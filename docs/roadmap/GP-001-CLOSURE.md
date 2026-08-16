@@ -12,7 +12,7 @@
   `77070d4344c5ea16a49360f75cdaa1ff0bd1dd4f`
 
 - Final Cleanup Content Checkpoint:
-  `PENDING_FINAL_COMMIT`
+  `236bb38100df87666002fd6a12cbee8113fb29f7`
 
 ## Summary
 GP-001 (WLMOUSE Visual & UX Reference) has undergone its final external-audit cleanup. The visual and UX reference specification (`docs/design/WLMOUSE_REFERENCE_SPEC.md`) was refined to correct checkpoint lifecycle history, re-assign exact motion and visual tokens to GP-002, neutralize media-pipeline wording for architecture neutrality, refine image-loading rules for viewport and LCP criticality, and neutralize warranty trust statements.
