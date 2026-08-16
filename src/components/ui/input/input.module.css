@@ -1,0 +1,99 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.label {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.35;
+  user-select: none;
+}
+
+.requiredIndicator {
+  color: var(--color-brand-primary);
+  margin-left: var(--space-1);
+}
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input {
+  width: 100%;
+  height: 40px;
+  padding: 0 var(--space-3);
+  background-color: var(--color-surface-card);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-control);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body), sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-easing-snappy),
+    box-shadow var(--motion-duration-fast) var(--motion-easing-snappy);
+}
+
+@media (max-width: 479px) {
+  .input {
+    height: 44px;
+  }
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+.input:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+}
+
+.input:focus {
+  outline: none;
+}
+
+.input:focus-visible {
+  border-color: var(--color-border-focus);
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.input:disabled {
+  background-color: var(--color-surface-tertiary);
+  color: var(--color-text-disabled);
+  border-color: var(--color-border-subtle);
+  cursor: not-allowed;
+}
+
+/* Error State */
+.hasError {
+  border-color: var(--color-status-danger-text) !important;
+}
+
+.hasError:focus-visible {
+  outline-color: var(--color-status-danger-text) !important;
+}
+
+.description {
+  font-family: var(--font-body), sans-serif;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.errorMessage {
+  font-family: var(--font-body), sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-status-danger-text);
+  line-height: 1.45;
+}

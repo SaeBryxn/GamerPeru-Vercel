@@ -1,0 +1,72 @@
+.card {
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition:
+    background-color var(--motion-duration-normal) var(--motion-easing-standard),
+    border-color var(--motion-duration-normal) var(--motion-easing-standard);
+}
+
+/* Surface Variants */
+.canvas {
+  background-color: var(--color-surface-canvas);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.cardSurface {
+  background-color: var(--color-surface-card);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.secondary {
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.dark {
+  background-color: var(--color-surface-dark-canvas);
+  color: var(--color-text-dark-primary);
+  border-color: var(--color-border-dark-subtle);
+}
+
+.darkCard {
+  background-color: var(--color-surface-dark-card);
+  color: var(--color-text-dark-primary);
+  border-color: var(--color-border-dark-subtle);
+}
+
+/* Padding scale */
+.paddingNone {
+  padding: 0;
+}
+
+.paddingSm {
+  padding: var(--space-4);
+}
+
+.paddingMd {
+  padding: var(--space-6);
+}
+
+.paddingLg {
+  padding: var(--space-8);
+}
+
+/* Elevation */
+.elevationNone {
+  box-shadow: var(--elevation-none);
+}
+
+.elevationLow {
+  box-shadow: var(--elevation-low);
+}
+
+.elevationMid {
+  box-shadow: var(--elevation-mid);
+}
+
+.elevationHigh {
+  box-shadow: var(--elevation-high);
+}

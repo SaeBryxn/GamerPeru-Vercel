@@ -19,34 +19,33 @@ export default function GlobalError({
       <body
         style={{
           margin: 0,
-          fontFamily:
-            'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          backgroundColor: "#0b0e14",
-          color: "#f8fafc",
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          backgroundColor: "#09090B",
+          color: "#F4F4F5",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           minHeight: "100vh",
-          padding: "2rem",
+          padding: "24px",
           textAlign: "center",
         }}
       >
         <div
           style={{
             maxWidth: "500px",
-            padding: "2.5rem",
-            borderRadius: "12px",
-            backgroundColor: "#111726",
-            border: "1px solid #1e293b",
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+            padding: "32px",
+            borderRadius: "8px",
+            backgroundColor: "#121215",
+            border: "1px solid #27272A",
+            boxShadow: "0 20px 25px -5px rgba(9, 9, 11, 0.14)",
           }}
         >
           <p
             style={{
-              fontSize: "0.875rem",
-              fontWeight: "600",
-              color: "#ff4655",
-              marginBottom: "0.5rem",
+              fontSize: "11px",
+              fontWeight: "700",
+              color: "#E11D48",
+              marginBottom: "8px",
               textTransform: "uppercase",
               letterSpacing: "0.05em",
             }}
@@ -55,20 +54,20 @@ export default function GlobalError({
           </p>
           <h1
             style={{
-              fontSize: "1.75rem",
+              fontSize: "24px",
               fontWeight: "700",
-              marginBottom: "1rem",
-              color: "#f8fafc",
+              marginBottom: "16px",
+              color: "#F4F4F5",
             }}
           >
             Error del Sistema
           </h1>
           <p
             style={{
-              color: "#94a3b8",
-              fontSize: "1rem",
-              lineHeight: "1.6",
-              marginBottom: "2rem",
+              color: "#A1A1AA",
+              fontSize: "15px",
+              lineHeight: "1.5",
+              marginBottom: "24px",
             }}
           >
             Ocurrió un error crítico en la aplicación. Por favor, intente recargar la página.
@@ -77,12 +76,13 @@ export default function GlobalError({
             type="button"
             onClick={() => reset()}
             style={{
-              padding: "0.75rem 1.5rem",
-              borderRadius: "6px",
-              backgroundColor: "#ff4655",
-              color: "#ffffff",
+              padding: "0 24px",
+              height: "44px",
+              borderRadius: "4px",
+              backgroundColor: "#E11D48",
+              color: "#FFFFFF",
               fontWeight: "600",
-              fontSize: "0.875rem",
+              fontSize: "14px",
               border: "none",
               cursor: "pointer",
             }}

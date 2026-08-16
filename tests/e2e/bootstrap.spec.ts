@@ -15,7 +15,7 @@ test.describe("GP-007 Application Foundation E2E & Contract Verification", () =>
     await expect(heading).toHaveText("Gamer Perú");
 
     // Verify foundation indicator badge
-    const badge = page.getByText("Application Foundation Initialized (GP-007)");
+    const badge = page.getByText("Design System Initialized (GP-008)");
     await expect(badge).toBeVisible();
   });
 

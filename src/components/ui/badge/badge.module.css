@@ -1,0 +1,102 @@
+.baseBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  border: 1px solid transparent;
+}
+
+/* General Badge */
+.badge {
+  composes: baseBadge;
+  font-size: 0.75rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.badgeNeutral {
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-subtle);
+}
+
+.badgeBrand {
+  background-color: var(--color-brand-primary);
+  color: var(--color-brand-text-on-accent);
+  border-color: var(--color-brand-primary);
+}
+
+.badgeSubtle {
+  background-color: var(--color-brand-subtle-light);
+  color: var(--color-brand-hover);
+  border-color: rgba(225, 29, 72, 0.15);
+}
+
+/* Spec Pill (Technical Metrics) */
+.specPill {
+  composes: baseBadge;
+  font-size: 0.6875rem;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-xs);
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-subtle);
+  letter-spacing: 0.01em;
+}
+
+.specPillInverted {
+  background-color: var(--color-surface-dark-secondary);
+  color: var(--color-text-dark-secondary);
+  border-color: var(--color-border-dark-subtle);
+}
+
+/* Status Badge */
+.statusBadge {
+  composes: baseBadge;
+  font-size: 0.75rem;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.statusSuccess {
+  background-color: var(--color-status-success-background);
+  color: var(--color-status-success-text);
+  border-color: var(--color-status-success-border);
+}
+
+.statusWarning {
+  background-color: var(--color-status-warning-background);
+  color: var(--color-status-warning-text);
+  border-color: var(--color-status-warning-border);
+}
+
+.statusDanger {
+  background-color: var(--color-status-danger-background);
+  color: var(--color-status-danger-text);
+  border-color: var(--color-status-danger-border);
+}
+
+.statusInfo {
+  background-color: var(--color-status-info-background);
+  color: var(--color-status-info-text);
+  border-color: var(--color-status-info-border);
+}
+
+.statusNeutral {
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-subtle);
+}
+
+/* Indicator Dot */
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: currentColor;
+  flex-shrink: 0;
+}

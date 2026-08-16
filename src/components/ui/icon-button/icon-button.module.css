@@ -1,0 +1,117 @@
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  text-decoration: none;
+  background-color: transparent;
+  color: var(--color-text-primary);
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-easing-snappy),
+    border-color var(--motion-duration-fast) var(--motion-easing-snappy),
+    color var(--motion-duration-fast) var(--motion-easing-snappy),
+    transform var(--motion-duration-fast) var(--motion-easing-snappy);
+}
+
+.iconButton:focus {
+  outline: none;
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* Primary Variant */
+.primary {
+  background-color: var(--color-brand-primary);
+  color: var(--color-brand-text-on-accent);
+  border-color: var(--color-brand-primary);
+}
+
+.primary:hover:not(:disabled) {
+  background-color: var(--color-brand-hover);
+  border-color: var(--color-brand-hover);
+  transform: translateY(-1px);
+}
+
+.primary:active:not(:disabled) {
+  background-color: var(--color-brand-active);
+  transform: translateY(0);
+}
+
+/* Secondary Variant */
+.secondary {
+  background-color: var(--color-surface-card);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-default);
+}
+
+.secondary:hover:not(:disabled) {
+  background-color: var(--color-surface-secondary);
+  border-color: var(--color-border-strong);
+  transform: translateY(-1px);
+}
+
+.secondary:active:not(:disabled) {
+  background-color: var(--color-surface-tertiary);
+  transform: translateY(0);
+}
+
+/* Ghost Variant */
+.ghost {
+  background-color: transparent;
+  color: var(--color-text-primary);
+  border-color: transparent;
+}
+
+.ghost:hover:not(:disabled) {
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-primary);
+}
+
+.ghost:active:not(:disabled) {
+  background-color: var(--color-surface-tertiary);
+}
+
+/* Destructive Variant */
+.destructive {
+  background-color: var(--color-status-danger-text);
+  color: #ffffff;
+  border-color: var(--color-status-danger-text);
+}
+
+.destructive:hover:not(:disabled) {
+  background-color: #9f1239;
+  transform: translateY(-1px);
+}
+
+.destructive:active:not(:disabled) {
+  background-color: #881337;
+  transform: translateY(0);
+}
+
+/* Disabled State */
+.iconButton:disabled,
+.iconButton[aria-disabled="true"] {
+  background-color: var(--color-surface-tertiary);
+  color: var(--color-text-disabled);
+  border-color: transparent;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.glyphSlot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import * as Sentry from "@sentry/nextjs";
 import Link from "next/link";
+import { Button, Card, Container, Stack } from "@/components/ui";
 
 export default function ErrorBoundary({
   error,
@@ -20,90 +21,46 @@ export default function ErrorBoundary({
     <main
       style={{
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
         minHeight: "100vh",
-        padding: "2rem",
-        textAlign: "center",
+        padding: "var(--space-6) 0",
       }}
     >
-      <div
-        style={{
-          maxWidth: "500px",
-          padding: "2.5rem",
-          borderRadius: "12px",
-          backgroundColor: "var(--card-bg)",
-          border: "1px solid var(--border)",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
-        }}
-      >
-        <p
-          style={{
-            fontSize: "0.875rem",
-            fontWeight: "700",
-            color: "#ff6b78",
-            marginBottom: "0.5rem",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-          }}
+      <Container size="prose">
+        <Card
+          surface="card"
+          padding="lg"
+          style={{ textAlign: "center", maxWidth: "540px", margin: "0 auto" }}
         >
-          Error
-        </p>
-        <h1
-          style={{
-            fontSize: "1.75rem",
-            fontWeight: "700",
-            marginBottom: "1rem",
-            color: "var(--foreground)",
-          }}
-        >
-          Algo salió mal
-        </h1>
-        <p
-          style={{
-            color: "#94a3b8",
-            fontSize: "1rem",
-            lineHeight: "1.6",
-            marginBottom: "2rem",
-          }}
-        >
-          Ocurrió un error inesperado al procesar su solicitud. Por favor, inténtelo de nuevo.
-        </p>
-        <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
-          <button
-            type="button"
-            onClick={() => reset()}
-            style={{
-              padding: "0.75rem 1.5rem",
-              borderRadius: "6px",
-              backgroundColor: "var(--foreground)",
-              color: "#0b0e14",
-              fontWeight: "700",
-              fontSize: "0.875rem",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            Reintentar
-          </button>
-          <Link
-            href="/"
-            style={{
-              padding: "0.75rem 1.5rem",
-              borderRadius: "6px",
-              backgroundColor: "transparent",
-              color: "var(--foreground)",
-              border: "1px solid var(--border)",
-              fontWeight: "700",
-              fontSize: "0.875rem",
-              textDecoration: "none",
-            }}
-          >
-            Ir al inicio
-          </Link>
-        </div>
-      </div>
+          <Stack direction="vertical" gap={4} align="center">
+            <span
+              className="type-caption"
+              style={{
+                color: "var(--color-status-danger-text)",
+                fontWeight: 700,
+                letterSpacing: "0.05em",
+              }}
+            >
+              Error
+            </span>
+            <h1 className="type-h2" style={{ color: "var(--color-text-primary)" }}>
+              Algo salió mal
+            </h1>
+            <p className="type-body-default" style={{ color: "var(--color-text-secondary)" }}>
+              Ocurrió un error inesperado al procesar su solicitud. Por favor, inténtelo de nuevo.
+            </p>
+            <Stack direction="horizontal" gap={3} justify="center" wrap="wrap">
+              <Button variant="primary" onClick={() => reset()}>
+                Reintentar
+              </Button>
+              <Link href="/" style={{ textDecoration: "none" }}>
+                <Button variant="secondary">Ir al inicio</Button>
+              </Link>
+            </Stack>
+          </Stack>
+        </Card>
+      </Container>
     </main>
   );
 }
