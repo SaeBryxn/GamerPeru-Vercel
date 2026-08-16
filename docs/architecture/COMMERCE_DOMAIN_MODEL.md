@@ -664,7 +664,7 @@ The central operational entity representing a committed purchase.
   - `id`: `UUIDv7` (PK)
   - `payment_method_code`: `VARCHAR(50)` (FK $\to$ `PaymentMethodConfiguration.code`)
   - `version_number`: `INTEGER`
-  - `recipient_name`: `VARCHAR(150)` (e.g., "Gamer Perú S.A.C.")
+  - `recipient_name`: `VARCHAR(150)` (e.g., "[TBD OWNER / LEGAL DECISION]")
   - `account_identifier`: `VARCHAR(50)` (e.g., "999-888-777")
   - `qr_media_id`: `UUIDv7` (FK $\to$ `MediaAsset.id`, Nullable)
   - `instruction_text`: `TEXT`

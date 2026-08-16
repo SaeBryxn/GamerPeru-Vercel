@@ -14,11 +14,12 @@ These standards govern:
 
 - The Next.js 16 App Router folder structure and layout hierarchy;
 - Core application metadata and non-secret application configuration (`src/config/app.ts`);
-- Cross-cutting error taxonomy (`AppError`) and public error sanitization;
+- Cross-cutting error taxonomy (`AppError`) and public error sanitization (`toPublicError`);
 - Framework error surfaces (`error.tsx`, `global-error.tsx`, `not-found.tsx`);
 - Server-only structured JSON logging with Pino (`src/lib/logger/`);
 - Mandatory sensitive data redaction in operational logs;
-- Sentry observability foundation (`@sentry/nextjs`) with strict PII minimization;
+- Sentry observability foundation (`@sentry/nextjs`) with pure event sanitization (`src/lib/observability/sentry-sanitize.ts`);
+- Next.js 16 instrumentation conventions (`instrumentation.ts`, `instrumentation-client.ts`);
 - Application liveness endpoint (`GET /api/health`);
 - HTTP security headers baseline in `next.config.ts`;
 - Compile-time server/client isolation boundaries (`import "server-only"`);
@@ -31,20 +32,35 @@ These standards govern:
 Gamer Perú uses a unified modular monolith App Router topology organized into logical route groups:
 
 ```text
-src/app/
-├── (storefront)/              # Public e-commerce surfaces (Catalog, PDP, Cart, Static pages)
-│   ├── layout.tsx             # Storefront layout (Header, Nav, Footer in GP-009)
-│   └── page.tsx               # Root homepage / (GP-010)
-├── (customer)/                # Authenticated customer hub (Account, Orders, Saved Addresses) [GP-015+]
-├── (admin)/                   # Protected operational backoffice (Inventory, Payments, AI) [GP-022+]
-├── api/                       # API Route Handlers
-│   └── health/
-│       └── route.ts           # Liveness probe (GET /api/health)
-├── error.tsx                  # Route segment error boundary
-├── global-error.tsx           # Global root HTML error boundary
-├── globals.css                # Global foundational styles & CSS custom properties
-├── layout.tsx                 # Root application shell (<html>, <body>, global metadata)
-└── not-found.tsx              # Canonical 404 page
+├── instrumentation.ts         # Next.js 16 server/edge runtime instrumentation & onRequestError
+├── instrumentation-client.ts  # Next.js 16 client runtime instrumentation & Sentry initialization
+├── sentry.server.config.ts    # Sentry Node.js server initializer with beforeSend sanitizer
+├── sentry.edge.config.ts      # Sentry Edge runtime initializer with beforeSend sanitizer
+├── next.config.ts             # Security headers, withSentryConfig (telemetry: false)
+└── src/
+    ├── app/
+    │   ├── (storefront)/      # Public e-commerce surfaces (Catalog, PDP, Cart, Static pages)
+    │   │   ├── layout.tsx     # Storefront layout (Header, Nav, Footer in GP-009)
+    │   │   └── page.tsx       # Root homepage / (GP-010)
+    │   ├── (customer)/        # Authenticated customer hub (Account, Orders, Saved Addresses) [GP-015+]
+    │   ├── (admin)/           # Protected operational backoffice (Inventory, Payments, AI) [GP-022+]
+    │   ├── api/               # API Route Handlers
+    │   │   └── health/
+    │   │       └── route.ts   # Liveness probe (GET /api/health)
+    │   ├── error.tsx          # Route segment error boundary
+    │   ├── global-error.tsx   # Global root HTML error boundary
+    │   ├── globals.css        # Global foundational styles & CSS custom properties
+    │   ├── layout.tsx         # Root application shell (<html>, <body>, global metadata)
+    │   └── not-found.tsx      # Canonical 404 page
+    ├── config/
+    │   ├── app.ts             # Static non-secret application constants
+    │   ├── public-env.ts      # Public environment schema & parser
+    │   └── server-env.ts      # Server-only environment schema & parser
+    └── lib/
+        ├── correlation/       # Request ID generation (UUIDv4)
+        ├── errors/            # AppError taxonomy & public error sanitization
+        ├── logger/            # Server-only Pino logger with canonical redaction
+        └── observability/     # Sentry event sanitizer (sentryBeforeSend)
 ```
 
 ---
@@ -88,12 +104,13 @@ To ensure complete data protection and zero secret leakage:
 Static, non-secret application constants are defined in `src/config/app.ts`:
 
 - `APP_CONFIG.name`: `"Gamer Perú"`
-- `APP_CONFIG.legalName`: `"Gamer Perú S.A.C."`
 - `APP_CONFIG.defaultLocale`: `"es-PE"`
 - `APP_CONFIG.defaultCurrency`: `"PEN"`
 - `APP_CONFIG.canonicalHost`: `"gamerperu.com"`
 
-Dynamic business policies (tax rates, shipping fees, commission rates, reservation TTLs) are strictly prohibited from static configuration files and belong in database tables or dedicated domain modules.
+### Legal Entity & Statutory Disclosures Rule
+
+Legal company name, RUC (Registro Único de Contribuyentes), fiscal address, tax presentation, and statutory consumer disclosures must originate from an explicit approved owner/legal specification before being added to application configuration. GP-007 does not invent or assume legal entity names (e.g. `legalName` is omitted from runtime configuration until formally decided).
 
 ---
 
@@ -138,6 +155,7 @@ The canonical 404 handler (`src/app/not-found.tsx`):
 
 - Emits real HTTP 404 status codes for unmatched routes;
 - Renders an accessible heading (`<h1>Página no encontrada</h1>`);
+- Meets WCAG 2.1 AA color contrast standards;
 - Provides a clear link back to the homepage (`/`);
 - Contains zero private or debug information.
 
@@ -149,11 +167,12 @@ Server-only structured logging is implemented via **Pino** (`src/lib/logger/inde
 
 - **Format**: Structured JSON output with ISO timestamps and environment tags;
 - **Runtime**: Strictly `server-only`; no browser logging;
+- **Testability**: Exports `createLogger(options, destination)` allowing deterministic unit testing with memory streams;
 - **Context**: Supports child loggers (`createChildLogger({ module, operation, requestId })`);
 - **Severities**:
   - `debug`: Detailed development diagnostics.
   - `info`: Meaningful operational facts (e.g. order placed, payment hold transition).
-  - `warn`: Recoverable unexpected conditions (e.g. rate limit approached, retryable network failure).
+  - `warn`: Recoverable unexpected conditions.
   - `error`: Failed operations requiring engineer investigation.
   - `fatal`: Process-level unrecoverable crashes.
 
@@ -161,15 +180,23 @@ Server-only structured logging is implemented via **Pino** (`src/lib/logger/inde
 
 ## 12. Logging Redaction
 
-Pino is configured with strict automatic path redaction for sensitive fields:
+Pino is configured with strict automatic path redaction for canonical environment secrets and sensitive commerce fields:
 
-- `password`, `*.password`
-- `authorization`, `*.authorization`, `headers.authorization`
-- `cookie`, `*.cookie`, `headers.cookie`
-- `token`, `*.token`, `access_token`, `refresh_token`
-- `secret`, `*.secret`, `apiKey`, `api_key`
-- `voucher_url`, `proof_url`, `operation_code`
-- Master environment keys (`DATABASE_URL`, `SUPABASE_SECRET_KEY`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `AI_ENCRYPTION_KEY_V1`)
+- `DATABASE_URL`, `*.DATABASE_URL`
+- `SUPABASE_SECRET_KEY`, `*.SUPABASE_SECRET_KEY`
+- `RESEND_API_KEY`, `*.RESEND_API_KEY`
+- `R2_ACCESS_KEY_ID`, `*.R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`, `*.R2_SECRET_ACCESS_KEY`
+- `INNGEST_EVENT_KEY`, `*.INNGEST_EVENT_KEY`
+- `INNGEST_SIGNING_KEY`, `*.INNGEST_SIGNING_KEY`
+- `AI_ENCRYPTION_KEY_V1`, `*.AI_ENCRYPTION_KEY_V1`
+- `SENTRY_AUTH_TOKEN`, `*.SENTRY_AUTH_TOKEN`
+- `password`, `*.password`, `*.*.password`
+- `authorization`, `*.authorization`, `headers.authorization`, `headers.Authorization`
+- `cookie`, `*.cookie`, `headers.cookie`, `headers.Cookie`
+- `token`, `*.token`, `*.*.token`, `access_token`, `refresh_token`
+- `secret`, `*.secret`, `*.*.secret`, `apiKey`, `api_key`
+- `voucher_url`, `*.voucher_url`, `proof_url`, `*.proof_url`, `operation_code`, `*.operation_code`
 
 Redacted values are automatically replaced with `"[REDACTED]"`.
 
@@ -177,27 +204,36 @@ Redacted values are automatically replaced with `"[REDACTED]"`.
 
 ## 13. Sentry Observability
 
-Sentry is integrated via `@sentry/nextjs` using the official Next.js 16 configuration files:
+Sentry is integrated via `@sentry/nextjs@10.70.0` following current Next.js 16 conventions:
 
-- `sentry.server.config.ts`: Server-side exception monitoring.
-- `sentry.edge.config.ts`: Edge runtime exception monitoring.
-- `sentry.client.config.ts`: Browser client error capture.
-- `instrumentation.ts`: Next.js lifecycle hooks registering runtime Sentry initializers.
-- `next.config.ts`: Configured with `withSentryConfig` to enable build integration.
+- **`instrumentation.ts`**: Registers server/edge runtime configurations and exports `onRequestError = Sentry.captureRequestError` for capturing unhandled App Router / RSC request errors.
+- **`instrumentation-client.ts`**: Native Next.js 16 client instrumentation entry point initializing browser Sentry client with `beforeSend: sentryBeforeSend`.
+- **`sentry.server.config.ts`**: Server-side Node.js runtime initialization with `beforeSend: sentryBeforeSend`.
+- **`sentry.edge.config.ts`**: Edge runtime initialization with `beforeSend: sentryBeforeSend`.
+- **`next.config.ts`**: Configured with `withSentryConfig` setting `telemetry: false`, `sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN }`, and `release: { create: Boolean(process.env.SENTRY_AUTH_TOKEN) }`.
 
-### Optional Operation & Zero Build Failure
+### Sentry Event Sanitization Boundary (`src/lib/observability/sentry-sanitize.ts`)
 
-- Sentry DSN and auth tokens are strictly optional in local and CI environments.
-- If Sentry credentials are not configured, the application and build pipeline execute normally without error.
-- Zero external network requests are sent when Sentry is unconfigured.
+A centralized, pure `sentryBeforeSend` hook is attached to all Sentry runtimes. It:
+
+1. Strips credentials from connection strings (e.g. `postgres://[REDACTED_CREDENTIALS]@host:port/db`);
+2. Strips signed private R2 URLs and access signatures (`[REDACTED_SIGNED_URL]`);
+3. Strips JWTs and 64-character hex master keys from error messages and exception values;
+4. Redacts `authorization`, `cookie`, `set-cookie`, tokens, payment operation codes, and proof URLs from request contexts, breadcrumbs, and extra metadata;
+5. Preserves diagnostic error types, sanitized messages, stack traces, and safe routes without mutating the original input object.
+
+### Unconfigured Operation & Quiet Builds
+
+- Sentry DSN, auth token, organization, and project are strictly optional in local and CI environments.
+- When unconfigured, `next build` executes cleanly without warning spam, skips source-map uploads, skips remote release creation, and disables build-plugin telemetry (`telemetry: false`).
 
 ---
 
-## 14. PII / Sensitive Data Policy
+## 14. PII & Identifier Classification
 
 1. **Default PII Disabled**: Sentry `sendDefaultPii` is set to `false`.
 2. **No Operational PII**: Customer street addresses, phone numbers, raw credit cards, and cleartext passwords must never be logged or sent to observability sinks.
-3. **Identifier Classification**: Anonymized entity IDs (UUIDs) and order numbers may be included in structured logs for traceability.
+3. **Identifier Classification**: UUIDs are internal/pseudonymous identifiers (not anonymous). Safe internal entity identifiers may be logged only where operationally necessary and classification permits.
 
 ---
 
@@ -256,7 +292,8 @@ Server operations can generate a standard UUIDv4 request identifier via `generat
 1. **Unit Tests (`tests/unit/`)**:
    - `AppError` instantiation, status codes, and operational flags;
    - `toPublicError` sanitization of known and unknown exceptions;
-   - Pino sensitive key redaction;
+   - Pino sensitive key redaction using in-memory streams (`createLogger`);
+   - Sentry event sanitization boundary (`sentryBeforeSend`, `sanitizeString`, `sanitizeObject`);
    - `APP_CONFIG` schema constants.
 2. **E2E & Integration Tests (`tests/e2e/`)**:
    - Verification of `/` HTTP 200 response and semantic headings;
@@ -301,8 +338,8 @@ The Application Foundation provides the shared runtime shell. Future GPs own the
 2. [x] Minimal root layout with `lang="es-PE"` and stable metadata.
 3. [x] Error taxonomy (`AppError`) and public error sanitization implemented.
 4. [x] `error.tsx`, `global-error.tsx`, and `not-found.tsx` error boundaries created.
-5. [x] Server-only Pino structured logger with automatic sensitive data redaction.
-6. [x] Sentry SDK integrated with zero-config build compatibility and PII protection.
+5. [x] Server-only Pino structured logger with automatic sensitive data redaction and stream testability.
+6. [x] Sentry SDK integrated via Next.js 16 `instrumentation.ts` / `instrumentation-client.ts` with `onRequestError = Sentry.captureRequestError`, `telemetry: false`, and pure `sentryBeforeSend` event sanitization.
 7. [x] `GET /api/health` liveness endpoint created with dynamic execution and no downstream queries.
 8. [x] Baseline HTTP security headers configured in `next.config.ts`.
 9. [x] Unit and E2E test suites covering application foundation passing 100%.
