@@ -8,15 +8,43 @@
 
 `2efd5380b9e8237aa078b2400181c2a145f964cb`
 
-## Remediation Checkpoint
+## First Remediation Checkpoint
 
 `51ceb59e01d2dbd33a4ba8bba85e6b18afaa8bb5`
+
+## Final Contract Remediation Checkpoint
+
+`281f3a52819e3730ea19658701fcd0509beaee4b`
 
 ---
 
 ## Summary
 
-Successfully translated the approved **Gamer Perú** visual identity (“Machinery Obsidian & Signal Crimson”, GP-002) into a production-grade, accessible **Design System**. Implemented the complete semantic design token vocabulary in `src/styles/tokens.css`, fluid typography hierarchy in `src/styles/typography.css`, Next.js 16 self-hosted Google Font architecture (`Plus Jakarta Sans`, `Inter`, `JetBrains Mono`), and built a focused suite of accessible, server-first core UI primitives (`Button`, `IconButton`, `Icon`, `Input`, `TextField`, `Badge`, `SpecPill`, `StatusBadge`, `Card`, `Container`, `VisuallyHidden`, `Stack`) in `src/components/ui/`. Removed all legacy temporary bootstrap visual placeholders (`#090a0f`, `#ff4655`, `#12141c`, `#1f2330`). Authored the canonical architectural specification in [`docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md`](../design/DESIGN_SYSTEM_IMPLEMENTATION.md), updated `docs/roadmap/GP-008.md` to `COMPLETE`, and validated complete token integrity, responsive scaling (360px to 1536px), reduced motion, font network isolation, and WCAG 2.1 AA accessibility across 35 Vitest unit tests and 18 Playwright E2E assertions.
+Successfully translated the approved **Gamer Perú** visual identity (“Machinery Obsidian & Signal Crimson”, GP-002) into a production-grade, accessible **Design System**. Implemented the complete semantic design token vocabulary in `src/styles/tokens.css`, fluid typography hierarchy in `src/styles/typography.css`, Next.js 16 self-hosted Google Font architecture (`Plus Jakarta Sans`, `Inter`, `JetBrains Mono`), and built a focused suite of accessible, server-first core UI primitives (`Button`, `IconButton`, `Icon`, `Input`, `TextField`, `Badge`, `SpecPill`, `StatusBadge`, `Card`, `Container`, `VisuallyHidden`, `Stack`) in `src/components/ui/`. Removed all legacy temporary bootstrap visual placeholders (`#090a0f`, `#ff4655`, `#12141c`, `#1f2330`). Authored the canonical architectural specification in [`docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md`](../design/DESIGN_SYSTEM_IMPLEMENTATION.md), updated `docs/roadmap/GP-008.md` to `COMPLETE`, and validated complete token integrity, responsive scaling (360px to 1536px), reduced motion, font network isolation, and accessibility baselines across 36 Vitest unit tests and 18 Playwright E2E assertions.
+
+---
+
+## Final Icon & Keyboard Contract Verification
+
+Following final external verification, a targeted micro-remediation was performed to close all remaining contract and evidence defects:
+
+1. **Icon Prop Override Hole Discovered & Enforced**:
+   - Discovered that callers could pass geometry props (`width`, `height`, `strokeWidth`, `stroke-width`) in `...rest`, and because forwarded props were spread last, canonical geometry could be overridden.
+   - Fixed by omitting geometry escape properties from `IconProps` and placing canonical geometry (`size`, `width`, `height`, `strokeWidth`) **after** `safeRest` with runtime property filtering.
+   - Added unit test regression proving that attempted runtime overrides via casts (e.g. `width: 999`, `strokeWidth: 9`) are completely defeated and canonical geometry strictly renders for all sizes (`sm: 16/1.25`, `md: 20/1.5`, `lg: 24/1.5`, `xl: 32/1.5`).
+2. **IconButton Arbitrary-Child Bypass Removed**:
+   - Removed `children?: React.ReactNode` and fallback child rendering from `IconButtonProps`.
+   - Made `icon: LucideIcon` strictly mandatory, guaranteeing that `IconButton` always renders through the canonical `Icon` primitive.
+3. **Button Canonical 20px / 1.5 Icon Contract**:
+   - Reconciled `ButtonProps` to accept canonical `leadingIcon?: LucideIcon` and `trailingIcon?: LucideIcon`.
+   - `Button` automatically renders canonical `md` (`20x20` / `1.5px` stroke) icon geometry, eliminating accidental icon geometry mismatch.
+4. **Replacement Actual Keyboard Tab Navigation Evidence**:
+   - Corrected previous E2E focus tests that called programmatic `.focus()`.
+   - Replaced with real Playwright keyboard input (`page.keyboard.press("Tab")` in traversal loops without calling `.focus()`).
+   - Verified that light focus ring resolves to solid 2px `#09090B` (`rgb(9, 9, 11)`) and dark contextual focus ring resolves to solid 2px `#F4F4F5` (`rgb(244, 244, 245)`).
+5. **WCAG Claim Precision Correction**:
+   - Removed broad certification copy ("WCAG 2.1 AA cumplido con ratios superiores a 18:1") from demo and closure report.
+   - Replaced with precise technical evidence: automated Axe-core scans with zero detected violations on tested surfaces, real Tab keyboard navigation tests, touch-target bounding checks, color-independent status indicators, and reduced-motion assertions.
 
 ---
 
@@ -43,7 +71,7 @@ Following initial implementation, an external design-contract and accessibility 
    - Refactored `badgeSubtle` border to consume `var(--color-status-danger-border)`.
    - Added a static drift protection unit test asserting 0 direct color literals across all `src/components/ui/**/*.module.css` files.
 5. **Neutralization of Demo Copy**:
-   - Replaced all business-looking copy ("En Stock (Lima)", "Últimas 2 Unidades", "Agotado", "Preventa Confirmada", "Procesando", "Correo Electrónico", "Código de Cupón") in `src/app/(storefront)/page.tsx` with neutral Design System labels ("Estado correcto", "Advertencia", "Error", "Información", "Neutral", "Campo de ejemplo", "Texto auxiliar descriptivo.", etc.).
+   - Replaced all business-looking copy ("En Stock (Lima)", "Últimas 2 Unidades", "Agotado", "Preventa Confirmada", "Procesando", "Correo Electrónico", "Código de Cupón") in `src/app/(storefront)/page.tsx` with neutral Design System labels ("Estado correcto", "Advertencia", "Error", "Información", "Neutral", "Campo de ejemplo", "Texto auxiliar descriptivo para el usuario.", etc.).
 6. **Touch-Target & Breakpoint Documentation Precision**:
    - Updated `docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md` to accurately distinguish dedicated touch targets (min 44x44), Button (44/48), IconButton (min 44x44), and Input/TextField (40 desktop / 44 mobile per GP-002).
    - Documented exact media query breakpoint thresholds (`360px`, `480px`, `768px`, `1024px`, `1280px`, `1536px`) as numeric constants due to CSS specifications not supporting custom properties in `@media` rules.
@@ -139,9 +167,9 @@ Created in `src/components/ui/`:
 
 | Component        | Export                               | Description                                                                                                                                             |
 | ---------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Button`         | `src/components/ui/button/`          | Native `<button>`, variants (`primary`, `secondary`, `ghost`, `destructive`), 44px desktop / 48px touch height, loading spinner with `aria-busy`.       |
-| `IconButton`     | `src/components/ui/icon-button/`     | 44x44px minimum touch target, mandatory `aria-label`, enforced canonical icon geometry.                                                                 |
-| `Icon`           | `src/components/ui/icon/`            | Enforced icon geometry mapping (`sm`: 16px/1.25, `md`/`lg`/`xl`: 20/24/32px/1.5).                                                                       |
+| `Button`         | `src/components/ui/button/`          | Native `<button>`, variants (`primary`, `secondary`, `ghost`, `destructive`), 44px desktop / 48px touch height, deterministic 20px/1.5 icon slots.      |
+| `IconButton`     | `src/components/ui/icon-button/`     | 44x44px minimum touch target, mandatory `aria-label`, mandatory `icon`, enforced canonical icon geometry.                                               |
+| `Icon`           | `src/components/ui/icon/`            | Enforced, non-overridable icon geometry mapping (`sm`: 16px/1.25, `md`/`lg`/`xl`: 20/24/32px/1.5).                                                      |
 | `Input`          | `src/components/ui/input/`           | Accessible `<input>`, 40px desktop / 44px mobile height, border `color.border.control` (`#71717A`).                                                     |
 | `TextField`      | `src/components/ui/input/`           | Form field with automatic `label`, `description`, and `error` ARIA linkage (`useId`, `aria-describedby`, `aria-invalid`).                               |
 | `Badge`          | `src/components/ui/badge/`           | General metadata badge (`neutral`, `brand`, `subtle`).                                                                                                  |
@@ -159,7 +187,7 @@ Created in `src/components/ui/`:
 - **Variants**: `primary` (`#E11D48` bg, `#FFFFFF` text), `secondary` (`#FFFFFF` bg, `#09090B` text, `#D4D4D8` border), `ghost` (transparent bg), `destructive` (`#BE123C` bg, `#FFFFFF` text).
 - **Dimensions**: Desktop height 44px, Mobile touch target height 48px, horizontal padding 24px, radius 4px (`radius.sm`), font Plus Jakarta Sans 600 / 14px.
 - **Accessibility**: Native `<button>`, `type="button"` default, real `disabled` state with `aria-disabled="true"`, high-contrast 2px focus-visible outline with 2px offset.
-- **Slots**: Leading and trailing icon slots accepting canonical `Icon`, accessible loading spinner with `aria-busy="true"`.
+- **Slots**: `leadingIcon` and `trailingIcon` slots accept Lucide icon components and automatically render canonical `md` (`20x20` / `1.5px` stroke) icon geometry, accessible loading spinner with `aria-busy="true"`.
 - **No Arbitrary Sizing**: Strictly avoided introducing non-canonical `sm/md/lg` size scales.
 
 ---
@@ -196,9 +224,10 @@ Created in `src/components/ui/`:
 ## Accessibility
 
 - **Keyboard & Focus**: Contextual `:focus-visible` contract (2px solid outline with 2px offset; `#09090B` on light surfaces, `#F4F4F5` on dark surfaces). Zero blanket `:focus { outline: none; }` suppression.
+- **Real Keyboard Navigation**: Verified via actual Playwright keyboard input (`page.keyboard.press("Tab")` in traversal loops without programmatic `.focus()`).
 - **Touch Ergonomics**: Dedicated interactive touch controls meet or exceed the `44x44px` minimum bounding area standard. Control heights strictly follow GP-002 (Button 44/48, Input 40/44).
 - **Reduced Motion**: Verified `@media (prefers-reduced-motion: reduce)` collapses transition durations to `0.01ms`.
-- **Axe-core Audit**: Verified 0 accessibility violations on both the storefront home design system surface and the 404 error page.
+- **Axe-core Audit**: Verified 0 detected accessibility violations on both the storefront home design system surface and the 404 error page.
 
 ---
 
@@ -261,7 +290,7 @@ Verified across canonical viewport widths:
 ```text
 $ pnpm install --frozen-lockfile
 Already up to date
-Done in 350ms using pnpm v11.22.0
+Done in 338ms using pnpm v11.22.0
 Exit code: 0
 ```
 
@@ -294,11 +323,11 @@ Exit code: 0 (0 warnings, 0 errors)
 $ vitest run
  RUN  v4.1.10 D:/Documentos/GamerPeru
  ✓ tests/unit/app-foundation.test.ts (20 tests) 13ms
- ✓ tests/unit/design-system-tokens.test.ts (9 tests) 8ms
- ✓ tests/unit/smoke.test.ts (6 tests) 17ms
+ ✓ tests/unit/smoke.test.ts (6 tests) 16ms
+ ✓ tests/unit/design-system-tokens.test.ts (10 tests) 14ms
  Test Files  3 passed (3)
-      Tests  35 passed (35)
-   Duration  654ms
+      Tests  36 passed (36)
+   Duration  672ms
 Exit code: 0
 ```
 
@@ -307,7 +336,7 @@ Exit code: 0
 ```text
 $ next build
 ▲ Next.js 16.3.1 (Turbopack)
-✓ Compiled successfully in 1195ms
+✓ Compiled successfully in 1180ms
 Route (app)
 ┌ ○ /
 ├ ○ /_not-found
@@ -322,18 +351,18 @@ $ pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm build
 All matched files use Prettier code style!
 TypeScript clean (0 errors)
 ESLint clean (0 warnings, 0 errors)
-Vitest: 35 passed (35)
+Vitest: 36 passed (36)
 Next.js build: Static and dynamic routes compiled
 Exit code: 0
 ```
 
-### 8. Playwright E2E, Keyboard Focus & Axe Accessibility Tests (`pnpm test:e2e`)
+### 8. Playwright E2E, Real Keyboard Tab Focus & Axe Accessibility Tests (`pnpm test:e2e`)
 
 ```text
 $ playwright test
 [WebServer] $ next dev
 Running 18 tests using 12 workers
-  18 passed (12.9s)
+  18 passed (13.7s)
 Exit code: 0
 ```
 
@@ -341,31 +370,26 @@ Exit code: 0
 
 ## Remote GitHub Actions CI Verification
 
-| Workflow Run ID | Commit SHA | Trigger Event                                          | Status    | Conclusion | URL                                                                   |
-| --------------- | ---------- | ------------------------------------------------------ | --------- | ---------- | --------------------------------------------------------------------- |
-| `31978318516`   | `2efd538`  | Push (`feat: implement GP-008 design system`)          | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31978318516` |
-| `31978470633`   | `fa9f92c`  | Push (`docs: close GP-008`)                            | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31978470633` |
-| `31979599931`   | `51ceb59`  | Push (`fix: reconcile GP-008 design system contracts`) | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31979599931` |
+| Workflow Run ID | Commit SHA | Trigger Event                                             | Status    | Conclusion | URL                                                                   |
+| --------------- | ---------- | --------------------------------------------------------- | --------- | ---------- | --------------------------------------------------------------------- |
+| `31978318516`   | `2efd538`  | Push (`feat: implement GP-008 design system`)             | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31978318516` |
+| `31978470633`   | `fa9f92c`  | Push (`docs: close GP-008`)                               | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31978470633` |
+| `31979599931`   | `51ceb59`  | Push (`fix: reconcile GP-008 design system contracts`)    | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31979599931` |
+| `31979771815`   | `2cf4257`  | Push (`docs: record GP-008 external design review`)       | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31979771815` |
+| `31980386634`   | `281f3a5`  | Push (`fix: finalize GP-008 icon and keyboard contracts`) | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31980386634` |
 
 ---
 
-## Files Changed in Remediation
+## Files Changed in Final Contract Remediation
 
-- `docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md` (Updated touch targets, breakpoints, focus contract, and Icon primitive specs)
-- `docs/roadmap/GP-008-CLOSURE.md` (Updated with external design contract review and full execution evidence)
-- `src/app/(storefront)/page.tsx` (Neutralized demo copy, adopted canonical Icon and IconButton APIs)
-- `src/app/globals.css` (Contextual `--focus-ring-color`, removed blanket focus suppression)
-- `src/components/ui/badge/badge.module.css` (Replaced inline rgba border with canonical token)
-- `src/components/ui/button/button.module.css` (Removed focus suppression, removed ad-hoc colors, adopted contextual focus)
-- `src/components/ui/card/card.module.css` (Set contextual dark focus ring on dark Card surfaces)
-- `src/components/ui/icon/icon.tsx` (New canonical Icon primitive with enforced size and stroke geometry)
-- `src/components/ui/icon/index.ts` (New Icon barrel export)
-- `src/components/ui/icon-button/icon-button.module.css` (Removed focus suppression, removed ad-hoc colors, adopted contextual focus)
-- `src/components/ui/icon-button/icon-button.tsx` (Enforced canonical Icon primitive)
-- `src/components/ui/index.ts` (Exported Icon primitive)
-- `src/components/ui/input/input.module.css` (Removed focus suppression, adopted contextual focus)
-- `tests/e2e/design-system.spec.ts` (Added real Tab keyboard focus tests for light and dark surfaces, icon geometry tests, neutralized selectors)
-- `tests/unit/design-system-tokens.test.ts` (Added icon geometry contract tests and CSS module literal color drift protection)
+- `docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md` (Documented enforced Icon geometry, required IconButton icon prop, Button 20px icon contract, and real keyboard navigation)
+- `docs/roadmap/GP-008-CLOSURE.md` (Updated with Final Icon & Keyboard Contract Verification section and full remote CI evidence)
+- `src/app/(storefront)/page.tsx` (Passed Lucide components directly to Button slots and neutralized dark surface copy)
+- `src/components/ui/button/button.tsx` (Updated leadingIcon/trailingIcon to accept LucideIcon and enforce md 20x20/1.5 icon geometry)
+- `src/components/ui/icon/icon.tsx` (Omitted geometry escape props from IconProps, applied canonical geometry after safeRest with runtime filtering)
+- `src/components/ui/icon-button/icon-button.tsx` (Made icon strictly mandatory, removed arbitrary children fallback)
+- `tests/e2e/design-system.spec.ts` (Implemented real keyboard Tab navigation loops without programmatic .focus(), verified Button icon geometry)
+- `tests/unit/design-system-tokens.test.ts` (Added regression unit tests asserting that attempted Icon geometry escapes via cast are defeated)
 
 ---
 
@@ -375,7 +399,8 @@ Exit code: 0
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `e12a1763b66b1832b886c48f5fa5f132fe5a4d03`
 - **Implementation Checkpoint**: `2efd5380b9e8237aa078b2400181c2a145f964cb`
-- **Remediation Checkpoint**: `51ceb59e01d2dbd33a4ba8bba85e6b18afaa8bb5`
+- **First Remediation Checkpoint**: `51ceb59e01d2dbd33a4ba8bba85e6b18afaa8bb5`
+- **Final Contract Remediation Checkpoint**: `281f3a52819e3730ea19658701fcd0509beaee4b`
 - **Working Tree**: Clean (Closure reconciliation staged for closure commit).
 
 ---
