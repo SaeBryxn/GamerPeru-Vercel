@@ -14,51 +14,42 @@
 - Remediation Content Checkpoint:
   `60f86ad1fdaced1fd92cf9108a313da09453d524`
 
+- Remediation Closure Checkpoint:
+  `d4a8619010f5465a1d62282ab38bbc01bf722485`
+
+- Final Consistency Content Checkpoint:
+  `0f9f9511b62f721dffb6fcb0a67da0438ae3d19e`
+
 ---
 
-## External Domain Review & Remediation
+## Final External Consistency Review
 
-Following external domain-model review, a comprehensive remediation pass resolved all validation artifact gaps, entity relationship inconsistencies, and state machine boundary ambiguities:
+A final domain consistency audit resolved all remaining duplicate state ownership, inventory release paths, and lifecycle transition invariants:
 
-1. **Validation Artifact Completion**:
-   - **Edge-Case Matrix**: Fully expanded Section 63 to include all 25 originally required scenarios with starting state, command, resulting state, inventory consequence, payment consequence, audit/domain events, and concurrency protection.
-   - **Sequence Diagrams**: Fully authored all 7 required Mermaid sequence diagrams in Section 60 (Checkout, Concurrent Stock Race, Yape/Plin Verification, Reservation Expiry, Cancellation/Refund, Affiliate Qualification, Outbox Dispatch).
-   - **State Diagrams**: Completed all 6 explicit Mermaid state diagrams in Section 59 (Product Publication, Reservation, Order, Payment, Fulfillment, Commission).
-   - **State Transition Tables**: Authored complete transition tables with preconditions, side effects, idempotency rules, audit events, domain events, and forbidden transitions across all 6 lifecycles in Section 61.
-   - **Critical Invariants Table**: Rebuilt complete 17-rule critical invariant table in Section 62.
-2. **Undeclared Late-Payment Pseudo-States Removed**:
-   - Eliminated all references to orphan pseudo-states (`PAYMENT_SUBMITTED_LATE`, `LATE_SUBMISSION`).
-   - Standardized late submission handling using canonical `Payment.status = 'SUBMITTED'` + `PaymentSubmission.is_late = true`, with reservation remaining `RELEASED`. Admin evaluates stock availability under lock during verification to either allocate stock (`ALLOCATED`) or issue an external refund (`REFUNDED`).
-3. **Refund & Return Model Reconciled**:
-   - **Full & Partial Refunds Supported**: Explicitly supported in data model with cumulative cap invariant: $\sum \text{Refund.amount\_cents} \le \text{Order.total\_cents}$. Partial refunds maintain `Payment.status = 'PAID'` and `Order.order_status = 'CONFIRMED'` / `'FULFILLED'` with `refunded_amount_cents > 0`.
-   - **Fulfilled Orders & Returns**: Fulfilled delivery history remains permanently recorded (`Shipment.status = 'DELIVERED'`); accepted returns transition `Shipment.status = 'RETURNED'`, and full reimbursement transitions `Order.order_status = 'REFUNDED'`.
-   - **Inventory Restock vs. Financial Refund Separation**: Pre-shipment cancellations release reserved/allocated stock without modifying `on_hand`; post-delivery returns increment physical `on_hand` (`on_hand_delta = +qty`) ONLY when physical merchandise is accepted via `movement_type = 'RETURN_RESTOCKED'`.
-4. **Order to Reservation Cardinality & Traceability**:
-   - Corrected relationship to `Order 1 -> * InventoryReservation` with direct `order_item_id` foreign key linkage for multi-item orders.
-5. **Inventory Ledger Multi-Balance Deltas**:
-   - Standardized explicit delta fields: `on_hand_delta`, `reserved_delta`, `allocated_delta`, alongside resulting balance snapshots.
-6. **Multi-Location Inventory Policy**:
-   - Maintained multi-location schema capability (`InventoryLocation` + `InventoryItem`) with deterministic v1 single primary fulfillment warehouse policy (`LOC-LIM-01`).
-7. **Collection Domain Added**:
-   - Added canonical `Collection` and `ProductCollection` join entities for curated merchandising groupings.
-8. **Category Specification Schema Versioning Fixed**:
-   - Replaced flawed single-category constraint with `UNIQUE(category_id, schema_version)` to preserve historical specification versions.
-9. **Payment Method Abstraction & Instruction Versioning**:
-   - Introduced `PaymentMethodConfiguration` (supporting `YAPE_MANUAL` and `PLIN_MANUAL` in v1) and `PaymentInstructionVersion` (freezing exact QR/phone/text instructions shown at checkout).
-10. **Promotion Scope, Stacking & Concurrency-Safe Usage**:
-    - Added `PromotionTarget` (supporting `ALL`, `PRODUCT`, `PRODUCT_VARIANT`, `CATEGORY`, `COLLECTION` scopes), deterministic evaluation ordering, and `CouponRedemption` with atomic usage limit locks.
-11. **Arbitrary Cart Policies Parameterized**:
-    - Replaced hardcoded expiry and quantity ceilings with configurable parameters (`CART_EXPIRY_DURATION`, `MAX_CART_LINE_QUANTITY`, `[TBD BUSINESS DECISION]`).
-12. **Affiliate Self-Referral Identity Correction**:
-    - Corrected self-referral identity check to `affiliate.user_id != customer_profile.user_id`. Treated IP/device fingerprints as operational risk signals.
-13. **Post-Payout Commission Adjustments**:
-    - Preserved immutability of paid `Commission` records; post-payout refunds append `CommissionAdjustment` records to offset future payout batches.
-14. **Customer Privacy Anonymization Reconciled**:
-    - Account deletion anonymizes `CustomerProfile`/`CustomerAddress` immediately, while Order PII snapshots are retained for an approved legal retention window (`[TBD LEGAL/RETENTION POLICY]`) before automated text scrubbing.
-15. **UUIDv7 Strategy & PostgreSQL Extensions**:
-    - Canonicalized PostgreSQL `uuid` column type with application-level UUIDv7 generation in Node.js (RFC 9562 library). Only `pg_trgm` is declared required for search.
-16. **GP-005 Handoff Completeness**:
-    - All 42 domain entities across all 11 modules indexed for physical Drizzle schema scaffolding in GP-005.
+1. **Single Authoritative State Ownership**:
+   - Removed duplicate state columns (`payment_status`, `fulfillment_status`) from the `Order` entity definition.
+   - Authoritative state is strictly partitioned:
+     * **Order Lifecycle**: `Order.status` (`PENDING`, `EXPIRED`, `CONFIRMED`, `PROCESSING`, `FULFILLED`, `CANCELLED`, `REFUNDED`).
+     * **Payment Lifecycle**: `Payment.status` (`UNPAID`, `SUBMITTED`, `VERIFYING`, `PAID`, `REJECTED`, `REFUNDED`).
+     * **Fulfillment Lifecycle**: `Shipment.status` (`UNFULFILLED`, `READY_TO_PACK`, `PACKED`, `SHIPPED`, `DELIVERED`, `RETURNED`).
+     * **Reservation Lifecycle**: `InventoryReservation.status` (`ACTIVE`, `VERIFICATION_HOLD`, `ALLOCATED`, `CONSUMED`, `RELEASED`).
+2. **Allocated Inventory Release**:
+   - Added canonical `ALLOCATED -> RELEASED` transition in `InventoryReservation` and `ALLOCATION_RELEASED` movement type in `InventoryLedgerEntry` (`allocated_delta = -qty`, `on_hand_delta = 0`, `reserved_delta = 0`) for pre-shipment order cancellations/refunds.
+3. **Late-Payment & Unpaid Expiry Reconciled**:
+   - Unpaid reservation timeout transitions `Order.status = 'EXPIRED'`, `Reservation.status = 'RELEASED'`, while `Payment.status` remains `'UNPAID'`.
+   - Late payment submission records `is_late = true` without modifying the historical `RELEASED` reservation.
+   - Admin verification under row lock creates a replacement `InventoryReservation` directly to `ALLOCATED` if stock is available; if stock is sold out, funds are recorded (`PAID`) and immediately refunded (`REFUNDED`), with zero fake stock allocation.
+4. **Non-Terminal Rejection & Resubmission Grace**:
+   - Added non-terminal payment rejection flow where `Payment.status` returns to `UNPAID` and `InventoryReservation` is held in `VERIFICATION_HOLD` during a configurable grace window (`PAYMENT_RESUBMISSION_GRACE_DURATION`, `[TBD BUSINESS DECISION]`).
+5. **Deterministic Version Selection**:
+   - `PaymentMethodConfiguration.current_instruction_version_id` and `Category.current_spec_schema_id` establish deterministic current version references for checkout and product validation.
+6. **Promotion & Coupon Completeness**:
+   - Added explicit `Promotion.priority` for deterministic evaluation order. Parameterized max coupon count per order.
+7. **Commission Qualification & Signed Money Corrections**:
+   - Replaced hardcoded qualification window with configurable `COMMISSION_QUALIFICATION_WINDOW_DAYS` starting upon delivery. Reconciled monetary constraints to permit signed values for `CommissionAdjustment.amount_cents`.
+8. **Truthful Entity Count & GP-005 Handoff**:
+   - Accurately categorized 58 domain & system entities + 2 Better Auth tables = 60 total physical table candidates.
+   - Clarified that GP-004 provides domain blueprints and schema inputs without mandating full immediate table creation in GP-005.
 
 ---
 
@@ -68,18 +59,19 @@ The canonical **Commerce Domain Model** is established authoritatively in [`docs
 ---
 
 ## Entity Model
-Defined 42 primary domain entities organized cleanly into domain modules:
-- **Catalog**: `Brand`, `Category`, `Collection`, `ProductCollection`, `Product`, `ProductVariant`, `CategorySpecificationSchema`, `ProductSpecifications`, `ProductStory`, `ProductStoryRevision`, `MediaAsset`.
-- **Identity & Customer**: `AuthUser` (Better Auth identity boundary), `CustomerProfile`, `CustomerAddress`, `WishlistItem`, `Review`.
-- **RBAC**: `Role`, `Permission`, `RolePermission`, `UserRole`.
-- **Cart & Checkout**: `Cart`, `CartItem`.
-- **Inventory**: `InventoryLocation`, `InventoryItem`, `InventoryLedgerEntry`, `InventoryReservation`.
-- **Orders & Snapshots**: `Order`, `OrderItem`, `OrderAddressSnapshot`, `OrderPricingSnapshot`, `OrderPromotionSnapshot`.
-- **Payments**: `PaymentMethodConfiguration`, `PaymentInstructionVersion`, `Payment`, `PaymentSubmission`, `PaymentVerification`, `Refund`.
-- **Fulfillment**: `ShippingMethod`, `Shipment`, `ShipmentItem`.
-- **Promotions**: `Promotion`, `PromotionTarget`, `Coupon`, `CouponRedemption`.
-- **Growth**: `ReferralProgram`, `ReferralCode`, `ReferralAttribution`, `Affiliate`, `AffiliateCode`, `AffiliateClick`, `AffiliateAttribution`, `Commission`, `CommissionAdjustment`, `CommissionPayoutBatch`.
-- **System & Operations**: `ContentSlot`, `AuditEvent`, `DomainEvent`, `OutboxEvent`, `IdempotencyKey`.
+Defined 58 domain & system entities plus 2 Better Auth technical tables (60 total physical candidates) organized cleanly into domain modules:
+- **Catalog (11)**: `Brand`, `Category`, `Collection`, `ProductCollection`, `Product`, `ProductVariant`, `CategorySpecificationSchema`, `ProductSpecifications`, `ProductStory`, `ProductStoryRevision`, `MediaAsset`.
+- **Identity & Customer (4)**: `CustomerProfile`, `CustomerAddress`, `WishlistItem`, `Review`.
+- **RBAC (4)**: `Role`, `Permission`, `RolePermission`, `UserRole`.
+- **Cart & Checkout (2)**: `Cart`, `CartItem`.
+- **Inventory (4)**: `InventoryLocation`, `InventoryItem`, `InventoryLedgerEntry`, `InventoryReservation`.
+- **Orders & Snapshots (5)**: `Order`, `OrderItem`, `OrderAddressSnapshot`, `OrderPricingSnapshot`, `OrderPromotionSnapshot`.
+- **Payments (6)**: `PaymentMethodConfiguration`, `PaymentInstructionVersion`, `Payment`, `PaymentSubmission`, `PaymentVerification`, `Refund`.
+- **Fulfillment (3)**: `ShippingMethod`, `Shipment`, `ShipmentItem`.
+- **Promotions (4)**: `Promotion`, `PromotionTarget`, `Coupon`, `CouponRedemption`.
+- **Growth (10)**: `ReferralProgram`, `ReferralCode`, `ReferralAttribution`, `Affiliate`, `AffiliateCode`, `AffiliateClick`, `AffiliateAttribution`, `Commission`, `CommissionAdjustment`, `CommissionPayoutBatch`.
+- **System & Operations (5)**: `ContentSlot`, `AuditEvent`, `DomainEvent`, `OutboxEvent`, `IdempotencyKey`.
+- **Auth Infrastructure (2)**: `AuthUser`, `Session`.
 
 ---
 
@@ -106,8 +98,8 @@ Defined 42 primary domain entities organized cleanly into domain modules:
   2. `VERIFICATION_HOLD`: Held upon payment submission; expiration suspended during review.
   3. `ALLOCATED`: Converted upon payment approval.
   4. `CONSUMED`: Deducted on physical parcel shipment dispatch.
-  5. `RELEASED`: Returned to sellable stock upon expiration, cancellation, or rejection.
-- **Multi-Balance Ledger**: Append-only `InventoryLedgerEntry` records `on_hand_delta`, `reserved_delta`, and `allocated_delta` with resulting balances.
+  5. `RELEASED`: Returned to sellable stock upon expiration, cancellation, rejection, or pre-shipment refund.
+- **Multi-Balance Ledger**: Append-only `InventoryLedgerEntry` records `on_hand_delta`, `reserved_delta`, and `allocated_delta` with resulting balances (`ALLOCATION_RELEASED` movement supported).
 
 ---
 
@@ -119,12 +111,12 @@ Defined 42 primary domain entities organized cleanly into domain modules:
 
 ## State Machines
 - **Orthogonal Sub-State Machines**:
-  - `Order.order_status`: `PENDING` $\to$ `CONFIRMED` $\to$ `PROCESSING` $\to$ `FULFILLED` (or `CANCELLED` / `REFUNDED`).
+  - `Order.status`: `PENDING` $\to$ `EXPIRED` / `CONFIRMED` $\to$ `PROCESSING` $\to$ `FULFILLED` (or `CANCELLED` / `REFUNDED`).
   - `Payment.status`: `UNPAID` $\to$ `SUBMITTED` $\to$ `VERIFYING` $\to$ `PAID` (or `REJECTED` / `REFUNDED`).
   - `Shipment.status`: `UNFULFILLED` $\to$ `READY_TO_PACK` $\to$ `PACKED` $\to$ `SHIPPED` $\to$ `DELIVERED` (or `RETURNED`).
   - `InventoryReservation.status`: `ACTIVE` $\to$ `VERIFICATION_HOLD` $\to$ `ALLOCATED` $\to$ `CONSUMED` (or `RELEASED`).
   - `Commission.status`: `PENDING` $\to$ `QUALIFIED` $\to$ `APPROVED` $\to$ `PAID` (or `VOIDED`).
-- **Candidate State Mapping**: Full 1-to-1 mapping matrix established for all 10 candidate states from `COMMERCE_SPEC.md`.
+- **Candidate State Mapping**: Full 1-to-1 derived mapping matrix established for all 10 candidate states from `COMMERCE_SPEC.md`.
 
 ---
 
@@ -143,7 +135,7 @@ Defined 42 primary domain entities organized cleanly into domain modules:
 ---
 
 ## Promotions
-- Configurable rules: percentage / fixed-amount discounts, minimum spend, max discount caps, date windows, total and per-customer usage limits, scope targets (`PromotionTarget`), and stackability controls.
+- Configurable rules: percentage / fixed-amount discounts, minimum spend, max discount caps, date windows, total and per-customer usage limits, scope targets (`PromotionTarget`), and stackability controls with explicit `priority`.
 - Applied discounts permanently snapshotted in `OrderPromotionSnapshot`; redemptions tracked concurrency-safe via `CouponRedemption`.
 
 ---
@@ -158,7 +150,7 @@ Defined 42 primary domain entities organized cleanly into domain modules:
 ## Audit & Events
 - **AuditEvent**: Append-only operational logging capturing actor, action, target entity, sanitized metadata diffs, and IP addresses.
 - **DomainEvent**: Internal business event stream (`OrderPlaced`, `PaymentSubmitted`, `PaymentApproved`, etc.).
-- **Transactional Outbox**: `OutboxEvent` table inserted in the same transaction as commerce mutations, ensuring at-least-once delivery to Inngest and downstream EC OS without distributed locking.
+- **Transactional Outbox**: `OutboxEvent` table inserted in the same transaction as commerce mutations, ensuring at-least-once delivery to Inngest and downstream EC OS without distributed locking. Payloads follow data-minimization principles.
 
 ---
 
@@ -187,8 +179,9 @@ The following commercial policies remain parameterized `[TBD BUSINESS DECISION]`
 - Courier selection and rate tables.
 - Return/warranty policy durations.
 - Numeric reservation hold TTL (`RESERVATION_TTL_MINUTES`, e.g. 15, 30, or 60 minutes).
+- Payment resubmission grace duration (`PAYMENT_RESUBMISSION_GRACE_DURATION`).
 - Cart expiry duration and max line quantities.
-- Affiliate commission percentage tiers.
+- Affiliate commission percentage tiers and qualification window (`COMMISSION_QUALIFICATION_WINDOW_DAYS`).
 - Customer support channels.
 
 ---
@@ -197,18 +190,18 @@ The following commercial policies remain parameterized `[TBD BUSINESS DECISION]`
 GP-005 (Repository Bootstrap) will consume:
 1. Exact entity names and aggregate structures for Drizzle schema modules across all 11 files (`catalog.ts`, `auth.ts`, `customers.ts`, `cart.ts`, `inventory.ts`, `orders.ts`, `payments.ts`, `shipping.ts`, `promotions.ts`, `growth.ts`, `system.ts`).
 2. UUIDv7 generation in application layer with PostgreSQL `uuid` columns.
-3. Required PostgreSQL extension: `pg_trgm`.
+3. Required PostgreSQL extension: `pg_trgm` for typo-tolerant trigram search.
 4. Integer Soles currency rules (`PEN` cents).
 5. Outbox table and Better Auth session integration interfaces.
 
 ---
 
 ## Files Changed
-- `docs/architecture/COMMERCE_DOMAIN_MODEL.md`: Reconciled all 67 sections with 25 edge cases, 7 sequence diagrams, 6 state diagrams, 6 transition tables, critical invariants, Collection domain, payment method abstraction, instruction versioning, multi-balance inventory ledger, and UUIDv7 application generation.
-- `docs/specs/COMMERCE_SPEC.md`: Updated to establish `COMMERCE_DOMAIN_MODEL.md` as the authoritative domain reference.
-- `docs/specs/PAYMENTS_SPEC.md`: Updated for consistency with payment method configuration, instruction versioning, and late payment workflows.
+- `docs/architecture/COMMERCE_DOMAIN_MODEL.md`: Finalized all 67 sections with single state ownership, allocated inventory release, late-payment reacquisition, non-terminal rejection grace hold, 9-column transition tables, and 25 edge cases.
+- `docs/specs/COMMERCE_SPEC.md`: Maintained concise canonical domain reference.
+- `docs/specs/PAYMENTS_SPEC.md`: Maintained payment method abstraction and instruction versioning alignment.
 - `docs/roadmap/GP-004.md`: Maintained `COMPLETE` status.
-- `docs/roadmap/GP-004-CLOSURE.md`: Created and updated closure report with external review remediation details.
+- `docs/roadmap/GP-004-CLOSURE.md`: Updated closure report with final consistency review findings.
 
 ---
 
@@ -226,7 +219,7 @@ GP-005 (Repository Bootstrap) will consume:
 - **Branch**: `main`
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `b7463a646bef6c1c1d5fe5cdb1e9937919207ebe`
-- **Closure Content Checkpoint**: `60f86ad1fdaced1fd92cf9108a313da09453d524`
+- **Closure Content Checkpoint**: `0f9f9511b62f721dffb6fcb0a67da0438ae3d19e`
 - **Working Tree**: Clean (Closure report staged for final closure commit).
 
 ---
