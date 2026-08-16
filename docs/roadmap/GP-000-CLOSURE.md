@@ -47,7 +47,8 @@ GP-000 (Product Definition & Source of Truth) has been fully executed. The canon
 - `docs/roadmap/GP-035.md`: Aligned to `TASK_TEMPLATE.md` standard sections (`Why`, `Context`, `Testing / Validation`, `Functional DoD`, `Accessibility DoD`, `Closure Requirements`, `Next Dependency: GP-036`).
 - `docs/specs/AI_PRODUCT_ASSISTANT_SPEC.md`: Updated status from `PROPOSED` to `APPROVED / CANONICAL (v1.2)`.
 - `docs/specs/AI_CUSTOMER_ASSISTANT_SPEC.md`: Updated status from `PROPOSED` to `APPROVED / CANONICAL (v1.2)`.
-- `docs/roadmap/GP-000-CLOSURE.md`: Created this closure report.
+- `docs/architecture/ECOS_INTEGRATION.md`: Corrected stale roadmap reference from `GP-040` to `GP-042` following post-GP external review.
+- `docs/roadmap/GP-000-CLOSURE.md`: Updated closure report with post-review audit and remediation.
 
 ## Decisions Confirmed
 - **Visual Direction & Non-Infringement**: Benchmark UX and visual quality against WLMOUSE (whitespace, large product media, technical storytelling, restrained UI, mobile-first design) while using strictly original Gamer Perú brand assets, color tokens, typography, compositions, 3D renders, and code. No pixel-for-pixel copying.
@@ -75,6 +76,9 @@ GP-000 (Product Definition & Source of Truth) has been fully executed. The canon
 4. **Outdated Specification Header Status**:
    - *Found*: `AI_PRODUCT_ASSISTANT_SPEC.md` and `AI_CUSTOMER_ASSISTANT_SPEC.md` had `Status: PROPOSED` headers despite being adopted into canonical v1.2.
    - *Resolution*: Updated both specification headers to `Status: APPROVED / CANONICAL (v1.2)`.
+5. **Stale EC OS Roadmap Reference in Architecture Documentation (Post-Review Remediation)**:
+   - *Found*: During post-GP external repository review, `docs/architecture/ECOS_INTEGRATION.md` was found to reference `Final contract: GP-040`. This was stale numbering from prior to the v1.2 additions (`GP-025` and `GP-035`). In canonical v1.2, `GP-040` is Commerce Analytics and `GP-042` is EC OS Integration Contract.
+   - *Resolution*: Corrected `docs/architecture/ECOS_INTEGRATION.md` to reference `Final contract: GP-042`. Conducted an exhaustive semantic cross-reference audit across the entire repository; verified that all internal and cross-document GP references accurately point to their canonical task counterparts without any remaining stale identifiers.
 
 ## Unresolved Questions
 None. All canonical boundaries, product scopes, and roadmap definitions for v1 are locked and unambiguous.
@@ -83,6 +87,7 @@ None. All canonical boundaries, product scopes, and roadmap definitions for v1 a
 - **Roadmap & Template Conformance Test**: Executed automated validation confirming all 53 task files (`GP-000.md` through `GP-052.md`) exist and contain all 18 standard template sections required by `TASK_TEMPLATE.md`. Result: 100% PASS.
 - **Task Index Verification**: Executed automated validation confirming exact 1-to-1 match between entries in `ROADMAP.md` and the 53 GP task files. Result: 100% PASS.
 - **Specification Alignment Audit**: Conducted line-by-line review of all specification files in `docs/specs/`, architecture files in `docs/architecture/`, and design files in `docs/design/` against `AGENTS.md` and `MASTER_SPEC.md`. Result: 100% Coherent.
+- **Repository-Wide Semantic Cross-Reference Audit**: Executed automated regex-based scanner checking every `GP-XXX` mention in all markdown files across the repository to verify that task numbers match their semantic definitions (e.g. `ECOS_INTEGRATION.md` $\to$ `GP-042`, `COMMERCE_SPEC.md` $\to$ `GP-004/020`, `AI_PROVIDER_ARCHITECTURE.md` $\to$ `GP-003`, `ROADMAP.md` dependencies/next links). Result: 100% PASS.
 
 ## Acceptance Criteria
 - Docs coherent; v1/Admin/payments/SEO/EC OS boundaries explicit: **PASS**
