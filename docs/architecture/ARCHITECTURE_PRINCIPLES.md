@@ -1,6 +1,7 @@
 # Architecture Principles
 
 ## Core Principles
+
 - **Modular Monolith**: One coherent application codebase with clean internal module boundaries; avoid premature microservices.
 - **Architecture by ADR**: Significant architectural decisions are governed by accepted Architecture Decision Records in [`docs/decisions/`](../decisions/).
 - **Canonical Authority**: [`TECHNOLOGY_ARCHITECTURE.md`](./TECHNOLOGY_ARCHITECTURE.md) (established in GP-003) is the authoritative technology and infrastructure specification for Gamer Perú.

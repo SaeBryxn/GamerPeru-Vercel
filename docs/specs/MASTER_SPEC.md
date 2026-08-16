@@ -13,27 +13,27 @@ design tokens, copy, media, compositions and implementation.
 
 ## v1 domains
 
--   Storefront
--   Catalog, variants and inventory
--   Search and category-aware filtering
--   Modular Product Story
--   Customer accounts and wishlist
--   Cart and checkout
--   Orders and fulfillment
--   Manual Yape/Plin payment verification
--   Promotions
--   Reviews foundation
--   Referrals and affiliates
--   Admin
--   Content management
--   Transactional communications
--   Technical and content SEO
--   Commerce/business analytics
--   AI Product Research & Import
--   AI Customer Assistant
--   Provider-agnostic AI infrastructure
--   Security, accessibility, performance, observability and recovery
--   EC OS integration contract
+- Storefront
+- Catalog, variants and inventory
+- Search and category-aware filtering
+- Modular Product Story
+- Customer accounts and wishlist
+- Cart and checkout
+- Orders and fulfillment
+- Manual Yape/Plin payment verification
+- Promotions
+- Reviews foundation
+- Referrals and affiliates
+- Admin
+- Content management
+- Transactional communications
+- Technical and content SEO
+- Commerce/business analytics
+- AI Product Research & Import
+- AI Customer Assistant
+- Provider-agnostic AI infrastructure
+- Security, accessibility, performance, observability and recovery
+- EC OS integration contract
 
 ## AI Product Assistant
 
@@ -63,14 +63,14 @@ server-side secrets.
 
 ## Core principles
 
--   Mobile is intentional, not compressed desktop.
--   Product Story is modular and Admin-managed.
--   Commerce data is structured and deterministic.
--   SEO is architectural.
--   Manual payments are replaceable through a payment-method
-    abstraction.
--   Sensitive operations are auditable.
--   AI assists; it is not the source of truth for price, inventory,
-    payment or authorization.
--   EC OS is integrated downstream and is never required for storefront
-    checkout availability.
+- Mobile is intentional, not compressed desktop.
+- Product Story is modular and Admin-managed.
+- Commerce data is structured and deterministic.
+- SEO is architectural.
+- Manual payments are replaceable through a payment-method
+  abstraction.
+- Sensitive operations are auditable.
+- AI assists; it is not the source of truth for price, inventory,
+  payment or authorization.
+- EC OS is integrated downstream and is never required for storefront
+  checkout availability.

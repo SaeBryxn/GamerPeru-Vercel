@@ -7,6 +7,7 @@
 This document defines the canonical technology architecture for **Gamer Perú** (`gamerperu.com`). It establishes the authoritative software stack, runtime environments, data boundaries, security models, hosting topology, and operational infrastructure required to build a high-performance multi-brand gaming peripherals e-commerce platform in Peru.
 
 **Canonical Decisions Summary**:
+
 - **Architecture Paradigm**: **Modular Monolith** with managed cloud infrastructure (avoiding premature microservices).
 - **Application Framework**: **Next.js (App Router, Next.js 16 Active LTS Line)** with **TypeScript (5.x)** running on the **Node.js 24 LTS Runtime**, providing server-rendered catalog pages, React Server Components (RSC), streaming AI responses, and strict server-side authorization.
 - **Application Hosting**: **Vercel** (Vercel Pro for commercial cloud deployment) hosting the application domain (`gamerperu.com`) on the Vercel Edge Network with serverless Node.js execution. (Cloudflare reverse-proxy is not placed in front of `gamerperu.com`).
@@ -101,23 +102,23 @@ graph TD
     User([Shopper / Customer]) -->|HTTPS gamerperu.com| VercelEdge[Vercel Edge Network]
     User -->|HTTPS media.gamerperu.com| CFEdge[Cloudflare Edge CDN]
     Admin([Staff / Super Admin]) -->|HTTPS gamerperu.com| VercelEdge
-    
+
     subgraph "Application Runtime (Next.js 16 on Vercel)"
         VercelEdge --> AppRouter[Next.js App Router]
         AppRouter --> Storefront[Storefront Pages & RSC]
         AppRouter --> CustomerHub[Customer Account Portal]
         AppRouter --> AdminPortal[Admin Operational Portal]
-        
+
         Storefront --> DomainServices[Domain Services Layer]
         CustomerHub --> DomainServices
         AdminPortal --> DomainServices
-        
+
         DomainServices --> AuthModule[Supabase Auth & Session Engine (@supabase/ssr)]
         DomainServices --> OrderModule[Orders & Manual Payment Engine]
         DomainServices --> CatalogModule[Catalog & Search Service]
         DomainServices --> AIGateway[AI Provider Gateway]
     end
-    
+
     subgraph "Managed Data & Storage Tier"
         DomainServices -->|Drizzle ORM / Supavisor| SupabaseDB[(Supabase PostgreSQL 16+)]
         CFEdge -->|Transforms & Serves| R2Public[(R2 Public Media Bucket)]
@@ -140,11 +141,11 @@ graph LR
         Browser[Public Browser]
         Bot[Search Engine Crawlers]
     end
-    
+
     subgraph "Zone 2: Authenticated Perimeter"
         BrowserSession[Browser Session Cookie Access JWT & Refresh Token]
     end
-    
+
     subgraph "Zone 3: Server Application Trust Boundary (Next.js 16 on Vercel)"
         SSRClient[Request-Scoped Supabase SSR Client]
         JWTVerify[getClaims JWT Verification against cached JWKS]
@@ -153,13 +154,13 @@ graph LR
         ZodValidator[Zod Input & Payload Validation]
         RBACGuard[Authoritative RBAC Guard requirePermission]
     end
-    
+
     subgraph "Zone 4: Isolated Storage & Infrastructure"
         SupabaseDB[(Supabase PostgreSQL ACID Store)]
         Vault[(AES-256-GCM Encrypted Key Table)]
         PrivateProofs[(Private S3 Voucher Storage)]
     end
-    
+
     Browser -->|Public Requests| AppServer
     Bot -->|Crawl Requests| AppServer
     BrowserSession -->|Cookie Session| SSRClient
@@ -167,7 +168,7 @@ graph LR
     JWTVerify -->|Verified Identity| AuthClaims
     AuthClaims -->|Customer Context| ZodValidator
     AuthClaims -->|Staff Identity| RBACGuard
-    
+
     RBACGuard -->|Requires 'orders:verify'| PrivateProofs
     RBACGuard -->|Requires 'ai:manage'| Vault
     ZodValidator --> AppServer
@@ -182,9 +183,9 @@ graph LR
 - **Selected Framework**: **Next.js (App Router)** with **TypeScript** on the **Next.js 16 Active LTS Line** (ADR-001).
 - **Server Runtime**: **Node.js 24 LTS** in serverless execution mode.
 - **Rendering Strategy**:
-  - *Public Catalog / Product Story*: Streaming Server-Side Rendering (SSR) with React Server Components (RSC) and On-Demand Incremental Static Regeneration (ISR) for static policy pages.
-  - *Dynamic Commerce Data*: Product stock availability, cart drawers, and price checks render with fresh server data on request.
-  - *Customer Hub & Admin Backoffice*: Dynamic server rendering with strict server-side session checks.
+  - _Public Catalog / Product Story_: Streaming Server-Side Rendering (SSR) with React Server Components (RSC) and On-Demand Incremental Static Regeneration (ISR) for static policy pages.
+  - _Dynamic Commerce Data_: Product stock availability, cart drawers, and price checks render with fresh server data on request.
+  - _Customer Hub & Admin Backoffice_: Dynamic server rendering with strict server-side session checks.
 - **API & Server Mutations**: Implemented primarily via type-safe Next.js **Server Actions** backed by Zod schemas, minimizing boilerplate REST endpoint maintenance while guaranteeing server-side execution.
 
 ---
@@ -219,20 +220,20 @@ graph LR
 - **Managed Database Provider**: **Supabase PostgreSQL** (PostgreSQL 16+ engine) with Supavisor connection pooling (ADR-002).
 - **Data Access Layer**: **Drizzle ORM** (TypeScript-native schema-as-code).
 - **Free-First Operational Strategy**:
-  - *Local Development*: Local PostgreSQL instance (native or Docker Compose).
-  - *Early Cloud Development / Pre-Launch*: **Supabase Free Plan** (500MB storage, Supavisor connection pooling).
-  - *Initial Live Launch*: **Supabase Free Plan is permitted** during initial commercial launch while storage, compute, and business risk remain within acceptable limits. The occurrence of a live customer transaction alone does NOT automatically force a plan upgrade.
-  - *Free-Stage Backup Strategy*: Automated scheduled logical database dumps (`pg_dump`) encrypted with AES-256 and stored in an isolated private Cloudflare R2 backup bucket (`gamerperu-db-backups-private`) with 30-day retention. Root backup encryption keys are managed independently offsite.
-  - *Pro Upgrade Triggers*: Transition to **Supabase Pro** ($25/mo) is evaluated when:
+  - _Local Development_: Local PostgreSQL instance (native or Docker Compose).
+  - _Early Cloud Development / Pre-Launch_: **Supabase Free Plan** (500MB storage, Supavisor connection pooling).
+  - _Initial Live Launch_: **Supabase Free Plan is permitted** during initial commercial launch while storage, compute, and business risk remain within acceptable limits. The occurrence of a live customer transaction alone does NOT automatically force a plan upgrade.
+  - _Free-Stage Backup Strategy_: Automated scheduled logical database dumps (`pg_dump`) encrypted with AES-256 and stored in an isolated private Cloudflare R2 backup bucket (`gamerperu-db-backups-private`) with 30-day retention. Root backup encryption keys are managed independently offsite.
+  - _Pro Upgrade Triggers_: Transition to **Supabase Pro** ($25/mo) is evaluated when:
     1. Database storage approaches 350 MB (70% of Free limit);
     2. Workload compute or concurrency creates resource pressure;
     3. Inactivity pausing risk becomes unacceptable as business operations scale;
     4. Managed daily automated backups (included in base Pro) are operationally required;
     5. Commercial revenue justifies the managed reliability upgrade.
-  - *Base Pro vs. PITR Separation*:
-    * *Base Supabase Pro ($25/mo)* includes compute upgrades, no inactivity pausing, and **7-day daily automated logical backups**.
-    * *Point-in-Time Recovery (PITR)* is a **separate optional add-on** (starting at ~$100/mo for 7-day physical WAL archiving) and is not automatically included in the $25 base Pro plan. PITR is a restore capability, not automated high-availability failover.
-  - *Zero-Rewrite Guarantee*: Transitioning from Supabase Free to Supabase Pro is purely an infrastructure billing upgrade that requires zero application code modifications.
+  - _Base Pro vs. PITR Separation_:
+    - _Base Supabase Pro ($25/mo)_ includes compute upgrades, no inactivity pausing, and **7-day daily automated logical backups**.
+    - _Point-in-Time Recovery (PITR)_ is a **separate optional add-on** (starting at ~$100/mo for 7-day physical WAL archiving) and is not automatically included in the $25 base Pro plan. PITR is a restore capability, not automated high-availability failover.
+  - _Zero-Rewrite Guarantee_: Transitioning from Supabase Free to Supabase Pro is purely an infrastructure billing upgrade that requires zero application code modifications.
 - **Portability Boundary**: Application domain logic uses pure Drizzle ORM and standard SQL queries; proprietary Supabase client libraries are avoided in core domain services to preserve complete PostgreSQL portability.
 
 ---
@@ -297,8 +298,8 @@ graph LR
 - **Storage Provider**: **Cloudflare R2** with **Cloudflare Edge CDN** (ADR-004).
 - **Bucket**: `gamerperu-public-media` (Served via `media.gamerperu.com`).
 - **Image Optimization & Free Limits**: Cloudflare Image Transformations dynamically generate responsive WebP and AVIF variants based on client `Accept` headers and viewport parameters.
-  - *Free Tier Transformation Behavior*: Source images remain in Cloudflare R2 (Cloudflare Images Storage at $5/100k images is a separate dimension and not used). Cloudflare Image Transformations Free includes up to 5,000 unique transformations/month. Exceeding 5,000 transformations acts as a hard cap where cached transformations continue serving, but new transformations fail until upgraded to Paid Transformations ($0.50 per 1,000 additional unique transformations on Cloudflare paid zones).
-  - *Mitigations during Free phase*: Enforce a strict set of standardized responsive variant presets (thumbnail, card, hero, story); avoid arbitrary client-requested dimensions; provide graceful source-image fallback if a transformation fails; monitor monthly transformation volume.
+  - _Free Tier Transformation Behavior_: Source images remain in Cloudflare R2 (Cloudflare Images Storage at $5/100k images is a separate dimension and not used). Cloudflare Image Transformations Free includes up to 5,000 unique transformations/month. Exceeding 5,000 transformations acts as a hard cap where cached transformations continue serving, but new transformations fail until upgraded to Paid Transformations ($0.50 per 1,000 additional unique transformations on Cloudflare paid zones).
+  - _Mitigations during Free phase_: Enforce a strict set of standardized responsive variant presets (thumbnail, card, hero, story); avoid arbitrary client-requested dimensions; provide graceful source-image fallback if a transformation fails; monitor monthly transformation volume.
 - **Caching**: `Cache-Control: public, max-age=31536000, immutable` for immutable hashed assets.
 - **Supabase Storage Boundary**: Supabase Storage is explicitly **NOT** used for the product catalog.
 
@@ -383,10 +384,10 @@ graph LR
 
 - **Validation Engine**: **Zod** across the entire application stack.
 - **Validation Layers**:
-  - *HTTP Inputs & Server Actions*: Form parameters and mutation payloads validated before execution.
-  - *AI Structured Outputs*: Model JSON responses validated against strict entity schemas.
-  - *Environment Variables*: Server configuration validated at startup via Zod schemas.
-  - *Integration Webhooks*: EC OS and Resend webhook signatures and payloads validated.
+  - _HTTP Inputs & Server Actions_: Form parameters and mutation payloads validated before execution.
+  - _AI Structured Outputs_: Model JSON responses validated against strict entity schemas.
+  - _Environment Variables_: Server configuration validated at startup via Zod schemas.
+  - _Integration Webhooks_: EC OS and Resend webhook signatures and payloads validated.
 
 ---
 
@@ -450,12 +451,12 @@ graph LR
 
 ## 28. Environment Configuration Model
 
-| Config Class | Storage Location | Example Variables | Exposure |
-|---|---|---|---|
-| **PUBLIC CONFIG** | `NEXT_PUBLIC_*` | `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_CDN_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser & Server |
-| **SERVER CONFIG** | Server Environment | `DATABASE_URL`, `RESEND_API_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Server Runtime Only |
-| **MASTER SECRET** | Server Environment | `AI_ENCRYPTION_KEY_V1` | Server Runtime Only |
-| **ENCRYPTED SECRET** | PostgreSQL Table | Encrypted OpenAI/Anthropic/Gemini API Keys | In-Memory Decryption Only |
+| Config Class         | Storage Location   | Example Variables                                                                                                 | Exposure                  |
+| -------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| **PUBLIC CONFIG**    | `NEXT_PUBLIC_*`    | `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_CDN_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser & Server          |
+| **SERVER CONFIG**    | Server Environment | `DATABASE_URL`, `RESEND_API_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                     | Server Runtime Only       |
+| **MASTER SECRET**    | Server Environment | `AI_ENCRYPTION_KEY_V1`                                                                                            | Server Runtime Only       |
+| **ENCRYPTED SECRET** | PostgreSQL Table   | Encrypted OpenAI/Anthropic/Gemini API Keys                                                                        | In-Memory Decryption Only |
 
 ---
 
@@ -488,10 +489,10 @@ graph LR
 Disaster recovery capabilities are categorized into four distinct architectural concepts:
 
 1. **Backups (Recovery Artifacts)**:
-   - *Supabase Free Phase*: Automated scheduled logical database dumps (`pg_dump`) encrypted with AES-256 and stored in `gamerperu-db-backups-private` (Cloudflare R2) with 30-day retention.
-   - *Supabase Pro Phase*: Managed automated daily logical backups with 7-day retention included in base Pro plan ($25/mo).
+   - _Supabase Free Phase_: Automated scheduled logical database dumps (`pg_dump`) encrypted with AES-256 and stored in `gamerperu-db-backups-private` (Cloudflare R2) with 30-day retention.
+   - _Supabase Pro Phase_: Managed automated daily logical backups with 7-day retention included in base Pro plan ($25/mo).
 2. **Point-in-Time Recovery (PITR - Restore Capability)**:
-   - *Not included in Free or Base Pro*: PITR is a **separate optional paid add-on** (starting at ~$100/mo) providing physical continuous WAL archiving with 7-day rollback capability.
+   - _Not included in Free or Base Pro_: PITR is a **separate optional paid add-on** (starting at ~$100/mo) providing physical continuous WAL archiving with 7-day rollback capability.
 3. **High Availability (HA - Infrastructure Redundancy)**:
    - Single-region managed compute with automated container replacement; multi-instance HA read-replicas are separate infrastructure and not part of the initial base plan.
 4. **Failover (Multi-Region / Standby Switching)**:
@@ -510,15 +511,15 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 
 ## 34. Security Architecture & Controls
 
-| Security Control | Implementation Layer | Enforcement Mechanism |
-|---|---|---|
-| **Admin RBAC** | Server Actions, Layouts & Route Handlers | Authoritative database role check (`requirePermission`) |
-| **Customer Data Isolation** | Data Access Layer | Server-verified `getClaims()` $\to$ `auth_user_id` $\to$ `CustomerProfile.id` filter |
-| **Payment Voucher Protection**| Private Storage | S3 private bucket with no anonymous public access; short-lived pre-signed URLs (5m) issued after RBAC verification |
-| **AI Credential Protection** | Database / Server | Versioned AES-256-GCM encryption at rest + separate server master key |
-| **SQL Injection Prevention** | Data Layer | Drizzle ORM parameterized query APIs significantly reduce SQL-injection risk by ensuring inputs remain parameterized |
-| **XSS & CSRF Mitigation** | Framework & HTTP | Next.js automatic encoding, `SameSite=Lax` and `Secure` cookies, cryptographically verified JWT claims |
-| **Rate Limiting** | Edge / Middleware | IP & Session token bucket rate limiting on auth and AI routes |
+| Security Control               | Implementation Layer                     | Enforcement Mechanism                                                                                                |
+| ------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Admin RBAC**                 | Server Actions, Layouts & Route Handlers | Authoritative database role check (`requirePermission`)                                                              |
+| **Customer Data Isolation**    | Data Access Layer                        | Server-verified `getClaims()` $\to$ `auth_user_id` $\to$ `CustomerProfile.id` filter                                 |
+| **Payment Voucher Protection** | Private Storage                          | S3 private bucket with no anonymous public access; short-lived pre-signed URLs (5m) issued after RBAC verification   |
+| **AI Credential Protection**   | Database / Server                        | Versioned AES-256-GCM encryption at rest + separate server master key                                                |
+| **SQL Injection Prevention**   | Data Layer                               | Drizzle ORM parameterized query APIs significantly reduce SQL-injection risk by ensuring inputs remain parameterized |
+| **XSS & CSRF Mitigation**      | Framework & HTTP                         | Next.js automatic encoding, `SameSite=Lax` and `Secure` cookies, cryptographically verified JWT claims               |
+| **Rate Limiting**              | Edge / Middleware                        | IP & Session token bucket rate limiting on auth and AI routes                                                        |
 
 ---
 
@@ -543,33 +544,33 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 
 ## 37. Failure & Degradation Matrix
 
-| Service / Dependency | Criticality | Behavior on Outage | Recovery / Fallback |
-|---|---|---|---|
-| **Vercel Application Host** | **CRITICAL** | Storefront offline | Vercel platform restoration / rollback where applicable |
-| **Supabase PostgreSQL** | **CRITICAL** | Storefront displays cached pages; mutations show graceful 503 error | Provider restoration / restore from logical backup |
-| **Supabase Auth** | **DEGRADABLE** | Public storefront browsable without auth; new login/signup/session refresh degraded; Admin requires valid session + RBAC | Supabase Auth platform restoration |
-| **Cloudflare Public Media**| **DEGRADABLE** | Storefront reachable but images fail to load; UI layout preserved via aspect ratios | Cloudflare Edge multi-POP redundancy |
-| **Cloudflare Private Proofs**| **DEGRADABLE** | Orders placed; voucher uploads/reviews temporarily fail | Affected file operations retried after storage recovery; does not block core storefront/catalog browsing (GP-004/GP-020 determines exact upload UX/degradation) |
-| **Inngest Async Queue** | **DEGRADABLE** | Async jobs paused; customer checkout completes | Job backlog drained on recovery |
-| **AI Providers** | **DEGRADABLE** | Product research paused; Customer Assistant displays helpful FAQ/search fallback | Background retry / manual input |
-| **Resend Email** | **DEGRADABLE** | Emails queued in Inngest; checkout completes successfully | Inngest exponential retries |
-| **PostHog Analytics** | **NON-CRITICAL** | Zero customer impact; behavioral events discarded or buffered | Telemetry best-effort recovery |
-| **Sentry Observability** | **NON-CRITICAL** | Zero customer impact; local error logs preserved | Sentry buffer reconnect |
-| **EC OS Downstream** | **NON-CRITICAL** | Zero customer impact; outbound events held in outbox queue | Automatic retry when EC OS returns |
+| Service / Dependency          | Criticality      | Behavior on Outage                                                                                                       | Recovery / Fallback                                                                                                                                             |
+| ----------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vercel Application Host**   | **CRITICAL**     | Storefront offline                                                                                                       | Vercel platform restoration / rollback where applicable                                                                                                         |
+| **Supabase PostgreSQL**       | **CRITICAL**     | Storefront displays cached pages; mutations show graceful 503 error                                                      | Provider restoration / restore from logical backup                                                                                                              |
+| **Supabase Auth**             | **DEGRADABLE**   | Public storefront browsable without auth; new login/signup/session refresh degraded; Admin requires valid session + RBAC | Supabase Auth platform restoration                                                                                                                              |
+| **Cloudflare Public Media**   | **DEGRADABLE**   | Storefront reachable but images fail to load; UI layout preserved via aspect ratios                                      | Cloudflare Edge multi-POP redundancy                                                                                                                            |
+| **Cloudflare Private Proofs** | **DEGRADABLE**   | Orders placed; voucher uploads/reviews temporarily fail                                                                  | Affected file operations retried after storage recovery; does not block core storefront/catalog browsing (GP-004/GP-020 determines exact upload UX/degradation) |
+| **Inngest Async Queue**       | **DEGRADABLE**   | Async jobs paused; customer checkout completes                                                                           | Job backlog drained on recovery                                                                                                                                 |
+| **AI Providers**              | **DEGRADABLE**   | Product research paused; Customer Assistant displays helpful FAQ/search fallback                                         | Background retry / manual input                                                                                                                                 |
+| **Resend Email**              | **DEGRADABLE**   | Emails queued in Inngest; checkout completes successfully                                                                | Inngest exponential retries                                                                                                                                     |
+| **PostHog Analytics**         | **NON-CRITICAL** | Zero customer impact; behavioral events discarded or buffered                                                            | Telemetry best-effort recovery                                                                                                                                  |
+| **Sentry Observability**      | **NON-CRITICAL** | Zero customer impact; local error logs preserved                                                                         | Sentry buffer reconnect                                                                                                                                         |
+| **EC OS Downstream**          | **NON-CRITICAL** | Zero customer impact; outbound events held in outbox queue                                                               | Automatic retry when EC OS returns                                                                                                                              |
 
 ---
 
 ## 38. Cost & Scalability Model
 
-*Research Date: August 16, 2026. All costs based on official published commercial tiers in USD.*
+_Research Date: August 16, 2026. All costs based on official published commercial tiers in USD._
 
-| Phase | Fixed Monthly Cost | Variable Usage Cost | Total Estimated Monthly Cost |
-|---|---|---|---|
-| **Local Development** | $0 (Local Node.js 24 + Local PostgreSQL + Mock Adapters) | $0 | **$0 / month** |
-| **Cloud Pre-Launch** | $20 (Vercel Pro $20 required for commercial team use; Supabase Free $0; Cloudflare R2 Free; Inngest Free; Resend Free; PostHog Free) | < $5 (AI test tokens) | **~$20 – $25 / month** |
-| **Initial Live Launch** | $20 (Vercel Pro $20; Supabase Free $0 with scheduled R2 backups; R2 Free; Resend Free; PostHog Free) | ~$15 (AI Product Research tokens) | **~$35 – $55 / month** |
-| **Supabase Pro Stage** | $45 (Vercel Pro $20 + Supabase Pro $25 with 7-day daily backups; Cloudflare R2 Free; Resend $0-$15) | ~$15 – $25 (AI tokens + Cloudflare Images) | **~$60 – $80 / month** |
-| **Growth Stage (Optional Add-ons)**| ~$175 – $250+ (Vercel Pro $20 + Supabase Pro $25 + Optional PITR ~$100 + Inngest Pro $35 + Cloudflare Images Paid transformations ~$10) | ~$50 – $100 (AI Customer Assistant tokens + Resend Email) | **~$175 – $325+ / month** |
+| Phase                               | Fixed Monthly Cost                                                                                                                      | Variable Usage Cost                                       | Total Estimated Monthly Cost |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------- |
+| **Local Development**               | $0 (Local Node.js 24 + Local PostgreSQL + Mock Adapters)                                                                                | $0                                                        | **$0 / month**               |
+| **Cloud Pre-Launch**                | $20 (Vercel Pro $20 required for commercial team use; Supabase Free $0; Cloudflare R2 Free; Inngest Free; Resend Free; PostHog Free)    | < $5 (AI test tokens)                                     | **~$20 – $25 / month**       |
+| **Initial Live Launch**             | $20 (Vercel Pro $20; Supabase Free $0 with scheduled R2 backups; R2 Free; Resend Free; PostHog Free)                                    | ~$15 (AI Product Research tokens)                         | **~$35 – $55 / month**       |
+| **Supabase Pro Stage**              | $45 (Vercel Pro $20 + Supabase Pro $25 with 7-day daily backups; Cloudflare R2 Free; Resend $0-$15)                                     | ~$15 – $25 (AI tokens + Cloudflare Images)                | **~$60 – $80 / month**       |
+| **Growth Stage (Optional Add-ons)** | ~$175 – $250+ (Vercel Pro $20 + Supabase Pro $25 + Optional PITR ~$100 + Inngest Pro $35 + Cloudflare Images Paid transformations ~$10) | ~$50 – $100 (AI Customer Assistant tokens + Resend Email) | **~$175 – $325+ / month**    |
 
 ---
 
@@ -598,22 +599,22 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 
 ## 41. Technology Decision Matrix
 
-| Technology Domain | Selected Solution | Key Alternatives Considered | Deciding Factors |
-|---|---|---|---|
-| **App Framework** | **Next.js 16 (Active LTS)** | Remix, Astro, Nuxt | SEO dominance, React Server Components, unified route groups, AI streaming. |
-| **App Hosting** | **Vercel Pro** | AWS ECS, Cloudflare Pages | Commercial compliance, native Next.js App Router support, preview environments. |
-| **Commerce Engine** | **Custom Domain** | Medusa, Saleor, Shopify | Native Yape/Plin verification, custom hardware specs, zero platform rent. |
-| **Managed Database**| **Supabase PostgreSQL** | Neon, AWS RDS, PlanetScale | PostgreSQL 16+, Supavisor pooling, Free-first launch $\to$ Pro zero-rewrite upgrade path. |
-| **Data Access Layer**| **Drizzle ORM** | Prisma, Kysely, TypeORM | Zero runtime overhead, pure TypeScript schema, native SQL control, fast cold-starts. |
-| **Authentication** | **Supabase Auth** | Better Auth, Auth.js, Clerk | Native Supabase PostgreSQL integration, Email/Password + Google OAuth, SSR cookie architecture, zero extra MAU SaaS fees up to 50k MAU. |
-| **Object Storage** | **Cloudflare R2** | AWS S3, Supabase Storage | Zero egress fees, global edge CDN, S3-compatible API, private bucket support. |
-| **Search Engine** | **PostgreSQL FTS/Trigram** | Meilisearch, Algolia | Zero extra infrastructure for v1, instant transactional updates, Spanish stemming. |
-| **Async Background**| **Inngest** | BullMQ, Temporal | Durable TypeScript workflows, step-level retries, serverless compatibility. |
-| **AI Gateway** | **Custom Multi-Provider** | Single Vendor SDK | Zero vendor lock-in, versioned AES-256-GCM credential encryption, structured Zod output. |
-| **Email** | **Resend + React Email** | Postmark, SendGrid | Type-safe React components, modern developer API, reliable deliverability. |
-| **Analytics** | **PostHog** | Plausible, Google Analytics | First-party PostgreSQL ledger for revenue + PostHog for cookieless product funnels. |
-| **Observability** | **Sentry + Pino** | Datadog, New Relic | Deep Next.js error tracing, structured JSON logs, automated PII scrubbing. |
-| **Testing** | **Vitest + Playwright** | Jest + Cypress | ESM-native speed, multi-browser E2E, integrated accessibility testing (`axe-core`). |
+| Technology Domain     | Selected Solution           | Key Alternatives Considered | Deciding Factors                                                                                                                        |
+| --------------------- | --------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **App Framework**     | **Next.js 16 (Active LTS)** | Remix, Astro, Nuxt          | SEO dominance, React Server Components, unified route groups, AI streaming.                                                             |
+| **App Hosting**       | **Vercel Pro**              | AWS ECS, Cloudflare Pages   | Commercial compliance, native Next.js App Router support, preview environments.                                                         |
+| **Commerce Engine**   | **Custom Domain**           | Medusa, Saleor, Shopify     | Native Yape/Plin verification, custom hardware specs, zero platform rent.                                                               |
+| **Managed Database**  | **Supabase PostgreSQL**     | Neon, AWS RDS, PlanetScale  | PostgreSQL 16+, Supavisor pooling, Free-first launch $\to$ Pro zero-rewrite upgrade path.                                               |
+| **Data Access Layer** | **Drizzle ORM**             | Prisma, Kysely, TypeORM     | Zero runtime overhead, pure TypeScript schema, native SQL control, fast cold-starts.                                                    |
+| **Authentication**    | **Supabase Auth**           | Better Auth, Auth.js, Clerk | Native Supabase PostgreSQL integration, Email/Password + Google OAuth, SSR cookie architecture, zero extra MAU SaaS fees up to 50k MAU. |
+| **Object Storage**    | **Cloudflare R2**           | AWS S3, Supabase Storage    | Zero egress fees, global edge CDN, S3-compatible API, private bucket support.                                                           |
+| **Search Engine**     | **PostgreSQL FTS/Trigram**  | Meilisearch, Algolia        | Zero extra infrastructure for v1, instant transactional updates, Spanish stemming.                                                      |
+| **Async Background**  | **Inngest**                 | BullMQ, Temporal            | Durable TypeScript workflows, step-level retries, serverless compatibility.                                                             |
+| **AI Gateway**        | **Custom Multi-Provider**   | Single Vendor SDK           | Zero vendor lock-in, versioned AES-256-GCM credential encryption, structured Zod output.                                                |
+| **Email**             | **Resend + React Email**    | Postmark, SendGrid          | Type-safe React components, modern developer API, reliable deliverability.                                                              |
+| **Analytics**         | **PostHog**                 | Plausible, Google Analytics | First-party PostgreSQL ledger for revenue + PostHog for cookieless product funnels.                                                     |
+| **Observability**     | **Sentry + Pino**           | Datadog, New Relic          | Deep Next.js error tracing, structured JSON logs, automated PII scrubbing.                                                              |
+| **Testing**           | **Vitest + Playwright**     | Jest + Cypress              | ESM-native speed, multi-browser E2E, integrated accessibility testing (`axe-core`).                                                     |
 
 ---
 
@@ -643,6 +644,7 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 ## 44. Inputs for GP-004 (Commerce Domain Model)
 
 This document provides GP-004 with exact architectural boundaries:
+
 - Relational database schema requirements on Supabase PostgreSQL (PostgreSQL 16+).
 - Core entities vs. JSONB dynamic spec extension patterns with Drizzle ORM.
 - Manual Yape/Plin payment verification workflow invariants.
@@ -654,6 +656,7 @@ This document provides GP-004 with exact architectural boundaries:
 ## 45. Inputs for GP-005 (Repository Bootstrap)
 
 This document establishes the exact technology choices to be initialized in GP-005:
+
 - Next.js 16 (App Router) + TypeScript + Node.js 24 LTS.
 - Drizzle ORM + Drizzle Kit with Supabase PostgreSQL connection configuration.
 - Supabase Auth client/server utility setup (`@supabase/supabase-js`, pinned `@supabase/ssr` version), request-scoped client factories, and environment contracts.
@@ -666,21 +669,21 @@ This document establishes the exact technology choices to be initialized in GP-0
 
 ## 46. GP-003 Definition of Done
 
-* [x] Exactly ONE canonical technology architecture selected and documented.
-* [x] Next.js 16 Active LTS and Node.js 24 LTS baselines established.
-* [x] Supabase PostgreSQL selected with Free-first launch $\to$ Pro upgrade path without code rewrite.
-* [x] Base Supabase Pro ($25/mo) with daily backups and optional PITR ($100/mo) correctly separated.
-* [x] All 8 foundational Architecture Decision Records (ADRs 001–008) authored and ACCEPTED.
-* [x] Current official documentation consulted for all technologies.
-* [x] Complete 46-section `TECHNOLOGY_ARCHITECTURE.md` specification created.
-* [x] Multi-brand SEO-first storefront requirements verified.
-* [x] Server-side authoritative Admin RBAC verified.
-* [x] Customer-private data isolation verified.
-* [x] Transactional manual Yape/Plin payment architecture verified.
-* [x] Private payment-proof storage isolated from public CDN assets.
-* [x] Multi-provider AI Gateway and versioned AES-256-GCM credential encryption architecture defined.
-* [x] AI Customer Assistant data boundaries (PUBLIC / CUSTOMER_PRIVATE / INTERNAL) verified.
-* [x] EC OS operational independence guaranteed.
-* [x] Backup, recovery, failure degradation, and cost models documented.
-* [x] Zero application source code or database migrations prematurely created.
-* [x] GP-004 and GP-005 remain PLANNED and unexecuted.
+- [x] Exactly ONE canonical technology architecture selected and documented.
+- [x] Next.js 16 Active LTS and Node.js 24 LTS baselines established.
+- [x] Supabase PostgreSQL selected with Free-first launch $\to$ Pro upgrade path without code rewrite.
+- [x] Base Supabase Pro ($25/mo) with daily backups and optional PITR ($100/mo) correctly separated.
+- [x] All 8 foundational Architecture Decision Records (ADRs 001–008) authored and ACCEPTED.
+- [x] Current official documentation consulted for all technologies.
+- [x] Complete 46-section `TECHNOLOGY_ARCHITECTURE.md` specification created.
+- [x] Multi-brand SEO-first storefront requirements verified.
+- [x] Server-side authoritative Admin RBAC verified.
+- [x] Customer-private data isolation verified.
+- [x] Transactional manual Yape/Plin payment architecture verified.
+- [x] Private payment-proof storage isolated from public CDN assets.
+- [x] Multi-provider AI Gateway and versioned AES-256-GCM credential encryption architecture defined.
+- [x] AI Customer Assistant data boundaries (PUBLIC / CUSTOMER_PRIVATE / INTERNAL) verified.
+- [x] EC OS operational independence guaranteed.
+- [x] Backup, recovery, failure degradation, and cost models documented.
+- [x] Zero application source code or database migrations prematurely created.
+- [x] GP-004 and GP-005 remain PLANNED and unexecuted.

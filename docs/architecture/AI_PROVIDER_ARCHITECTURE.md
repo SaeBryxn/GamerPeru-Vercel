@@ -41,6 +41,7 @@ Admin should have a protected settings area conceptually similar to:
 Capabilities:
 
 ### Providers
+
 - enable / disable provider;
 - configure API credential through secure server-side secret management;
 - test connection;
@@ -48,7 +49,9 @@ Capabilities:
 - set default provider.
 
 ### Models
+
 For each supported provider:
+
 - model identifier;
 - enabled / disabled;
 - display name;
@@ -57,23 +60,29 @@ For each supported provider:
 - context capability metadata when available.
 
 ### Default Model Profiles
+
 Instead of hardcoding model names in product workflows, create reusable AI profiles.
 
 Examples:
 
 `PRODUCT_RESEARCH_FAST`
+
 - optimized for inexpensive extraction / triage.
 
 `PRODUCT_RESEARCH_DEEP`
+
 - optimized for difficult product research and conflict resolution.
 
 `SEO_COPY`
+
 - optimized for product SEO copy.
 
 `PRODUCT_STORY`
+
 - optimized for premium marketing/product storytelling.
 
 `BATCH_IMPORT`
+
 - optimized for cost-efficient structured enrichment.
 
 Each profile references a configured provider + model + generation settings.
@@ -157,6 +166,7 @@ Malformed AI responses must never be written directly into canonical commerce re
 Provider API credentials are infrastructure secrets.
 
 The Admin may show:
+
 - provider configured: yes/no;
 - masked key identifier;
 - last connection test;
@@ -181,6 +191,7 @@ Fallback:
 Fallback should only occur according to explicit policy.
 
 Reasons may include:
+
 - provider outage;
 - rate limiting;
 - unavailable model.

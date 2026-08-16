@@ -40,8 +40,7 @@ export default function HomePage() {
             marginBottom: "1.5rem",
           }}
         >
-          Plataforma de e-commerce de periféricos gamer de alto rendimiento para
-          el mercado peruano.
+          Plataforma de e-commerce de periféricos gamer de alto rendimiento para el mercado peruano.
         </p>
         <div
           style={{

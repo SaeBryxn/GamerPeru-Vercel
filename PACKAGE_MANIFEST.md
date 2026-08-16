@@ -15,10 +15,10 @@ v1 Launch
 
 ## AI documents
 
--   `docs/specs/AI_PRODUCT_ASSISTANT_SPEC.md`
--   `docs/specs/AI_CUSTOMER_ASSISTANT_SPEC.md`
--   `docs/architecture/AI_PROVIDER_ARCHITECTURE.md`
--   `docs/architecture/AI_CUSTOMER_ASSISTANT_ARCHITECTURE.md`
+- `docs/specs/AI_PRODUCT_ASSISTANT_SPEC.md`
+- `docs/specs/AI_CUSTOMER_ASSISTANT_SPEC.md`
+- `docs/architecture/AI_PROVIDER_ARCHITECTURE.md`
+- `docs/architecture/AI_CUSTOMER_ASSISTANT_ARCHITECTURE.md`
 
 ## Execution
 

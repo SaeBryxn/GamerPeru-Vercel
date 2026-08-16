@@ -62,7 +62,8 @@ describe("GP-005 Smoke Tests", () => {
     // Accepts valid production DATABASE_URL in production environment
     const validProd = validateServerEnv({
       NODE_ENV: "production",
-      DATABASE_URL: "postgres://db_user:secret_pass@aws-0-sa-east-1.pooler.supabase.com:6543/postgres",
+      DATABASE_URL:
+        "postgres://db_user:secret_pass@aws-0-sa-east-1.pooler.supabase.com:6543/postgres",
     });
     expect(validProd.NODE_ENV).toBe("production");
   });

@@ -49,7 +49,9 @@ Chat UI / Product Cards / Actions
 ## Data Zones
 
 ### PUBLIC
+
 Allowed:
+
 - published products;
 - public prices;
 - public stock representation;
@@ -58,14 +60,18 @@ Allowed:
 - public FAQ/help.
 
 ### CUSTOMER_PRIVATE
+
 Allowed only with authenticated ownership checks:
+
 - customer's orders;
 - customer's shipping/tracking data;
 - customer's payment-verification state;
 - customer's addresses only when necessary.
 
 ### INTERNAL
+
 Never available to public assistant:
+
 - cost/margin;
 - supplier terms;
 - internal notes;
@@ -118,6 +124,7 @@ Product URLs, prices and images should come from canonical application data afte
 Use search/indexing appropriate to the architecture selected in GP-003.
 
 Retrieval documents should be partitioned by visibility:
+
 - public catalog;
 - public knowledge base;
 - customer-private data through tools rather than general vector retrieval;
@@ -132,6 +139,7 @@ Never put the entire company knowledge base into a public assistant index.
 Treat retrieved content as untrusted.
 
 Tool calls are constrained by:
+
 - allowlist;
 - schema validation;
 - authorization;
@@ -157,6 +165,7 @@ The internal orchestrator may route by task while retaining one public assistant
 ## Reliability
 
 If AI provider fails:
+
 - preserve chat session;
 - show graceful error;
 - offer search/help fallback;
@@ -178,6 +187,7 @@ If AI provider fails:
 ## Observability
 
 Measure:
+
 - latency;
 - provider/model;
 - tool calls;

@@ -1,4 +1,5 @@
 # SEO Specification
+
 Goal: maximize crawlability, indexability, relevance, performance and commercial search coverage; no ranking position is guaranteed.
 
 Technical: semantic URLs, canonicals, sitemap, robots, metadata, Open Graph, breadcrumbs, structured data, redirects, correct status codes, image optimization, Core Web Vitals, crawl-safe faceting.

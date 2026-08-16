@@ -1,6 +1,7 @@
 # Gamer Perú — AI Product Assistant Specification
 
 ## Status
+
 APPROVED / CANONICAL (v1.2)
 
 ## Purpose
@@ -16,6 +17,7 @@ The AI must assist the administrator. It must never silently publish unverified 
 ## 1. Primary Use Cases
 
 ### Single Product Import
+
 Administrator enters:
 
 `WLMouse Beast X Max`
@@ -44,6 +46,7 @@ The system researches the product and creates a draft containing, when available
 - Product Story suggestions.
 
 ### Batch Import
+
 Administrator pastes a list of product names or uploads CSV.
 
 The system creates an import job with per-product status:
@@ -58,7 +61,9 @@ The system creates an import job with per-product status:
 - `PUBLISHED`
 
 ### Existing Product Enrichment
+
 Administrator may ask AI to:
+
 - complete missing specifications;
 - improve product description;
 - generate SEO metadata;
@@ -74,6 +79,7 @@ Administrator may ask AI to:
 AI-generated or AI-researched product information must enter Gamer Perú as a draft.
 
 AI is allowed to:
+
 - research;
 - extract;
 - normalize;
@@ -83,6 +89,7 @@ AI is allowed to:
 - suggest.
 
 AI is NOT allowed to:
+
 - mark manual payments as paid;
 - publish new products automatically by default;
 - change prices automatically;
@@ -323,6 +330,7 @@ One failed product must not invalidate the entire batch.
 AI provider keys are server-side secrets.
 
 Never:
+
 - expose provider API keys in browser bundles;
 - store plaintext keys in client-accessible database fields;
 - send unnecessary customer data to AI providers;

@@ -13,7 +13,7 @@ Build a premium multi-brand gaming-peripherals e-commerce platform for Peru with
 The project progresses sequentially through 53 gated tasks: **GP-000 → GP-052**.
 
 - **GP-000 to GP-005**: System Initialization, Design System, Technology Architecture, Commerce Domain Model, and Repository Bootstrap (`COMPLETE`).
-- **GP-006**: Engineering Standards (`NEXT / PLANNED`).
+- **GP-006**: Engineering Standards (`CURRENT`).
 - **GP-007 to GP-052**: Core Tooling, UI Design System, Catalog, Cart, Checkout, Payments, Admin, Affiliates, AI Assistant, and Production Launch (`PLANNED`).
 
 ---
@@ -31,6 +31,18 @@ The project progresses sequentially through 53 gated tasks: **GP-000 → GP-052*
 - **Async Execution**: Inngest durable background workflows
 - **Communications**: Resend (Auth SMTP + Inngest commerce emails) + React Email
 - **Testing**: Vitest (Unit/Integration) + Playwright & `@axe-core/playwright` (E2E & Accessibility)
+- **Code Quality**: ESLint 9 (Flat Config, zero-warning tolerance) + Prettier 3
+
+---
+
+## Engineering Standards & Quality Gates
+
+All contributors and coding agents must strictly adhere to the canonical [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md). Before submitting PRs or claiming task completion, execute the local quality validation gate:
+
+```bash
+pnpm check
+pnpm test:e2e
+```
 
 ---
 
@@ -92,22 +104,24 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to view th
 
 ## Available Scripts
 
-| Command | Description |
-|---|---|
-| `pnpm dev` | Starts the Next.js development server on port 3000. |
-| `pnpm build` | Compiles the production application bundle. |
-| `pnpm start` | Starts the Next.js production server. |
-| `pnpm typecheck` | Runs TypeScript static type checking without emitting files. |
-| `pnpm lint` | Runs Next.js ESLint verification. |
-| `pnpm test` | Runs unit and integration smoke tests with Vitest. |
-| `pnpm test:watch` | Runs Vitest in interactive watch mode. |
-| `pnpm test:e2e` | Runs end-to-end browser and accessibility tests with Playwright. |
-| `pnpm db:generate` | Generates Drizzle SQL migrations from schema files. |
-| `pnpm db:migrate` | Applies pending Drizzle database migrations. |
-| `pnpm db:studio` | Launches Drizzle Studio database browser UI. |
-| `pnpm supabase:start` | Starts the local Supabase Docker development stack. |
-| `pnpm supabase:stop` | Stops the local Supabase Docker development stack. |
-| `pnpm supabase:status` | Displays connection details for the local Supabase stack. |
+| Command                | Description                                                                         |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| `pnpm check`           | Runs full local quality gate: `format:check`, `typecheck`, `lint`, `test`, `build`. |
+| `pnpm format`          | Automatically formats all tracked code and documentation with Prettier.             |
+| `pnpm format:check`    | Checks that all files conform to Prettier rules (read-only, fails in CI).           |
+| `pnpm typecheck`       | Runs TypeScript static type checking without emitting files.                        |
+| `pnpm lint`            | Runs ESLint verification with zero warning tolerance (`--max-warnings=0`).          |
+| `pnpm test`            | Runs unit and integration smoke tests with Vitest.                                  |
+| `pnpm test:watch`      | Runs Vitest in interactive watch mode.                                              |
+| `pnpm test:e2e`        | Runs end-to-end browser and accessibility tests with Playwright.                    |
+| `pnpm build`           | Compiles the production application bundle.                                         |
+| `pnpm start`           | Starts the Next.js production server.                                               |
+| `pnpm db:generate`     | Generates Drizzle SQL migrations from schema files.                                 |
+| `pnpm db:migrate`      | Applies pending Drizzle database migrations.                                        |
+| `pnpm db:studio`       | Launches Drizzle Studio database browser UI.                                        |
+| `pnpm supabase:start`  | Starts the local Supabase Docker development stack.                                 |
+| `pnpm supabase:stop`   | Stops the local Supabase Docker development stack.                                  |
+| `pnpm supabase:status` | Displays connection details for the local Supabase stack.                           |
 
 ---
 
@@ -116,6 +130,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to view th
 Canonical architecture specifications and decision records live in [`docs/`](./docs/):
 
 - [`AGENTS.md`](./AGENTS.md) — Operating contract, quality gates, and anti-clone rules.
+- [`docs/engineering/ENGINEERING_STANDARDS.md`](./docs/engineering/ENGINEERING_STANDARDS.md) — Canonical engineering & quality standards.
 - [`docs/specs/`](./docs/specs/) — Core functional and domain specifications.
 - [`docs/architecture/TECHNOLOGY_ARCHITECTURE.md`](./docs/architecture/TECHNOLOGY_ARCHITECTURE.md) — Canonical technology baseline.
 - [`docs/architecture/COMMERCE_DOMAIN_MODEL.md`](./docs/architecture/COMMERCE_DOMAIN_MODEL.md) — Complete 67-section commerce domain model.

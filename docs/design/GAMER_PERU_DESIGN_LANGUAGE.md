@@ -9,6 +9,7 @@ This document establishes the canonical visual design language for **Gamer Perú
 Building upon the benchmark principles researched in `WLMOUSE_REFERENCE_SPEC.md` (GP-001) and the high-level intent in `VISUAL_DIRECTION.md`, this specification defines an **original, proprietary visual identity** engineered specifically for a high-performance multi-brand gaming peripherals retailer in the Peruvian market.
 
 **Core Mandates**:
+
 1. **Product Dominance**: Hardware industrial design, metallic/matte textures, structural cutouts, and physical ergonomics remain the primary visual focal points.
 2. **Technological Restraint**: Clean monochrome foundations, high contrast, and disciplined precision replace generic RGB gamer tropes, distracting neon glows, and template clutter.
 3. **Multi-Brand Neutrality**: The interface provides an elegant, high-contrast backdrop that harmonizes with peripherals of any colorway (from matte black and arctic white to vibrant pastels, anodized red, and gold).
@@ -21,13 +22,13 @@ Building upon the benchmark principles researched in `WLMOUSE_REFERENCE_SPEC.md`
 
 Gamer Perú occupies the intersection of **esports engineering, high-end industrial design, and Peruvian gaming culture**:
 
-| Trait | What It Is | What It Is NOT |
-|---|---|---|
-| **Precision** | Surgical lines, tight typography, exact numeric specs (`39g`, `8000Hz`) | Decorative fake technical grids or sci-fi HUD clutter |
-| **Maturity** | Sophisticated dark/light contrast, deep obsidian canvas, generous whitespace | Childish neon gaming glows, RGB rainbow gradients |
-| **Editorial** | Magazine-style hardware deep dives, blueprint schematics, exploded views | Commodity marketplace rows of squeezed thumbnail cards |
+| Trait            | What It Is                                                                         | What It Is NOT                                            |
+| ---------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| **Precision**    | Surgical lines, tight typography, exact numeric specs (`39g`, `8000Hz`)            | Decorative fake technical grids or sci-fi HUD clutter     |
+| **Maturity**     | Sophisticated dark/light contrast, deep obsidian canvas, generous whitespace       | Childish neon gaming glows, RGB rainbow gradients         |
+| **Editorial**    | Magazine-style hardware deep dives, blueprint schematics, exploded views           | Commodity marketplace rows of squeezed thumbnail cards    |
 | **Authenticity** | Direct Peruvian relevance (Soles pricing, Yape/Plin trust, domestic stock clarity) | Generic drop-shipping templates or patriotic flag clichés |
-| **Performance** | Snappy transitions, immediate interactions, zero layout shifts | Heavy bloated 3D canvases or scroll-hijacked animations |
+| **Performance**  | Snappy transitions, immediate interactions, zero layout shifts                     | Heavy bloated 3D canvases or scroll-hijacked animations   |
 
 ---
 
@@ -44,6 +45,7 @@ Gamer Perú occupies the intersection of **esports engineering, high-end industr
 ## 4. Selected Visual Direction & Rationale
 
 ### Selected Canonical Direction: "Machinery Obsidian & Signal Crimson"
+
 - **Canvas & Surface Palette**: Deep precision obsidian (`#09090B`) paired with clinical crisp canvas (`#FAFAFA`), structured by neutral slate-tinted zinc neutrals (`#18181B`, `#27272A`, `#E4E4E7`, `#FFFFFF`).
 - **Brand Accent**: **Signal Crimson** (`#E11D48` / `#BE123C`), a laser-precise, saturated crimson inspired by optical sensor beams, anodized aluminum switches, and an authentic, non-cliché nod to Peruvian national identity.
 - **Why This Direction Won**:
@@ -57,12 +59,14 @@ Gamer Perú occupies the intersection of **esports engineering, high-end industr
 ## 5. Rejected Alternative Directions
 
 ### Rejected Concept 1: "Cyber Volt & Pitch Black"
-- *Description*: Pure black background with electric neon green/yellow accents and glowing borders.
-- *Reason for Rejection*: Highly clichéd "gamer" aesthetic; creates severe visual fatigue; clashes aggressively with multi-brand peripheral colorways (e.g., pink or pastel mice look jarring next to neon green); fails professional and luxury quality bars.
+
+- _Description_: Pure black background with electric neon green/yellow accents and glowing borders.
+- _Reason for Rejection_: Highly clichéd "gamer" aesthetic; creates severe visual fatigue; clashes aggressively with multi-brand peripheral colorways (e.g., pink or pastel mice look jarring next to neon green); fails professional and luxury quality bars.
 
 ### Rejected Concept 2: "Boutique Minimalist Champagne Gold"
-- *Description*: Warm grey canvas with muted champagne gold accents and serif display typography.
-- *Reason for Rejection*: Feels like a luxury jewelry or perfume boutique; lacks the visceral punch, competitive energy, and high-visibility status signaling required for esports hardware.
+
+- _Description_: Warm grey canvas with muted champagne gold accents and serif display typography.
+- _Reason for Rejection_: Feels like a luxury jewelry or perfume boutique; lacks the visceral punch, competitive energy, and high-visibility status signaling required for esports hardware.
 
 ---
 
@@ -82,72 +86,72 @@ All colors are defined as canonical semantic hex tokens.
 +-----------------------+-----------------------+-----------------------+
 ```
 
-| Token Name | Canonical Value | Semantic Usage |
-|---|---|---|
-| `color.brand.primary` | `#E11D48` | Primary CTA buttons, key active indicators, price highlights |
-| `color.brand.hover` | `#BE123C` | Hover state for primary buttons and interactive brand elements |
-| `color.brand.active` | `#9F1239` | Pressed / active state for brand controls |
-| `color.brand.subtle_light`| `#FFF1F2` | Background tint for sale tags and promo banners on light surfaces |
-| `color.brand.subtle_dark` | `#4C0519` | Background tint for sale tags and promo banners on dark surfaces |
-| `color.brand.text_on_accent`| `#FFFFFF` | Text rendered on top of `color.brand.primary` / `hover` |
+| Token Name                   | Canonical Value | Semantic Usage                                                    |
+| ---------------------------- | --------------- | ----------------------------------------------------------------- |
+| `color.brand.primary`        | `#E11D48`       | Primary CTA buttons, key active indicators, price highlights      |
+| `color.brand.hover`          | `#BE123C`       | Hover state for primary buttons and interactive brand elements    |
+| `color.brand.active`         | `#9F1239`       | Pressed / active state for brand controls                         |
+| `color.brand.subtle_light`   | `#FFF1F2`       | Background tint for sale tags and promo banners on light surfaces |
+| `color.brand.subtle_dark`    | `#4C0519`       | Background tint for sale tags and promo banners on dark surfaces  |
+| `color.brand.text_on_accent` | `#FFFFFF`       | Text rendered on top of `color.brand.primary` / `hover`           |
 
 ### 6.2 Neutral Surfaces (Light Context)
 
-| Token Name | Canonical Value | Semantic Usage |
-|---|---|---|
-| `color.surface.canvas` | `#FAFAFA` | Default page background for light storefront sections & Admin |
-| `color.surface.card` | `#FFFFFF` | Default product card, table container, and content block surface |
-| `color.surface.elevated` | `#FFFFFF` | Dropdowns, popovers, and floating cards (with elevation shadow) |
-| `color.surface.secondary` | `#F4F4F5` | Secondary card wells, filter toolbars, and inactive tab strips |
-| `color.surface.tertiary` | `#E4E4E7` | Subtle section backgrounds and table header rows in Admin |
-| `color.surface.overlay` | `rgba(9, 9, 11, 0.65)`| Semi-transparent backdrop for modal dialogs and slide-out drawers |
+| Token Name                | Canonical Value        | Semantic Usage                                                    |
+| ------------------------- | ---------------------- | ----------------------------------------------------------------- |
+| `color.surface.canvas`    | `#FAFAFA`              | Default page background for light storefront sections & Admin     |
+| `color.surface.card`      | `#FFFFFF`              | Default product card, table container, and content block surface  |
+| `color.surface.elevated`  | `#FFFFFF`              | Dropdowns, popovers, and floating cards (with elevation shadow)   |
+| `color.surface.secondary` | `#F4F4F5`              | Secondary card wells, filter toolbars, and inactive tab strips    |
+| `color.surface.tertiary`  | `#E4E4E7`              | Subtle section backgrounds and table header rows in Admin         |
+| `color.surface.overlay`   | `rgba(9, 9, 11, 0.65)` | Semi-transparent backdrop for modal dialogs and slide-out drawers |
 
 ### 6.3 Inverted Neutral Surfaces (Dark Context & Dark Editorial Sections)
 
-| Token Name | Canonical Value | Semantic Usage |
-|---|---|---|
-| `color.surface.dark_canvas` | `#09090B` | Obsidian dark page background for hero sections and dark PDP story blocks |
-| `color.surface.dark_card` | `#121215` | Elevated card surface on dark canvas |
-| `color.surface.dark_secondary` | `#18181B` | Secondary wells, dark spec callout boxes, dark table rows |
-| `color.surface.dark_tertiary` | `#27272A` | Inverted input fields and dark control backgrounds |
+| Token Name                     | Canonical Value | Semantic Usage                                                            |
+| ------------------------------ | --------------- | ------------------------------------------------------------------------- |
+| `color.surface.dark_canvas`    | `#09090B`       | Obsidian dark page background for hero sections and dark PDP story blocks |
+| `color.surface.dark_card`      | `#121215`       | Elevated card surface on dark canvas                                      |
+| `color.surface.dark_secondary` | `#18181B`       | Secondary wells, dark spec callout boxes, dark table rows                 |
+| `color.surface.dark_tertiary`  | `#27272A`       | Inverted input fields and dark control backgrounds                        |
 
 ### 6.4 Text & Typography Tokens
 
-| Token Name | Canonical Value | Context & Usage |
-|---|---|---|
-| `color.text.primary` | `#09090B` | Primary headings, product titles, and body copy on light surfaces |
-| `color.text.secondary` | `#52525B` | Subheadings, descriptions, and metadata on light surfaces |
-| `color.text.muted` | `#71717A` | Secondary spec pills, breadcrumbs, placeholder text (large/spec contexts) |
-| `color.text.disabled` | `#A1A1AA` | Disabled button and input labels |
-| `color.text.link` | `#E11D48` | Inline text hyperlinks on light surfaces |
-| `color.text.dark_primary` | `#F4F4F5` | Primary text and headlines on dark/inverted surfaces |
-| `color.text.dark_secondary`| `#A1A1AA` | Secondary body text and spec descriptions on dark surfaces |
-| `color.text.dark_muted` | `#9CA3AF` | Captions, footprints, and muted descriptions on dark surfaces ($\ge 5.8:1$ contrast) |
-| `color.text.dark_link` | `#FB7185` | Inline hyperlinks on dark surfaces |
+| Token Name                  | Canonical Value | Context & Usage                                                                      |
+| --------------------------- | --------------- | ------------------------------------------------------------------------------------ |
+| `color.text.primary`        | `#09090B`       | Primary headings, product titles, and body copy on light surfaces                    |
+| `color.text.secondary`      | `#52525B`       | Subheadings, descriptions, and metadata on light surfaces                            |
+| `color.text.muted`          | `#71717A`       | Secondary spec pills, breadcrumbs, placeholder text (large/spec contexts)            |
+| `color.text.disabled`       | `#A1A1AA`       | Disabled button and input labels                                                     |
+| `color.text.link`           | `#E11D48`       | Inline text hyperlinks on light surfaces                                             |
+| `color.text.dark_primary`   | `#F4F4F5`       | Primary text and headlines on dark/inverted surfaces                                 |
+| `color.text.dark_secondary` | `#A1A1AA`       | Secondary body text and spec descriptions on dark surfaces                           |
+| `color.text.dark_muted`     | `#9CA3AF`       | Captions, footprints, and muted descriptions on dark surfaces ($\ge 5.8:1$ contrast) |
+| `color.text.dark_link`      | `#FB7185`       | Inline hyperlinks on dark surfaces                                                   |
 
 ### 6.5 Border & Divider Tokens
 
-| Token Name | Canonical Value | Semantic Usage |
-|---|---|---|
-| `color.border.subtle` | `#E4E4E7` | Subtle decorative card outlines and row dividers on light surfaces |
-| `color.border.dark_subtle` | `#27272A` | Subtle decorative dividers and tab borders on dark surfaces |
-| `color.border.default` | `#D4D4D8` | Standard container boundaries and table header dividers (light) |
-| `color.border.dark_default`| `#3F3F46` | Standard container boundaries on dark surfaces |
-| `color.border.control` | `#71717A` | Accessible structural boundary for inputs, selects, and checkboxes on light surfaces ($\ge 4.6:1$) |
-| `color.border.dark_control`| `#8E8E93` | Accessible structural boundary for inputs and checkboxes on dark surfaces ($\ge 6.1:1$) |
-| `color.border.strong` | `#52525B` | Active borders, hovered controls, selected swatch rings on light surfaces |
-| `color.border.dark_strong` | `#A1A1AA` | Active borders and selected swatch rings on dark surfaces |
-| `color.border.focus` | `#09090B` | High-contrast 2px focus ring for keyboard accessibility on light surfaces |
-| `color.border.dark_focus` | `#F4F4F5` | High-contrast 2px focus ring for keyboard accessibility on dark surfaces |
+| Token Name                  | Canonical Value | Semantic Usage                                                                                     |
+| --------------------------- | --------------- | -------------------------------------------------------------------------------------------------- |
+| `color.border.subtle`       | `#E4E4E7`       | Subtle decorative card outlines and row dividers on light surfaces                                 |
+| `color.border.dark_subtle`  | `#27272A`       | Subtle decorative dividers and tab borders on dark surfaces                                        |
+| `color.border.default`      | `#D4D4D8`       | Standard container boundaries and table header dividers (light)                                    |
+| `color.border.dark_default` | `#3F3F46`       | Standard container boundaries on dark surfaces                                                     |
+| `color.border.control`      | `#71717A`       | Accessible structural boundary for inputs, selects, and checkboxes on light surfaces ($\ge 4.6:1$) |
+| `color.border.dark_control` | `#8E8E93`       | Accessible structural boundary for inputs and checkboxes on dark surfaces ($\ge 6.1:1$)            |
+| `color.border.strong`       | `#52525B`       | Active borders, hovered controls, selected swatch rings on light surfaces                          |
+| `color.border.dark_strong`  | `#A1A1AA`       | Active borders and selected swatch rings on dark surfaces                                          |
+| `color.border.focus`        | `#09090B`       | High-contrast 2px focus ring for keyboard accessibility on light surfaces                          |
+| `color.border.dark_focus`   | `#F4F4F5`       | High-contrast 2px focus ring for keyboard accessibility on dark surfaces                           |
 
 ### 6.6 Semantic Status Tokens
 
-| Status Level | Text Token & Value | Background Token & Value | Border Token & Value | Dark Text Token & Value |
-|---|---|---|---|---|
-| **Success** | `color.status.success.text`<br>`#15803D` (Green 700) | `color.status.success.background`<br>`#F0FDF4` (Green 50) | `color.status.success.border`<br>`#BBF7D0` (Green 200) | `color.status.success.dark_text`<br>`#4ADE80` (Green 400) |
-| **Warning** | `color.status.warning.text`<br>`#B45309` (Amber 700) | `color.status.warning.background`<br>`#FFFBEB` (Amber 50) | `color.status.warning.border`<br>`#FDE68A` (Amber 200) | `color.status.warning.dark_text`<br>`#FBBF24` (Amber 400) |
-| **Danger / Error** | `color.status.danger.text`<br>`#BE123C` (Rose 700) | `color.status.danger.background`<br>`#FFF1F2` (Rose 50) | `color.status.danger.border`<br>`#FECDD3` (Rose 200) | `color.status.danger.dark_text`<br>`#FB7185` (Rose 400) |
-| **Information** | `color.status.info.text`<br>`#0369A1` (Sky 700) | `color.status.info.background`<br>`#F0F9FF` (Sky 50) | `color.status.info.border`<br>`#BAE6FD` (Sky 200) | `color.status.info.dark_text`<br>`#38BDF8` (Sky 400) |
+| Status Level       | Text Token & Value                                   | Background Token & Value                                  | Border Token & Value                                   | Dark Text Token & Value                                   |
+| ------------------ | ---------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------- |
+| **Success**        | `color.status.success.text`<br>`#15803D` (Green 700) | `color.status.success.background`<br>`#F0FDF4` (Green 50) | `color.status.success.border`<br>`#BBF7D0` (Green 200) | `color.status.success.dark_text`<br>`#4ADE80` (Green 400) |
+| **Warning**        | `color.status.warning.text`<br>`#B45309` (Amber 700) | `color.status.warning.background`<br>`#FFFBEB` (Amber 50) | `color.status.warning.border`<br>`#FDE68A` (Amber 200) | `color.status.warning.dark_text`<br>`#FBBF24` (Amber 400) |
+| **Danger / Error** | `color.status.danger.text`<br>`#BE123C` (Rose 700)   | `color.status.danger.background`<br>`#FFF1F2` (Rose 50)   | `color.status.danger.border`<br>`#FECDD3` (Rose 200)   | `color.status.danger.dark_text`<br>`#FB7185` (Rose 400)   |
+| **Information**    | `color.status.info.text`<br>`#0369A1` (Sky 700)      | `color.status.info.background`<br>`#F0F9FF` (Sky 50)      | `color.status.info.border`<br>`#BAE6FD` (Sky 200)      | `color.status.info.dark_text`<br>`#38BDF8` (Sky 400)      |
 
 ---
 
@@ -156,14 +160,14 @@ All colors are defined as canonical semantic hex tokens.
 ### 7.1 Font Pair Architecture
 
 1. **Heading & Numeric Font**: `Plus Jakarta Sans`
-   - *Weights*: `500` (Medium), `600` (SemiBold), `700` (Bold), `800` (ExtraBold).
-   - *Rationale*: A modern geometric grotesque with crisp technical geometry, tight apertures, and outstanding numerical figures for specifications (`39g`, `8000Hz`, `PAW3950`). Fully open-source (OFL), distinct from generic Inter headings, high-end feel.
+   - _Weights_: `500` (Medium), `600` (SemiBold), `700` (Bold), `800` (ExtraBold).
+   - _Rationale_: A modern geometric grotesque with crisp technical geometry, tight apertures, and outstanding numerical figures for specifications (`39g`, `8000Hz`, `PAW3950`). Fully open-source (OFL), distinct from generic Inter headings, high-end feel.
 2. **Body & Interface Font**: `Inter`
-   - *Weights*: `400` (Regular), `500` (Medium), `600` (SemiBold).
-   - *Rationale*: Exceptional micro-legibility in Spanish, outstanding rendering in dense Admin tables, robust cross-browser rendering.
+   - _Weights_: `400` (Regular), `500` (Medium), `600` (SemiBold).
+   - _Rationale_: Exceptional micro-legibility in Spanish, outstanding rendering in dense Admin tables, robust cross-browser rendering.
 3. **Monospace & Code Font**: `JetBrains Mono`
-   - *Weights*: `400` (Regular), `500` (Medium).
-   - *Rationale*: Tabular figures for SKUs, order tracking codes, Yape/Plin operation IDs, and MCU/sensor technical registers.
+   - _Weights_: `400` (Regular), `500` (Medium).
+   - _Rationale_: Tabular figures for SKUs, order tracking codes, Yape/Plin operation IDs, and MCU/sensor technical registers.
 
 ### 7.2 Typographic Hierarchy & Fluid Scales
 
@@ -185,30 +189,32 @@ CODE MONO         JetBrains Mono 400    | 13px         | Line-Height: 1.40 | 0.0
 ========================================================================================
 ```
 
-| Typographic Level | Font Family | Weight | Size (Mobile $\to$ Desktop) | Line Height | Letter Spacing |
-|---|---|---|---|---|---|
-| `type.display` | Plus Jakarta Sans | 800 | `clamp(2.75rem, 6vw, 4.5rem)` | `1.05` | `-0.035em` |
-| `type.h1` | Plus Jakarta Sans | 700 | `clamp(2.0rem, 4vw, 2.75rem)` | `1.15` | `-0.03em` |
-| `type.h2` | Plus Jakarta Sans | 700 | `clamp(1.5rem, 3vw, 2.0rem)` | `1.20` | `-0.025em` |
-| `type.h3` | Plus Jakarta Sans | 600 | `clamp(1.125rem, 2vw, 1.375rem)`| `1.30` | `-0.02em` |
-| `type.h4` | Plus Jakarta Sans | 600 | `1.0rem` (16px) | `1.35` | `-0.01em` |
-| `type.card.title` | Plus Jakarta Sans | 600 | `1.0rem` (16px) | `1.30` | `-0.01em` |
-| `type.card.price` | Plus Jakarta Sans | 700 | `1.125rem` (18px) | `1.20` | `-0.02em` |
-| `type.body.large` | Inter | 400 | `1.125rem` (18px) | `1.60` | `0.0em` |
-| `type.body.default`| Inter | 400 / 500 | `0.9375rem` (15px) | `1.50` | `0.0em` |
-| `type.body.small` | Inter | 400 / 500 | `0.8125rem` (13px) | `1.45` | `0.0em` |
-| `type.caption` | Inter | 500 | `0.6875rem` (11px) | `1.30` | `+0.02em` (Uppercase) |
-| `type.button` | Plus Jakarta Sans | 600 | `0.875rem` (14px) | `1.0` | `+0.01em` |
-| `type.stat.giant` | Plus Jakarta Sans | 800 | `clamp(3.5rem, 8vw, 6.0rem)` | `0.95` | `-0.04em` |
-| `type.code.mono` | JetBrains Mono | 400 / 500 | `0.8125rem` (13px) | `1.40` | `0.0em` |
+| Typographic Level   | Font Family       | Weight    | Size (Mobile $\to$ Desktop)      | Line Height | Letter Spacing        |
+| ------------------- | ----------------- | --------- | -------------------------------- | ----------- | --------------------- |
+| `type.display`      | Plus Jakarta Sans | 800       | `clamp(2.75rem, 6vw, 4.5rem)`    | `1.05`      | `-0.035em`            |
+| `type.h1`           | Plus Jakarta Sans | 700       | `clamp(2.0rem, 4vw, 2.75rem)`    | `1.15`      | `-0.03em`             |
+| `type.h2`           | Plus Jakarta Sans | 700       | `clamp(1.5rem, 3vw, 2.0rem)`     | `1.20`      | `-0.025em`            |
+| `type.h3`           | Plus Jakarta Sans | 600       | `clamp(1.125rem, 2vw, 1.375rem)` | `1.30`      | `-0.02em`             |
+| `type.h4`           | Plus Jakarta Sans | 600       | `1.0rem` (16px)                  | `1.35`      | `-0.01em`             |
+| `type.card.title`   | Plus Jakarta Sans | 600       | `1.0rem` (16px)                  | `1.30`      | `-0.01em`             |
+| `type.card.price`   | Plus Jakarta Sans | 700       | `1.125rem` (18px)                | `1.20`      | `-0.02em`             |
+| `type.body.large`   | Inter             | 400       | `1.125rem` (18px)                | `1.60`      | `0.0em`               |
+| `type.body.default` | Inter             | 400 / 500 | `0.9375rem` (15px)               | `1.50`      | `0.0em`               |
+| `type.body.small`   | Inter             | 400 / 500 | `0.8125rem` (13px)               | `1.45`      | `0.0em`               |
+| `type.caption`      | Inter             | 500       | `0.6875rem` (11px)               | `1.30`      | `+0.02em` (Uppercase) |
+| `type.button`       | Plus Jakarta Sans | 600       | `0.875rem` (14px)                | `1.0`       | `+0.01em`             |
+| `type.stat.giant`   | Plus Jakarta Sans | 800       | `clamp(3.5rem, 8vw, 6.0rem)`     | `0.95`      | `-0.04em`             |
+| `type.code.mono`    | JetBrains Mono    | 400 / 500 | `0.8125rem` (13px)               | `1.40`      | `0.0em`               |
 
 ### 7.3 Caption & Small-Text Safety Rule
+
 `type.caption` (`11px`) is strictly restricted to secondary/non-essential metadata (such as brand category tags or micro timestamps). **11px typography must NEVER be used for**:
+
 - Payment instructions or verification notices;
 - Form validation error messages;
 - Warranty, returns, or shipping terms;
 - Essential accessibility status messages or transaction details.
-All critical copy must use `type.body.small` (`13px`) or `type.body.default` (`15px`).
+  All critical copy must use `type.body.small` (`13px`) or `type.body.default` (`15px`).
 
 ---
 
@@ -216,34 +222,36 @@ All critical copy must use `type.body.small` (`13px`) or `type.body.default` (`1
 
 Gamer Perú utilizes a geometric base-4/base-8 spacing scale.
 
-| Token Name | Exact Value | Rem Equiv. | Semantic Application |
-|---|---|---|---|
-| `space.0` | `0px` | `0rem` | Reset |
-| `space.1` | `4px` | `0.25rem` | Micro padding, icon gaps, status dot offsets |
-| `space.2` | `8px` | `0.5rem` | Tight tag padding, input inner vertical padding, badge gaps |
-| `space.3` | `12px` | `0.75rem` | Button vertical padding, card inner gutter, form input gaps |
-| `space.4` | `16px` | `1.0rem` | Standard component padding, mobile page gutters, list item gaps |
-| `space.5` | `20px` | `1.25rem` | Medium component padding, tablet card gaps |
-| `space.6` | `24px` | `1.5rem` | Card padding, desktop grid gutters, header height padding |
-| `space.8` | `32px` | `2.0rem` | Large card padding, modal inner padding, desktop section gutters |
-| `space.10` | `40px` | `2.5rem` | Sub-section spacing, filter sidebar margin |
-| `space.12` | `48px` | `3.0rem` | Standard section vertical spacing (Storefront) |
-| `space.16` | `64px` | `4.0rem` | Major section vertical spacing (Storefront desktop) |
-| `space.20` | `80px` | `5.0rem` | Editorial section vertical gaps |
-| `space.24` | `96px` | `6.0rem` | Large Product Story transition blocks |
-| `space.32` | `128px` | `8.0rem` | Hero and flagship product showcase spacing |
+| Token Name | Exact Value | Rem Equiv. | Semantic Application                                             |
+| ---------- | ----------- | ---------- | ---------------------------------------------------------------- |
+| `space.0`  | `0px`       | `0rem`     | Reset                                                            |
+| `space.1`  | `4px`       | `0.25rem`  | Micro padding, icon gaps, status dot offsets                     |
+| `space.2`  | `8px`       | `0.5rem`   | Tight tag padding, input inner vertical padding, badge gaps      |
+| `space.3`  | `12px`      | `0.75rem`  | Button vertical padding, card inner gutter, form input gaps      |
+| `space.4`  | `16px`      | `1.0rem`   | Standard component padding, mobile page gutters, list item gaps  |
+| `space.5`  | `20px`      | `1.25rem`  | Medium component padding, tablet card gaps                       |
+| `space.6`  | `24px`      | `1.5rem`   | Card padding, desktop grid gutters, header height padding        |
+| `space.8`  | `32px`      | `2.0rem`   | Large card padding, modal inner padding, desktop section gutters |
+| `space.10` | `40px`      | `2.5rem`   | Sub-section spacing, filter sidebar margin                       |
+| `space.12` | `48px`      | `3.0rem`   | Standard section vertical spacing (Storefront)                   |
+| `space.16` | `64px`      | `4.0rem`   | Major section vertical spacing (Storefront desktop)              |
+| `space.20` | `80px`      | `5.0rem`   | Editorial section vertical gaps                                  |
+| `space.24` | `96px`      | `6.0rem`   | Large Product Story transition blocks                            |
+| `space.32` | `128px`     | `8.0rem`   | Hero and flagship product showcase spacing                       |
 
 ---
 
 ## 9. Grid & Container System
 
 ### 9.1 Container Strategy
+
 - **Standard Container (`container.default`)**: `max-width: 1440px` with responsive gutters. Used for catalog, listings, PDP commerce blocks, and footer.
 - **Narrow Container (`container.prose`)**: `max-width: 840px`. Used for customer account forms, policy pages, checkout, and text-heavy editorial.
 - **Full-Bleed Container (`container.full`)**: `max-width: 1920px` with clamp gutters. Used for hero storytelling, macro hardware banners, and exploded 3D diagrams.
 - **Admin Fluid Container (`container.admin`)**: `max-width: 1600px` with fixed 24px gutters. Optimizes horizontal space for complex data tables.
 
 ### 9.2 Page Gutters
+
 - Compact Mobile (`360px - 479px`): `16px`
 - Standard Mobile (`480px - 767px`): `20px`
 - Tablet (`768px - 1023px`): `24px`
@@ -257,14 +265,14 @@ Gamer Perú utilizes a geometric base-4/base-8 spacing scale.
 
 To eliminate ambiguity for coding agents, Gamer Perú defines exact, deterministic numeric thresholds:
 
-| Token Name | Exact Numeric Value | Semantic Usage & Target Viewport |
-|---|---|---|
-| `viewport.minimum` | `360px` | Minimum supported reference viewport (Compact Mobile = `360px` to `479px`) |
-| `bp.sm` | `480px` | Standard Mobile threshold (Large smartphones / phablets) |
-| `bp.md` | `768px` | Tablet Portrait threshold |
-| `bp.lg` | `1024px` | Desktop / Laptop threshold (Header drawer $\to$ mega-menu switch) |
-| `bp.xl` | `1280px` | Standard Desktop threshold (4-column product grid threshold) |
-| `bp.2xl` | `1536px` | Wide Desktop threshold (Max container clamping active) |
+| Token Name         | Exact Numeric Value | Semantic Usage & Target Viewport                                           |
+| ------------------ | ------------------- | -------------------------------------------------------------------------- |
+| `viewport.minimum` | `360px`             | Minimum supported reference viewport (Compact Mobile = `360px` to `479px`) |
+| `bp.sm`            | `480px`             | Standard Mobile threshold (Large smartphones / phablets)                   |
+| `bp.md`            | `768px`             | Tablet Portrait threshold                                                  |
+| `bp.lg`            | `1024px`            | Desktop / Laptop threshold (Header drawer $\to$ mega-menu switch)          |
+| `bp.xl`            | `1280px`            | Standard Desktop threshold (4-column product grid threshold)               |
+| `bp.2xl`           | `1536px`            | Wide Desktop threshold (Max container clamping active)                     |
 
 ---
 
@@ -277,21 +285,23 @@ To eliminate ambiguity for coding agents, Gamer Perú defines exact, determinist
 (Spec Pills)        (Buttons / Inputs)  (Cards / Alerts)    (Drawers / Modals)   (Swatches / Dots)
 ```
 
-| Token Name | Exact Value | Semantic Target |
-|---|---|---|
-| `radius.none` | `0px` | Full-bleed banners, table square cells |
-| `radius.xs` | `2px` | Micro status tags, spec pills |
-| `radius.sm` | `4px` | Primary/secondary buttons, input fields, select dropdowns |
-| `radius.md` | `8px` | Product cards, dialog boxes, toast notifications, story containers |
-| `radius.lg` | `12px` | Modal dialogs, slide-out drawer panels |
-| `radius.full` | `9999px` | Color swatch circles, status indicator pills, avatar circles |
+| Token Name    | Exact Value | Semantic Target                                                    |
+| ------------- | ----------- | ------------------------------------------------------------------ |
+| `radius.none` | `0px`       | Full-bleed banners, table square cells                             |
+| `radius.xs`   | `2px`       | Micro status tags, spec pills                                      |
+| `radius.sm`   | `4px`       | Primary/secondary buttons, input fields, select dropdowns          |
+| `radius.md`   | `8px`       | Product cards, dialog boxes, toast notifications, story containers |
+| `radius.lg`   | `12px`      | Modal dialogs, slide-out drawer panels                             |
+| `radius.full` | `9999px`    | Color swatch circles, status indicator pills, avatar circles       |
 
 ### 11.2 Border Width Tokens
+
 - `border.width.thin`: `1px` (Standard card borders, input borders, divider lines)
 - `border.width.medium`: `2px` (Selected swatch rings, active focus rings, tab indicators)
 - `border.width.thick`: `3px` (Heavy highlight badges)
 
 ### 11.3 Elevation & Shadow Tokens
+
 - `elevation.none`: `none`
 - `elevation.low`: `0 1px 3px 0 rgba(9, 9, 11, 0.04), 0 1px 2px -1px rgba(9, 9, 11, 0.04)` (Product cards resting on canvas)
 - `elevation.mid`: `0 4px 6px -1px rgba(9, 9, 11, 0.08), 0 2px 4px -2px rgba(9, 9, 11, 0.06)` (Product card on hover, search dropdowns)
@@ -319,25 +329,28 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 
 ### 13.1 Canonical Motion Tokens
 
-| Token Name | Value | Purpose & Application |
-|---|---|---|
-| `motion.duration.instant`| `0ms` | For users with `prefers-reduced-motion: reduce` |
-| `motion.duration.fast` | `150ms` | Button hover states, input border focus, color transitions |
-| `motion.duration.normal` | `250ms` | Card hover lift, dropdown menu expand, accordion open/close |
-| `motion.duration.moderate`| `350ms` | Off-canvas drawer slide-in, modal dialog entrance |
-| `motion.duration.slow` | `500ms` | Hero carousel crossfades, large storytelling block reveal |
-| `motion.easing.snappy` | `cubic-bezier(0.16, 1, 0.3, 1)` | Standard deceleration curve for entrances and interactive controls |
-| `motion.easing.standard`| `cubic-bezier(0.4, 0, 0.2, 1)` | General in-out transitions |
-| `motion.easing.linear` | `linear` | Continuous spinners and progress indicators |
+| Token Name                 | Value                           | Purpose & Application                                              |
+| -------------------------- | ------------------------------- | ------------------------------------------------------------------ |
+| `motion.duration.instant`  | `0ms`                           | For users with `prefers-reduced-motion: reduce`                    |
+| `motion.duration.fast`     | `150ms`                         | Button hover states, input border focus, color transitions         |
+| `motion.duration.normal`   | `250ms`                         | Card hover lift, dropdown menu expand, accordion open/close        |
+| `motion.duration.moderate` | `350ms`                         | Off-canvas drawer slide-in, modal dialog entrance                  |
+| `motion.duration.slow`     | `500ms`                         | Hero carousel crossfades, large storytelling block reveal          |
+| `motion.easing.snappy`     | `cubic-bezier(0.16, 1, 0.3, 1)` | Standard deceleration curve for entrances and interactive controls |
+| `motion.easing.standard`   | `cubic-bezier(0.4, 0, 0.2, 1)`  | General in-out transitions                                         |
+| `motion.easing.linear`     | `linear`                        | Continuous spinners and progress indicators                        |
 
 ### 13.2 Specific Interaction Behaviors
+
 - **Product Card Hover**: Subtle 3px vertical lift (`translateY(-3px)`) with smooth shadow transition (`elevation.low` $\to$ `elevation.mid`) over `250ms` using `motion.easing.snappy`. Secondary product view smoothly cross-fades via opacity.
 - **Drawer Slide-in**: Slides horizontally from right viewport edge (`translateX(100%)` $\to$ `0`) over `350ms` with synchronized opacity backdrop fade (`0` $\to$ `1`).
 - **No Permanent Stock Pulse**: Stock indicators use a solid, static state dot. No continuous ambient pulsing animation.
 - **Reduced Motion Support**:
   ```css
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
@@ -351,36 +364,37 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 
 ### 14.1 Complete WCAG 2.1 AA Contrast Validation Table
 
-| Foreground Token | Background Token | Context / Role | Ratio | Requirement | Result |
-|---|---|---|---|---|---|
-| `color.text.primary` (`#09090B`) | `color.surface.canvas` (`#FAFAFA`) | Body / Headings on Light | **19.06:1** | $\ge 4.5:1$ | **PASS** |
-| `color.text.primary` (`#09090B`) | `color.surface.card` (`#FFFFFF`) | Body on White Card | **19.89:1** | $\ge 4.5:1$ | **PASS** |
-| `color.text.secondary` (`#52525B`)| `color.surface.canvas` (`#FAFAFA`) | Secondary Text on Light | **7.41:1** | $\ge 4.5:1$ | **PASS** |
-| `color.text.secondary` (`#52525B`)| `color.surface.card` (`#FFFFFF`) | Secondary on Card | **7.73:1** | $\ge 4.5:1$ | **PASS** |
-| `color.text.muted` (`#71717A`) | `color.surface.canvas` (`#FAFAFA`) | Spec Text (Large/Pill) | **4.63:1** | $\ge 3.0:1$ | **PASS** |
-| `color.brand.primary` (`#E11D48`) | `color.surface.canvas` (`#FAFAFA`) | Brand Accent / Big Price | **4.50:1** | $\ge 3.0:1$ | **PASS** |
-| `color.brand.hover` (`#BE123C`) | `color.surface.canvas` (`#FAFAFA`) | Hover Brand Link | **6.02:1** | $\ge 4.5:1$ | **PASS** |
-| `color.brand.text_on_accent` (`#FFFFFF`) | `color.brand.primary` (`#E11D48`) | White on Primary Button | **4.70:1** | $\ge 4.5:1$ | **PASS** |
-| `color.brand.text_on_accent` (`#FFFFFF`) | `color.brand.hover` (`#BE123C`) | White on Hover Button | **6.29:1** | $\ge 4.5:1$ | **PASS** |
-| `color.border.control` (`#71717A`)| `color.surface.canvas` (`#FAFAFA`) | Input Boundary (Non-text)| **4.63:1** | $\ge 3.0:1$ | **PASS** |
-| `color.border.control` (`#71717A`)| `color.surface.card` (`#FFFFFF`) | Input Boundary on Card | **4.83:1** | $\ge 3.0:1$ | **PASS** |
-| `color.border.focus` (`#09090B`) | `color.surface.canvas` (`#FAFAFA`) | Keyboard Focus Ring (Light)| **19.06:1** | $\ge 3.0:1$ | **PASS** |
-| `color.text.dark_primary` (`#F4F4F5`)| `color.surface.dark_canvas` (`#09090B`)| Dark Canvas Headings | **18.10:1** | $\ge 4.5:1$ | **PASS** |
-| `color.text.dark_secondary` (`#A1A1AA`)| `color.surface.dark_canvas` (`#09090B`)| Dark Canvas Body | **7.76:1** | $\ge 4.5:1$ | **PASS** |
-| `color.text.dark_muted` (`#9CA3AF`)| `color.surface.dark_canvas` (`#09090B`)| Dark Canvas Muted | **7.84:1** | $\ge 4.5:1$ | **PASS** |
-| `color.text.dark_muted` (`#9CA3AF`)| `color.surface.dark_tertiary` (`#27272A`)| Dark Tertiary Muted | **5.87:1** | $\ge 4.5:1$ | **PASS** |
-| `color.border.dark_control` (`#8E8E93`)| `color.surface.dark_canvas` (`#09090B`)| Dark Input Boundary | **6.10:1** | $\ge 3.0:1$ | **PASS** |
-| `color.border.dark_focus` (`#F4F4F5`)| `color.surface.dark_canvas` (`#09090B`)| Keyboard Focus Ring (Dark) | **18.10:1** | $\ge 3.0:1$ | **PASS** |
-| `color.status.success.text` (`#15803D`)| `color.status.success.background` (`#F0FDF4`) | Success Label (Light) | **4.79:1** | $\ge 4.5:1$ | **PASS** |
-| `color.status.success.dark_text` (`#4ADE80`)| `color.surface.dark_canvas` (`#09090B`) | Success Label (Dark) | **11.42:1** | $\ge 4.5:1$ | **PASS** |
-| `color.status.warning.text` (`#B45309`)| `color.status.warning.background` (`#FFFBEB`) | Warning Label (Light) | **4.84:1** | $\ge 4.5:1$ | **PASS** |
-| `color.status.warning.dark_text` (`#FBBF24`)| `color.surface.dark_canvas` (`#09090B`) | Warning Label (Dark) | **11.92:1** | $\ge 4.5:1$ | **PASS** |
-| `color.status.danger.text` (`#BE123C`)| `color.status.danger.background` (`#FFF1F2`) | Error Label (Light) | **5.72:1** | $\ge 4.5:1$ | **PASS** |
-| `color.status.danger.dark_text` (`#FB7185`)| `color.surface.dark_canvas` (`#09090B`) | Error Label (Dark) | **7.39:1** | $\ge 4.5:1$ | **PASS** |
-| `color.status.info.text` (`#0369A1`)| `color.status.info.background` (`#F0F9FF`) | Info Label (Light) | **5.57:1** | $\ge 4.5:1$ | **PASS** |
-| `color.status.info.dark_text` (`#38BDF8`)| `color.surface.dark_canvas` (`#09090B`) | Info Label (Dark) | **9.29:1** | $\ge 4.5:1$ | **PASS** |
+| Foreground Token                             | Background Token                              | Context / Role              | Ratio       | Requirement | Result   |
+| -------------------------------------------- | --------------------------------------------- | --------------------------- | ----------- | ----------- | -------- |
+| `color.text.primary` (`#09090B`)             | `color.surface.canvas` (`#FAFAFA`)            | Body / Headings on Light    | **19.06:1** | $\ge 4.5:1$ | **PASS** |
+| `color.text.primary` (`#09090B`)             | `color.surface.card` (`#FFFFFF`)              | Body on White Card          | **19.89:1** | $\ge 4.5:1$ | **PASS** |
+| `color.text.secondary` (`#52525B`)           | `color.surface.canvas` (`#FAFAFA`)            | Secondary Text on Light     | **7.41:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.text.secondary` (`#52525B`)           | `color.surface.card` (`#FFFFFF`)              | Secondary on Card           | **7.73:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.text.muted` (`#71717A`)               | `color.surface.canvas` (`#FAFAFA`)            | Spec Text (Large/Pill)      | **4.63:1**  | $\ge 3.0:1$ | **PASS** |
+| `color.brand.primary` (`#E11D48`)            | `color.surface.canvas` (`#FAFAFA`)            | Brand Accent / Big Price    | **4.50:1**  | $\ge 3.0:1$ | **PASS** |
+| `color.brand.hover` (`#BE123C`)              | `color.surface.canvas` (`#FAFAFA`)            | Hover Brand Link            | **6.02:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.brand.text_on_accent` (`#FFFFFF`)     | `color.brand.primary` (`#E11D48`)             | White on Primary Button     | **4.70:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.brand.text_on_accent` (`#FFFFFF`)     | `color.brand.hover` (`#BE123C`)               | White on Hover Button       | **6.29:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.border.control` (`#71717A`)           | `color.surface.canvas` (`#FAFAFA`)            | Input Boundary (Non-text)   | **4.63:1**  | $\ge 3.0:1$ | **PASS** |
+| `color.border.control` (`#71717A`)           | `color.surface.card` (`#FFFFFF`)              | Input Boundary on Card      | **4.83:1**  | $\ge 3.0:1$ | **PASS** |
+| `color.border.focus` (`#09090B`)             | `color.surface.canvas` (`#FAFAFA`)            | Keyboard Focus Ring (Light) | **19.06:1** | $\ge 3.0:1$ | **PASS** |
+| `color.text.dark_primary` (`#F4F4F5`)        | `color.surface.dark_canvas` (`#09090B`)       | Dark Canvas Headings        | **18.10:1** | $\ge 4.5:1$ | **PASS** |
+| `color.text.dark_secondary` (`#A1A1AA`)      | `color.surface.dark_canvas` (`#09090B`)       | Dark Canvas Body            | **7.76:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.text.dark_muted` (`#9CA3AF`)          | `color.surface.dark_canvas` (`#09090B`)       | Dark Canvas Muted           | **7.84:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.text.dark_muted` (`#9CA3AF`)          | `color.surface.dark_tertiary` (`#27272A`)     | Dark Tertiary Muted         | **5.87:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.border.dark_control` (`#8E8E93`)      | `color.surface.dark_canvas` (`#09090B`)       | Dark Input Boundary         | **6.10:1**  | $\ge 3.0:1$ | **PASS** |
+| `color.border.dark_focus` (`#F4F4F5`)        | `color.surface.dark_canvas` (`#09090B`)       | Keyboard Focus Ring (Dark)  | **18.10:1** | $\ge 3.0:1$ | **PASS** |
+| `color.status.success.text` (`#15803D`)      | `color.status.success.background` (`#F0FDF4`) | Success Label (Light)       | **4.79:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.status.success.dark_text` (`#4ADE80`) | `color.surface.dark_canvas` (`#09090B`)       | Success Label (Dark)        | **11.42:1** | $\ge 4.5:1$ | **PASS** |
+| `color.status.warning.text` (`#B45309`)      | `color.status.warning.background` (`#FFFBEB`) | Warning Label (Light)       | **4.84:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.status.warning.dark_text` (`#FBBF24`) | `color.surface.dark_canvas` (`#09090B`)       | Warning Label (Dark)        | **11.92:1** | $\ge 4.5:1$ | **PASS** |
+| `color.status.danger.text` (`#BE123C`)       | `color.status.danger.background` (`#FFF1F2`)  | Error Label (Light)         | **5.72:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.status.danger.dark_text` (`#FB7185`)  | `color.surface.dark_canvas` (`#09090B`)       | Error Label (Dark)          | **7.39:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.status.info.text` (`#0369A1`)         | `color.status.info.background` (`#F0F9FF`)    | Info Label (Light)          | **5.57:1**  | $\ge 4.5:1$ | **PASS** |
+| `color.status.info.dark_text` (`#38BDF8`)    | `color.surface.dark_canvas` (`#09090B`)       | Info Label (Dark)           | **9.29:1**  | $\ge 4.5:1$ | **PASS** |
 
 ### 14.2 Focus & Touch Ergonomics
+
 1. **Focus Ring Visibility**: Interactive elements display a dedicated 2px high-contrast outline (`color.border.focus`: `#09090B` on light canvas, `color.border.dark_focus`: `#F4F4F5` on dark canvas) with a 2px offset on keyboard navigation (`:focus-visible`).
 2. **Touch-Target Standard**: Dedicated interactive touch controls (including icon buttons, navigation triggers, color swatches, quantity steppers, checkboxes, radio inputs, close buttons, cart controls, mobile filter controls, and standalone action buttons) must target a minimum interactive hit bounding area of `44x44px` as an internal Gamer Perú usability and touch-ergonomics standard. Visible glyphs (e.g., 20x20px close icon or 20x20px wishlist heart) are separated from the 44x44px interactive hit container. Inline textual links within multi-line body prose maintain accessible hit comfort via generous line-height without requiring rigid 44x44 box bounding that distorts paragraph flow.
 3. **Color-Independent Status**: Badges, stock indicators, and error fields always pair color with text labels or distinct geometric icons (never relying on color alone).
@@ -436,27 +450,33 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 ## 18. Navigation Language
 
 ### 18.1 Announcement Bar
+
 - Height: `36px`, Background: `color.surface.dark_canvas` (`#09090B`), Text: `color.text.dark_primary` (`#F4F4F5`), Typography: `type.body.small` (`13px` Inter 500).
 - Purpose: High-visibility notifications (shipping notes, new brand launches, customer service announcements).
 
 ### 18.2 Desktop Header
+
 - Sticky header with clean `64px` height, Background: `rgba(255, 255, 255, 0.95)` with backdrop blur and 1px bottom border (`color.border.subtle`).
 - Brand Mark on left, horizontal category navigation in center (`type.body.default` Inter 500), utility actions on right (Search, Account, Wishlist, Cart with numeric counter badge).
 - Hover States: Active links display a 2px bottom crimson indicator bar (`#E11D48`).
 
 ### 18.3 Mega-Menu
+
 - Full-width dropdown panel resting on `elevation.high` shadow, Background: `color.surface.card` (`#FFFFFF`).
 - 4-column layout: Featured product spotlight with photo (Col 1), Structured category sub-links (Col 2 & 3), Brand directory with logos (Col 4).
 
 ### 18.4 Mobile Navigation Drawer
+
 - Left slide-out drawer (`320px` width on mobile), Background: `color.surface.card`.
 - Accordion navigation tree: Categories $\to$ Brands $\to$ Featured Curations.
 - Bottom pinned actions: Customer Account link, Customer Support link / entry point (channel configured from approved support policy `[TBD BUSINESS DECISION]`), Soles currency indicator.
 
 ### 18.5 Breadcrumbs
+
 - Typography: `type.body.small` (`13px`), Color: `color.text.muted`, Active leaf: `color.text.primary` (SemiBold). Slash separators (`/`) in `color.border.default`.
 
 ### 18.6 Footer
+
 - Background: `color.surface.dark_canvas` (`#09090B`), Text: `color.text.dark_secondary`, Border top: 1px `color.border.dark_subtle`.
 - 4-column structured layout: Brand story & store identity, Catalog directory, Customer support & policies, Payment & trust badges (Yape, Plin).
 
@@ -465,14 +485,17 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 ## 19. Drawers, Modals & Overlays
 
 ### 19.1 Surface Treatment & Backdrop
+
 - Backdrop: `color.surface.overlay` (`rgba(9, 9, 11, 0.65)`) with smooth 350ms opacity transition.
 - Panel Surface: `color.surface.card` (`#FFFFFF`) on light mode; `elevation.high` shadow.
 
 ### 19.2 Drawer vs. Modal Distinction
+
 - **Drawers (Cart, Mobile Nav, Mobile Filters)**: Slide out from the right (or bottom on mobile filters) over `350ms` using `motion.easing.snappy`. Width: `420px` (Desktop) / `100vw` (Mobile).
 - **Modals (Product Quick View, Verification Details)**: Centered floating dialog (`max-width: 600px` to `800px`), Radius: `radius.lg` (`12px`), scale-in transition (`scale(0.96) -> scale(1.0)`).
 
 ### 19.3 Header & Close Controls
+
 - Sticky top header with bold title in `type.h3` and an accessible close button with a 20x20px visible icon glyph inside a minimum `44x44px` interactive touch hit target (`aria-label="Cerrar"`).
 - Keyboard: Pressing `Escape` immediately triggers smooth close transition. Focus is trapped within overlay while open.
 
@@ -503,6 +526,7 @@ Product cards are the core visual currency of Gamer Perú:
 ```
 
 ### Card Visual Anatomy
+
 1. **Aspect Ratio**: 4:5 vertical proportion providing ample headroom and base room for hardware.
 2. **Background**: Pure `color.surface.card` (`#FFFFFF`) with subtle 1px border (`color.border.subtle`).
 3. **Brand Badge**: Subtle uppercase tracking (`type.caption`, `11px`, `color.text.muted`).
@@ -520,10 +544,12 @@ Product cards are the core visual currency of Gamer Perú:
 ## 21. Category & Brand Page Language
 
 ### 21.1 Page Header & Editorial Intro
+
 - Structured header displaying Category / Brand Title in `type.h1` (32px - 44px) alongside a concise 2-line technical overview in `type.body.large` (18px).
 - Optional brand hero banner with authorized manufacturer emblem and verified distributor badge.
 
 ### 21.2 Layout & Filter Sidebar
+
 - 2-column desktop layout: Left filter sidebar (`280px` fixed width) + Right product grid (Fluid 3 to 4 columns).
 - Filter Sidebar: Collapsible accordion sections for Brand, Price Slider, Weight Range, Sensor, Connectivity, Switch Type, and Stock Status. All checkboxes use `color.border.control` with high-contrast active checkmarks.
 - Active Filter Bar: Horizontal strip above grid displaying dismissible pill chips (e.g. `[ < 45g ✕ ]`, `[ WLMOUSE ✕ ]`) with "Limpiar Filtros" quick reset.
@@ -534,6 +560,7 @@ Product cards are the core visual currency of Gamer Perú:
 ## 22. Product Detail Page (PDP) Language
 
 ### 22.1 Desktop PDP Composition
+
 - **Left Column (58% width)**: Sticky interactive media gallery:
   - Main hero stage with fluid zoom capability.
   - Horizontal thumbnail row with active crimson bottom bar.
@@ -550,6 +577,7 @@ Product cards are the core visual currency of Gamer Perú:
   - Configurable warranty & support trust slot (`[TBD BUSINESS DECISION: Warranty policy TBD]`).
 
 ### 22.2 Mobile PDP Composition
+
 - Swipeable 1:1 / 4:5 aspect ratio gallery with numerical counter pill (`1/7`).
 - Purchase panel stacked immediately below hero gallery.
 - Sticky bottom purchase bar triggered once user scrolls past main Add to Cart button: displays mini thumbnail, price, and instant "Añadir al Carrito" button.
@@ -576,23 +604,24 @@ The below-the-fold PDP experience uses 13 standardized editorial story blocks:
 [ RELATED PERIPHERALS] -> Cross-sell complementary accessories (skates, pads)
 ```
 
-| Component Name | Visual Purpose | Light/Dark Mode | Media/Text Ratio |
-|---|---|---|---|
-| **`HeroMedia`** | Full-width cinematic introduction | Dark Canvas | 80% Media / 20% Text |
-| **`FullBleedImage`**| Macro texture & material showcase | Either | 100% Media |
-| **`ImageText`** | Editorial engineering explanation | Either | 50% Media / 50% Text |
-| **`StatHighlight`** | Giant metric visual marketing | Dark Canvas | 30% Media / 70% Typography |
-| **`SpecFeature`** | Detailed flagship feature spotlight | Light Canvas | 60% Media / 40% Text |
-| **`Video`** | Hardware motion / sound test | Dark/Light Canvas| 80% Video / 20% Text |
-| **`Gallery`** | Multi-angle curated photo sequence | Light Canvas | 90% Gallery / 10% Captions |
-| **`Comparison`** | Visual matrix vs benchmark models | Light Canvas | Tabular Data |
-| **`Dimensions`** | Orthographic blueprint drawings | Dark/Light Canvas| 70% Blueprint / 30% Text |
-| **`BoxContents`** | Visual inventory of packaged items | Light Canvas | 60% Image Grid / 40% Text |
-| **`TechnicalSpecs`**| Exhaustive technical spec table | Neutral Surface | 100% Tabular Text |
-| **`FAQ`** | Expandable support accordions | Light Canvas | 100% Text |
-| **`RelatedProducts`**| Catalog carousel of accessories | Light Canvas | Card Grid |
+| Component Name        | Visual Purpose                      | Light/Dark Mode   | Media/Text Ratio           |
+| --------------------- | ----------------------------------- | ----------------- | -------------------------- |
+| **`HeroMedia`**       | Full-width cinematic introduction   | Dark Canvas       | 80% Media / 20% Text       |
+| **`FullBleedImage`**  | Macro texture & material showcase   | Either            | 100% Media                 |
+| **`ImageText`**       | Editorial engineering explanation   | Either            | 50% Media / 50% Text       |
+| **`StatHighlight`**   | Giant metric visual marketing       | Dark Canvas       | 30% Media / 70% Typography |
+| **`SpecFeature`**     | Detailed flagship feature spotlight | Light Canvas      | 60% Media / 40% Text       |
+| **`Video`**           | Hardware motion / sound test        | Dark/Light Canvas | 80% Video / 20% Text       |
+| **`Gallery`**         | Multi-angle curated photo sequence  | Light Canvas      | 90% Gallery / 10% Captions |
+| **`Comparison`**      | Visual matrix vs benchmark models   | Light Canvas      | Tabular Data               |
+| **`Dimensions`**      | Orthographic blueprint drawings     | Dark/Light Canvas | 70% Blueprint / 30% Text   |
+| **`BoxContents`**     | Visual inventory of packaged items  | Light Canvas      | 60% Image Grid / 40% Text  |
+| **`TechnicalSpecs`**  | Exhaustive technical spec table     | Neutral Surface   | 100% Tabular Text          |
+| **`FAQ`**             | Expandable support accordions       | Light Canvas      | 100% Text                  |
+| **`RelatedProducts`** | Catalog carousel of accessories     | Light Canvas      | Card Grid                  |
 
 ### Video & Gallery Specifications
+
 - **`Video`**: Silent looping video blocks must include an explicit `poster` frame image, `muted`, `playsinline`, and `autoplay` only when in active viewport. Video controls must be accessible for keyboard pause/play.
 - **`Gallery`**: 3 to 6 high-resolution images arranged in a clean masonry or horizontal scroll layout on mobile, with descriptive alt text on every frame.
 
@@ -601,11 +630,13 @@ The below-the-fold PDP experience uses 13 standardized editorial story blocks:
 ## 24. Cart & Checkout Language
 
 ### 24.1 Cart Drawer & Full Cart Page
+
 - Item rows: Clean thumbnail (80x80px), Brand & Title, Variant descriptor (e.g. `Negro / Omron Optical`), unit price in Soles, plus/minus quantity stepper, and remove button.
 - Subtotal block: Clear Soles calculation, promotional discount field, and primary "Proceder al Pago" CTA button.
 - Canonical v1 Payment Trust Box: Explicit notice that payment is completed via **Yape** or **Plin** manual verification upon order placement.
 
 ### 24.2 Checkout Visual Clarity
+
 - 2-column layout: Customer & Shipping form (Left) + Order Summary & Payment Verification instructions (Right).
 - Form inputs follow strict accessible control borders (`color.border.control`).
 - Step clarity: 1. Datos de Contacto $\to$ 2. Dirección de Envío $\to$ 3. Pago con Yape/Plin $\to$ 4. Confirmación de Pedido.
@@ -615,6 +646,7 @@ The below-the-fold PDP experience uses 13 standardized editorial story blocks:
 ## 25. Customer Account Language
 
 Visual templates for authenticated customer hub:
+
 1. **Profile & Security**: Clean form cards for name, email, phone, and password update.
 2. **Address Book**: Multi-card grid with "Predeterminada" badge and edit/delete actions.
 3. **Order History & Detail**: Tabular list with Order ID (`type.code.mono`), date, total in Soles, and payment verification status pill (`Verificando Pago`, `Pago Confirmado`, `Enviado`).
@@ -642,13 +674,13 @@ Gamer Perú maintains a single unified token system with two distinct functional
 
 ### Shared Foundations vs Surface Divergence
 
-| Dimension | Storefront Expression | Admin Operational Expression |
-|---|---|---|
-| **Color Tokens** | Shared Canonical Palette (`#09090B`, `#E11D48`, `#FAFAFA`) | Shared Palette with heavy emphasis on status colors (`#15803D`, `#B45309`, `#BE123C`) |
-| **Typography** | Plus Jakarta Sans (Headings) + Inter (Body) | Inter (UI) + JetBrains Mono (SKUs, IDs, Operations) |
-| **Table Density** | Relaxed (48px row height) | Compact (32px row height with border dividers) |
-| **Corner Radius** | `radius.md` (8px cards) | `radius.sm` (4px data containers) |
-| **Motion** | Editorial reveals, card lifts (`250ms`) | Instant / Micro (`150ms`) for operational speed |
+| Dimension         | Storefront Expression                                      | Admin Operational Expression                                                          |
+| ----------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Color Tokens**  | Shared Canonical Palette (`#09090B`, `#E11D48`, `#FAFAFA`) | Shared Palette with heavy emphasis on status colors (`#15803D`, `#B45309`, `#BE123C`) |
+| **Typography**    | Plus Jakarta Sans (Headings) + Inter (Body)                | Inter (UI) + JetBrains Mono (SKUs, IDs, Operations)                                   |
+| **Table Density** | Relaxed (48px row height)                                  | Compact (32px row height with border dividers)                                        |
+| **Corner Radius** | `radius.md` (8px cards)                                    | `radius.sm` (4px data containers)                                                     |
+| **Motion**        | Editorial reveals, card lifts (`250ms`)                    | Instant / Micro (`150ms`) for operational speed                                       |
 
 ---
 
@@ -677,9 +709,9 @@ Original product photography and 3D renders are core brand assets that elevate G
 1. **Lighting & Atmosphere**: High-contrast directional edge lighting that catches metallic chamfers, CNC cutouts, and matte polymer textures without excessive glare.
 2. **Background Treatment**: Clean studio neutral backgrounds (`#FAFAFA` light or `#09090B` deep dark) with soft, realistic contact shadows.
 3. **Angles & Perspectives**:
-   - *Hero Angle*: 3/4 perspective elevated at 30 degrees showcasing top shell cutouts and side grip curves.
-   - *Orthographic Angles*: Exact top-down, side-profile, and bottom base shots with skates visible.
-   - *Exploded Internal Views*: Floating component layers (Shell $\to$ PCB $\to$ Battery $\to$ Sensor $\to$ Base).
+   - _Hero Angle_: 3/4 perspective elevated at 30 degrees showcasing top shell cutouts and side grip curves.
+   - _Orthographic Angles_: Exact top-down, side-profile, and bottom base shots with skates visible.
+   - _Exploded Internal Views_: Floating component layers (Shell $\to$ PCB $\to$ Battery $\to$ Sensor $\to$ Base).
 4. **Multi-Brand Normalization**: When vendor-provided media varies in style, Gamer Perú card layouts apply consistent padding and neutral background wells to maintain unified catalog quality.
 5. **Zero Text in Images**: Never bake marketing slogans, price points, or spec text into static image files. All copy must be crawlable semantic HTML.
 
@@ -877,6 +909,7 @@ Motion          motion.easing.linear            linear                          
 ## 34. Inputs for GP-003 and GP-008
 
 This document directly feeds into the upcoming engineering tasks:
+
 - **GP-003 (System Architecture & Technology Selection)**: Informs CSS architecture requirements, font asset loading strategy, fluid clamp tooling, and image rendering pipelines.
 - **GP-008 (Design Tokens & Base UI Component Library)**: Provides exact token values, component anatomies, states, and responsive rules for code implementation.
 
@@ -884,18 +917,18 @@ This document directly feeds into the upcoming engineering tasks:
 
 ## 35. GP-002 Definition of Done
 
-* [x] Original Gamer Perú visual identity defined ("Machinery Obsidian & Signal Crimson").
-* [x] Alternative aesthetic directions evaluated and documented with rejection rationales.
-* [x] Complete semantic color system defined with exact hex tokens and dedicated accessible control borders.
-* [x] Typographic hierarchy and fluid scaling defined (`Plus Jakarta Sans` + `Inter` + `JetBrains Mono`).
-* [x] Base-4/base-8 spacing scale and responsive layout grid defined.
-* [x] Radius, border width, and elevation shadow tokens defined.
-* [x] Canonical motion tokens and interaction guidelines established (without ambient stock pulses, with reduced-motion support).
-* [x] Visual anatomies defined for Core Components, Navigation, Drawers/Modals, Product Cards, Category/Brand Pages, PDP, Product Story blocks (all 13 blocks), Cart/Checkout, and Customer Accounts.
-* [x] Dual-surface expressions specified for Storefront and Admin interfaces.
-* [x] AI Customer Assistant future visual compatibility rules established.
-* [x] WCAG 2.1 AA color contrast validation executed and 100% passed across all canonical pairs.
-* [x] SEO-aware and performance-aware visual rules preserved.
-* [x] Canonical Yape/Plin v1 payment model respected without unapproved business commitments or warehouse location claims.
-* [x] Complete Token Reference Matrix documented with unambiguous breakpoint semantics.
-* [x] Zero application UI or production source code implemented.
+- [x] Original Gamer Perú visual identity defined ("Machinery Obsidian & Signal Crimson").
+- [x] Alternative aesthetic directions evaluated and documented with rejection rationales.
+- [x] Complete semantic color system defined with exact hex tokens and dedicated accessible control borders.
+- [x] Typographic hierarchy and fluid scaling defined (`Plus Jakarta Sans` + `Inter` + `JetBrains Mono`).
+- [x] Base-4/base-8 spacing scale and responsive layout grid defined.
+- [x] Radius, border width, and elevation shadow tokens defined.
+- [x] Canonical motion tokens and interaction guidelines established (without ambient stock pulses, with reduced-motion support).
+- [x] Visual anatomies defined for Core Components, Navigation, Drawers/Modals, Product Cards, Category/Brand Pages, PDP, Product Story blocks (all 13 blocks), Cart/Checkout, and Customer Accounts.
+- [x] Dual-surface expressions specified for Storefront and Admin interfaces.
+- [x] AI Customer Assistant future visual compatibility rules established.
+- [x] WCAG 2.1 AA color contrast validation executed and 100% passed across all canonical pairs.
+- [x] SEO-aware and performance-aware visual rules preserved.
+- [x] Canonical Yape/Plin v1 payment model respected without unapproved business commitments or warehouse location claims.
+- [x] Complete Token Reference Matrix documented with unambiguous breakpoint semantics.
+- [x] Zero application UI or production source code implemented.

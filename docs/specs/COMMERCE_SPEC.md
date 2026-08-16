@@ -5,6 +5,7 @@ Core entities include Brand, Category, Collection, Product, ProductVariant, Medi
 Canonical domain model, business invariants, and state-machine transitions are specified authoritatively in [`docs/architecture/COMMERCE_DOMAIN_MODEL.md`](../architecture/COMMERCE_DOMAIN_MODEL.md) (GP-004).
 
 Rules:
+
 - Order snapshots preserve purchase-time facts (pricing, line items, address, discounts).
 - `ProductVariant` / SKU is the canonical selling and inventory unit.
 - Checkout validates stock availability and recomputes prices server-side in integer Soles (`PEN` cents).

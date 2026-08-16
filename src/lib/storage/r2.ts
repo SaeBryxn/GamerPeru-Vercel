@@ -17,9 +17,9 @@ export const R2_BUCKETS = {
  * Configured with custom R2 endpoint and credentials.
  */
 export function createR2Client() {
-  const accountId = serverEnv.R2_ACCOUNT_ID || "placeholder_r2_account_id";
-  const accessKeyId = serverEnv.R2_ACCESS_KEY_ID || "placeholder_r2_access_key";
-  const secretAccessKey = serverEnv.R2_SECRET_ACCESS_KEY || "placeholder_r2_secret";
+  const accountId = serverEnv.R2_ACCOUNT_ID ?? "placeholder_r2_account_id";
+  const accessKeyId = serverEnv.R2_ACCESS_KEY_ID ?? "placeholder_r2_access_key";
+  const secretAccessKey = serverEnv.R2_SECRET_ACCESS_KEY ?? "placeholder_r2_secret";
 
   return new S3Client({
     region: "auto",

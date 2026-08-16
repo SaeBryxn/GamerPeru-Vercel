@@ -17,8 +17,7 @@ if (isProduction && !rawUrl) {
   throw new Error("DATABASE_URL must be explicitly configured in production environments.");
 }
 
-const connectionString =
-  rawUrl || "postgres://postgres:postgres@127.0.0.1:54322/postgres";
+const connectionString = rawUrl ?? "postgres://postgres:postgres@127.0.0.1:54322/postgres";
 
 // Prevent multiple connection pool instances in development hot-reloading
 const globalForDb = globalThis as unknown as {

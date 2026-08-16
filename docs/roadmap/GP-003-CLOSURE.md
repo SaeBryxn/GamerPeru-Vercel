@@ -110,9 +110,11 @@ A targeted documentation audit finalized all remaining domain boundaries, provid
 ---
 
 ## Research Date
+
 August 16, 2026
 
 ## Official Sources Reviewed
+
 - **Application Framework**: Next.js 16 Active LTS Documentation (`nextjs.org/docs`) — Server Components (RSC), App Router, streaming SSR, metadata generation API, server actions, and route group isolation.
 - **Node.js Runtime**: Node.js 24 LTS Documentation (`nodejs.org/docs/latest-v24.x/`).
 - **Database & Data Layer**: PostgreSQL 16+ Manual (`postgresql.org/docs/16/`), Supabase Guides & Pricing (`supabase.com/docs`, `supabase.com/pricing`), Drizzle ORM Documentation (`orm.drizzle.team/docs`) — ACID transactions, row-level locks (`SELECT ... FOR UPDATE`), JSONB hardware specs, GIN full-text indexes, `pg_trgm` similarity, Supavisor connection pooling, base Pro daily backups vs optional PITR add-on.
@@ -127,6 +129,7 @@ August 16, 2026
 ---
 
 ## Selected Architecture Summary
+
 - **Paradigm**: **Modular Monolith** with managed cloud infrastructure.
 - **Application Runtime**: **Next.js (App Router, Next.js 16 Active LTS Line)** + **TypeScript 5.x** on **Node.js 24 LTS**.
 - **Application Hosting**: **Vercel Pro** hosting `gamerperu.com` on Vercel Edge Network with serverless Node.js execution.
@@ -142,7 +145,9 @@ August 16, 2026
 ---
 
 ## ADRs Created / Reconciled
+
 All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`docs/decisions/`](../decisions/):
+
 1. [`docs/decisions/ADR-001-application-framework-runtime.md`](../decisions/ADR-001-application-framework-runtime.md): Next.js 16 Active LTS, TypeScript 5.x, Node.js 24 LTS, Vercel Pro hosting, Modular Monolith topology.
 2. [`docs/decisions/ADR-002-commerce-engine-data-architecture.md`](../decisions/ADR-002-commerce-engine-data-architecture.md): Custom Gamer Perú commerce domain on Supabase PostgreSQL (Free-first launch $\to$ Pro upgrade) with Drizzle ORM.
 3. [`docs/decisions/ADR-003-authentication-authorization-rbac.md`](../decisions/ADR-003-authentication-authorization-rbac.md): Supabase Auth (Email/Password + Google OAuth), Next.js SSR cookies, `getClaims()` verification, Resend custom SMTP, and authoritative RBAC.
@@ -155,6 +160,7 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 ---
 
 ## Security Validation
+
 - [x] Authoritative server-side RBAC guards every administrative mutation, page layout, and route handler (`requirePermission`).
 - [x] Customer data isolation derives identity exclusively from the verified server-side identity (`getClaims()` $\to$ `auth_user_id` $\to$ `CustomerProfile.id`).
 - [x] Yape/Plin payment proofs are stored in an isolated private bucket with no anonymous public access; viewable exclusively via 5-minute pre-signed URLs with bearer credential audit logging.
@@ -164,6 +170,7 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 ---
 
 ## SEO Validation
+
 - [x] Full Server-Side Rendering (SSR) and React Server Components (RSC) ensure search engine crawlers receive complete HTML without client execution delays.
 - [x] Dynamic `<title>`, meta descriptions, canonical URLs, and OpenGraph images generated per route.
 - [x] Automated JSON-LD structured data injection (`Product`, `BreadcrumbList`, `Organization`).
@@ -172,6 +179,7 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 ---
 
 ## Performance Validation
+
 - [x] Target Core Web Vitals budgets: LCP < 2.5s, CLS < 0.1, INP < 200ms (benchmarked during implementation).
 - [x] Media assets delivered via Cloudflare Edge CDN (`media.gamerperu.com`) with on-the-fly WebP/AVIF transformation and pre-allocated container aspect ratios.
 - [x] Self-hosted typography (`Plus Jakarta Sans`, `Inter`, `JetBrains Mono`) via `next/font` to minimize font-induced layout shift with fallback metrics, validated during implementation.
@@ -180,12 +188,14 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 ---
 
 ## Failure / Degradation Summary
+
 - **Critical Path**: Primary Supabase PostgreSQL Database (managed with daily backups on Pro / optional PITR add-on).
 - **Gracefully Degradable**: Supabase Auth (public storefront remains browsable without auth; new login/session refresh degraded), AI Providers (research paused, assistant shows helpful search fallback), Transactional Email (queued in Inngest for retry), Search Engine (falls back to database ILIKE only while Postgres is healthy), Analytics (best-effort external delivery; financial truth safe in PostgreSQL), EC OS Downstream (outbox queue holds events until recovery).
 
 ---
 
 ## Cost Snapshot (USD)
+
 - **Local Development**: **$0 / month** (Local Node.js 24 + Local PostgreSQL + Mock Adapters).
 - **Cloud Pre-Launch**: **~$20 – $25 / month** (Vercel Pro $20 required for commercial team use, Supabase Free $0 with Supabase Auth up to 50k MAU, Cloudflare R2 Free, Inngest Free, Resend Free, PostHog Free, AI test tokens < $5).
 - **Initial Live Launch**: **~$35 – $55 / month** (Vercel Pro $20, Supabase Free $0 with scheduled R2 backups and Auth included, Cloudflare R2 Free / Images Free, Resend Free, PostHog Free, AI tokens ~$15).
@@ -195,6 +205,7 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 ---
 
 ## Deferred Decisions
+
 - **GP-004**: Commerce Domain Model (database table column definitions, exact entity relationships, inventory allocation/reservation rules, checkout lifecycle).
 - **GP-005**: Repository Bootstrap (`package.json`, lockfiles, framework scaffolding, Drizzle config).
 - **GP-042**: Final EC OS Integration Contract (exact outbound payload schemas).
@@ -202,6 +213,7 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 ---
 
 ## Files Changed
+
 - `docs/architecture/TECHNOLOGY_ARCHITECTURE.md`: Finalized Supabase Auth SSR cookie model, `getClaims()` verification, Trust Boundary diagram, email pipeline separation, and portability classifications.
 - `docs/decisions/ADR-003-authentication-authorization-rbac.md`: Refined ADR-003 with official `@supabase/ssr` shared cookie model, `getClaims()` primary verification, request-scoped client factories, and identity detachment lifecycle.
 - `docs/decisions/ADR-006-communications-analytics-observability.md`: Explicitly separated Supabase Auth custom SMTP vs Inngest React Email API pipelines.
@@ -211,6 +223,7 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 ---
 
 ## Repository Status
+
 - **Branch**: `main`
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `d08a1407c19bdcb17b8ef5929b9c944ceeac9276`
@@ -220,4 +233,5 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 ---
 
 ## Final Status
+
 PASS

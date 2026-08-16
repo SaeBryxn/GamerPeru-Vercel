@@ -6,10 +6,18 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
-    name: Typecheck, Lint, Test & Build
+    name: Format, Typecheck, Lint, Test, Build & E2E
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -29,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check Formatting
+        run: pnpm format:check
+
       - name: Run Typecheck
         run: pnpm typecheck
 
@@ -46,3 +57,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_ci_placeholder_key"
           DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:54322/postgres"
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run E2E & Accessibility Tests
+        run: pnpm test:e2e

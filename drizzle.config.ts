@@ -25,7 +25,7 @@ export default defineConfig({
   out: "./src/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: databaseUrl || "postgres://postgres:postgres@127.0.0.1:54322/postgres",
+    url: databaseUrl ?? "postgres://postgres:postgres@127.0.0.1:54322/postgres",
   },
   strict: true,
   verbose: true,

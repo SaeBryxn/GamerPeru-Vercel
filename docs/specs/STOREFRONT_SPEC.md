@@ -1,4 +1,5 @@
 # Storefront Specification
+
 Required: Home, category, brand, search, PDP, cart drawer/full cart, checkout, account, order status, wishlist, referral attribution and help/policy pages.
 
 Home: hero, launches, categories, best sellers, brands, editorial technology/product blocks, new arrivals, trust, SEO/editorial entry points and footer.

@@ -6,6 +6,7 @@ Workflow:
 Order → QR/instructions (`PaymentInstructionVersion`) → customer submits operation code + optional proof (`PaymentSubmission`) → `VERIFYING` workbench → authorized Admin verifies actual bank receipt → approve (`PAID`) / reject.
 
 Rules:
+
 - Customer submission never confirms funds automatically.
 - Payment instructions presented at checkout are frozen in immutable `PaymentInstructionVersion` records.
 - Payment submission is distinct from payment verification; resubmission is supported for non-terminal rejections.
