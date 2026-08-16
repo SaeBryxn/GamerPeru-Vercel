@@ -26,46 +26,69 @@
 - Schema Readiness Content Checkpoint:
   `89791016ff3b1207d10376e2f4db260d068a6c8c`
 
+- Schema Readiness Closure Checkpoint:
+  `9fcee874e433e0597253db30b4ef3ed60a07e1e6`
+
+- Supabase Auth Amendment Checkpoint:
+  `b7c785680c66bff77352625b196cc88a1cc0d000`
+
+---
+
+## Owner Authentication Domain Amendment
+
+Following the owner architecture decision adopting **Supabase Auth** as the canonical identity provider, the commerce domain model and schema blueprints were reconciled:
+
+1. **Provider-Owned Auth Schema Separation**:
+   - Supabase Auth manages its internal `auth` schema (`auth.users`, credentials, OAuth identities, refresh tokens).
+   - Removed Better Auth application tables (`user`, `session`, `account`, `verification`) from the Gamer Perú Drizzle schema blueprint.
+   - Gamer Perú domain tables reference `auth.users.id` (`UUID`) via `auth_user_id`.
+2. **Canonical Identity References**:
+   - `CustomerProfile.auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`, Unique).
+   - `UserRole.auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`).
+   - Staff/Actor references (`created_by_auth_user_id`, `verifier_auth_user_id`, `actor_auth_user_id`, `moderated_by_auth_user_id`, `processed_by_auth_user_id`, `Affiliate.auth_user_id`) standardly reference `auth.users.id` (`UUID`).
+3. **CustomerProfile Provisioning & Account Linking**:
+   - Idempotent `ensureCustomerProfile(auth_user_id)` creates `CustomerProfile` on first login (supporting both Email/Password and Google OAuth).
+   - Linked Google and password credentials belonging to the same Supabase user resolve to the same `CustomerProfile`.
+4. **Final Gamer Perú Physical Entity Count**:
+   - Exactly **58 Gamer Perú domain & system physical table candidates** across 11 modules.
+   - Provider-owned internal `auth` tables are excluded from Gamer Perú Drizzle migrations.
+5. **Zero Data Migration Cost**:
+   - Executed prior to repository bootstrap (GP-005), requiring zero code refactoring or database data migration.
+
 ---
 
 ## Final Schema-Readiness External Audit & Remediation
 
 A final schema-readiness external audit resolved all remaining authentication model classifications, payment state semantics, and relational constraints:
 
-1. **Better Auth Core-Schema Verification (August 16, 2026)**:
-   - Verified official Better Auth core relational architecture comprising 4 provider-owned tables: `user`, `session`, `account`, and `verification`.
-   - Verified that email/password credentials are stored in `account.password` using configured custom Argon2id handlers. Password hashes are never duplicated in Gamer Perú customer domain tables.
-   - Updated ADR-003 and COMMERCE_DOMAIN_MODEL.md to reflect the accurate 4-table provider boundary (`auth.ts` blueprint: 4 Better Auth tables + 4 Gamer Perú RBAC tables = 8 tables).
-2. **Payment `REJECTED` Semantics Reconciled**:
+1. **Payment `REJECTED` Semantics Reconciled**:
    - Customer/Admin cancellation of an unpaid order transitions `Order.status` $\to$ `CANCELLED`, leaves `Payment.status` as `UNPAID` (no REJECTED transition), and releases `InventoryReservation` $\to$ `RELEASED`.
    - `Payment.status = 'REJECTED'` represents an actual terminal payment evidence/verification rejection.
-3. **Auditable Verification Decisions**:
+2. **Auditable Verification Decisions**:
    - `PaymentVerification.decision` standardized as `ENUM('APPROVED', 'REJECTED_RETRYABLE', 'REJECTED_TERMINAL')`.
    - Retryable rejections transition `Payment.status` $\to$ `UNPAID`, maintain `InventoryReservation` in `VERIFICATION_HOLD`, and set `Payment.resubmission_grace_expires_at`.
    - Post-deadline expiration without resubmission enters an operational Admin-resolution queue condition without automatically releasing stock.
-4. **Late Payment Reacquisition & Sold-Out Path**:
+3. **Late Payment Reacquisition & Sold-Out Path**:
    - Reacquisition of late stock requires all-or-nothing locking across all required `InventoryItem` records. If all are available, replacement reservations are created in `ACTIVE` and transitioned in the same transaction `ACTIVE` $\to$ `ALLOCATED`. Historical `RELEASED` reservations remain immutable.
    - If stock is sold out but bank funds were confirmed: `Payment.status` transitions `SUBMITTED`/`VERIFYING` $\to$ `PAID` (Order remains `EXPIRED`, zero stock allocated), immediately followed by full external refund recording: `Payment.status` $\to$ `REFUNDED`, `Order.status` $\to$ `REFUNDED`.
-5. **Shipment v1 Cardinality**:
+4. **Shipment v1 Cardinality**:
    - Standardized one active outbound `Shipment` per `Order` operationally in v1 while maintaining `Order 1 -> * Shipment` schema extensibility for future split fulfillment.
-6. **Coupon & Promotion Controls**:
+5. **Coupon & Promotion Controls**:
    - Parameterized `MAX_COUPONS_PER_ORDER` (`[TBD BUSINESS DECISION]`) and added `UNIQUE(coupon_id, order_id)`.
    - `CouponRedemption` supports `APPLIED` and `VOIDED` lifecycle states, allowing future restoration without deleting historical audit records.
    - Coupons with `per_customer_limit` require authenticated customer identity.
-7. **Customer & Cart Integrity**:
+6. **Customer & Cart Integrity**:
    - `CustomerProfile.default_shipping_address_id` is the sole authoritative default-address pointer (removed duplicate `is_default` from `CustomerAddress`).
    - Added strict cart ownership invariants (at most one active cart per customer/session).
-8. **Refund Concurrency**:
+7. **Refund Concurrency**:
    - Enforced row-level locking on `Payment` during refund processing to recompute `refundable_remaining_cents` and guarantee $\sum \text{Refund} \le \text{Total}$.
-9. **Event Versioning & Outbox Idempotency**:
+8. **Event Versioning & Outbox Idempotency**:
    - Added `event_version: INTEGER` to `DomainEvent` and `OutboxEvent`.
    - `OutboxEvent.id` established as the canonical stable `event_id` and downstream idempotency key.
-10. **Growth Attribution Precedence & Commission Payout Traceability**:
-    - Added configurable `GROWTH_ATTRIBUTION_PRECEDENCE` and `AFFILIATE_ATTRIBUTION_WINDOW_DAYS`.
-    - `Commission` enforces 1-to-1 linkage with `AffiliateAttribution`.
-    - `CommissionPayoutBatch` links commissions and applied adjustments for full financial traceability without selecting a payout provider.
-11. **Truthful Physical Table Candidates**:
-    - Categorized 58 Gamer Perú domain & system entities + 4 Better Auth core technical tables = 62 total physical table candidates.
+9. **Growth Attribution Precedence & Commission Payout Traceability**:
+   - Added configurable `GROWTH_ATTRIBUTION_PRECEDENCE` and `AFFILIATE_ATTRIBUTION_WINDOW_DAYS`.
+   - `Commission` enforces 1-to-1 linkage with `AffiliateAttribution`.
+   - `CommissionPayoutBatch` links commissions and applied adjustments for full financial traceability without selecting a payout provider.
 
 ---
 
@@ -75,7 +98,7 @@ The canonical **Commerce Domain Model** is established authoritatively in [`docs
 ---
 
 ## Entity Model
-Defined 58 domain & system entities plus 4 Better Auth technical tables (62 total physical candidates) organized cleanly into domain modules:
+Defined 58 Gamer Perú domain & system entities organized cleanly into domain modules:
 - **Catalog (11)**: `Brand`, `Category`, `Collection`, `ProductCollection`, `Product`, `ProductVariant`, `CategorySpecificationSchema`, `ProductSpecifications`, `ProductStory`, `ProductStoryRevision`, `MediaAsset`.
 - **Identity & Customer (4)**: `CustomerProfile`, `CustomerAddress`, `WishlistItem`, `Review`.
 - **RBAC (4)**: `Role`, `Permission`, `RolePermission`, `UserRole`.
@@ -87,7 +110,6 @@ Defined 58 domain & system entities plus 4 Better Auth technical tables (62 tota
 - **Promotions (4)**: `Promotion`, `PromotionTarget`, `Coupon`, `CouponRedemption`.
 - **Growth (10)**: `ReferralProgram`, `ReferralCode`, `ReferralAttribution`, `Affiliate`, `AffiliateCode`, `AffiliateClick`, `AffiliateAttribution`, `Commission`, `CommissionAdjustment`, `CommissionPayoutBatch`.
 - **System & Operations (5)**: `ContentSlot`, `AuditEvent`, `DomainEvent`, `OutboxEvent`, `IdempotencyKey`.
-- **Auth Infrastructure (4)**: `user`, `session`, `account`, `verification`.
 
 ---
 
@@ -174,7 +196,7 @@ Defined 58 domain & system entities plus 4 Better Auth technical tables (62 tota
 
 ## Security Validation
 - [x] Authoritative server-side RBAC checks (`requirePermission`) required for all administrative mutations.
-- [x] Customer data isolation derived exclusively from verified server session (`session.customerId`).
+- [x] Customer data isolation derived exclusively from verified server session (`getUser()` $\to$ `auth_user_id` $\to$ `CustomerProfile.id`).
 - [x] Payment vouchers isolated from public CDN; accessed via 5-minute pre-signed URLs with audit logging.
 - [x] AI Assistant restricted to allowlisted tool calls and session-verified customer order lookups.
 - [x] Master secrets and encryption keys excluded from commerce tables and restricted to server environment variables.
@@ -209,19 +231,23 @@ The following commercial policies remain parameterized `[TBD BUSINESS DECISION]`
 
 ## GP-005 Handoff
 GP-005 (Repository Bootstrap) will consume:
-1. Exact entity names and aggregate structures for Drizzle schema modules across all 11 files (`catalog.ts`, `auth.ts`, `customers.ts`, `cart.ts`, `inventory.ts`, `orders.ts`, `payments.ts`, `shipping.ts`, `promotions.ts`, `growth.ts`, `system.ts`).
+1. Exact entity names and aggregate structures for Drizzle schema modules across all 11 files (`catalog.ts`, `rbac.ts`, `customers.ts`, `cart.ts`, `inventory.ts`, `orders.ts`, `payments.ts`, `shipping.ts`, `promotions.ts`, `growth.ts`, `system.ts`).
 2. UUIDv7 generation in application layer with PostgreSQL `uuid` columns.
-3. Required PostgreSQL extension: `pg_trgm` for typo-tolerant trigram search.
-4. Integer Soles currency rules (`PEN` cents).
-5. Outbox table and Better Auth session integration interfaces.
+3. Supabase Auth client/server utility contracts (`@supabase/supabase-js`, `@supabase/ssr`).
+4. Required PostgreSQL extension: `pg_trgm` for typo-tolerant trigram search.
+5. Integer Soles currency rules (`PEN` cents).
+6. Outbox table and verified server-side identity interfaces.
 
 ---
 
 ## Files Changed
-- `docs/architecture/COMMERCE_DOMAIN_MODEL.md`: Finalized all 67 sections with Better Auth core models, auditable verification decisions, late payment all-or-nothing reacquisition, sold-out funds refund workflow, and complete constraint/index blueprints.
-- `docs/decisions/ADR-003-authentication-authorization-rbac.md`: Factually updated Better Auth core schema references (`user`, `session`, `account`, `verification`).
-- `docs/roadmap/GP-004.md`: Maintained `COMPLETE` status.
-- `docs/roadmap/GP-004-CLOSURE.md`: Updated closure report with final schema-readiness audit findings.
+- `docs/architecture/COMMERCE_DOMAIN_MODEL.md`: Reconciled all 67 sections with Supabase Auth identity boundary (`auth.users.id UUID`), `auth_user_id` references, and 58 physical entity candidate blueprint.
+- `docs/architecture/TECHNOLOGY_ARCHITECTURE.md`: Amended architecture specification adopting Supabase Auth with Email/Password + Google OAuth and Next.js SSR cookie sessions.
+- `docs/decisions/ADR-003-authentication-authorization-rbac.md`: Amended ADR-003 adopting Supabase Auth and recording decision history.
+- `docs/decisions/README.md`: Updated ADR index table.
+- `docs/roadmap/GP-015.md`: Updated future authentication task scope for Supabase Auth.
+- `docs/roadmap/GP-003-CLOSURE.md`: Updated with Owner Authentication Architecture Amendment details.
+- `docs/roadmap/GP-004-CLOSURE.md`: Updated with Owner Authentication Domain Amendment details.
 
 ---
 
@@ -239,7 +265,7 @@ GP-005 (Repository Bootstrap) will consume:
 - **Branch**: `main`
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `b7463a646bef6c1c1d5fe5cdb1e9937919207ebe`
-- **Closure Content Checkpoint**: `89791016ff3b1207d10376e2f4db260d068a6c8c`
+- **Closure Content Checkpoint**: `b7c785680c66bff77352625b196cc88a1cc0d000`
 - **Working Tree**: Clean (Closure report staged for final closure commit).
 
 ---

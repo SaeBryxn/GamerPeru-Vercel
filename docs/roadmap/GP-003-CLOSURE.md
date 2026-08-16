@@ -26,6 +26,32 @@
 - Final Boundary Content Checkpoint:
   `cd1b097520b08bcaeb6ce41792c1f3da4bda6642`
 
+- Supabase Auth Amendment Checkpoint:
+  `b7c785680c66bff77352625b196cc88a1cc0d000`
+
+---
+
+## Owner Authentication Architecture Amendment
+
+Prior to the commencement of GP-005 (Repository Bootstrap), an explicit owner architecture decision amended the identity plane for Gamer Perú:
+
+1. **Supabase Auth Adoption**:
+   - Replaced Better Auth with **Supabase Auth** as the canonical identity provider.
+   - Leverages native identity plane capabilities included in the already-selected Supabase PostgreSQL infrastructure.
+2. **Canonical v1 Authentication Methods**:
+   - `EMAIL_PASSWORD`: Email registration, verification, login, and password recovery.
+   - `GOOGLE`: Google OAuth 2.0 ("Continuar con Google") with PKCE flow.
+3. **Session & Security Model**:
+   - Short-lived JWT access tokens and rotated refresh tokens transported via secure HTTP-only cookies managed with `@supabase/ssr`.
+   - Verified server-side identity checks (`getUser()`) enforce security across all protected routes and server actions.
+4. **Authoritative Gamer Perú RBAC Preserved**:
+   - Supabase Auth handles authentication ("Who is this user?"); Gamer Perú PostgreSQL RBAC tables (`roles`, `permissions`, `role_permissions`, `user_roles`) handle authorization ("What may this user do?").
+   - Google login or user metadata never grants administrative permissions; `requirePermission(...)` remains authoritative.
+5. **Free-First Compatibility**:
+   - Operates within Supabase Free tier allowances (up to 50,000 monthly active users including social OAuth) with zero plan upgrade required solely for Google login.
+6. **Zero Migration Cost**:
+   - Executed prior to repository bootstrap (GP-005) and auth implementation (GP-015), requiring zero code refactoring or database migration.
+
 ---
 
 ## Final Boundary & Provider Semantics Cleanup
@@ -61,7 +87,7 @@ August 16, 2026
 - **Node.js Runtime**: Node.js 24 LTS Documentation (`nodejs.org/docs/latest-v24.x/`).
 - **Database & Data Layer**: PostgreSQL 16+ Manual (`postgresql.org/docs/16/`), Supabase Guides & Pricing (`supabase.com/docs`, `supabase.com/pricing`), Drizzle ORM Documentation (`orm.drizzle.team/docs`) — ACID transactions, row-level locks (`SELECT ... FOR UPDATE`), JSONB hardware specs, GIN full-text indexes, `pg_trgm` similarity, Supavisor connection pooling, base Pro daily backups vs optional PITR add-on.
 - **Object Storage & Media**: Cloudflare R2 Documentation (`developers.cloudflare.com/r2/`), Cloudflare Images (`developers.cloudflare.com/images/`) — S3 API compatibility subset, zero egress bandwidth pricing, 5,000 free transformation limit behavior, paid transformation billing ($0.50/1k), and private bucket pre-signed URLs.
-- **Authentication**: Better Auth Documentation (`better-auth.com/docs`) — App Router integration, PostgreSQL session adapters, custom Argon2id hashing, and session revocation.
+- **Authentication**: Supabase Auth Documentation (`supabase.com/docs/guides/auth`) — Email/password, Google OAuth, `@supabase/ssr` cookies, PKCE flow, and Resend custom SMTP integration.
 - **Asynchronous Processing**: Inngest Durable Execution Documentation (`inngest.com/docs`) — Multi-step workflows, automatic retries, rate limiting, and failure handlers.
 - **Communications**: Resend API Docs (`resend.com/docs`), React Email Docs (`react.email/docs`) — Transactional email deliverability and React-based templating.
 - **Observability & Analytics**: PostHog Docs (`posthog.com/docs`), Sentry Docs (`docs.sentry.io`), Pino Logger Docs (`getpino.io`) — Error tracing, automated PII redaction, and cookieless product analytics.
@@ -76,7 +102,7 @@ August 16, 2026
 - **Application Hosting**: **Vercel Pro** hosting `gamerperu.com` on Vercel Edge Network with serverless Node.js execution.
 - **Commerce Engine**: **Custom Gamer Perú Commerce Domain** owned entirely in TypeScript.
 - **Database & Data Access**: **Supabase PostgreSQL (PostgreSQL 16+)** with **Drizzle ORM** and Supavisor connection pooling (Free-First launch $\to$ Pro upgrade path without code rewrite).
-- **Authentication & RBAC**: **Better Auth** with PostgreSQL session persistence, custom **Argon2id** password hashing, and authoritative server-side Role-Based Access Control (`requirePermission`).
+- **Authentication & RBAC**: **Supabase Auth** (Email/Password + Google OAuth) with Next.js SSR cookie session architecture (`@supabase/ssr`), Resend custom SMTP, and authoritative server-side Role-Based Access Control (`requirePermission`).
 - **Object Storage**: **Cloudflare R2** partitioned into `gamerperu-public-media` (Edge CDN + WebP/AVIF transformations via `media.gamerperu.com`) and `gamerperu-private-proofs` (Private S3 bucket + 5-minute pre-signed URLs).
 - **Search & Background Jobs**: **PostgreSQL FTS + Trigram (`pg_trgm`)** behind a `SearchProvider` adapter; **Inngest** for durable asynchronous workflows.
 - **AI Infrastructure**: Multi-provider AI Gateway with versioned **AES-256-GCM** encryption-at-rest for admin API keys, separated from the database runtime master key.
@@ -89,7 +115,7 @@ August 16, 2026
 All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`docs/decisions/`](../decisions/):
 1. [`docs/decisions/ADR-001-application-framework-runtime.md`](../decisions/ADR-001-application-framework-runtime.md): Next.js 16 Active LTS, TypeScript 5.x, Node.js 24 LTS, Vercel Pro hosting, Modular Monolith topology.
 2. [`docs/decisions/ADR-002-commerce-engine-data-architecture.md`](../decisions/ADR-002-commerce-engine-data-architecture.md): Custom Gamer Perú commerce domain on Supabase PostgreSQL (Free-first launch $\to$ Pro upgrade) with Drizzle ORM.
-3. [`docs/decisions/ADR-003-authentication-authorization-rbac.md`](../decisions/ADR-003-authentication-authorization-rbac.md): Better Auth with PostgreSQL session store, custom Argon2id hashing, and authoritative RBAC.
+3. [`docs/decisions/ADR-003-authentication-authorization-rbac.md`](../decisions/ADR-003-authentication-authorization-rbac.md): Supabase Auth (Email/Password + Google OAuth), Next.js SSR cookies, Resend custom SMTP, and authoritative RBAC.
 4. [`docs/decisions/ADR-004-storage-media-pipeline.md`](../decisions/ADR-004-storage-media-pipeline.md): Cloudflare R2 (public media + image transformations / private proofs with short-lived pre-signed URLs).
 5. [`docs/decisions/ADR-005-search-asynchronous-jobs.md`](../decisions/ADR-005-search-asynchronous-jobs.md): PostgreSQL FTS / Trigram with SearchProvider adapter + Inngest durable async workflows.
 6. [`docs/decisions/ADR-006-communications-analytics-observability.md`](../decisions/ADR-006-communications-analytics-observability.md): Resend + React Email, first-party PostgreSQL event ledger + PostHog, Sentry + Pino.
@@ -100,7 +126,7 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 
 ## Security Validation
 - [x] Authoritative server-side RBAC guards every administrative mutation, page layout, and route handler (`requirePermission`).
-- [x] Customer data isolation derives identity exclusively from the verified server-side session cookie (`session.customerId`).
+- [x] Customer data isolation derives identity exclusively from the verified server-side identity (`getUser()` $\to$ `auth_user_id` $\to$ `CustomerProfile.id`).
 - [x] Yape/Plin payment proofs are stored in an isolated private bucket with no anonymous public access; viewable exclusively via 5-minute pre-signed URLs with bearer credential audit logging.
 - [x] Admin-configured AI credentials encrypted at rest using AES-256-GCM with key versioning (`key_version`) and a server runtime master key (`AI_ENCRYPTION_KEY_V1`) stored separately from database tables. Plaintext keys are never returned to client browsers.
 - [x] AI Customer Assistant is restricted to allowlisted tool calls and public/session-filtered data; zero direct database or SQL execution access.
@@ -125,15 +151,15 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 
 ## Failure / Degradation Summary
 - **Critical Path**: Primary Supabase PostgreSQL Database (managed with daily backups on Pro / optional PITR add-on).
-- **Gracefully Degradable**: AI Providers (research paused, assistant shows helpful search fallback), Transactional Email (queued in Inngest for retry), Search Engine (falls back to database ILIKE only while Postgres is healthy), Analytics (best-effort external delivery; financial truth safe in PostgreSQL), EC OS Downstream (outbox queue holds events until recovery).
+- **Gracefully Degradable**: Supabase Auth (public storefront remains browsable without auth; new login/session refresh degraded), AI Providers (research paused, assistant shows helpful search fallback), Transactional Email (queued in Inngest for retry), Search Engine (falls back to database ILIKE only while Postgres is healthy), Analytics (best-effort external delivery; financial truth safe in PostgreSQL), EC OS Downstream (outbox queue holds events until recovery).
 
 ---
 
 ## Cost Snapshot (USD)
 - **Local Development**: **$0 / month** (Local Node.js 24 + Local PostgreSQL + Mock Adapters).
-- **Cloud Pre-Launch**: **~$20 – $25 / month** (Vercel Pro $20 required for commercial team use, Supabase Free $0, Cloudflare R2 Free, Inngest Free, Resend Free, PostHog Free, AI test tokens < $5).
-- **Initial Live Launch**: **~$35 – $55 / month** (Vercel Pro $20, Supabase Free $0 with scheduled R2 backups, Cloudflare R2 Free / Images Free, Resend Free, PostHog Free, AI tokens ~$15).
-- **Supabase Pro Stage**: **~$60 – $80 / month** (Vercel Pro $20 + Supabase Pro $25 with 7-day daily backups + Cloudflare R2 Free + Resend $0-$15 + PostHog Free + AI tokens ~$15-$25).
+- **Cloud Pre-Launch**: **~$20 – $25 / month** (Vercel Pro $20 required for commercial team use, Supabase Free $0 with Supabase Auth up to 50k MAU, Cloudflare R2 Free, Inngest Free, Resend Free, PostHog Free, AI test tokens < $5).
+- **Initial Live Launch**: **~$35 – $55 / month** (Vercel Pro $20, Supabase Free $0 with scheduled R2 backups and Auth included, Cloudflare R2 Free / Images Free, Resend Free, PostHog Free, AI tokens ~$15).
+- **Supabase Pro Stage**: **~$60 – $80 / month** (Vercel Pro $20 + Supabase Pro $25 with 7-day daily backups and 100k Auth MAU + Cloudflare R2 Free + Resend $0-$15 + PostHog Free + AI tokens ~$15-$25).
 - **Growth Stage (Optional Add-ons)**: **~$175 – $325+ / month** (Vercel Pro $20 + Supabase Pro $25 + Optional PITR ~$100 + Inngest Pro $35 + Cloudflare Images Paid transformations ~$10 + AI tokens $50-$100 + Resend Paid ~$20).
 
 ---
@@ -146,10 +172,11 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 ---
 
 ## Files Changed
-- `docs/architecture/TECHNOLOGY_ARCHITECTURE.md`: Finalized 46-section architecture specification with exact domain boundaries, accurate Cloudflare Images transformation pricing, R2 S3 compatibility subset, private proof access semantics, decoupled failure models, and precise security/performance wording.
-- `docs/decisions/ADR-002-commerce-engine-data-architecture.md`: Updated with precise SQL injection risk reduction language and neutral inventory locking.
-- `docs/decisions/ADR-004-storage-media-pipeline.md`: Updated with Cloudflare Images transformation pricing semantics, R2 S3-compatibility subset, and private proof access controls.
-- `docs/roadmap/GP-003-CLOSURE.md`: Updated with final boundary and provider semantics cleanup details and full checkpoint lineage.
+- `docs/architecture/TECHNOLOGY_ARCHITECTURE.md`: Amended architecture specification adopting Supabase Auth with Email/Password + Google OAuth and Next.js SSR cookie sessions.
+- `docs/decisions/ADR-003-authentication-authorization-rbac.md`: Amended ADR-003 adopting Supabase Auth and recording decision history.
+- `docs/decisions/README.md`: Updated ADR index table.
+- `docs/roadmap/GP-015.md`: Updated future authentication task scope for Supabase Auth.
+- `docs/roadmap/GP-003-CLOSURE.md`: Updated with Owner Authentication Architecture Amendment details.
 
 ---
 
@@ -157,7 +184,7 @@ All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`d
 - **Branch**: `main`
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `d08a1407c19bdcb17b8ef5929b9c944ceeac9276`
-- **Closure Content Checkpoint**: `cd1b097520b08bcaeb6ce41792c1f3da4bda6642`
+- **Closure Content Checkpoint**: `b7c785680c66bff77352625b196cc88a1cc0d000`
 - **Working Tree**: Clean (Closure report staged for final closure commit).
 
 ---
