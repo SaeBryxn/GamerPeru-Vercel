@@ -414,7 +414,7 @@ graph LR
 - **Application Commerce Email Pipeline**:
   - Dispatched asynchronously by **Gamer Perú Domain Events / Inngest** using the **Resend API** and type-safe **React Email** templates.
   - Triggers: Order confirmation, payment submitted notice, payment approved receipt, payment rejected notice, order shipped tracking, RMA return updates.
-  - Reliability: Dispatched via Inngest background jobs with automatic retries and dead-letter queueing on provider downtime.
+  - Reliability: Dispatched via Inngest background jobs with automatic step-level retries, failure handling (`onFailure`), execution observability, and explicit replay/manual recovery where needed.
   - Non-Duplication Invariant: Password recovery/reset emails are handled strictly by the Supabase Auth SMTP pipeline; they are NEVER dispatched via Inngest.
 
 ---
@@ -452,9 +452,9 @@ graph LR
 
 | Config Class | Storage Location | Example Variables | Exposure |
 |---|---|---|---|
-| **PUBLIC CONFIG** | `NEXT_PUBLIC_*` | `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_CDN_URL` | Browser & Server |
-| **SERVER CONFIG** | Server Environment | `DATABASE_URL`, `RESEND_API_KEY`, `R2_ACCESS_KEY` | Server Runtime Only |
-| **MASTER SECRET** | Server Environment | `AI_ENCRYPTION_KEY_V1`, `BETTER_AUTH_SECRET` | Server Runtime Only |
+| **PUBLIC CONFIG** | `NEXT_PUBLIC_*` | `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_CDN_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser & Server |
+| **SERVER CONFIG** | Server Environment | `DATABASE_URL`, `RESEND_API_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Server Runtime Only |
+| **MASTER SECRET** | Server Environment | `AI_ENCRYPTION_KEY_V1` | Server Runtime Only |
 | **ENCRYPTED SECRET** | PostgreSQL Table | Encrypted OpenAI/Anthropic/Gemini API Keys | In-Memory Decryption Only |
 
 ---

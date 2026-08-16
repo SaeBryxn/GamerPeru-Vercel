@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Typecheck, Lint, Test & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Typecheck
+        run: pnpm typecheck
+
+      - name: Run Lint
+        run: pnpm lint
+
+      - name: Run Unit Tests
+        run: pnpm test
+
+      - name: Run Next.js Build
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SITE_URL: "http://localhost:3000"
+          NEXT_PUBLIC_CDN_URL: "http://localhost:3000/media"
+          NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.ci_anon_key"
+          DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:54322/postgres"
