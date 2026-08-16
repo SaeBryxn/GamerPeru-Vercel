@@ -1187,7 +1187,7 @@ Guarantees at-least-once delivery of outbound events to Inngest and downstream E
 - **Authoritative Server RBAC**: Every privileged action checks `requirePermission('permission:name')` against database records. Client route hiding or token claims are never relied upon for security.
 - **IDOR Protection**: Customer queries verify identity via `getClaims()`, resolve `auth_user_id` to `CustomerProfile.id`, and enforce customer data isolation; client-provided user IDs are discarded.
 - **Key Boundary**:
-  - *Browser-Safe*: `NEXT_PUBLIC_SUPABASE_ANON_KEY` / publishable key is safe for client-side bundle exposure.
+  - *Browser-Safe*: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` / publishable key is safe for client-side bundle exposure.
   - *Server-Only*: Supabase service role key, direct database connection strings, Google OAuth Client Secret, and Resend SMTP credentials remain strictly in server environment variables.
 - **Row Level Security (RLS) Boundary**:
   - Server-side Next.js / Drizzle logic performs authoritative authorization.

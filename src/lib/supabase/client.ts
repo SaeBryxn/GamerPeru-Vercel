@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { publicEnv } from "@/config/env";
+import { publicEnv } from "@/config/public-env";
 
 /**
  * Creates a Supabase client for use in browser Client Components.
@@ -8,6 +8,6 @@ import { publicEnv } from "@/config/env";
 export function createBrowserSupabaseClient() {
   return createBrowserClient(
     publicEnv.NEXT_PUBLIC_SUPABASE_URL,
-    publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    publicEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   );
 }

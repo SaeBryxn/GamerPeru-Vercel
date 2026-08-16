@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24.0.0",
-    "pnpm": ">=10.0.0"
+    "node": ">=24.0.0 <25",
+    "pnpm": ">=11.22.0 <12"
   },
   "packageManager": "pnpm@11.22.0",
   "scripts": {
@@ -19,33 +19,40 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "supabase": "supabase",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1111.0",
-    "@aws-sdk/s3-request-presigner": "^3.1111.0",
-    "@supabase/ssr": "^0.12.4",
-    "@supabase/supabase-js": "^2.112.3",
-    "drizzle-orm": "^0.45.2",
-    "inngest": "^4.18.1",
-    "next": "^16.3.1",
-    "postgres": "^3.4.9",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "zod": "^3.25.76"
+    "@aws-sdk/client-s3": "3.1111.0",
+    "@aws-sdk/s3-request-presigner": "3.1111.0",
+    "@supabase/ssr": "0.12.4",
+    "@supabase/supabase-js": "2.112.3",
+    "drizzle-orm": "0.45.2",
+    "inngest": "4.18.1",
+    "next": "16.3.1",
+    "postgres": "3.4.9",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1",
+    "zod": "3.25.76"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.13.0",
-    "@next/eslint-plugin-next": "^16.3.1",
-    "@playwright/test": "^1.62.1",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "@typescript-eslint/eslint-plugin": "^8.67.0",
-    "@typescript-eslint/parser": "^8.67.0",
-    "drizzle-kit": "^0.31.10",
-    "eslint": "^9.39.5",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "@axe-core/playwright": "4.13.0",
+    "@next/eslint-plugin-next": "16.3.1",
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@typescript-eslint/eslint-plugin": "8.67.0",
+    "@typescript-eslint/parser": "8.67.0",
+    "dotenv": "17.4.2",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.5",
+    "supabase": "2.114.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
   }
 }

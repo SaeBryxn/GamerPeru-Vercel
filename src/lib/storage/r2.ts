@@ -1,5 +1,6 @@
+import "server-only";
 import { S3Client } from "@aws-sdk/client-s3";
-import { serverEnv } from "@/config/env";
+import { serverEnv } from "@/config/server-env";
 
 /**
  * Cloudflare R2 Logical Bucket Names

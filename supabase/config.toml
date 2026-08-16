@@ -1,6 +1,6 @@
 # ==============================================================================
 # Gamer Perú — Local Supabase Configuration
-# Used with Supabase CLI (`npx supabase start`) for zero-cloud local development.
+# Used with Supabase CLI (`pnpm supabase:start`) for zero-cloud local development.
 # ==============================================================================
 
 project_id = "gamerperu-local"
@@ -15,7 +15,7 @@ max_rows = 1000
 [db]
 port = 54322
 shadow_port = 54320
-major_version = 15
+major_version = 16
 
 [db.pooler]
 enabled = false
@@ -34,7 +34,7 @@ enable_signup = true
 [auth.email]
 enable_signup = true
 double_confirm_changes = true
-enable_confirmations = false
+enable_confirmations = true
 
 [auth.external.google]
 enabled = false

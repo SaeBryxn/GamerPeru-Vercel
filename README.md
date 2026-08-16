@@ -12,9 +12,9 @@ Build a premium multi-brand gaming-peripherals e-commerce platform for Peru with
 
 The project progresses sequentially through 53 gated tasks: **GP-000 → GP-052**.
 
-- **GP-000 to GP-004**: System Initialization, Design System, Technology Architecture, and Commerce Domain Model (`COMPLETE`).
-- **GP-005**: Repository Bootstrap (`CURRENT`).
-- **GP-006 to GP-052**: Core Tooling, UI Design System, Catalog, Cart, Checkout, Payments, Admin, Affiliates, AI Assistant, and Production Launch (`PLANNED`).
+- **GP-000 to GP-005**: System Initialization, Design System, Technology Architecture, Commerce Domain Model, and Repository Bootstrap (`COMPLETE`).
+- **GP-006**: Engineering Standards (`NEXT / PLANNED`).
+- **GP-007 to GP-052**: Core Tooling, UI Design System, Catalog, Cart, Checkout, Payments, Admin, Affiliates, AI Assistant, and Production Launch (`PLANNED`).
 
 ---
 
@@ -22,7 +22,7 @@ The project progresses sequentially through 53 gated tasks: **GP-000 → GP-052*
 
 - **Application Framework**: Next.js 16 Active LTS (App Router, Server Components, Server Actions)
 - **Language & Runtime**: TypeScript 5.x on Node.js 24 LTS
-- **Package Manager**: `pnpm` (v11+)
+- **Package Manager**: `pnpm` (v11.22.0)
 - **Database & ORM**: Supabase PostgreSQL (PostgreSQL 16+) with Drizzle ORM & Drizzle Kit
 - **PostgreSQL Driver**: `postgres` (postgres.js) with Supavisor transaction pooler compatibility
 - **Authentication**: Supabase Auth (Email/Password + Google OAuth) with Next.js SSR session cookies (`@supabase/ssr`)
@@ -39,7 +39,7 @@ The project progresses sequentially through 53 gated tasks: **GP-000 → GP-052*
 ### Prerequisites
 
 - **Node.js**: `v24.0.0` or higher (`node -v`)
-- **pnpm**: `v10.0.0` or higher (`pnpm -v`)
+- **pnpm**: `v11.22.0` (`pnpm -v`)
 - **Docker**: (Optional, for running local Supabase CLI stack)
 
 ### 1. Installation
@@ -47,7 +47,7 @@ The project progresses sequentially through 53 gated tasks: **GP-000 → GP-052*
 Clone the repository and install dependencies using `pnpm`:
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 ### 2. Environment Configuration
@@ -62,16 +62,23 @@ The application runs locally and builds without requiring remote production clou
 
 ### 3. Local Supabase Stack (Optional for Offline Auth & PostgreSQL)
 
-To start the local Supabase container stack (PostgreSQL, Supabase Auth, local Studio):
+To start the local Supabase container stack (PostgreSQL 16, Supabase Auth, local Studio, Inbucket):
 
 ```bash
-npx supabase start
+pnpm supabase:start
 ```
 
 - Local API Gateway: `http://127.0.0.1:54321`
 - Local PostgreSQL: `postgres://postgres:postgres@127.0.0.1:54322/postgres`
 - Local Supabase Studio: `http://127.0.0.1:54323`
 - Local Inbucket Email Inbox: `http://127.0.0.1:54324`
+
+To check status or stop the stack:
+
+```bash
+pnpm supabase:status
+pnpm supabase:stop
+```
 
 ### 4. Running the Development Server
 
@@ -98,6 +105,9 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to view th
 | `pnpm db:generate` | Generates Drizzle SQL migrations from schema files. |
 | `pnpm db:migrate` | Applies pending Drizzle database migrations. |
 | `pnpm db:studio` | Launches Drizzle Studio database browser UI. |
+| `pnpm supabase:start` | Starts the local Supabase Docker development stack. |
+| `pnpm supabase:stop` | Stops the local Supabase Docker development stack. |
+| `pnpm supabase:status` | Displays connection details for the local Supabase stack. |
 
 ---
 

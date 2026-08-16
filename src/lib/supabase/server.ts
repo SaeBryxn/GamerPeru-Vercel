@@ -1,6 +1,7 @@
+import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { publicEnv } from "@/config/env";
+import { publicEnv } from "@/config/public-env";
 
 /**
  * Creates a request-scoped Supabase client for Server Components, Server Actions,
@@ -13,7 +14,7 @@ export async function createServerSupabaseClient() {
 
   return createServerClient(
     publicEnv.NEXT_PUBLIC_SUPABASE_URL,
-    publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    publicEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
       cookies: {
         getAll() {
