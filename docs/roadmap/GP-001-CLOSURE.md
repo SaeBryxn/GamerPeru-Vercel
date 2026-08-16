@@ -1,28 +1,43 @@
 # GP-001 — Closure Report
 
-## Base Checkpoint
-`8bf19038b84b7fddd46759130ecab14ee60cc6f5`
+## Checkpoint History
 
-## Closure Checkpoint
-`187c59300b9b18d51bd0d88ddb99f3b71be58c9b`
+- Original GP-001 Base Checkpoint:
+  `d2d115f357ef35ac40d4fcad47cfaeb201cc2ae4`
+
+- Initial GP-001 Completion:
+  `8bf19038b84b7fddd46759130ecab14ee60cc6f5`
+
+- External Review Remediation Checkpoint:
+  `77070d4344c5ea16a49360f75cdaa1ff0bd1dd4f`
+
+- Final Cleanup Content Checkpoint:
+  `PENDING_FINAL_COMMIT`
 
 ## Summary
-GP-001 (WLMOUSE Visual & UX Reference) has been remediated following external repository review. The visual and UX reference specification (`docs/design/WLMOUSE_REFERENCE_SPEC.md`) was rigorously audited and refined to remove unapproved business commitments, distinguish direct WLMOUSE observations from Gamer Perú design translations, eliminate premature design token prescriptions, refine conditional SEO schema and faceted navigation rules, and label performance targets as provisional/aspirational.
+GP-001 (WLMOUSE Visual & UX Reference) has undergone its final external-audit cleanup. The visual and UX reference specification (`docs/design/WLMOUSE_REFERENCE_SPEC.md`) was refined to correct checkpoint lifecycle history, re-assign exact motion and visual tokens to GP-002, neutralize media-pipeline wording for architecture neutrality, refine image-loading rules for viewport and LCP criticality, and neutralize warranty trust statements.
 
-## External Review Findings & Post-Review Remediation
-The initial GP-001 execution successfully analyzed WLMOUSE's design strengths, but external repository review identified several boundary violations and scope assumptions:
-1. **Unapproved Business Policies**: The initial specification contained assumptions regarding immediate/same-day Lima delivery, specific courier names (Olva/Shalom), local RMA warranty promises, direct WhatsApp customer service channels, and unapproved payment methods (cards, BCP/BBVA transfers, installment messaging).
-   - *Remediation*: All courier selections, delivery SLAs, warranty policies, and support channels were converted to explicit `[TBD BUSINESS DECISION]` slots. Canonical v1 payment methods were strictly re-anchored to `YAPE_MANUAL` and `PLIN_MANUAL`. Any future payment gateway or card support was explicitly marked as `[FUTURE / NOT PART OF V1 / PROVIDER TBD]`.
-2. **Tripartite Observation / Decision Classification**: Statements in the specification were audited and strictly classified into:
-   - `[WLMOUSE OBSERVATION - Observed on reference]`: Factual observations from the public WLMOUSE storefront.
-   - `[GAMER PERÚ TRANSLATION]`: Intentional visual and UX design principles to carry forward.
-   - `[FUTURE / TBD BUSINESS DECISION]`: Requirements awaiting later commercial or operational decisions.
-3. **Premature Design Token Locking**: Prescriptive color hex codes (`#171717`, `#262626`, etc.) and fixed spacing/radius values were previously listed under inputs for GP-002.
-   - *Remediation*: All prescriptive token values were removed from Gamer Perú requirements. The document now explicitly states that **GP-002 is solely responsible for creating and approving original Gamer Perú design tokens**, with WLMOUSE values marked strictly as non-binding research context.
-4. **SEO Schema & Faceted Navigation Refinement**:
-   - `aggregateRating` and `review` schema properties were refined to be strictly conditional (emitted only when genuine, qualifying review data exists).
-   - Faceted navigation indexing was clarified: curated primary category/brand combinations may be indexable, while combinatorial dynamic filter facets are prevented from creating crawl traps, with final indexing policies deferred to dedicated SEO tasks (GP-036 to GP-039).
-5. **Performance Budget Refinement**: Numerical metrics (`LCP < 1.8s`, `CLS = 0`) were explicitly labeled as `[PROVISIONAL / ASPIRATIONAL]` reference goals, with final performance budgets deferred to the architecture/performance phases (GP-003 and GP-044).
+## External Audit Findings & Final Boundary Reconciliations
+Across two review cycles, external repository audits identified scope-boundary and lifecycle integrity issues that were systematically remediated:
+
+1. **Checkpoint History Lifecycle Integrity**:
+   - The closure report lifecycle history was updated to preserve the complete lineage from the original GP-001 base (`d2d115f3...`), through the initial completion (`8bf19038...`), the post-review remediation (`77070d43...`), to the final content cleanup commit.
+2. **Motion Token Deferral to GP-002**:
+   - Prescriptive Gamer Perú motion values (`2-4px` Y-translation, `250-300ms` drawer durations, specific cubic-bezier curves) were removed from Gamer Perú requirements and re-framed as design principles (subtle card hover lift, snappy drawer transitions, smooth cross-fades).
+   - Exact WLMOUSE reference measurements are designated strictly as `[WLMOUSE OBSERVATION — NON-BINDING]`.
+   - **GP-002 is confirmed as the sole owner of canonical Gamer Perú motion tokens**.
+3. **Visual Token Audit & GP-002 Boundary**:
+   - Confirmed that GP-001 does not finalize Gamer Perú colors, typography pairings/scales, spacing scales, radius scales, grid breakpoints, or iconography stroke tokens.
+   - WLMOUSE research observations remain clearly marked as non-binding context.
+4. **Architecture-Neutral Media Pipeline**:
+   - Media delivery wording was reframed from prescriptive format mandates to high-level principles: Gamer Perú must utilize an optimized responsive media pipeline using modern efficient formats (such as WebP/AVIF where applicable) appropriate to the architecture selected in GP-003.
+5. **Viewport-Critical Media Loading Strategy**:
+   - Corrected over-broad lazy-loading rules: Above-the-fold / LCP-critical media must NOT be lazily loaded; below-the-fold non-critical storytelling media should be deferred; collection grids must prioritize visible items and defer off-screen media.
+6. **Neutralized Warranty Language**:
+   - Neutralized commercial promises to neutral trust slots: `Warranty / returns information — configured from approved Gamer Perú policy; terms TBD ([TBD BUSINESS DECISION])`.
+7. **Canonical v1 Commerce & Trust Baseline**:
+   - Payments strictly anchored to `YAPE_MANUAL` and `PLIN_MANUAL` manual verification.
+   - Couriers, delivery SLAs, warranty terms, and customer support channels remain configurable TBD business decision slots.
 
 ## Sources Reviewed
 - **Live WLMOUSE Public Storefront** (`https://www.wlmouse.com`) — Inspected August 16, 2026.
@@ -40,8 +55,8 @@ The initial GP-001 execution successfully analyzed WLMOUSE's design strengths, b
     * *Accessories* — Glass and PTFE skates, custom grip tapes, 8K Cat/Cube dongles.
 
 ## Files Changed
-- `docs/design/WLMOUSE_REFERENCE_SPEC.md`: Remediated to enforce canonical v1 scope, remove unapproved business claims, categorize observations, remove premature tokens, and refine SEO/performance constraints.
-- `docs/roadmap/GP-001-CLOSURE.md`: Updated to document external review findings, specific remediations, and closure verification.
+- `docs/design/WLMOUSE_REFERENCE_SPEC.md`: Cleaned to enforce GP-002 token boundaries, architecture-neutral media wording, viewport-critical loading, and neutralized warranty trust language.
+- `docs/roadmap/GP-001-CLOSURE.md`: Updated to record complete checkpoint lineage, external audit remediations, and validation evidence.
 
 ## Key Findings
 1. **Product Dominance**: Hardware media occupies 70-80% of visual weight on collections and 60% above-the-fold on PDP, creating an instant high-end impression.
@@ -51,7 +66,7 @@ The initial GP-001 execution successfully analyzed WLMOUSE's design strengths, b
 5. **Mobile First-Class Parity**: Mobile uses horizontal touch galleries, horizontal variant pill chips, sticky bottom commerce bars, and compact drawer menus.
 
 ## ADOPT Summary
-- **Product-Dominant Visual Hierarchy**: Large, high-resolution product media on contrasting backgrounds.
+- **Product-Dominant Visual Hierarchy**: Large, high-resolution product photography dominating layout with crisp contrast.
 - **Technical Specs as Marketing**: Bold typography callouts for core competitive peripheral specs.
 - **Restrained Monochrome UI**: Clean dark/light neutral backdrops highlighting product colorways.
 - **Modular Long-Form PDP Storytelling**: Admin-driven Product Story component system.
@@ -88,9 +103,9 @@ Gamer Perú cannot function as a boutique single-brand showcase. It must balance
 
 ## Performance Conclusions
 - Provisional aspirational target: LCP < 1.8s on 4G mobile, CLS = 0. Final budgets validated during GP-003 and GP-044.
-- Mandatory WebP/AVIF asset generation with explicit `srcset` and `sizes`.
+- Viewport-critical media loading: prioritize above-the-fold/LCP images; defer non-critical below-the-fold media.
 - Container `aspect-ratio` pre-allocation to eliminate Cumulative Layout Shift.
-- Native lazy loading on all below-the-fold storytelling blocks and collection grids.
+- Responsive asset pipeline using modern formats (e.g., WebP/AVIF where applicable).
 
 ## Accessibility Conclusions
 - WCAG 2.1 AA compliance (4.5:1 text contrast ratio, 3:1 UI component contrast).
@@ -100,19 +115,19 @@ Gamer Perú cannot function as a boutique single-brand showcase. It must balance
 - Descriptive alt text on all product media views.
 
 ## Validation
-- [x] Unapproved couriers (Olva/Shalom), same-day delivery promises, and unapproved warranty/channel claims removed.
-- [x] Payment methods strictly constrained to canonical v1 `YAPE_MANUAL` and `PLIN_MANUAL`. Future gateways marked TBD.
-- [x] Tripartite classification (`WLMOUSE OBSERVATION`, `GAMER PERÚ TRANSLATION`, `FUTURE / TBD BUSINESS DECISION`) enforced.
-- [x] Premature Gamer Perú design tokens removed; GP-002 established as sole authority for token creation.
-- [x] Product schema `aggregateRating` and `review` confirmed conditional.
-- [x] Faceted navigation rules refined to avoid over-generalization.
-- [x] Performance targets explicitly marked provisional/aspirational.
+- [x] Checkpoint history correctly documents complete GP-001 lineage.
+- [x] All premature motion and visual token values removed from Gamer Perú requirements and assigned to GP-002.
+- [x] Media-pipeline language updated to architecture-neutral principle.
+- [x] Viewport-critical media loading strategy accurately defined (LCP prioritized, non-critical deferred).
+- [x] Warranty language neutralized to configurable policy slot.
+- [x] Unapproved couriers (Olva/Shalom), same-day delivery promises, and unapproved payment methods excluded from v1.
+- [x] Tripartite classification (`WLMOUSE OBSERVATION`, `GAMER PERÚ TRANSLATION`, `FUTURE / TBD BUSINESS DECISION`) maintained.
 - [x] Anti-clone and IP boundaries strictly maintained.
 - [x] No application code, CSS tokens, or proprietary WLMOUSE assets committed.
-- [x] GP-002 not executed.
+- [x] GP-002 has not been executed.
 
 ## Deviations / Risks
-None. All boundary violations have been resolved and aligned with canonical v1 documentation.
+None. All scope boundary and documentation issues identified during external audit have been resolved.
 
 ## Repository Status
 - **Branch**: `main`

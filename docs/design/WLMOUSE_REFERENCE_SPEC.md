@@ -14,6 +14,7 @@ However, WLMOUSE operates as a single-brand manufacturer with a boutique catalog
 - Adopt the premium product-first visual philosophy without cloning WLMOUSE's proprietary code, brand identity, copy, imagery, 3D assets, icons, logos, or distinctive compositions.
 - Maintain a strict boundary between *WLMOUSE Observations*, *Gamer Perú Translations*, and *Future / TBD Business Decisions*.
 - Preserve canonical Gamer Perú v1 constraints (manual Yape/Plin payment verification, multi-brand retail taxonomy, TBD logistics/warranty policies).
+- Establish high-level design and performance principles while deferring exact design-token selections to **GP-002** and technical architecture to **GP-003**.
 
 ---
 
@@ -51,7 +52,7 @@ However, WLMOUSE operates as a single-brand manufacturer with a boutique catalog
 * `[WLMOUSE OBSERVATION - Observed on reference]`: **Announcement Bar**: Ultra-slim top bar displaying shipping or product availability updates with high contrast.
 * `[WLMOUSE OBSERVATION - Observed on reference]`: **Header Layout**: Minimalist sticky header with brand wordmark centered/left, surrounded by clean horizontal navigation links.
 * `[WLMOUSE OBSERVATION - Observed on reference]`: **Navigation Architecture**: Organized strictly by proprietary product families (*Beast X Series*, *Sword Series*, *Huan Series*, *Keyboards*, *Accessories*, *Support*, *Software/Hub*).
-* `[WLMOUSE OBSERVATION - Observed on reference]`: **Utility Actions**: Search, User Account, and Cart icons utilizing light stroke iconography (approx. 1.5px stroke weight in CSS).
+* `[WLMOUSE OBSERVATION - NON-BINDING]`: **Utility Actions**: Search, User Account, and Cart icons utilizing light stroke iconography (approx. 1.5px stroke weight in CSS baseline).
 * `[WLMOUSE OBSERVATION - Observed on reference]`: **Drawer Overlays**: Search and Cart open in off-canvas slide-out drawers rather than redirecting to separate utility pages.
 
 ### 4.2 Gamer Perú Translation
@@ -61,6 +62,7 @@ However, WLMOUSE operates as a single-brand manufacturer with a boutique catalog
   - By Specification / Grip: Ultra-lightweight (<45g), Ergonomic, Symmetrical, Small/Medium/Large grip.
 * `[GAMER PERÚ TRANSLATION]`: **Mega-Menu / Dropdown**: Multi-column desktop mega-menu with featured product highlights and brand logos alongside structured category links.
 * `[GAMER PERÚ TRANSLATION]`: **Search Integration**: Interactive predictive search drawer returning instant matching products, brands, and categories with live pricing and thumbnail previews.
+* `[GAMER PERÚ TRANSLATION]`: **Utility Iconography**: Clean, restrained stroke iconography (exact stroke width, grid alignment, and icon tokens defined in GP-002).
 
 ---
 
@@ -80,7 +82,7 @@ However, WLMOUSE operates as a single-brand manufacturer with a boutique catalog
 * `[GAMER PERÚ TRANSLATION]`: **Trust & Guarantee Strip**: Highlighting localized Peruvian value propositions:
   - Stock transparency (`[TBD BUSINESS DECISION: Stock display policy]`).
   - Nationwide shipping coverage (`[TBD BUSINESS DECISION: Courier provider TBD]`).
-  - Gamer Perú official warranty (`[TBD BUSINESS DECISION: Warranty terms TBD]`).
+  - Warranty / returns information — configured from approved Gamer Perú policy; terms TBD (`[TBD BUSINESS DECISION]`).
   - Yape / Plin manual verification (`[CANONICAL V1 PAYMENT]`).
 
 ---
@@ -88,7 +90,7 @@ However, WLMOUSE operates as a single-brand manufacturer with a boutique catalog
 ## 6. Collection & Listing Experience
 
 ### 6.1 Observations from Reference (WLMOUSE)
-* `[WLMOUSE OBSERVATION - Observed on reference]`: **Grid Density**: 3 to 4 columns on large desktop, 2 columns on tablet, 1 to 2 columns on mobile.
+* `[WLMOUSE OBSERVATION - Observed on reference]`: **Grid Density**: Multi-column desktop grid adapting to 1 or 2 columns on mobile.
 * `[WLMOUSE OBSERVATION - Observed on reference]`: **Card Ratios**: Vertical aspect ratios giving maximum height to product photography.
 * `[WLMOUSE OBSERVATION - Observed on reference]`: **Filtering**: Minimalist toolbar due to manufacturer's small SKU count.
 
@@ -208,7 +210,7 @@ However, WLMOUSE operates as a single-brand manufacturer with a boutique catalog
 ## 12. Typography & Hierarchy Observations
 
 ### 12.1 Observations from Reference (WLMOUSE)
-* `[WLMOUSE OBSERVATION - Observed on reference]`:
+* `[WLMOUSE OBSERVATION - NON-BINDING]`:
   - Primary font: Inter (`Inter, sans-serif`) with weights 400 (regular), 500 (medium), and 700 (bold).
   - Heading characteristics: Tight letter-spacing (approx. `-0.03em`), tight line-height (`1.0` to `1.1`), clean modern technical style.
   - Fluid typography: CSS `clamp()` scaling adapting font sizes across mobile and wide viewports.
@@ -222,12 +224,12 @@ However, WLMOUSE operates as a single-brand manufacturer with a boutique catalog
 ## 13. Grid, Spacing & Whitespace Observations
 
 ### 13.1 Observations from Reference (WLMOUSE)
-* `[WLMOUSE OBSERVATION - Observed on reference]`:
+* `[WLMOUSE OBSERVATION - NON-BINDING]`:
   - Fluid container expanding up to 2000px on ultra-wide viewports with responsive horizontal gutters.
   - Restrained component radii (approx. 4px to 8px) on interactive controls and cards.
 
 ### 13.2 Principle for GP-002 (`[GAMER PERÚ TRANSLATION]`)
-* `[GAMER PERÚ TRANSLATION]`: Gamer Perú will establish an original spacing scale and layout container system in **GP-002**, utilizing generous whitespace to elevate hardware photography while maintaining structured density on data-heavy product matrices.
+* `[GAMER PERÚ TRANSLATION]`: Gamer Perú will establish an original spacing scale, layout container system, and component radius scale in **GP-002**, utilizing generous whitespace to elevate hardware photography while maintaining structured density on data-heavy product matrices.
 
 ---
 
@@ -235,20 +237,21 @@ However, WLMOUSE operates as a single-brand manufacturer with a boutique catalog
 
 * `[WLMOUSE OBSERVATION - Observed on reference]`: High-resolution hardware photography with sharp lighting capturing metallic, matte, and cutout textures against dark and light backdrops.
 * `[GAMER PERÚ TRANSLATION]`:
-  - High-fidelity product photography with consistent aspect ratios across catalog grids (1:1 or 4:5) and storytelling banners (16:9 or 21:9).
-  - All production media must be served via optimized formats (WebP/AVIF) with explicit container dimensions to prevent layout shifts.
+  - High-fidelity product photography with consistent aspect ratios across catalog grids and storytelling banners (exact aspect ratio tokens defined in GP-002).
+  - Gamer Perú must use an optimized responsive media pipeline using modern efficient formats appropriate to the architecture selected later, such as WebP/AVIF where applicable, with explicit container dimensions to prevent layout shifts.
 
 ---
 
 ## 15. Motion & Micro-interactions
 
 ### 15.1 Observations & Translation
-* `[WLMOUSE OBSERVATION - Observed on reference]`: Subtle card hover transitions (secondary image fade) and smooth drawer slide-ins.
-* `[GAMER PERÚ TRANSLATION - Adopted Motion]`:
-  - Subtle hover lift on product cards (2-4px Y-translation with smooth cubic-bezier easing).
+* `[WLMOUSE OBSERVATION - NON-BINDING]`: Subtle card hover transitions (secondary image crossfade) and smooth, fast drawer slide-ins in reference theme.
+* `[GAMER PERÚ TRANSLATION - Adopted Motion Principles]`:
+  - Subtle hover lift and visual feedback on product cards without jarring shifts.
   - Smooth cross-fade between primary and secondary product views on card hover.
-  - Snappy off-canvas drawer slide-in (approx. 250ms-300ms ease-out).
+  - Snappy, lightweight off-canvas drawer transitions.
   - Accordion transitions for specifications and FAQ sections.
+  - *Note on Motion Tokens*: Exact Gamer Perú transition durations, easing curves, and transforms will be defined in **GP-002**. Motion must never delay purchasing interactions.
 * `[GAMER PERÚ TRANSLATION - Rejected Motion]`:
   - Scroll hijacking / forced full-page snapping.
   - Unbudgeted 3D canvas rendering that causes thread blocking or battery drain.
@@ -267,7 +270,7 @@ However, WLMOUSE operates as a single-brand manufacturer with a boutique catalog
    - Sticky bottom action bar when scrolling past main Add to Cart: displays mini title, price, and instant "Añadir al Carrito" button.
    - Variant selection via horizontal scrolling pill chips.
    - Collapsible accordion blocks for Specs, Box Contents, Shipping, and Warranty to prevent infinite page scroll fatigue.
-3. **Touch Targets**: All interactive elements (buttons, swatches, menu items, quantity selectors) meet minimum 44x44px touch target guidelines.
+3. **Touch Targets**: All interactive elements (buttons, swatches, menu items, quantity selectors) meet accessibility guidelines for touch ergonomics (e.g., WCAG 44x44px minimum target size).
 4. **Mobile Performance**: Priority loading for mobile-optimized image crops and touch-optimized gestures.
 
 ---
@@ -280,7 +283,7 @@ However, WLMOUSE operates as a single-brand manufacturer with a boutique catalog
 | **Information Architecture** | Proprietary product lines (*Beast*, *Sword*, *Huan*) | Categories (*Mice*, *Keyboards*, *Audio*) + Brands + Technical Attributes |
 | **Discovery Model** | Linear marketing showcase | Dynamic search, faceted filters, sorting, recommendations |
 | **Product Detail Page** | Bespoke single-model editorial | Dynamic Product Story builder combining structured specs + modular blocks |
-| **Commercial Trust** | Direct factory shipping | Local Peruvian stock, domestic fulfillment, local warranty, Yape/Plin verification |
+| **Commercial Trust** | Direct factory shipping | Local Peruvian stock, domestic fulfillment, warranty transparency, Yape/Plin verification |
 | **Customer Accounts** | Basic order tracking | Customer accounts with wishlists, order history, address book, referral program |
 | **SEO Strategy** | Brand/model name search | Broad commercial search ("mouse gamer inalámbrico perú", category landing pages, buying guides) |
 
@@ -293,7 +296,7 @@ Gamer Perú adapts global e-commerce trust patterns for the Peruvian domestic ma
 1. **Local Payment Verification (v1)**: Clear visual guidance for **Yape** and **Plin** QR payments, including transaction code submission and Admin human verification timelines (`[CANONICAL V1 PAYMENT]`).
 2. **Stock Transparency**: Explicit stock badges derived from inventory rules (`[TBD BUSINESS DECISION: Stock badge terminology TBD]`).
 3. **Fulfillment Transparency**: Dynamic delivery estimation based on destination (`[TBD BUSINESS DECISION: Courier provider & delivery SLA TBD]`).
-4. **Warranty & RMA Support**: Prominent assurance of Gamer Perú warranty coverage (`[TBD BUSINESS DECISION: Warranty policy TBD]`).
+4. **Warranty & Returns Transparency**: Prominent slot for warranty and return policy details, configured from approved Gamer Perú policy; terms TBD (`[TBD BUSINESS DECISION]`).
 5. **Customer Assistance**: Accessible customer service options (`[TBD BUSINESS DECISION: Support channel TBD]`).
 
 ---
@@ -321,10 +324,14 @@ Gamer Perú adapts global e-commerce trust patterns for the Peruvian domestic ma
    - Aggressive LCP optimization (provisional target: < 1.8s on 4G mobile for hero and main PDP media).
    - Near-zero layout shifts (provisional target: CLS = 0).
    - *Final architecture performance budgets are validated during GP-003 and GP-044.*
-2. **Modern Image Formats**: WebP and AVIF generation with responsive `srcset` and `sizes` attributes.
-3. **Layout Shift Prevention**: Explicit `aspect-ratio` or dimensions defined on all media containers to eliminate layout jumping.
-4. **Lazy Loading**: Native `loading="lazy"` applied to all below-the-fold storytelling media and collection grid images.
-5. **Video Optimization**: Silent looping video blocks must use lightweight MP4/WebM with explicit `poster` frames, `muted`, `playsinline`, and `autoplay` only when in viewport.
+2. **Modern Image Formats**: Use of modern efficient image formats (such as WebP/AVIF) with responsive `srcset` and `sizes` attributes appropriate to the selected platform architecture.
+3. **Layout Shift Prevention**: Pre-allocation of container dimensions / aspect-ratio containers to prevent layout jumping.
+4. **Viewport-Critical Media Loading Strategy**:
+   - Above-the-fold / LCP-critical media must NOT be lazily loaded (preloaded/prioritized where applicable).
+   - Below-the-fold non-critical storytelling media should be deferred/lazy-loaded where appropriate.
+   - Collection-grid loading strategy must prioritize initially visible products and defer off-screen media.
+   - Exact implementation mechanism is chosen in later architecture phases (GP-003 / GP-007).
+5. **Video Optimization**: Silent looping video blocks must use lightweight formats (e.g., MP4/WebM) with explicit `poster` frames, `muted`, `playsinline`, and `autoplay` only when in viewport.
 
 ---
 
@@ -360,8 +367,8 @@ Gamer Perú adapts global e-commerce trust patterns for the Peruvian domestic ma
 | **Product Cards** | Single-product image + title + price | Category-aware cards with dynamic spec pills (Weight, Sensor, Switches, Layout) |
 | **Filtering & Sorting** | Minimal/no filtering | Multi-attribute faceted filter engine with crawl-safe URLs |
 | **Product Configuration** | Specific WLMOUSE switch/dongle choices | Universal variant selectors handling colorways, switch types, layouts, bundles |
-| **Trust & Guarantees** | Global shipping messaging | Peru-specific trust: Domestic delivery ETA TBD, Local warranty policy TBD, Yape/Plin verification |
-| **Media Delivery** | Standard theme delivery | Responsive asset pipeline with automated WebP/AVIF generation and strict budgets |
+| **Trust & Guarantees** | Global shipping messaging | Peru-specific trust: Domestic delivery ETA TBD, Warranty / returns policy TBD, Yape/Plin verification |
+| **Media Delivery** | Standard theme delivery | Responsive asset pipeline using modern formats (e.g. WebP/AVIF) and viewport-critical loading |
 | **Customer Accounts** | Basic customer hub | Gamer Perú accounts with wishlist, order tracking, address book, referral program |
 
 ---
@@ -398,6 +405,8 @@ This specification provides the foundational conceptual inputs for **GP-002 — 
    - Palette: Deep rich darks, pure crisp whites, neutral scale, and distinct Gamer Perú accent colors. *(GP-002 will create original color tokens; no hex codes are locked by GP-001).*
    - Typography: Clean technical heading font paired with highly legible body font, with defined fluid scaling equations. *(GP-002 will select original font pairings and scale).*
    - Spacing & Radius: Micro scale and macro section spacing; restrained corner radii. *(GP-002 will define original spacing/radius scales).*
+   - Motion Tokens: Duration tokens, easing curves, and transform values. *(GP-002 will define original motion tokens).*
+   - Iconography & Component Styling: Stroke weights, grid alignment, and styling tokens. *(GP-002 will define original icon and component systems).*
 2. **Component Primitives to be Designed in GP-002**:
    - Buttons (Primary, Secondary, Ghost, Icon).
    - Badges & Spec Pills (Stock, Sale, Weight, Polling Rate, Sensor).
@@ -407,7 +416,7 @@ This specification provides the foundational conceptual inputs for **GP-002 — 
 3. **Product Story Block Layouts to be Defined in GP-002**:
    - Layout blueprints and responsive behavior for all 11 modular story components.
 
-*Reference Observation — Non-binding: WLMOUSE palette and dimensions recorded during research are non-binding reference material. GP-002 is responsible for defining original Gamer Perú design tokens independently.*
+*Reference Observation — Non-binding: WLMOUSE palette, dimensions, and motion values recorded during research are non-binding reference material. GP-002 is solely responsible for defining original Gamer Perú design tokens independently.*
 
 ---
 
