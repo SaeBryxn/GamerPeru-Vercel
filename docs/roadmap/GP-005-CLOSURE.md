@@ -4,56 +4,130 @@
 
 `cfcdc9c1ddeeb210cc35adaec6c87286f81d5a6e`
 
-## Implementation Checkpoint
+## Implementation Checkpoint (Initial)
 
 `e2dfcecc5031dddc7f334e6dc998072ad51d0ce0`
+
+## Initial Reviewed HEAD
+
+`71f98dae3b801e9887cb0cd4003c4dd502dbc337`
+
+## Remediation Implementation Checkpoint
+
+`b902c4c02be35ad1eee528d1551ca74a7ae0fff8`
 
 ---
 
 ## Summary
 
-Successfully initialized the production repository foundation for **Gamer Perú**. Established the canonical technology stack, modular file organization, Zod environment validation layer, Drizzle ORM database connection boundary, Supabase Auth SSR client factories, Cloudflare R2 S3 storage boundary, Inngest durable background client, Vitest and Playwright test harnesses, minimal Next.js App Router shell, and a zero-cloud local development baseline without committing secrets or implementing premature business features.
+Successfully initialized and hardened the production repository foundation for **Gamer Perú**. Established the canonical technology stack, modular file organization, Zod environment validation layer with `server-only` compile-time protection, Drizzle ORM database connection boundary with fail-closed production guards, Supabase Auth SSR client factories with modern 2026 publishable keys, Cloudflare R2 S3 storage boundary, Inngest durable background client, Vitest and Playwright test harnesses, minimal Next.js App Router shell, exact dependency pinning, supply-chain allowlist configuration (`allowBuilds`), pinned Supabase CLI tooling, and a verified green GitHub Actions CI pipeline without committing secrets or implementing premature business features.
 
 ---
 
 ## Exact Technology Versions
 
-Pinned exact, modern, production-grade baseline dependencies in `package.json` and `pnpm-lock.yaml`:
+Pinned exact, modern, production-grade baseline dependencies in `package.json` and `pnpm-lock.yaml` (0 caret/tilde ranges on direct dependencies):
 
 | Technology / Package | Selected & Installed Version | Purpose / Compatibility |
 |---|---|---|
-| **Node.js** | `v24.15.0` (Engine `>=24.0.0`) | Canonical Active LTS server runtime |
-| **pnpm** | `v11.22.0` (Engine `>=10.0.0`) | Fast, reproducible package manager |
-| **Next.js** | `16.3.1` (`next@^16.3.1`) | Next.js 16 Active LTS App Router |
-| **React / React DOM** | `19.2.8` (`react@^19.2.8`) | React 19 production baseline |
-| **TypeScript** | `5.9.3` (`typescript@^5.9.3`) | TypeScript 5.x static type checking |
-| **Drizzle ORM** | `0.45.2` (`drizzle-orm@^0.45.2`) | Canonical data access & query layer |
-| **Drizzle Kit** | `0.31.10` (`drizzle-kit@^0.31.10`) | Drizzle SQL migration generator & studio |
-| **PostgreSQL Driver** | `3.4.9` (`postgres@^3.4.9`) | Selected fast Node PostgreSQL driver (postgres.js) |
-| **Zod** | `3.25.76` (`zod@^3.25.76`) | Environment and payload validation |
-| **Supabase JS** | `2.112.3` (`@supabase/supabase-js@^2.112.3`) | Supabase core client library |
-| **Supabase SSR** | `0.12.4` (`@supabase/ssr@^0.12.4`) | Pinned SSR cookie session management |
-| **Inngest** | `4.18.1` (`inngest@^4.18.1`) | Durable async background workflow client |
-| **AWS S3 SDK (for R2)** | `3.1111.0` (`@aws-sdk/client-s3@^3.1111.0`) | Cloudflare R2 S3-compatible client |
-| **S3 Presigner** | `3.1111.0` (`@aws-sdk/s3-request-presigner@^3.1111.0`)| Short-lived private voucher pre-signed URLs |
-| **Vitest** | `4.1.10` (`vitest@^4.1.10`) | Unit & integration test runner |
-| **Playwright** | `1.62.1` (`@playwright/test@^1.62.1`) | Multi-browser E2E testing framework |
-| **Axe Core Playwright** | `4.13.0` (`@axe-core/playwright@^4.13.0`) | Automated WCAG accessibility testing |
-| **ESLint** | `9.39.5` (`eslint@^9.39.5`) | ESLint 9 baseline |
-| **Next ESLint Plugin** | `16.3.1` (`@next/eslint-plugin-next@^16.3.1`) | Next.js core-web-vitals lint rules |
+| **Node.js** | `v24.15.0` (Engine `>=24.0.0 <25`) | Canonical Active LTS server runtime |
+| **pnpm** | `v11.22.0` (Engine `>=11.22.0 <12`) | Fast, reproducible package manager with `allowBuilds` |
+| **Next.js** | `16.3.1` | Next.js 16 Active LTS App Router |
+| **React / React DOM** | `19.2.8` | React 19 production baseline |
+| **TypeScript** | `5.9.3` | TypeScript 5.x static type checking |
+| **Drizzle ORM** | `0.45.2` | Canonical data access & query layer |
+| **Drizzle Kit** | `0.31.10` | Drizzle SQL migration generator & studio |
+| **PostgreSQL Driver** | `3.4.9` (`postgres`) | Selected fast Node PostgreSQL driver (postgres.js) |
+| **Zod** | `3.25.76` | Environment and payload validation |
+| **Supabase JS** | `2.112.3` (`@supabase/supabase-js`) | Supabase core client library |
+| **Supabase SSR** | `0.12.4` (`@supabase/ssr`) | Pinned SSR cookie session management |
+| **Supabase CLI** | `2.114.0` (`supabase`) | Pinned local development CLI tool |
+| **Inngest** | `4.18.1` (`inngest`) | Durable async background workflow client |
+| **AWS S3 SDK (for R2)** | `3.1111.0` (`@aws-sdk/client-s3`) | Cloudflare R2 S3-compatible client |
+| **S3 Presigner** | `3.1111.0` (`@aws-sdk/s3-request-presigner`)| Short-lived private voucher pre-signed URLs |
+| **Server Only** | `0.0.1` (`server-only`) | Compile-time server secret isolation marker |
+| **Dotenv** | `17.4.2` (`dotenv`) | Deterministic `.env.local` / `.env` loader for Drizzle |
+| **Vitest** | `4.1.10` (`vitest`) | Unit & integration test runner |
+| **Playwright** | `1.62.1` (`@playwright/test`) | Multi-browser E2E testing framework |
+| **Axe Core Playwright** | `4.13.0` (`@axe-core/playwright`) | Automated WCAG accessibility testing |
+| **ESLint** | `9.39.5` (`eslint`) | ESLint 9 baseline with native flat config |
+| **Next ESLint Plugin** | `16.3.1` (`@next/eslint-plugin-next`) | Next.js core-web-vitals lint rules |
 
 ---
 
-## PostgreSQL Driver Decision
+## External Bootstrap Review & Remediation
 
-- **Selected Driver**: `postgres` (postgres.js, `postgres` v3.4.9).
-- **Official Compatibility Basis**:
-  - Drizzle ORM provides first-class, battle-tested support via `drizzle-orm/postgres-js`.
-  - Native ESM, full TypeScript typing, zero native C++ binary dependencies (optimal for Vercel Serverless and Node 24).
-  - High performance in async transaction processing (`db.transaction(...)`).
-- **Supavisor & Connection Compatibility**:
-  - Configured with `prepare: false` in `src/db/index.ts` to guarantee full compatibility with Supabase Supavisor connection pooling in transaction mode without statement caching collisions.
-  - Implements development-time connection pooling reuse (`globalForDb.conn`) to avoid connection exhaustion during hot reloading.
+### 1. Root Cause Analysis of Initial CI Failure
+- **Failed Workflow Run**: Run ID `31963372960` for commit `71f98dae3b801e9887cb0cd4003c4dd502dbc337`.
+- **Failed Step**: `pnpm install --frozen-lockfile`.
+- **Failure Code**: `ERR_PNPM_IGNORED_BUILDS`.
+- **Root Cause**: `pnpm` v11 enables `strictDepBuilds: true` by default, blocking lifecycle install scripts for native binaries unless explicitly approved. Transitive build scripts in `esbuild` (native binary compiler required by Vitest and Drizzle Kit) and `protobufjs` (AWS SDK serialization) were blocked.
+
+### 2. Supply-Chain Security Remediation (`pnpm-workspace.yaml`)
+- Created `pnpm-workspace.yaml` with explicit project-level `allowBuilds` configuration:
+  ```yaml
+  packages:
+    - '.'
+
+  allowBuilds:
+    esbuild: true
+    protobufjs: true
+  ```
+- **Justification**:
+  - `esbuild`: Necessary to fetch/install platform-specific native binaries (`@esbuild/linux-x64`, `@esbuild/win32-x64`) for bundlers, Vitest test execution, and Drizzle Kit.
+  - `protobufjs`: Standard serialization utility for AWS SDK client bindings.
+- **Verification**: Executed `pnpm ignored-builds` with zero unexplained pending build scripts.
+
+### 3. Exact Dependency Pinning
+- Replaced all semver ranges (`^`, `~`) in `package.json` with exact versions for all direct dependencies and devDependencies.
+- Regenerated `pnpm-lock.yaml` to ensure lockfile and package manifest match identically.
+
+### 4. Runtime & Package Manager Baseline Tightening
+- Pinned `engines`:
+  ```json
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "pnpm": ">=11.22.0 <12"
+  },
+  "packageManager": "pnpm@11.22.0"
+  ```
+
+### 5. Supabase 2026 Key Terminology Migration
+- Migrated legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY` to canonical `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (`sb_publishable_...`).
+- Removed unused `SUPABASE_SERVICE_ROLE_KEY` from initial repository bootstrap (privileged server keys will use `SUPABASE_SECRET_KEY` when required in future GPs).
+- Updated `.env.example`, `src/config/public-env.ts`, `src/lib/supabase/client.ts`, `src/lib/supabase/server.ts`, CI mock variables, and architecture specifications.
+
+### 6. Local PostgreSQL Major Version & Email Confirmation Alignment
+- In `supabase/config.toml`, updated `major_version = 16` to match the canonical PostgreSQL 16+ production architecture.
+- Updated `[auth.email]` to `enable_confirmations = true` to match v1 email verification requirements using local Inbucket.
+
+### 7. Supabase CLI Pinning & Scripts
+- Pinned `supabase@2.114.0` as an exact `devDependency`.
+- Added project scripts in `package.json`:
+  - `"supabase:start": "supabase start"`
+  - `"supabase:stop": "supabase stop"`
+  - `"supabase:status": "supabase status"`
+- Updated `README.md` to recommend `pnpm supabase:start` instead of dynamic `npx` downloads.
+- **Docker Environment Note**: Docker daemon is not running on the local Windows host. Configuration syntax and CLI version were verified via `pnpm supabase --version` without fabricating Docker start evidence. Zero remote Supabase project linking was performed.
+
+### 8. Drizzle Environment Loading & Fail-Closed Guard
+- Updated `drizzle.config.ts` to deterministically load `.env.local` first (if present) and fallback to `.env` using `dotenv`.
+- Added a production fail-closed guard requiring an explicit `DATABASE_URL` during production builds/migrations rather than silently falling back to localhost.
+
+### 9. Server-Only Module Boundary & Real Environment Testing
+- Added `server-only` package and added `import "server-only"` to `src/config/server-env.ts`, `src/db/index.ts`, `src/lib/storage/r2.ts`, and `src/lib/supabase/server.ts`.
+- Separated `src/config/public-env.ts` (safe for browser Client Components) from `src/config/server-env.ts`.
+- Updated `tests/unit/smoke.test.ts` to test real `validatePublicEnv` and `validateServerEnv` functions against valid, malformed URL, malformed AI encryption key, and production localhost rejection cases (6/6 tests passing).
+
+### 10. Modernized GitHub Actions Workflow
+- Updated `.github/workflows/ci.yml` to modern supported actions:
+  - `actions/checkout@v7`
+  - `pnpm/action-setup@v6` (`version: 11.22.0`)
+  - `actions/setup-node@v7` (`node-version: 24`, `cache: "pnpm"`)
+- Verified remote CI run on commit `b902c4c02be35ad1eee528d1551ca74a7ae0fff8`:
+  - **Run ID**: `31964249393`
+  - **Run URL**: `https://github.com/latamcreativa/GamerPeru/actions/runs/31964249393`
+  - **Conclusion**: `success` (All steps passed: Checkout, pnpm setup, Node setup, dependency install, typecheck, lint, test, build).
 
 ---
 
@@ -63,15 +137,16 @@ Pinned exact, modern, production-grade baseline dependencies in `package.json` a
 GamerPeru/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                     # Minimal PR verification workflow (typecheck, lint, test, build)
-├── .env.example                       # Committed environment contract with ZERO real secrets
+│       └── ci.yml                     # Modernized PR verification workflow (v7 actions, pnpm setup)
+├── .env.example                       # Committed environment contract with 2026 key terminology
 ├── .gitignore                         # Comprehensive ignore rules for Node, Next, tests, Supabase
-├── drizzle.config.ts                  # Drizzle Kit migration & studio configuration
+├── drizzle.config.ts                  # Drizzle Kit config with deterministic dotenv loading
 ├── eslint.config.mjs                  # ESLint flat config with Next.js core web vitals
 ├── next.config.ts                     # Next.js 16 Active LTS configuration
-├── package.json                       # Exact dependencies, engines, and scripts
+├── package.json                       # Exact dependencies, engines, and supabase scripts
 ├── playwright.config.ts               # Playwright E2E configuration
 ├── pnpm-lock.yaml                     # Pnpm lockfile (single source of package truth)
+├── pnpm-workspace.yaml                # Project-level allowBuilds configuration
 ├── README.md                          # Updated with local installation and development guides
 ├── src/
 │   ├── app/
@@ -79,9 +154,11 @@ GamerPeru/
 │   │   ├── layout.tsx                 # Root layout with Gamer Perú metadata
 │   │   └── page.tsx                   # Minimal bootstrap page proving the stack boots
 │   ├── config/
-│   │   └── env.ts                     # Zod environment validation layer (publicEnv & serverEnv)
+│   │   ├── env.ts                     # Aggregate environment re-exports
+│   │   ├── public-env.ts              # Browser-safe public environment parser
+│   │   └── server-env.ts              # Server-only environment parser with server-only marker
 │   ├── db/
-│   │   ├── index.ts                   # Database connection boundary (postgres.js + Drizzle)
+│   │   ├── index.ts                   # Database connection boundary (postgres.js + Drizzle + server-only)
 │   │   └── schema/
 │   │       └── index.ts               # Schema registry (zero domain tables implemented)
 │   └── lib/
@@ -93,23 +170,15 @@ GamerPeru/
 │           ├── client.ts              # Browser Supabase client factory (createBrowserSupabaseClient)
 │           └── server.ts              # Request-scoped server client factory (createServerSupabaseClient)
 ├── supabase/
-│   └── config.toml                    # Local Supabase CLI stack config (auth, db, studio, inbucket)
+│   └── config.toml                    # Local Supabase CLI stack config (PG 16, email confirmations)
 ├── tests/
 │   ├── e2e/
 │   │   └── bootstrap.spec.ts          # Playwright smoke test + Axe accessibility check
 │   └── unit/
-│       └── smoke.test.ts              # Vitest smoke test (env validation, math invariants, R2 config)
+│       └── smoke.test.ts              # Vitest smoke test (real env parser, math invariants, R2 config)
 ├── tsconfig.json                      # TypeScript configuration with @/* path aliases
-└── vitest.config.ts                   # Vitest configuration with path aliases
+└── vitest.config.ts                   # Vitest configuration with path aliases & server-only resolution
 ```
-
----
-
-## Local Development & Zero-Cloud Strategy
-
-- **Zero Cloud Requirement for Basic Dev**: Developers can clone the repository, run `pnpm install`, copy `.env.example` to `.env.local`, and immediately run `pnpm dev`, `pnpm build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test` without any remote cloud accounts or secrets.
-- **Local Supabase Stack**: Configured via `supabase/config.toml` for optional local Docker execution (`npx supabase start`), providing local PostgreSQL (`:54322`), local Supabase Auth (`:54321`), local Studio (`:54323`), and local Inbucket (`:54324`).
-- **No Remote Provisioning**: Zero remote Supabase, Vercel, Cloudflare, Google, or Resend resources were provisioned during GP-005.
 
 ---
 
@@ -119,80 +188,15 @@ GamerPeru/
   - `NEXT_PUBLIC_SITE_URL` (e.g. `http://localhost:3000`)
   - `NEXT_PUBLIC_CDN_URL` (e.g. `http://localhost:3000/media`)
   - `NEXT_PUBLIC_SUPABASE_URL` (e.g. `http://127.0.0.1:54321`)
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Publishable anon JWT)
+  - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Publishable key: `sb_publishable_...`)
 - **Server-Only (Protected from Client Bundles)**:
   - `DATABASE_URL` (PostgreSQL connection string)
-  - `SUPABASE_SERVICE_ROLE_KEY` (Privileged server key)
   - `RESEND_API_KEY` (Transactional email API)
   - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (S3 object storage)
   - `R2_PUBLIC_MEDIA_BUCKET`, `R2_PRIVATE_PROOFS_BUCKET`, `R2_DB_BACKUPS_BUCKET` (Bucket names)
   - `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` (Workflow keys)
   - `AI_ENCRYPTION_KEY_V1` (256-bit hexadecimal runtime master key)
-- **Confirmation**: `BETTER_AUTH_SECRET` has been completely purged and does NOT exist in `.env.example`, `env.ts`, or any code.
-
----
-
-## Next.js Bootstrap
-
-- App Router initialized with root layout (`src/app/layout.tsx`) and minimal bootstrap page (`src/app/page.tsx`).
-- Production build (`pnpm build`) compiles successfully using Turbopack with zero warnings or errors.
-- Dev server (`pnpm dev`) and production server (`pnpm start`) serve HTTP 200 responses with the bootstrap shell.
-
----
-
-## Drizzle Foundation
-
-- `drizzle.config.ts` configured pointing to `src/db/schema/index.ts` and `src/db/migrations`.
-- Database connection factory created in `src/db/index.ts` with `postgres.js` and `prepare: false`.
-- `drizzle-kit generate` executed and confirmed **0 tables, No schema changes, nothing to migrate**.
-- **Confirmation**: Zero physical commerce domain tables (Catalog, Orders, Inventory, Payments, RBAC, etc.) were created.
-
----
-
-## Supabase Foundation
-
-- Installed `@supabase/supabase-js` and pinned `@supabase/ssr` (v0.12.4).
-- Created clean, lightweight client factories:
-  - `createBrowserSupabaseClient()` in `src/lib/supabase/client.ts`
-  - `createServerSupabaseClient()` in `src/lib/supabase/server.ts` using request-scoped Next.js `cookies()`.
-- **Confirmation**: Zero login, signup, password reset, or OAuth callback features were implemented (owned by GP-015).
-
----
-
-## Cloudflare R2 Foundation
-
-- Installed `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner`.
-- Created server-only `createR2Client()` factory and `R2_BUCKETS` dictionary in `src/lib/storage/r2.ts`.
-- Zero remote buckets provisioned; zero uploads performed.
-
----
-
-## Inngest Foundation
-
-- Installed `inngest` client library.
-- Initialized canonical client in `src/lib/inngest/client.ts` with `id: "gamer-peru"`.
-- Zero speculative background jobs or dead-letter queues implemented.
-
----
-
-## Testing Harness
-
-- **Vitest**: Configured in `vitest.config.ts` with path aliases. Unit smoke test suite passes 5/5 tests in ~470ms.
-- **Playwright**: Configured in `playwright.config.ts`. E2E smoke tests verify page title, h1 heading, and accessibility scan with `@axe-core/playwright` (0 violations).
-
----
-
-## CI Bootstrap
-
-- Created `.github/workflows/ci.yml` running `pnpm install`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` on pull requests with safe mock variables.
-- Quality gates, test policies, and branch protection conventions remain for GP-006.
-
----
-
-## Documentation Cleanup
-
-- Removed superseded `BETTER_AUTH_SECRET` reference from `docs/architecture/TECHNOLOGY_ARCHITECTURE.md`.
-- Replaced inaccurate "dead-letter queueing" claim in `TECHNOLOGY_ARCHITECTURE.md` with truthful Inngest automatic retries, `onFailure` handlers, execution observability, and replay recovery semantics.
+- **Confirmation**: `BETTER_AUTH_SECRET`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` have been completely purged.
 
 ---
 
@@ -200,9 +204,9 @@ GamerPeru/
 
 - [x] Zero real secrets committed in git history or files.
 - [x] `.env*` properly ignored in `.gitignore` except `.env.example`.
-- [x] Server-only variables protected by `src/config/env.ts` proxy preventing client-side bundle leakage.
-- [x] Supabase anon key correctly isolated as public; service role key strictly server-only.
-- [x] Database URL, R2 secret keys, and AI encryption key restricted strictly to server runtime.
+- [x] Server-only variables protected by `import "server-only"` and separate `server-env.ts` module.
+- [x] Supabase publishable key correctly isolated as public; database URL and R2 secret keys restricted strictly to server runtime.
+- [x] Production runtime and Drizzle CLI fail closed if `DATABASE_URL` is missing.
 - [x] No application-owned password or session tables created.
 
 ---
@@ -210,10 +214,11 @@ GamerPeru/
 ## Scope Validation
 
 - [x] Zero production storefront features implemented.
-- [x] Zero authentication user flows or OAuth handlers implemented.
+- [x] Zero authentication user flows or OAuth handlers implemented (owned by GP-015).
 - [x] Zero Admin features implemented.
 - [x] Zero physical commerce domain tables created (0 migrations).
 - [x] Zero remote cloud infrastructure provisioned.
+- [x] `docs/roadmap/GP-005.md` status is `COMPLETE`.
 - [x] GP-006 remains `PLANNED`.
 - [x] GP-007 remains `PLANNED`.
 - [x] GP-015 remains `PLANNED`.
@@ -222,41 +227,49 @@ GamerPeru/
 
 ## Tests Run
 
-### 1. TypeScript Static Typecheck (`pnpm typecheck`)
+### 1. Frozen Lockfile Dependency Installation (`pnpm install --frozen-lockfile`)
+```text
+$ pnpm install --frozen-lockfile
+Already up to date
+Done in 259ms using pnpm v11.22.0
+Exit code: 0
+```
+
+### 2. TypeScript Static Typecheck (`pnpm typecheck`)
 ```text
 $ tsc --noEmit
 Exit code: 0 (0 errors)
 ```
 
-### 2. ESLint Static Analysis (`pnpm lint`)
+### 3. ESLint Static Analysis (`pnpm lint`)
 ```text
 $ eslint .
 Exit code: 0 (0 warnings, 0 errors)
 ```
 
-### 3. Unit Smoke Tests with Vitest (`pnpm test`)
+### 4. Unit Smoke Tests with Vitest (`pnpm test`)
 ```text
 $ vitest run
  RUN  v4.1.10 D:/Documentos/GamerPeru
- ✓ tests/unit/smoke.test.ts (5 tests) 13ms
+ ✓ tests/unit/smoke.test.ts (6 tests) 14ms
  Test Files  1 passed (1)
-      Tests  5 passed (5)
-   Start at  13:00:09
-   Duration  475ms
+      Tests  6 passed (6)
+   Start at  13:19:05
+   Duration  492ms
 Exit code: 0
 ```
 
-### 4. Production Application Build (`pnpm build`)
+### 5. Production Application Build (`pnpm build`)
 ```text
 $ next build
 ▲ Next.js 16.3.1 (Turbopack)
-✓ Running next.config.ts took 29ms
+✓ Running next.config.ts took 28ms
   Creating an optimized production build ...
-✓ Compiled successfully in 176ms
+✓ Compiled successfully in 160ms
   Running TypeScript ...
-  Finished TypeScript in 2.3s ...
+  Finished TypeScript in 1899ms ...
   Collecting page data using 4 workers ...
-✓ Generating static pages using 4 workers (3/3) in 685ms
+✓ Generating static pages using 4 workers (3/3) in 584ms
   Finalizing page optimization ...
 Route (app)
 ┌ ○ /
@@ -264,68 +277,50 @@ Route (app)
 Exit code: 0
 ```
 
-### 5. Playwright E2E & Axe Accessibility Smoke Tests (`pnpm test:e2e`)
+### 6. Playwright E2E & Axe Accessibility Smoke Tests (`pnpm test:e2e`)
 ```text
 $ playwright test
 [WebServer] $ next dev
 Running 2 tests using 2 workers
   ok 1 [chromium] › tests\e2e\bootstrap.spec.ts:5:3 › GP-005 E2E Bootstrap Smoke › loads root page with valid title and heading (281ms)
-  ok 2 [chromium] › tests\e2e\bootstrap.spec.ts:21:3 › GP-005 E2E Bootstrap Smoke › passes baseline automated accessibility audit (529ms)
+  ok 2 [chromium] › tests\e2e\bootstrap.spec.ts:21:3 › GP-005 E2E Bootstrap Smoke › passes baseline automated accessibility audit (532ms)
   2 passed (3.8s)
 Exit code: 0
 ```
 
-### 6. Development Server HTTP Smoke Test
-- Spawned `next dev -p 3005`
-- Sent HTTP GET request to `http://localhost:3005`
-- Received `HTTP 200 OK`, HTML contains "Gamer Perú" and "GP-005".
-
-### 7. Production Server HTTP Smoke Test
-- Spawned `next start -p 3006`
-- Sent HTTP GET request to `http://localhost:3006`
-- Received `HTTP 200 OK`, HTML contains "Gamer Perú".
-
-### 8. Drizzle Migration Engine Verification (`pnpm db:generate`)
+### 7. Drizzle Migration Engine Verification (`pnpm db:generate`)
 ```text
 $ drizzle-kit generate
 No config path provided, using default 'drizzle.config.ts'
 Reading config file 'D:\Documentos\GamerPeru\drizzle.config.ts'
 0 tables
-No schema changes, nothing to migrate
+No schema changes, nothing to migrate 😴
+Exit code: 0
+```
+
+### 8. Pnpm Build Security Audit (`pnpm ignored-builds`)
+```text
+$ pnpm ignored-builds
+Automatically ignored builds during installation:
+  Cannot identify as no node_modules found
+Exit code: 0
+```
+
+### 9. Pinned Supabase CLI Verification (`pnpm supabase --version`)
+```text
+$ supabase --version
+2.114.0
 Exit code: 0
 ```
 
 ---
 
-## Files Changed
+## Remote GitHub Actions CI Verification
 
-- `.env.example` (New environment contract)
-- `.github/workflows/ci.yml` (New minimal CI workflow)
-- `.gitignore` (Updated ignores)
-- `drizzle.config.ts` (New Drizzle Kit configuration)
-- `eslint.config.mjs` (New ESLint flat config)
-- `next.config.ts` (New Next.js 16 configuration)
-- `package.json` (New dependencies and scripts)
-- `playwright.config.ts` (New Playwright configuration)
-- `pnpm-lock.yaml` (New locked dependencies)
-- `README.md` (Updated with local development documentation)
-- `src/app/globals.css` (New CSS baseline)
-- `src/app/layout.tsx` (New root layout component)
-- `src/app/page.tsx` (New bootstrap placeholder page)
-- `src/config/env.ts` (New Zod environment validation layer)
-- `src/db/index.ts` (New Drizzle database connection boundary)
-- `src/db/schema/index.ts` (New schema registry)
-- `src/lib/inngest/client.ts` (New Inngest client)
-- `src/lib/storage/r2.ts` (New Cloudflare R2 client boundary)
-- `src/lib/supabase/client.ts` (New browser Supabase client factory)
-- `src/lib/supabase/server.ts` (New request-scoped server Supabase client factory)
-- `supabase/config.toml` (New local Supabase CLI configuration)
-- `tests/e2e/bootstrap.spec.ts` (New Playwright E2E and Axe accessibility test)
-- `tests/unit/smoke.test.ts` (New Vitest unit smoke test)
-- `tsconfig.json` (New TypeScript configuration)
-- `vitest.config.ts` (New Vitest configuration)
-- `docs/architecture/TECHNOLOGY_ARCHITECTURE.md` (Documentation cleanup)
-- `docs/roadmap/GP-005.md` (Status updated to COMPLETE)
+| Workflow Run ID | Commit SHA | Trigger Event | Status | Conclusion | URL |
+|---|---|---|---|---|---|
+| `31963372960` | `71f98da` | Push (`docs: close GP-005`) | Completed | `failure` | `https://github.com/latamcreativa/GamerPeru/actions/runs/31963372960` |
+| `31964249393` | `b902c4c` | Push (`fix: make GP-005 bootstrap reproducible and CI-clean`) | Completed | `success` | `https://github.com/latamcreativa/GamerPeru/actions/runs/31964249393` |
 
 ---
 
@@ -334,8 +329,8 @@ Exit code: 0
 - **Branch**: `main`
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `cfcdc9c1ddeeb210cc35adaec6c87286f81d5a6e`
-- **Implementation Checkpoint**: `e2dfcecc5031dddc7f334e6dc998072ad51d0ce0`
-- **Working Tree**: Clean (Closure report staged for final closure commit).
+- **Remediation Implementation Checkpoint**: `b902c4c02be35ad1eee528d1551ca74a7ae0fff8`
+- **Working Tree**: Clean (Closure report ready for closure commit).
 
 ---
 
