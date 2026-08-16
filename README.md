@@ -12,9 +12,9 @@ Build a premium multi-brand gaming-peripherals e-commerce platform for Peru with
 
 The project progresses sequentially through 53 gated tasks: **GP-000 → GP-052**.
 
-- **GP-000 to GP-005**: System Initialization, Design System, Technology Architecture, Commerce Domain Model, and Repository Bootstrap (`COMPLETE`).
-- **GP-006**: Engineering Standards (`CURRENT`).
-- **GP-007 to GP-052**: Core Tooling, UI Design System, Catalog, Cart, Checkout, Payments, Admin, Affiliates, AI Assistant, and Production Launch (`PLANNED`).
+- **GP-000 to GP-006**: System Initialization, Design System, Technology Architecture, Commerce Domain Model, Repository Bootstrap, and Engineering Standards (`COMPLETE`).
+- **GP-007**: Core Tooling & Foundation (`NEXT / PLANNED`).
+- **GP-008 to GP-052**: UI Design System, Catalog, Cart, Checkout, Payments, Admin, Affiliates, AI Assistant, and Production Launch (`PLANNED`).
 
 ---
 
