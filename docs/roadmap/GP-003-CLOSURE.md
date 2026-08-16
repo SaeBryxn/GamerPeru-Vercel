@@ -14,30 +14,39 @@
 - Remediation Content Checkpoint:
   `cdc1f594910620dd737c829ca55f72ec73e087ed`
 
+- Remediation Closure Checkpoint:
+  `29544984d7638d8dccce26e3390cb8a8490f8b4f`
+
+- Final Content Checkpoint:
+  `e72543c67703c637d7eed3592307b24aef4dddea`
+
 ---
 
-## External Architecture Review & Remediation
+## Final External Factual Verification
 
-The initial GP-003 submission was externally reviewed. While the modular monolith direction was accepted, several ambiguities and unselected alternatives were identified and remediated:
+Following final external architecture verification, a comprehensive factual reconciliation pass resolved all remaining provider constraints, lifecycle baselines, and pricing distinctions:
 
-1. **Owner Decisions Incorporated**:
-   - **Managed PostgreSQL Provider**: Canonicalized as **Supabase PostgreSQL** with a **Free-First, Upgrade-Ready** strategy.
-   - **Object Storage & Media**: Canonicalized as **Cloudflare R2** with Cloudflare Edge Media Delivery and Image Transformations. Supabase Storage is explicitly **excluded** from the catalog media pipeline.
-2. **Deterministic Architecture Selections (Zero A/B Ambiguity)**:
-   - **Application Hosting**: Selected **Vercel** as the single canonical host for `gamerperu.com`. (Cloudflare reverse proxy is not placed in front of Vercel).
-   - **Authentication**: Selected **Better Auth** with a PostgreSQL database session store and **Argon2id** password hashing. Deprecated libraries (Lucia) and vague alternatives were completely removed.
-   - **Background Jobs**: Selected **Inngest** as the single canonical durable workflow engine.
-   - **Analytics**: Selected **PostHog** for product and conversion funnel analytics alongside the authoritative first-party PostgreSQL event ledger.
-   - **Runtime Baselines**: Replaced vague references with **Next.js 15 Active Production Line** and **Node.js 22 LTS**.
-3. **Backup & Disaster Recovery Reconciliation**:
-   - Explicitly separated **Free-stage backup model** (scheduled logical `pg_dump` encrypted with AES-256 and stored in private R2 backup bucket with 30-day retention) from **Pro-stage backup model** (managed daily automated backups + 7-day PITR).
-   - Accurately distinguished backups, Point-in-Time Recovery (PITR), High Availability (HA), and multi-region failover.
-4. **Security & Key Lifecycle Refinements**:
-   - Clarified that short-lived R2 pre-signed URLs (5-minute expiration) function as temporary bearer credentials, requiring strict server-side authorization checks, no logging in standard streams, and authorization audit logging.
-   - Implemented an explicit **key versioning and rotation model** for AI credential encryption (AES-256-GCM with `key_version`), noting that the master encryption key must be backed up independently from database snapshots.
-   - Removed overly absolute security phrasing in favor of precise, defense-in-depth risk descriptions.
-5. **Commerce Boundary Corrections**:
-   - Removed premature ownership of exact state machine names (e.g. `PAYMENT_VERIFIED`), inventory reservation windows, and tax calculation rules, deferring them to GP-004 and GP-020 while strictly preserving core payment invariants (`YAPE_MANUAL`, `PLIN_MANUAL`, manual admin verification).
+1. **Next.js & Node.js Production Baselines**:
+   - Canonicalized **Next.js 16 Active LTS** (Next.js 16.x Active LTS line; Next.js 15 is Maintenance LTS) and **Node.js 24 LTS** (default runtime for new Vercel projects).
+2. **Supabase Free Launch & Pro/PITR Separation**:
+   - **Initial Live Launch**: Confirmed owner decision that Supabase Free is permitted during initial live commercial launch while storage, compute, and business risk remain acceptable; the first customer transaction alone does NOT force an upgrade.
+   - **Free Backup Strategy**: Preserved scheduled logical `pg_dump` encrypted with AES-256 and stored in `gamerperu-db-backups-private` (Cloudflare R2) with 30-day retention.
+   - **Base Pro ($25/mo) vs. PITR (~$100/mo)**: Base Pro includes compute upgrades, no inactivity pausing, and **7-day daily automated logical backups**. Point-in-Time Recovery (PITR) is a separate optional paid add-on (~$100/mo) for continuous physical WAL archiving and is not falsely bundled into the base $25 plan.
+   - **HA / Failover Corrections**: Removed unsupported claims of "automated PITR failover" or multi-region automated standby switching; accurately separated Backups (recovery artifacts), PITR (restore capability), High Availability (redundant infrastructure), and Failover (routing switch).
+3. **Application Hosting & Caching Topology**:
+   - **Commercial Compliance**: Explicitly budgeted **Vercel Pro** (~$20/mo) for cloud commercial deployments (respecting Vercel Hobby personal-use limits).
+   - **Application vs. Media CDN Separation**: Application route and page caching uses Vercel Edge Network and Next.js ISR primitives (`gamerperu.com`). Cloudflare Edge CDN exclusively manages media delivery (`media.gamerperu.com`).
+4. **Cloudflare Images & R2 Corrections**:
+   - **Images Free Hard-Cap**: Documented that Cloudflare Images Free includes up to 5,000 unique transformations/month; exceeding this allowance acts as a hard cap where new transformations fail until upgraded to Paid Images ($5/mo base or $0.50/1k). Mitigated by standardized responsive variant presets and source fallback.
+   - **R2 Versioning Correction**: Removed unsupported claims of R2 native S3 bucket versioning; replaced with architectural integrity controls (immutable content-hashed keys, timestamped backup objects, and database lifecycle tracking).
+5. **Better Auth + Argon2id & Session Semantics**:
+   - Explicitly documented that Argon2id is a custom `hash()` and `verify()` configuration (overriding Better Auth's default `scrypt`).
+   - Defined session cookies as opaque signed tokens validated server-side against PostgreSQL.
+   - Mandated explicit configuration of session invalidation upon password reset.
+6. **Async Workflow & Search Semantics**:
+   - Corrected Inngest failure handling: uses durable step retries, backoff, `onFailure` event handlers, and a PostgreSQL transactional outbox for EC OS deliveries (removed fake native DLQ terminology).
+   - Corrected search degradation semantics: because PostgreSQL is the search engine, database outages take all search offline; simplified SQL search (`ILIKE`) applies only if PostgreSQL remains healthy but advanced trigram queries degrade.
+   - Removed unsupported absolute latency guarantees in favor of target budgets benchmarked during implementation.
 
 ---
 
@@ -45,26 +54,26 @@ The initial GP-003 submission was externally reviewed. While the modular monolit
 August 16, 2026
 
 ## Official Sources Reviewed
-- **Application Framework**: Next.js 15+ Documentation (`nextjs.org/docs`) — Evaluated Server Components (RSC), App Router, streaming SSR, metadata generation API, server actions, and route group isolation.
-- **Node.js Runtime**: Node.js 22 LTS Documentation (`nodejs.org/docs/latest-v22.x/`).
-- **Database & Data Layer**: PostgreSQL 16+ Manual (`postgresql.org/docs/16/`), Supabase Guides (`supabase.com/docs/guides/database`), Drizzle ORM Documentation (`orm.drizzle.team/docs`) — Evaluated ACID transactions, row-level locks (`SELECT ... FOR UPDATE`), JSONB hardware specs, GIN full-text indexes, `pg_trgm` similarity, Supavisor connection pooling, and TypeScript schema-as-code.
-- **Object Storage & Media**: Cloudflare R2 Documentation (`developers.cloudflare.com/r2/`), Cloudflare Images (`developers.cloudflare.com/images/`) — Evaluated S3 API compatibility, zero egress bandwidth pricing, on-the-fly WebP/AVIF transformation, and private bucket pre-signed URLs.
-- **Authentication**: Better Auth Documentation (`better-auth.com/docs`) — Evaluated Next.js App Router integration, PostgreSQL session adapters, Argon2id hashing, and session revocation.
-- **Asynchronous Processing**: Inngest Durable Execution Documentation (`inngest.com/docs`) — Evaluated serverless multi-step workflows, automatic retries, rate limiting, and state persistence for AI import workflows.
-- **Communications**: Resend API Docs (`resend.com/docs`), React Email Docs (`react.email/docs`) — Evaluated transactional email deliverability, React-based templating, and webhook status tracking.
-- **Observability & Analytics**: PostHog Docs (`posthog.com/docs`), Sentry Docs (`docs.sentry.io`), Pino Logger Docs (`getpino.io`) — Evaluated error tracing, Core Web Vitals profiling, automated PII redaction, and cookieless privacy-friendly event tracking.
-- **Testing**: Vitest (`vitest.dev`), Playwright (`playwright.dev`), axe-core (`deque.com/axe`) — Evaluated ESM test runner speed, multi-browser mobile emulation, and automated WCAG 2.1 AA testing.
-- **AI Providers**: OpenAI API (`platform.openai.com/docs`), Anthropic API (`docs.anthropic.com`), Google Gemini API (`ai.google.dev/docs`) — Evaluated multi-provider structured JSON outputs, streaming interfaces, and token pricing models.
+- **Application Framework**: Next.js 16 Active LTS Documentation (`nextjs.org/docs`) — Server Components (RSC), App Router, streaming SSR, metadata generation API, server actions, and route group isolation.
+- **Node.js Runtime**: Node.js 24 LTS Documentation (`nodejs.org/docs/latest-v24.x/`).
+- **Database & Data Layer**: PostgreSQL 16+ Manual (`postgresql.org/docs/16/`), Supabase Guides & Pricing (`supabase.com/docs`, `supabase.com/pricing`), Drizzle ORM Documentation (`orm.drizzle.team/docs`) — ACID transactions, row-level locks (`SELECT ... FOR UPDATE`), JSONB hardware specs, GIN full-text indexes, `pg_trgm` similarity, Supavisor connection pooling, base Pro daily backups vs optional PITR add-on.
+- **Object Storage & Media**: Cloudflare R2 Documentation (`developers.cloudflare.com/r2/`), Cloudflare Images (`developers.cloudflare.com/images/`) — S3 API compatibility, zero egress bandwidth pricing, 5,000 free transformation limit behavior, and private bucket pre-signed URLs.
+- **Authentication**: Better Auth Documentation (`better-auth.com/docs`) — App Router integration, PostgreSQL session adapters, custom Argon2id hashing, and session revocation.
+- **Asynchronous Processing**: Inngest Durable Execution Documentation (`inngest.com/docs`) — Multi-step workflows, automatic retries, rate limiting, and failure handlers.
+- **Communications**: Resend API Docs (`resend.com/docs`), React Email Docs (`react.email/docs`) — Transactional email deliverability and React-based templating.
+- **Observability & Analytics**: PostHog Docs (`posthog.com/docs`), Sentry Docs (`docs.sentry.io`), Pino Logger Docs (`getpino.io`) — Error tracing, automated PII redaction, and cookieless product analytics.
+- **Testing**: Vitest (`vitest.dev`), Playwright (`playwright.dev`), axe-core (`deque.com/axe`) — ESM test runner speed, multi-browser mobile emulation, and automated WCAG 2.1 AA testing.
+- **AI Providers**: OpenAI API (`platform.openai.com/docs`), Anthropic API (`docs.anthropic.com`), Google Gemini API (`ai.google.dev/docs`) — Multi-provider structured JSON outputs, streaming interfaces, and token pricing models.
 
 ---
 
 ## Selected Architecture Summary
 - **Paradigm**: **Modular Monolith** with managed cloud infrastructure.
-- **Application Runtime**: **Next.js (App Router, Next.js 15 Active Production Line)** + **TypeScript 5.x** on **Node.js 22 LTS**.
-- **Application Hosting**: **Vercel** hosting `gamerperu.com` with serverless Node.js execution.
+- **Application Runtime**: **Next.js (App Router, Next.js 16 Active LTS Line)** + **TypeScript 5.x** on **Node.js 24 LTS**.
+- **Application Hosting**: **Vercel Pro** hosting `gamerperu.com` on Vercel Edge Network with serverless Node.js execution.
 - **Commerce Engine**: **Custom Gamer Perú Commerce Domain** owned entirely in TypeScript.
-- **Database & Data Access**: **Supabase PostgreSQL (PostgreSQL 16+)** with **Drizzle ORM** and Supavisor connection pooling (Free-First $\to$ Pro upgrade path).
-- **Authentication & RBAC**: **Better Auth** with PostgreSQL session persistence, **Argon2id** password hashing, and authoritative server-side Role-Based Access Control (`requirePermission`).
+- **Database & Data Access**: **Supabase PostgreSQL (PostgreSQL 16+)** with **Drizzle ORM** and Supavisor connection pooling (Free-First launch $\to$ Pro upgrade path without code rewrite).
+- **Authentication & RBAC**: **Better Auth** with PostgreSQL session persistence, custom **Argon2id** password hashing, and authoritative server-side Role-Based Access Control (`requirePermission`).
 - **Object Storage**: **Cloudflare R2** partitioned into `gamerperu-public-media` (Edge CDN + WebP/AVIF transformations via `media.gamerperu.com`) and `gamerperu-private-proofs` (Private S3 bucket + 5-minute pre-signed URLs).
 - **Search & Background Jobs**: **PostgreSQL FTS + Trigram (`pg_trgm`)** behind a `SearchProvider` adapter; **Inngest** for durable asynchronous workflows.
 - **AI Infrastructure**: Multi-provider AI Gateway with versioned **AES-256-GCM** encryption-at-rest for admin API keys, separated from the database runtime master key.
@@ -74,20 +83,20 @@ August 16, 2026
 ---
 
 ## ADRs Created / Reconciled
-All 8 foundational ADRs updated to **ACCEPTED** with deterministic selections under [`docs/decisions/`](../decisions/):
-1. [`docs/decisions/ADR-001-application-framework-runtime.md`](../decisions/ADR-001-application-framework-runtime.md): Next.js 15, TypeScript 5.x, Node.js 22 LTS, Vercel hosting, Modular Monolith topology.
-2. [`docs/decisions/ADR-002-commerce-engine-data-architecture.md`](../decisions/ADR-002-commerce-engine-data-architecture.md): Custom Gamer Perú commerce domain on Supabase PostgreSQL (Free-first $\to$ Pro upgrade) with Drizzle ORM.
+All 8 foundational ADRs updated to **ACCEPTED** with factual baselines under [`docs/decisions/`](../decisions/):
+1. [`docs/decisions/ADR-001-application-framework-runtime.md`](../decisions/ADR-001-application-framework-runtime.md): Next.js 16 Active LTS, TypeScript 5.x, Node.js 24 LTS, Vercel Pro hosting, Modular Monolith topology.
+2. [`docs/decisions/ADR-002-commerce-engine-data-architecture.md`](../decisions/ADR-002-commerce-engine-data-architecture.md): Custom Gamer Perú commerce domain on Supabase PostgreSQL (Free-first launch $\to$ Pro upgrade) with Drizzle ORM.
 3. [`docs/decisions/ADR-003-authentication-authorization-rbac.md`](../decisions/ADR-003-authentication-authorization-rbac.md): Better Auth with PostgreSQL session store, Argon2id hashing, and authoritative RBAC.
 4. [`docs/decisions/ADR-004-storage-media-pipeline.md`](../decisions/ADR-004-storage-media-pipeline.md): Cloudflare R2 (public media + image transformations / private proofs with short-lived pre-signed URLs).
 5. [`docs/decisions/ADR-005-search-asynchronous-jobs.md`](../decisions/ADR-005-search-asynchronous-jobs.md): PostgreSQL FTS / Trigram with SearchProvider adapter + Inngest durable async workflows.
 6. [`docs/decisions/ADR-006-communications-analytics-observability.md`](../decisions/ADR-006-communications-analytics-observability.md): Resend + React Email, first-party PostgreSQL event ledger + PostHog, Sentry + Pino.
 7. [`docs/decisions/ADR-007-ai-provider-credential-security.md`](../decisions/ADR-007-ai-provider-credential-security.md): Provider-agnostic AI orchestrator, versioned AES-256-GCM secret encryption, Assistant isolation.
-8. [`docs/decisions/ADR-008-testing-cicd-deployment.md`](../decisions/ADR-008-testing-cicd-deployment.md): Vitest + Playwright + GitHub Actions + Vercel deployment.
+8. [`docs/decisions/ADR-008-testing-cicd-deployment.md`](../decisions/ADR-008-testing-cicd-deployment.md): Vitest + Playwright + GitHub Actions + Vercel Pro deployment.
 
 ---
 
 ## Security Validation
-- [x] Authoritative server-side RBAC guards every administrative mutation and page layout (`requirePermission`).
+- [x] Authoritative server-side RBAC guards every administrative mutation, page layout, and route handler (`requirePermission`).
 - [x] Customer data isolation derives identity exclusively from the verified server-side session cookie (`session.customerId`).
 - [x] Yape/Plin payment proofs are stored in an isolated private bucket inaccessible via public HTTP; viewable exclusively via 5-minute pre-signed URLs with bearer credential audit logging.
 - [x] Admin-configured AI credentials encrypted at rest using AES-256-GCM with key versioning (`key_version`) and a server runtime master key (`AI_ENCRYPTION_KEY_V1`) stored separately from database tables. Plaintext keys are never returned to client browsers.
@@ -104,7 +113,7 @@ All 8 foundational ADRs updated to **ACCEPTED** with deterministic selections un
 ---
 
 ## Performance Validation
-- [x] Target Core Web Vitals: LCP < 2.5s, CLS < 0.1, INP < 200ms.
+- [x] Target Core Web Vitals budgets: LCP < 2.5s, CLS < 0.1, INP < 200ms (benchmarked during implementation).
 - [x] Media assets delivered via Cloudflare Edge CDN (`media.gamerperu.com`) with on-the-fly WebP/AVIF transformation and pre-allocated container aspect ratios.
 - [x] Self-hosted typography (`Plus Jakarta Sans`, `Inter`, `JetBrains Mono`) via `next/font` with zero layout shift.
 - [x] Minimal client JavaScript bundle size achieved through React Server Components.
@@ -112,16 +121,17 @@ All 8 foundational ADRs updated to **ACCEPTED** with deterministic selections un
 ---
 
 ## Failure / Degradation Summary
-- **Critical Path**: Primary Supabase PostgreSQL Database (managed with automated PITR failover upon Pro upgrade).
-- **Gracefully Degradable**: AI Providers (research paused, assistant shows helpful search fallback), Transactional Email (queued in Inngest for retry), Search Engine (falls back to database ILIKE), Analytics (local buffering), EC OS Downstream (outbox queue holds events until recovery).
+- **Critical Path**: Primary Supabase PostgreSQL Database (managed with daily backups on Pro / optional PITR add-on).
+- **Gracefully Degradable**: AI Providers (research paused, assistant shows helpful search fallback), Transactional Email (queued in Inngest for retry), Search Engine (falls back to database ILIKE only while Postgres is healthy), Analytics (local buffering), EC OS Downstream (outbox queue holds events until recovery).
 
 ---
 
 ## Cost Snapshot (USD)
-- **Local Development**: $0 / month (Local Node.js + Local PostgreSQL + Mock Adapters).
-- **Cloud Pre-Launch**: $0 – $5 / month (Vercel Hobby $0, Supabase Free $0, Cloudflare R2 Free, Inngest Free, Resend Free, AI test tokens < $5).
-- **Initial Launch**: ~$35 – $50 / month (Vercel Pro $20, Supabase Free $0 with scheduled R2 backups, R2 $0, Resend $0, PostHog Free $0, AI tokens ~$15).
-- **Growth (Production Pro)**: ~$145 – $210 / month (Vercel Pro $20 + Supabase Pro $25 + Inngest Pro $35 + Cloudflare Images ~$15 + AI tokens $50-$100 + Resend Email).
+- **Local Development**: **$0 / month** (Local Node.js 24 + Local PostgreSQL + Mock Adapters).
+- **Cloud Pre-Launch**: **~$20 – $25 / month** (Vercel Pro $20 required for commercial team use, Supabase Free $0, Cloudflare R2 Free, Inngest Free, Resend Free, PostHog Free, AI test tokens < $5).
+- **Initial Live Launch**: **~$35 – $55 / month** (Vercel Pro $20, Supabase Free $0 with scheduled R2 backups, Cloudflare R2 Free / Images Free, Resend Free, PostHog Free, AI tokens ~$15).
+- **Supabase Pro Stage**: **~$60 – $80 / month** (Vercel Pro $20 + Supabase Pro $25 with 7-day daily backups + Cloudflare R2 Free + Resend $0-$15 + PostHog Free + AI tokens ~$15-$25).
+- **Growth Stage (Optional Add-ons)**: **~$175 – $325+ / month** (Vercel Pro $20 + Supabase Pro $25 + Optional PITR ~$100 + Inngest Pro $35 + Cloudflare Images Paid ~$10 + AI tokens $50-$100 + Resend Paid ~$20).
 
 ---
 
@@ -133,11 +143,11 @@ All 8 foundational ADRs updated to **ACCEPTED** with deterministic selections un
 ---
 
 ## Files Changed
-- `docs/architecture/TECHNOLOGY_ARCHITECTURE.md`: Reconciled all 46 sections with deterministic selections, Supabase Free-first details, Cloudflare R2/Images separation, Vercel hosting, Better Auth + Argon2id, and AI key versioning.
-- `docs/decisions/ADR-001-application-framework-runtime.md` through `ADR-008-testing-cicd-deployment.md`: Reconciled with deterministic choices.
+- `docs/architecture/TECHNOLOGY_ARCHITECTURE.md`: Finalized 46-section architecture specification with Next.js 16 Active LTS, Node.js 24 LTS, Vercel Pro commercial hosting, Supabase Free-first launch rules, Base Pro daily backups vs optional PITR separation, Cloudflare Images free limits, R2 versioning corrections, Better Auth Argon2id custom config, and Inngest outbox failure models.
+- `docs/decisions/ADR-001-application-framework-runtime.md` through `ADR-008-testing-cicd-deployment.md`: Reconciled with accurate factual baselines.
 - `docs/decisions/README.md`: Updated index of accepted ADRs.
 - `docs/roadmap/GP-003.md`: Preserved `COMPLETE` status.
-- `docs/roadmap/GP-003-CLOSURE.md`: Updated to record external review remediations and full checkpoint history.
+- `docs/roadmap/GP-003-CLOSURE.md`: Created complete closure report with final factual verification details and checkpoint history.
 
 ---
 
@@ -145,7 +155,7 @@ All 8 foundational ADRs updated to **ACCEPTED** with deterministic selections un
 - **Branch**: `main`
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `d08a1407c19bdcb17b8ef5929b9c944ceeac9276`
-- **Closure Content Checkpoint**: `cdc1f594910620dd737c829ca55f72ec73e087ed`
+- **Closure Content Checkpoint**: `e72543c67703c637d7eed3592307b24aef4dddea`
 - **Working Tree**: Clean (Closure report staged for final closure commit).
 
 ---
