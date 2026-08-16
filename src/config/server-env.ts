@@ -28,6 +28,9 @@ export const serverEnvSchema = z
       .length(64, "Must be exactly 64 hexadecimal characters")
       .regex(/^[0-9a-fA-F]+$/, "Must be a valid 64-character hexadecimal string")
       .optional(),
+    SENTRY_AUTH_TOKEN: z.string().optional(),
+    SENTRY_ORG: z.string().optional(),
+    SENTRY_PROJECT: z.string().optional(),
   })
   .refine(
     (data) => {
@@ -70,6 +73,9 @@ function parseServerEnv(): ServerEnv {
     INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
     INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
     AI_ENCRYPTION_KEY_V1: process.env.AI_ENCRYPTION_KEY_V1,
+    SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN,
+    SENTRY_ORG: process.env.SENTRY_ORG,
+    SENTRY_PROJECT: process.env.SENTRY_PROJECT,
   });
 }
 

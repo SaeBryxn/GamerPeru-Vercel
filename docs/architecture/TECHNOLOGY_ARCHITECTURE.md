@@ -208,7 +208,7 @@ graph LR
 - **Core Modules**:
   - `Cart & Pricing`: Client cart state synchronized with server-side pricing in Soles (`S/`) and promotional discount calculators.
   - `Checkout & Inventory Mutation`: Checkout and inventory mutations use PostgreSQL transactions and row-level locking (`SELECT ... FOR UPDATE`) according to the reservation/allocation model finalized in GP-004 to prevent overselling.
-  - `Manual Payment Verification`: State machine specifically designed for Yape/Plin domestic verification (customer submission enters verification workflow; authorized admin verifies funds before approving/rejecting; all transitions audited). Exact state machine names and timing remain deferred to GP-004 and GP-020.
+  - `Manual Payment Verification`: State machine specifically designed for Yape/Plin domestic verification (customer submission enters verification workflow; authorized admin verifies funds before approving/rejecting; all transitions audited). `COMMERCE_DOMAIN_MODEL.md` owns the state-machine and reservation semantics finalized in GP-004, implemented in later feature GPs such as GP-020 without redefinition.
   - `Multi-Category Hardware Catalog`: Dynamic specifications stored in structured JSONB columns with category-specific Zod schema validation (Mice, Keyboards, Audio, Mousepads).
   - `Product Story Engine`: Modular 13-block editorial PDP content builder.
   - `Affiliates & Commissions`: First-party affiliate tracking, coupon attribution, and commission status management with automatic invalidation upon order cancellation or return.
@@ -220,7 +220,7 @@ graph LR
 - **Managed Database Provider**: **Supabase PostgreSQL** (PostgreSQL 16+ engine) with Supavisor connection pooling (ADR-002).
 - **Data Access Layer**: **Drizzle ORM** (TypeScript-native schema-as-code).
 - **Free-First Operational Strategy**:
-  - _Local Development_: Local PostgreSQL instance (native or Docker Compose).
+  - _Local Development_: Supabase CLI local Docker stack with PostgreSQL 16 and local Supabase Auth service/schema. Direct PostgreSQL connections from Drizzle ORM remain preserved.
   - _Early Cloud Development / Pre-Launch_: **Supabase Free Plan** (500MB storage, Supavisor connection pooling).
   - _Initial Live Launch_: **Supabase Free Plan is permitted** during initial commercial launch while storage, compute, and business risk remain within acceptable limits. The occurrence of a live customer transaction alone does NOT automatically force a plan upgrade.
   - _Free-Stage Backup Strategy_: Automated scheduled logical database dumps (`pg_dump`) encrypted with AES-256 and stored in an isolated private Cloudflare R2 backup bucket (`gamerperu-db-backups-private`) with 30-day retention. Root backup encryption keys are managed independently offsite.

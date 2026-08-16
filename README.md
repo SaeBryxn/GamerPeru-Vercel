@@ -12,9 +12,9 @@ Build a premium multi-brand gaming-peripherals e-commerce platform for Peru with
 
 The project progresses sequentially through 53 gated tasks: **GP-000 → GP-052**.
 
-- **GP-000 to GP-006**: System Initialization, Design System, Technology Architecture, Commerce Domain Model, Repository Bootstrap, and Engineering Standards (`COMPLETE`).
-- **GP-007**: Core Tooling & Foundation (`NEXT / PLANNED`).
-- **GP-008 to GP-052**: UI Design System, Catalog, Cart, Checkout, Payments, Admin, Affiliates, AI Assistant, and Production Launch (`PLANNED`).
+- **GP-000 to GP-007**: System Initialization, Design System, Technology Architecture, Commerce Domain Model, Repository Bootstrap, Engineering Standards, and Application Foundation (`COMPLETE`).
+- **GP-008**: UI Design System & Component Library (`NEXT / PLANNED`).
+- **GP-009 to GP-052**: Catalog, Cart, Checkout, Payments, Admin, Affiliates, AI Assistant, and Production Launch (`PLANNED`).
 
 ---
 
@@ -133,6 +133,7 @@ Canonical architecture specifications and decision records live in [`docs/`](./d
 - [`docs/engineering/ENGINEERING_STANDARDS.md`](./docs/engineering/ENGINEERING_STANDARDS.md) — Canonical engineering & quality standards.
 - [`docs/specs/`](./docs/specs/) — Core functional and domain specifications.
 - [`docs/architecture/TECHNOLOGY_ARCHITECTURE.md`](./docs/architecture/TECHNOLOGY_ARCHITECTURE.md) — Canonical technology baseline.
+- [`docs/architecture/APPLICATION_FOUNDATION.md`](./docs/architecture/APPLICATION_FOUNDATION.md) — Canonical application shell, layout, error, and observability foundation.
 - [`docs/architecture/COMMERCE_DOMAIN_MODEL.md`](./docs/architecture/COMMERCE_DOMAIN_MODEL.md) — Complete 67-section commerce domain model.
 - [`docs/decisions/`](./docs/decisions/) — Accepted Architecture Decision Records (ADR-001 through ADR-008).
 - [`docs/roadmap/ROADMAP.md`](./docs/roadmap/ROADMAP.md) — 53-step development roadmap.

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
+import { APP_CONFIG } from "@/config/app";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Gamer Perú — Periféricos Gamer Premium en Perú",
-  description:
-    "E-commerce de periféricos gamer de alto rendimiento en Perú. Mouses, teclados, mousepads y accesorios para esports.",
+  title: APP_CONFIG.publicTitle,
+  description: APP_CONFIG.publicDescription,
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    <html lang={APP_CONFIG.defaultLocale}>
       <body>{children}</body>
     </html>
   );

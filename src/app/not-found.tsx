@@ -1,4 +1,6 @@
-export default function HomePage() {
+import Link from "next/link";
+
+export default function NotFound() {
   return (
     <main
       style={{
@@ -13,7 +15,7 @@ export default function HomePage() {
     >
       <div
         style={{
-          maxWidth: "600px",
+          maxWidth: "500px",
           padding: "2.5rem",
           borderRadius: "12px",
           backgroundColor: "var(--card-bg)",
@@ -21,42 +23,54 @@ export default function HomePage() {
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
         }}
       >
+        <p
+          style={{
+            fontSize: "0.875rem",
+            fontWeight: "700",
+            color: "#ff6b78",
+            marginBottom: "0.5rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+          }}
+        >
+          Error 404
+        </p>
         <h1
           style={{
-            fontSize: "2rem",
+            fontSize: "1.75rem",
             fontWeight: "700",
             marginBottom: "1rem",
             color: "var(--foreground)",
-            letterSpacing: "-0.02em",
           }}
         >
-          Gamer Perú
+          Página no encontrada
         </h1>
         <p
           style={{
             color: "#94a3b8",
             fontSize: "1rem",
             lineHeight: "1.6",
-            marginBottom: "1.5rem",
+            marginBottom: "2rem",
           }}
         >
-          Plataforma de e-commerce de periféricos gamer de alto rendimiento para el mercado peruano.
+          El recurso o página que busca no existe, ha sido movido o no se encuentra disponible.
         </p>
-        <div
+        <Link
+          href="/"
           style={{
             display: "inline-block",
-            padding: "0.5rem 1rem",
+            padding: "0.75rem 1.5rem",
             borderRadius: "6px",
-            backgroundColor: "rgba(255, 70, 85, 0.1)",
-            border: "1px solid rgba(255, 70, 85, 0.3)",
-            color: "var(--accent)",
+            backgroundColor: "var(--foreground)",
+            color: "#0b0e14",
+            fontWeight: "700",
             fontSize: "0.875rem",
-            fontWeight: "600",
-            fontFamily: "var(--font-mono)",
+            textDecoration: "none",
+            transition: "opacity 0.2s ease",
           }}
         >
-          Bootstrap Initialized (GP-005)
-        </div>
+          Volver al inicio
+        </Link>
       </div>
     </main>
   );
