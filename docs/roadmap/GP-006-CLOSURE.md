@@ -4,15 +4,35 @@
 
 `e5afe4ffd0c5f966ffa69a480fdc338df7c9229b`
 
-## Implementation Checkpoint
+## Implementation Checkpoint (Initial)
 
 `08a98814f2e564bfebe13e0b734ad6ad07cc51eb`
+
+## Semantic Remediation Checkpoint
+
+`5eb4093af5f3212dc48dc5315c3ddbb09d97da94`
 
 ---
 
 ## Summary
 
-Successfully established the canonical engineering standards and mechanical quality enforcement infrastructure for **Gamer Perú**. Authored [`docs/engineering/ENGINEERING_STANDARDS.md`](../engineering/ENGINEERING_STANDARDS.md) as the repository's single implementation-quality authority across 27 core domains. Pinned Prettier 3.9.6 with deterministic formatting configurations, strengthened TypeScript compiler strictness (`allowJs: false`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `forceConsistentCasingInFileNames`, `noFallthroughCasesInSwitch`), upgraded ESLint 9 to enforce type-aware strict rules with zero-warning tolerance (`--max-warnings=0`), added Playwright Chromium E2E and Axe accessibility verification to CI, hardened GitHub Actions permissions and concurrency controls, established the local composite validation gate (`pnpm check`), and verified that all remote CI checks conclude with `success`.
+Successfully established and hardened the canonical engineering standards and mechanical quality enforcement infrastructure for **Gamer Perú**. Authored [`docs/engineering/ENGINEERING_STANDARDS.md`](../engineering/ENGINEERING_STANDARDS.md) as the repository's single implementation-quality authority across 27 core domains. Pinned Prettier 3.9.6 with deterministic formatting configurations, strengthened TypeScript compiler strictness (`allowJs: false`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `forceConsistentCasingInFileNames`, `noFallthroughCasesInSwitch`), upgraded ESLint 9 to enforce type-aware strict rules with zero-warning tolerance (`--max-warnings=0`), added Playwright Chromium E2E and Axe accessibility verification to CI, hardened GitHub Actions permissions and concurrency controls, established the local composite validation gate (`pnpm check`), and verified that all remote CI checks conclude with `success`.
+
+---
+
+## External Semantic Consistency Review
+
+Following external review, refined the canonical standards and configurations to eliminate semantic ambiguities:
+
+1. **Tax / Fiscal Testing Semantics**: Removed premature hardcoded "18% IGV" rule from Section 19. Replaced with provider/domain-neutral testing requirements (rate boundaries, integer minor units, exempt cases, deterministic allocation) governed by future approved business/legal specifications.
+2. **Discount & Promotion Boundaries**: Generalized discount testing from unapproved "100% discount vouchers" to configurable promotion limits, ensuring discounts cannot exceed permitted order amounts.
+3. **Signed vs Standard Money Invariants**: Reconciled Section 19 to distinguish non-negative standard amounts (prices, order totals, line items, positive allocated discounts) from explicitly signed adjustment entities (`CommissionAdjustment.amount_cents` for clawbacks).
+4. **Distinct Email Delivery Pipelines**: Clarified Section 3 to explicitly separate the Authentication Email pipeline (Supabase Auth -> Resend custom SMTP) from the Commerce & Application Email pipeline (Inngest -> Resend API -> React Email).
+5. **Drizzle Migration Formatting Exclusion**: Added `src/db/migrations/**` to `.prettierignore` to prevent Prettier from mutating Drizzle-generated SQL or metadata, and restored `src/db/migrations/meta/_journal.json` to its canonical unformatted generated baseline.
+6. **Migration Review Policy**: Clarified that while Drizzle generates migration artifacts and metadata journals, generated SQL must undergo human review before execution, permitting reviewed custom SQL where legitimately required.
+7. **Branch Protection Policy Wording**: Refined Section 23 to document branch protection as a target repository policy rather than asserting unverified remote GitHub repository settings.
+8. **Truthful Build Security Evidence**: Recorded exact output of `pnpm ignored-builds` in an installed environment confirming zero unreviewed lifecycle scripts.
+9. **Precise Security Scopes**: Clarified that secret validation confirms zero real secrets in current tracked repository files and local environment boundaries without claiming unperformed historical git scans.
 
 ---
 
@@ -63,7 +83,7 @@ Linked in [`AGENTS.md`](../../AGENTS.md) and [`README.md`](../../README.md) as a
   - `trailingComma: "es5"`
   - `arrowParens: "always"`
   - `endOfLine: "lf"`
-- **Ignore Rules**: Created `.prettierignore` covering `.next`, `node_modules`, `dist`, `build`, `coverage`, `test-results`, `playwright-report`, `next-env.d.ts`, and `pnpm-lock.yaml`.
+- **Ignore Rules**: Created `.prettierignore` covering `.next`, `node_modules`, `dist`, `build`, `coverage`, `test-results`, `playwright-report`, `next-env.d.ts`, `pnpm-lock.yaml`, and `src/db/migrations/**`.
 - **EditorConfig**: Created `.editorconfig` enforcing UTF-8, LF, 2-space indentation, final newline, and trimmed whitespace.
 - **Scripts**: Added `"format": "prettier --write ."` and `"format:check": "prettier --check ."`.
 
@@ -179,7 +199,8 @@ Total local feedback loop remains under 15 seconds.
 
 ## Security Validation
 
-- [x] Zero secrets committed in repository files or git history.
+- [x] Zero real secrets committed in current tracked repository files.
+- [x] Environment variable boundaries preserved (`.env.example` contains placeholders only).
 - [x] CI permissions restricted to read-only (`permissions: { contents: read }`).
 - [x] Concurrency cancellation prevents redundant execution.
 - [x] Server-only module boundaries protected by `import "server-only"`.
@@ -195,7 +216,7 @@ Total local feedback loop remains under 15 seconds.
 - [x] Zero authentication user flows created.
 - [x] Zero remote Supabase project linking performed.
 - [x] Zero remote deployment configured.
-- [x] `docs/roadmap/GP-006.md` status updated to `COMPLETE`.
+- [x] `docs/roadmap/GP-006.md` status is `COMPLETE`.
 - [x] `GP-007` remains `PLANNED`.
 
 ---
@@ -233,7 +254,7 @@ $ vitest run
  ✓ tests/unit/smoke.test.ts (6 tests) 14ms
  Test Files  1 passed (1)
       Tests  6 passed (6)
-   Duration  494ms
+   Duration  487ms
 Exit code: 0
 ```
 
@@ -242,8 +263,8 @@ Exit code: 0
 ```text
 $ next build
 ▲ Next.js 16.3.1 (Turbopack)
-✓ Compiled successfully in 176ms
-✓ Generating static pages using 4 workers (3/3) in 594ms
+✓ Compiled successfully in 161ms
+✓ Generating static pages using 4 workers (3/3) in 595ms
 Route (app)
 ┌ ○ /
 └ ○ /_not-found
@@ -268,9 +289,9 @@ Exit code: 0
 $ playwright test
 [WebServer] $ next dev
 Running 2 tests using 2 workers
-  ok 1 [chromium] › tests\e2e\bootstrap.spec.ts:5:3 › loads root page with valid title and heading (281ms)
-  ok 2 [chromium] › tests\e2e\bootstrap.spec.ts:21:3 › passes baseline automated accessibility audit (525ms)
-  2 passed (3.9s)
+  ok 2 [chromium] › tests\e2e\bootstrap.spec.ts:5:3 › loads root page with valid title and heading (291ms)
+  ok 1 [chromium] › tests\e2e\bootstrap.spec.ts:21:3 › passes baseline automated accessibility audit (545ms)
+  2 passed (4.0s)
 Exit code: 0
 ```
 
@@ -287,9 +308,11 @@ Exit code: 0
 
 ## Remote GitHub Actions CI Verification
 
-| Workflow Run ID | Commit SHA | Trigger Event                                          | Status    | Conclusion | URL                                                                   |
-| --------------- | ---------- | ------------------------------------------------------ | --------- | ---------- | --------------------------------------------------------------------- |
-| `31964973458`   | `08a9881`  | Push (`chore: establish GP-006 engineering standards`) | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31964973458` |
+| Workflow Run ID | Commit SHA | Trigger Event                                                 | Status    | Conclusion | URL                                                                   |
+| --------------- | ---------- | ------------------------------------------------------------- | --------- | ---------- | --------------------------------------------------------------------- |
+| `31964973458`   | `08a9881`  | Push (`chore: establish GP-006 engineering standards`)        | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31964973458` |
+| `31965122450`   | `cfa66c6`  | Push (`docs: close GP-006`)                                   | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31965122450` |
+| `31966531629`   | `5eb4093`  | Push (`fix: reconcile GP-006 engineering standard semantics`) | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31966531629` |
 
 ---
 
@@ -297,11 +320,11 @@ Exit code: 0
 
 - `.editorconfig` (New EditorConfig rules)
 - `.github/workflows/ci.yml` (Hardened CI workflow with format check, E2E, permissions, concurrency)
-- `.prettierignore` (New Prettier ignore definitions)
+- `.prettierignore` (New Prettier ignore definitions including `src/db/migrations/**`)
 - `.prettierrc.json` (New canonical Prettier configuration)
 - `AGENTS.md` (Updated with links to ENGINEERING_STANDARDS.md and canonical gates)
-- `docs/engineering/ENGINEERING_STANDARDS.md` (New 27-section canonical engineering standards authority)
-- `docs/roadmap/GP-006-CLOSURE.md` (New closure report)
+- `docs/engineering/ENGINEERING_STANDARDS.md` (New 27-section canonical engineering standards authority with semantic cleanups)
+- `docs/roadmap/GP-006-CLOSURE.md` (New closure report with semantic consistency review section)
 - `docs/roadmap/GP-006.md` (Status updated to COMPLETE)
 - `drizzle.config.ts` (Updated to nullish coalescing `??`)
 - `eslint.config.mjs` (Added strict TypeScript rules with type-aware parser)
@@ -310,9 +333,9 @@ Exit code: 0
 - `pnpm-lock.yaml` (Updated with pinned prettier dependency)
 - `README.md` (Updated with quality scripts and Engineering Standards link)
 - `src/db/index.ts` (Updated to nullish coalescing `??`)
+- `src/db/migrations/meta/_journal.json` (Restored to exact unformatted generated baseline)
 - `src/lib/storage/r2.ts` (Updated to nullish coalescing `??`)
 - `tsconfig.json` (Added strict compiler options: `allowJs: false`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `forceConsistentCasingInFileNames`, `noFallthroughCasesInSwitch`)
-- Tracked documentation and source files (Formatted to canonical Prettier standard)
 
 ---
 
@@ -321,7 +344,8 @@ Exit code: 0
 - **Branch**: `main`
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `e5afe4ffd0c5f966ffa69a480fdc338df7c9229b`
-- **Implementation Checkpoint**: `08a98814f2e564bfebe13e0b734ad6ad07cc51eb`
+- **Initial Implementation Checkpoint**: `08a98814f2e564bfebe13e0b734ad6ad07cc51eb`
+- **Semantic Remediation Checkpoint**: `5eb4093af5f3212dc48dc5315c3ddbb09d97da94`
 - **Working Tree**: Clean (Closure report staged for closure commit).
 
 ---
