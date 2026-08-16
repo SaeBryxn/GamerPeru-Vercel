@@ -43,7 +43,7 @@ Gamer Perú requires an authoritative commerce domain model covering multi-brand
 - **Negative**: Requires maintaining free-stage scheduled backup scripts until upgrading to managed daily backups on Supabase Pro.
 
 ## Security / SEO / Performance Impact
-- **Security**: Strict database constraints and parameterized queries via Drizzle eliminate SQL injection risks.
+- **Security**: Strict database constraints and Drizzle parameterized query APIs significantly reduce SQL-injection risk by ensuring user inputs remain parameterized; raw SQL queries, when genuinely necessary, require explicit review and parameter binding.
 - **SEO**: Product slugs, category hierarchies, and metadata are queried with low latency for server rendering.
 - **Performance**: Supabase Supavisor connection pooling manages connection concurrency during traffic peaks.
 

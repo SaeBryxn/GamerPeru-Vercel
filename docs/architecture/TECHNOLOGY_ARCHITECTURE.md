@@ -203,7 +203,7 @@ graph LR
 - **Selected Strategy**: **Custom Gamer Perú Commerce Domain** on PostgreSQL (ADR-002).
 - **Core Modules**:
   - `Cart & Pricing`: Client cart state synchronized with server-side pricing in Soles (`S/`) and promotional discount calculators.
-  - `Checkout & Reservation`: Atomic inventory reservation during order placement using PostgreSQL row-level locks (`SELECT ... FOR UPDATE`).
+  - `Checkout & Inventory Mutation`: Checkout and inventory mutations use PostgreSQL transactions and row-level locking (`SELECT ... FOR UPDATE`) according to the reservation/allocation model finalized in GP-004 to prevent overselling.
   - `Manual Payment Verification`: State machine specifically designed for Yape/Plin domestic verification (customer submission enters verification workflow; authorized admin verifies funds before approving/rejecting; all transitions audited). Exact state machine names and timing remain deferred to GP-004 and GP-020.
   - `Multi-Category Hardware Catalog`: Dynamic specifications stored in structured JSONB columns with category-specific Zod schema validation (Mice, Keyboards, Audio, Mousepads).
   - `Product Story Engine`: Modular 13-block editorial PDP content builder.
@@ -268,11 +268,8 @@ graph LR
 - **Storage Provider**: **Cloudflare R2** with **Cloudflare Edge CDN** (ADR-004).
 - **Bucket**: `gamerperu-public-media` (Served via `media.gamerperu.com`).
 - **Image Optimization & Free Limits**: Cloudflare Image Transformations dynamically generate responsive WebP and AVIF variants based on client `Accept` headers and viewport parameters.
-  - *Free Tier Transformation Behavior*: Cloudflare Images Free includes up to 5,000 unique transformations/month. Exceeding 5,000 transformations acts as a hard cap where new transformations fail until upgraded to a Paid Images plan ($5/mo base or $0.50/1,000 transformations on paid zones). To mitigate risks during the Free phase:
-    * Enforce a strict set of standardized responsive variant presets (thumbnail, card, hero, story);
-    * Avoid arbitrary client-requested image dimensions;
-    * Provide graceful source-image fallback if a transformation fails;
-    * Monitor monthly transformation volume.
+  - *Free Tier Transformation Behavior*: Source images remain in Cloudflare R2 (Cloudflare Images Storage at $5/100k images is a separate dimension and not used). Cloudflare Image Transformations Free includes up to 5,000 unique transformations/month. Exceeding 5,000 transformations acts as a hard cap where cached transformations continue serving, but new transformations fail until upgraded to Paid Transformations ($0.50 per 1,000 additional unique transformations on Cloudflare paid zones).
+  - *Mitigations during Free phase*: Enforce a strict set of standardized responsive variant presets (thumbnail, card, hero, story); avoid arbitrary client-requested dimensions; provide graceful source-image fallback if a transformation fails; monitor monthly transformation volume.
 - **Caching**: `Cache-Control: public, max-age=31536000, immutable` for immutable hashed assets.
 - **Supabase Storage Boundary**: Supabase Storage is explicitly **NOT** used for the product catalog.
 
@@ -281,8 +278,8 @@ graph LR
 ## 15. Private Payment-Proof Storage
 
 - **Storage Provider**: **Cloudflare R2 Private Bucket** (`gamerperu-private-proofs`) (ADR-004).
-- **Access Control**: Completely closed to public HTTP access (no custom domain, zero CDN caching, no public directory listing).
-- **Access Model**: Authorized **short-lived S3/R2 pre-signed URLs** (5-minute expiration) generated on-demand by server actions only after verifying the admin's `orders:verify` permission.
+- **Access Control**: Configured with no anonymous public read access, no public custom media domain, no directory/index listing, and no unrestricted CDN delivery.
+- **Access Model**: Authorized **short-lived S3/R2 pre-signed URLs** (5-minute expiration) generated on-demand by server actions only after verifying the admin's `orders:verify` permission. Possession of an unexpired signed URL provides temporary object access.
 - **Bearer Credential Semantics**: Because an unexpired signed URL functions as a temporary bearer credential, URLs are transmitted strictly over HTTPS, never logged in standard application log streams, never included in analytics, served with `Cache-Control: private, no-store`, and logged as an authorization audit event upon generation.
 - **Upload Validation**: Enforces strict MIME type checks (JPEG, PNG, WebP) and a 5MB size limit.
 
@@ -368,7 +365,7 @@ graph LR
 
 - **Canonical v1 Methods**: `YAPE_MANUAL` and `PLIN_MANUAL` (ADR-002).
 - **Workflow Invariants**:
-  1. Order placed $\to$ inventory reserved for payment window $\to$ payment instructions and QR code displayed.
+  1. Order placed $\to$ payment instructions and QR code displayed $\to$ checkout and inventory state handled according to the reservation/allocation model finalized in GP-004.
   2. Customer inputs operation code and optional voucher upload. (Explicitly informs customer that submission does NOT equal confirmed payment).
   3. Payment enters verification workflow $\to$ authorized admin checks actual bank receipt.
   4. Admin confirms or rejects payment $\to$ order transitions accordingly.
@@ -481,9 +478,9 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 |---|---|---|
 | **Admin RBAC** | Server Actions, Layouts & Route Handlers | Authoritative database role check (`requirePermission`) |
 | **Customer Data Isolation** | Data Access Layer | Enforced `session.customerId` filter from session cookie |
-| **Payment Voucher Protection**| Private Storage | S3 private bucket + 5-minute pre-signed URLs (bearer semantics) |
+| **Payment Voucher Protection**| Private Storage | S3 private bucket with no anonymous public access; short-lived pre-signed URLs (5m) issued after RBAC verification |
 | **AI Credential Protection** | Database / Server | Versioned AES-256-GCM encryption at rest + separate server master key |
-| **SQL Injection Prevention** | Data Layer | Drizzle ORM parameterized SQL queries |
+| **SQL Injection Prevention** | Data Layer | Drizzle ORM parameterized query APIs significantly reduce SQL-injection risk by ensuring inputs remain parameterized |
 | **XSS & CSRF Mitigation** | Framework & HTTP | Next.js automatic encoding, SameSite=Lax HttpOnly Secure cookies |
 | **Rate Limiting** | Edge / Middleware | IP & Session token bucket rate limiting on auth and AI routes |
 
@@ -503,7 +500,7 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 
 - [x] Core Web Vitals target budgets: LCP < 2.5s, CLS < 0.1, INP < 200ms (benchmarked during implementation).
 - [x] Automatic WebP/AVIF generation with pre-allocated container aspect ratios.
-- [x] Font optimization: `Plus Jakarta Sans`, `Inter`, and `JetBrains Mono` self-hosted via `next/font` with zero layout shift.
+- [x] Font optimization: self-hosted/optimized font loading via `next/font` to minimize font-induced layout shift with fallback metrics, validated during implementation.
 - [x] Minimal client JavaScript bundle by leveraging React Server Components.
 
 ---
@@ -512,10 +509,10 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 
 | Service / Dependency | Criticality | Behavior on Outage | Recovery / Fallback |
 |---|---|---|---|
-| **Vercel Application Host** | **CRITICAL** | Storefront offline | Vercel platform restoration / DNS failover |
+| **Vercel Application Host** | **CRITICAL** | Storefront offline | Vercel platform restoration / rollback where applicable |
 | **Supabase PostgreSQL** | **CRITICAL** | Storefront displays cached pages; mutations show graceful 503 error | Provider restoration / restore from logical backup |
 | **Cloudflare Public Media**| **DEGRADABLE** | Storefront reachable but images fail to load; UI layout preserved via aspect ratios | Cloudflare Edge multi-POP redundancy |
-| **Cloudflare Private Proofs**| **DEGRADABLE** | Orders placed; voucher uploads/reviews temporarily fail | Inngest retry / temporary hold |
+| **Cloudflare Private Proofs**| **DEGRADABLE** | Orders placed; voucher uploads/reviews temporarily fail | Affected file operations retried after storage recovery; does not block core storefront/catalog browsing (GP-004/GP-020 determines exact upload UX/degradation) |
 | **Inngest Async Queue** | **DEGRADABLE** | Async jobs paused; customer checkout completes | Job backlog drained on recovery |
 | **AI Providers** | **DEGRADABLE** | Product research paused; Customer Assistant displays helpful FAQ/search fallback | Background retry / manual input |
 | **Resend Email** | **DEGRADABLE** | Emails queued in Inngest; checkout completes successfully | Inngest exponential retries |
@@ -535,7 +532,7 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 | **Cloud Pre-Launch** | $20 (Vercel Pro $20 required for commercial team use; Supabase Free $0; Cloudflare R2 Free; Inngest Free; Resend Free; PostHog Free) | < $5 (AI test tokens) | **~$20 – $25 / month** |
 | **Initial Live Launch** | $20 (Vercel Pro $20; Supabase Free $0 with scheduled R2 backups; R2 Free; Resend Free; PostHog Free) | ~$15 (AI Product Research tokens) | **~$35 – $55 / month** |
 | **Supabase Pro Stage** | $45 (Vercel Pro $20 + Supabase Pro $25 with 7-day daily backups; Cloudflare R2 Free; Resend $0-$15) | ~$15 – $25 (AI tokens + Cloudflare Images) | **~$60 – $80 / month** |
-| **Growth Stage (Optional Add-ons)**| ~$175 – $250+ (Vercel Pro $20 + Supabase Pro $25 + Optional PITR ~$100 + Inngest Pro $35 + Cloudflare Images Paid ~$10) | ~$50 – $100 (AI Customer Assistant tokens + Resend Email) | **~$175 – $325+ / month** |
+| **Growth Stage (Optional Add-ons)**| ~$175 – $250+ (Vercel Pro $20 + Supabase Pro $25 + Optional PITR ~$100 + Inngest Pro $35 + Cloudflare Images Paid transformations ~$10) | ~$50 – $100 (AI Customer Assistant tokens + Resend Email) | **~$175 – $325+ / month** |
 
 ---
 
@@ -552,7 +549,7 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 
 - **Database**: Standard PostgreSQL schema; exportable via `pg_dump` and portable to any cloud provider in minutes.
 - **ORM**: Drizzle generates standard SQL migrations; domain code uses standard TypeScript interfaces.
-- **Object Storage**: S3-compatible API; assets transferable via standard S3 sync tools.
+- **Object Storage**: Cloudflare R2 exposes an S3-compatible API for standard object operations, and application access is encapsulated behind a storage adapter. While standard object operations and pre-signed URL workflows improve portability, migrating to another S3-compatible provider will require revalidating provider-specific behavior, signing semantics, CDN/transformation integrations, and cache headers rather than assuming guaranteed zero-code parity.
 - **AI Infrastructure**: Internal `AIProvider` gateway allows switching model vendors by updating configuration.
 
 ---
@@ -567,7 +564,7 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 | **Managed Database**| **Supabase PostgreSQL** | Neon, AWS RDS, PlanetScale | PostgreSQL 16+, Supavisor pooling, Free-first launch $\to$ Pro zero-rewrite upgrade path. |
 | **Data Access Layer**| **Drizzle ORM** | Prisma, Kysely, TypeORM | Zero runtime overhead, pure TypeScript schema, native SQL control, fast cold-starts. |
 | **Authentication** | **Better Auth (PostgreSQL)**| Auth.js, Clerk, Auth0 | Native PostgreSQL session store, Argon2id hashing, zero MAU SaaS fees, instant revocation. |
-| **Object Storage** | **Cloudflare R2** | AWS S3, Supabase Storage | Zero egress fees, global edge CDN, S3 API compatibility, private bucket support. |
+| **Object Storage** | **Cloudflare R2** | AWS S3, Supabase Storage | Zero egress fees, global edge CDN, S3-compatible API, private bucket support. |
 | **Search Engine** | **PostgreSQL FTS/Trigram** | Meilisearch, Algolia | Zero extra infrastructure for v1, instant transactional updates, Spanish stemming. |
 | **Async Background**| **Inngest** | BullMQ, Temporal | Durable TypeScript workflows, step-level retries, serverless compatibility. |
 | **AI Gateway** | **Custom Multi-Provider** | Single Vendor SDK | Zero vendor lock-in, versioned AES-256-GCM credential encryption, structured Zod output. |
@@ -607,7 +604,7 @@ This document provides GP-004 with exact architectural boundaries:
 - Relational database schema requirements on Supabase PostgreSQL (PostgreSQL 16+).
 - Core entities vs. JSONB dynamic spec extension patterns with Drizzle ORM.
 - Manual Yape/Plin payment verification workflow invariants.
-- Multi-brand catalog relationships and variant inventory reservation logic.
+- Multi-brand catalog relationships, inventory allocation/reservation rules, and checkout lifecycle.
 - Affiliate attribution and commission cancellation rules.
 
 ---
