@@ -8,11 +8,49 @@
 
 `2efd5380b9e8237aa078b2400181c2a145f964cb`
 
+## Remediation Checkpoint
+
+`51ceb59e01d2dbd33a4ba8bba85e6b18afaa8bb5`
+
 ---
 
 ## Summary
 
-Successfully translated the approved **Gamer Perú** visual identity (“Machinery Obsidian & Signal Crimson”, GP-002) into a production-grade, accessible **Design System**. Implemented the complete semantic design token vocabulary in `src/styles/tokens.css`, fluid typography hierarchy in `src/styles/typography.css`, Next.js 16 self-hosted Google Font architecture (`Plus Jakarta Sans`, `Inter`, `JetBrains Mono`), and built a focused suite of accessible, server-first core UI primitives (`Button`, `IconButton`, `Input`, `TextField`, `Badge`, `SpecPill`, `StatusBadge`, `Card`, `Container`, `VisuallyHidden`, `Stack`) in `src/components/ui/`. Removed all legacy temporary bootstrap visual placeholders (`#090a0f`, `#ff4655`, `#12141c`, `#1f2330`). Authored the canonical architectural specification in [`docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md`](../design/DESIGN_SYSTEM_IMPLEMENTATION.md), updated `docs/roadmap/GP-008.md` to `COMPLETE`, and validated complete token integrity, responsive scaling (360px to 1536px), reduced motion, font network isolation, and WCAG 2.1 AA accessibility across 33 Vitest unit tests and 15 Playwright E2E assertions.
+Successfully translated the approved **Gamer Perú** visual identity (“Machinery Obsidian & Signal Crimson”, GP-002) into a production-grade, accessible **Design System**. Implemented the complete semantic design token vocabulary in `src/styles/tokens.css`, fluid typography hierarchy in `src/styles/typography.css`, Next.js 16 self-hosted Google Font architecture (`Plus Jakarta Sans`, `Inter`, `JetBrains Mono`), and built a focused suite of accessible, server-first core UI primitives (`Button`, `IconButton`, `Icon`, `Input`, `TextField`, `Badge`, `SpecPill`, `StatusBadge`, `Card`, `Container`, `VisuallyHidden`, `Stack`) in `src/components/ui/`. Removed all legacy temporary bootstrap visual placeholders (`#090a0f`, `#ff4655`, `#12141c`, `#1f2330`). Authored the canonical architectural specification in [`docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md`](../design/DESIGN_SYSTEM_IMPLEMENTATION.md), updated `docs/roadmap/GP-008.md` to `COMPLETE`, and validated complete token integrity, responsive scaling (360px to 1536px), reduced motion, font network isolation, and WCAG 2.1 AA accessibility across 35 Vitest unit tests and 18 Playwright E2E assertions.
+
+---
+
+## External Design Contract Review & Remediation
+
+Following initial implementation, an external design-contract and accessibility review was performed and remediated:
+
+1. **Focus Reset & Suppression Fix**:
+   - Removed blanket `:focus { outline: none; }` rules across `src/app/globals.css`, `button.module.css`, `icon-button.module.css`, and `input.module.css`.
+   - Established a contextual focus token architecture: `:root` defines `--focus-ring-color: var(--color-border-focus)` (`#09090B`), while `.surface-dark`, `.surface-dark-card`, and `Card surface="dark" / "dark-card"` contextually override `--focus-ring-color: var(--color-border-dark-focus)` (`#F4F4F5`).
+   - Standardized `:focus-visible { outline: 2px solid var(--focus-ring-color); outline-offset: 2px; }` across all shared controls.
+2. **Real Keyboard Focus E2E Tests**:
+   - Added automated Playwright tests performing real keyboard navigation and evaluating rendered computed styles.
+   - Verified that focusing light controls produces a solid 2px outline resolving to `#09090B` (`rgb(9, 9, 11)`).
+   - Verified that focusing controls within dark Card surfaces produces a solid 2px outline resolving to `#F4F4F5` (`rgb(244, 244, 245)`).
+3. **Canonical Icon Primitive & Geometry Enforcement**:
+   - Created the canonical `Icon` primitive (`src/components/ui/icon/`) enforcing GP-002 geometry: `sm` (16px / 1.25 stroke), `md` (20px / 1.5 stroke), `lg` (24px / 1.5 stroke), `xl` (32px / 1.5 stroke).
+   - Refactored `IconButton` to accept `icon={LucideIcon}` and `iconSize` to automatically enforce canonical geometry and `aria-hidden="true"`.
+   - Updated `Button` leading/trailing icon slots to consume canonical `Icon`.
+   - Added contract tests in Vitest and Playwright verifying exact stroke width and SVG attributes.
+4. **Removal of Ad-Hoc Component Colors & Static Drift Check**:
+   - Removed direct color literals (`#ffffff`, `#9f1239`, `#881337`, `rgba(225, 29, 72, 0.15)`) from UI CSS modules.
+   - Refactored destructive variants to use `var(--color-status-danger-text)` and `var(--color-brand-text-on-accent)` with CSS transform and opacity feedback.
+   - Refactored `badgeSubtle` border to consume `var(--color-status-danger-border)`.
+   - Added a static drift protection unit test asserting 0 direct color literals across all `src/components/ui/**/*.module.css` files.
+5. **Neutralization of Demo Copy**:
+   - Replaced all business-looking copy ("En Stock (Lima)", "Últimas 2 Unidades", "Agotado", "Preventa Confirmada", "Procesando", "Correo Electrónico", "Código de Cupón") in `src/app/(storefront)/page.tsx` with neutral Design System labels ("Estado correcto", "Advertencia", "Error", "Información", "Neutral", "Campo de ejemplo", "Texto auxiliar descriptivo.", etc.).
+6. **Touch-Target & Breakpoint Documentation Precision**:
+   - Updated `docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md` to accurately distinguish dedicated touch targets (min 44x44), Button (44/48), IconButton (min 44x44), and Input/TextField (40 desktop / 44 mobile per GP-002).
+   - Documented exact media query breakpoint thresholds (`360px`, `480px`, `768px`, `1024px`, `1280px`, `1536px`) as numeric constants due to CSS specifications not supporting custom properties in `@media` rules.
+7. **Direct Registry Provenance for `lucide-react`**:
+   - Queried npm registry directly (`pnpm view lucide-react ...`). Confirmed that `1.31.0` is the official `latest` dist-tag (ISC license, 0 runtime dependencies).
+8. **Build Evidence Accuracy**:
+   - Separated local measured build metrics from remote GitHub Actions hosted runner execution.
 
 ---
 
@@ -99,19 +137,20 @@ Implemented the complete token families from GP-002:
 
 Created in `src/components/ui/`:
 
-| Component        | Export                               | Description                                                                                                                                       |
-| ---------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Button`         | `src/components/ui/button/`          | Native `<button>`, variants (`primary`, `secondary`, `ghost`, `destructive`), 44px desktop / 48px touch height, loading spinner with `aria-busy`. |
-| `IconButton`     | `src/components/ui/icon-button/`     | 44x44px minimum touch target, mandatory `aria-label`, centered icon glyph.                                                                        |
-| `Input`          | `src/components/ui/input/`           | Accessible `<input>`, 40px desktop / 44px mobile height, border `color.border.control` (`#71717A`).                                               |
-| `TextField`      | `src/components/ui/input/`           | Form field with automatic `label`, `description`, and `error` ARIA linkage (`useId`, `aria-describedby`, `aria-invalid`).                         |
-| `Badge`          | `src/components/ui/badge/`           | General metadata badge (`neutral`, `brand`, `subtle`).                                                                                            |
-| `SpecPill`       | `src/components/ui/badge/`           | Technical metric pill (`39g`, `8000Hz`) with 2px radius and light/dark surface support.                                                           |
-| `StatusBadge`    | `src/components/ui/badge/`           | Semantic status badge (`success`, `warning`, `danger`, `info`, `neutral`) with mandatory visible text label and optional static indicator dot.    |
-| `Card`           | `src/components/ui/card/`            | Compositional neutral surface (`canvas`, `card`, `secondary`, `dark`, `dark-card`), padding options, elevation options.                           |
-| `Container`      | `src/components/ui/container/`       | Responsive layout container (`default`, `prose`, `full`, `admin`) with canonical gutters.                                                         |
-| `VisuallyHidden` | `src/components/ui/visually-hidden/` | Screen-reader utility for accessible names without visual layout footprint.                                                                       |
-| `Stack`          | `src/components/ui/stack/`           | Finite typed flex layout helper with canonical token-mapped gaps (`0` to `12`).                                                                   |
+| Component        | Export                               | Description                                                                                                                                             |
+| ---------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button`         | `src/components/ui/button/`          | Native `<button>`, variants (`primary`, `secondary`, `ghost`, `destructive`), 44px desktop / 48px touch height, loading spinner with `aria-busy`.       |
+| `IconButton`     | `src/components/ui/icon-button/`     | 44x44px minimum touch target, mandatory `aria-label`, enforced canonical icon geometry.                                                                 |
+| `Icon`           | `src/components/ui/icon/`            | Enforced icon geometry mapping (`sm`: 16px/1.25, `md`/`lg`/`xl`: 20/24/32px/1.5).                                                                       |
+| `Input`          | `src/components/ui/input/`           | Accessible `<input>`, 40px desktop / 44px mobile height, border `color.border.control` (`#71717A`).                                                     |
+| `TextField`      | `src/components/ui/input/`           | Form field with automatic `label`, `description`, and `error` ARIA linkage (`useId`, `aria-describedby`, `aria-invalid`).                               |
+| `Badge`          | `src/components/ui/badge/`           | General metadata badge (`neutral`, `brand`, `subtle`).                                                                                                  |
+| `SpecPill`       | `src/components/ui/badge/`           | Technical metric pill (`39g`, `8000Hz`) with 2px radius and light/dark surface support.                                                                 |
+| `StatusBadge`    | `src/components/ui/badge/`           | Semantic status badge (`success`, `warning`, `danger`, `info`, `neutral`) with mandatory visible text label and optional static indicator dot.          |
+| `Card`           | `src/components/ui/card/`            | Compositional neutral surface (`canvas`, `card`, `secondary`, `dark`, `dark-card`), padding options, elevation options. Sets contextual focus variable. |
+| `Container`      | `src/components/ui/container/`       | Responsive layout container (`default`, `prose`, `full`, `admin`) with canonical gutters.                                                               |
+| `VisuallyHidden` | `src/components/ui/visually-hidden/` | Screen-reader utility for accessible names without visual layout footprint.                                                                             |
+| `Stack`          | `src/components/ui/stack/`           | Finite typed flex layout helper with canonical token-mapped gaps (`0` to `12`).                                                                         |
 
 ---
 
@@ -120,7 +159,7 @@ Created in `src/components/ui/`:
 - **Variants**: `primary` (`#E11D48` bg, `#FFFFFF` text), `secondary` (`#FFFFFF` bg, `#09090B` text, `#D4D4D8` border), `ghost` (transparent bg), `destructive` (`#BE123C` bg, `#FFFFFF` text).
 - **Dimensions**: Desktop height 44px, Mobile touch target height 48px, horizontal padding 24px, radius 4px (`radius.sm`), font Plus Jakarta Sans 600 / 14px.
 - **Accessibility**: Native `<button>`, `type="button"` default, real `disabled` state with `aria-disabled="true"`, high-contrast 2px focus-visible outline with 2px offset.
-- **Slots**: Leading and trailing icon slots, accessible loading spinner with `aria-busy="true"`.
+- **Slots**: Leading and trailing icon slots accepting canonical `Icon`, accessible loading spinner with `aria-busy="true"`.
 - **No Arbitrary Sizing**: Strictly avoided introducing non-canonical `sm/md/lg` size scales.
 
 ---
@@ -149,15 +188,15 @@ Created in `src/components/ui/`:
 
 ## Surface / Container
 
-- **Card / Surface**: Purely compositional, neutral container supporting `canvas`, `card`, `secondary`, `dark`, and `dark-card` surfaces with canonical padding (`none`, `sm`, `md`, `lg`) and elevation (`none`, `low`, `mid`, `high`). Base primitive is non-interactive by default.
+- **Card / Surface**: Purely compositional, neutral container supporting `canvas`, `card`, `secondary`, `dark`, and `dark-card` surfaces with canonical padding (`none`, `sm`, `md`, `lg`) and elevation (`none`, `low`, `mid`, `high`). Base primitive is non-interactive by default and automatically manages descendant focus contexts.
 - **Container**: Canonical layout boundary supporting `default` (1440px), `prose` (840px), `full` (1920px), and `admin` (1600px) with responsive gutters from 16px (mobile) to 64px (wide desktop).
 
 ---
 
 ## Accessibility
 
-- **Keyboard & Focus**: Verified high-contrast `:focus-visible` contract (2px solid outline with 2px offset).
-- **Touch Ergonomics**: All interactive controls (buttons, icon buttons, text fields) meet or exceed the `44x44px` minimum bounding area standard.
+- **Keyboard & Focus**: Contextual `:focus-visible` contract (2px solid outline with 2px offset; `#09090B` on light surfaces, `#F4F4F5` on dark surfaces). Zero blanket `:focus { outline: none; }` suppression.
+- **Touch Ergonomics**: Dedicated interactive touch controls meet or exceed the `44x44px` minimum bounding area standard. Control heights strictly follow GP-002 (Button 44/48, Input 40/44).
 - **Reduced Motion**: Verified `@media (prefers-reduced-motion: reduce)` collapses transition durations to `0.01ms`.
 - **Axe-core Audit**: Verified 0 accessibility violations on both the storefront home design system surface and the 404 error page.
 
@@ -176,9 +215,11 @@ Verified across canonical viewport widths:
 
 ## Performance
 
-- **New Dependency**: `lucide-react@1.31.0` (exact pin, 0 runtime subdependencies, ISC license).
+- **Dependency**: `lucide-react@1.31.0` (exact pin, 0 runtime subdependencies, ISC license). Verified against npm registry dist-tags.
 - **Client-JS Impact**: Primitives are Server Components by default; only client interactions (e.g. error boundary reset) use `"use client"`.
-- **Build Impact**: Turbopack compiles in 1.1s with zero warnings, zero deprecation notices, and zero auth-token warnings.
+- **Build Measurement**:
+  - **Local Build**: Turbopack compiled static and dynamic routes in ~1.2s.
+  - **Remote CI Build**: GitHub Actions runner successfully compiled Next.js production build and executed full test suite.
 
 ---
 
@@ -220,7 +261,7 @@ Verified across canonical viewport widths:
 ```text
 $ pnpm install --frozen-lockfile
 Already up to date
-Done in 266ms using pnpm v11.22.0
+Done in 350ms using pnpm v11.22.0
 Exit code: 0
 ```
 
@@ -252,12 +293,12 @@ Exit code: 0 (0 warnings, 0 errors)
 ```text
 $ vitest run
  RUN  v4.1.10 D:/Documentos/GamerPeru
- ✓ tests/unit/design-system-tokens.test.ts (7 tests) 4ms
- ✓ tests/unit/app-foundation.test.ts (20 tests) 12ms
- ✓ tests/unit/smoke.test.ts (6 tests) 16ms
+ ✓ tests/unit/app-foundation.test.ts (20 tests) 13ms
+ ✓ tests/unit/design-system-tokens.test.ts (9 tests) 8ms
+ ✓ tests/unit/smoke.test.ts (6 tests) 17ms
  Test Files  3 passed (3)
-      Tests  33 passed (33)
-   Duration  658ms
+      Tests  35 passed (35)
+   Duration  654ms
 Exit code: 0
 ```
 
@@ -266,7 +307,7 @@ Exit code: 0
 ```text
 $ next build
 ▲ Next.js 16.3.1 (Turbopack)
-✓ Compiled successfully in 1188ms
+✓ Compiled successfully in 1195ms
 Route (app)
 ┌ ○ /
 ├ ○ /_not-found
@@ -281,18 +322,18 @@ $ pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm build
 All matched files use Prettier code style!
 TypeScript clean (0 errors)
 ESLint clean (0 warnings, 0 errors)
-Vitest: 33 passed (33)
+Vitest: 35 passed (35)
 Next.js build: Static and dynamic routes compiled
 Exit code: 0
 ```
 
-### 8. Playwright E2E & Axe Accessibility Tests (`pnpm test:e2e`)
+### 8. Playwright E2E, Keyboard Focus & Axe Accessibility Tests (`pnpm test:e2e`)
 
 ```text
 $ playwright test
 [WebServer] $ next dev
-Running 15 tests using 12 workers
-  15 passed (13.0s)
+Running 18 tests using 12 workers
+  18 passed (12.9s)
 Exit code: 0
 ```
 
@@ -300,58 +341,31 @@ Exit code: 0
 
 ## Remote GitHub Actions CI Verification
 
-| Workflow Run ID | Commit SHA | Trigger Event                                 | Status    | Conclusion | URL                                                                   |
-| --------------- | ---------- | --------------------------------------------- | --------- | ---------- | --------------------------------------------------------------------- |
-| `31978318516`   | `2efd538`  | Push (`feat: implement GP-008 design system`) | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31978318516` |
+| Workflow Run ID | Commit SHA | Trigger Event                                          | Status    | Conclusion | URL                                                                   |
+| --------------- | ---------- | ------------------------------------------------------ | --------- | ---------- | --------------------------------------------------------------------- |
+| `31978318516`   | `2efd538`  | Push (`feat: implement GP-008 design system`)          | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31978318516` |
+| `31978470633`   | `fa9f92c`  | Push (`docs: close GP-008`)                            | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31978470633` |
+| `31979599931`   | `51ceb59`  | Push (`fix: reconcile GP-008 design system contracts`) | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31979599931` |
 
 ---
 
-## Files Changed
+## Files Changed in Remediation
 
-- `docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md` (New canonical Design System architecture specification)
-- `docs/roadmap/GP-008.md` (Status updated to COMPLETE)
-- `docs/roadmap/GP-008-CLOSURE.md` (New closure report)
-- `package.json` (Added exact dependency `lucide-react@1.31.0`)
-- `pnpm-lock.yaml` (Updated lockfile with pinned dependency)
-- `src/app/(storefront)/page.tsx` (Updated temporary root demo with Design System primitives)
-- `src/app/error.tsx` (Updated error boundary to consume canonical tokens and Button)
-- `src/app/global-error.tsx` (Updated global error fallback with canonical colors)
-- `src/app/globals.css` (Updated global CSS with tokens, reset, focus contract, and reduced motion)
-- `src/app/layout.tsx` (Configured next/font/google loaders for Plus Jakarta Sans, Inter, and JetBrains Mono)
-- `src/app/not-found.tsx` (Updated 404 page with Design System components)
-- `src/components/ui/badge/badge.module.css` (New Badge CSS Module)
-- `src/components/ui/badge/badge.tsx` (New Badge primitive)
-- `src/components/ui/badge/index.ts` (New Badge barrel export)
-- `src/components/ui/badge/spec-pill.tsx` (New SpecPill primitive)
-- `src/components/ui/badge/status-badge.tsx` (New StatusBadge primitive)
-- `src/components/ui/button/button.module.css` (New Button CSS Module)
-- `src/components/ui/button/button.tsx` (New Button primitive)
-- `src/components/ui/button/index.ts` (New Button barrel export)
-- `src/components/ui/card/card.module.css` (New Card CSS Module)
-- `src/components/ui/card/card.tsx` (New Card primitive)
-- `src/components/ui/card/index.ts` (New Card barrel export)
-- `src/components/ui/container/container.module.css` (New Container CSS Module)
-- `src/components/ui/container/container.tsx` (New Container primitive)
-- `src/components/ui/container/index.ts` (New Container barrel export)
-- `src/components/ui/icon-button/icon-button.module.css` (New IconButton CSS Module)
-- `src/components/ui/icon-button/icon-button.tsx` (New IconButton primitive)
-- `src/components/ui/icon-button/index.ts` (New IconButton barrel export)
-- `src/components/ui/index.ts` (New master UI primitives barrel export)
-- `src/components/ui/input/index.ts` (New Input barrel export)
-- `src/components/ui/input/input.module.css` (New Input CSS Module)
-- `src/components/ui/input/input.tsx` (New Input primitive)
-- `src/components/ui/input/text-field.tsx` (New TextField primitive with deterministic ARIA linkage)
-- `src/components/ui/stack/index.ts` (New Stack barrel export)
-- `src/components/ui/stack/stack.module.css` (New Stack CSS Module)
-- `src/components/ui/stack/stack.tsx` (New Stack primitive)
-- `src/components/ui/visually-hidden/index.ts` (New VisuallyHidden barrel export)
-- `src/components/ui/visually-hidden/visually-hidden.module.css` (New VisuallyHidden CSS Module)
-- `src/components/ui/visually-hidden/visually-hidden.tsx` (New VisuallyHidden primitive)
-- `src/styles/tokens.css` (New canonical design tokens CSS)
-- `src/styles/typography.css` (New fluid typography scale CSS)
-- `tests/e2e/bootstrap.spec.ts` (Updated root badge assertion)
-- `tests/e2e/design-system.spec.ts` (New Playwright E2E and accessibility test suite)
-- `tests/unit/design-system-tokens.test.ts` (New Vitest token contract test suite)
+- `docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md` (Updated touch targets, breakpoints, focus contract, and Icon primitive specs)
+- `docs/roadmap/GP-008-CLOSURE.md` (Updated with external design contract review and full execution evidence)
+- `src/app/(storefront)/page.tsx` (Neutralized demo copy, adopted canonical Icon and IconButton APIs)
+- `src/app/globals.css` (Contextual `--focus-ring-color`, removed blanket focus suppression)
+- `src/components/ui/badge/badge.module.css` (Replaced inline rgba border with canonical token)
+- `src/components/ui/button/button.module.css` (Removed focus suppression, removed ad-hoc colors, adopted contextual focus)
+- `src/components/ui/card/card.module.css` (Set contextual dark focus ring on dark Card surfaces)
+- `src/components/ui/icon/icon.tsx` (New canonical Icon primitive with enforced size and stroke geometry)
+- `src/components/ui/icon/index.ts` (New Icon barrel export)
+- `src/components/ui/icon-button/icon-button.module.css` (Removed focus suppression, removed ad-hoc colors, adopted contextual focus)
+- `src/components/ui/icon-button/icon-button.tsx` (Enforced canonical Icon primitive)
+- `src/components/ui/index.ts` (Exported Icon primitive)
+- `src/components/ui/input/input.module.css` (Removed focus suppression, adopted contextual focus)
+- `tests/e2e/design-system.spec.ts` (Added real Tab keyboard focus tests for light and dark surfaces, icon geometry tests, neutralized selectors)
+- `tests/unit/design-system-tokens.test.ts` (Added icon geometry contract tests and CSS module literal color drift protection)
 
 ---
 
@@ -361,7 +375,8 @@ Exit code: 0
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `e12a1763b66b1832b886c48f5fa5f132fe5a4d03`
 - **Implementation Checkpoint**: `2efd5380b9e8237aa078b2400181c2a145f964cb`
-- **Working Tree**: Clean (Closure report staged for closure commit).
+- **Remediation Checkpoint**: `51ceb59e01d2dbd33a4ba8bba85e6b18afaa8bb5`
+- **Working Tree**: Clean (Closure reconciliation staged for closure commit).
 
 ---
 
