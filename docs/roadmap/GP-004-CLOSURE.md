@@ -32,6 +32,30 @@
 - Supabase Auth Amendment Checkpoint:
   `b7c785680c66bff77352625b196cc88a1cc0d000`
 
+- Supabase Auth Semantics Checkpoint:
+  `322e522c5111815c33d1e299d17713b668e69b5a`
+
+---
+
+## Supabase Auth Identity Lifecycle Verification
+
+Following external architecture review, identity lifecycle semantics and relational foreign key boundaries were reconciled:
+
+1. **Identity Detachment & Account Deletion**:
+   - `CustomerProfile.auth_user_id`: Enforces `UNIQUE WHERE auth_user_id IS NOT NULL`. Required for active linked accounts, but set to `NULL` upon customer account deletion/anonymization without deleting historical orders or addresses.
+   - Account deletion anonymizes customer PII, detaches `CustomerProfile.auth_user_id = NULL`, removes `UserRole` records, and deletes/disables the Supabase Auth user while permanently preserving historical commerce facts (Orders, Payments, Refunds, Inventory ledger, Audit events).
+2. **Historical Staff & Actor Foreign Keys**:
+   - Historical staff references (`created_by_auth_user_id`, `verifier_auth_user_id`, `actor_auth_user_id`, `moderated_by_auth_user_id`, `processed_by_auth_user_id`) use nullable FKs with `ON DELETE SET NULL`, ensuring staff identity deletion never blocks record deletion or cascade-deletes historical commerce data.
+   - Permanent `AuditEvent` records preserve historical actor identity strings independently of foreign key relationships.
+3. **Ephemeral Authorization**:
+   - `UserRole.auth_user_id` is an ephemeral assignment and is cleanly removed when an Auth user is deleted.
+4. **Affiliate Account Detachment**:
+   - `Affiliate.auth_user_id`: Enforces `UNIQUE WHERE auth_user_id IS NOT NULL`. An affiliate can be detached or suspended (`auth_user_id = NULL`) without deleting historical attribution clicks, commissions, or payout records.
+5. **Idempotent Profile Provisioning Concurrency**:
+   - Application-level `ensureCustomerProfile(auth_user_id)` is concurrency-safe under the unique constraint on non-null `auth_user_id`, ensuring simultaneous first requests after OAuth callback produce exactly one `CustomerProfile`.
+6. **Final Physical Entity Count**:
+   - Exactly **58 Gamer Perú domain & system physical table candidates** across 11 schema modules (unchanged).
+
 ---
 
 ## Owner Authentication Domain Amendment
@@ -43,7 +67,7 @@ Following the owner architecture decision adopting **Supabase Auth** as the cano
    - Removed Better Auth application tables (`user`, `session`, `account`, `verification`) from the Gamer Perú Drizzle schema blueprint.
    - Gamer Perú domain tables reference `auth.users.id` (`UUID`) via `auth_user_id`.
 2. **Canonical Identity References**:
-   - `CustomerProfile.auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`, Unique).
+   - `CustomerProfile.auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`, Nullable on detachment, `UNIQUE WHERE auth_user_id IS NOT NULL`).
    - `UserRole.auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`).
    - Staff/Actor references (`created_by_auth_user_id`, `verifier_auth_user_id`, `actor_auth_user_id`, `moderated_by_auth_user_id`, `processed_by_auth_user_id`, `Affiliate.auth_user_id`) standardly reference `auth.users.id` (`UUID`).
 3. **CustomerProfile Provisioning & Account Linking**:
@@ -196,7 +220,7 @@ Defined 58 Gamer Perú domain & system entities organized cleanly into domain mo
 
 ## Security Validation
 - [x] Authoritative server-side RBAC checks (`requirePermission`) required for all administrative mutations.
-- [x] Customer data isolation derived exclusively from verified server session (`getUser()` $\to$ `auth_user_id` $\to$ `CustomerProfile.id`).
+- [x] Customer data isolation derived exclusively from verified server session (`getClaims()` $\to$ `auth_user_id` $\to$ `CustomerProfile.id`).
 - [x] Payment vouchers isolated from public CDN; accessed via 5-minute pre-signed URLs with audit logging.
 - [x] AI Assistant restricted to allowlisted tool calls and session-verified customer order lookups.
 - [x] Master secrets and encryption keys excluded from commerce tables and restricted to server environment variables.
@@ -233,21 +257,22 @@ The following commercial policies remain parameterized `[TBD BUSINESS DECISION]`
 GP-005 (Repository Bootstrap) will consume:
 1. Exact entity names and aggregate structures for Drizzle schema modules across all 11 files (`catalog.ts`, `rbac.ts`, `customers.ts`, `cart.ts`, `inventory.ts`, `orders.ts`, `payments.ts`, `shipping.ts`, `promotions.ts`, `growth.ts`, `system.ts`).
 2. UUIDv7 generation in application layer with PostgreSQL `uuid` columns.
-3. Supabase Auth client/server utility contracts (`@supabase/supabase-js`, `@supabase/ssr`).
-4. Required PostgreSQL extension: `pg_trgm` for typo-tolerant trigram search.
-5. Integer Soles currency rules (`PEN` cents).
-6. Outbox table and verified server-side identity interfaces.
+3. Supabase Auth client/server utility contracts (`@supabase/supabase-js`, pinned `@supabase/ssr` version) with request-scoped client factories.
+4. Primary server identity verification via `getClaims()` against cached JWKS.
+5. Required PostgreSQL extension: `pg_trgm` for typo-tolerant trigram search.
+6. Integer Soles currency rules (`PEN` cents).
+7. Outbox table and verified server-side identity interfaces.
 
 ---
 
 ## Files Changed
-- `docs/architecture/COMMERCE_DOMAIN_MODEL.md`: Reconciled all 67 sections with Supabase Auth identity boundary (`auth.users.id UUID`), `auth_user_id` references, and 58 physical entity candidate blueprint.
-- `docs/architecture/TECHNOLOGY_ARCHITECTURE.md`: Amended architecture specification adopting Supabase Auth with Email/Password + Google OAuth and Next.js SSR cookie sessions.
-- `docs/decisions/ADR-003-authentication-authorization-rbac.md`: Amended ADR-003 adopting Supabase Auth and recording decision history.
-- `docs/decisions/README.md`: Updated ADR index table.
-- `docs/roadmap/GP-015.md`: Updated future authentication task scope for Supabase Auth.
-- `docs/roadmap/GP-003-CLOSURE.md`: Updated with Owner Authentication Architecture Amendment details.
-- `docs/roadmap/GP-004-CLOSURE.md`: Updated with Owner Authentication Domain Amendment details.
+- `docs/architecture/COMMERCE_DOMAIN_MODEL.md`: Reconciled all 67 sections with Supabase Auth identity boundary (`auth.users.id UUID`), `auth_user_id` detachment model, `getClaims()` server verification, and 58 physical entity candidate blueprint.
+- `docs/architecture/TECHNOLOGY_ARCHITECTURE.md`: Amended architecture specification adopting Supabase Auth with Email/Password + Google OAuth, `getClaims()` verification, and separated email pipelines.
+- `docs/decisions/ADR-003-authentication-authorization-rbac.md`: Amended ADR-003 with official `@supabase/ssr` shared cookie model, `getClaims()` primary verification, and identity detachment lifecycle.
+- `docs/decisions/ADR-006-communications-analytics-observability.md`: Updated email pipeline architecture separating Auth SMTP and Inngest API.
+- `docs/roadmap/GP-015.md`: Updated future authentication task scope for Supabase Auth, `getClaims()`, and regression test suites.
+- `docs/roadmap/GP-003-CLOSURE.md`: Appended `## Supabase Auth External Semantics Verification`.
+- `docs/roadmap/GP-004-CLOSURE.md`: Appended `## Supabase Auth Identity Lifecycle Verification`.
 
 ---
 
@@ -265,7 +290,7 @@ GP-005 (Repository Bootstrap) will consume:
 - **Branch**: `main`
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `b7463a646bef6c1c1d5fe5cdb1e9937919207ebe`
-- **Closure Content Checkpoint**: `b7c785680c66bff77352625b196cc88a1cc0d000`
+- **Closure Content Checkpoint**: `322e522c5111815c33d1e299d17713b668e69b5a`
 - **Working Tree**: Clean (Closure report staged for final closure commit).
 
 ---
