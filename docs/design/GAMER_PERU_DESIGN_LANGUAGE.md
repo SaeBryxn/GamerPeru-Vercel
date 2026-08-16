@@ -127,22 +127,27 @@ All colors are defined as canonical semantic hex tokens.
 
 ### 6.5 Border & Divider Tokens
 
-| Token Name | Canonical Value | Usage |
+| Token Name | Canonical Value | Semantic Usage |
 |---|---|---|
-| `color.border.subtle` | `#E4E4E7` (Dark: `#27272A`) | Subtle decorative card outlines, row dividers, tab borders |
-| `color.border.default` | `#D4D4D8` (Dark: `#3F3F46`) | Standard container boundaries, table header dividers |
-| `color.border.control` | `#71717A` (Dark: `#8E8E93`) | Accessible structural boundary for inputs, selects, and checkboxes ($\ge 4.6:1$ light / $\ge 4.5:1$ dark) |
-| `color.border.strong` | `#52525B` (Dark: `#A1A1AA`) | Active borders, selected swatch rings, hovered controls |
-| `color.border.focus` | `#09090B` (Dark: `#F4F4F5`) | High-contrast 2px focus ring for keyboard accessibility |
+| `color.border.subtle` | `#E4E4E7` | Subtle decorative card outlines and row dividers on light surfaces |
+| `color.border.dark_subtle` | `#27272A` | Subtle decorative dividers and tab borders on dark surfaces |
+| `color.border.default` | `#D4D4D8` | Standard container boundaries and table header dividers (light) |
+| `color.border.dark_default`| `#3F3F46` | Standard container boundaries on dark surfaces |
+| `color.border.control` | `#71717A` | Accessible structural boundary for inputs, selects, and checkboxes on light surfaces ($\ge 4.6:1$) |
+| `color.border.dark_control`| `#8E8E93` | Accessible structural boundary for inputs and checkboxes on dark surfaces ($\ge 6.1:1$) |
+| `color.border.strong` | `#52525B` | Active borders, hovered controls, selected swatch rings on light surfaces |
+| `color.border.dark_strong` | `#A1A1AA` | Active borders and selected swatch rings on dark surfaces |
+| `color.border.focus` | `#09090B` | High-contrast 2px focus ring for keyboard accessibility on light surfaces |
+| `color.border.dark_focus` | `#F4F4F5` | High-contrast 2px focus ring for keyboard accessibility on dark surfaces |
 
 ### 6.6 Semantic Status Tokens
 
-| Status | Text Color | Background (Light) | Border Color | Dark Canvas Text |
+| Status Level | Text Token & Value | Background Token & Value | Border Token & Value | Dark Text Token & Value |
 |---|---|---|---|---|
-| **Success** | `#15803D` (Green 700) | `#F0FDF4` (Green 50) | `#BBF7D0` (Green 200) | `#4ADE80` (Green 400) |
-| **Warning** | `#B45309` (Amber 700) | `#FFFBEB` (Amber 50) | `#FDE68A` (Amber 200) | `#FBBF24` (Amber 400) |
-| **Danger / Error** | `#BE123C` (Rose 700) | `#FFF1F2` (Rose 50) | `#FECDD3` (Rose 200) | `#FB7185` (Rose 400) |
-| **Information** | `#0369A1` (Sky 700) | `#F0F9FF` (Sky 50) | `#BAE6FD` (Sky 200) | `#38BDF8` (Sky 400) |
+| **Success** | `color.status.success.text`<br>`#15803D` (Green 700) | `color.status.success.background`<br>`#F0FDF4` (Green 50) | `color.status.success.border`<br>`#BBF7D0` (Green 200) | `color.status.success.dark_text`<br>`#4ADE80` (Green 400) |
+| **Warning** | `color.status.warning.text`<br>`#B45309` (Amber 700) | `color.status.warning.background`<br>`#FFFBEB` (Amber 50) | `color.status.warning.border`<br>`#FDE68A` (Amber 200) | `color.status.warning.dark_text`<br>`#FBBF24` (Amber 400) |
+| **Danger / Error** | `color.status.danger.text`<br>`#BE123C` (Rose 700) | `color.status.danger.background`<br>`#FFF1F2` (Rose 50) | `color.status.danger.border`<br>`#FECDD3` (Rose 200) | `color.status.danger.dark_text`<br>`#FB7185` (Rose 400) |
+| **Information** | `color.status.info.text`<br>`#0369A1` (Sky 700) | `color.status.info.background`<br>`#F0F9FF` (Sky 50) | `color.status.info.border`<br>`#BAE6FD` (Sky 200) | `color.status.info.dark_text`<br>`#38BDF8` (Sky 400) |
 
 ---
 
@@ -239,7 +244,7 @@ Gamer Perú utilizes a geometric base-4/base-8 spacing scale.
 - **Admin Fluid Container (`container.admin`)**: `max-width: 1600px` with fixed 24px gutters. Optimizes horizontal space for complex data tables.
 
 ### 9.2 Page Gutters
-- Compact Mobile (`< 480px`): `16px`
+- Compact Mobile (`360px - 479px`): `16px`
 - Standard Mobile (`480px - 767px`): `20px`
 - Tablet (`768px - 1023px`): `24px`
 - Desktop (`1024px - 1279px`): `32px`
@@ -250,17 +255,16 @@ Gamer Perú utilizes a geometric base-4/base-8 spacing scale.
 
 ## 10. Responsive Breakpoints
 
-To prevent ambiguity for coding agents, Gamer Perú defines exact viewport thresholds:
-- **Minimum Supported Viewport**: `360px` (All interfaces must remain completely functional and overflow-free at 360px).
+To eliminate ambiguity for coding agents, Gamer Perú defines exact, deterministic numeric thresholds:
 
-| Token Name | Breakpoint Threshold | Semantic Target |
+| Token Name | Exact Numeric Value | Semantic Usage & Target Viewport |
 |---|---|---|
-| `bp.xs` | `< 480px` | Compact Mobile viewports (Reference range: 360px - 479px) |
-| `bp.sm` | `480px` | Standard Mobile (Large smartphones / phablets) |
-| `bp.md` | `768px` | Tablet Portrait |
-| `bp.lg` | `1024px` | Tablet Landscape / Small Laptop (Header drawer $\to$ mega-menu switch) |
-| `bp.xl` | `1280px` | Standard Desktop (4-column product grid threshold) |
-| `bp.2xl` | `1536px` | Wide Desktop (Max container clamping active) |
+| `viewport.minimum` | `360px` | Minimum supported reference viewport (Compact Mobile = `360px` to `479px`) |
+| `bp.sm` | `480px` | Standard Mobile threshold (Large smartphones / phablets) |
+| `bp.md` | `768px` | Tablet Portrait threshold |
+| `bp.lg` | `1024px` | Desktop / Laptop threshold (Header drawer $\to$ mega-menu switch) |
+| `bp.xl` | `1280px` | Standard Desktop threshold (4-column product grid threshold) |
+| `bp.2xl` | `1536px` | Wide Desktop threshold (Max container clamping active) |
 
 ---
 
@@ -360,20 +364,25 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 | `color.brand.text_on_accent` (`#FFFFFF`) | `color.brand.hover` (`#BE123C`) | White on Hover Button | **6.29:1** | $\ge 4.5:1$ | **PASS** |
 | `color.border.control` (`#71717A`)| `color.surface.canvas` (`#FAFAFA`) | Input Boundary (Non-text)| **4.63:1** | $\ge 3.0:1$ | **PASS** |
 | `color.border.control` (`#71717A`)| `color.surface.card` (`#FFFFFF`) | Input Boundary on Card | **4.83:1** | $\ge 3.0:1$ | **PASS** |
-| `color.border.focus` (`#09090B`) | `color.surface.canvas` (`#FAFAFA`) | Keyboard Focus Ring | **19.06:1** | $\ge 3.0:1$ | **PASS** |
+| `color.border.focus` (`#09090B`) | `color.surface.canvas` (`#FAFAFA`) | Keyboard Focus Ring (Light)| **19.06:1** | $\ge 3.0:1$ | **PASS** |
 | `color.text.dark_primary` (`#F4F4F5`)| `color.surface.dark_canvas` (`#09090B`)| Dark Canvas Headings | **18.10:1** | $\ge 4.5:1$ | **PASS** |
 | `color.text.dark_secondary` (`#A1A1AA`)| `color.surface.dark_canvas` (`#09090B`)| Dark Canvas Body | **7.76:1** | $\ge 4.5:1$ | **PASS** |
 | `color.text.dark_muted` (`#9CA3AF`)| `color.surface.dark_canvas` (`#09090B`)| Dark Canvas Muted | **7.84:1** | $\ge 4.5:1$ | **PASS** |
 | `color.text.dark_muted` (`#9CA3AF`)| `color.surface.dark_tertiary` (`#27272A`)| Dark Tertiary Muted | **5.87:1** | $\ge 4.5:1$ | **PASS** |
 | `color.border.dark_control` (`#8E8E93`)| `color.surface.dark_canvas` (`#09090B`)| Dark Input Boundary | **6.10:1** | $\ge 3.0:1$ | **PASS** |
-| `color.status.success` (`#15803D`)| `#F0FDF4` (Success Bg) | Success Label | **4.79:1** | $\ge 4.5:1$ | **PASS** |
-| `color.status.warning` (`#B45309`)| `#FFFBEB` (Warning Bg) | Warning Label | **4.84:1** | $\ge 4.5:1$ | **PASS** |
-| `color.status.danger` (`#BE123C`) | `#FFF1F2` (Danger Bg) | Error Label | **5.72:1** | $\ge 4.5:1$ | **PASS** |
-| `color.status.info` (`#0369A1`) | `#F0F9FF` (Info Bg) | Info Label | **5.57:1** | $\ge 4.5:1$ | **PASS** |
+| `color.border.dark_focus` (`#F4F4F5`)| `color.surface.dark_canvas` (`#09090B`)| Keyboard Focus Ring (Dark) | **18.10:1** | $\ge 3.0:1$ | **PASS** |
+| `color.status.success.text` (`#15803D`)| `color.status.success.background` (`#F0FDF4`) | Success Label (Light) | **4.79:1** | $\ge 4.5:1$ | **PASS** |
+| `color.status.success.dark_text` (`#4ADE80`)| `color.surface.dark_canvas` (`#09090B`) | Success Label (Dark) | **11.42:1** | $\ge 4.5:1$ | **PASS** |
+| `color.status.warning.text` (`#B45309`)| `color.status.warning.background` (`#FFFBEB`) | Warning Label (Light) | **4.84:1** | $\ge 4.5:1$ | **PASS** |
+| `color.status.warning.dark_text` (`#FBBF24`)| `color.surface.dark_canvas` (`#09090B`) | Warning Label (Dark) | **11.92:1** | $\ge 4.5:1$ | **PASS** |
+| `color.status.danger.text` (`#BE123C`)| `color.status.danger.background` (`#FFF1F2`) | Error Label (Light) | **5.72:1** | $\ge 4.5:1$ | **PASS** |
+| `color.status.danger.dark_text` (`#FB7185`)| `color.surface.dark_canvas` (`#09090B`) | Error Label (Dark) | **7.39:1** | $\ge 4.5:1$ | **PASS** |
+| `color.status.info.text` (`#0369A1`)| `color.status.info.background` (`#F0F9FF`) | Info Label (Light) | **5.57:1** | $\ge 4.5:1$ | **PASS** |
+| `color.status.info.dark_text` (`#38BDF8`)| `color.surface.dark_canvas` (`#09090B`) | Info Label (Dark) | **9.29:1** | $\ge 4.5:1$ | **PASS** |
 
 ### 14.2 Focus & Touch Ergonomics
-1. **Focus Ring Visibility**: Interactive elements display a dedicated 2px high-contrast outline (`color.border.focus`: `#09090B` on light canvas, `#F4F4F5` on dark canvas) with a 2px offset on keyboard navigation (`:focus-visible`).
-2. **Touch-Target Standard**: All interactive buttons, checkboxes, links, and drawer triggers target a minimum of `44x44px` touch bounding area as a Gamer Perú usability standard.
+1. **Focus Ring Visibility**: Interactive elements display a dedicated 2px high-contrast outline (`color.border.focus`: `#09090B` on light canvas, `color.border.dark_focus`: `#F4F4F5` on dark canvas) with a 2px offset on keyboard navigation (`:focus-visible`).
+2. **Touch-Target Standard**: Dedicated interactive touch controls (including icon buttons, navigation triggers, color swatches, quantity steppers, checkboxes, radio inputs, close buttons, cart controls, mobile filter controls, and standalone action buttons) must target a minimum interactive hit bounding area of `44x44px` as an internal Gamer Perú usability and touch-ergonomics standard. Visible glyphs (e.g., 20x20px close icon or 20x20px wishlist heart) are separated from the 44x44px interactive hit container. Inline textual links within multi-line body prose maintain accessible hit comfort via generous line-height without requiring rigid 44x44 box bounding that distorts paragraph flow.
 3. **Color-Independent Status**: Badges, stock indicators, and error fields always pair color with text labels or distinct geometric icons (never relying on color alone).
 
 ---
@@ -393,7 +402,7 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 - **Ghost / Tertiary Button**:
   - Background: Transparent, Text: `color.text.primary`, Hover: Background `color.surface.secondary`
 - **Destructive Button**:
-  - Background: `color.status.danger`, Text: `#FFFFFF`
+  - Background: `color.status.danger.text`, Text: `#FFFFFF`
 
 ---
 
@@ -405,20 +414,20 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 - Placeholder: `color.text.muted` (`#71717A`)
 - Hover: Border `color.border.strong` (`#52525B`)
 - Focus: Border `color.border.focus` (1px solid `#09090B`), 2px subtle ring
-- Error State: Border `color.status.danger` (`#BE123C`), inline error caption in `color.status.danger` (13px `type.body.small`)
+- Error State: Border `color.status.danger.border` / `color.status.danger.text`, inline error caption in `color.status.danger.text` (13px `type.body.small`)
 
 ---
 
 ## 17. Badges, Pills & Status Indicators
 
 - **Spec Pill (Technical Metric)**:
-  - Background: `color.surface.secondary` (`#F4F4F5`) (Dark: `#18181B`)
-  - Text: `color.text.secondary` (`#52525B`) (Dark: `#A1A1AA`), Typography: Plus Jakarta Sans 600, `11px`
+  - Background: `color.surface.secondary` (`#F4F4F5`) (Dark: `color.surface.dark_secondary` `#18181B`)
+  - Text: `color.text.secondary` (`#52525B`) (Dark: `color.text.dark_secondary` `#A1A1AA`), Typography: Plus Jakarta Sans 600, `11px`
   - Padding: `2px 8px`, Radius: `radius.xs` (`2px`), Border: 1px `color.border.subtle`
 - **Stock Badge**:
-  - In Stock: Text `#15803D`, Background `#F0FDF4`, Border `#BBF7D0` (with static 6px green indicator dot)
-  - Low Stock: Text `#B45309`, Background `#FFFBEB`, Border `#FDE68A`
-  - Pre-order: Text `#0369A1`, Background `#F0F9FF`, Border `#BAE6FD`
+  - In Stock: Text `color.status.success.text` (`#15803D`), Background `color.status.success.background` (`#F0FDF4`), Border `color.status.success.border` (`#BBF7D0`) (with static 6px green indicator dot)
+  - Low Stock: Text `color.status.warning.text` (`#B45309`), Background `color.status.warning.background` (`#FFFBEB`), Border `color.status.warning.border` (`#FDE68A`)
+  - Pre-order: Text `color.status.info.text` (`#0369A1`), Background `color.status.info.background` (`#F0F9FF`), Border `color.status.info.border` (`#BAE6FD`)
 - **Sale / Discount Tag**:
   - Background: `color.brand.primary` (`#E11D48`), Text: `#FFFFFF`, Typography: Plus Jakarta Sans 700, `11px`
 
@@ -442,13 +451,13 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 ### 18.4 Mobile Navigation Drawer
 - Left slide-out drawer (`320px` width on mobile), Background: `color.surface.card`.
 - Accordion navigation tree: Categories $\to$ Brands $\to$ Featured Curations.
-- Bottom pinned actions: Customer Account link, WhatsApp/Support link, Soles currency indicator.
+- Bottom pinned actions: Customer Account link, Customer Support link / entry point (channel configured from approved support policy `[TBD BUSINESS DECISION]`), Soles currency indicator.
 
 ### 18.5 Breadcrumbs
 - Typography: `type.body.small` (`13px`), Color: `color.text.muted`, Active leaf: `color.text.primary` (SemiBold). Slash separators (`/`) in `color.border.default`.
 
 ### 18.6 Footer
-- Background: `color.surface.dark_canvas` (`#09090B`), Text: `color.text.dark_secondary`, Border top: 1px `color.border.subtle`.
+- Background: `color.surface.dark_canvas` (`#09090B`), Text: `color.text.dark_secondary`, Border top: 1px `color.border.dark_subtle`.
 - 4-column structured layout: Brand story & store identity, Catalog directory, Customer support & policies, Payment & trust badges (Yape, Plin).
 
 ---
@@ -464,7 +473,7 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 - **Modals (Product Quick View, Verification Details)**: Centered floating dialog (`max-width: 600px` to `800px`), Radius: `radius.lg` (`12px`), scale-in transition (`scale(0.96) -> scale(1.0)`).
 
 ### 19.3 Header & Close Controls
-- Sticky top header with bold title in `type.h3` and a 36x36px accessible close icon button (`aria-label="Cerrar"`).
+- Sticky top header with bold title in `type.h3` and an accessible close button with a 20x20px visible icon glyph inside a minimum `44x44px` interactive touch hit target (`aria-label="Cerrar"`).
 - Keyboard: Pressing `Escape` immediately triggers smooth close transition. Focus is trapped within overlay while open.
 
 ---
@@ -504,7 +513,7 @@ Product cards are the core visual currency of Gamer Perú:
    - Mousepads: Surface (`Glass/Cloth`), Dimensions (`490x420mm`), Base (`PORON`).
 6. **Pricing Block**: Current price in `type.card.price` (Plus Jakarta Sans 700, 18px, Crimson or Primary), Compare-at price in `type.body.small` strikethrough (`color.text.muted`).
 7. **Colorway Swatches**: 14px circular color dots with 2px white gap and subtle hover ring.
-8. **Wishlist Icon**: Top right corner overlay, 32x32px circular hit target, accessible via keyboard focus.
+8. **Wishlist Control**: Top right corner overlay with a 20x20px visible icon glyph inside a minimum `44x44px` interactive touch hit target, accessible via keyboard focus.
 
 ---
 
@@ -698,7 +707,9 @@ Original product photography and 3D renders are core brand assets that elevate G
 ## 31. Mobile Design Rules
 
 1. **Mobile-First Touch Ergonomics**:
-   - Minimum `44x44px` interactive touch targets across all buttons, filter checkboxes, swatches, and drawer close targets as an internal usability standard.
+   - Dedicated interactive touch controls (icon buttons, navigation triggers, color swatches, quantity steppers, checkboxes, radio inputs, close buttons, cart controls, mobile filter controls, standalone action buttons) must target a minimum interactive hit bounding area of `44x44px` as an internal usability standard.
+   - Visible icon glyphs (20x20px) are separated from the 44x44px interactive container.
+   - Inline text links maintain accessible hit comfort via generous line-height without requiring rigid 44x44 rectangular bounding blocks.
    - Horizontal scrolling chip bars for variant selection and filter categories on mobile screens.
 2. **Fluid Layout Transitions**:
    - Navigation collapses to an accessible slide-out drawer below `1024px` (`bp.lg`).
@@ -744,17 +755,33 @@ Color Text      color.text.dark_secondary       #A1A1AA                         
 Color Text      color.text.dark_muted           #9CA3AF                         Dark muted text (7.8:1 / 5.9:1)
 Color Text      color.text.dark_link            #FB7185                         Link on dark canvas (7.4:1)
 
-Color Border    color.border.subtle             #E4E4E7 / #27272A               Decorative card divider
-Color Border    color.border.default            #D4D4D8 / #3F3F46               Standard container border
-Color Border    color.border.control            #71717A                         Accessible input border (4.6:1)
-Color Border    color.border.dark_control       #8E8E93                         Dark input border (6.1:1)
-Color Border    color.border.strong             #52525B / #A1A1AA               Active border / swatch ring
-Color Border    color.border.focus              #09090B / #F4F4F5               Keyboard focus outline (18:1+)
+Color Border    color.border.subtle             #E4E4E7                         Decorative divider on light canvas
+Color Border    color.border.dark_subtle        #27272A                         Decorative divider on dark canvas
+Color Border    color.border.default            #D4D4D8                         Standard container border (light)
+Color Border    color.border.dark_default       #3F3F46                         Standard container border (dark)
+Color Border    color.border.control            #71717A                         Accessible input border light (4.6:1)
+Color Border    color.border.dark_control       #8E8E93                         Accessible input border dark (6.1:1)
+Color Border    color.border.strong             #52525B                         Active border / swatch ring (light)
+Color Border    color.border.dark_strong        #A1A1AA                         Active border / swatch ring (dark)
+Color Border    color.border.focus              #09090B                         Keyboard focus outline light (19:1)
+Color Border    color.border.dark_focus         #F4F4F5                         Keyboard focus outline dark (18:1)
 
-Color Status    color.status.success            #15803D (Bg: #F0FDF4)           Success state (4.8:1)
-Color Status    color.status.warning            #B45309 (Bg: #FFFBEB)           Warning state (4.8:1)
-Color Status    color.status.danger             #BE123C (Bg: #FFF1F2)           Error / danger state (5.7:1)
-Color Status    color.status.info               #0369A1 (Bg: #F0F9FF)           Informational note (5.6:1)
+Color Status    color.status.success.text       #15803D                         Success text on light (4.8:1)
+Color Status    color.status.success.background #F0FDF4                         Success background (light)
+Color Status    color.status.success.border     #BBF7D0                         Success border (light)
+Color Status    color.status.success.dark_text  #4ADE80                         Success text on dark canvas (11.4:1)
+Color Status    color.status.warning.text       #B45309                         Warning text on light (4.8:1)
+Color Status    color.status.warning.background #FFFBEB                         Warning background (light)
+Color Status    color.status.warning.border     #FDE68A                         Warning border (light)
+Color Status    color.status.warning.dark_text  #FBBF24                         Warning text on dark canvas (11.9:1)
+Color Status    color.status.danger.text        #BE123C                         Error text on light (5.7:1)
+Color Status    color.status.danger.background  #FFF1F2                         Error background (light)
+Color Status    color.status.danger.border      #FECDD3                         Error border (light)
+Color Status    color.status.danger.dark_text   #FB7185                         Error text on dark canvas (7.4:1)
+Color Status    color.status.info.text          #0369A1                         Info text on light (5.6:1)
+Color Status    color.status.info.background    #F0F9FF                         Info background (light)
+Color Status    color.status.info.border        #BAE6FD                         Info border (light)
+Color Status    color.status.info.dark_text     #38BDF8                         Info text on dark canvas (9.3:1)
 
 Typography      type.display                    Plus Jakarta Sans 800           clamp(2.75rem, 6vw, 4.5rem) / 1.05
 Typography      type.h1                         Plus Jakarta Sans 700           clamp(2.0rem, 4vw, 2.75rem) / 1.15
@@ -791,7 +818,7 @@ Containers      container.prose                 840px max-width                 
 Containers      container.full                  1920px max-width                Hero storytelling banner
 Containers      container.admin                 1600px max-width                Admin fluid data container
 
-Breakpoints     bp.xs                           < 480px (Ref: 360px)            Compact Mobile threshold
+Breakpoints     viewport.minimum                360px                           Minimum supported viewport threshold
 Breakpoints     bp.sm                           480px                           Standard Mobile threshold
 Breakpoints     bp.md                           768px                           Tablet Portrait threshold
 Breakpoints     bp.lg                           1024px                          Desktop / Laptop threshold
