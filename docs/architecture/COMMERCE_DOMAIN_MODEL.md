@@ -74,7 +74,7 @@ graph TD
         Payment --> PaymentVerification
         Order --> Shipment
         Shipment --> ShipmentItem
-        Order --> Refund
+        Payment --> Refund
     end
 
     subgraph "Growth Context"
@@ -124,13 +124,11 @@ To prevent business volume leakage while maintaining index locality and clean op
   - `S/ 1.00` is stored as `100`.
   - All arithmetic (subtotals, discounts, shipping, taxes, refunds, commissions) is performed in integer cents. Floating-point types (`FLOAT`, `DOUBLE`) are strictly forbidden for financial calculations.
 - **Financial Field Invariants**:
-  - `unit_price_cents >= 0`
-  - `compare_at_price_cents >= unit_price_cents` (when defined)
-  - `discount_cents >= 0`
-  - `shipping_cents >= 0`
+  - Standard monetary values must be $\ge 0$ (`unit_price_cents`, `compare_at_price_cents`, `discount_cents`, `shipping_cents`, `subtotal_cents`, `total_cents`, `amount_cents`).
+  - Signed monetary adjustment values (`CommissionAdjustment.amount_cents`) are negative for clawbacks/refunds ($< 0$) or positive for manual additions.
   - `subtotal_cents = sum(quantity * unit_price_cents)`
   - `total_cents = subtotal_cents - discount_cents + shipping_cents` (must be $\ge 0$)
-  - `refunded_amount_cents <= total_cents`
+  - `Payment.refunded_amount_cents = sum(Refund.amount_cents) <= Payment.amount_cents`
 
 ---
 
@@ -213,6 +211,7 @@ Represents the multi-tier gaming peripherals taxonomy (e.g., Mice, Keyboards, Au
   - `name`: `VARCHAR(100)`
   - `slug`: `VARCHAR(100)` (Unique)
   - `parent_id`: `UUIDv7` (FK $\to$ `Category.id`, Nullable for root categories)
+  - `current_spec_schema_id`: `UUIDv7` (FK $\to$ `CategorySpecificationSchema.id`, Nullable)
   - `description`: `TEXT` (Nullable)
   - `display_order`: `INTEGER` (Default `0`)
   - `status`: `ENUM('DRAFT', 'PUBLISHED', 'ARCHIVED')`
@@ -303,7 +302,7 @@ Hardware attributes are structured dynamically per category using JSONB validate
   - `schema_version`: `INTEGER`
   - `spec_values`: `JSONB` (Key-value map validated against category schema, e.g., `{"sensor": "PAW3950", "weight": "39g", "polling_rate": "8000Hz"}`)
   - `updated_at`: `TIMESTAMPTZ`
-- **Evolution Invariant**: Creating a new schema version does not overwrite prior versions. Existing product specifications remain interpretable under their recorded `schema_id` until explicitly revalidated/migrated.
+- **Evolution Invariant**: Creating a new schema version does not overwrite prior versions. `Category.current_spec_schema_id` identifies the canonical schema for new validation, while existing products remain linked to their recorded `schema_id`.
 
 ---
 
@@ -322,7 +321,7 @@ Editorial rich media storytelling layouts for flagship PDPs, structured into 13 
   - `status`: `ENUM('DRAFT', 'PUBLISHED', 'ARCHIVED')`
   - `blocks`: `JSONB` (Array of structured block definitions: `block_id`, `type`, `order`, `payload`)
   - `published_at`: `TIMESTAMPTZ` (Nullable)
-  - `created_by_user_id`: `VARCHAR(255)` (FK $\to$ `AuthUser.id`)
+  - `created_by_user_id`: `VARCHAR(255)` (FK $\to` `AuthUser.id`)
   - `created_at`: `TIMESTAMPTZ`
 - **Canonical 13 Block Types**: `HeroMedia`, `FullBleedImage`, `ImageText`, `StatHighlight`, `SpecFeature`, `Video`, `Gallery`, `Comparison`, `Dimensions`, `BoxContents`, `TechnicalSpecs`, `FAQ`, `RelatedProducts`.
 
@@ -484,7 +483,7 @@ An immutable append-only ledger recording every stock transition with explicit m
 - **InventoryLedgerEntry Entity**:
   - `id`: `UUIDv7` (PK)
   - `inventory_item_id`: `UUIDv7` (FK $\to$ `InventoryItem.id`)
-  - `movement_type`: `ENUM('RECEIVING', 'MANUAL_ADJUSTMENT', 'RESERVATION_CREATED', 'RESERVATION_EXPIRED', 'RESERVATION_RELEASED', 'ALLOCATION_CONFIRMED', 'FULFILLMENT_DISPATCHED', 'RETURN_RESTOCKED')`
+  - `movement_type`: `ENUM('RECEIVING', 'MANUAL_ADJUSTMENT', 'RESERVATION_CREATED', 'RESERVATION_EXPIRED', 'RESERVATION_RELEASED', 'ALLOCATION_CONFIRMED', 'ALLOCATION_RELEASED', 'FULFILLMENT_DISPATCHED', 'RETURN_RESTOCKED')`
   - `on_hand_delta`: `INTEGER` (Change in physical warehouse stock)
   - `reserved_delta`: `INTEGER` (Change in reserved hold balance)
   - `allocated_delta`: `INTEGER` (Change in confirmed allocation balance)
@@ -516,7 +515,9 @@ An immutable append-only ledger recording every stock transition with explicit m
   2. `VERIFICATION_HOLD`: When customer submits operation code/voucher, reservation transitions to `VERIFICATION_HOLD`. Expiry timer is suspended during review.
   3. `ALLOCATED`: Upon Admin payment approval (`PAID`), reservation transitions to `ALLOCATED` (`reserved_delta = -qty`, `allocated_delta = +qty`).
   4. `CONSUMED`: On parcel dispatch, reservation becomes `CONSUMED` (`allocated_delta = -qty`, `on_hand_delta = -qty`).
-  5. `RELEASED`: If order is cancelled, rejected, or unpaid reservation expires, reservation transitions to `RELEASED` (`reserved_delta = -qty`), immediately restoring sellable stock.
+  5. `RELEASED`: If order is cancelled, rejected, unpaid reservation expires, or allocated pre-shipment order is refunded, reservation transitions to `RELEASED`:
+     - From `ACTIVE` / `VERIFICATION_HOLD`: `reserved_delta = -qty`.
+     - From `ALLOCATED`: `allocated_delta = -qty` (logged as `ALLOCATION_RELEASED`).
 
 ---
 
@@ -531,24 +532,27 @@ To guarantee zero overselling under high concurrency:
 
 ---
 
-## 27. Order Aggregate
+## 27. Order Aggregate & Authoritative State Ownership
 
-The central financial and operational entity representing a committed purchase.
+The central operational entity representing a committed purchase.
 
+- **Authoritative Orthogonal State Separation**:
+  - **Order Lifecycle**: Stored strictly in `Order.status`.
+  - **Payment Lifecycle**: Stored strictly in `Payment.status`.
+  - **Fulfillment Lifecycle**: Stored strictly in `Shipment.status`.
+  - **Reservation Lifecycle**: Stored strictly in `InventoryReservation.status`.
+  - *Duplicate state columns (`Order.payment_status`, `Order.fulfillment_status`) are removed to prevent dual source-of-truth drift.*
 - **Order Entity**:
   - `id`: `UUIDv7` (PK)
   - `order_number`: `VARCHAR(30)` (Unique human reference, e.g., `GP-7K9M-2026`)
   - `customer_id`: `UUIDv7` (FK $\to$ `CustomerProfile.id`, Nullable for guest purchases)
   - `customer_email`: `VARCHAR(255)` (Snapshot at purchase)
   - `customer_phone`: `VARCHAR(20)` (Snapshot at purchase)
-  - `order_status`: `ENUM('PENDING', 'CONFIRMED', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'REFUNDED')` (Default `PENDING`)
-  - `payment_status`: `ENUM('UNPAID', 'SUBMITTED', 'VERIFYING', 'PAID', 'REJECTED', 'REFUNDED')` (Default `UNPAID`)
-  - `fulfillment_status`: `ENUM('UNFULFILLED', 'READY_TO_PACK', 'PACKED', 'SHIPPED', 'DELIVERED', 'RETURNED')` (Default `UNFULFILLED`)
+  - `status`: `ENUM('PENDING', 'CONFIRMED', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'EXPIRED', 'REFUNDED')` (Default `PENDING`)
   - `subtotal_cents`: `INTEGER` (Sum of line items)
   - `discount_cents`: `INTEGER` (Total discount applied, Default `0`)
   - `shipping_cents`: `INTEGER` (Delivery fee, Default `0`)
   - `total_cents`: `INTEGER` (Final amount payable in Soles)
-  - `refunded_amount_cents`: `INTEGER` (Cumulative refunded amount, Default `0`)
   - `currency`: `VARCHAR(3)` (Default `'PEN'`)
   - `customer_notes`: `TEXT` (Nullable)
   - `cancelled_at`: `TIMESTAMPTZ` (Nullable)
@@ -557,7 +561,7 @@ The central financial and operational entity representing a committed purchase.
 
 ---
 
-## 28. Order Snapshots
+## 28. Order Snapshots & Candidate State Mapping
 
 - **OrderItem Entity**: Immutable record of purchased variants.
   - `id`: `UUIDv7` (PK)
@@ -573,6 +577,21 @@ The central financial and operational entity representing a committed purchase.
 - **OrderPricingSnapshot Entity**: Records tax metadata, discount allocations, and shipping fees applied.
 - **OrderPromotionSnapshot Entity**: Records coupon codes and promotion rule summaries applied to the order.
 
+### Derived Candidate State Mapping Matrix
+
+| COMMERCE_SPEC Candidate State | Order Status (`Order.status`) | Payment Status (`Payment.status`) | Fulfillment Status (`Shipment.status`) | Reservation Status (`Reservation.status`) |
+|---|---|---|---|---|
+| `pending_payment` | `PENDING` | `UNPAID` | `UNFULFILLED` | `ACTIVE` |
+| `payment_submitted` | `PENDING` | `SUBMITTED` | `UNFULFILLED` | `VERIFICATION_HOLD` |
+| `payment_verification` | `PENDING` | `VERIFYING` | `UNFULFILLED` | `VERIFICATION_HOLD` |
+| `paid` | `CONFIRMED` | `PAID` | `UNFULFILLED` | `ALLOCATED` |
+| `processing` | `CONFIRMED` | `PAID` | `READY_TO_PACK` / `PACKED` | `ALLOCATED` |
+| `ready_to_ship` | `CONFIRMED` | `PAID` | `PACKED` | `ALLOCATED` |
+| `shipped` | `CONFIRMED` | `PAID` | `SHIPPED` | `CONSUMED` |
+| `delivered` | `FULFILLED` | `PAID` | `DELIVERED` | `CONSUMED` |
+| `cancelled` | `CANCELLED` / `EXPIRED` | `UNPAID` / `REJECTED` | `UNFULFILLED` | `RELEASED` |
+| `refunded` | `REFUNDED` | `REFUNDED` | Any | `RELEASED` / `RETURNED` |
+
 ---
 
 ## 29. Payment Method Abstraction & Instruction Versioning
@@ -582,6 +601,7 @@ The central financial and operational entity representing a committed purchase.
   - `code`: `VARCHAR(50)` (Unique, e.g., `'YAPE_MANUAL'`, `'PLIN_MANUAL'`)
   - `name`: `VARCHAR(100)` (e.g., "Yape (Transferencia Móvil)")
   - `method_type`: `ENUM('MANUAL', 'GATEWAY')`
+  - `current_instruction_version_id`: `UUIDv7` (FK $\to$ `PaymentInstructionVersion.id`, Nullable)
   - `is_active`: `BOOLEAN` (Default `true`)
   - `display_order`: `INTEGER` (Default `0`)
   - `created_at`, `updated_at`: `TIMESTAMPTZ`
@@ -596,6 +616,7 @@ The central financial and operational entity representing a committed purchase.
   - `is_active`: `BOOLEAN` (Default `true`)
   - `created_at`: `TIMESTAMPTZ`
   - *Unique Constraint*: `(payment_method_code, version_number)`
+- **Version Selection Invariant**: Checkout queries `PaymentMethodConfiguration.current_instruction_version_id` to freeze the exact payment instructions/QR shown for the order.
 
 ---
 
@@ -633,18 +654,18 @@ The central financial and operational entity representing a committed purchase.
 
 ---
 
-## 31. Payment Lifecycle & Rejection / Resubmission Rules
+## 31. Payment Lifecycle, Late Payments & Resubmission
 
 - **Payment Lifecycle States**: `UNPAID` $\to$ `SUBMITTED` $\to$ `VERIFYING` $\to$ `PAID` (or `REJECTED` / `REFUNDED`).
-- **Late Payment Submission Behavior**:
-  - When payment is submitted after reservation expired (`ACTIVE` $\to$ `RELEASED`), `PaymentSubmission` is recorded with `is_late = true` and `Payment.status = 'SUBMITTED'`.
-  - Stock is NOT automatically re-allocated. Admin reviews evidence in backoffice:
-    * If stock is currently available: Admin approves payment, transaction locks `InventoryItem`, and allocates stock (`ALLOCATED`).
-    * If stock is sold out: Admin approves payment and immediately records an external refund (`REFUNDED`), or rejects submission with explanation.
-- **Rejection & Resubmission Policy**:
-  - When an Admin rejects a submission (e.g. illegible voucher), `PaymentVerification` records `REJECTED`.
-  - If rejected as non-terminal (resubmission allowed within remaining SLA): `Payment.status` returns to `UNPAID` and customer is prompted for `PaymentSubmission` with `attempt_number = 2`.
-  - If rejected terminally (fraud/no funds): `Payment.status = 'REJECTED'`, `Order.order_status = 'CANCELLED'`, and reservation is `RELEASED`.
+- **Late Payment Handling**:
+  - When payment is submitted after reservation expired (`Order.status = 'EXPIRED'`, `Reservation.status = 'RELEASED'`), `PaymentSubmission` is recorded with `is_late = true` and `Payment.status = 'SUBMITTED'`.
+  - The historical `RELEASED` reservation is NOT modified. During Admin review:
+    * **Stock Available**: Transaction acquires lock on `InventoryItem`. If stock is available, a replacement `InventoryReservation` is inserted and set directly to `ALLOCATED` (`allocated_delta = +qty`). `Payment.status = 'PAID'`, `Order.status = 'CONFIRMED'`.
+    * **Stock Unavailable, Funds Received**: Funds are recorded: `Payment.status = 'PAID'`, an external refund is recorded $\to$ `Payment.status = 'REFUNDED'`, `Order.status = 'REFUNDED'`. Zero fake inventory allocation occurs.
+    * **Funds Not Received**: `Payment.status = 'REJECTED'`, `Order.status = 'CANCELLED'`.
+- **Non-Terminal Rejection & Resubmission Grace Policy**:
+  - When an Admin non-terminally rejects a submission (e.g. illegible voucher), `PaymentVerification` records `REJECTED`.
+  - `Payment.status` transitions to `UNPAID`. Existing `InventoryReservation` remains `VERIFICATION_HOLD` during a configurable grace duration (`PAYMENT_RESUBMISSION_GRACE_DURATION`, `[TBD BUSINESS DECISION]`), allowing the customer to submit a replacement `PaymentSubmission` (`attempt_number = 2`).
 
 ---
 
@@ -663,7 +684,7 @@ The central financial and operational entity representing a committed purchase.
   - `id`: `UUIDv7` (PK)
   - `order_id`: `UUIDv7` (FK $\to$ `Order.id`)
   - `shipping_method_id`: `UUIDv7` (FK $\to$ `ShippingMethod.id`)
-  - `status`: `ENUM('UNFULFILLED', 'READY_TO_PACK', 'PACKED', 'SHIPPED', 'DELIVERED', 'RETURNED')`
+  - `status`: `ENUM('UNFULFILLED', 'READY_TO_PACK', 'PACKED', 'SHIPPED', 'DELIVERED', 'RETURNED')` (Default `UNFULFILLED`)
   - `courier_name`: `VARCHAR(100)` (`[TBD BUSINESS DECISION]`)
   - `tracking_number`: `VARCHAR(100)` (Nullable)
   - `tracking_url`: `VARCHAR(500)` (Nullable)
@@ -691,7 +712,7 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
 
 - `PENDING / UNPAID`: Customer or Admin can cancel immediately; all associated `InventoryReservation` records transition to `RELEASED`.
 - `PENDING / SUBMITTED`: Admin review required; on cancellation, reservations transition to `RELEASED`.
-- `CONFIRMED / PAID`: Admin cancellation releases allocated stock via `InventoryLedgerEntry` (`allocated_delta = -qty`). Commission is `VOIDED`.
+- `CONFIRMED / PAID`: Admin cancellation releases allocated stock via `InventoryLedgerEntry` (`allocated_delta = -qty`, movement `ALLOCATION_RELEASED`). Commission is `VOIDED`.
 - `SHIPPED / DELIVERED`: Direct cancellation is forbidden; customer must proceed through return/RMA workflow.
 
 ---
@@ -708,21 +729,21 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
   - `actor_user_id`: `VARCHAR(255)` (FK $\to$ `AuthUser.id`)
   - `created_at`: `TIMESTAMPTZ`
 - **Refund Invariants**:
-  - `Order.refunded_amount_cents = sum(Refund.amount_cents) <= Order.total_cents`.
-  - When `Order.refunded_amount_cents == Order.total_cents`: `Order.order_status = 'REFUNDED'` and `Payment.status = 'REFUNDED'`.
-  - When `Order.refunded_amount_cents < Order.total_cents`: `Order.order_status` and `Payment.status` remain `CONFIRMED` / `PAID` (or `FULFILLED`), reflecting partial reimbursement.
+  - `Payment.refunded_amount_cents = sum(Refund.amount_cents) <= Payment.amount_cents`.
+  - When `Payment.refunded_amount_cents == Payment.amount_cents`: `Payment.status = 'REFUNDED'` and `Order.status = 'REFUNDED'`.
+  - When `Payment.refunded_amount_cents < Payment.amount_cents`: `Payment.status` and `Order.status` remain `PAID` / `CONFIRMED` (or `FULFILLED`), reflecting partial reimbursement.
 
 ---
 
 ## 36. Return / Restock Separation
 
 - **Separation of Concerns**: A financial `Refund` record reflects monetary reimbursement; an `InventoryLedgerEntry` reflects physical merchandise restock.
-- **Pre-Shipment Refund**: Stock allocation is released (`allocated_delta = -qty`). Physical `on_hand` is not modified because items never left the warehouse.
+- **Pre-Shipment Refund**: Stock allocation is released (`allocated_delta = -qty`, movement `ALLOCATION_RELEASED`). Physical `on_hand` is not modified because items never left the warehouse.
 - **Post-Delivery Return**: Physical `on_hand` increments (`on_hand_delta = +qty`) ONLY when warehouse staff receives, inspects, and accepts the physical return (`movement_type = 'RETURN_RESTOCKED'`).
 
 ---
 
-## 37. Promotion Domain & Target Scopes
+## 37. Promotion Domain, Priorities & Target Scopes
 
 - **Promotion Entity**:
   - `id`: `UUIDv7` (PK)
@@ -731,6 +752,7 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
   - `discount_value`: `INTEGER` (Basis points or fixed cents)
   - `min_spend_cents`: `INTEGER` (Default `0`)
   - `max_discount_cents`: `INTEGER` (Nullable)
+  - `priority`: `INTEGER` (Default `0`, higher priority evaluated first)
   - `start_date`, `end_date`: `TIMESTAMPTZ`
   - `total_usage_limit`: `INTEGER` (Nullable)
   - `current_usage_count`: `INTEGER` (Default `0`)
@@ -743,6 +765,12 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
   - `scope_type`: `ENUM('ALL', 'PRODUCT', 'PRODUCT_VARIANT', 'CATEGORY', 'COLLECTION')`
   - `target_id`: `UUIDv7` (Nullable; references specific target entity based on `scope_type`)
   - `created_at`: `TIMESTAMPTZ`
+- **Deterministic Stacking & Evaluation**:
+  1. Evaluate eligible automatic promotions sorted by `priority DESC, created_at ASC`.
+  2. Evaluate applied coupon codes sorted by `priority DESC`.
+  3. Non-stackable promotions override or suppress lower-priority discounts.
+  4. Enforce `max_discount_cents` cap.
+  5. Freeze applied discount allocations in `OrderPromotionSnapshot`.
 
 ---
 
@@ -758,10 +786,12 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
 - **CouponRedemption Entity**:
   - `id`: `UUIDv7` (PK)
   - `coupon_id`: `UUIDv7` (FK $\to$ `Coupon.id`)
-  - `customer_id`: `UUIDv7` (FK $\to$ `CustomerProfile.id`, Nullable for guest checkout)
-  - `order_id`: `UUIDv7` (FK $\to$ `Order.id`, Unique)
+  - `customer_id`: `UUIDv7` (FK $\to$ `CustomerProfile.id`, Nullable)
+  - `order_id`: `UUIDv7` (FK $\to$ `Order.id`)
   - `redeemed_at`: `TIMESTAMPTZ`
-  - *Concurrency Protection*: Checkout row-locks `Promotion` with `SELECT ... FOR UPDATE`, checks `current_usage_count < total_usage_limit`, increments count, and records `CouponRedemption`.
+- **Per-Customer Rule & Concurrency**:
+  - Coupons with `per_customer_limit` require an authenticated customer identity (`customer_id IS NOT NULL`).
+  - Checkout locks `Promotion` via `SELECT ... FOR UPDATE`, verifies `current_usage_count < total_usage_limit` and customer redemption count, increments usage count, and inserts `CouponRedemption`.
 
 ---
 
@@ -857,9 +887,9 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
   - `id`: `UUIDv7` (PK)
   - `affiliate_id`: `UUIDv7` (FK $\to$ `Affiliate.id`)
   - `order_id`: `UUIDv7` (FK $\to$ `Order.id`)
-  - `amount_cents`: `INTEGER` ($> 0$)
+  - `amount_cents`: `INTEGER` ($> 0$, Base earned amount)
   - `status`: `ENUM('PENDING', 'QUALIFIED', 'APPROVED', 'PAID', 'VOIDED')` (Default `PENDING`)
-  - `qualification_due_at`: `TIMESTAMPTZ` (Set to `Shipment.delivered_at + COMMISSION_QUALIFICATION_WINDOW_DAYS`, `[TBD BUSINESS DECISION]`)
+  - `qualification_due_at`: `TIMESTAMPTZ` (Set to `Shipment.delivered_at + COMMISSION_QUALIFICATION_WINDOW_DAYS`, `[TBD BUSINESS DECISION]`; NULL prior to delivery)
   - `approved_at`, `paid_at`, `voided_at`: `TIMESTAMPTZ` (Nullable)
   - `void_reason`: `VARCHAR(255)` (Nullable)
   - `created_at`: `TIMESTAMPTZ`
@@ -867,12 +897,15 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
   - `id`: `UUIDv7` (PK)
   - `commission_id`: `UUIDv7` (FK $\to$ `Commission.id`)
   - `adjustment_type`: `ENUM('CLAWBACK_REFUND', 'MANUAL_CORRECTION')`
-  - `amount_cents`: `INTEGER` (Negative integer)
+  - `amount_cents`: `INTEGER` (Signed integer; negative for clawbacks)
   - `reason`: `VARCHAR(255)`
   - `order_id`: `UUIDv7` (FK $\to$ `Order.id`)
   - `refund_id`: `UUIDv7` (FK $\to$ `Refund.id`, Nullable)
   - `created_at`: `TIMESTAMPTZ`
-- **Post-Payout Refund Invariant**: When an order is refunded after its commission was `PAID`, the historical `Commission` remains immutable and a `CommissionAdjustment` is inserted to offset future payouts.
+- **Net Commission Formula & Immutability**:
+  $$\text{net\_commission\_cents} = \text{Commission.amount\_cents} + \sum \text{CommissionAdjustment.amount\_cents}$$
+  - For partial refunds before payout: A negative `CommissionAdjustment` is recorded. If net becomes 0, status transitions to `VOIDED`.
+  - For refunds after payout (`status = 'PAID'`): The historical `Commission` remains immutable and a negative `CommissionAdjustment` is recorded to carry over into future payout accounting.
 
 ---
 
@@ -937,7 +970,7 @@ Represents factual business occurrences within Gamer Perú.
   - `event_name`: `VARCHAR(100)` (`OrderPlaced`, `PaymentSubmitted`, `PaymentApproved`, `PaymentRejected`, `OrderCancelled`, `ShipmentDispatched`, `OrderDelivered`, `RefundIssued`, `CommissionQualified`)
   - `aggregate_type`: `VARCHAR(50)` (`Order`, `Payment`, `Inventory`, `Affiliate`)
   - `aggregate_id`: `VARCHAR(255)`
-  - `payload`: `JSONB`
+  - `payload`: `JSONB` (Sanitized minimum-necessary domain event payload)
   - `occurred_at`: `TIMESTAMPTZ`
 
 ---
@@ -951,7 +984,7 @@ Guarantees at-least-once delivery of outbound events to Inngest and downstream E
   - `event_name`: `VARCHAR(100)`
   - `aggregate_type`: `VARCHAR(50)`
   - `aggregate_id`: `VARCHAR(255)`
-  - `payload`: `JSONB` (Complete event snapshot)
+  - `payload`: `JSONB` (Versioned minimum-necessary integration payload; excluded from private credentials, internal margins, and raw proof URLs)
   - `status`: `ENUM('PENDING', 'DELIVERED', 'FAILED')` (Default `PENDING`)
   - `retry_count`: `INTEGER` (Default `0`)
   - `next_attempt_at`: `TIMESTAMPTZ` (Default `NOW()`)
@@ -990,7 +1023,7 @@ Guarantees at-least-once delivery of outbound events to Inngest and downstream E
 |---|---|---|
 | **Final Unit Concurrent Checkout** | `InventoryItem` | `SELECT ... FOR UPDATE` row-level lock on `(variant_id, location_id)`; checks $\text{available\_to\_sell} \ge \text{qty}$. |
 | **Concurrent Admin Payment Verification** | `Payment` | `SELECT ... FOR UPDATE` on payment record; checks `status IN ('SUBMITTED', 'VERIFYING')`. |
-| **Simultaneous Cancellation & Approval** | `Order` / `Payment` | Transactional lock on `Order`; checks state before status transition. |
+| **Simultaneous Cancellation & Approval** | `Order` / `Payment` | Transactional lock on `Payment` and `Order`; checks state before status transition. |
 | **Duplicate Webhook Delivery** | `OutboxEvent` | Idempotency check on `event_id` and unique transaction key. |
 | **Concurrent Coupon Redemption** | `Promotion` / `Coupon` | Row-level lock on `Promotion`; rechecks `current_usage_count < total_usage_limit`. |
 
@@ -1006,13 +1039,12 @@ Guarantees at-least-once delivery of outbound events to Inngest and downstream E
 6. `CartItem`: `UNIQUE(cart_id, variant_id)`
 7. `WishlistItem`: `UNIQUE(customer_id, product_id)`
 8. `InventoryItem`: `UNIQUE(variant_id, location_id)`
-9. `CouponRedemption`: `UNIQUE(coupon_id, order_id)`
-10. `PaymentMethodConfiguration.code`: `UNIQUE NOT NULL`
-11. `PaymentInstructionVersion`: `UNIQUE(payment_method_code, version_number)`
-12. `Quantity Constraints`: `CartItem.quantity > 0`, `InventoryItem.quantity_on_hand >= 0`, `InventoryItem.quantity_reserved >= 0`, `InventoryItem.quantity_allocated >= 0`
-13. `Money Constraints`: All monetary amounts $\ge 0$; `Order.refunded_amount_cents <= Order.total_cents`
-14. `RolePermission`: `PRIMARY KEY(role_id, permission_id)`
-15. `UserRole`: `PRIMARY KEY(user_id, role_id)`
+9. `PaymentMethodConfiguration.code`: `UNIQUE NOT NULL`
+10. `PaymentInstructionVersion`: `UNIQUE(payment_method_code, version_number)`
+11. `Quantity Constraints`: `CartItem.quantity > 0`, `InventoryItem.quantity_on_hand >= 0`, `InventoryItem.quantity_reserved >= 0`, `InventoryItem.quantity_allocated >= 0`
+12. `Money Constraints`: Standard monetary amounts $\ge 0$; signed adjustments may be negative; `Payment.refunded_amount_cents <= Payment.amount_cents`
+13. `RolePermission`: `PRIMARY KEY(role_id, permission_id)`
+14. `UserRole`: `PRIMARY KEY(user_id, role_id)`
 
 ---
 
@@ -1022,15 +1054,15 @@ Guarantees at-least-once delivery of outbound events to Inngest and downstream E
 |---|---|---|---|
 | `Product` | `idx_product_slug` | `slug` (Unique B-tree) | Storefront PDP lookup. |
 | `Product` | `idx_product_brand_cat` | `brand_id, category_id, status` | Category/brand catalog filtering. |
-| `Product` | `idx_product_search_gin` | `to_tsvector('spanish', name)` | Full-text search engine. |
-| `Product` | `idx_product_name_trgm` | `name gin_trgm_ops` | Typo-tolerant trigram search. |
+| `Product` | `idx_product_search_gin` | `to_tsvector('spanish', name)` | Full-text search engine (PostgreSQL FTS). |
+| `Product` | `idx_product_name_trgm` | `name gin_trgm_ops` | Typo-tolerant trigram search (`pg_trgm`). |
 | `ProductVariant` | `idx_variant_sku` | `sku` (Unique B-tree) | SKU lookup and inventory indexing. |
 | `ProductCollection` | `idx_prod_collection` | `collection_id, display_order` | Collection grid rendering. |
 | `InventoryItem` | `idx_inv_variant_loc` | `variant_id, location_id` | Stock reservation and checkout locking. |
 | `InventoryReservation` | `idx_inv_res_expiry` | `status, expires_at` | Reservation expiration worker. |
 | `Order` | `idx_order_number` | `order_number` (Unique B-tree) | Human reference search. |
 | `Order` | `idx_order_customer` | `customer_id, created_at DESC` | Customer order history list. |
-| `Order` | `idx_order_verification_queue`| `order_status, payment_status` | Admin pending verification workbench. |
+| `Payment` | `idx_payment_verification_queue`| `status, created_at` | Admin pending verification workbench. |
 | `PaymentSubmission` | `idx_pay_sub_opcode` | `operation_code, submitted_at` | Duplicate submission / fraud detection. |
 | `Commission` | `idx_comm_qual_due` | `status, qualification_due_at`| Commission maturation worker. |
 | `OutboxEvent` | `idx_outbox_pending` | `status, next_attempt_at` | Inngest background poller/worker. |
@@ -1064,6 +1096,7 @@ erDiagram
     Brand ||--o{ Product : owns
     Category ||--o{ Product : categorizes
     Category ||--o{ CategorySpecificationSchema : versions
+    Category ||--o| CategorySpecificationSchema : current_schema
     Collection ||--o{ ProductCollection : groups
     Product ||--o{ ProductCollection : includes
     Product ||--o{ ProductVariant : contains
@@ -1105,10 +1138,11 @@ erDiagram
     
     Order ||--o| Payment : pays
     PaymentMethodConfiguration ||--o{ Payment : configures
+    PaymentMethodConfiguration ||--o| PaymentInstructionVersion : current_version
     PaymentInstructionVersion ||--o{ Payment : presents
     Payment ||--o{ PaymentSubmission : submits
     Payment ||--o{ PaymentVerification : verifies
-    Order ||--o{ Refund : refunds
+    Payment ||--o{ Refund : refunds
     
     Order ||--o{ Shipment : fulfills
     ShippingMethod ||--o{ Shipment : routes
@@ -1118,7 +1152,7 @@ erDiagram
     Promotion ||--o{ Coupon : codes
     Promotion ||--o{ PromotionTarget : scopes
     Coupon ||--o{ CouponRedemption : redeems
-    Order ||--o| CouponRedemption : tracks
+    Order ||--o{ CouponRedemption : tracks
     
     ReferralCode ||--o{ ReferralAttribution : attributes
     Order ||--o| ReferralAttribution : rewards
@@ -1160,6 +1194,7 @@ stateDiagram-v2
     ALLOCATED --> CONSUMED: Parcel Shipped (allocated -, on_hand -)
     ACTIVE --> RELEASED: Timeout / Order Cancelled (reserved -)
     VERIFICATION_HOLD --> RELEASED: Payment Rejected / Cancelled (reserved -)
+    ALLOCATED --> RELEASED: Pre-Shipment Order Refund / Cancelled (allocated -)
     CONSUMED --> [*]
     RELEASED --> [*]
 ```
@@ -1168,13 +1203,17 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: Checkout Completed
+    PENDING --> EXPIRED: Unpaid Reservation Timeout
     PENDING --> CONFIRMED: Payment Approved
-    PENDING --> CANCELLED: Expired / Cancelled / Terminal Rejection
+    PENDING --> CANCELLED: Order Cancelled by Customer/Admin
+    EXPIRED --> CONFIRMED: Late Payment Verified & Stock Allocated
+    EXPIRED --> REFUNDED: Late Payment Verified & Stock Sold Out (Full Refund)
+    EXPIRED --> CANCELLED: Late Payment Rejected / Abandoned
     CONFIRMED --> PROCESSING: Staff Pick & Pack
     PROCESSING --> FULFILLED: Delivered to Customer
-    CONFIRMED --> REFUNDED: Full Refund Issued
-    PROCESSING --> REFUNDED: Full Refund Issued
-    FULFILLED --> REFUNDED: Full Refund Issued on Return
+    CONFIRMED --> REFUNDED: Full Refund Issued Pre-Shipment
+    PROCESSING --> REFUNDED: Full Refund Issued Pre-Shipment
+    FULFILLED --> REFUNDED: Full Refund Issued on Accepted Return
     FULFILLED --> [*]
     CANCELLED --> [*]
     REFUNDED --> [*]
@@ -1190,8 +1229,8 @@ stateDiagram-v2
     VERIFYING --> REJECTED: Admin rejects submission terminally
     VERIFYING --> UNPAID: Non-terminal rejection (Resubmission allowed)
     SUBMITTED --> REJECTED: Admin rejects submission terminally
-    PAID --> REFUNDED: Admin records full external refund
-    UNPAID --> REJECTED: Order cancelled / expired
+    PAID --> REFUNDED: Full external refund recorded
+    UNPAID --> REJECTED: Order cancelled by Customer/Admin
     PAID --> [*]
     REJECTED --> [*]
     REFUNDED --> [*]
@@ -1215,7 +1254,7 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: Order Paid
-    PENDING --> QUALIFIED: Delivery Verified + Qualification Window Passes
+    PENDING --> QUALIFIED: Delivery Confirmed + Qualification Window Passes
     PENDING --> VOIDED: Order Cancelled / Full Refund Before Payout
     QUALIFIED --> APPROVED: Admin Approves Payout Batch
     QUALIFIED --> VOIDED: Refund Before Payout Batch Approval
@@ -1241,12 +1280,12 @@ sequenceDiagram
     Storefront->>DB: Lock InventoryItem (SELECT ... FOR UPDATE)
     Storefront->>DB: Recompute Subtotal, Coupon Discount, Shipping
     Storefront->>DB: Check available_to_sell >= requested_qty
-    Storefront->>DB: INSERT INTO orders (order_status: 'PENDING', payment_status: 'UNPAID')
+    Storefront->>DB: INSERT INTO orders (status: 'PENDING')
     Storefront->>DB: INSERT INTO order_items, order_address_snapshots, order_pricing_snapshots
     Storefront->>DB: INSERT INTO inventory_reservations (status: 'ACTIVE')
     Storefront->>DB: UPDATE inventory_items SET quantity_reserved = quantity_reserved + qty
     Storefront->>DB: INSERT INTO inventory_ledger_entries (RESERVATION_CREATED)
-    Storefront->>DB: INSERT INTO payments (payment_method_code, instruction_version_id)
+    Storefront->>DB: INSERT INTO payments (status: 'UNPAID', payment_method_code, instruction_version_id)
     Storefront->>DB: INSERT INTO outbox_events (OrderPlaced)
     Storefront->>DB: COMMIT TRANSACTION
     Storefront-->>Customer: Display Order Confirmation & Payment Instructions
@@ -1265,11 +1304,11 @@ sequenceDiagram
     CustomerB->>API: Checkout (1 unit)
     
     API->>DB: BEGIN TX A
-    API->>DB: SELECT * FROM inventory_items WHERE variant_id = X FOR UPDATE
+    API->>DB: SELECT * FROM inventory_items WHERE variant_id = X AND location_id = Y FOR UPDATE
     Note over DB: Locked by TX A
     
     API->>DB: BEGIN TX B
-    API->>DB: SELECT * FROM inventory_items WHERE variant_id = X FOR UPDATE
+    API->>DB: SELECT * FROM inventory_items WHERE variant_id = X AND location_id = Y FOR UPDATE
     Note over DB: TX B Waits
     
     API->>DB: TX A: available = 1 - 0 - 0 = 1 (OK)
@@ -1305,14 +1344,14 @@ sequenceDiagram
     App-->>Customer: Acknowledges submission (Review pending)
     
     Admin->>App: Opens Verification Workbench (/admin/orders)
-    App->>DB: Fetch Order & PaymentSubmission
+    App->>DB: Fetch Order, Payment & PaymentSubmission
     App->>R2: Generate 5m Pre-signed URL
     Admin->>Admin: Confirms funds in mobile banking app
     Admin->>App: Clicks "Confirmar Pago"
     App->>DB: BEGIN TRANSACTION
     App->>DB: INSERT INTO payment_verifications (APPROVED)
     App->>DB: UPDATE payments SET status = 'PAID'
-    App->>DB: UPDATE orders SET order_status = 'CONFIRMED', payment_status = 'PAID'
+    App->>DB: UPDATE orders SET status = 'CONFIRMED'
     App->>DB: UPDATE inventory_reservations SET status = 'ALLOCATED'
     App->>DB: UPDATE inventory_items SET quantity_reserved = reserved - qty, quantity_allocated = allocated + qty
     App->>DB: INSERT INTO inventory_ledger_entries (ALLOCATION_CONFIRMED)
@@ -1332,9 +1371,9 @@ sequenceDiagram
     loop For each expired reservation
         Inngest->>DB: UPDATE inventory_reservations SET status = 'RELEASED'
         Inngest->>DB: UPDATE inventory_items SET quantity_reserved = quantity_reserved - qty
-        Inngest->>DB: UPDATE orders SET order_status = 'CANCELLED', payment_status = 'REJECTED' WHERE id = res.order_id AND payment_status = 'UNPAID'
+        Inngest->>DB: UPDATE orders SET status = 'EXPIRED' WHERE id = res.order_id AND status = 'PENDING'
         Inngest->>DB: INSERT INTO inventory_ledger_entries (RESERVATION_EXPIRED)
-        Inngest->>DB: INSERT INTO outbox_events (OrderCancelled)
+        Inngest->>DB: INSERT INTO outbox_events (OrderExpired)
     end
 ```
 
@@ -1349,12 +1388,12 @@ sequenceDiagram
     Admin->>App: Issues Full Refund on Order
     App->>DB: BEGIN TRANSACTION
     App->>DB: INSERT INTO refunds (amount_cents, reason, external_reference)
-    App->>DB: UPDATE orders SET order_status = 'REFUNDED', payment_status = 'REFUNDED', refunded_amount_cents = total_cents
     App->>DB: UPDATE payments SET status = 'REFUNDED', refunded_amount_cents = amount_cents
+    App->>DB: UPDATE orders SET status = 'REFUNDED'
     alt Pre-Shipment Refund
         App->>DB: UPDATE inventory_items SET quantity_allocated = quantity_allocated - qty
         App->>DB: UPDATE inventory_reservations SET status = 'RELEASED'
-        App->>DB: INSERT INTO inventory_ledger_entries (RESERVATION_RELEASED)
+        App->>DB: INSERT INTO inventory_ledger_entries (ALLOCATION_RELEASED)
     else Post-Delivery Return Accepted
         App->>DB: UPDATE shipments SET status = 'RETURNED'
         App->>DB: UPDATE inventory_items SET quantity_on_hand = quantity_on_hand + qty
@@ -1372,13 +1411,13 @@ sequenceDiagram
     participant Inngest as Inngest Worker
     participant DB as PostgreSQL
 
-    Note over Inngest: Triggered on Order Delivered
-    Inngest->>DB: UPDATE commissions SET status = 'PENDING', qualification_due_at = NOW() + 15_DAYS WHERE order_id = X
+    Note over Inngest: Triggered on Shipment Delivered
+    Inngest->>DB: UPDATE commissions SET status = 'PENDING', qualification_due_at = NOW() + ConfiguredWindow WHERE order_id = X
     
     Note over Inngest: Cron Polls Matured Commissions
     Inngest->>DB: SELECT * FROM commissions WHERE status = 'PENDING' AND qualification_due_at <= NOW() FOR UPDATE SKIP LOCKED
     loop For each matured commission
-        Inngest->>DB: Check Order.order_status NOT IN ('CANCELLED', 'REFUNDED')
+        Inngest->>DB: Check Order.status NOT IN ('CANCELLED', 'EXPIRED', 'REFUNDED')
         alt Order Healthy
             Inngest->>DB: UPDATE commissions SET status = 'QUALIFIED'
             Inngest->>DB: INSERT INTO outbox_events (CommissionQualified)
@@ -1417,78 +1456,82 @@ sequenceDiagram
 
 ## 61. Complete State Transition Tables
 
-### 1. Product Publication Transitions
-| Current State | Event / Command | Next State | Allowed Actor | Preconditions | Side Effects | Audit Event |
-|---|---|---|---|---|---|---|
-| `DRAFT` | `publish_product` | `PUBLISHED` | `ADMIN` | $\ge 1$ active variant; specs validated | Becomes crawlable on Storefront | `catalog:publish` |
-| `PUBLISHED` | `archive_product` | `ARCHIVED` | `ADMIN` | None | Delisted from Storefront | `catalog:archive` |
-| `DRAFT` | `archive_product` | `ARCHIVED` | `ADMIN` | None | Draft delisted | `catalog:archive` |
-| `ARCHIVED` | `restore_product` | `PUBLISHED` | `ADMIN` | Specs valid | Re-indexed on Storefront | `catalog:restore` |
+### 1. Product Publication Lifecycle Table
+| FROM | EVENT / COMMAND | TO | ALLOWED ACTOR | PRECONDITIONS | SIDE EFFECTS | IDEMPOTENCY BEHAVIOR | AUDIT EVENT | DOMAIN EVENT |
+|---|---|---|---|---|---|---|---|---|
+| `DRAFT` | `publish_product` | `PUBLISHED` | `ADMIN` | $\ge 1$ active variant; specs validated | Becomes crawlable on Storefront | No-op if already `PUBLISHED` | `catalog:publish` | `ProductPublished` |
+| `PUBLISHED` | `archive_product` | `ARCHIVED` | `ADMIN` | None | Delisted from Storefront | No-op if already `ARCHIVED` | `catalog:archive` | `ProductArchived` |
+| `DRAFT` | `archive_product` | `ARCHIVED` | `ADMIN` | None | Draft delisted | No-op if already `ARCHIVED` | `catalog:archive` | `ProductArchived` |
+| `ARCHIVED` | `restore_product` | `PUBLISHED` | `ADMIN` | Specs valid | Re-indexed on Storefront | No-op if already `PUBLISHED` | `catalog:restore` | `ProductPublished` |
 
 *Forbidden Transitions*: `PUBLISHED` $\to$ `DRAFT`.
 
 ---
 
-### 2. Order Transitions
-| Current State | Event / Command | Next State | Allowed Actor | Preconditions | Side Effects | Audit Event |
-|---|---|---|---|---|---|---|
-| `PENDING` | `approve_payment` | `CONFIRMED` | `ADMIN` | Payment is `PAID` | Reservation $\to$ `ALLOCATED`. Outbox: `OrderConfirmed`. | `orders:approve_payment` |
-| `PENDING` | `cancel_order` | `CANCELLED` | `CUSTOMER`/`ADMIN`/`SYS` | Unpaid or rejected | Reservation $\to$ `RELEASED`. Outbox: `OrderCancelled`. | `orders:cancel` |
-| `CONFIRMED` | `start_processing`| `PROCESSING` | `ADMIN` | None | Fulfillment $\to$ `READY_TO_PACK`. | `orders:process` |
-| `PROCESSING` | `confirm_delivery`| `FULFILLED` | `ADMIN`/`SYSTEM`| Shipment `DELIVERED` | Commission qualification timer starts. | `orders:fulfill` |
-| `CONFIRMED`/`PROCESSING`/`FULFILLED` | `issue_full_refund`| `REFUNDED` | `ADMIN` | Cumulative refund = total | Stock adjusted. Commission voided/adjusted. | `orders:refund` |
+### 2. Order Lifecycle Table
+| FROM | EVENT / COMMAND | TO | ALLOWED ACTOR | PRECONDITIONS | SIDE EFFECTS | IDEMPOTENCY BEHAVIOR | AUDIT EVENT | DOMAIN EVENT |
+|---|---|---|---|---|---|---|---|---|
+| `PENDING` | `expire_order` | `EXPIRED` | `SYSTEM` | Unpaid reservation timer expired | Reservations released | No-op if already `EXPIRED` | `orders:expire` | `OrderExpired` |
+| `PENDING` | `approve_payment` | `CONFIRMED` | `ADMIN` | Payment is `PAID` | Reservations $\to$ `ALLOCATED` | Returns current order if `CONFIRMED` | `orders:approve_payment` | `OrderConfirmed` |
+| `EXPIRED` | `reallocate_late_payment` | `CONFIRMED` | `ADMIN` | Payment `PAID` & replacement stock locked | New reservations $\to$ `ALLOCATED` | Idempotent on locked payment | `orders:late_allocate` | `OrderConfirmed` |
+| `EXPIRED` | `refund_late_sold_out` | `REFUNDED` | `ADMIN` | Payment `PAID` & stock sold out | Full external refund recorded | Idempotent on refund record | `orders:late_refund` | `RefundIssued` |
+| `PENDING`/`EXPIRED` | `cancel_order` | `CANCELLED` | `CUSTOMER`/`ADMIN`/`SYS` | Order unconfirmed | Reservations $\to$ `RELEASED` | No-op if already `CANCELLED` | `orders:cancel` | `OrderCancelled` |
+| `CONFIRMED` | `start_processing`| `PROCESSING` | `ADMIN` | Order confirmed | Shipment $\to$ `READY_TO_PACK` | No-op if already `PROCESSING` | `orders:process` | N/A |
+| `PROCESSING` | `confirm_delivery`| `FULFILLED` | `ADMIN`/`SYSTEM`| Shipment `DELIVERED` | Commission timer starts | No-op if already `FULFILLED` | `orders:fulfill` | `OrderDelivered` |
+| `CONFIRMED`/`PROCESSING`/`FULFILLED` | `issue_full_refund`| `REFUNDED` | `ADMIN` | Full refund recorded | Stock adjusted; Commission adjusted | Idempotent on refund record | `orders:refund` | `RefundIssued` |
 
 *Forbidden Transitions*: `CANCELLED` $\to$ `CONFIRMED`; `REFUNDED` $\to$ `PROCESSING`.
 
 ---
 
-### 3. Payment Transitions
-| Current State | Event / Command | Next State | Allowed Actor | Preconditions | Side Effects | Audit Event |
-|---|---|---|---|---|---|---|
-| `UNPAID` | `submit_evidence` | `SUBMITTED` | `CUSTOMER` | OpCode provided | Reservation $\to$ `VERIFICATION_HOLD`. Outbox: `PaymentSubmitted`. | `payments:submit` |
-| `SUBMITTED` | `start_review` | `VERIFYING` | `ADMIN` | None | Locked for admin review | `payments:review` |
-| `SUBMITTED`/`VERIFYING` | `approve_payment`| `PAID` | `ADMIN` | Bank funds confirmed | Order $\to$ `CONFIRMED`. Reservation $\to$ `ALLOCATED`. | `payments:approve` |
-| `SUBMITTED`/`VERIFYING` | `reject_terminal`| `REJECTED` | `ADMIN` | Fraud/No funds | Order $\to$ `CANCELLED`. Reservation $\to$ `RELEASED`. | `payments:reject` |
-| `SUBMITTED`/`VERIFYING` | `reject_resubmit`| `UNPAID` | `ADMIN` | Illegible voucher | Customer prompted to resubmit | `payments:reject_resubmit` |
-| `PAID` | `record_full_refund`| `REFUNDED` | `ADMIN` | Full refund recorded | Order $\to$ `REFUNDED`. | `payments:refund` |
+### 3. Payment Lifecycle Table
+| FROM | EVENT / COMMAND | TO | ALLOWED ACTOR | PRECONDITIONS | SIDE EFFECTS | IDEMPOTENCY BEHAVIOR | AUDIT EVENT | DOMAIN EVENT |
+|---|---|---|---|---|---|---|---|---|
+| `UNPAID` | `submit_evidence` | `SUBMITTED` | `CUSTOMER` | OpCode provided | Reservation $\to$ `VERIFICATION_HOLD` | Replays cached submission on duplicate | `payments:submit` | `PaymentSubmitted` |
+| `SUBMITTED` | `start_review` | `VERIFYING` | `ADMIN` | None | Locked for admin review | No-op if already `VERIFYING` | `payments:review` | N/A |
+| `SUBMITTED`/`VERIFYING` | `approve_payment`| `PAID` | `ADMIN` | Bank funds confirmed | Order $\to$ `CONFIRMED`; Res $\to$ `ALLOCATED` | Returns success if already `PAID` | `payments:approve` | `PaymentApproved` |
+| `SUBMITTED`/`VERIFYING` | `reject_terminal`| `REJECTED` | `ADMIN` | Fraud / No funds | Order $\to$ `CANCELLED`; Res $\to$ `RELEASED` | Returns success if already `REJECTED` | `payments:reject` | `PaymentRejected` |
+| `SUBMITTED`/`VERIFYING` | `reject_resubmit`| `UNPAID` | `ADMIN` | Illegible voucher | Customer prompted; Res held in grace | Returns `UNPAID` status | `payments:reject_resubmit`| `PaymentRejected` |
+| `PAID` | `record_full_refund`| `REFUNDED` | `ADMIN` | Cumulative refund = total | Order $\to$ `REFUNDED` | Idempotent on refund record | `payments:refund` | `RefundIssued` |
 
 *Forbidden Transitions*: `UNPAID` $\to$ `PAID` (customer bypass); `REJECTED` $\to$ `PAID`.
 
 ---
 
-### 4. Inventory Reservation Transitions
-| Current State | Event / Command | Next State | Allowed Actor | Preconditions | Side Effects | Audit Event |
-|---|---|---|---|---|---|---|
-| `ACTIVE` | `submit_payment` | `VERIFICATION_HOLD` | `SYSTEM` | Payment submitted | Timer suspended | `inventory:hold` |
-| `ACTIVE` | `expire_reservation`| `RELEASED` | `SYSTEM` | `expires_at < NOW()` | `reserved_delta = -qty`. Stock restored. | `inventory:expire` |
-| `ACTIVE`/`VERIFICATION_HOLD` | `cancel_reservation`| `RELEASED` | `ADMIN`/`SYS` | Order cancelled | `reserved_delta = -qty`. Stock restored. | `inventory:release` |
-| `VERIFICATION_HOLD` | `approve_allocation`| `ALLOCATED` | `ADMIN` | Payment approved | `reserved_delta = -qty`, `allocated_delta = +qty`. | `inventory:allocate` |
-| `ALLOCATED` | `dispatch_shipment` | `CONSUMED` | `SYSTEM` | Courier dispatched | `allocated_delta = -qty`, `on_hand_delta = -qty`. | `inventory:consume` |
+### 4. Inventory Reservation Lifecycle Table
+| FROM | EVENT / COMMAND | TO | ALLOWED ACTOR | PRECONDITIONS | SIDE EFFECTS | IDEMPOTENCY BEHAVIOR | AUDIT EVENT | DOMAIN EVENT |
+|---|---|---|---|---|---|---|---|---|
+| `ACTIVE` | `submit_payment` | `VERIFICATION_HOLD` | `SYSTEM` | Payment submitted | Expiry timer suspended | No-op if already `VERIFICATION_HOLD` | `inventory:hold` | N/A |
+| `ACTIVE` | `expire_reservation`| `RELEASED` | `SYSTEM` | `expires_at < NOW()` | `reserved_delta = -qty`. Stock restored. | No-op if already `RELEASED` | `inventory:expire` | N/A |
+| `ACTIVE`/`VERIFICATION_HOLD` | `cancel_reservation`| `RELEASED` | `ADMIN`/`SYS` | Order cancelled | `reserved_delta = -qty`. Stock restored. | No-op if already `RELEASED` | `inventory:release` | N/A |
+| `VERIFICATION_HOLD` | `approve_allocation`| `ALLOCATED` | `ADMIN` | Payment approved | `reserved_delta = -qty`, `allocated_delta = +qty` | No-op if already `ALLOCATED` | `inventory:allocate` | N/A |
+| `ALLOCATED` | `dispatch_shipment` | `CONSUMED` | `SYSTEM` | Courier dispatched | `allocated_delta = -qty`, `on_hand_delta = -qty` | No-op if already `CONSUMED` | `inventory:consume` | N/A |
+| `ALLOCATED` | `release_allocation`| `RELEASED` | `ADMIN`/`SYS` | Pre-shipment refund | `allocated_delta = -qty` (ALLOCATION_RELEASED) | No-op if already `RELEASED` | `inventory:release_allocation` | N/A |
 
-*Forbidden Transitions*: `RELEASED` $\to$ `ALLOCATED` (must reacquire lock via active check); `CONSUMED` $\to$ `ACTIVE`.
+*Forbidden Transitions*: `RELEASED` $\to$ `ALLOCATED` (must reacquire via new reservation under lock); `CONSUMED` $\to$ `ACTIVE`.
 
 ---
 
-### 5. Fulfillment Transitions
-| Current State | Event / Command | Next State | Allowed Actor | Preconditions | Side Effects | Audit Event |
-|---|---|---|---|---|---|---|
-| `UNFULFILLED` | `start_packing` | `READY_TO_PACK` | `ADMIN` | Order `CONFIRMED` | Items claimed | `fulfillment:pack_start` |
-| `READY_TO_PACK`| `complete_packing`| `PACKED` | `ADMIN` | Boxed & labeled | Ready for courier | `fulfillment:packed` |
-| `PACKED` | `dispatch_courier`| `SHIPPED` | `ADMIN` | Tracking number | Reservation $\to$ `CONSUMED`. Outbox: `OrderShipped`. | `fulfillment:dispatch` |
-| `SHIPPED` | `confirm_delivery`| `DELIVERED` | `ADMIN`/`SYS` | Courier confirmation | Order $\to$ `FULFILLED`. Outbox: `OrderDelivered`. | `fulfillment:deliver` |
-| `SHIPPED`/`DELIVERED` | `accept_return` | `RETURNED` | `ADMIN` | RMA accepted & items received | Stock restocked via ledger (`RETURN_RESTOCKED`). | `fulfillment:return` |
+### 5. Fulfillment Lifecycle Table
+| FROM | EVENT / COMMAND | TO | ALLOWED ACTOR | PRECONDITIONS | SIDE EFFECTS | IDEMPOTENCY BEHAVIOR | AUDIT EVENT | DOMAIN EVENT |
+|---|---|---|---|---|---|---|---|---|
+| `UNFULFILLED` | `start_packing` | `READY_TO_PACK` | `ADMIN` | Order `CONFIRMED` | Items claimed by staff | No-op if already `READY_TO_PACK` | `fulfillment:pack_start` | N/A |
+| `READY_TO_PACK`| `complete_packing`| `PACKED` | `ADMIN` | Boxed & labeled | Ready for courier | No-op if already `PACKED` | `fulfillment:packed` | N/A |
+| `PACKED` | `dispatch_courier`| `SHIPPED` | `ADMIN` | Tracking number | Res $\to$ `CONSUMED`. Outbox: `OrderShipped`. | No-op if already `SHIPPED` | `fulfillment:dispatch` | `ShipmentDispatched` |
+| `SHIPPED` | `confirm_delivery`| `DELIVERED` | `ADMIN`/`SYS` | Courier confirmation | Order $\to$ `FULFILLED`. Outbox: `OrderDelivered`. | No-op if already `DELIVERED` | `fulfillment:deliver` | `OrderDelivered` |
+| `SHIPPED`/`DELIVERED` | `accept_return` | `RETURNED` | `ADMIN` | RMA accepted & items received | Stock restocked (`RETURN_RESTOCKED`). | Idempotent on return RMA record | `fulfillment:return` | `ReturnAccepted` |
 
 *Forbidden Transitions*: `UNFULFILLED` $\to$ `SHIPPED` (must pack first).
 
 ---
 
-### 6. Commission Transitions
-| Current State | Event / Command | Next State | Allowed Actor | Preconditions | Side Effects | Audit Event |
-|---|---|---|---|---|---|---|
-| `PENDING` | `mature_qualification`| `QUALIFIED` | `SYSTEM` | Qualification window passed & order healthy | Eligible for payout batch | `growth:commission_qualify` |
-| `PENDING`/`QUALIFIED` | `void_commission` | `VOIDED` | `SYSTEM`/`ADMIN`| Order cancelled or refunded before payout | Commission invalidated | `growth:commission_void` |
-| `QUALIFIED` | `approve_payout` | `APPROVED` | `ADMIN` | Batch created | Ready for banking payout | `growth:commission_approve` |
-| `APPROVED` | `execute_payout` | `PAID` | `ADMIN` | Bank transfer completed | Historical record immutable | `growth:commission_paid` |
+### 6. Commission Lifecycle Table
+| FROM | EVENT / COMMAND | TO | ALLOWED ACTOR | PRECONDITIONS | SIDE EFFECTS | IDEMPOTENCY BEHAVIOR | AUDIT EVENT | DOMAIN EVENT |
+|---|---|---|---|---|---|---|---|---|
+| `PENDING` | `mature_qualification`| `QUALIFIED` | `SYSTEM` | Qualification window passed & order healthy | Eligible for payout batch | No-op if already `QUALIFIED` | `growth:commission_qualify` | `CommissionQualified` |
+| `PENDING`/`QUALIFIED` | `void_commission` | `VOIDED` | `SYSTEM`/`ADMIN`| Order cancelled or net commission = 0 | Commission invalidated | No-op if already `VOIDED` | `growth:commission_void` | N/A |
+| `QUALIFIED` | `approve_payout` | `APPROVED` | `ADMIN` | Payout batch created | Ready for banking payout | No-op if already `APPROVED` | `growth:commission_approve` | N/A |
+| `APPROVED` | `execute_payout` | `PAID` | `ADMIN` | Bank transfer completed | Historical record immutable | No-op if already `PAID` | `growth:commission_paid` | `CommissionPaid` |
 
 *Forbidden Transitions*: `PAID` $\to$ `VOIDED` (post-payout refunds insert `CommissionAdjustment`).
 
@@ -1508,10 +1551,10 @@ sequenceDiagram
 | 8 | **Payment Instructions Frozen** | Order records exact `payment_instruction_version_id` presented at checkout. |
 | 9 | **Server-Enforced RBAC** | Privileged actions check `requirePermission('permission:name')` against database role mappings. |
 | 10 | **At-Most-Once State Execution** | State transitions are idempotent; replaying a command returns identical state without duplicate side effects. |
-| 11 | **Cancelled Orders Cannot Ship** | Fulfillment transitions reject orders with `order_status = 'CANCELLED'`. |
-| 12 | **Delivered History Is Preserved** | Returns and refunds mark status orthogonal without erasing historical delivery timestamps. |
+| 11 | **Cancelled Orders Cannot Ship** | Fulfillment transitions reject orders with `Order.status = 'CANCELLED'`. |
+| 12 | **Delivered History Is Preserved** | Returns and refunds mark status orthogonal without erasing historical delivery timestamps in `Shipment`. |
 | 13 | **Refund $\ne$ Automatic Restock** | Financial refunds never increment physical `on_hand`; restock requires explicit warehouse return acceptance. |
-| 14 | **Cumulative Refund Cap** | $\sum \text{Refund.amount\_cents} \le \text{Order.total\_cents}$. |
+| 14 | **Cumulative Refund Cap** | $\sum \text{Refund.amount\_cents} \le \text{Payment.amount\_cents}$. |
 | 15 | **Paid Commission Immutability** | Paid commissions are never deleted or set to `VOIDED`; post-payout refunds insert `CommissionAdjustment`. |
 | 16 | **Downstream Non-Blocking** | EC OS, PostHog, or Resend downtime never rolls back a PostgreSQL commerce transaction. |
 | 17 | **AI Advisory Only** | Artificial intelligence never holds authority over prices, stock, order transitions, or sensitive credentials. |
@@ -1522,7 +1565,7 @@ sequenceDiagram
 
 | # | Scenario | Starting State | Command / Event | Resulting State | Inventory Consequence | Payment Consequence | Audit & Domain Events | Protection / Concurrency | Configurable Policy |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | **Concurrent Final Unit Purchase** | `avail = 1` | Customer A & B checkout | A: `PENDING`, B: Aborts | A: `reserved + 1`, B: None | A: `UNPAID`, B: None | `OrderPlaced` (A) | `SELECT ... FOR UPDATE` row lock | N/A |
+| 1 | **Concurrent Final Unit Purchase** | `avail = 1` | Customer A & B checkout | A: Order `PENDING`, B: Aborts | A: `reserved + 1`, B: None | A: Payment `UNPAID`, B: None | `OrderPlaced` (A) | `SELECT ... FOR UPDATE` row lock | N/A |
 | 2 | **Price Changes While in Cart** | Cart has old price | Customer starts checkout | Price updated to current | None | None | `cart:price_recalculated` | Server-side pricing revalidation | N/A |
 | 3 | **Variant Archived While in Cart** | Variant in Cart | Customer starts checkout | Checkout rejects item | None | None | None | Variant `status == 'ACTIVE'` check | N/A |
 | 4 | **Coupon Expires in Cart** | Coupon in Cart | Customer clicks pay | Coupon rejected with alert | None | None | None | Real-time coupon validity check | N/A |
@@ -1531,7 +1574,7 @@ sequenceDiagram
 | 7 | **Payment Proof Omitted** | Payment `UNPAID` | Submit OpCode without image| Payment `SUBMITTED` | `VERIFICATION_HOLD` | OpCode captured | `PaymentSubmitted` | Validates proof is optional in v1 | N/A |
 | 8 | **Proof Storage Unavailable** | Uploading voucher | Cloudflare R2 5xx | OpCode saved; voucher alerts| `VERIFICATION_HOLD` | OpCode captured | `payments:voucher_upload_failed`| Graceful storage degradation | `[TBD BUSINESS DECISION]` |
 | 9 | **Payment Submitted at Expiry Edge**| `expires_at` in 5s | Customer submits OpCode | Payment `SUBMITTED` | `VERIFICATION_HOLD` (timer stops)| OpCode captured | `PaymentSubmitted` | Transaction acquires row lock | N/A |
-| 10 | **Payment Submitted After Expiry** | Reservation `RELEASED`| Customer submits OpCode | Payment `SUBMITTED` (`is_late`)| Stock not held; manual review | OpCode captured | `payments:late_submission` | Admin manual stock allocation / refund | `[TBD BUSINESS DECISION]` |
+| 10 | **Payment Submitted After Expiry** | Order `EXPIRED`, Res `RELEASED`| Customer submits OpCode | Payment `SUBMITTED` (`is_late`)| Stock not held; manual review | OpCode captured | `payments:late_submission` | Admin manual stock allocation / refund | `[TBD BUSINESS DECISION]` |
 | 11 | **Two Admins Approve Concurrently** | Payment `SUBMITTED` | Admin 1 & 2 click Approve | Admin 1 succeeds; 2 no-ops | Converted to `ALLOCATED` once| Payment `PAID` once | `PaymentApproved` (single) | Row lock on `Payment` | N/A |
 | 12 | **Admin Rejects Already-Paid** | Payment `PAID` | Admin clicks Reject | Mutation rejected | Allocated stock remains | Payment remains `PAID` | `payments:invalid_transition` | State transition guard | N/A |
 | 13 | **Access Other Customer Order** | Customer B logged in| GET `/orders/GP-CUST-A` | 404 / 403 Forbidden | None | None | `security:unauthorized_access` | `session.customerId` query filter | N/A |
@@ -1557,10 +1600,12 @@ The following commercial decisions remain explicitly **`[TBD BUSINESS DECISION]`
 2. **Delivery SLA & Shipping Rates**: Fixed/dynamic rates per Peruvian department.
 3. **Warranty Duration & Return Window**: Return eligibility periods (e.g. 7, 15, or 30 days).
 4. **Reservation Hold TTL**: Numeric unpaid checkout duration (`RESERVATION_TTL_MINUTES`, e.g. 15, 30, or 60 minutes).
-5. **Cart Expiry Duration**: Transient cart lifetime (`CART_EXPIRY_DURATION`).
-6. **Max Cart Line Quantity**: Per-item ceiling (`MAX_CART_LINE_QUANTITY`).
-7. **Affiliate Commission Rates**: Default basis points per partner tier.
-8. **Customer Support Communication Channel**: Configuration slot for helpdesk/messaging.
+5. **Resubmission Grace Duration**: Time window to resubmit voucher upon non-terminal rejection (`PAYMENT_RESUBMISSION_GRACE_DURATION`).
+6. **Cart Expiry Duration**: Transient cart lifetime (`CART_EXPIRY_DURATION`).
+7. **Max Cart Line Quantity**: Per-item ceiling (`MAX_CART_LINE_QUANTITY`).
+8. **Affiliate Commission Rates**: Default basis points per partner tier.
+9. **Commission Qualification Window**: Maturation period following delivery (`COMMISSION_QUALIFICATION_WINDOW_DAYS`).
+10. **Customer Support Communication Channel**: Configuration slot for helpdesk/messaging.
 
 ---
 
@@ -1585,40 +1630,49 @@ The following commercial decisions remain explicitly **`[TBD BUSINESS DECISION]`
 
 ## 66. Inputs for GP-005 (Repository Bootstrap)
 
-GP-005 will consume the following authoritative specifications from GP-004:
-- **Drizzle Schema Organization**: Grouped into modular schema files under `src/db/schema/`:
-  - `catalog.ts`: `brands`, `categories`, `collections`, `product_collections`, `products`, `product_variants`, `category_spec_schemas`, `product_specs`, `product_stories`, `product_story_revisions`, `media_assets`.
-  - `auth.ts`: `users`, `sessions`, `roles`, `permissions`, `role_permissions`, `user_roles`.
-  - `customers.ts`: `customer_profiles`, `customer_addresses`, `wishlist_items`, `reviews`.
-  - `cart.ts`: `carts`, `cart_items`.
-  - `inventory.ts`: `inventory_locations`, `inventory_items`, `inventory_ledger_entries`, `inventory_reservations`.
-  - `orders.ts`: `orders`, `order_items`, `order_address_snapshots`, `order_pricing_snapshots`, `order_promotion_snapshots`.
-  - `payments.ts`: `payment_method_configurations`, `payment_instruction_versions`, `payments`, `payment_submissions`, `payment_verifications`, `refunds`.
-  - `shipping.ts`: `shipping_methods`, `shipments`, `shipment_items`.
-  - `promotions.ts`: `promotions`, `promotion_targets`, `coupons`, `coupon_redemptions`.
-  - `growth.ts`: `referral_programs`, `referral_codes`, `referral_attributions`, `affiliates`, `affiliate_codes`, `affiliate_clicks`, `affiliate_attributions`, `commissions`, `commission_adjustments`, `payout_batches`.
-  - `system.ts`: `content_slots`, `audit_events`, `domain_events`, `outbox_events`, `idempotency_keys`.
+This specification establishes the canonical domain inputs and schema blueprints available to **GP-005** and subsequent implementation GPs:
+
+### 1. Drizzle Schema Module Organization Blueprint
+Grouped into modular schema files under `src/db/schema/`:
+- `catalog.ts`: `brands`, `categories`, `collections`, `product_collections`, `products`, `product_variants`, `category_spec_schemas`, `product_specs`, `product_stories`, `product_story_revisions`, `media_assets`. (11 entities)
+- `auth.ts`: `users`, `sessions`, `roles`, `permissions`, `role_permissions`, `user_roles`. (6 entities: 2 Better Auth + 4 RBAC)
+- `customers.ts`: `customer_profiles`, `customer_addresses`, `wishlist_items`, `reviews`. (4 entities)
+- `cart.ts`: `carts`, `cart_items`. (2 entities)
+- `inventory.ts`: `inventory_locations`, `inventory_items`, `inventory_ledger_entries`, `inventory_reservations`. (4 entities)
+- `orders.ts`: `orders`, `order_items`, `order_address_snapshots`, `order_pricing_snapshots`, `order_promotion_snapshots`. (5 entities)
+- `payments.ts`: `payment_method_configurations`, `payment_instruction_versions`, `payments`, `payment_submissions`, `payment_verifications`, `refunds`. (6 entities)
+- `shipping.ts`: `shipping_methods`, `shipments`, `shipment_items`. (3 entities)
+- `promotions.ts`: `promotions`, `promotion_targets`, `coupons`, `coupon_redemptions`. (4 entities)
+- `growth.ts`: `referral_programs`, `referral_codes`, `referral_attributions`, `affiliates`, `affiliate_codes`, `affiliate_clicks`, `affiliate_attributions`, `commissions`, `commission_adjustments`, `payout_batches`. (10 entities)
+- `system.ts`: `content_slots`, `audit_events`, `domain_events`, `outbox_events`, `idempotency_keys`. (5 entities)
+
+### 2. Entity Count Classification
+- **Domain & System Entities**: 58 entities.
+- **Better Auth Infrastructure Tables**: 2 tables (`users`, `sessions`).
+- **Total Physical Table Candidates**: 60 physical table candidates.
+
+### 3. UUIDv7 & Extension Guidelines
 - **UUIDv7 Strategy**: PostgreSQL `uuid` column type. UUIDv7 values generated at application layer using TypeScript RFC 9562 library.
-- **Required PostgreSQL Extensions**: `pg_trgm` (for full-text and typo-tolerant search).
+- **PostgreSQL Built-In Capabilities & Extensions**: PostgreSQL built-in FTS (`to_tsvector`); `pg_trgm` extension for typo-tolerant trigram similarity search.
 
 ---
 
 ## 67. GP-004 Definition of Done
 
 * [x] Canonical `COMMERCE_DOMAIN_MODEL.md` created covering all 67 required sections.
+* [x] Exactly one authoritative owner established for each orthogonal lifecycle (Order, Payment, Fulfillment, Reservation).
+* [x] `ALLOCATED -> RELEASED` inventory transition and `ALLOCATION_RELEASED` ledger movement defined.
+* [x] Late payment handling modeled without undeclared pseudo-states or mutation of historical released reservations.
+* [x] Non-terminal payment rejection with resubmission grace hold modeled.
+* [x] Deterministic current payment instruction version and current category schema selection modeled.
 * [x] Complete 25-scenario edge-case matrix present and fully articulated.
 * [x] All 7 required Mermaid sequence diagrams present and complete.
 * [x] All 6 required Mermaid state diagrams present with exact matching enums.
-* [x] State transition tables created for every major lifecycle with forbidden rules.
-* [x] Collection domain modeled with membership relations.
-* [x] Category specification schema versioning corrected (`UNIQUE(category_id, schema_version)`).
-* [x] Payment method abstraction and instruction versioning established.
-* [x] Late payment handling modeled without undeclared pseudo-states.
+* [x] State transition tables created for all 6 lifecycles with all 9 columns (including Idempotency and Domain Events).
 * [x] Full and partial refund model reconciled with cumulative cap.
-* [x] Pre-shipment allocation release vs post-delivery merchandise restock separated.
-* [x] Multi-balance inventory ledger (`on_hand_delta`, `reserved_delta`, `allocated_delta`) defined.
-* [x] Order to InventoryReservation cardinality (1-to-many) and line traceability modeled.
-* [x] Self-referral identity traversal corrected (`affiliate.user_id != customer.user_id`).
-* [x] Post-payout commission adjustments modeled.
+* [x] Promotion priority, target scopes, and concurrency-safe redemptions modeled.
+* [x] Commission qualification starting on delivery and post-payout adjustments modeled.
+* [x] Exact entity count (58 domain + 2 Better Auth = 60 total candidates) documented.
+* [x] Outbox payload updated to versioned minimum-necessary integration payload.
 * [x] Zero application source code, Drizzle schemas, migrations, or `package.json` created.
 * [x] GP-005 remains PLANNED and unexecuted.
