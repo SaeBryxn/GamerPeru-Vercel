@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { CANONICAL_ICON_GEOMETRY } from "@/components/ui";
 
 describe("GP-008 Design System — Token Contract & Drift Protection", () => {
   const tokensCssPath = path.resolve(process.cwd(), "src/styles/tokens.css");
@@ -133,5 +134,39 @@ describe("GP-008 Design System — Token Contract & Drift Protection", () => {
     expect(typographyCss).toContain(".type-button");
     expect(typographyCss).toContain(".type-stat-giant");
     expect(typographyCss).toContain(".type-code-mono");
+  });
+
+  it("enforces canonical icon geometry for sm, md, lg, xl sizes", () => {
+    expect(CANONICAL_ICON_GEOMETRY.sm).toEqual({ size: 16, strokeWidth: 1.25 });
+    expect(CANONICAL_ICON_GEOMETRY.md).toEqual({ size: 20, strokeWidth: 1.5 });
+    expect(CANONICAL_ICON_GEOMETRY.lg).toEqual({ size: 24, strokeWidth: 1.5 });
+    expect(CANONICAL_ICON_GEOMETRY.xl).toEqual({ size: 32, strokeWidth: 1.5 });
+  });
+
+  it("ensures zero ad-hoc literal colors in component CSS modules", () => {
+    const uiDir = path.resolve(process.cwd(), "src/components/ui");
+    const moduleFiles: string[] = [];
+
+    function findModuleCss(dir: string) {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          findModuleCss(fullPath);
+        } else if (entry.name.endsWith(".module.css")) {
+          moduleFiles.push(fullPath);
+        }
+      }
+    }
+
+    findModuleCss(uiDir);
+    expect(moduleFiles.length).toBeGreaterThan(0);
+
+    for (const file of moduleFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      // Match hex colors (e.g., #fff, #12141c) or rgb/rgba literals
+      const matches = content.match(/#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)/g);
+      expect(matches).toBeNull();
+    }
   });
 });

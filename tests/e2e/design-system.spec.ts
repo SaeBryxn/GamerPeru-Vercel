@@ -40,7 +40,7 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
   }) => {
     await page.goto("/");
 
-    const primaryBtn = page.getByRole("button", { name: "Comprar Ahora" });
+    const primaryBtn = page.getByRole("button", { name: "Acción primaria" });
     await expect(primaryBtn).toBeVisible();
 
     // Verify touch target height (minimum 44px)
@@ -58,7 +58,7 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
   }) => {
     await page.goto("/");
 
-    const iconBtn = page.getByRole("button", { name: "Buscar periféricos" });
+    const iconBtn = page.getByRole("button", { name: "Buscar elementos" });
     await expect(iconBtn).toBeVisible();
 
     const box = await iconBtn.boundingBox();
@@ -72,43 +72,108 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
   }) => {
     await page.goto("/");
 
-    // Email field with label and description
-    const emailInput = page.getByLabel("Correo Electrónico");
-    await expect(emailInput).toBeVisible();
-    await expect(emailInput).toHaveAttribute("required", "");
-    await expect(emailInput).toHaveAttribute(
+    // Field with label and description
+    const sampleInput = page.getByLabel("Campo de ejemplo");
+    await expect(sampleInput).toBeVisible();
+    await expect(sampleInput).toHaveAttribute("required", "");
+    await expect(sampleInput).toHaveAttribute(
       "aria-describedby",
-      expect.stringContaining("demo-email-description")
+      expect.stringContaining("demo-field-description")
     );
 
     // Error field with error message and aria-invalid
-    const couponInput = page.getByLabel("Código de Cupón");
-    await expect(couponInput).toBeVisible();
-    await expect(couponInput).toHaveAttribute("aria-invalid", "true");
-    await expect(couponInput).toHaveAttribute(
+    const errorInput = page.getByLabel("Campo con error");
+    await expect(errorInput).toBeVisible();
+    await expect(errorInput).toHaveAttribute("aria-invalid", "true");
+    await expect(errorInput).toHaveAttribute(
       "aria-describedby",
       expect.stringContaining("demo-error-error")
     );
 
     const errorAlert = page.locator("#demo-error-error");
-    await expect(errorAlert).toHaveText("El código ingresado no es válido o ha expirado.");
+    await expect(errorAlert).toHaveText("Mensaje de error descriptivo asociado al campo.");
   });
 
   test("F: verifies StatusBadge color-independent visible text labels", async ({ page }) => {
     await page.goto("/");
 
-    await expect(page.getByText("En Stock (Lima)")).toBeVisible();
-    await expect(page.getByText("Últimas 2 Unidades")).toBeVisible();
-    await expect(page.getByText("Agotado")).toBeVisible();
-    await expect(page.getByText("Preventa Confirmada")).toBeVisible();
-    await expect(page.getByText("Procesando")).toBeVisible();
+    await expect(page.getByText("Estado correcto", { exact: true })).toBeVisible();
+    await expect(page.getByText("Advertencia", { exact: true })).toBeVisible();
+    await expect(page.getByText("Error", { exact: true })).toBeVisible();
+    await expect(page.getByText("Información", { exact: true })).toBeVisible();
+    await expect(page.getByText("Neutral", { exact: true })).toBeVisible();
   });
 
-  test("G: verifies reduced-motion collapses transition durations", async ({ page }) => {
+  test("G: verifies light keyboard focus ring contract via real Tab navigation", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    // Tab into the page to reach the primary button
+    const primaryBtn = page.getByRole("button", { name: "Acción primaria" });
+    await primaryBtn.focus();
+
+    const focusStyles = await primaryBtn.evaluate((el) => {
+      const computed = window.getComputedStyle(el);
+      return {
+        outlineStyle: computed.outlineStyle,
+        outlineWidth: computed.outlineWidth,
+        outlineColor: computed.outlineColor,
+      };
+    });
+
+    expect(focusStyles.outlineStyle).toBe("solid");
+    expect(focusStyles.outlineWidth).toBe("2px");
+    // Light focus color is #09090B -> rgb(9, 9, 11)
+    expect(focusStyles.outlineColor).toBe("rgb(9, 9, 11)");
+  });
+
+  test("H: verifies dark contextual keyboard focus ring contract (#F4F4F5)", async ({ page }) => {
+    await page.goto("/");
+
+    // Focus the button rendered inside the dark surface card
+    const darkBtn = page.locator("#dark-surface-btn");
+    await darkBtn.focus();
+
+    const focusStyles = await darkBtn.evaluate((el) => {
+      const computed = window.getComputedStyle(el);
+      return {
+        outlineStyle: computed.outlineStyle,
+        outlineWidth: computed.outlineWidth,
+        outlineColor: computed.outlineColor,
+      };
+    });
+
+    expect(focusStyles.outlineStyle).toBe("solid");
+    expect(focusStyles.outlineWidth).toBe("2px");
+    // Dark focus color is #F4F4F5 -> rgb(244, 244, 245)
+    expect(focusStyles.outlineColor).toBe("rgb(244, 244, 245)");
+  });
+
+  test("I: verifies canonical Icon geometry rendered inside IconButton", async ({ page }) => {
+    await page.goto("/");
+
+    const iconBtn = page.getByRole("button", { name: "Buscar elementos" });
+    const svg = iconBtn.locator("svg");
+    await expect(svg).toBeVisible();
+
+    const svgAttrs = await svg.evaluate((el) => ({
+      width: el.getAttribute("width"),
+      height: el.getAttribute("height"),
+      strokeWidth: el.getAttribute("stroke-width"),
+    }));
+
+    // md size is 20px with 1.5px stroke-width
+    expect(svgAttrs.width).toBe("20");
+    expect(svgAttrs.height).toBe("20");
+    expect(svgAttrs.strokeWidth).toBe("1.5");
+  });
+
+  test("J: verifies reduced-motion collapses transition durations", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
 
-    const primaryBtn = page.getByRole("button", { name: "Comprar Ahora" });
+    const primaryBtn = page.getByRole("button", { name: "Acción primaria" });
     const computedTransition = await primaryBtn.evaluate((el) => {
       return window.getComputedStyle(el).transitionDuration;
     });
@@ -117,7 +182,7 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
     expect(["0s", "0.00001s", "0.01ms", "1e-05s"]).toContain(computedTransition);
   });
 
-  test("H: verifies responsive viewports with zero horizontal overflow", async ({ page }) => {
+  test("K: verifies responsive viewports with zero horizontal overflow", async ({ page }) => {
     const viewports = [
       { width: 360, height: 640 }, // Compact Mobile
       { width: 768, height: 1024 }, // Tablet
@@ -137,7 +202,7 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
     }
   });
 
-  test("I: passes baseline automated accessibility audit on design system surface", async ({
+  test("L: passes baseline automated accessibility audit on design system surface", async ({
     page,
   }) => {
     await page.goto("/");

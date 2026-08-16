@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Container,
+  Icon,
   IconButton,
   SpecPill,
   Stack,
@@ -24,8 +25,8 @@ export default function HomePage() {
               className="type-body-large"
               style={{ color: "var(--color-text-secondary)", maxWidth: "600px" }}
             >
-              Design System initialized. Identidad visual canónica “Machinery Obsidian & Signal
-              Crimson” y primitivas accesibles.
+              Design System canónico “Machinery Obsidian & Signal Crimson” y catálogo de primitivas
+              accesibles.
             </p>
             <span
               id="gp008-badge"
@@ -70,23 +71,23 @@ export default function HomePage() {
                   Botones (44px Desktop / 48px Touch)
                 </h3>
                 <Stack direction="horizontal" gap={3} wrap="wrap" align="center">
-                  <Button variant="primary" leadingIcon={<Zap size={18} strokeWidth={1.5} />}>
-                    Comprar Ahora
+                  <Button variant="primary" leadingIcon={<Icon icon={Zap} size="sm" />}>
+                    Acción primaria
                   </Button>
-                  <Button
-                    variant="secondary"
-                    trailingIcon={<ArrowRight size={18} strokeWidth={1.5} />}
-                  >
-                    Ver Detalles
+                  <Button variant="secondary" trailingIcon={<Icon icon={ArrowRight} size="sm" />}>
+                    Acción secundaria
                   </Button>
-                  <Button variant="ghost">Cancelar</Button>
-                  <Button variant="destructive">Eliminar</Button>
+                  <Button variant="ghost">Acción terciaria</Button>
+                  <Button variant="destructive">Acción destructiva</Button>
                   <Button variant="primary" disabled>
                     Deshabilitado
                   </Button>
-                  <IconButton aria-label="Buscar periféricos" variant="secondary">
-                    <Search size={20} strokeWidth={1.5} />
-                  </IconButton>
+                  <IconButton
+                    aria-label="Buscar elementos"
+                    icon={Search}
+                    iconSize="md"
+                    variant="secondary"
+                  />
                 </Stack>
               </Stack>
 
@@ -96,11 +97,11 @@ export default function HomePage() {
                   Estados Semánticos (Color + Texto Obligatorio)
                 </h3>
                 <Stack direction="horizontal" gap={2} wrap="wrap">
-                  <StatusBadge variant="success">En Stock (Lima)</StatusBadge>
-                  <StatusBadge variant="warning">Últimas 2 Unidades</StatusBadge>
-                  <StatusBadge variant="danger">Agotado</StatusBadge>
-                  <StatusBadge variant="info">Preventa Confirmada</StatusBadge>
-                  <StatusBadge variant="neutral">Procesando</StatusBadge>
+                  <StatusBadge variant="success">Estado correcto</StatusBadge>
+                  <StatusBadge variant="warning">Advertencia</StatusBadge>
+                  <StatusBadge variant="danger">Error</StatusBadge>
+                  <StatusBadge variant="info">Información</StatusBadge>
+                  <StatusBadge variant="neutral">Neutral</StatusBadge>
                 </Stack>
               </Stack>
 
@@ -117,18 +118,18 @@ export default function HomePage() {
                   }}
                 >
                   <TextField
-                    id="demo-email"
-                    label="Correo Electrónico"
-                    placeholder="ejemplo@gamerperu.com"
-                    description="Te notificaremos cuando el stock esté disponible."
+                    id="demo-field"
+                    label="Campo de ejemplo"
+                    placeholder="Texto de ejemplo"
+                    description="Texto auxiliar descriptivo para el usuario."
                     required
                   />
                   <TextField
                     id="demo-error"
-                    label="Código de Cupón"
-                    placeholder="GAMERPERU10"
-                    defaultValue="INVALID_CODE"
-                    error="El código ingresado no es válido o ha expirado."
+                    label="Campo con error"
+                    placeholder="Valor inválido"
+                    defaultValue="VALOR_INCORRECTO"
+                    error="Mensaje de error descriptivo asociado al campo."
                   />
                 </div>
               </Stack>
@@ -139,10 +140,11 @@ export default function HomePage() {
           <Card surface="dark" padding="lg" style={{ width: "100%", maxWidth: "840px" }}>
             <Stack direction="vertical" gap={4}>
               <Stack direction="horizontal" gap={2} align="center">
-                <Shield
-                  size={20}
-                  strokeWidth={1.5}
+                <Icon
+                  icon={Shield}
+                  size="md"
                   style={{ color: "var(--color-brand-primary)" }}
+                  aria-hidden="true"
                 />
                 <h2 className="type-h3" style={{ color: "var(--color-text-dark-primary)" }}>
                   Superficie Invertida (Obsidian Dark)
@@ -152,8 +154,7 @@ export default function HomePage() {
                 className="type-body-default"
                 style={{ color: "var(--color-text-dark-secondary)" }}
               >
-                Demostración de tokens invertidos para bloques editoriales y fichas técnicas de alto
-                rendimiento.
+                Demostración de tokens contextuales e inversión cromática de alto contraste.
               </p>
               <Stack direction="horizontal" gap={2} wrap="wrap">
                 <SpecPill inverted>Magnesium Alloy</SpecPill>
@@ -173,8 +174,12 @@ export default function HomePage() {
                       WCAG 2.1 AA cumplido con ratios superiores a 18:1
                     </span>
                   </Stack>
-                  <Button variant="primary" leadingIcon={<Check size={18} strokeWidth={1.5} />}>
-                    Confirmar Selección
+                  <Button
+                    id="dark-surface-btn"
+                    variant="primary"
+                    leadingIcon={<Icon icon={Check} size="sm" />}
+                  >
+                    Acción en superficie oscura
                   </Button>
                 </Stack>
               </Card>

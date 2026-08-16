@@ -2,6 +2,7 @@ export * from "./badge";
 export * from "./button";
 export * from "./card";
 export * from "./container";
+export * from "./icon";
 export * from "./icon-button";
 export * from "./input";
 export * from "./stack";

@@ -29,12 +29,14 @@
   background-color: var(--color-surface-dark-canvas);
   color: var(--color-text-dark-primary);
   border-color: var(--color-border-dark-subtle);
+  --focus-ring-color: var(--color-border-dark-focus);
 }
 
 .darkCard {
   background-color: var(--color-surface-dark-card);
   color: var(--color-text-dark-primary);
   border-color: var(--color-border-dark-subtle);
+  --focus-ring-color: var(--color-border-dark-focus);
 }
 
 /* Padding scale */

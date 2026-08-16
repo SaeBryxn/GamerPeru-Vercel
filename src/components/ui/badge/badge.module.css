@@ -33,7 +33,7 @@
 .badgeSubtle {
   background-color: var(--color-brand-subtle-light);
   color: var(--color-brand-hover);
-  border-color: rgba(225, 29, 72, 0.15);
+  border-color: var(--color-status-danger-border);
 }
 
 /* Spec Pill (Technical Metrics) */

@@ -1,4 +1,6 @@
 import React from "react";
+import type { LucideIcon, LucideProps } from "lucide-react";
+import { Icon, type IconSize } from "../icon";
 import styles from "./icon-button.module.css";
 
 export type IconButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
@@ -6,13 +8,17 @@ export type IconButtonVariant = "primary" | "secondary" | "ghost" | "destructive
 export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   "aria-label": string;
   variant?: IconButtonVariant;
-  children: React.ReactNode;
+  icon?: LucideIcon | React.ComponentType<LucideProps>;
+  iconSize?: IconSize;
+  children?: React.ReactNode;
 }
 
 export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
   {
     "aria-label": ariaLabel,
     variant = "ghost",
+    icon,
+    iconSize = "md",
     type = "button",
     disabled,
     className,
@@ -28,13 +34,13 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(f
       ref={ref}
       type={type}
       aria-label={ariaLabel}
-      disabled={disabled}
+      disabled={Boolean(disabled)}
       aria-disabled={disabled ? "true" : undefined}
       className={classNames}
       {...rest}
     >
       <span className={styles.glyphSlot} aria-hidden="true">
-        {children}
+        {icon ? <Icon icon={icon} size={iconSize} aria-hidden="true" /> : children}
       </span>
     </button>
   );
