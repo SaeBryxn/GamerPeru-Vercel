@@ -47,7 +47,7 @@ Adopt a **Provider-Agnostic AI Gateway with Versioned AES-256-GCM Credential Enc
 
 ## Security / SEO / Performance Impact
 - **Security**: In the event of a database dump compromise, credentials cannot be decrypted without the separate runtime master key.
-- **SEO**: AI-generated copy is schema-validated and stored as static HTML/JSON in the catalog, ensuring optimal search engine crawling.
+- **SEO**: AI-generated copy is schema-validated and stored as static HTML/JSON in the catalog, ensuring search engine crawling capability.
 - **Performance**: AI calls run asynchronously in Inngest background jobs for import workflows, preventing browser request timeouts.
 
 ## Migration / Reversal

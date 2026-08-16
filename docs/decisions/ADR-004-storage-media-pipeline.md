@@ -26,17 +26,29 @@ Adopt **Cloudflare R2 (S3-Compatible Object Storage)** with **Cloudflare Edge Me
    - Stores catalog product photos, brand logos, 3D renders, and editorial Product Story media.
    - Connected to public media domain (`media.gamerperu.com`).
    - Cloudflare Image Transformations generate responsive WebP and AVIF variants based on client `Accept` headers and viewport parameters.
-   - Long-lived cache headers (`Cache-Control: public, max-age=31536000, immutable`) ensure maximum edge cache hit rates.
+   - **Cloudflare Images Free Tier Behavior**: The Free tier includes up to 5,000 unique transformations/month. Exceeding 5,000 transformations acts as a hard cap where new transformations fail until upgraded to a Paid Images plan ($5/mo base or $0.50/1,000 transformations on paid zones). To mitigate risks during the Free phase:
+     * Enforce a strict set of standardized responsive variant presets (thumbnail, card, hero, story);
+     * Avoid arbitrary client-requested image dimensions;
+     * Provide graceful source-image fallback if a transformation fails;
+     * Monitor monthly transformation volume.
+   - Long-lived cache headers (`Cache-Control: public, max-age=31536000, immutable`) ensure high edge cache hit rates.
 2. **Private Proofs Bucket (`gamerperu-private-proofs`)**:
    - Stores customer Yape/Plin payment transfer vouchers and screenshots.
    - Completely isolated from public HTTP access (no custom domain, zero CDN caching, no public directory listing).
    - **Access Model**: Authorized **short-lived S3/R2 pre-signed URLs** (5-minute expiration) generated on-demand by server actions only after verifying the admin's `orders:verify` permission.
    - *Bearer Credential Semantics*: Because an unexpired signed URL functions as a temporary bearer credential, URLs are transmitted strictly over HTTPS, never logged in standard application log streams, never included in analytics, served with `Cache-Control: private, no-store`, and logged as an authorization audit event upon generation.
    - File uploads enforce strict MIME type validation (JPEG, PNG, WebP only) and a strict 5MB size limit.
+3. **R2 Object Lifecycle & Integrity**:
+   - Cloudflare R2's S3 compatibility does NOT support native S3 bucket versioning operations.
+   - Integrity is safeguarded architecturally:
+     * Public media uses immutable, content-hashed object keys (`/products/[brand]/[model]/[hash].webp`);
+     * Database records maintain canonical object URIs;
+     * Private proofs follow an application-level retention policy;
+     * Database backups use timestamped object keys (`backup_YYYY-MM-DD_HHMMSS.sql.gz.enc`) with 30-day lifecycle rules in `gamerperu-db-backups-private`.
 
 ## Consequences
 - **Positive**: Zero data egress fees, high-speed edge media delivery for customers in Peru, complete physical and logical isolation of sensitive financial vouchers, full S3 API compatibility.
-- **Negative**: Cloudflare Image Transformations incur minimal usage-based transformation fees beyond the free allowance.
+- **Negative**: Requires monitoring Cloudflare Images free transformation caps and managing immutable key naming without relying on native bucket versioning.
 
 ## Security / SEO / Performance Impact
 - **Security**: Complete physical and logical separation of sensitive customer payment proofs from public marketing assets.

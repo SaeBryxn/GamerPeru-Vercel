@@ -44,7 +44,7 @@ Gamer Perú requires reliable transactional communications (order confirmations,
 ## Security / SEO / Performance Impact
 - **Security**: Strict automated redaction ensures no sensitive customer data or credentials appear in Sentry or server log streams.
 - **SEO**: Lightweight analytics scripts have zero impact on Core Web Vitals and LCP scores.
-- **Performance**: Asynchronous email dispatch via background jobs ensures customer checkout response is instant.
+- **Performance**: Asynchronous email dispatch via background jobs ensures customer checkout response remains fast and non-blocking.
 
 ## Migration / Reversal
 Resend uses standard SMTP/REST conventions; email templates written in React Email can be rendered to static HTML and dispatched via any provider (Postmark, SendGrid, SES). PostHog can be migrated to Plausible or Mixpanel via the analytics adapter.

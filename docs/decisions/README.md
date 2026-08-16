@@ -6,8 +6,8 @@ This directory contains the canonical Architecture Decision Records for Gamer Pe
 
 | ADR | Title | Status | Date | Decision Summary |
 |---|---|---|---|---|
-| [ADR-001](./ADR-001-application-framework-runtime.md) | Application Framework, Runtime and Topology | **ACCEPTED** | 2026-08-16 | Next.js 15 Active Production Line, TypeScript 5.x, Node.js 22 LTS, Vercel hosting, Modular Monolith topology. |
-| [ADR-002](./ADR-002-commerce-engine-data-architecture.md) | Commerce Engine and Managed Database Architecture | **ACCEPTED** | 2026-08-16 | Custom Gamer Perú commerce domain on Supabase PostgreSQL (Free-first $\to$ Pro upgrade) with Drizzle ORM. |
+| [ADR-001](./ADR-001-application-framework-runtime.md) | Application Framework, Runtime and Topology | **ACCEPTED** | 2026-08-16 | Next.js 16 Active LTS, TypeScript 5.x, Node.js 24 LTS, Vercel hosting, Modular Monolith topology. |
+| [ADR-002](./ADR-002-commerce-engine-data-architecture.md) | Commerce Engine and Managed Database Architecture | **ACCEPTED** | 2026-08-16 | Custom Gamer Perú commerce domain on Supabase PostgreSQL (Free-first launch $\to$ Pro upgrade) with Drizzle ORM. |
 | [ADR-003](./ADR-003-authentication-authorization-rbac.md) | Authentication, Session Management and RBAC | **ACCEPTED** | 2026-08-16 | Better Auth with PostgreSQL session store, Argon2id password hashing, and authoritative server-side RBAC. |
 | [ADR-004](./ADR-004-storage-media-pipeline.md) | Object Storage, Media Pipeline and Voucher Security | **ACCEPTED** | 2026-08-16 | Cloudflare R2 (public media + image transformations / private proofs with short-lived pre-signed URLs). |
 | [ADR-005](./ADR-005-search-asynchronous-jobs.md) | Search and Asynchronous Job Architecture | **ACCEPTED** | 2026-08-16 | PostgreSQL FTS / Trigram with SearchProvider adapter + Inngest durable async workflows. |

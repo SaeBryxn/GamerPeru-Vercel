@@ -23,14 +23,14 @@ Gamer Perú requires secure, multi-surface identity management supporting:
 ## Decision
 Adopt **Better Auth** with a **PostgreSQL Database Session Store** and **Argon2id** password hashing:
 
-1. **Authentication Architecture**:
-   - **Password Hashing**: **Argon2id** for robust password security against GPU-based brute force attacks.
-   - **Session Transport**: Encrypted, `HttpOnly`, `SameSite=Lax`, `Secure` cookies stored in PostgreSQL with rolling expiration and instant server-side revocation capability.
+1. **Authentication Architecture & Hashing Configuration**:
+   - **Password Hashing**: Explicitly configure **Argon2id** via custom `hash()` and `verify()` handlers in Better Auth (overriding Better Auth's default `scrypt` algorithm) to ensure high resistance against GPU-based brute force attacks.
+   - **Session Transport**: Opaque signed session cookies (`HttpOnly`, `SameSite=Lax`, `Secure` in production) validated directly against the PostgreSQL `session` table on each authenticated request. (Cookies contain signed session identifiers, not arbitrary JWE encrypted payloads).
+   - **Session Revocation on Password Reset**: Explicitly configure Better Auth's password reset workflow to invalidate all existing active database sessions for the target user upon successful credential change.
    - **Security Properties**:
      * `HttpOnly` prevents client-side JavaScript access to session tokens, mitigating token extraction via XSS.
-     * `Secure` mandates HTTPS transport for all session cookies.
-     * `SameSite=Lax` mitigates Cross-Site Request Forgery (CSRF) on cross-origin requests.
-     * Session revocation immediately terminates all active devices upon password reset or admin privilege modification.
+     * `Secure` mandates HTTPS transport for all session cookies in production.
+     * `SameSite=Lax` mitigates Cross-Site Request Forgery (CSRF) on cross-origin navigation.
 2. **Authoritative Gamer Perú RBAC**:
    - Authentication (identifying the user) and Authorization (determining permissions) are strictly separated.
    - User roles and permissions are stored in PostgreSQL (`roles`, `permissions`, `user_roles`).
@@ -41,12 +41,12 @@ Adopt **Better Auth** with a **PostgreSQL Database Session Store** and **Argon2i
      * `ADMIN_SUPPORT`: Customer inquiry management, return/RMA review.
      * `CUSTOMER`: Standard customer account access restricted exclusively to owned records.
    - Authorization Enforcement:
-     * Every administrative server action and page layout invokes `requirePermission('permission:name')`.
+     * Every administrative server action, layout, and route handler invokes `requirePermission('permission:name')`.
      * Customer data queries automatically inject `session.customerId` derived from the server session; client-provided user IDs are ignored.
 
 ## Consequences
 - **Positive**: Complete control over user data and auth flows, zero recurring auth vendor costs, instant session revocation, zero external dependency during login/checkout.
-- **Negative**: Gamer Perú engineering owns password reset email delivery and rate limiting.
+- **Negative**: Requires explicit configuration of custom Argon2id hashing and password-reset session invalidation handlers during bootstrap.
 
 ## Security / SEO / Performance Impact
 - **Security**: Server-side RBAC and secure session cookie attributes enforce defense-in-depth across customer and admin surfaces.

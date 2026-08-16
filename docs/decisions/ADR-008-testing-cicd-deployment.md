@@ -10,14 +10,14 @@ To ensure high reliability across multi-brand hardware commerce, automated payme
 - **Commerce Integrity**: High test confidence for cart calculations, inventory reservation, checkout, and manual Yape/Plin order state transitions.
 - **Fast Developer Feedback**: Rapid test execution locally and in CI to empower autonomous AI coding agents and human developers.
 - **Cross-Browser & Mobile Verification**: End-to-end testing across desktop and real mobile viewports, including WCAG 2.1 AA accessibility checks.
-- **Deterministic Production Hosting**: Exactly one production application hosting platform with automated preview environments and zero-downtime rollouts.
+- **Deterministic Production Hosting**: Exactly one commercial application hosting platform with automated preview environments and zero-downtime rollouts.
 
 ## Options Considered
 1. **Vitest + Playwright + GitHub Actions + Vercel Deployment**:
    - Modern, blazing-fast ESM-native test runner (Vitest) for unit/integration tests.
    - Playwright for multi-browser E2E, mobile emulation, and accessibility auditing (`axe-core`).
    - GitHub Actions for automated pull-request validation, linting, type-checking, and test execution.
-   - Vercel for atomic preview and production deployments with instant rollback.
+   - Vercel Pro for commercial cloud deployment, atomic preview environments, and production deployments with instant rollback.
 2. **Jest + Cypress + AWS Container Deployment**: Slower execution, heavier memory footprint, and higher operational complexity for a launch-scale modular monolith.
 
 ## Decision
@@ -41,11 +41,12 @@ Adopt **Vitest + Playwright + GitHub Actions + Vercel Deployment**:
      3. Production deployment to Vercel with instant rollback capability.
 3. **Application Hosting Platform**:
    - **Vercel** is the canonical application host for `gamerperu.com`.
-   - Application traffic routes: `Browser -> Vercel Edge Network -> Next.js Node.js Serverless Execution -> Supabase PostgreSQL (via Supavisor connection pooler)`.
+   - Vercel Pro is used for cloud commercial deployments (Vercel Hobby is restricted to non-commercial personal use).
+   - Application traffic routes: `Browser -> Vercel Edge Network -> Next.js Serverless Execution (Node.js 24 LTS) -> Supabase PostgreSQL (via Supavisor connection pooler)`.
 
 ## Consequences
 - **Positive**: Sub-second unit test execution, robust E2E coverage of financial and checkout flows, automated prevention of accessibility and layout regressions, frictionless CI/CD previews.
-- **Negative**: Requires maintaining Playwright browser binaries in CI environments.
+- **Negative**: Requires maintaining Playwright browser binaries in CI environments and commercial Vercel subscription for hosted environments.
 
 ## Security / SEO / Performance Impact
 - **Security**: Pre-deployment CI checks prevent shipping unauthenticated server actions or flawed permission guards.
