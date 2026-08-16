@@ -16,20 +16,25 @@ These standards apply to all code, tests, database migrations, configuration fil
 
 The Gamer Perú canonical technology baseline is fixed and non-negotiable:
 
-| Concern                | Technology / Version                                                    | Role in Architecture                                    |
-| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| **Application Host**   | Next.js 16 Active LTS (`next@16.3.1`)                                   | App Router, Server Components, Server Actions           |
-| **Runtime & Language** | Node.js 24 LTS + TypeScript 5.x (`typescript@5.9.3`)                    | Server runtime & static typing engine                   |
-| **Package Manager**    | `pnpm` (v11.22.0)                                                       | Reproducible dependency & lockfile management           |
-| **Database & ORM**     | Supabase PostgreSQL 16+ with Drizzle ORM (`drizzle-orm@0.45.2`)         | Authoritative relational data store & query layer       |
-| **PostgreSQL Driver**  | `postgres` (`postgres@3.4.9`)                                           | Node PostgreSQL client configured with `prepare: false` |
-| **Authentication**     | Supabase Auth (`@supabase/ssr@0.12.4`, `@supabase/supabase-js@2.112.3`) | Identity, session cookies, OAuth, email confirmation    |
-| **Authorization**      | Authoritative Gamer Perú Server-Side RBAC                               | Database-backed permission checks (`requirePermission`) |
-| **Storage & CDN**      | Cloudflare R2 (`@aws-sdk/client-s3@3.1111.0`) + Edge Delivery           | Public product media, private payment proofs, backups   |
-| **Async Jobs**         | Inngest (`inngest@4.18.1`)                                              | Durable step-function workflows and event retries       |
-| **Email Delivery**     | Resend + React Email                                                    | Transactional order updates and auth notifications      |
-| **Testing Harness**    | Vitest (`vitest@4.1.10`) + Playwright (`@playwright/test@1.62.1`)       | Unit, integration, E2E, and accessibility testing       |
-| **Code Quality**       | ESLint 9 (`eslint@9.39.5`) + Prettier 3 (`prettier@3.9.6`)              | Static analysis and deterministic formatting            |
+| Concern                | Technology / Version                                                    | Role in Architecture                                                                  |
+| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Application Host**   | Next.js 16 Active LTS (`next@16.3.1`)                                   | App Router, Server Components, Server Actions                                         |
+| **Runtime & Language** | Node.js 24 LTS + TypeScript 5.x (`typescript@5.9.3`)                    | Server runtime & static typing engine                                                 |
+| **Package Manager**    | `pnpm` (v11.22.0)                                                       | Reproducible dependency & lockfile management                                         |
+| **Database & ORM**     | Supabase PostgreSQL 16+ with Drizzle ORM (`drizzle-orm@0.45.2`)         | Authoritative relational data store & query layer                                     |
+| **PostgreSQL Driver**  | `postgres` (`postgres@3.4.9`)                                           | Node PostgreSQL client configured with `prepare: false`                               |
+| **Authentication**     | Supabase Auth (`@supabase/ssr@0.12.4`, `@supabase/supabase-js@2.112.3`) | Identity, session cookies, OAuth, email confirmation                                  |
+| **Authorization**      | Authoritative Gamer Perú Server-Side RBAC                               | Database-backed permission checks (`requirePermission`)                               |
+| **Storage & CDN**      | Cloudflare R2 (`@aws-sdk/client-s3@3.1111.0`) + Edge Delivery           | Public product media, private payment proofs, backups                                 |
+| **Async Jobs**         | Inngest (`inngest@4.18.1`)                                              | Durable step-function workflows and event retries                                     |
+| **Email Delivery**     | Resend (Custom SMTP for Auth + API for Commerce) + React Email          | Auth emails via Supabase/Resend SMTP; commerce notices via Inngest/Resend/React Email |
+| **Testing Harness**    | Vitest (`vitest@4.1.10`) + Playwright (`@playwright/test@1.62.1`)       | Unit, integration, E2E, and accessibility testing                                     |
+| **Code Quality**       | ESLint 9 (`eslint@9.39.5`) + Prettier 3 (`prettier@3.9.6`)              | Static analysis and deterministic formatting                                          |
+
+### Email Architecture Distinct Pipelines
+
+1. **Authentication Email Pipeline**: Supabase Auth -> Resend custom SMTP (signup verification, password recovery, email changes).
+2. **Commerce & Application Email Pipeline**: Gamer Perú / Inngest -> Resend API -> React Email (order confirmations, payment notices, fulfillment/shipment updates). React Email is not the canonical Supabase Auth email transport/template layer unless a future explicitly approved implementation adopts such integration.
 
 ---
 
@@ -57,6 +62,7 @@ Formatting is mechanically enforced by Prettier (`prettier@3.9.6`) and verified 
   - `trailingComma`: `"es5"`
   - `arrowParens`: `"always"`
   - `endOfLine`: `"lf"`
+- **Ignore Rules**: `.prettierignore` excludes build artifacts (`.next`, `dist`, `build`, `out`), dependencies (`node_modules`), lockfiles (`pnpm-lock.yaml`), test output (`coverage`, `test-results`, `playwright-report`), and Drizzle generated migration artifacts (`src/db/migrations/**`).
 - **Execution Commands**:
   - `pnpm format`: Formats all tracked files.
   - `pnpm format:check`: Read-only verification (fails CI on formatting deviations).
@@ -116,7 +122,7 @@ ESLint 9 uses native flat configuration in `eslint.config.mjs` with zero-warning
 - **Relative Imports**: Permitted only within immediate sibling files in the same cohesive module folder (e.g. `import { helper } from "./helpers";`).
 - **Type Imports**: Types must be imported with explicit `import type`:
   - `import type { Database } from "@/db";`
-- **Client/Server Isolation**: Never import `server-only` modules (`src/config/server-env`, `src/db`, `src/lib/storage/r2`) from client-side files (`"use client"`).
+- **Client/Server Isolation**: Never import `server-only` modules (`src/config/server-env`, `src/db`, `src/lib/storage/r2`, `src/lib/supabase/server`) from client-side files (`"use client"`).
 - **Circular Dependencies**: Deliberate circular imports are strictly prohibited.
 
 ---
@@ -238,11 +244,23 @@ tests/
 
 - **Integer Minor Units**: All monetary values are strictly represented as integers in minor units (Peruvian Centavos, PEN). Floating-point currency representation is strictly forbidden.
 - **Rounding & Precision**: Multiplication and discount allocations must define explicit integer rounding rules (`Math.round`, `Math.floor`) preventing fractional cent discrepancies.
-- **Mandatory Edge Coverage**: Financial tests must cover:
-  - Zero-sum orders and 100% discount vouchers.
-  - Rounding boundaries on tax (18% IGV).
-  - Negative values (must throw validation error).
-  - Order subtotal + shipping - discount = final total invariant.
+- **Standard vs Signed Values**:
+  - _Standard Money Values_ (prices, line totals, shipping fees, payments, allocated discounts): Must be non-negative integers (`>= 0`) according to domain constraints.
+  - _Signed Financial Adjustments_: Explicit adjustment entities (such as `CommissionAdjustment.amount_cents`) may accept signed integer values when representing debit adjustments or clawbacks.
+  - Financial testing must verify that unauthorized negative values are rejected, while explicitly signed adjustment entities accept only valid signed amounts.
+- **Tax / Fiscal Testing Semantics**: Future tax/fiscal calculations, if and when approved by the corresponding business/legal specification, must test:
+  - configured rate boundaries;
+  - integer-minor-unit rounding;
+  - zero/exempt cases where applicable;
+  - deterministic allocation across items;
+  - total reconciliation.
+    _(Exact Peru tax presentation and calculation remains governed by future approved business/legal specifications)._
+- **Discount & Promotion Boundaries**: Financial testing for discounts must verify:
+  - zero discount baseline;
+  - maximum configured promotion limits;
+  - discounts cannot exceed permitted/order-applicable caps;
+  - deterministic discount distribution across line items;
+  - order subtotal + shipping - discount = final total invariant.
 
 ---
 
@@ -260,16 +278,21 @@ Privileged endpoints, Server Actions, and Admin Route Handlers must be tested ac
 ## 21. Database & Migration Standards
 
 1. **Single Schema Authority**: Drizzle schema files in `src/db/schema/` are the authoritative data models.
-2. **Migration Review**: Migrations must be generated via `pnpm db:generate` and committed to `src/db/migrations/`.
-3. **No Direct Remote Alterations**: Manual changes to remote production tables outside canonical migrations are prohibited.
-4. **Zero-Downtime Safe DDL**: Additive columns should be nullable or provide safe defaults; dropping columns requires a phased deprecation.
-5. **Supavisor Compatibility**: Database connections must configure `prepare: false` to guarantee compatibility with Supabase transaction connection pooling.
+2. **Generated Migration Artifacts**: Migrations must be generated via `pnpm db:generate` and committed to `src/db/migrations/`.
+3. **Migration Review Policy**:
+   - Drizzle generates migration SQL and metadata journals (`_journal.json`).
+   - Generated SQL must be reviewed for safety before execution.
+   - Agents and formatters must not casually rewrite or reformat Drizzle metadata journals (migration paths are excluded from Prettier).
+   - If a migration genuinely requires custom SQL or manual correction, that change must be deliberate, reviewed, documented, and compatible with the canonical schema.
+4. **No Direct Remote Alterations**: Manual changes to remote production tables outside canonical migrations are prohibited.
+5. **Zero-Downtime Safe DDL**: Additive columns should be nullable or provide safe defaults; dropping columns requires a phased deprecation.
+6. **Supavisor Compatibility**: Database connections must configure `prepare: false` to guarantee compatibility with Supabase transaction connection pooling.
 
 ---
 
 ## 22. CI Pipeline Requirements
 
-GitHub Actions CI (`.github/workflows/ci.yml`) is the mandatory gate for all code merging to `main`:
+GitHub Actions CI (`.github/workflows/ci.yml`) is the mandatory quality gate for all code merging to `main`:
 
 ```yaml
 jobs:
@@ -288,16 +311,21 @@ jobs:
       - Run E2E & Accessibility Tests (pnpm test:e2e)
 ```
 
-- **Branch Protection**: `main` requires passing CI before merge.
 - **Concurrency**: Superseded pull request runs are automatically cancelled (`cancel-in-progress: true`).
 - **Security Permissions**: Strict read-only tokens (`permissions: { contents: read }`).
+- **Execution Timeout**: 10 minutes maximum job duration.
 
 ---
 
-## 23. Git & Pull Request Standards
+## 23. Git & Branch Policy Standards
 
 - **Linear History**: Clean, meaningful commit messages following Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`).
-- **No Force Push to Main**: Direct force pushes to `main` are strictly forbidden.
+- **Target Branch Protection Policy**:
+  - `main` should be protected through GitHub Branch Protection or Rulesets.
+  - The required CI workflow must pass before merge once branch protection is enabled.
+  - Direct force-pushes to `main` are prohibited by project policy.
+  - A failed CI workflow run can never be called `PASS`.
+  - Current remote branch protection settings must not be claimed as verified unless explicitly audited.
 - **Clean Working Tree**: Commits must not contain leftover debug code, untracked temporary files, or commented-out blocks.
 
 ---
@@ -307,7 +335,7 @@ jobs:
 The following files are managed automatically by tooling and must not be edited manually:
 
 - `pnpm-lock.yaml` (managed via `pnpm install` / `pnpm add`)
-- `src/db/migrations/` SQL files & metadata journals (managed via `pnpm db:generate`)
+- `src/db/migrations/` SQL files & metadata journals (managed via `pnpm db:generate`, excluded from code formatting)
 - `next-env.d.ts` (managed by Next.js compiler)
 - `.next/` build output
 
@@ -352,7 +380,7 @@ A task or GP is **DONE** when and only when:
 
 1. **Functional DoD**: All scoped behavior is implemented without missing edge cases or scope creep.
 2. **Quality DoD**: `pnpm check` and `pnpm test:e2e` pass with 0 errors and 0 warnings.
-3. **Security DoD**: Zero secrets committed; server-only boundaries respected; `allowBuilds` audited.
+3. **Security DoD**: Zero secrets committed in tracked files; server-only boundaries respected; `allowBuilds` audited.
 4. **Accessibility DoD**: Playwright axe-core audits pass with zero violations.
 5. **CI DoD**: Remote GitHub Actions workflow completes with conclusion `success`.
 6. **Documentation DoD**: A completed `GP-XXX-CLOSURE.md` report is committed using the canonical closure template.
