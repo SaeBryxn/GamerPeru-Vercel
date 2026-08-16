@@ -142,11 +142,13 @@ graph LR
     end
     
     subgraph "Zone 2: Authenticated Perimeter"
-        CustSession[Supabase Auth Customer JWT / Refresh Cookie]
-        AdminSession[Supabase Auth Admin JWT / Refresh Cookie]
+        BrowserSession[Browser Session Cookie Access JWT & Refresh Token]
     end
     
     subgraph "Zone 3: Server Application Trust Boundary (Next.js 16 on Vercel)"
+        SSRClient[Request-Scoped Supabase SSR Client]
+        JWTVerify[getClaims JWT Verification against cached JWKS]
+        AuthClaims[Verified Auth Claims sub = auth_user_id]
         AppServer[Next.js Server Actions & API Handlers]
         ZodValidator[Zod Input & Payload Validation]
         RBACGuard[Authoritative RBAC Guard requirePermission]
@@ -160,12 +162,16 @@ graph LR
     
     Browser -->|Public Requests| AppServer
     Bot -->|Crawl Requests| AppServer
-    CustSession -->|Verified by Cookie| ZodValidator
-    AdminSession -->|Verified by Cookie| RBACGuard
+    BrowserSession -->|Cookie Session| SSRClient
+    SSRClient -->|Token Extraction| JWTVerify
+    JWTVerify -->|Verified Identity| AuthClaims
+    AuthClaims -->|Customer Context| ZodValidator
+    AuthClaims -->|Staff Identity| RBACGuard
     
     RBACGuard -->|Requires 'orders:verify'| PrivateProofs
     RBACGuard -->|Requires 'ai:manage'| Vault
     ZodValidator --> AppServer
+    RBACGuard --> AppServer
     AppServer --> SupabaseDB
 ```
 
@@ -237,21 +243,36 @@ graph LR
 - **Canonical v1 Login Methods**:
   1. `EMAIL_PASSWORD`: Standard customer registration, email verification, login, and password recovery.
   2. `GOOGLE`: Google OAuth 2.0 with PKCE authorization flow for streamlined "Continuar con Google".
-- **Session Architecture & Token Transport**:
-  - Supabase Auth issues short-lived JWT access tokens and rotated refresh tokens.
-  - Next.js App Router manages sessions through secure HTTP-only cookies using official Supabase SSR libraries (`@supabase/ssr`).
-  - *PKCE Flow*: OAuth redirects and password recovery use PKCE (Proof Key for Code Exchange) to prevent authorization code interception.
-  - *Server-Side Token Verification*: Protected server actions and data access layers verify identity via `getUser()` / verified JWT tokens, never relying on unverified cookie data.
-- **Provider-Owned Identity Boundary**:
-  - Supabase Auth owns and manages its internal `auth` schema (`auth.users`, credentials, OAuth identities, refresh tokens).
-  - Gamer Perú / Drizzle does not own, migrate, or alter internal Supabase `auth` tables.
-  - Gamer Perú tables reference `auth.users.id` (`UUID`) via `auth_user_id`.
-- **CustomerProfile Provisioning**:
-  - Separates identity (`auth.users`) from business data (`CustomerProfile`).
-  - Provisioned idempotently upon first authenticated session via application-level `ensureCustomerProfile(auth_user_id)`.
-  - Customer business data (names, phone, document, default address) resides in `CustomerProfile`, never in Supabase user metadata.
+- **Cookie & SSR Architecture (`@supabase/ssr`)**:
+  - `@supabase/ssr` manages session cookies shared between browser and server (`SameSite=Lax`, `Secure` in production, `Path=/`).
+  - Standard Supabase SSR session cookies are NOT HttpOnly because the browser-side Supabase client (`createBrowserClient`) needs access to session tokens to maintain and refresh client state.
+  - The access token is a short-lived JWT; the refresh token maintains and rotates the active session.
+  - Token validity, revocation, and expiration are controlled by Supabase Auth.
+  - Possession of a cookie alone is NEVER proof of identity; server-side execution must independently verify JWT authenticity.
+- **Server Identity Verification Strategy**:
+  - **Primary (`getClaims()`)**: Server actions, route handlers, and Server Components primarily verify identity using `getClaims()` (or verified JWT verification against cached project JWKS), validating token signature and claims without an unnecessary network roundtrip to the Auth server.
+  - **Fresh User Record (`getUser()`)**: Used when Gamer Perú specifically requires the authoritative user record directly from Supabase Auth servers (e.g. verifying updated email confirmation state or administrative user status).
+  - **Non-Authoritative (`getSession()`)**: Used only when raw token metadata is required; `getSession()` user data alone is explicitly NOT trusted as authorization proof in server code.
+  - **Conceptual Helper (`getVerifiedAuthContext()`)**: GP-015 will implement a request-scoped helper that creates the Supabase server client, validates claims with `getClaims()`, extracts `auth_user_id` from the verified `sub` claim, and resolves `CustomerProfile` or RBAC roles.
+- **Request-Scoped Server Client Lifetime on Vercel**:
+  - Supabase server clients containing request-specific session state must be created within the current request scope.
+  - Shared module-level authenticated Supabase clients are strictly forbidden to prevent session state leakage across serverless requests or reused compute instances.
+- **Authenticated-Route Caching Policy**:
+  - Authenticated customer and admin routes must not use ISR if session refresh can occur and must not publicly cache responses containing `Set-Cookie`.
+  - User-specific authenticated pages render dynamically (`no-store` / `force-dynamic`).
+  - Public catalog routes remain independently cacheable via ISR and CDN edge caching.
+- **Package Maturity Note**:
+  - `@supabase/ssr` is the official recommended package but continues to evolve its API surface; GP-005 / GP-015 will pin a tested version and version upgrades require auth regression tests.
+- **Google OAuth Scope & Token Boundary**:
+  - Scopes are strictly limited to minimum login/profile permissions: `openid`, `email`, `profile`.
+  - No Google provider access tokens (`provider_token`) or refresh tokens (`provider_refresh_token`) are stored in Gamer Perú domain tables.
+  - Supabase Auth automatically links OAuth identities sharing the same verified email to a single Supabase user record.
+- **Identity Detachment & Lifecycle Boundary**:
+  - `CustomerProfile.auth_user_id` is required for active linked accounts (`UNIQUE WHERE auth_user_id IS NOT NULL`), but becomes `NULL` upon customer account deletion/anonymization.
+  - Account deletion anonymizes customer personal data, detaches `CustomerProfile.auth_user_id`, removes `UserRole` assignments, and deletes/disables the Supabase Auth user while permanently preserving historical commerce records (Orders, Payments, Refunds, Inventory ledger, Audit events).
+  - Historical staff references (`created_by_auth_user_id`, `verifier_auth_user_id`, `actor_auth_user_id`, etc.) use nullable FK (`ON DELETE SET NULL`) while immutable `AuditEvent` logs preserve historical audit strings.
 - **Authentication Emails**:
-  - Supabase Auth transactional emails (signup verification, password reset) are routed through **Resend custom SMTP** in production. (Supabase's built-in demo SMTP is not used for production).
+  - Supabase Auth transactional emails (signup verification, password recovery/reset) are routed through **Resend custom SMTP** in production. (Supabase's built-in demo SMTP is not used for production).
 
 ---
 
@@ -266,7 +287,7 @@ graph LR
   - `CUSTOMER`: Standard customer account access restricted exclusively to owned records.
 - **Enforcement Rules**:
   - Every administrative server action, layout, and route handler invokes `requirePermission('permission:name')`.
-  - Customer queries verify the Supabase Auth session server-side (`getUser()`), resolve `auth_user_id` to `CustomerProfile.id`, and apply customer data isolation; client-supplied user IDs are ignored.
+  - Customer queries verify identity via `getClaims()`, resolve `auth_user_id` to `CustomerProfile.id`, and apply customer data isolation; client-supplied user IDs are ignored.
   - Social OAuth login (Google) never automatically grants administrative privileges.
 
 ---
@@ -385,9 +406,16 @@ graph LR
 ## 24. Email & Transactional Communications
 
 - **Provider**: **Resend** with **React Email** (ADR-006).
-- **Template Architecture**: Type-safe React components shared within the codebase.
-- **Transactional Triggers**: Order confirmation, payment submitted notice, payment verified receipt, order shipped tracking, password reset.
-- **Reliability**: Dispatched via Inngest background jobs with automatic retry on provider downtime.
+- **Authentication Email Pipeline**:
+  - Dispatched directly by **Supabase Auth** routed via **Resend custom SMTP** in production.
+  - Triggers: Signup email confirmation, email verification, password recovery/reset, and email change notifications.
+  - Operational Requirements: Verified sending domain, configured SPF/DKIM/DMARC, sender identity partitioned from marketing where practical.
+  - Supabase demo SMTP is restricted strictly to local/development testing.
+- **Application Commerce Email Pipeline**:
+  - Dispatched asynchronously by **Gamer Perú Domain Events / Inngest** using the **Resend API** and type-safe **React Email** templates.
+  - Triggers: Order confirmation, payment submitted notice, payment approved receipt, payment rejected notice, order shipped tracking, RMA return updates.
+  - Reliability: Dispatched via Inngest background jobs with automatic retries and dead-letter queueing on provider downtime.
+  - Non-Duplication Invariant: Password recovery/reset emails are handled strictly by the Supabase Auth SMTP pipeline; they are NEVER dispatched via Inngest.
 
 ---
 
@@ -485,11 +513,11 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 | Security Control | Implementation Layer | Enforcement Mechanism |
 |---|---|---|
 | **Admin RBAC** | Server Actions, Layouts & Route Handlers | Authoritative database role check (`requirePermission`) |
-| **Customer Data Isolation** | Data Access Layer | Server-verified `auth_user_id` $\to$ `CustomerProfile.id` filter |
+| **Customer Data Isolation** | Data Access Layer | Server-verified `getClaims()` $\to$ `auth_user_id` $\to$ `CustomerProfile.id` filter |
 | **Payment Voucher Protection**| Private Storage | S3 private bucket with no anonymous public access; short-lived pre-signed URLs (5m) issued after RBAC verification |
 | **AI Credential Protection** | Database / Server | Versioned AES-256-GCM encryption at rest + separate server master key |
 | **SQL Injection Prevention** | Data Layer | Drizzle ORM parameterized query APIs significantly reduce SQL-injection risk by ensuring inputs remain parameterized |
-| **XSS & CSRF Mitigation** | Framework & HTTP | Next.js automatic encoding, SameSite=Lax HttpOnly Secure cookies |
+| **XSS & CSRF Mitigation** | Framework & HTTP | Next.js automatic encoding, `SameSite=Lax` and `Secure` cookies, cryptographically verified JWT claims |
 | **Rate Limiting** | Edge / Middleware | IP & Session token bucket rate limiting on auth and AI routes |
 
 ---
@@ -556,8 +584,13 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 
 ## 40. Vendor Lock-In & Exit Strategy
 
-- **Database**: Standard PostgreSQL schema; exportable via `pg_dump` and portable to any cloud provider in minutes.
-- **ORM**: Drizzle generates standard SQL migrations; domain code uses standard TypeScript interfaces.
+- **Commerce Data & Domain Portability (High)**:
+  - Standard PostgreSQL schema with Drizzle ORM; exportable via `pg_dump` and portable to any managed PostgreSQL cloud provider in minutes.
+  - Domain business logic uses pure TypeScript and standard SQL interfaces without vendor proprietary extensions.
+- **Identity Provider Portability (Lower)**:
+  - Gamer Perú intentionally couples its authentication plane to Supabase Auth.
+  - Domain records reference `auth.users(id)` via `auth_user_id`.
+  - Migrating to an alternative identity provider (e.g. Auth0, Clerk, or custom OpenID) later would require deliberate identity export, credential migration, and session cutover rather than zero-code drop-in parity.
 - **Object Storage**: Cloudflare R2 exposes an S3-compatible API for standard object operations, and application access is encapsulated behind a storage adapter. While standard object operations and pre-signed URL workflows improve portability, migrating to another S3-compatible provider will require revalidating provider-specific behavior, signing semantics, CDN/transformation integrations, and cache headers rather than assuming guaranteed zero-code parity.
 - **AI Infrastructure**: Internal `AIProvider` gateway allows switching model vendors by updating configuration.
 
@@ -623,7 +656,7 @@ This document provides GP-004 with exact architectural boundaries:
 This document establishes the exact technology choices to be initialized in GP-005:
 - Next.js 16 (App Router) + TypeScript + Node.js 24 LTS.
 - Drizzle ORM + Drizzle Kit with Supabase PostgreSQL connection configuration.
-- Supabase Auth client/server utility setup (`@supabase/supabase-js`, `@supabase/ssr`) and environment contracts.
+- Supabase Auth client/server utility setup (`@supabase/supabase-js`, pinned `@supabase/ssr` version), request-scoped client factories, and environment contracts.
 - Cloudflare R2 SDK clients for public media and private proofs.
 - Inngest client setup.
 - Vitest + Playwright testing harness.
