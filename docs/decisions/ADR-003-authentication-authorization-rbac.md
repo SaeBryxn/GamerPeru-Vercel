@@ -24,6 +24,7 @@ Gamer Perú requires secure, multi-surface identity management supporting:
 Adopt **Better Auth** with a **PostgreSQL Database Session Store** and **Argon2id** password hashing:
 
 1. **Authentication Architecture & Hashing Configuration**:
+   - **Core Better Auth Relational Models**: Better Auth manages its core technical schema (`user`, `session`, `account`, `verification`). Credential password hashes reside strictly in the `account` table, while token lifecycles are managed in `verification`.
    - **Password Hashing**: Explicitly configure **Argon2id** via custom `hash()` and `verify()` handlers in Better Auth (overriding Better Auth's default `scrypt` algorithm) to ensure high resistance against GPU-based brute force attacks.
    - **Session Transport**: Opaque signed session cookies (`HttpOnly`, `SameSite=Lax`, `Secure` in production) validated directly against the PostgreSQL `session` table on each authenticated request. (Cookies contain signed session identifiers, not arbitrary JWE encrypted payloads).
    - **Session Revocation on Password Reset**: Explicitly configure Better Auth's password reset workflow to invalidate all existing active database sessions for the target user upon successful credential change.
@@ -54,4 +55,4 @@ Adopt **Better Auth** with a **PostgreSQL Database Session Store** and **Argon2i
 - **Performance**: Indexed database session lookups add minimal overhead to authenticated requests.
 
 ## Migration / Reversal
-User credentials and sessions reside in standard PostgreSQL tables (`users`, `sessions`, `roles`, `permissions`). Auth logic can easily transition to alternative authentication libraries or external identity providers in the future.
+User credentials, sessions, accounts, and verification tokens reside in standard PostgreSQL tables (`user`, `session`, `account`, `verification`, `roles`, `permissions`). Auth logic can easily transition to alternative authentication libraries or external identity providers in the future.
