@@ -12,7 +12,7 @@ This document defines the canonical technology architecture for **Gamer Perú** 
 - **Application Hosting**: **Vercel** (Vercel Pro for commercial cloud deployment) hosting the application domain (`gamerperu.com`) on the Vercel Edge Network with serverless Node.js execution. (Cloudflare reverse-proxy is not placed in front of `gamerperu.com`).
 - **Commerce Domain Engine**: **Custom Gamer Perú Commerce Domain** owned entirely in TypeScript, optimized for Peruvian domestic payments (`YAPE_MANUAL`, `PLIN_MANUAL`), dynamic multi-category hardware specifications, and modular Product Story layouts.
 - **Database & Data Layer**: **Supabase PostgreSQL (PostgreSQL 16+)** with **Drizzle ORM** and Supavisor connection pooling, utilizing a **Free-First, Upgrade-Ready** operational strategy (zero code changes required to upgrade from Free to Pro). Supabase Free may be used during the initial live launch while operational risk and limits remain acceptable.
-- **Authentication & RBAC**: **Better Auth** with a PostgreSQL session store, custom **Argon2id** password hashing, and authoritative server-side Role-Based Access Control (`requirePermission`).
+- **Authentication & RBAC**: **Supabase Auth** (Email/Password + Google OAuth) with Next.js SSR cookie session architecture (`@supabase/ssr`), Resend custom SMTP for auth emails, and authoritative server-side Role-Based Access Control (`requirePermission`).
 - **Object Storage & Media Pipeline**: **Cloudflare R2** with Cloudflare Edge Media Delivery and on-the-fly Image Transformations for public media (`media.gamerperu.com`); isolated private bucket (`gamerperu-private-proofs`) with short-lived (5-minute expiration) pre-signed URLs for customer Yape/Plin vouchers. (Supabase Storage is explicitly NOT used for the product catalog).
 - **Search & Asynchronous Processing**: **PostgreSQL Full-Text Search + Trigram (`pg_trgm`)** behind a clean `SearchProvider` adapter for v1; **Inngest** for durable asynchronous background workflows (AI product imports, email retries, outbound EC OS events).
 - **AI Infrastructure & Credential Security**: Multi-provider AI Gateway (OpenAI, Anthropic, Google Gemini) with versioned **AES-256-GCM** encryption-at-rest for admin-managed API keys, separated from the database runtime master key.
@@ -29,10 +29,7 @@ This document defines the canonical technology architecture for **Gamer Perú** 
   - Next.js 16 Active LTS Documentation (`nextjs.org/docs`)
   - Node.js 24 LTS Documentation (`nodejs.org/docs/latest-v24.x/`)
   - PostgreSQL 16 Official Manual (`postgresql.org/docs/16/`)
-  - Supabase Database, Supavisor & Pricing Docs (`supabase.com/docs`, `supabase.com/pricing`)
-  - Drizzle ORM Documentation (`orm.drizzle.team/docs`)
-  - Cloudflare R2 & Image Optimization Docs (`developers.cloudflare.com/r2/`, `developers.cloudflare.com/images/`)
-  - Better Auth Documentation (`better-auth.com/docs`)
+  - Supabase Database, Auth, Supavisor & Pricing Docs (`supabase.com/docs`, `supabase.com/docs/guides/auth`, `supabase.com/pricing`)
   - Inngest Durable Execution Docs (`inngest.com/docs`)
   - Resend & React Email Documentation (`resend.com/docs`, `react.email/docs`)
   - PostHog Product Analytics Docs (`posthog.com/docs`)
@@ -115,7 +112,7 @@ graph TD
         CustomerHub --> DomainServices
         AdminPortal --> DomainServices
         
-        DomainServices --> AuthModule[Better Auth & Session Engine]
+        DomainServices --> AuthModule[Supabase Auth & Session Engine (@supabase/ssr)]
         DomainServices --> OrderModule[Orders & Manual Payment Engine]
         DomainServices --> CatalogModule[Catalog & Search Service]
         DomainServices --> AIGateway[AI Provider Gateway]
@@ -145,8 +142,8 @@ graph LR
     end
     
     subgraph "Zone 2: Authenticated Perimeter"
-        CustSession[Opaque Customer Session Cookie]
-        AdminSession[Opaque Admin RBAC Session Cookie]
+        CustSession[Supabase Auth Customer JWT / Refresh Cookie]
+        AdminSession[Supabase Auth Admin JWT / Refresh Cookie]
     end
     
     subgraph "Zone 3: Server Application Trust Boundary (Next.js 16 on Vercel)"
@@ -236,15 +233,25 @@ graph LR
 
 ## 12. Authentication
 
-- **Authentication Framework**: **Better Auth** with a **PostgreSQL Database Session Store** (ADR-003).
-- **Password Security**: Explicitly configure **Argon2id** via custom `hash()` and `verify()` handlers in Better Auth (overriding Better Auth's default `scrypt` algorithm) to ensure high resistance against GPU-based brute force attacks.
-- **Session Transport**: Opaque signed session cookies (`HttpOnly`, `SameSite=Lax`, `Secure` in production) validated directly against the PostgreSQL `session` table on each authenticated request.
-- **Session Security Properties**:
-  - `HttpOnly` prevents client-side JavaScript access to session tokens, mitigating token extraction via XSS.
-  - `Secure` mandates HTTPS transport for all session cookies in production.
-  - `SameSite=Lax` mitigates Cross-Site Request Forgery (CSRF) on cross-origin navigation.
-  - **Session Revocation on Password Reset**: Explicitly configure Better Auth's password reset workflow to invalidate all existing active database sessions for the target user upon successful credential change.
-- **Customer Flows**: Registration, login, password reset via signed email tokens, and profile update.
+- **Authentication Provider**: **Supabase Auth** (ADR-003).
+- **Canonical v1 Login Methods**:
+  1. `EMAIL_PASSWORD`: Standard customer registration, email verification, login, and password recovery.
+  2. `GOOGLE`: Google OAuth 2.0 with PKCE authorization flow for streamlined "Continuar con Google".
+- **Session Architecture & Token Transport**:
+  - Supabase Auth issues short-lived JWT access tokens and rotated refresh tokens.
+  - Next.js App Router manages sessions through secure HTTP-only cookies using official Supabase SSR libraries (`@supabase/ssr`).
+  - *PKCE Flow*: OAuth redirects and password recovery use PKCE (Proof Key for Code Exchange) to prevent authorization code interception.
+  - *Server-Side Token Verification*: Protected server actions and data access layers verify identity via `getUser()` / verified JWT tokens, never relying on unverified cookie data.
+- **Provider-Owned Identity Boundary**:
+  - Supabase Auth owns and manages its internal `auth` schema (`auth.users`, credentials, OAuth identities, refresh tokens).
+  - Gamer Perú / Drizzle does not own, migrate, or alter internal Supabase `auth` tables.
+  - Gamer Perú tables reference `auth.users.id` (`UUID`) via `auth_user_id`.
+- **CustomerProfile Provisioning**:
+  - Separates identity (`auth.users`) from business data (`CustomerProfile`).
+  - Provisioned idempotently upon first authenticated session via application-level `ensureCustomerProfile(auth_user_id)`.
+  - Customer business data (names, phone, document, default address) resides in `CustomerProfile`, never in Supabase user metadata.
+- **Authentication Emails**:
+  - Supabase Auth transactional emails (signup verification, password reset) are routed through **Resend custom SMTP** in production. (Supabase's built-in demo SMTP is not used for production).
 
 ---
 
@@ -259,7 +266,8 @@ graph LR
   - `CUSTOMER`: Standard customer account access restricted exclusively to owned records.
 - **Enforcement Rules**:
   - Every administrative server action, layout, and route handler invokes `requirePermission('permission:name')`.
-  - Customer queries automatically filter by `session.customerId` derived from the verified session cookie; client-supplied user IDs are ignored.
+  - Customer queries verify the Supabase Auth session server-side (`getUser()`), resolve `auth_user_id` to `CustomerProfile.id`, and apply customer data isolation; client-supplied user IDs are ignored.
+  - Social OAuth login (Google) never automatically grants administrative privileges.
 
 ---
 
@@ -477,7 +485,7 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 | Security Control | Implementation Layer | Enforcement Mechanism |
 |---|---|---|
 | **Admin RBAC** | Server Actions, Layouts & Route Handlers | Authoritative database role check (`requirePermission`) |
-| **Customer Data Isolation** | Data Access Layer | Enforced `session.customerId` filter from session cookie |
+| **Customer Data Isolation** | Data Access Layer | Server-verified `auth_user_id` $\to$ `CustomerProfile.id` filter |
 | **Payment Voucher Protection**| Private Storage | S3 private bucket with no anonymous public access; short-lived pre-signed URLs (5m) issued after RBAC verification |
 | **AI Credential Protection** | Database / Server | Versioned AES-256-GCM encryption at rest + separate server master key |
 | **SQL Injection Prevention** | Data Layer | Drizzle ORM parameterized query APIs significantly reduce SQL-injection risk by ensuring inputs remain parameterized |
@@ -511,6 +519,7 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 |---|---|---|---|
 | **Vercel Application Host** | **CRITICAL** | Storefront offline | Vercel platform restoration / rollback where applicable |
 | **Supabase PostgreSQL** | **CRITICAL** | Storefront displays cached pages; mutations show graceful 503 error | Provider restoration / restore from logical backup |
+| **Supabase Auth** | **DEGRADABLE** | Public storefront browsable without auth; new login/signup/session refresh degraded; Admin requires valid session + RBAC | Supabase Auth platform restoration |
 | **Cloudflare Public Media**| **DEGRADABLE** | Storefront reachable but images fail to load; UI layout preserved via aspect ratios | Cloudflare Edge multi-POP redundancy |
 | **Cloudflare Private Proofs**| **DEGRADABLE** | Orders placed; voucher uploads/reviews temporarily fail | Affected file operations retried after storage recovery; does not block core storefront/catalog browsing (GP-004/GP-020 determines exact upload UX/degradation) |
 | **Inngest Async Queue** | **DEGRADABLE** | Async jobs paused; customer checkout completes | Job backlog drained on recovery |
@@ -563,7 +572,7 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 | **Commerce Engine** | **Custom Domain** | Medusa, Saleor, Shopify | Native Yape/Plin verification, custom hardware specs, zero platform rent. |
 | **Managed Database**| **Supabase PostgreSQL** | Neon, AWS RDS, PlanetScale | PostgreSQL 16+, Supavisor pooling, Free-first launch $\to$ Pro zero-rewrite upgrade path. |
 | **Data Access Layer**| **Drizzle ORM** | Prisma, Kysely, TypeORM | Zero runtime overhead, pure TypeScript schema, native SQL control, fast cold-starts. |
-| **Authentication** | **Better Auth (PostgreSQL)**| Auth.js, Clerk, Auth0 | Native PostgreSQL session store, Argon2id hashing, zero MAU SaaS fees, instant revocation. |
+| **Authentication** | **Supabase Auth** | Better Auth, Auth.js, Clerk | Native Supabase PostgreSQL integration, Email/Password + Google OAuth, SSR cookie architecture, zero extra MAU SaaS fees up to 50k MAU. |
 | **Object Storage** | **Cloudflare R2** | AWS S3, Supabase Storage | Zero egress fees, global edge CDN, S3-compatible API, private bucket support. |
 | **Search Engine** | **PostgreSQL FTS/Trigram** | Meilisearch, Algolia | Zero extra infrastructure for v1, instant transactional updates, Spanish stemming. |
 | **Async Background**| **Inngest** | BullMQ, Temporal | Durable TypeScript workflows, step-level retries, serverless compatibility. |
@@ -579,7 +588,7 @@ Disaster recovery capabilities are categorized into four distinct architectural 
 
 1. [`ADR-001: Application Framework, Runtime and Topology`](../decisions/ADR-001-application-framework-runtime.md)
 2. [`ADR-002: Commerce Engine and Managed Database Architecture`](../decisions/ADR-002-commerce-engine-data-architecture.md)
-3. [`ADR-003: Authentication, Session Management and RBAC`](../decisions/ADR-003-authentication-authorization-rbac.md)
+3. [`ADR-003: Authentication, Identity Management and RBAC`](../decisions/ADR-003-authentication-authorization-rbac.md)
 4. [`ADR-004: Object Storage, Media Pipeline and Voucher Security`](../decisions/ADR-004-storage-media-pipeline.md)
 5. [`ADR-005: Search and Asynchronous Job Architecture`](../decisions/ADR-005-search-asynchronous-jobs.md)
 6. [`ADR-006: Communications, Analytics and Observability`](../decisions/ADR-006-communications-analytics-observability.md)
@@ -614,7 +623,7 @@ This document provides GP-004 with exact architectural boundaries:
 This document establishes the exact technology choices to be initialized in GP-005:
 - Next.js 16 (App Router) + TypeScript + Node.js 24 LTS.
 - Drizzle ORM + Drizzle Kit with Supabase PostgreSQL connection configuration.
-- Better Auth setup with PostgreSQL adapter and Argon2id configuration.
+- Supabase Auth client/server utility setup (`@supabase/supabase-js`, `@supabase/ssr`) and environment contracts.
 - Cloudflare R2 SDK clients for public media and private proofs.
 - Inngest client setup.
 - Vitest + Playwright testing harness.

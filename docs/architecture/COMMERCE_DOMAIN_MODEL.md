@@ -6,7 +6,7 @@
 
 This document defines the canonical **Commerce Domain Model** for **Gamer Perú** (`gamerperu.com`). It establishes the authoritative entities, aggregates, state machines, business invariants, data relationships, transactional boundaries, concurrency controls, and lifecycle rules required for multi-brand gaming peripherals e-commerce in Peru.
 
-Following the technology architecture established in **GP-003** (Modular Monolith, Next.js 16 Active LTS, Supabase PostgreSQL 16+, Drizzle ORM, Better Auth, Cloudflare R2, and Inngest), this domain model provides the single source of truth for all domain entities and business workflows implemented in **GP-005** and subsequent roadmap gates.
+Following the technology architecture established in **GP-003** (Modular Monolith, Next.js 16 Active LTS, Supabase PostgreSQL 16+, Drizzle ORM, Supabase Auth, Cloudflare R2, and Inngest), this domain model provides the single source of truth for all domain entities and business workflows implemented in **GP-005** and subsequent roadmap gates.
 
 ---
 
@@ -39,14 +39,15 @@ graph TD
         ProductVariant --> MediaAsset
     end
 
-    subgraph "Customer & Identity Context (Better Auth & Domain)"
-        AuthUser[Auth User Identity] --> AuthAccount[Auth Account Credentials]
-        AuthUser --> AuthSession[Auth Session]
-        AuthUser --> AuthVerification[Auth Verification Token]
-        AuthUser --> CustomerProfile
+    subgraph "Customer & Identity Context (Supabase Auth & Domain)"
+        SupabaseAuth[Supabase Auth auth.users UUID] --> CustomerProfile
         CustomerProfile --> CustomerAddress
         CustomerProfile --> WishlistItem
         CustomerProfile --> Review
+        SupabaseAuth --> UserRole
+        Role --> UserRole
+        Role --> RolePermission
+        Permission --> RolePermission
     end
 
     subgraph "Cart & Checkout Context"
@@ -111,6 +112,7 @@ To prevent business volume leakage while maintaining index locality and clean op
 | Identifier Type | Format | Example | Generation & Use |
 |---|---|---|---|
 | **Internal Entity ID** | `UUIDv7` (36 chars) | `019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f` | Primary key across all PostgreSQL tables; time-ordered for optimal B-tree indexing. Generated at application layer. |
+| **Auth User ID** | `UUID` (36 chars) | `a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11` | Primary key of `auth.users` managed by Supabase Auth; referenced via `auth_user_id`. |
 | **Human Order Number** | `GP-` + Random Alphanumeric (8 chars) | `GP-7K9M-2026` | Public customer-facing reference; unguessable and non-sequential. |
 | **SKU (Stock Keeping Unit)** | Structured Alphanumeric | `WLM-BX-MAG-BLK-8K` | Machine and warehouse identifier per `ProductVariant`. |
 | **Public Slug** | Kebab-case string | `wlmouse-beast-x-magnesium` | URL-safe identifier for Brands, Categories, Collections, and Products. |
@@ -327,7 +329,7 @@ Editorial rich media storytelling layouts for flagship PDPs, structured into 13 
   - `status`: `ENUM('DRAFT', 'PUBLISHED', 'ARCHIVED')`
   - `blocks`: `JSONB` (Array of structured block definitions: `block_id`, `type`, `order`, `payload`)
   - `published_at`: `TIMESTAMPTZ` (Nullable)
-  - `created_by_user_id`: `VARCHAR(255)` (FK $\to$ `user.id`)
+  - `created_by_auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`)
   - `created_at`: `TIMESTAMPTZ`
 - **Canonical 13 Block Types**: `HeroMedia`, `FullBleedImage`, `ImageText`, `StatHighlight`, `SpecFeature`, `Video`, `Gallery`, `Comparison`, `Dimensions`, `BoxContents`, `TechnicalSpecs`, `FAQ`, `RelatedProducts`.
 
@@ -352,30 +354,37 @@ Encapsulates metadata for binary objects stored in Cloudflare R2.
 
 ---
 
-## 17. User & Authentication Boundary (Better Auth Core Schema)
+## 17. User & Authentication Boundary — Supabase Auth
 
-Separates Better Auth identity mechanics and credential tables from the Gamer Perú commerce domain.
+Separates Supabase-managed identity mechanics from the Gamer Perú commerce domain.
 
-- **Better Auth Relational Models (Provider Owned)**:
-  Better Auth manages its core relational schema according to its official framework contract:
-  1. `user`: `id` (`VARCHAR(255)` PK), `name` (`TEXT`), `email` (`VARCHAR(255)` Unique), `email_verified` (`BOOLEAN`), `image` (`TEXT`), `created_at`, `updated_at`.
-  2. `session`: `id` (`VARCHAR(255)` PK), `user_id` (`VARCHAR(255)` FK $\to$ `user.id`), `token` (`VARCHAR(255)` Unique), `expires_at`, `ip_address`, `user_agent`, `created_at`, `updated_at`.
-  3. `account`: `id` (`VARCHAR(255)` PK), `user_id` (`VARCHAR(255)` FK $\to$ `user.id`), `account_id` (`TEXT`), `provider_id` (`TEXT`), `access_token`, `refresh_token`, `id_token`, `access_token_expires_at`, `refresh_token_expires_at`, `scope`, `password` (`TEXT` - stores hashed credential passwords), `created_at`, `updated_at`.
-  4. `verification`: `id` (`VARCHAR(255)` PK), `identifier` (`TEXT`), `value` (`TEXT`), `expires_at`, `created_at`, `updated_at`.
-- **Argon2id Integration Boundary**:
-  - Better Auth is configured with custom `hash()` and `verify()` handlers delegating to Argon2id.
-  - Credential password hashes reside strictly in `account.password`; password hashes are never stored or duplicated in Gamer Perú customer profile tables.
-- **Identity Boundary**: Gamer Perú commerce and RBAC tables reference `user.id` as the identity foreign key.
+- **Provider-Owned Identity Architecture**:
+  - Supabase Auth manages its internal `auth` schema (`auth.users`, credentials, OAuth identities, refresh tokens).
+  - Gamer Perú / Drizzle does NOT own, migrate, or alter internal Supabase `auth` tables.
+  - Stable Integration Boundary: `auth.users.id` (`UUID`).
+- **Canonical v1 Authentication Methods**:
+  1. `EMAIL_PASSWORD`: Standard customer registration, email confirmation, login, and password recovery.
+  2. `GOOGLE`: Google OAuth 2.0 with PKCE authorization flow for streamlined "Continuar con Google".
+- **Credential & Token Security**:
+  - Password storage, hashing, and OAuth token exchanges are handled entirely by Supabase Auth; Gamer Perú never stores plaintext passwords or password hashes.
+  - Short-lived JWT access tokens and rotated refresh tokens are stored in secure HTTP-only cookies managed via `@supabase/ssr`.
+- **Identity Linking & Profile Boundary**:
+  - `CustomerProfile` links to `auth.users.id` via `auth_user_id` (`UUID`, Unique).
+  - Multiple verified authentication identities (Google OAuth + Email/Password) belonging to the same Supabase user resolve to the exact same `CustomerProfile`.
+  - Application-level `ensureCustomerProfile(auth_user_id)` provisions the profile idempotently on first authenticated login.
+  - Business profile facts (first name, last name, phone, document, default address) reside exclusively in `CustomerProfile`, never in Supabase user metadata.
+- **Authentication Emails**:
+  - Production signup confirmations and password recovery emails are routed through **Resend custom SMTP** configured in Supabase Auth project settings.
 
 ---
 
 ## 18. Customer Profile
 
-Stores customer-facing commerce profile data linked 1-to-1 with Better Auth's `user`.
+Stores customer-facing commerce profile data linked 1-to-1 with Supabase Auth's `auth.users`.
 
 - **Entity Attributes**:
   - `id`: `UUIDv7` (PK)
-  - `user_id`: `VARCHAR(255)` (FK $\to$ `user.id`, Unique)
+  - `auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`, Unique)
   - `first_name`: `VARCHAR(100)`
   - `last_name`: `VARCHAR(100)`
   - `phone`: `VARCHAR(20)` (Nullable)
@@ -394,7 +403,7 @@ Enforces authoritative server-side role-based access control.
 - **Role Entity**: `id` (`UUIDv7`), `name` (`VARCHAR(50)`, Unique, e.g., `SUPER_ADMIN`, `ADMIN_CATALOG`, `ADMIN_ORDERS`, `ADMIN_SUPPORT`, `CUSTOMER`), `description` (`TEXT`).
 - **Permission Entity**: `id` (`UUIDv7`), `name` (`VARCHAR(100)`, Unique, e.g., `orders:verify`, `catalog:publish`, `ai:manage_credentials`).
 - **RolePermission Entity**: `role_id` (`UUIDv7`), `permission_id` (`UUIDv7`) (Composite PK).
-- **UserRole Entity**: `user_id` (`VARCHAR(255)`), `role_id` (`UUIDv7`) (Composite PK).
+- **UserRole Entity**: `auth_user_id` (`UUID`, FK $\to$ `auth.users(id)`), `role_id` (`UUIDv7`, FK $\to$ `Role.id`) (Composite PK `(auth_user_id, role_id)`).
 
 ---
 
@@ -660,7 +669,7 @@ The central operational entity representing a committed purchase.
   - `id`: `UUIDv7` (PK)
   - `payment_id`: `UUIDv7` (FK $\to$ `Payment.id`)
   - `submission_id`: `UUIDv7` (FK $\to$ `PaymentSubmission.id`)
-  - `verifier_user_id`: `VARCHAR(255)` (FK $\to$ `user.id`)
+  - `verifier_auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`)
   - `decision`: `ENUM('APPROVED', 'REJECTED_RETRYABLE', 'REJECTED_TERMINAL')`
   - `rejection_reason`: `VARCHAR(255)` (Nullable)
   - `verification_notes`: `TEXT` (Nullable)
@@ -672,7 +681,7 @@ The central operational entity representing a committed purchase.
 
 - **Payment Lifecycle States**: `UNPAID` $\to$ `SUBMITTED` $\to$ `VERIFYING` $\to$ `PAID` (or `REJECTED` / `REFUNDED`).
 - **Unpaid Order Cancellation vs Payment Rejection**:
-  - Unpaid Order Cancellation (Customer or Admin before payment submission): `Order.status` $\to$ `CANCELLED`, `Payment.status` remains `UNPAID`, `Reservation.status` $\to$ `RELEASED`. No Payment `REJECTED` state transition occurs.
+  - Unpaid Order Cancellation (Customer or Admin before payment submission): `Order.status` $\to$ `CANCELLED`, `Payment.status` remains `UNPAID` (no REJECTED transition), and `Reservation.status` $\to$ `RELEASED`. No Payment `REJECTED` state transition occurs.
   - Terminal Payment Rejection (Admin review of submission): `Payment.status` $\to$ `REJECTED`, `Order.status` $\to$ `CANCELLED`, `Reservation.status` $\to$ `RELEASED`.
 - **Late Payment Handling**:
   - When payment is submitted on an expired order (`Order.status = 'EXPIRED'`, `Reservation.status = 'RELEASED'`), `PaymentSubmission` is recorded with `is_late = true` and `Payment.status = 'SUBMITTED'`.
@@ -746,7 +755,7 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
   - `amount_cents`: `INTEGER` ($> 0$)
   - `reason`: `VARCHAR(255)`
   - `external_reference`: `VARCHAR(100)` (Bank operation code)
-  - `actor_user_id`: `VARCHAR(255)` (FK $\to$ `user.id`)
+  - `actor_auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`)
   - `created_at`: `TIMESTAMPTZ`
 - **Refund Concurrency Protection**:
   1. Transaction locks `Payment` row via `SELECT ... FOR UPDATE`.
@@ -844,7 +853,7 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
   - `title`: `VARCHAR(150)` (Nullable)
   - `comment`: `TEXT`
   - `moderation_status`: `ENUM('PENDING', 'APPROVED', 'REJECTED')` (Default `PENDING`)
-  - `moderated_by_user_id`: `VARCHAR(255)` (FK $\to$ `user.id`, Nullable)
+  - `moderated_by_auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`, Nullable)
   - `moderated_at`: `TIMESTAMPTZ` (Nullable)
   - `created_at`: `TIMESTAMPTZ`
 
@@ -875,7 +884,7 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
 
 - **Affiliate Entity**:
   - `id`: `UUIDv7` (PK)
-  - `user_id`: `VARCHAR(255)` (FK $\to$ `user.id`, Unique)
+  - `auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`, Unique)
   - `company_name`: `VARCHAR(150)` (Nullable)
   - `contact_email`: `VARCHAR(255)`
   - `status`: `ENUM('PENDING', 'ACTIVE', 'SUSPENDED')` (Default `PENDING`)
@@ -904,7 +913,7 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
   - `attribution_rule`: `ENUM('LAST_TOUCH_ELIGIBLE')`
   - `attributed_at`: `TIMESTAMPTZ`
 - **Cross-Attribution Precedence**: When both referral and affiliate tracking exist on an order, exactly one reward-bearing attribution qualifies according to `GROWTH_ATTRIBUTION_PRECEDENCE` (`[TBD BUSINESS DECISION]`).
-- **Authoritative Identity Traversal**: Self-referral check asserts `affiliate.user_id != customer_profile.user_id` (via `Order.customer_id` $\to$ `CustomerProfile.user_id`).
+- **Authoritative Identity Traversal**: Self-referral check asserts `affiliate.auth_user_id != customer_profile.auth_user_id` (via `Order.customer_id` $\to$ `CustomerProfile.auth_user_id`).
 
 ---
 
@@ -947,7 +956,7 @@ The fulfillment machine tracks parcel handling from pick/pack to courier deliver
   - `total_payout_cents`: `INTEGER`
   - `status`: `ENUM('DRAFT', 'PROCESSING', 'COMPLETED')`
   - `external_reference`: `VARCHAR(100)` (Nullable bank transfer reference)
-  - `processed_by_user_id`: `VARCHAR(255)` (FK $\to$ `user.id`)
+  - `processed_by_auth_user_id`: `UUID` (FK $\to$ `auth.users(id)`)
   - `created_at`, `completed_at`: `TIMESTAMPTZ`
 - **Traceability Linkage**: Linked commissions reference `Commission.payout_batch_id`; applied clawbacks reference `CommissionAdjustment.applied_payout_batch_id`. The batch total is fully explainable from linked items.
 
@@ -984,7 +993,7 @@ Appends an immutable audit record for every privileged or state-changing action.
   - `id`: `UUIDv7` (PK)
   - `timestamp`: `TIMESTAMPTZ` (Default `NOW()`)
   - `actor_type`: `ENUM('CUSTOMER', 'ADMIN', 'SYSTEM')`
-  - `actor_id`: `VARCHAR(255)`
+  - `actor_id`: `VARCHAR(255)` (Staff UUID, customer UUID, or `'SYSTEM'`)
   - `action`: `VARCHAR(100)` (e.g., `orders:verify_payment`, `catalog:update_price`)
   - `target_type`: `VARCHAR(50)` (e.g., `Order`, `Payment`, `ProductVariant`)
   - `target_id`: `VARCHAR(255)`
@@ -1087,10 +1096,13 @@ Guarantees at-least-once delivery of outbound events to Inngest and downstream E
 17. `ReferralAttribution`: `UNIQUE(order_id)`
 18. `AffiliateAttribution`: `UNIQUE(order_id)`
 19. `Commission`: `UNIQUE(affiliate_attribution_id)`
-20. `Quantity Constraints`: `CartItem.quantity > 0`, `InventoryItem.quantity_on_hand >= 0`, `InventoryItem.quantity_reserved >= 0`, `InventoryItem.quantity_allocated >= 0`
-21. `Money Constraints`: Standard monetary amounts $\ge 0$; signed adjustments may be negative; `Payment.refunded_amount_cents <= Payment.amount_cents` enforced transactionally.
-22. `RolePermission`: `PRIMARY KEY(role_id, permission_id)`
-23. `UserRole`: `PRIMARY KEY(user_id, role_id)`
+20. `CustomerProfile.auth_user_id`: `UNIQUE NOT NULL` (FK $\to$ `auth.users(id)`)
+21. `Affiliate.auth_user_id`: `UNIQUE NOT NULL` (FK $\to$ `auth.users(id)`)
+22. `Quantity Constraints`: `CartItem.quantity > 0`, `InventoryItem.quantity_on_hand >= 0`, `InventoryItem.quantity_reserved >= 0`, `InventoryItem.quantity_allocated >= 0`
+23. `Money Constraints`: Standard monetary amounts $\ge 0$; signed adjustments may be negative; `Payment.refunded_amount_cents <= Payment.amount_cents` enforced transactionally.
+24. `RolePermission`: `PRIMARY KEY(role_id, permission_id)`
+25. `UserRole`: `PRIMARY KEY(auth_user_id, role_id)`
+26. **Non-Cascading Deletion Invariant**: Deletion or disablement of an `auth.users` identity record does NOT cascade delete historical Orders, OrderItems, Payments, Refunds, Verifications, Inventory Ledger entries, or Commissions.
 
 ---
 
@@ -1116,6 +1128,8 @@ Guarantees at-least-once delivery of outbound events to Inngest and downstream E
 | `AffiliateClick` | `idx_aff_click_expiry` | `affiliate_code_id, expires_at`| Attribution window lookup. |
 | `Commission` | `idx_comm_qual_due` | `status, qualification_due_at`| Commission maturation worker. |
 | `Commission` | `idx_comm_payout_batch` | `payout_batch_id` | Payout batch reconciliation. |
+| `CustomerProfile` | `idx_cust_auth_user` | `auth_user_id` (Unique B-tree)| Customer profile lookup by verified Auth session. |
+| `UserRole` | `idx_user_role_auth_user` | `auth_user_id` | Staff RBAC permission resolution. |
 | `OutboxEvent` | `idx_outbox_pending` | `status, next_attempt_at` | Inngest background poller/worker. |
 
 ---
@@ -1133,8 +1147,11 @@ Guarantees at-least-once delivery of outbound events to Inngest and downstream E
 
 ## 57. Security Analysis
 
-- **Authoritative Server RBAC**: Every privileged action checks `requirePermission('permission:name')` against database records. Client route hiding is never relied upon for security.
-- **IDOR Protection**: Customer queries automatically inject `session.customerId` derived from the verified session cookie; client-provided user IDs are discarded.
+- **Authoritative Server RBAC**: Every privileged action checks `requirePermission('permission:name')` against database records. Client route hiding or token claims are never relied upon for security.
+- **IDOR Protection**: Customer queries verify the Supabase Auth session server-side (`getUser()`), resolve `auth_user_id` to `CustomerProfile.id`, and enforce customer data isolation; client-provided user IDs are discarded.
+- **Row Level Security (RLS) Boundary**:
+  - Server-side Next.js / Drizzle logic performs authoritative authorization.
+  - For any Gamer Perú tables exposed through Supabase Data API endpoints, RLS policies enforce default-deny and `auth.uid()` checks as defense-in-depth.
 - **Payment Voucher Security**: Voucher images reside in a private Cloudflare R2 bucket with no public read access; staff view vouchers exclusively via 5-minute pre-signed URLs.
 - **Mass Assignment Prevention**: All server action and API payloads are strictly validated through Zod schemas.
 
@@ -1157,10 +1174,8 @@ erDiagram
     ProductStory ||--o{ ProductStoryRevision : versions
     ProductVariant ||--o{ MediaAsset : displays
     
-    user ||--o| CustomerProfile : profiles
-    user ||--o{ session : authenticates
-    user ||--o{ account : credentials
-    user ||--o{ UserRole : assigned
+    auth_users ||--o| CustomerProfile : profiles
+    auth_users ||--o{ UserRole : assigned
     Role ||--o{ UserRole : has
     Role ||--o{ RolePermission : grants
     Permission ||--o{ RolePermission : defines
@@ -1405,7 +1420,7 @@ sequenceDiagram
     Admin->>Admin: Confirms funds in mobile banking app
     Admin->>App: Clicks "Confirmar Pago" (decision: APPROVED)
     App->>DB: BEGIN TRANSACTION
-    App->>DB: INSERT INTO payment_verifications (decision: 'APPROVED')
+    App->>DB: INSERT INTO payment_verifications (verifier_auth_user_id: Admin.id, decision: 'APPROVED')
     App->>DB: UPDATE payments SET status = 'PAID'
     App->>DB: UPDATE orders SET status = 'CONFIRMED'
     App->>DB: UPDATE inventory_reservations SET status = 'ALLOCATED'
@@ -1445,7 +1460,7 @@ sequenceDiagram
     App->>DB: BEGIN TRANSACTION
     App->>DB: Lock Payment (SELECT ... FOR UPDATE)
     App->>DB: Check requested_amount <= (amount_cents - refunded_amount_cents)
-    App->>DB: INSERT INTO refunds (amount_cents, reason, external_reference)
+    App->>DB: INSERT INTO refunds (actor_auth_user_id: Admin.id, amount_cents, reason, external_reference)
     App->>DB: UPDATE payments SET status = 'REFUNDED', refunded_amount_cents = amount_cents
     App->>DB: UPDATE orders SET status = 'REFUNDED'
     alt Pre-Shipment Refund
@@ -1637,7 +1652,7 @@ sequenceDiagram
 | 10 | **Payment Submitted After Expiry** | Order `EXPIRED`, Res `RELEASED`| Customer submits OpCode | Payment `SUBMITTED` (`is_late`)| Stock not held; manual review | OpCode captured | `payments:late_submission` | Admin manual stock allocation / refund | `[TBD BUSINESS DECISION]` |
 | 11 | **Two Admins Approve Concurrently** | Payment `SUBMITTED` | Admin 1 & 2 click Approve | Admin 1 succeeds; 2 no-ops | Converted to `ALLOCATED` once| Payment `PAID` once | `PaymentApproved` (single) | Row lock on `Payment` | N/A |
 | 12 | **Admin Rejects Already-Paid** | Payment `PAID` | Admin clicks Reject | Mutation rejected | Allocated stock remains | Payment remains `PAID` | `payments:invalid_transition` | State transition guard | N/A |
-| 13 | **Access Other Customer Order** | Customer B logged in| GET `/orders/GP-CUST-A` | 404 / 403 Forbidden | None | None | `security:unauthorized_access` | `session.customerId` query filter | N/A |
+| 13 | **Access Other Customer Order** | Customer B logged in| GET `/orders/GP-CUST-A` | 404 / 403 Forbidden | None | None | `security:unauthorized_access` | Server-verified `auth_user_id` query filter | N/A |
 | 14 | **Cancel Order Before Payment** | Order `PENDING` | Customer clicks Cancel | Order `CANCELLED` | Reservation $\to$ `RELEASED` | Payment remains `UNPAID` | `OrderCancelled` | State machine transition | N/A |
 | 15 | **Cancel During Verification** | Payment `SUBMITTED` | Customer requests cancel | Admin alerted; review needed| Held until admin resolves | Resolves before cancel | `orders:cancel_requested` | Prevents releasing stock if paid | `[TBD BUSINESS DECISION]` |
 | 16 | **Refund After Commission Exists** | Commission `PENDING` | Admin issues Full Refund | Commission `VOIDED` | Pre-ship: released; Post: RMA | Refund recorded | `RefundIssued`, `CommissionVoided`| Commission qualification check | N/A |
@@ -1649,7 +1664,7 @@ sequenceDiagram
 | 22 | **AI Provider Offline** | OpenAI/Anthropic 5xx | AI product research job | Job queued in Inngest | None | None | `ai:provider_error` | Inngest step retries | N/A |
 | 23 | **Resend Offline During Payment** | Resend 5xx | Payment approved | Order `CONFIRMED` | Stock allocated | Payment `PAID` | Email job queued in Inngest | Async worker retries | N/A |
 | 24 | **Outbox Delivery Duplicated** | Network glitch | EC OS receives duplicate | EC OS drops duplicate | None | None | `outbox:duplicate_delivered` | HMAC + `event_id` (`outbox.id`) | N/A |
-| 25 | **Affiliate Self-Referral Attempt**| Affiliate clicks own link| Places order | Attribution rejected | Normal stock allocation | Normal payment | `growth:self_referral_blocked`| `affiliate.user_id != cust.user_id`| N/A |
+| 25 | **Affiliate Self-Referral Attempt**| Affiliate clicks own link| Places order | Attribution rejected | Normal stock allocation | Normal payment | `growth:self_referral_blocked`| `affiliate.auth_user_id != cust.auth_user_id`| N/A |
 
 ---
 
@@ -1676,7 +1691,7 @@ The following commercial decisions remain explicitly **`[TBD BUSINESS DECISION]`
 
 | Domain Area | Governing GP Gate | Implementation Responsibility |
 |---|---|---|
-| **Authentication & Sessions** | **GP-015** | Better Auth implementation, Argon2id config, session middleware. |
+| **Authentication & Sessions** | **GP-015** | Supabase Auth (Email/Password + Google OAuth), Next.js SSR session cookies (`@supabase/ssr`), Resend custom SMTP. |
 | **Customer Account Portal** | **GP-016** | Customer profile, address book, personal order views. |
 | **Cart Domain & Drawer** | **GP-017** | Cart state management, anonymous merge, local storage sync. |
 | **Checkout Flow** | **GP-018** | Multi-step checkout, address capture, atomic order transaction. |
@@ -1698,7 +1713,7 @@ This specification establishes the canonical domain inputs and schema blueprints
 ### 1. Drizzle Schema Module Organization Blueprint
 Grouped into modular schema files under `src/db/schema/`:
 - `catalog.ts`: `brands`, `categories`, `collections`, `product_collections`, `products`, `product_variants`, `category_spec_schemas`, `product_specs`, `product_stories`, `product_story_revisions`, `media_assets`. (11 entities)
-- `auth.ts`: `user`, `session`, `account`, `verification`, `roles`, `permissions`, `role_permissions`, `user_roles`. (8 entities: 4 Better Auth core tables + 4 RBAC entities)
+- `rbac.ts` (or `auth.ts`): `roles`, `permissions`, `role_permissions`, `user_roles`. (4 Gamer Perú RBAC entities; external FK $\to$ `auth.users(id)`)
 - `customers.ts`: `customer_profiles`, `customer_addresses`, `wishlist_items`, `reviews`. (4 entities)
 - `cart.ts`: `carts`, `cart_items`. (2 entities)
 - `inventory.ts`: `inventory_locations`, `inventory_items`, `inventory_ledger_entries`, `inventory_reservations`. (4 entities)
@@ -1710,9 +1725,8 @@ Grouped into modular schema files under `src/db/schema/`:
 - `system.ts`: `content_slots`, `audit_events`, `domain_events`, `outbox_events`, `idempotency_keys`. (5 entities)
 
 ### 2. Entity Count Classification
-- **Gamer Perú Domain & System Entities**: 58 entities.
-- **Better Auth Core Technical Tables**: 4 tables (`user`, `session`, `account`, `verification`).
-- **Total Physical Table Candidates**: 62 physical table candidates.
+- **Gamer Perú Domain & System Entities**: Exactly 58 physical table candidates.
+- **Supabase Auth Provider Schema (`auth.users`, etc.)**: Managed internally by Supabase and excluded from Gamer Perú Drizzle tables.
 
 ### 3. UUIDv7 & Extension Guidelines
 - **UUIDv7 Strategy**: PostgreSQL `uuid` column type. UUIDv7 values generated at application layer using TypeScript RFC 9562 library.
@@ -1724,10 +1738,11 @@ Grouped into modular schema files under `src/db/schema/`:
 
 * [x] Canonical `COMMERCE_DOMAIN_MODEL.md` created covering all 67 required sections.
 * [x] Exactly one authoritative owner established for each orthogonal lifecycle (Order, Payment, Fulfillment, Reservation).
-* [x] Better Auth core schema verified from official documentation (User, Session, Account, Verification) and accurately categorized (58 domain + 4 auth = 62 total candidates).
+* [x] Supabase Auth identity boundary specified (`auth.users.id UUID`), separating managed auth from Gamer Perú customer profiles and RBAC.
+* [x] Canonical 58 Gamer Perú physical entity count verified.
 * [x] Payment `REJECTED` semantics reconciled (unpaid cancellation leaves `Payment.status = 'UNPAID'`; terminal rejection moves to `REJECTED`).
 * [x] Payment verification decisions structured as `APPROVED`, `REJECTED_RETRYABLE`, `REJECTED_TERMINAL`.
-* [x] Resubmission grace deadline and post-deadline Admin resolution workflow defined without auto-releasing stock.
+* [x] Resubmission grace deadline and post-deadline Admin resolution defined without auto-releasing stock.
 * [x] Late payment reacquisition modeled as multi-item all-or-nothing with replacement reservations transitioning `ACTIVE -> ALLOCATED` under lock.
 * [x] Late funds received on sold-out orders modeled explicitly with immediate full refund recording.
 * [x] All 9 columns present across all 6 lifecycle transition tables.
