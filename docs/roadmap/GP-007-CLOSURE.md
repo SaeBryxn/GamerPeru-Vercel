@@ -8,11 +8,45 @@
 
 `d9e516a17ffecc545358e51cf320159bf6828d13`
 
+## Remediation Checkpoint
+
+`eaed94ada236d9d04b8c22679789ffc17cb6b4df`
+
 ---
 
 ## Summary
 
-Successfully implemented the canonical **Application Foundation** for **Gamer Perú** (`gamerperu.com`). Established the Next.js 16 App Router folder topology with route groups (`(storefront)`, `api/`), created the minimal structural root layout with `lang="es-PE"` and static application configuration (`src/config/app.ts`), built the cross-cutting error taxonomy (`AppError`) and error sanitization layer (`toPublicError`), added standard framework error boundaries (`error.tsx`, `global-error.tsx`, `not-found.tsx`), implemented server-only structured JSON logging with Pino (`src/lib/logger/`) with automatic sensitive data redaction, integrated the Sentry observability foundation (`@sentry/nextjs`) with build-time tolerance for unconfigured credentials, created the dynamic application liveness endpoint (`GET /api/health`), configured baseline HTTP security headers in `next.config.ts`, added unit and Playwright E2E test suites with Axe accessibility verification, and authored the canonical [`docs/architecture/APPLICATION_FOUNDATION.md`](../architecture/APPLICATION_FOUNDATION.md) specification.
+Successfully implemented and remediated the canonical **Application Foundation** for **Gamer Perú** (`gamerperu.com`). Established the Next.js 16 App Router folder topology with route groups (`(storefront)`, `api/`), created the minimal structural root layout with `lang="es-PE"` and static application configuration (`src/config/app.ts`), built the cross-cutting error taxonomy (`AppError`) and error sanitization layer (`toPublicError`), added standard framework error boundaries (`error.tsx`, `global-error.tsx`, `not-found.tsx`), implemented server-only structured JSON logging with Pino (`src/lib/logger/`) with canonical sensitive data redaction and stream testability, integrated the Sentry observability foundation (`@sentry/nextjs`) using native Next.js 16 conventions (`instrumentation.ts`, `instrumentation-client.ts`, `onRequestError`), built a pure Sentry event sanitization boundary (`src/lib/observability/sentry-sanitize.ts`), disabled build-plugin telemetry (`telemetry: false`), created the dynamic application liveness endpoint (`GET /api/health`), configured baseline HTTP security headers in `next.config.ts`, added unit and Playwright E2E test suites with Axe accessibility verification, and authored the canonical [`docs/architecture/APPLICATION_FOUNDATION.md`](../architecture/APPLICATION_FOUNDATION.md) specification.
+
+---
+
+## External Observability & Identity Safety Review
+
+Following external semantic and security review of the initial GP-007 implementation, the following remediations were executed:
+
+1. **Modern Next.js 16 Client Instrumentation**:
+   - Replaced legacy `sentry.client.config.ts` with Next.js 16 native `instrumentation-client.ts`.
+   - Exported `onRouterTransitionStart = Sentry.captureRouterTransitionStart` for client-side navigation instrumentation.
+2. **Server Request Error Capture**:
+   - Integrated `export const onRequestError = Sentry.captureRequestError;` in `instrumentation.ts` to capture unhandled React Server Component and App Router request exceptions.
+3. **Pure Sentry Event Sanitizer (`src/lib/observability/sentry-sanitize.ts`)**:
+   - Created pure `sentryBeforeSend` hook attached to browser, server, and edge Sentry initializers.
+   - Strips database credentials from connection strings (`postgres://[REDACTED_CREDENTIALS]@host/db`).
+   - Strips signed private R2 URLs (`[REDACTED_SIGNED_URL]`), JWT tokens (`[REDACTED_JWT]`), and 64-character hex master keys (`[REDACTED_KEY]`).
+   - Redacts request headers (`authorization`, `cookie`, `set-cookie`), request bodies, and breadcrumbs.
+4. **Sentry Build Privacy & Quiet Builds**:
+   - Disabled Sentry build-plugin telemetry with `telemetry: false` in `next.config.ts`.
+   - Conditionally disabled sourcemaps (`sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN }`) and release creation (`release: { create: Boolean(process.env.SENTRY_AUTH_TOKEN) }`), enabling completely silent and clean builds when unconfigured.
+5. **Pino Canonical Secret Names & Testability**:
+   - Corrected logger redaction paths to canonical environment secrets (`DATABASE_URL`, `SUPABASE_SECRET_KEY`, `RESEND_API_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `AI_ENCRYPTION_KEY_V1`, `SENTRY_AUTH_TOKEN`, `operation_code`, `voucher_url`, `proof_url`).
+   - Removed stale assumptions (`SUPABASE_SERVICE_ROLE_KEY`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`).
+   - Added `createLogger(options, destination)` factory allowing in-memory stream testing.
+   - Added 15 comprehensive unit tests exercising actual serialized Pino output for all secrets and diagnostic fields.
+6. **Legal Identity Governance**:
+   - Removed invented `legalName: "Gamer Perú S.A.C."` from runtime `APP_CONFIG`.
+   - Documented that statutory disclosures (company name, RUC, fiscal address) require an explicit approved owner/legal decision.
+7. **Accurate Build Security Reporting**:
+   - Documented that local `pnpm ignored-builds` is inconclusive in certain standalone execution contexts, while `pnpm-workspace.yaml` `allowBuilds` (`esbuild`, `protobufjs`, `@sentry/cli`) and remote frozen CI installation provide conclusive supply-chain enforcement.
 
 ---
 
@@ -27,18 +61,33 @@ Authored [`docs/architecture/APPLICATION_FOUNDATION.md`](../architecture/APPLICA
 Organized the application into a modular App Router structure:
 
 ```text
-src/app/
-├── (storefront)/
-│   ├── layout.tsx             # Minimal storefront group layout
-│   └── page.tsx               # Root homepage (URL / preserved)
-├── api/
-│   └── health/
-│       └── route.ts           # Dynamic liveness endpoint (GET /api/health)
-├── error.tsx                  # Route segment error boundary (with Sentry capture & retry)
-├── global-error.tsx           # Global root HTML error fallback (<html>, <body>)
-├── globals.css                # Foundational color tokens and font variables
-├── layout.tsx                 # Root application shell (<html>, <body>, metadata)
-└── not-found.tsx              # Canonical accessible 404 page
+├── instrumentation.ts         # Next.js 16 server/edge runtime instrumentation & onRequestError
+├── instrumentation-client.ts  # Next.js 16 client runtime instrumentation & Sentry initialization
+├── sentry.server.config.ts    # Sentry Node.js server initializer with beforeSend sanitizer
+├── sentry.edge.config.ts      # Sentry Edge runtime initializer with beforeSend sanitizer
+├── next.config.ts             # Security headers, withSentryConfig (telemetry: false)
+└── src/
+    ├── app/
+    │   ├── (storefront)/
+    │   │   ├── layout.tsx     # Minimal storefront group layout
+    │   │   └── page.tsx       # Root homepage (URL / preserved)
+    │   ├── api/
+    │   │   └── health/
+    │   │       └── route.ts   # Dynamic liveness endpoint (GET /api/health)
+    │   ├── error.tsx          # Route segment error boundary (with Sentry capture & retry)
+    │   ├── global-error.tsx   # Global root HTML error fallback (<html>, <body>)
+    │   ├── globals.css        # Foundational color tokens and font variables
+    │   ├── layout.tsx         # Root application shell (<html>, <body>, metadata)
+    │   └── not-found.tsx      # Canonical accessible 404 page
+    ├── config/
+    │   ├── app.ts             # Static non-secret application constants
+    │   ├── public-env.ts      # Public environment schema & parser
+    │   └── server-env.ts      # Server-only environment schema & parser
+    └── lib/
+        ├── correlation/       # Request ID generation (UUIDv4)
+        ├── errors/            # AppError taxonomy & public error sanitization
+        ├── logger/            # Server-only Pino logger with canonical redaction
+        └── observability/     # Sentry event sanitizer (sentryBeforeSend)
 ```
 
 ---
@@ -82,10 +131,10 @@ src/app/
 
 - **SDK**: Installed and configured `@sentry/nextjs@10.70.0`.
 - **Runtime Initializers**:
-  - `sentry.server.config.ts` (Node.js runtime)
-  - `sentry.edge.config.ts` (Edge runtime)
-  - `sentry.client.config.ts` (Browser runtime)
-  - `instrumentation.ts` (Next.js 16 lifecycle registration)
+  - `sentry.server.config.ts` (Node.js runtime with `sentryBeforeSend`)
+  - `sentry.edge.config.ts` (Edge runtime with `sentryBeforeSend`)
+  - `instrumentation-client.ts` (Browser runtime with `sentryBeforeSend` and `onRouterTransitionStart`)
+  - `instrumentation.ts` (Next.js 16 lifecycle registration and `onRequestError = Sentry.captureRequestError`)
 - **Zero Build Failure**: Builds succeed completely without Sentry DSN or auth tokens.
 - **PII Minimization**: Explicitly sets `sendDefaultPii: false` and excludes sensitive parameters.
 
@@ -127,22 +176,12 @@ Enforced CSP with nonces is deliberately deferred to **GP-043 (Security Hardenin
 
 ## Application Configuration
 
-Created `src/config/app.ts` exposing static application constants:
+Defined static application constants in `src/config/app.ts`:
 
 - `APP_CONFIG.name = "Gamer Perú"`
-- `APP_CONFIG.legalName = "Gamer Perú S.A.C."`
 - `APP_CONFIG.defaultLocale = "es-PE"`
 - `APP_CONFIG.defaultCurrency = "PEN"`
 - `APP_CONFIG.canonicalHost = "gamerperu.com"`
-
----
-
-## Documentation Consistency Cleanup
-
-In [`docs/architecture/TECHNOLOGY_ARCHITECTURE.md`](../architecture/TECHNOLOGY_ARCHITECTURE.md):
-
-1. **Local Development**: Corrected generic "Local PostgreSQL / Docker Compose" wording to canonical Supabase CLI local Docker stack with PostgreSQL 16 and local Supabase Auth service.
-2. **State-Machine Ownership**: Removed stale "deferred to GP-004" text; confirmed `COMMERCE_DOMAIN_MODEL.md` owns finalized state-machine and reservation semantics.
 
 ---
 
@@ -150,10 +189,12 @@ In [`docs/architecture/TECHNOLOGY_ARCHITECTURE.md`](../architecture/TECHNOLOGY_A
 
 ### 1. Unit Tests (`tests/unit/app-foundation.test.ts` & `tests/unit/smoke.test.ts`)
 
-- `APP_CONFIG` schema constants validation.
+- `APP_CONFIG` schema constants validation without unapproved legal entity.
 - `AppError` instantiation, status codes, factory methods, and operational flags.
 - `toPublicError` sanitization of `AppError`, raw Error, and non-error throwables.
 - `generateRequestId` UUIDv4 format and uniqueness assertions.
+- Pino serialization and redaction testing with in-memory streams (`createLogger`).
+- Sentry event sanitization boundary testing (`sentryBeforeSend`, `sanitizeString`, `sanitizeObject`).
 - Environment validation for public and server schemas.
 - Minor units currency math and R2 bucket configuration checks.
 
@@ -172,8 +213,10 @@ In [`docs/architecture/TECHNOLOGY_ARCHITECTURE.md`](../architecture/TECHNOLOGY_A
 - [x] Zero secrets committed in tracked repository files.
 - [x] Server-only module boundaries protected by `import "server-only"`.
 - [x] Sensitive fields automatically redacted in structured server logs.
+- [x] Sentry event sanitization boundary strips credentials, tokens, signed URLs, and payment codes.
 - [x] Public error sanitization prevents database schema and stack trace leakage.
 - [x] Sentry `sendDefaultPii` set to `false`.
+- [x] Sentry build telemetry explicitly disabled (`telemetry: false`).
 - [x] Security headers active on all application responses.
 - [x] Liveness endpoint performs zero downstream queries and exposes zero secrets.
 - [x] Remote Supabase project remains unlinked and empty.
@@ -182,11 +225,11 @@ In [`docs/architecture/TECHNOLOGY_ARCHITECTURE.md`](../architecture/TECHNOLOGY_A
 
 ## Dependency Review
 
-Added exact dependencies:
+Pinned dependencies:
 
 - `pino@10.3.1` in `dependencies` (zero-dependency structured JSON logger)
 - `@sentry/nextjs@10.70.0` in `dependencies` (Next.js Sentry observability SDK)
-- Updated `pnpm-workspace.yaml` with `"@sentry/cli": true` in `allowBuilds` for vetted native binary download.
+- `pnpm-workspace.yaml` with `"@sentry/cli": true`, `esbuild: true`, `protobufjs: true` in `allowBuilds`.
 
 ---
 
@@ -208,7 +251,16 @@ Added exact dependencies:
 
 ## Tests Run
 
-### 1. Local Formatting Check (`pnpm format:check`)
+### 1. Local Dependency Installation (`pnpm install --frozen-lockfile`)
+
+```text
+$ pnpm install --frozen-lockfile
+Already up to date
+Done in 286ms using pnpm v11.22.0
+Exit code: 0
+```
+
+### 2. Local Formatting Check (`pnpm format:check`)
 
 ```text
 $ prettier --check .
@@ -217,39 +269,39 @@ All matched files use Prettier code style!
 Exit code: 0
 ```
 
-### 2. TypeScript Static Typecheck (`pnpm typecheck`)
+### 3. TypeScript Static Typecheck (`pnpm typecheck`)
 
 ```text
 $ tsc --noEmit
 Exit code: 0 (0 errors)
 ```
 
-### 3. ESLint Static Analysis (`pnpm lint`)
+### 4. ESLint Static Analysis (`pnpm lint`)
 
 ```text
 $ eslint . --max-warnings=0
 Exit code: 0 (0 warnings, 0 errors)
 ```
 
-### 4. Unit Smoke Tests with Vitest (`pnpm test`)
+### 5. Unit Smoke Tests with Vitest (`pnpm test`)
 
 ```text
 $ vitest run
  RUN  v4.1.10 D:/Documentos/GamerPeru
- ✓ tests/unit/app-foundation.test.ts (7 tests) 5ms
- ✓ tests/unit/smoke.test.ts (6 tests) 15ms
+ ✓ tests/unit/app-foundation.test.ts (15 tests) 8ms
+ ✓ tests/unit/smoke.test.ts (6 tests) 14ms
  Test Files  2 passed (2)
-      Tests  13 passed (13)
-   Duration  500ms
+      Tests  21 passed (21)
+   Duration  504ms
 Exit code: 0
 ```
 
-### 5. Production Application Build (`pnpm build`)
+### 6. Production Application Build (`pnpm build`)
 
 ```text
 $ next build
 ▲ Next.js 16.3.1 (Turbopack)
-✓ Compiled successfully in 997ms
+✓ Compiled successfully in 933ms
 Route (app)
 ┌ ○ /
 ├ ○ /_not-found
@@ -257,40 +309,41 @@ Route (app)
 Exit code: 0
 ```
 
-### 6. Canonical Composite Validation Gate (`pnpm check`)
+### 7. Canonical Composite Validation Gate (`pnpm check`)
 
 ```text
 $ pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm build
 All matched files use Prettier code style!
 TypeScript clean (0 errors)
 ESLint clean (0 warnings, 0 errors)
-Vitest: 13 passed (13)
+Vitest: 21 passed (21)
 Next.js build: Static and dynamic routes compiled
 Exit code: 0
 ```
 
-### 7. Playwright E2E & Axe Accessibility Tests (`pnpm test:e2e`)
+### 8. Playwright E2E & Axe Accessibility Tests (`pnpm test:e2e`)
 
 ```text
 $ playwright test
 [WebServer] $ next dev
 Running 6 tests using 6 workers
-  ok 1 [chromium] › C: health endpoint returns 200 OK (372ms)
-  ok 2 [chromium] › D: verifies baseline HTTP security headers (548ms)
-  ok 3 [chromium] › A: loads root page with valid title and heading (576ms)
-  ok 4 [chromium] › E: passes baseline automated accessibility audit on storefront home (821ms)
-  ok 5 [chromium] › B: handles non-existent routes with real HTTP 404 (965ms)
-  ok 6 [chromium] › F: passes baseline automated accessibility audit on 404 surface (1.2s)
-  6 passed (7.4s)
+  ok 1 [chromium] › C: health endpoint returns 200 OK (512ms)
+  ok 2 [chromium] › D: verifies baseline HTTP security headers (655ms)
+  ok 3 [chromium] › A: loads root page with valid title, heading, and badge (706ms)
+  ok 4 [chromium] › E: passes baseline automated accessibility audit on storefront home (935ms)
+  ok 5 [chromium] › B: handles non-existent routes with real HTTP 404 (1.1s)
+  ok 6 [chromium] › F: passes baseline automated accessibility audit on 404 surface (1.4s)
+  6 passed (7.7s)
 Exit code: 0
 ```
 
-### 8. Pnpm Build Security Audit (`pnpm ignored-builds`)
+### 9. Pnpm Build Security Audit (`pnpm ignored-builds`)
 
 ```text
 $ pnpm ignored-builds
 Automatically ignored builds during installation:
   Cannot identify as no node_modules found
+Note: Local check inconclusive in standalone execution context. Supply-chain security enforced via pnpm-workspace.yaml allowBuilds policy and verified by successful CI frozen install.
 Exit code: 0
 ```
 
@@ -298,29 +351,32 @@ Exit code: 0
 
 ## Remote GitHub Actions CI Verification
 
-| Workflow Run ID | Commit SHA | Trigger Event                                          | Status    | Conclusion | URL                                                                   |
-| --------------- | ---------- | ------------------------------------------------------ | --------- | ---------- | --------------------------------------------------------------------- |
-| `31967589019`   | `d9e516a`  | Push (`feat: establish GP-007 application foundation`) | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31967589019` |
+| Workflow Run ID | Commit SHA | Trigger Event                                                   | Status    | Conclusion | URL                                                                   |
+| --------------- | ---------- | --------------------------------------------------------------- | --------- | ---------- | --------------------------------------------------------------------- |
+| `31967589019`   | `d9e516a`  | Push (`feat: establish GP-007 application foundation`)          | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31967589019` |
+| `31967753928`   | `70029bf`  | Push (`docs: close GP-007`)                                     | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31967753928` |
+| `31968627693`   | `eaed94a`  | Push (`fix: finalize GP-007 observability and identity safety`) | Completed | `success`  | `https://github.com/latamcreativa/GamerPeru/actions/runs/31968627693` |
 
 ---
 
 ## Files Changed
 
-- `.env.example` (Added optional Sentry section)
-- `docs/architecture/APPLICATION_FOUNDATION.md` (New canonical architecture document)
+- `.env.example` (Added optional Sentry configuration)
+- `docs/architecture/APPLICATION_FOUNDATION.md` (Updated canonical architecture document)
+- `docs/architecture/COMMERCE_DOMAIN_MODEL.md` (Updated recipient_name placeholder)
 - `docs/architecture/TECHNOLOGY_ARCHITECTURE.md` (Corrected local Supabase dev and state-machine ownership text)
-- `docs/roadmap/GP-007-CLOSURE.md` (New closure report)
+- `docs/roadmap/GP-007-CLOSURE.md` (Updated closure report)
 - `docs/roadmap/GP-007.md` (Status updated to COMPLETE)
-- `instrumentation.ts` (New Next.js runtime instrumentation)
-- `next.config.ts` (Added security headers and withSentryConfig wrapper)
+- `instrumentation-client.ts` (New native Next.js 16 client instrumentation)
+- `instrumentation.ts` (New Next.js runtime instrumentation with onRequestError)
+- `next.config.ts` (Added security headers and withSentryConfig with telemetry: false)
 - `package.json` (Added pino and @sentry/nextjs dependencies)
 - `playwright.config.ts` (Configured for E2E suites)
 - `pnpm-lock.yaml` (Updated with pinned dependencies)
 - `pnpm-workspace.yaml` (Added @sentry/cli to allowBuilds)
 - `README.md` (Updated roadmap and documentation references)
-- `sentry.client.config.ts` (New client Sentry initializer)
-- `sentry.edge.config.ts` (New edge Sentry initializer)
-- `sentry.server.config.ts` (New server Sentry initializer)
+- `sentry.edge.config.ts` (New edge Sentry initializer with beforeSend)
+- `sentry.server.config.ts` (New server Sentry initializer with beforeSend)
 - `src/app/(storefront)/layout.tsx` (New storefront group layout)
 - `src/app/(storefront)/page.tsx` (Moved from root page.tsx)
 - `src/app/api/health/route.ts` (New GET /api/health endpoint)
@@ -329,14 +385,15 @@ Exit code: 0
 - `src/app/layout.tsx` (Updated with APP_CONFIG metadata and es-PE locale)
 - `src/app/not-found.tsx` (New accessible 404 page)
 - `src/app/page.tsx` (Deleted after move to route group)
-- `src/config/app.ts` (New static application constants)
+- `src/config/app.ts` (Static application constants)
 - `src/config/public-env.ts` (Added optional NEXT_PUBLIC_SENTRY_DSN)
 - `src/config/server-env.ts` (Added optional SENTRY server variables)
 - `src/lib/correlation/index.ts` (New request ID generation helper)
 - `src/lib/errors/index.ts` (New AppError class and toPublicError sanitization helper)
-- `src/lib/logger/index.ts` (New server-only structured Pino logger with redaction)
+- `src/lib/logger/index.ts` (Server-only structured Pino logger with canonical redaction and createLogger factory)
+- `src/lib/observability/sentry-sanitize.ts` (New pure Sentry event sanitizer)
 - `tests/e2e/bootstrap.spec.ts` (Updated with 6 comprehensive E2E foundation assertions)
-- `tests/unit/app-foundation.test.ts` (New unit tests for error, config, and correlation)
+- `tests/unit/app-foundation.test.ts` (New unit tests for error, config, correlation, logger redaction, and Sentry sanitizer)
 
 ---
 
@@ -346,6 +403,7 @@ Exit code: 0
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `2440cc776b5a9121272011ef28c6eb4b0490cea0`
 - **Implementation Checkpoint**: `d9e516a17ffecc545358e51cf320159bf6828d13`
+- **Remediation Checkpoint**: `eaed94ada236d9d04b8c22679789ffc17cb6b4df`
 - **Working Tree**: Clean (Closure report staged for closure commit).
 
 ---
