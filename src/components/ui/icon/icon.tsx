@@ -15,7 +15,10 @@ export const CANONICAL_ICON_GEOMETRY: Record<IconSize, IconGeometry> = {
   xl: { size: 32, strokeWidth: 1.5 },
 };
 
-export interface IconProps extends Omit<React.SVGAttributes<SVGSVGElement>, "size"> {
+export interface IconProps extends Omit<
+  React.SVGAttributes<SVGSVGElement>,
+  "size" | "width" | "height" | "strokeWidth" | "stroke-width"
+> {
   icon: LucideIcon | React.ComponentType<LucideProps>;
   size?: IconSize;
   className?: string;
@@ -30,13 +33,24 @@ export function Icon({
 }: IconProps) {
   const geometry = CANONICAL_ICON_GEOMETRY[size] ?? CANONICAL_ICON_GEOMETRY.md;
 
+  // Filter out any runtime geometry override attempts passed via cast/spread
+  const {
+    width: _w,
+    height: _h,
+    strokeWidth: _sw,
+    "stroke-width": _swHyphen,
+    ...safeRest
+  } = rest as Record<string, unknown>;
+
   return (
     <IconComponent
-      size={geometry.size}
-      strokeWidth={geometry.strokeWidth}
       aria-hidden={ariaHidden}
       className={className}
-      {...rest}
+      {...safeRest}
+      size={geometry.size}
+      width={geometry.size}
+      height={geometry.size}
+      strokeWidth={geometry.strokeWidth}
     />
   );
 }

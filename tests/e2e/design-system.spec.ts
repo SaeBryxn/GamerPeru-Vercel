@@ -53,7 +53,7 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
     await expect(disabledBtn).toHaveAttribute("aria-disabled", "true");
   });
 
-  test("D: verifies IconButton accessible name and minimum 44x44px hit bounding box", async ({
+  test("D: verifies IconButton accessible name, geometry, and minimum 44x44px hit bounding box", async ({
     page,
   }) => {
     await page.goto("/");
@@ -65,6 +65,21 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
     expect(box).not.toBeNull();
     expect(box!.width).toBeGreaterThanOrEqual(44);
     expect(box!.height).toBeGreaterThanOrEqual(44);
+
+    const svg = iconBtn.locator("svg");
+    await expect(svg).toBeVisible();
+    const svgAttrs = await svg.evaluate((el) => ({
+      width: el.getAttribute("width"),
+      height: el.getAttribute("height"),
+      strokeWidth: el.getAttribute("stroke-width"),
+      ariaHidden: el.getAttribute("aria-hidden"),
+    }));
+
+    // md size is 20px with 1.5px stroke-width and aria-hidden="true"
+    expect(svgAttrs.width).toBe("20");
+    expect(svgAttrs.height).toBe("20");
+    expect(svgAttrs.strokeWidth).toBe("1.5");
+    expect(svgAttrs.ariaHidden).toBe("true");
   });
 
   test("E: verifies TextField label association, description, and aria-invalid error state", async ({
@@ -104,14 +119,22 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
     await expect(page.getByText("Neutral", { exact: true })).toBeVisible();
   });
 
-  test("G: verifies light keyboard focus ring contract via real Tab navigation", async ({
+  test("G: verifies light keyboard focus ring contract via actual Tab navigation", async ({
     page,
   }) => {
     await page.goto("/");
 
-    // Tab into the page to reach the primary button
+    // Traverse into the document using keyboard Tab presses
     const primaryBtn = page.getByRole("button", { name: "Acción primaria" });
-    await primaryBtn.focus();
+
+    let isFocused = false;
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press("Tab");
+      isFocused = await primaryBtn.evaluate((el) => document.activeElement === el);
+      if (isFocused) break;
+    }
+
+    expect(isFocused).toBe(true);
 
     const focusStyles = await primaryBtn.evaluate((el) => {
       const computed = window.getComputedStyle(el);
@@ -128,12 +151,22 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
     expect(focusStyles.outlineColor).toBe("rgb(9, 9, 11)");
   });
 
-  test("H: verifies dark contextual keyboard focus ring contract (#F4F4F5)", async ({ page }) => {
+  test("H: verifies dark contextual keyboard focus ring contract (#F4F4F5) via actual Tab navigation", async ({
+    page,
+  }) => {
     await page.goto("/");
 
-    // Focus the button rendered inside the dark surface card
+    // Continue Tab navigation to reach the button inside the dark surface card
     const darkBtn = page.locator("#dark-surface-btn");
-    await darkBtn.focus();
+
+    let isFocused = false;
+    for (let i = 0; i < 25; i++) {
+      await page.keyboard.press("Tab");
+      isFocused = await darkBtn.evaluate((el) => document.activeElement === el);
+      if (isFocused) break;
+    }
+
+    expect(isFocused).toBe(true);
 
     const focusStyles = await darkBtn.evaluate((el) => {
       const computed = window.getComputedStyle(el);
@@ -150,23 +183,24 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
     expect(focusStyles.outlineColor).toBe("rgb(244, 244, 245)");
   });
 
-  test("I: verifies canonical Icon geometry rendered inside IconButton", async ({ page }) => {
+  test("I: verifies canonical Button icon slot geometry (20x20 / 1.5 stroke)", async ({ page }) => {
     await page.goto("/");
 
-    const iconBtn = page.getByRole("button", { name: "Buscar elementos" });
-    const svg = iconBtn.locator("svg");
+    const primaryBtn = page.getByRole("button", { name: "Acción primaria" });
+    const svg = primaryBtn.locator("svg");
     await expect(svg).toBeVisible();
 
     const svgAttrs = await svg.evaluate((el) => ({
       width: el.getAttribute("width"),
       height: el.getAttribute("height"),
       strokeWidth: el.getAttribute("stroke-width"),
+      ariaHidden: el.getAttribute("aria-hidden"),
     }));
 
-    // md size is 20px with 1.5px stroke-width
     expect(svgAttrs.width).toBe("20");
     expect(svgAttrs.height).toBe("20");
     expect(svgAttrs.strokeWidth).toBe("1.5");
+    expect(svgAttrs.ariaHidden).toBe("true");
   });
 
   test("J: verifies reduced-motion collapses transition durations", async ({ page }) => {

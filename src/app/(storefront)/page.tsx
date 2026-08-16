@@ -71,10 +71,10 @@ export default function HomePage() {
                   Botones (44px Desktop / 48px Touch)
                 </h3>
                 <Stack direction="horizontal" gap={3} wrap="wrap" align="center">
-                  <Button variant="primary" leadingIcon={<Icon icon={Zap} size="sm" />}>
+                  <Button variant="primary" leadingIcon={Zap}>
                     Acción primaria
                   </Button>
-                  <Button variant="secondary" trailingIcon={<Icon icon={ArrowRight} size="sm" />}>
+                  <Button variant="secondary" trailingIcon={ArrowRight}>
                     Acción secundaria
                   </Button>
                   <Button variant="ghost">Acción terciaria</Button>
@@ -171,14 +171,10 @@ export default function HomePage() {
                       className="type-body-small"
                       style={{ color: "var(--color-text-dark-muted)" }}
                     >
-                      WCAG 2.1 AA cumplido con ratios superiores a 18:1
+                      Superficie oscura con tokens de contraste y focus contextuales.
                     </span>
                   </Stack>
-                  <Button
-                    id="dark-surface-btn"
-                    variant="primary"
-                    leadingIcon={<Icon icon={Check} size="sm" />}
-                  >
+                  <Button id="dark-surface-btn" variant="primary" leadingIcon={Check}>
                     Acción en superficie oscura
                   </Button>
                 </Stack>

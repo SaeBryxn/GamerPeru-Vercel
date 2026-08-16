@@ -5,24 +5,25 @@ import styles from "./icon-button.module.css";
 
 export type IconButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
 
-export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface IconButtonProps extends Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  "children"
+> {
   "aria-label": string;
+  icon: LucideIcon | React.ComponentType<LucideProps>;
   variant?: IconButtonVariant;
-  icon?: LucideIcon | React.ComponentType<LucideProps>;
   iconSize?: IconSize;
-  children?: React.ReactNode;
 }
 
 export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
   {
     "aria-label": ariaLabel,
-    variant = "ghost",
     icon,
+    variant = "ghost",
     iconSize = "md",
     type = "button",
     disabled,
     className,
-    children,
     ...rest
   },
   ref
@@ -40,7 +41,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(f
       {...rest}
     >
       <span className={styles.glyphSlot} aria-hidden="true">
-        {icon ? <Icon icon={icon} size={iconSize} aria-hidden="true" /> : children}
+        <Icon icon={icon} size={iconSize} aria-hidden="true" />
       </span>
     </button>
   );

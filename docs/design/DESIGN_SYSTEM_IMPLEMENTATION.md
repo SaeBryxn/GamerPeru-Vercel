@@ -102,6 +102,7 @@ All canonical design tokens from GP-002 are exposed as CSS Custom Properties:
 - **Dark Context**: `.surface-dark`, `.surface-dark-card`, and `Card surface="dark" / "dark-card"` override `--focus-ring-color: var(--color-border-dark-focus)` (`#F4F4F5`).
 - **Focus Rule**: `:focus-visible { outline: 2px solid var(--focus-ring-color); outline-offset: 2px; }`.
 - **Zero Focus Suppression**: Blanket `:focus { outline: none; }` rules are strictly forbidden across globals and component CSS.
+- **Keyboard Navigation Verification**: Validated via real keyboard Tab navigation (`page.keyboard.press("Tab")`).
 
 ### 5.2 Touch Targets & Control Heights
 
@@ -131,31 +132,35 @@ All canonical design tokens from GP-002 are exposed as CSS Custom Properties:
 ## 7. Iconography System (`src/components/ui/icon/`)
 
 - **Package**: `lucide-react@1.31.0` (exact pin, 0 runtime dependencies, ISC license).
-- **Canonical Primitive**: `Icon` component with enforced geometric mappings:
+- **Canonical Primitive**: `Icon` component with non-overridable geometric mappings:
   - `sm`: `16px` width/height, `strokeWidth: 1.25`
   - `md`: `20px` width/height, `strokeWidth: 1.5`
   - `lg`: `24px` width/height, `strokeWidth: 1.5`
   - `xl`: `32px` width/height, `strokeWidth: 1.5`
-- **IconButton Enforcement**: `IconButton` accepts `icon={IconDefinition}` and `iconSize` to automatically render the canonical `Icon` primitive with `aria-hidden="true"`.
+- **Enforcement & Non-Bypassability**:
+  - `IconProps` strictly omits geometry escape attributes (`size`, `width`, `height`, `strokeWidth`, `stroke-width`).
+  - Canonical geometry properties are rendered **after** forwarded props, guaranteeing that geometry cannot be overridden at runtime.
+  - `IconButton` requires `icon: LucideIcon` as a mandatory prop and renders `Icon` internally (arbitrary children fallback removed).
+  - `Button` leading/trailing icon slots accept `LucideIcon` and automatically render canonical `md` (`20x20` / `1.5px` stroke) icon geometry.
 
 ---
 
 ## 8. Core Component Inventory (`src/components/ui/`)
 
-| Primitive        | Directory                            | Key Responsibilities                                                                                                                                    |
-| ---------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Button`         | `src/components/ui/button/`          | Native `<button>`, variants (`primary`, `secondary`, `ghost`, `destructive`), 44px desktop / 48px touch height, loading spinner with `aria-busy`.       |
-| `IconButton`     | `src/components/ui/icon-button/`     | 44x44px minimum touch area, mandatory `aria-label`, enforced canonical icon geometry.                                                                   |
-| `Icon`           | `src/components/ui/icon/`            | Enforced icon geometry mapping (`sm`: 16px/1.25, `md`/`lg`/`xl`: 20/24/32px/1.5).                                                                       |
-| `Input`          | `src/components/ui/input/`           | Accessible `<input>`, 40px desktop / 44px mobile, border `color.border.control` (`#71717A`).                                                            |
-| `TextField`      | `src/components/ui/input/`           | Integrated form field with automatic `label`, `description`, and `error` ARIA linkage (`useId`, `aria-describedby`, `aria-invalid`).                    |
-| `Badge`          | `src/components/ui/badge/`           | Category and general metadata badge (`neutral`, `brand`, `subtle`).                                                                                     |
-| `SpecPill`       | `src/components/ui/badge/`           | Technical metric pill (`39g`, `8000Hz`) with 2px radius and light/dark surface support.                                                                 |
-| `StatusBadge`    | `src/components/ui/badge/`           | Semantic status indicator (`success`, `warning`, `danger`, `info`, `neutral`) with mandatory visible text label and optional static indicator dot.      |
-| `Card`           | `src/components/ui/card/`            | Compositional neutral surface (`canvas`, `card`, `secondary`, `dark`, `dark-card`), padding options, elevation options. Sets contextual focus variable. |
-| `Container`      | `src/components/ui/container/`       | Responsive layout container (`default`, `prose`, `full`, `admin`) with canonical gutters.                                                               |
-| `VisuallyHidden` | `src/components/ui/visually-hidden/` | Screen-reader utility for accessible names without visual layout footprint.                                                                             |
-| `Stack`          | `src/components/ui/stack/`           | Finite typed flex layout helper with canonical token-mapped gaps (`0` to `12`).                                                                         |
+| Primitive        | Directory                            | Key Responsibilities                                                                                                                               |
+| ---------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button`         | `src/components/ui/button/`          | Native `<button>`, variants (`primary`, `secondary`, `ghost`, `destructive`), 44px desktop / 48px touch height, deterministic 20px/1.5 icon slots. |
+| `IconButton`     | `src/components/ui/icon-button/`     | 44x44px minimum touch area, mandatory `aria-label`, mandatory `icon`, enforced canonical icon geometry.                                            |
+| `Icon`           | `src/components/ui/icon/`            | Enforced, non-overridable icon geometry mapping (`sm`: 16px/1.25, `md`/`lg`/`xl`: 20/24/32px/1.5).                                                 |
+| `Input`          | `src/components/ui/input/`           | Accessible `<input>`, 40px desktop / 44px mobile, border `color.border.control` (`#71717A`).                                                       |
+| `TextField`      | `src/components/ui/input/`           | Integrated form field with automatic `label`, `description`, and `error` ARIA linkage (`useId`, `aria-describedby`, `aria-invalid`).               |
+| `Badge`          | `src/components/ui/badge/`           | Category and general metadata badge (`neutral`, `brand`, `subtle`).                                                                                |
+| `SpecPill`       | `src/components/ui/badge/`           | Technical metric pill (`39g`, `8000Hz`) with 2px radius and light/dark surface support.                                                            |
+| `StatusBadge`    | `src/components/ui/badge/`           | Semantic status indicator (`success`, `warning`, `danger`, `info`, `neutral`) with mandatory visible text label and optional static indicator dot. |
+| `Card`           | `src/components/ui/card/`            | Compositional neutral surface (`canvas`, `card`, `secondary`, `dark`, `dark-card`), padding options, elevation options. Sets contextual focus.     |
+| `Container`      | `src/components/ui/container/`       | Responsive layout container (`default`, `prose`, `full`, `admin`) with canonical gutters.                                                          |
+| `VisuallyHidden` | `src/components/ui/visually-hidden/` | Screen-reader utility for accessible names without visual layout footprint.                                                                        |
+| `Stack`          | `src/components/ui/stack/`           | Finite typed flex layout helper with canonical token-mapped gaps (`0` to `12`).                                                                    |
 
 ---
 

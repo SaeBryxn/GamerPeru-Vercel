@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import React from "react";
+import { Search } from "lucide-react";
+import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { CANONICAL_ICON_GEOMETRY } from "@/components/ui";
+import { CANONICAL_ICON_GEOMETRY, Icon, type IconProps } from "@/components/ui";
 
 describe("GP-008 Design System — Token Contract & Drift Protection", () => {
   const tokensCssPath = path.resolve(process.cwd(), "src/styles/tokens.css");
@@ -141,6 +144,47 @@ describe("GP-008 Design System — Token Contract & Drift Protection", () => {
     expect(CANONICAL_ICON_GEOMETRY.md).toEqual({ size: 20, strokeWidth: 1.5 });
     expect(CANONICAL_ICON_GEOMETRY.lg).toEqual({ size: 24, strokeWidth: 1.5 });
     expect(CANONICAL_ICON_GEOMETRY.xl).toEqual({ size: 32, strokeWidth: 1.5 });
+  });
+
+  it("renders non-overridable canonical geometry in Icon component even with attempted escapes", () => {
+    // Standard rendering for each size
+    const smHtml = renderToString(React.createElement(Icon, { icon: Search, size: "sm" }));
+    expect(smHtml).toContain('width="16"');
+    expect(smHtml).toContain('height="16"');
+    expect(smHtml).toContain('stroke-width="1.25"');
+
+    const mdHtml = renderToString(React.createElement(Icon, { icon: Search, size: "md" }));
+    expect(mdHtml).toContain('width="20"');
+    expect(mdHtml).toContain('height="20"');
+    expect(mdHtml).toContain('stroke-width="1.5"');
+
+    const lgHtml = renderToString(React.createElement(Icon, { icon: Search, size: "lg" }));
+    expect(lgHtml).toContain('width="24"');
+    expect(lgHtml).toContain('height="24"');
+    expect(lgHtml).toContain('stroke-width="1.5"');
+
+    const xlHtml = renderToString(React.createElement(Icon, { icon: Search, size: "xl" }));
+    expect(xlHtml).toContain('width="32"');
+    expect(xlHtml).toContain('height="32"');
+    expect(xlHtml).toContain('stroke-width="1.5"');
+
+    // Attempted runtime escape via cast
+    const escapeProps = {
+      icon: Search,
+      size: "sm",
+      width: 999,
+      height: 999,
+      strokeWidth: 9,
+      "stroke-width": 9,
+    } as unknown as IconProps;
+
+    const escapeHtml = renderToString(React.createElement(Icon, escapeProps));
+    // Canonical sm geometry must strictly win
+    expect(escapeHtml).toContain('width="16"');
+    expect(escapeHtml).toContain('height="16"');
+    expect(escapeHtml).toContain('stroke-width="1.25"');
+    expect(escapeHtml).not.toContain('width="999"');
+    expect(escapeHtml).not.toContain('stroke-width="9"');
   });
 
   it("ensures zero ad-hoc literal colors in component CSS modules", () => {

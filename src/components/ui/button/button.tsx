@@ -1,4 +1,6 @@
 import React from "react";
+import type { LucideIcon, LucideProps } from "lucide-react";
+import { Icon } from "../icon";
 import styles from "./button.module.css";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
@@ -7,8 +9,8 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   variant?: ButtonVariant;
   fullWidth?: boolean;
   loading?: boolean;
-  leadingIcon?: React.ReactNode;
-  trailingIcon?: React.ReactNode;
+  leadingIcon?: LucideIcon | React.ComponentType<LucideProps>;
+  trailingIcon?: LucideIcon | React.ComponentType<LucideProps>;
   children: React.ReactNode;
 }
 
@@ -45,7 +47,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
         <span className={styles.spinner} aria-hidden="true" />
       ) : leadingIcon ? (
         <span className={styles.iconSlot} aria-hidden="true">
-          {leadingIcon}
+          <Icon icon={leadingIcon} size="md" aria-hidden="true" />
         </span>
       ) : null}
 
@@ -53,7 +55,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
 
       {!loading && trailingIcon ? (
         <span className={styles.iconSlot} aria-hidden="true">
-          {trailingIcon}
+          <Icon icon={trailingIcon} size="md" aria-hidden="true" />
         </span>
       ) : null}
     </button>
