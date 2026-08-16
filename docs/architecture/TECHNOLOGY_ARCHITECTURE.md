@@ -8,15 +8,16 @@ This document defines the canonical technology architecture for **Gamer Perú** 
 
 **Canonical Decisions Summary**:
 - **Architecture Paradigm**: **Modular Monolith** with managed cloud infrastructure (avoiding premature microservices).
-- **Application Framework**: **Next.js (App Router) with TypeScript** running on the **Node.js Runtime**, providing server-rendered catalog pages, React Server Components (RSC), streaming AI responses, and strict server-side authorization.
+- **Application Framework**: **Next.js (App Router, Next.js 15 Active Production Line)** with **TypeScript (5.x)** running on the **Node.js 22 LTS Runtime**, providing server-rendered catalog pages, React Server Components (RSC), streaming AI responses, and strict server-side authorization.
+- **Application Hosting**: **Vercel** hosting the application domain (`gamerperu.com`) on the Vercel Edge Network with serverless Node.js execution.
 - **Commerce Domain Engine**: **Custom Gamer Perú Commerce Domain** owned entirely in TypeScript, optimized for Peruvian domestic payments (`YAPE_MANUAL`, `PLIN_MANUAL`), dynamic multi-category hardware specifications, and modular Product Story layouts.
-- **Database & Data Layer**: **PostgreSQL 16+** with **Drizzle ORM**, providing strict ACID transactions, row-level locking for inventory allocation, JSONB for hardware spec extensions, and automated migrations.
-- **Authentication & RBAC**: **Server-Side Session Authentication** with PostgreSQL session persistence and authoritative server-side Role-Based Access Control (RBAC).
-- **Object Storage & Media Pipeline**: **Cloudflare R2** with edge CDN and on-the-fly WebP/AVIF transformation for public media; isolated private bucket with time-limited pre-signed URLs for customer Yape/Plin vouchers.
+- **Database & Data Layer**: **Supabase PostgreSQL (PostgreSQL 16+)** with **Drizzle ORM** and Supavisor connection pooling, utilizing a **Free-First, Upgrade-Ready** operational strategy (zero code changes required to upgrade from Free to Pro).
+- **Authentication & RBAC**: **Better Auth** with a PostgreSQL session store, **Argon2id** password hashing, and authoritative server-side Role-Based Access Control (`requirePermission`).
+- **Object Storage & Media Pipeline**: **Cloudflare R2** with Cloudflare Edge Media Delivery and on-the-fly Image Transformations for public media (`media.gamerperu.com`); isolated private bucket (`gamerperu-private-proofs`) with short-lived (5-minute expiration) pre-signed URLs for customer Yape/Plin vouchers. (Supabase Storage is explicitly NOT used for the product catalog).
 - **Search & Asynchronous Processing**: **PostgreSQL Full-Text Search + Trigram (`pg_trgm`)** behind a clean `SearchProvider` adapter for v1; **Inngest** for durable asynchronous background workflows (AI product imports, email retries, outbound EC OS events).
-- **AI Infrastructure & Credential Security**: Multi-provider AI Gateway (OpenAI, Anthropic, Google Gemini) with **AES-256-GCM** encryption-at-rest for admin-managed API keys, separated from the database master key.
-- **Communications, Analytics & Observability**: **Resend + React Email**, **First-Party PostgreSQL Event Ledger + PostHog/Plausible**, and **Sentry + Pino** structured JSON logging with automatic PII masking.
-- **Testing & Deployment**: **Vitest** (Unit/Integration) + **Playwright** (E2E & a11y) + **GitHub Actions CI/CD** with automated staging and preview deployments.
+- **AI Infrastructure & Credential Security**: Multi-provider AI Gateway (OpenAI, Anthropic, Google Gemini) with versioned **AES-256-GCM** encryption-at-rest for admin-managed API keys, separated from the database runtime master key.
+- **Communications, Analytics & Observability**: **Resend + React Email**, **First-Party PostgreSQL Event Ledger + PostHog**, and **Sentry + Pino** structured JSON logging with automatic PII masking.
+- **Testing & Deployment**: **Vitest** (Unit/Integration) + **Playwright** (E2E & a11y) + **GitHub Actions CI/CD** with automated previews and staging promotion.
 
 ---
 
@@ -25,12 +26,16 @@ This document defines the canonical technology architecture for **Gamer Perú** 
 - **Decision Date**: August 16, 2026
 - **Research Method**: Every candidate technology was evaluated against official vendor and open-source project documentation, current stable production releases, enterprise support longevity, Latin American regional latency, operational complexity, and alignment with Gamer Perú's canonical specifications.
 - **Primary Documentation Sources Consulted**:
-  - Next.js 15+ Documentation (`nextjs.org/docs`)
+  - Next.js 15 Active Production Line Documentation (`nextjs.org/docs`)
+  - Node.js 22 LTS Documentation (`nodejs.org/docs/latest-v22.x/`)
   - PostgreSQL 16 Official Manual (`postgresql.org/docs/16/`)
+  - Supabase Database & Supavisor Docs (`supabase.com/docs/guides/database`)
   - Drizzle ORM Documentation (`orm.drizzle.team/docs`)
-  - Cloudflare R2 & Image Optimization Docs (`developers.cloudflare.com/r2/`)
+  - Cloudflare R2 & Image Optimization Docs (`developers.cloudflare.com/r2/`, `developers.cloudflare.com/images/`)
+  - Better Auth Documentation (`better-auth.com/docs`)
   - Inngest Durable Execution Docs (`inngest.com/docs`)
   - Resend & React Email Documentation (`resend.com/docs`, `react.email/docs`)
+  - PostHog Product Analytics Docs (`posthog.com/docs`)
   - Sentry SDK Documentation (`docs.sentry.io`)
   - Web Content Accessibility Guidelines (WCAG 2.1 AA)
 
@@ -66,7 +71,7 @@ This document defines the canonical technology architecture for **Gamer Perú** 
                                                   |  (HTTPS / Next.js Server Actions / APIs)
                                                   v
 +---------------------------------------------------------------------------------------------------+
-|                            NEXT.JS APPLICATION RUNTIME (Node.js)                                  |
+|                            APPLICATION RUNTIME (Next.js 15 on Vercel)                             |
 |                                                                                                   |
 |  +-----------------------+  +------------------------+  +---------------------------------------+ |
 |  | Route Group: Storefront|  | Route Group: Customer  |  | Route Group: Admin                    | |
@@ -83,8 +88,8 @@ This document defines the canonical technology architecture for **Gamer Perú** 
       |                       |                       |                      |               |
       v                       v                       v                      v               v
 +-------------+      +------------------+      +-------------+      +-----------------+  +----------+
-| PostgreSQL  |      | Cloudflare R2    |      | Inngest     |      | AI Providers    |  | Resend   |
-| Primary DB  |      | Object Storage   |      | Async Queue |      | (OpenAI/Anth/   |  | Transact |
+| Supabase    |      | Cloudflare R2    |      | Inngest     |      | AI Providers    |  | Resend   |
+| PostgreSQL  |      | Object Storage   |      | Async Queue |      | (OpenAI/Anth/   |  | Transact |
 | (Postgres16+|      | - Public Media   |      | - AI Jobs   |      |  Gemini Gateway)|  | Email    |
 | + Drizzle)  |      | - Private Proofs |      | - Retries   |      | Encrypted Keys  |  | Templates|
 +-------------+      +------------------+      +-------------+      +-----------------+  +----------+
@@ -96,11 +101,12 @@ This document defines the canonical technology architecture for **Gamer Perú** 
 
 ```mermaid
 graph TD
-    User([Shopper / Customer]) -->|HTTPS| CDN[Cloudflare Edge CDN]
-    Admin([Staff / Super Admin]) -->|HTTPS| CDN
+    User([Shopper / Customer]) -->|HTTPS gamerperu.com| VercelEdge[Vercel Edge Network]
+    User -->|HTTPS media.gamerperu.com| CFEdge[Cloudflare Edge CDN]
+    Admin([Staff / Super Admin]) -->|HTTPS gamerperu.com| VercelEdge
     
-    subgraph "Application Runtime (Next.js)"
-        CDN --> AppRouter[Next.js App Router]
+    subgraph "Application Runtime (Next.js 15 on Vercel)"
+        VercelEdge --> AppRouter[Next.js App Router]
         AppRouter --> Storefront[Storefront Pages & RSC]
         AppRouter --> CustomerHub[Customer Account Portal]
         AppRouter --> AdminPortal[Admin Operational Portal]
@@ -109,21 +115,21 @@ graph TD
         CustomerHub --> DomainServices
         AdminPortal --> DomainServices
         
-        DomainServices --> AuthModule[Auth & Session Engine]
+        DomainServices --> AuthModule[Better Auth & Session Engine]
         DomainServices --> OrderModule[Orders & Manual Payment Engine]
         DomainServices --> CatalogModule[Catalog & Search Service]
         DomainServices --> AIGateway[AI Provider Gateway]
     end
     
-    subgraph "Data & Infrastructure Tier"
-        DomainServices -->|Drizzle ORM / SQL| DB[(PostgreSQL 16+ Primary DB)]
-        DomainServices -->|S3 API| R2Public[(R2 Public Media Bucket)]
-        DomainServices -->|Signed URLs| R2Private[(R2 Private Proofs Bucket)]
+    subgraph "Managed Data & Storage Tier"
+        DomainServices -->|Drizzle ORM / Supavisor| SupabaseDB[(Supabase PostgreSQL 16+)]
+        CFEdge -->|Transforms & Serves| R2Public[(R2 Public Media Bucket)]
+        DomainServices -->|Signed URLs 5m| R2Private[(R2 Private Proofs Bucket)]
         DomainServices -->|Events| Inngest[Inngest Background Worker]
-        AIGateway -->|Encrypted Keys| DB
+        AIGateway -->|Versioned AES-256-GCM| SupabaseDB
         AIGateway -->|HTTPS API| LLMs[OpenAI / Anthropic / Gemini]
         Inngest -->|Async Tasks| Resend[Resend Transactional Email]
-        Inngest -->|Outbox Events| ECOS[Downstream EC OS]
+        Inngest -->|Outbox Webhooks| ECOS[Downstream EC OS]
     end
 ```
 
@@ -143,14 +149,14 @@ graph LR
         AdminSession[Admin RBAC Session Cookie]
     end
     
-    subgraph "Zone 3: Server Application Trust Boundary"
+    subgraph "Zone 3: Server Application Trust Boundary (Next.js on Vercel)"
         AppServer[Next.js Server Actions & API Handlers]
         ZodValidator[Zod Input & Payload Validation]
-        RBACGuard[Authoritative RBAC Guard]
+        RBACGuard[Authoritative RBAC Guard requirePermission]
     end
     
     subgraph "Zone 4: Isolated Storage & Infrastructure"
-        DB[(PostgreSQL ACID Store)]
+        SupabaseDB[(Supabase PostgreSQL ACID Store)]
         Vault[(AES-256-GCM Encrypted Key Table)]
         PrivateProofs[(Private S3 Voucher Storage)]
     end
@@ -163,15 +169,15 @@ graph LR
     RBACGuard -->|Requires 'orders:verify'| PrivateProofs
     RBACGuard -->|Requires 'ai:manage'| Vault
     ZodValidator --> AppServer
-    AppServer --> DB
+    AppServer --> SupabaseDB
 ```
 
 ---
 
 ## 8. Application Framework & Runtime
 
-- **Selected Framework**: **Next.js (App Router)** with **TypeScript** (ADR-001).
-- **Server Runtime**: **Node.js (LTS)** on serverless/container infrastructure.
+- **Selected Framework**: **Next.js (App Router)** with **TypeScript** on the **Next.js 15 Active Production Line** (ADR-001).
+- **Server Runtime**: **Node.js 22 LTS** in serverless execution mode.
 - **Rendering Strategy**:
   - *Public Catalog / Product Story*: Streaming Server-Side Rendering (SSR) with React Server Components (RSC) and On-Demand Incremental Static Regeneration (ISR) for static policy pages.
   - *Dynamic Commerce Data*: Product stock availability, cart drawers, and price checks render with fresh server data on request.
@@ -182,12 +188,12 @@ graph LR
 
 ## 9. Storefront / Admin Topology
 
-- **Topology Model**: **Single Unified Modular Application (Modular Monolith)**.
+- **Topology Model**: **Single Unified Modular Application (Modular Monolith)** (ADR-001).
 - **Route Structure**:
   - `app/(storefront)/*`: Public catalog, search, product detail pages, marketing, and footer pages.
   - `app/(customer)/*`: Authenticated customer profile, saved addresses, order tracking, and wishlist.
   - `app/(admin)/*`: Protected administrative backoffice, inventory management, Yape/Plin verification workbench, staff management, and AI settings.
-  - `app/api/*`: Specialized webhook handlers (Resend, EC OS) and streaming AI endpoints.
+  - `app/api/*`: Webhook endpoints (Resend, Inngest, EC OS) and specialized streaming AI endpoints.
 - **Security Boundary**: Security is enforced at the layout, server action, and database query layers. Non-admin sessions attempting to access `/admin` are rejected by server middleware before any UI or data leaks.
 
 ---
@@ -196,9 +202,9 @@ graph LR
 
 - **Selected Strategy**: **Custom Gamer Perú Commerce Domain** on PostgreSQL (ADR-002).
 - **Core Modules**:
-  - `Cart & Pricing`: Client cart state synchronized with server-side pricing, tax (IGV in Soles), and promotional discount calculators.
+  - `Cart & Pricing`: Client cart state synchronized with server-side pricing in Soles (`S/`) and promotional discount calculators.
   - `Checkout & Reservation`: Atomic inventory reservation during order placement using PostgreSQL row-level locks (`SELECT ... FOR UPDATE`).
-  - `Manual Payment Verification`: State machine specifically designed for Yape/Plin domestic verification (`PENDING_PAYMENT` $\to$ `PAYMENT_SUBMITTED` $\to$ `PAYMENT_VERIFIED` $\to$ `PAID` / `REJECTED`).
+  - `Manual Payment Verification`: State machine specifically designed for Yape/Plin domestic verification (customer submission enters verification workflow; authorized admin verifies funds before approving/rejecting; all transitions audited). Exact state machine names and timing remain deferred to GP-004 and GP-020.
   - `Multi-Category Hardware Catalog`: Dynamic specifications stored in structured JSONB columns with category-specific Zod schema validation (Mice, Keyboards, Audio, Mousepads).
   - `Product Story Engine`: Modular 13-block editorial PDP content builder.
   - `Affiliates & Commissions`: First-party affiliate tracking, coupon attribution, and commission status management with automatic invalidation upon order cancellation or return.
@@ -207,23 +213,32 @@ graph LR
 
 ## 11. Database & Data Access
 
-- **Database Engine**: **PostgreSQL 16+** (ADR-002).
-- **Managed Provider Strategy**: **Supabase** or **Neon / AWS RDS** with connection pooling (PgBouncer) enabled.
+- **Managed Database Provider**: **Supabase PostgreSQL** (PostgreSQL 16+ engine) with Supavisor connection pooling (ADR-002).
 - **Data Access Layer**: **Drizzle ORM** (TypeScript-native schema-as-code).
-- **Schema Discipline**:
-  - Core financial and inventory entities use strict foreign keys, unique constraints, and check constraints.
-  - Category hardware specifications and modular Product Story blocks use PostgreSQL `JSONB` columns with Zod validation.
-  - Migrations are generated as standard SQL scripts (`.sql`) via `drizzle-kit` and versioned in Git.
-- **Connection Management**: Serverless execution pools connections through PgBouncer in transaction mode to prevent connection exhaustion.
+- **Free-First Operational Strategy**:
+  - *Local Development*: Local PostgreSQL instance (native or Docker Compose).
+  - *Early Cloud Development / Pre-Launch*: **Supabase Free Plan** (500MB storage, Supavisor connection pooling).
+  - *Free-Stage Backup Strategy*: Automated scheduled logical database dumps (`pg_dump`) encrypted with AES-256 and stored in an isolated private Cloudflare R2 backup bucket (`gamerperu-db-backups-private`) with 30-day retention.
+  - *Pro Upgrade Triggers*: Transition to **Supabase Pro** ($25/mo) triggered by:
+    1. Sustained production customer order flow (eliminating inactivity pausing).
+    2. Database size exceeding 350 MB (70% of free limit).
+    3. Requirement for managed automated daily backups and 7-day Point-in-Time Recovery (PITR).
+    4. Concurrency demands requiring unthrottled compute.
+  - *Zero-Rewrite Guarantee*: Transitioning from Supabase Free to Supabase Pro is an infrastructure billing plan change requiring zero application code modifications.
+- **Portability Boundary**: Application domain logic uses pure Drizzle ORM and standard SQL queries; proprietary Supabase client libraries are avoided in core domain services to preserve complete PostgreSQL portability.
 
 ---
 
 ## 12. Authentication
 
-- **Authentication Strategy**: **Server-Side Session Authentication** with PostgreSQL persistence (ADR-003).
-- **Password Security**: Passwords hashed using **Argon2id** (or `bcrypt` with cost factor 12).
+- **Authentication Framework**: **Better Auth** with a **PostgreSQL Database Session Store** (ADR-003).
+- **Password Security**: Passwords hashed using **Argon2id** for robust defense against GPU-based brute force attacks.
 - **Session Transport**: Encrypted, `HttpOnly`, `SameSite=Lax`, `Secure` session cookies.
-- **Session Management**: Session tokens stored in PostgreSQL with rolling expiration; instant revocation upon password reset or admin session termination.
+- **Session Security Properties**:
+  - `HttpOnly` prevents client-side JavaScript access to session tokens, mitigating token extraction via XSS.
+  - `Secure` mandates HTTPS transport for all session cookies.
+  - `SameSite=Lax` mitigates Cross-Site Request Forgery (CSRF) on cross-origin requests.
+  - Session revocation immediately invalidates active sessions upon password reset or admin privilege modification.
 - **Customer Flows**: Registration, login, password reset via signed email tokens, and profile update.
 
 ---
@@ -238,25 +253,27 @@ graph LR
   - `ADMIN_SUPPORT`: Customer inquiry management, return/RMA review.
   - `CUSTOMER`: Standard customer account access restricted exclusively to owned records.
 - **Enforcement Rules**:
-  - Every server action and data query calls `requirePermission('permission:name')`.
+  - Every administrative server action and page layout invokes `requirePermission('permission:name')`.
   - Customer queries automatically filter by `session.customerId` derived from the verified session cookie; client-supplied user IDs are ignored.
 
 ---
 
 ## 14. Public Media Storage
 
-- **Storage Provider**: **Cloudflare R2** (ADR-004) with **Cloudflare Edge CDN**.
-- **Bucket**: `gamerperu-public-media` (Publicly accessible via `media.gamerperu.com`).
-- **Optimization Pipeline**: Dynamic edge transformation to WebP and AVIF based on browser headers.
+- **Storage Provider**: **Cloudflare R2** with **Cloudflare Edge CDN** (ADR-004).
+- **Bucket**: `gamerperu-public-media` (Served via `media.gamerperu.com`).
+- **Image Optimization**: Cloudflare Image Transformations dynamically generate responsive WebP and AVIF variants based on client `Accept` headers and viewport parameters.
 - **Caching**: `Cache-Control: public, max-age=31536000, immutable` for immutable hashed assets.
+- **Supabase Storage Boundary**: Supabase Storage is explicitly **NOT** used for the product catalog.
 
 ---
 
 ## 15. Private Payment-Proof Storage
 
-- **Storage Provider**: **Cloudflare R2 Private Bucket** (ADR-004).
-- **Bucket**: `gamerperu-private-proofs` (Completely closed to public HTTP access).
-- **Access Control**: Zero public URLs or CDN endpoints. Staff view vouchers exclusively via **time-limited pre-signed URLs** (5-minute expiration) generated on-demand by server actions after verifying `orders:verify` permission.
+- **Storage Provider**: **Cloudflare R2 Private Bucket** (`gamerperu-private-proofs`) (ADR-004).
+- **Access Control**: Completely closed to public HTTP access (no custom domain, zero CDN caching, no public directory listing).
+- **Access Model**: Authorized **short-lived S3/R2 pre-signed URLs** (5-minute expiration) generated on-demand by server actions only after verifying the admin's `orders:verify` permission.
+- **Bearer Credential Semantics**: Because an unexpired signed URL functions as a temporary bearer credential, URLs are transmitted strictly over HTTPS, never logged in standard application log streams, never included in analytics, served with `Cache-Control: private, no-store`, and logged as an authorization audit event upon generation.
 - **Upload Validation**: Enforces strict MIME type checks (JPEG, PNG, WebP) and a 5MB size limit.
 
 ---
@@ -264,8 +281,9 @@ graph LR
 ## 16. Search Architecture
 
 - **v1 Search Engine**: **PostgreSQL Full-Text Search (`tsvector`) + Trigram Similarity (`pg_trgm`)** (ADR-005).
-- **Search Capabilities**: Sub-10ms queries across product titles, brand names, categories, and technical attributes with typo tolerance and Spanish stemming.
+- **Search Capabilities**: Sub-10ms queries across product titles, brand names, categories, and technical attributes with typo tolerance and Spanish stemming. (Performance benchmarks will be measured during implementation).
 - **Abstraction**: Encapsulated behind a clean TypeScript **`SearchProvider`** interface.
+- **Degradation Semantics**: Because PostgreSQL is the search engine, search availability is directly coupled to primary database health. If advanced trigram search is degraded, simplified SQL filtering (`ILIKE`) serves as an emergency fallback only while the database remains healthy.
 - **Scale / Migration Trigger**: If the catalog exceeds 10,000 SKUs or requires complex vector similarity, `SearchProvider` can transition to **Meilisearch** or **Typesense** without altering UI or business logic.
 
 ---
@@ -286,7 +304,7 @@ graph LR
   - Batch product imports with provider rate-limiting.
   - Transactional email dispatch with exponential backoff retries.
   - Outbound EC OS integration event delivery with dead-letter queueing.
-  - Search index synchronization and cache warming.
+  - Cache warming workflows.
 - **Reliability**: Step-level state persistence, automatic retries, idempotency keys, and full execution observability.
 
 ---
@@ -303,9 +321,11 @@ graph LR
 ## 20. AI Credential Storage & Security
 
 - **Encryption Standard**: **AES-256-GCM** with authenticated data (ADR-007).
-- **Key Separation**:
-  - Ciphertext, IV, and auth tag are stored in PostgreSQL (`ai_provider_credentials` table).
-  - Master Key (`AI_ENCRYPTION_KEY`, 256-bit) resides strictly in server runtime environment variables, never in the database.
+- **Key Lifecycle & Versioning**:
+  - The database table stores: `ciphertext`, `iv` (12 bytes), `auth_tag` (16 bytes), and `key_version` (integer, e.g. `1`).
+  - The master key (`AI_ENCRYPTION_KEY_V1`, 256-bit) is injected securely at server runtime via environment variables, completely separated from the Supabase database. The database must **NEVER** store the root encryption key.
+  - **Key Rotation**: When rotating keys, a new environment variable (`AI_ENCRYPTION_KEY_V2`) is defined alongside previous versions. A migration command decrypts records using their respective `key_version` and re-encrypts them with the active version.
+  - **Recovery Requirement**: Database backups contain ciphertext only. Restoring a database snapshot requires the corresponding root encryption keys from an independent, secure credential backup.
 - **Admin UI Masking**: Admin settings display only masked identifiers (`sk-...abcd`) and connection health test status; plaintext keys are never returned to the client.
 - **In-Memory Decryption**: Decryption occurs strictly within server-side AI adapters during job execution.
 
@@ -328,7 +348,7 @@ graph LR
 - **Validation Layers**:
   - *HTTP Inputs & Server Actions*: Form parameters and mutation payloads validated before execution.
   - *AI Structured Outputs*: Model JSON responses validated against strict entity schemas.
-  - *Environment Variables*: Server configuration validated at startup via `@t3-oss/env-nextjs` / Zod schemas.
+  - *Environment Variables*: Server configuration validated at startup via Zod schemas.
   - *Integration Webhooks*: EC OS and Resend webhook signatures and payloads validated.
 
 ---
@@ -336,12 +356,13 @@ graph LR
 ## 23. Manual Payment Architecture
 
 - **Canonical v1 Methods**: `YAPE_MANUAL` and `PLIN_MANUAL` (ADR-002).
-- **State Machine**:
-  1. `PENDING_PAYMENT`: Order created, inventory reserved for payment window, QR code and instructions displayed.
-  2. `PAYMENT_SUBMITTED`: Customer inputs operation code and optional voucher upload. (Explicitly informs customer that submission $\ne$ payment confirmed).
-  3. `PAYMENT_VERIFIED`: Authorized admin reviews bank account receipt and clicks "Confirmar Pago".
-  4. `PAID` / `REJECTED`: Order transitions to fulfillment or cancellation.
-- **Audit Logging**: Every status transition records timestamp, acting admin ID, and reason.
+- **Workflow Invariants**:
+  1. Order placed $\to$ inventory reserved for payment window $\to$ payment instructions and QR code displayed.
+  2. Customer inputs operation code and optional voucher upload. (Explicitly informs customer that submission does NOT equal confirmed payment).
+  3. Payment enters verification workflow $\to$ authorized admin checks actual bank receipt.
+  4. Admin confirms or rejects payment $\to$ order transitions accordingly.
+  5. All status transitions are fully audited and sensitive mutations are idempotent.
+  6. Exact state machine names and timing windows remain deferred to GP-004 and GP-020.
 
 ---
 
@@ -357,7 +378,8 @@ graph LR
 ## 25. Analytics Architecture
 
 - **First-Party Commerce Ledger**: Financial revenue, orders, and affiliate commission attribution are computed exclusively from PostgreSQL records (ADR-006).
-- **Web & Funnel Analytics**: **PostHog** / **Plausible** for privacy-first, cookieless traffic and funnel metrics without heavy client scripts.
+- **Product & Funnel Analytics**: **PostHog** for privacy-first, cookieless traffic and funnel metrics without heavy client scripts.
+- **Outage Semantics**: If PostHog is temporarily unavailable, core commerce continues unimpeded. Non-critical behavioral event loss is accepted as best-effort; financial and order records remain 100% intact and derivable from PostgreSQL.
 - **Privacy Standard**: Zero PII (passwords, vouchers, customer phone numbers) sent to external analytics.
 
 ---
@@ -372,11 +394,11 @@ graph LR
 
 ## 27. Hosting, CDN & Deployment Topology
 
-- **Hosting Platform**: **Vercel** or **AWS (ECS / Amplify) / Node.js Container** (ADR-008).
-- **Edge CDN**: Global edge distribution with points of presence in South America (including Lima, Peru).
+- **Application Hosting Platform**: **Vercel** hosting the application domain (`gamerperu.com`) on the Vercel Edge Network with serverless Node.js execution (ADR-008).
+- **Media CDN**: **Cloudflare Edge CDN** hosting the media domain (`media.gamerperu.com`) with Cloudflare Image Transformations backed by Cloudflare R2 (ADR-004).
 - **Environment Separation**:
   - `LOCAL`: Developer workstations (Local Node.js + Local/Docker PostgreSQL).
-  - `PREVIEW`: Ephemeral pull-request preview deployments.
+  - `PREVIEW`: Ephemeral pull-request preview deployments on Vercel.
   - `STAGING`: Staging environment for pre-release validation.
   - `PRODUCTION`: High-availability production environment (`gamerperu.com`).
 
@@ -388,7 +410,7 @@ graph LR
 |---|---|---|---|
 | **PUBLIC CONFIG** | `NEXT_PUBLIC_*` | `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_CDN_URL` | Browser & Server |
 | **SERVER CONFIG** | Server Environment | `DATABASE_URL`, `RESEND_API_KEY`, `R2_ACCESS_KEY` | Server Runtime Only |
-| **MASTER SECRET** | Server Environment | `AI_ENCRYPTION_KEY`, `AUTH_SECRET` | Server Runtime Only |
+| **MASTER SECRET** | Server Environment | `AI_ENCRYPTION_KEY_V1`, `BETTER_AUTH_SECRET` | Server Runtime Only |
 | **ENCRYPTED SECRET** | PostgreSQL Table | Encrypted OpenAI/Anthropic/Gemini API Keys | In-Memory Decryption Only |
 
 ---
@@ -419,9 +441,10 @@ graph LR
 
 ## 32. Backups & Disaster Recovery
 
-- **Automated DB Backups**: Daily automated full backups with 7-day Point-in-Time Recovery (PITR) via managed PostgreSQL.
+- **Supabase Free Phase Backup Model**: Automated scheduled logical database dumps (`pg_dump`) encrypted with AES-256 and stored in an isolated private Cloudflare R2 backup bucket (`gamerperu-db-backups-private`) with 30-day retention.
+- **Supabase Production Paid Phase Backup Model**: Managed automated daily backups with 7-day Point-in-Time Recovery (PITR) enabled upon upgrading to Supabase Pro ($25/mo).
 - **Media Redundancy**: Object storage versioning enabled on Cloudflare R2 public and private buckets.
-- **Recovery Testing**: Documented runbook for spinning up a restored database instance from snapshot.
+- **Recovery Requirement**: Restoring a database snapshot requires access to corresponding root encryption keys from an independent, secure credential backup.
 
 ---
 
@@ -439,10 +462,10 @@ graph LR
 |---|---|---|
 | **Admin RBAC** | Server Actions & API | Authoritative database role check (`requirePermission`) |
 | **Customer Data Isolation** | Data Access Layer | Enforced `session.customerId` filter from session cookie |
-| **Payment Voucher Protection**| Private Storage | S3 private bucket + 5-minute pre-signed URLs |
-| **AI Credential Protection** | Database / Server | AES-256-GCM encryption at rest + separate server master key |
+| **Payment Voucher Protection**| Private Storage | S3 private bucket + 5-minute pre-signed URLs (bearer semantics) |
+| **AI Credential Protection** | Database / Server | Versioned AES-256-GCM encryption at rest + separate server master key |
 | **SQL Injection Prevention** | Data Layer | Drizzle ORM parameterized SQL queries |
-| **XSS & CSRF Prevention** | Framework & HTTP | Next.js automatic encoding, SameSite=Lax HttpOnly cookies |
+| **XSS & CSRF Mitigation** | Framework & HTTP | Next.js automatic encoding, SameSite=Lax HttpOnly Secure cookies |
 | **Rate Limiting** | Edge / Middleware | IP & Session token bucket rate limiting on auth and AI routes |
 
 ---
@@ -470,11 +493,15 @@ graph LR
 
 | Service / Dependency | Criticality | Behavior on Outage | Recovery / Fallback |
 |---|---|---|---|
-| **Primary Database** | **CRITICAL** | Storefront displays cached pages; mutations show graceful 503 error | Automated PITR failover |
+| **Vercel / App Host** | **CRITICAL** | Storefront offline | Vercel multi-region failover |
+| **Supabase PostgreSQL** | **CRITICAL** | Storefront displays cached pages; mutations show graceful 503 error | Automated PITR failover |
+| **Cloudflare Public Media**| **DEGRADABLE** | Storefront reachable but images fail to load; UI layout preserved via aspect ratios | Cloudflare Edge multi-POP redundancy |
+| **Cloudflare Private Proofs**| **DEGRADABLE** | Orders placed; voucher uploads/reviews temporarily fail | Inngest retry / temporary hold |
+| **Inngest Async Queue** | **DEGRADABLE** | Async jobs paused; customer checkout completes | Job backlog drained on recovery |
 | **AI Providers** | **DEGRADABLE** | Product research paused; Customer Assistant displays helpful FAQ/search fallback | Background retry / manual input |
-| **Email Provider (Resend)**| **DEGRADABLE** | Emails queued in Inngest; checkout completes successfully | Inngest exponential retries |
-| **Search Engine** | **DEGRADABLE** | Fallback to basic database ILIKE / category browsing | Automatic query fallback |
-| **Analytics (PostHog)** | **NON-CRITICAL** | Zero customer impact; events buffered locally | Discard non-critical telemetry |
+| **Resend Email** | **DEGRADABLE** | Emails queued in Inngest; checkout completes successfully | Inngest exponential retries |
+| **PostHog Analytics** | **NON-CRITICAL** | Zero customer impact; behavioral events discarded or buffered | Telemetry best-effort recovery |
+| **Sentry Observability** | **NON-CRITICAL** | Zero customer impact; local error logs preserved | Sentry buffer reconnect |
 | **EC OS Downstream** | **NON-CRITICAL** | Zero customer impact; outbound events held in outbox queue | Automatic retry when EC OS returns |
 
 ---
@@ -483,19 +510,21 @@ graph LR
 
 *Research Date: August 16, 2026. All costs based on official published tiers in USD.*
 
-| Phase | Fixed Infrastructure Cost | Estimated Variable Cost | Total Estimated Monthly Cost |
+| Phase | Fixed Monthly Cost | Variable Usage Cost | Total Estimated Monthly Cost |
 |---|---|---|---|
-| **Development / Pre-Launch** | $0 (Free tiers: Vercel Hobby, Supabase Free, Cloudflare R2 Free, Inngest Free) | < $5 (AI test tokens) | **$0 – $5 / month** |
-| **Launch (1k-5k visits/mo)** | ~$45 (Vercel Pro $20, Supabase Pro $25, R2 ~$0, Resend $0-$20) | ~$15 (AI Product Research + Email) | **~$60 – $80 / month** |
-| **Growth (50k+ visits/mo)** | ~$90 (Compute + Database Pro + Storage + Inngest Pro) | ~$50 - $100 (AI Customer Assistant + Email) | **~$140 – $190 / month** |
+| **Local Development** | $0 (Local Node.js + Local PostgreSQL + Mock Adapters) | $0 | **$0 / month** |
+| **Cloud Pre-Launch** | $0 (Vercel Hobby $0, Supabase Free $0, Cloudflare R2 Free, Inngest Free, Resend Free) | < $5 (AI test tokens) | **$0 – $5 / month** |
+| **Initial Launch** | ~$20 (Vercel Pro $20; Supabase Free $0 with scheduled R2 backups; R2 $0; Resend $0; PostHog Free $0) | ~$15 (AI Product Research tokens) | **~$35 – $50 / month** |
+| **Growth (Production Pro)**| ~$95 (Vercel Pro $20 + Supabase Pro $25 + Inngest Pro $35 + Cloudflare Images ~$15) | ~$50 – $100 (AI Customer Assistant tokens + Resend Email) | **~$145 – $210 / month** |
 
 ---
 
 ## 39. Scaling Triggers
 
-1. **Catalog Expansion (>10,000 SKUs)**: Switch `SearchProvider` from PostgreSQL FTS to dedicated Meilisearch/Typesense cluster.
-2. **High Concurrency Traffic (>1,000 req/s)**: Add read replicas to PostgreSQL and enable edge caching for public catalog APIs.
-3. **Media Bandwidth (>1 TB/mo)**: Cloudflare R2 scales linearly with zero egress bandwidth charges.
+1. **Production Launch**: Upgrade Supabase Free $\to$ Pro ($25/mo) to eliminate inactivity pausing and enable automated daily backups + PITR.
+2. **Catalog Expansion (>10,000 SKUs)**: Switch `SearchProvider` from PostgreSQL FTS to dedicated Meilisearch/Typesense cluster.
+3. **High Concurrency Traffic (>1,000 req/s)**: Add read replicas to Supabase PostgreSQL and enable edge caching for public catalog APIs.
+4. **Media Bandwidth (>1 TB/mo)**: Cloudflare R2 scales linearly with zero egress bandwidth charges.
 
 ---
 
@@ -512,27 +541,29 @@ graph LR
 
 | Technology Domain | Selected Solution | Key Alternatives Considered | Deciding Factors |
 |---|---|---|---|
-| **App Framework** | **Next.js (App Router)** | Remix, Astro, Nuxt | SEO dominance, React Server Components, unified route groups, AI streaming. |
+| **App Framework** | **Next.js 15 (App Router)** | Remix, Astro, Nuxt | SEO dominance, React Server Components, unified route groups, AI streaming. |
+| **App Hosting** | **Vercel** | AWS ECS, Cloudflare Pages | Native Next.js App Router support, preview environments, zero-downtime rollouts. |
 | **Commerce Engine** | **Custom Domain** | Medusa, Saleor, Shopify | Native Yape/Plin verification, custom hardware specs, zero platform rent. |
-| **Primary Database** | **PostgreSQL 16+** | MySQL, MongoDB | Strict ACID transactions, row-level locks, JSONB hardware specs, GIN search. |
+| **Managed Database**| **Supabase PostgreSQL** | Neon, AWS RDS, PlanetScale | PostgreSQL 16+, Supavisor pooling, Free-first $\to$ Pro zero-rewrite upgrade path. |
 | **Data Access Layer**| **Drizzle ORM** | Prisma, Kysely, TypeORM | Zero runtime overhead, pure TypeScript schema, native SQL control, fast cold-starts. |
-| **Authentication** | **Server Session (Auth.js)**| Clerk, Auth0, Supabase Auth | Full data ownership, zero MAU SaaS fees, instant server session revocation. |
-| **Object Storage** | **Cloudflare R2** | AWS S3, Cloudinary | Zero egress fees, global edge CDN, S3 API compatibility, private bucket support. |
-| **Search Engine** | **PostgreSQL FTS/Trigram** | Meilisearch, Algolia | Zero extra infrastructure for v1, instant transactional updates, sub-10ms queries. |
+| **Authentication** | **Better Auth (PostgreSQL)**| Auth.js, Clerk, Auth0 | Native PostgreSQL session store, Argon2id hashing, zero MAU SaaS fees, instant revocation. |
+| **Object Storage** | **Cloudflare R2** | AWS S3, Supabase Storage | Zero egress fees, global edge CDN, S3 API compatibility, private bucket support. |
+| **Search Engine** | **PostgreSQL FTS/Trigram** | Meilisearch, Algolia | Zero extra infrastructure for v1, instant transactional updates, Spanish stemming. |
 | **Async Background**| **Inngest** | BullMQ, Temporal | Durable TypeScript workflows, step-level retries, serverless compatibility. |
-| **AI Gateway** | **Custom Multi-Provider** | Single Vendor SDK | Zero vendor lock-in, AES-256-GCM credential encryption, structured Zod output. |
+| **AI Gateway** | **Custom Multi-Provider** | Single Vendor SDK | Zero vendor lock-in, versioned AES-256-GCM credential encryption, structured Zod output. |
 | **Email** | **Resend + React Email** | Postmark, SendGrid | Type-safe React components, modern developer API, reliable deliverability. |
+| **Analytics** | **PostHog** | Plausible, Google Analytics | First-party PostgreSQL ledger for revenue + PostHog for cookieless product funnels. |
 | **Observability** | **Sentry + Pino** | Datadog, New Relic | Deep Next.js error tracing, structured JSON logs, automated PII scrubbing. |
-| **Testing** | **Vitest + Playwright** | Jest + Cypress | ESM-native speed, multi-browser E2E, integrated accessibility testing. |
+| **Testing** | **Vitest + Playwright** | Jest + Cypress | ESM-native speed, multi-browser E2E, integrated accessibility testing (`axe-core`). |
 
 ---
 
 ## 42. Accepted ADR Index
 
 1. [`ADR-001: Application Framework, Runtime and Topology`](../decisions/ADR-001-application-framework-runtime.md)
-2. [`ADR-002: Commerce Engine and Data Architecture`](../decisions/ADR-002-commerce-engine-data-architecture.md)
+2. [`ADR-002: Commerce Engine and Managed Database Architecture`](../decisions/ADR-002-commerce-engine-data-architecture.md)
 3. [`ADR-003: Authentication, Session Management and RBAC`](../decisions/ADR-003-authentication-authorization-rbac.md)
-4. [`ADR-004: Object Storage and Media Pipeline`](../decisions/ADR-004-storage-media-pipeline.md)
+4. [`ADR-004: Object Storage, Media Pipeline and Voucher Security`](../decisions/ADR-004-storage-media-pipeline.md)
 5. [`ADR-005: Search and Asynchronous Job Architecture`](../decisions/ADR-005-search-asynchronous-jobs.md)
 6. [`ADR-006: Communications, Analytics and Observability`](../decisions/ADR-006-communications-analytics-observability.md)
 7. [`ADR-007: AI Provider Gateway and Credential Security`](../decisions/ADR-007-ai-provider-credential-security.md)
@@ -553,9 +584,9 @@ graph LR
 ## 44. Inputs for GP-004 (Commerce Domain Model)
 
 This document provides GP-004 with exact architectural boundaries:
-- Relational database schema requirements on PostgreSQL 16+.
-- Core entities vs. JSONB dynamic spec extension patterns.
-- Manual Yape/Plin payment verification state machine transitions.
+- Relational database schema requirements on Supabase PostgreSQL (PostgreSQL 16+).
+- Core entities vs. JSONB dynamic spec extension patterns with Drizzle ORM.
+- Manual Yape/Plin payment verification workflow invariants.
 - Multi-brand catalog relationships and variant inventory reservation logic.
 - Affiliate attribution and commission cancellation rules.
 
@@ -564,9 +595,11 @@ This document provides GP-004 with exact architectural boundaries:
 ## 45. Inputs for GP-005 (Repository Bootstrap)
 
 This document establishes the exact technology choices to be initialized in GP-005:
-- Next.js (App Router) + TypeScript.
-- Drizzle ORM + Drizzle Kit configuration.
-- Tailwind / CSS styling architecture mapping to GP-002 design tokens.
+- Next.js 15 (App Router) + TypeScript + Node.js 22 LTS.
+- Drizzle ORM + Drizzle Kit with Supabase PostgreSQL connection configuration.
+- Better Auth setup with PostgreSQL adapter.
+- Cloudflare R2 SDK clients for public media and private proofs.
+- Inngest client setup.
 - Vitest + Playwright testing harness.
 - GitHub Actions CI workflow definitions.
 
@@ -575,6 +608,7 @@ This document establishes the exact technology choices to be initialized in GP-0
 ## 46. GP-003 Definition of Done
 
 * [x] Exactly ONE canonical technology architecture selected and documented.
+* [x] Supabase PostgreSQL selected as managed database provider with Free-first $\to$ Pro upgrade path.
 * [x] All 8 foundational Architecture Decision Records (ADRs 001–008) authored and ACCEPTED.
 * [x] Current official documentation consulted for all technologies.
 * [x] Complete 46-section `TECHNOLOGY_ARCHITECTURE.md` specification created.
@@ -583,7 +617,7 @@ This document establishes the exact technology choices to be initialized in GP-0
 * [x] Customer-private data isolation verified.
 * [x] Transactional manual Yape/Plin payment architecture verified.
 * [x] Private payment-proof storage isolated from public CDN assets.
-* [x] Multi-provider AI Gateway and AES-256-GCM credential encryption architecture defined.
+* [x] Multi-provider AI Gateway and versioned AES-256-GCM credential encryption architecture defined.
 * [x] AI Customer Assistant data boundaries (PUBLIC / CUSTOMER_PRIVATE / INTERNAL) verified.
 * [x] EC OS operational independence guaranteed.
 * [x] Backup, recovery, failure degradation, and cost models documented.

@@ -6,12 +6,12 @@ ACCEPTED
 ## Context
 Gamer Perú requires two critical operational capabilities:
 1. **Catalog Search & Filtering**: Multi-attribute search across brands, models, sensors, switches, polling rates, and categories with typo tolerance, instant suggestions, and low latency.
-2. **Durable Asynchronous Background Processing**: Long-running AI product research workflows, multi-step LLM batch imports, transactional email retries, search index updates, and reliable EC OS outbound webhook delivery.
+2. **Durable Asynchronous Background Processing**: Long-running AI product research workflows, multi-step LLM batch imports, transactional email retries, and reliable EC OS outbound webhook delivery.
 
 ## Decision Drivers
 - **Operational Simplicity**: Avoid premature multi-service clusters during early stages while providing an architectural path for scale.
-- **Search Latency & Relevance**: Fast, accurate search results for Peruvian gaming hardware shoppers without stale search indexes.
-- **Job Reliability & Non-Blocking Execution**: Long-running AI generation jobs (which can take 15–45 seconds) must never tie up browser HTTP request lifecycles and must support automatic retries, backoff, and failure observability.
+- **Search Relevance**: Fast, accurate search results for Peruvian gaming hardware shoppers without synchronization lag.
+- **Job Reliability & Non-Blocking Execution**: Long-running AI generation jobs (15–45 seconds) must never tie up browser HTTP request lifecycles and must support automatic retries, backoff, and failure observability.
 
 ## Options Considered
 1. **Search**:
@@ -26,11 +26,12 @@ Gamer Perú requires two critical operational capabilities:
 ## Decision
 1. **Search Architecture**:
    - Adopt **PostgreSQL Full-Text Search with `pg_trgm` (Trigram similarity)** as the canonical v1 search engine, structured behind a clean TypeScript **`SearchProvider`** interface.
-   - *Rationale*: For Gamer Perú's launch catalog (<1,000 SKUs), PostgreSQL FTS with GIN indexes and Trigram matching delivers sub-10ms query times, typo-tolerant matching (e.g. `beastx` -> `Beast X`), Spanish stemming, and immediate transactional index updates with zero synchronization lag and zero extra infrastructure cost.
-   - *Migration Path*: When the catalog scales beyond 10,000 SKUs or requires complex vector similarity, the `SearchProvider` adapter can be switched to **Meilisearch** or **Typesense** without modifying any UI or domain logic.
+   - *Rationale*: For launch-scale catalogs (<1,000 SKUs), PostgreSQL FTS with GIN indexes and Trigram matching provides typo-tolerant matching (e.g. `beastx` $\to$ `Beast X`), Spanish stemming, and immediate transactional index updates with zero synchronization lag and zero extra infrastructure cost. (Performance benchmarks will be measured during implementation).
+   - *Degradation Semantics*: Because PostgreSQL is the search engine, search availability is directly coupled to primary database health. If advanced trigram search is degraded, simplified SQL filtering (`ILIKE`) serves as an emergency fallback only while the database remains healthy.
+   - *Migration Trigger*: When the catalog exceeds 10,000 SKUs or requires complex vector embeddings, the `SearchProvider` adapter can transition to **Meilisearch** or **Typesense** without modifying UI components or domain services.
 2. **Asynchronous Processing Architecture**:
-   - Adopt **Inngest** (or **BullMQ** with Node.js worker) as the durable background job execution engine.
-   - *Rationale*: Inngest enables durable, multi-step TypeScript workflows with automatic retries, exponential backoff, concurrency controls, rate limiting (essential for AI provider quotas), and step-level state persistence. Long-running AI product imports run reliably in the background while streaming progress back to the admin UI.
+   - Adopt **Inngest** as the canonical durable background workflow execution engine.
+   - *Rationale*: Inngest provides durable, multi-step TypeScript workflows with automatic retries, exponential backoff, concurrency controls, rate limiting (essential for AI provider quotas), and step-level state persistence. Long-running AI product imports run reliably in the background while streaming progress back to the admin UI.
 
 ## Consequences
 - **Positive**: Zero external search infrastructure to maintain for v1, instant search consistency on catalog updates, resilient background jobs for AI and transactional emails, non-blocking HTTP endpoints.
