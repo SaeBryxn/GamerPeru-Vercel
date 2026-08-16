@@ -37,8 +37,12 @@ const nextConfig: NextConfig = {
   },
 };
 
+const hasSentryBuildCredentials = Boolean(
+  process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
+);
+
 export default withSentryConfig(nextConfig, {
-  silent: !process.env.CI,
+  silent: !hasSentryBuildCredentials,
   telemetry: false,
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
@@ -46,9 +50,9 @@ export default withSentryConfig(nextConfig, {
   widenClientFileUpload: true,
   tunnelRoute: "/monitoring",
   sourcemaps: {
-    disable: !process.env.SENTRY_AUTH_TOKEN,
+    disable: !hasSentryBuildCredentials,
   },
   release: {
-    create: Boolean(process.env.SENTRY_AUTH_TOKEN),
+    create: hasSentryBuildCredentials,
   },
 });

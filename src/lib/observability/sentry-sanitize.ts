@@ -1,19 +1,22 @@
 import type { ErrorEvent, EventHint } from "@sentry/nextjs";
 
 const SENSITIVE_KEY_REGEX =
-  /^(password|authorization|cookie|set-cookie|token|access_token|refresh_token|secret|apikey|api_key|voucher_url|proof_url|operation_code|database_url|supabase_secret_key|resend_api_key|r2_access_key_id|r2_secret_access_key|inngest_event_key|inngest_signing_key|ai_encryption_key_v1|sentry_auth_token)$/i;
+  /^(password|authorization|cookie|set-cookie|token|access_token|refresh_token|secret|apikey|api_key|voucher_url|proof_url|operation_code|database_url|supabase_secret_key|resend_api_key|r2_access_key_id|r2_secret_access_key|inngest_event_key|inngest_signing_key|ai_encryption_key_v1|sentry_auth_token|email|phone|phone_number|address|street)$/i;
 
-const STRING_PATTERNS: Array<{ regex: RegExp; replacement: string }> = [
+const STRING_PATTERNS: Array<{
+  regex: RegExp;
+  replacement: string | ((substring: string, ...args: string[]) => string);
+}> = [
   // Database connection URLs containing credentials
   {
     regex: /postgres(?:ql)?:\/\/[^@\s]+@/gi,
     replacement: "postgres://[REDACTED_CREDENTIALS]@",
   },
-  // Signed URLs with access signatures or tokens
+  // Sensitive query parameters inside URLs (tokens, passwords, codes, secrets, emails, signatures)
   {
     regex:
-      /https?:\/\/[^\s"'<>]*(?:(?:X-Amz-Signature|token|signature|sig|key|token)=[^\s"'&<>]+)[^\s"'<>]*/gi,
-    replacement: "[REDACTED_SIGNED_URL]",
+      /([?&](?:token|code|secret|password|email|key|api_key|access_token|refresh_token|signature|sig|X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token)=)[^&\s#]+/gi,
+    replacement: (_match: string, p1: string) => `${p1}[REDACTED]`,
   },
   // JWT tokens (Header.Payload.Signature)
   {
@@ -30,12 +33,21 @@ const STRING_PATTERNS: Array<{ regex: RegExp; replacement: string }> = [
     regex: /\b(?:re_|sb_secret_|sntrys_)[A-Za-z0-9_-]+\b/gi,
     replacement: "[REDACTED_API_KEY]",
   },
+  // Conservative email addresses in diagnostic messages/breadcrumbs
+  {
+    regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+    replacement: "[REDACTED_EMAIL]",
+  },
 ];
 
 export function sanitizeString(value: string): string {
   let sanitized = value;
   for (const { regex, replacement } of STRING_PATTERNS) {
-    sanitized = sanitized.replace(regex, replacement);
+    if (typeof replacement === "string") {
+      sanitized = sanitized.replace(regex, replacement);
+    } else {
+      sanitized = sanitized.replace(regex, replacement);
+    }
   }
   return sanitized;
 }
@@ -70,7 +82,7 @@ export function sanitizeObject<T>(obj: T): T {
 
 /**
  * Pure Sentry beforeSend hook ensuring all events are stripped of secrets,
- * authorization headers, cookies, credentials, and sensitive payment data.
+ * authorization headers, cookies, credentials, PII, and sensitive payment data.
  */
 export function sentryBeforeSend(event: ErrorEvent, _hint?: EventHint): ErrorEvent | null {
   if (!event) {
@@ -94,8 +106,20 @@ export function sentryBeforeSend(event: ErrorEvent, _hint?: EventHint): ErrorEve
     }
   }
 
+  // Sanitize user context (preserve safe internal pseudonymous ID only; purge email, username, ip)
+  if (sanitized.user) {
+    const safeId =
+      typeof sanitized.user.id === "string" || typeof sanitized.user.id === "number"
+        ? sanitized.user.id
+        : undefined;
+    sanitized.user = safeId ? { id: safeId } : undefined;
+  }
+
   // Sanitize request context
   if (sanitized.request) {
+    if (sanitized.request.url) {
+      sanitized.request.url = sanitizeString(sanitized.request.url);
+    }
     if (sanitized.request.headers) {
       sanitized.request.headers = sanitizeObject(sanitized.request.headers);
     }
@@ -120,6 +144,11 @@ export function sentryBeforeSend(event: ErrorEvent, _hint?: EventHint): ErrorEve
         sanitized.request.query_string = sanitizeObject(sanitized.request.query_string);
       }
     }
+  }
+
+  // Sanitize tags
+  if (sanitized.tags) {
+    sanitized.tags = sanitizeObject(sanitized.tags);
   }
 
   // Sanitize breadcrumbs

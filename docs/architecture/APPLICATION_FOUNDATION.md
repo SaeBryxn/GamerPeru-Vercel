@@ -210,7 +210,7 @@ Sentry is integrated via `@sentry/nextjs@10.70.0` following current Next.js 16 c
 - **`instrumentation-client.ts`**: Native Next.js 16 client instrumentation entry point initializing browser Sentry client with `beforeSend: sentryBeforeSend`.
 - **`sentry.server.config.ts`**: Server-side Node.js runtime initialization with `beforeSend: sentryBeforeSend`.
 - **`sentry.edge.config.ts`**: Edge runtime initialization with `beforeSend: sentryBeforeSend`.
-- **`next.config.ts`**: Configured with `withSentryConfig` setting `telemetry: false`, `sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN }`, and `release: { create: Boolean(process.env.SENTRY_AUTH_TOKEN) }`.
+- **`next.config.ts`**: Configured with `withSentryConfig` setting `telemetry: false`. Build integration (sourcemap upload and release creation) is strictly gated on complete build credentials: `hasSentryBuildCredentials = Boolean(SENTRY_AUTH_TOKEN && SENTRY_ORG && SENTRY_PROJECT)`. When unconfigured, `silent: true`, `sourcemaps: { disable: true }`, and `release: { create: false }` suppress all auth-token warning noise.
 
 ### Sentry Event Sanitization Boundary (`src/lib/observability/sentry-sanitize.ts`)
 
@@ -218,14 +218,16 @@ A centralized, pure `sentryBeforeSend` hook is attached to all Sentry runtimes. 
 
 1. Strips credentials from connection strings (e.g. `postgres://[REDACTED_CREDENTIALS]@host:port/db`);
 2. Strips signed private R2 URLs and access signatures (`[REDACTED_SIGNED_URL]`);
-3. Strips JWTs and 64-character hex master keys from error messages and exception values;
-4. Redacts `authorization`, `cookie`, `set-cookie`, tokens, payment operation codes, and proof URLs from request contexts, breadcrumbs, and extra metadata;
-5. Preserves diagnostic error types, sanitized messages, stack traces, and safe routes without mutating the original input object.
+3. Strips sensitive query parameters from `request.url` (`token`, `code`, `secret`, `password`, `email`, `key`, `signature`, `sig`, `X-Amz-Signature`);
+4. Strips JWTs, 64-character hex master keys, and conservative email addresses from error messages, exception values, and breadcrumbs;
+5. Minimizes `event.user` by preserving only a safe internal pseudonymous ID while purging email, username, and IP addresses;
+6. Redacts `authorization`, `cookie`, `set-cookie`, tokens, payment operation codes, proof URLs, and PII keys (`email`, `phone`, `address`, `street`) from request contexts, tags, breadcrumbs, and extra metadata;
+7. Preserves diagnostic error types, sanitized messages, stack traces, and safe routes without mutating the original input object.
 
 ### Unconfigured Operation & Quiet Builds
 
 - Sentry DSN, auth token, organization, and project are strictly optional in local and CI environments.
-- When unconfigured, `next build` executes cleanly without warning spam, skips source-map uploads, skips remote release creation, and disables build-plugin telemetry (`telemetry: false`).
+- When unconfigured, `next build` executes cleanly without warning spam or auth-token notices, skips source-map uploads, skips remote release creation, and disables build-plugin telemetry (`telemetry: false`).
 
 ---
 

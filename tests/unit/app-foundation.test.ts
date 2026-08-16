@@ -117,7 +117,8 @@ describe("Application Foundation — Request Correlation", () => {
 
 describe("Application Foundation — Pino Server Logger Redaction", () => {
   function captureLog(
-    fn: (testLogger: ReturnType<typeof createLogger>) => void
+    fn: (testLogger: ReturnType<typeof createLogger>) => void,
+    customOptions?: Parameters<typeof createLogger>[0]
   ): Record<string, unknown> {
     const chunks: Buffer[] = [];
     const stream = new Writable({
@@ -127,7 +128,7 @@ describe("Application Foundation — Pino Server Logger Redaction", () => {
       },
     });
 
-    const testLogger = createLogger({ level: "debug" }, stream);
+    const testLogger = createLogger({ level: "debug", ...customOptions }, stream);
     fn(testLogger);
 
     const raw = Buffer.concat(chunks).toString("utf8").trim();
@@ -227,6 +228,29 @@ describe("Application Foundation — Pino Server Logger Redaction", () => {
     expect(log.itemCount).toBe(3);
     expect(log.msg).toBe("Product catalog queried");
   });
+
+  it("guarantees that custom logger options cannot disable canonical redaction paths", () => {
+    const log = captureLog(
+      (l) => {
+        l.info(
+          {
+            password: "must-still-be-redacted",
+            customSensitive: "custom-redacted-val",
+          },
+          "Custom option test"
+        );
+      },
+      {
+        redact: {
+          paths: ["customSensitive"],
+          censor: "[REDACTED]",
+        },
+      }
+    );
+
+    expect(log.password).toBe("[REDACTED]");
+    expect(log.customSensitive).toBe("[REDACTED]");
+  });
 });
 
 describe("Application Foundation — Sentry Event Sanitization Boundary", () => {
@@ -247,7 +271,9 @@ describe("Application Foundation — Sentry Event Sanitization Boundary", () => 
       "Error fetching proof: https://r2.gamerperu.com/proofs/123.jpg?X-Amz-Signature=abcdef123456&key=val";
     const sanitized = sanitizeString(rawUrl);
 
-    expect(sanitized).toBe("Error fetching proof: [REDACTED_SIGNED_URL]");
+    expect(sanitized).toBe(
+      "Error fetching proof: https://r2.gamerperu.com/proofs/123.jpg?X-Amz-Signature=[REDACTED]&key=[REDACTED]"
+    );
   });
 
   it("sanitizes JWTs and 64-character hex master keys in strings", () => {
@@ -259,9 +285,21 @@ describe("Application Foundation — Sentry Event Sanitization Boundary", () => 
     expect(sanitizeString(`Key: ${hexKey}`)).toBe("Key: [REDACTED_KEY]");
   });
 
-  it("sanitizes nested objects containing credentials without mutating source", () => {
+  it("sanitizes conservative email addresses from strings without breaking package imports", () => {
+    expect(sanitizeString("Failed sending receipt to customer.buyer@example.com")).toBe(
+      "Failed sending receipt to [REDACTED_EMAIL]"
+    );
+    expect(sanitizeString("Module @sentry/nextjs loaded cleanly")).toBe(
+      "Module @sentry/nextjs loaded cleanly"
+    );
+  });
+
+  it("sanitizes nested objects containing credentials and PII without mutating source", () => {
     const source = {
       user: "customer_1",
+      email: "real_customer@test.com",
+      phone: "+51999888777",
+      address: "Av. Larco 123, Miraflores",
       credentials: {
         password: "raw_password",
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
@@ -274,6 +312,9 @@ describe("Application Foundation — Sentry Event Sanitization Boundary", () => 
 
     const sanitized = sanitizeObject(source);
 
+    expect(sanitized.email).toBe("[REDACTED]");
+    expect(sanitized.phone).toBe("[REDACTED]");
+    expect(sanitized.address).toBe("[REDACTED]");
     expect(sanitized.credentials.password).toBe("[REDACTED]");
     expect(sanitized.credentials.DATABASE_URL).toBe("[REDACTED]");
     expect(sanitized.headers.authorization).toBe("[REDACTED]");
@@ -282,14 +323,76 @@ describe("Application Foundation — Sentry Event Sanitization Boundary", () => 
 
     // Source object remained unmutated
     expect(source.credentials.password).toBe("raw_password");
+    expect(source.email).toBe("real_customer@test.com");
   });
 
-  it("processes Sentry ErrorEvent through sentryBeforeSend cleanly", () => {
+  it("minimizes event.user context by preserving safe pseudonymous ID only", () => {
+    const mockEvent: ErrorEvent = {
+      type: undefined,
+      event_id: "user-context-event",
+      level: "error",
+      user: {
+        id: "usr_safe_uuid_555",
+        email: "sensitive_user@example.com",
+        username: "sensitive_gamer",
+        ip_address: "190.234.12.34",
+      },
+    };
+
+    const result = sentryBeforeSend(mockEvent);
+    expect(result?.user).toEqual({
+      id: "usr_safe_uuid_555",
+    });
+    expect((result?.user as Record<string, unknown>)?.email).toBeUndefined();
+    expect((result?.user as Record<string, unknown>)?.username).toBeUndefined();
+    expect((result?.user as Record<string, unknown>)?.ip_address).toBeUndefined();
+  });
+
+  it("sanitizes request.url with sensitive query parameters while preserving safe routes", () => {
+    const mockEvent: ErrorEvent = {
+      type: undefined,
+      event_id: "url-query-event",
+      level: "error",
+      request: {
+        url: "https://gamerperu.com/auth/callback?code=secret_oauth_code_456&state=safe_state&token=access_123",
+      },
+    };
+
+    const result = sentryBeforeSend(mockEvent);
+    expect(result?.request?.url).toBe(
+      "https://gamerperu.com/auth/callback?code=[REDACTED]&state=safe_state&token=[REDACTED]"
+    );
+  });
+
+  it("sanitizes event.tags to prevent credential/PII leaks while preserving operational tags", () => {
+    const mockEvent: ErrorEvent = {
+      type: undefined,
+      event_id: "tags-event",
+      level: "error",
+      tags: {
+        module: "checkout",
+        environment: "production",
+        password: "leaked_tag_password",
+        email: "leaked_tag_email@example.com",
+      },
+    };
+
+    const result = sentryBeforeSend(mockEvent);
+    expect(result?.tags).toEqual({
+      module: "checkout",
+      environment: "production",
+      password: "[REDACTED]",
+      email: "[REDACTED]",
+    });
+  });
+
+  it("processes comprehensive Sentry ErrorEvent through sentryBeforeSend cleanly", () => {
     const mockEvent: ErrorEvent = {
       type: undefined,
       event_id: "test-event-123",
       level: "error",
-      message: "DB connection error postgres://admin:secret123@localhost/postgres",
+      message:
+        "DB connection error postgres://admin:secret123@localhost/postgres for customer@test.pe",
       exception: {
         values: [
           {
@@ -300,7 +403,7 @@ describe("Application Foundation — Sentry Event Sanitization Boundary", () => 
         ],
       },
       request: {
-        url: "https://gamerperu.com/api/test",
+        url: "https://gamerperu.com/api/test?token=sensitive_query_token",
         headers: {
           authorization: "Bearer sensitive-token",
           cookie: "session=sensitive-session",
@@ -316,7 +419,7 @@ describe("Application Foundation — Sentry Event Sanitization Boundary", () => 
       },
       breadcrumbs: [
         {
-          message: "User sent password=mypassword",
+          message: "User sent password=mypassword to admin@example.com",
           data: {
             secret: "topsecret",
           },
@@ -333,13 +436,16 @@ describe("Application Foundation — Sentry Event Sanitization Boundary", () => 
 
     // Message sanitization
     expect(result?.message).toContain("[REDACTED_CREDENTIALS]");
+    expect(result?.message).toContain("[REDACTED_EMAIL]");
     expect(result?.message).not.toContain("secret123");
+    expect(result?.message).not.toContain("customer@test.pe");
 
     // Exception sanitization
     expect(result?.exception?.values?.[0]?.type).toBe("DatabaseError");
     expect(result?.exception?.values?.[0]?.value).toContain("[REDACTED_JWT]");
 
-    // Request headers and cookies
+    // Request URL, headers and cookies
+    expect(result?.request?.url).toBe("https://gamerperu.com/api/test?token=[REDACTED]");
     expect(result?.request?.headers?.authorization).toBe("[REDACTED]");
     expect(result?.request?.headers?.cookie).toBe("[REDACTED]");
     expect(result?.request?.headers?.["content-type"]).toBe("application/json");
@@ -351,6 +457,7 @@ describe("Application Foundation — Sentry Event Sanitization Boundary", () => 
     expect(reqData.voucher_url).toBe("[REDACTED]");
 
     // Breadcrumbs
+    expect(result?.breadcrumbs?.[0]?.message).toContain("[REDACTED_EMAIL]");
     expect(result?.breadcrumbs?.[0]?.data?.secret).toBe("[REDACTED]");
 
     // Extra context

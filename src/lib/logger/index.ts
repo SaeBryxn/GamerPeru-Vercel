@@ -62,17 +62,25 @@ export function createLogger(
   options?: pino.LoggerOptions,
   destination?: pino.DestinationStream
 ): pino.Logger {
+  const userRedactPaths = Array.isArray(options?.redact)
+    ? options.redact
+    : Array.isArray(options?.redact?.paths)
+      ? options.redact.paths
+      : [];
+
+  const combinedRedactPaths = Array.from(new Set([...CANONICAL_REDACT_PATHS, ...userRedactPaths]));
+
   const baseOptions: pino.LoggerOptions = {
     level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === "production" ? "info" : "debug"),
-    redact: {
-      paths: CANONICAL_REDACT_PATHS,
-      censor: "[REDACTED]",
-    },
     timestamp: pino.stdTimeFunctions.isoTime,
     base: {
       env: process.env.NODE_ENV ?? "development",
     },
     ...options,
+    redact: {
+      paths: combinedRedactPaths,
+      censor: "[REDACTED]",
+    },
   };
 
   return destination ? pino(baseOptions, destination) : pino(baseOptions);
