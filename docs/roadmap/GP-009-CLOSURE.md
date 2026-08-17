@@ -6,7 +6,7 @@
 
 ## Closure Checkpoint
 
-`PENDING_CLOSURE_COMMIT`
+`929258c2545680771006d474e38de326b4453de3`
 
 ## Implementation Checkpoint
 
@@ -259,6 +259,7 @@ GP-009 directly consumes the accepted GP-008 Design System:
 | Workflow Run ID | Commit SHA | Trigger Event                                     | Status    | Conclusion  | URL                                                                                    |
 | --------------- | ---------- | ------------------------------------------------- | --------- | ----------- | -------------------------------------------------------------------------------------- |
 | `31982229162`   | `92516b5`  | Push (`feat: implement GP-009 global navigation`) | Completed | **SUCCESS** | [Run 31982229162](https://github.com/latamcreativa/GamerPeru/actions/runs/31982229162) |
+| `31982405496`   | `929258c`  | Push (`docs: close GP-009`)                       | Completed | **SUCCESS** | [Run 31982405496](https://github.com/latamcreativa/GamerPeru/actions/runs/31982405496) |
 
 ---
 
@@ -353,6 +354,7 @@ None. All required corrections and architectural boundaries were incorporated di
 - **Upstream**: `origin/main`
 - **Base Checkpoint**: `deed6bc6ceb9e1b1b00ad7d1b2a11172af842c5c`
 - **Implementation SHA**: `92516b5570cb6830f979c54880c8919967a71d1e`
+- **Closure Checkpoint**: `929258c2545680771006d474e38de326b4453de3`
 - **Working Tree**: Clean
 - **GP-009 Status**: `COMPLETE`
 - **GP-010 Status**: `PLANNED`
