@@ -1,0 +1,126 @@
+import { describe, expect, it } from "vitest";
+import * as schema from "@/db/schema";
+import { getTableColumns } from "drizzle-orm";
+
+describe("Catalog Schema — Physical Bootstrap Integrity", () => {
+  it("exports exactly the 5 approved canonical catalog tables", () => {
+    expect(schema.mediaAssets).toBeDefined();
+    expect(schema.brands).toBeDefined();
+    expect(schema.categories).toBeDefined();
+    expect(schema.products).toBeDefined();
+    expect(schema.productVariants).toBeDefined();
+
+    // Verify deferred tables are NOT present in this gate
+    expect((schema as Record<string, unknown>).collections).toBeUndefined();
+    expect((schema as Record<string, unknown>).productCollections).toBeUndefined();
+    expect((schema as Record<string, unknown>).categorySpecificationSchemas).toBeUndefined();
+    expect((schema as Record<string, unknown>).productSpecifications).toBeUndefined();
+    expect((schema as Record<string, unknown>).productStories).toBeUndefined();
+    expect((schema as Record<string, unknown>).customerProfiles).toBeUndefined();
+    expect((schema as Record<string, unknown>).orders).toBeUndefined();
+    expect((schema as Record<string, unknown>).payments).toBeUndefined();
+  });
+
+  it("exports the 4 canonical catalog PostgreSQL enums", () => {
+    expect(schema.catalogStatusEnum.enumValues).toEqual(["DRAFT", "PUBLISHED", "ARCHIVED"]);
+    expect(schema.variantStatusEnum.enumValues).toEqual(["ACTIVE", "INACTIVE", "ARCHIVED"]);
+    expect(schema.securityClassEnum.enumValues).toEqual([
+      "PUBLIC_MEDIA",
+      "PRIVATE_PAYMENT_PROOF",
+      "PRIVATE_BACKUP",
+    ]);
+    expect(schema.mediaTypeEnum.enumValues).toEqual(["IMAGE", "VIDEO", "DOCUMENT"]);
+  });
+
+  describe("media_assets table", () => {
+    it("has canonical column definitions and types", () => {
+      const cols = getTableColumns(schema.mediaAssets);
+      expect(cols.id).toBeDefined();
+      expect(cols.objectKey).toBeDefined();
+      expect(cols.securityClass).toBeDefined();
+      expect(cols.mediaType).toBeDefined();
+      expect(cols.mimeType).toBeDefined();
+      expect(cols.fileSizeBytes).toBeDefined();
+      expect(cols.width).toBeDefined();
+      expect(cols.height).toBeDefined();
+      expect(cols.altText).toBeDefined();
+      expect(cols.checksumSha256).toBeDefined();
+      expect(cols.createdAt).toBeDefined();
+    });
+  });
+
+  describe("brands table", () => {
+    it("has canonical column definitions and types", () => {
+      const cols = getTableColumns(schema.brands);
+      expect(cols.id).toBeDefined();
+      expect(cols.name).toBeDefined();
+      expect(cols.slug).toBeDefined();
+      expect(cols.description).toBeDefined();
+      expect(cols.websiteUrl).toBeDefined();
+      expect(cols.logoMediaId).toBeDefined();
+      expect(cols.status).toBeDefined();
+      expect(cols.createdAt).toBeDefined();
+      expect(cols.updatedAt).toBeDefined();
+    });
+  });
+
+  describe("categories table", () => {
+    it("has canonical column definitions and excludes non-canonical hero_media_id", () => {
+      const cols = getTableColumns(schema.categories);
+      expect(cols.id).toBeDefined();
+      expect(cols.name).toBeDefined();
+      expect(cols.slug).toBeDefined();
+      expect(cols.parentId).toBeDefined();
+      expect(cols.description).toBeDefined();
+      expect(cols.displayOrder).toBeDefined();
+      expect(cols.status).toBeDefined();
+      expect(cols.createdAt).toBeDefined();
+      expect(cols.updatedAt).toBeDefined();
+
+      // Ensure non-canonical hero_media_id is NOT in categories
+      expect((cols as Record<string, unknown>).heroMediaId).toBeUndefined();
+      // Ensure deferred spec schema is NOT in categories yet
+      expect((cols as Record<string, unknown>).currentSpecSchemaId).toBeUndefined();
+    });
+  });
+
+  describe("products table", () => {
+    it("has canonical column definitions including primary_media_id", () => {
+      const cols = getTableColumns(schema.products);
+      expect(cols.id).toBeDefined();
+      expect(cols.brandId).toBeDefined();
+      expect(cols.categoryId).toBeDefined();
+      expect(cols.name).toBeDefined();
+      expect(cols.slug).toBeDefined();
+      expect(cols.subtitle).toBeDefined();
+      expect(cols.description).toBeDefined();
+      expect(cols.status).toBeDefined();
+      expect(cols.isFeatured).toBeDefined();
+      expect(cols.primaryMediaId).toBeDefined();
+      expect(cols.createdAt).toBeDefined();
+      expect(cols.updatedAt).toBeDefined();
+    });
+  });
+
+  describe("product_variants table", () => {
+    it("has canonical column definitions and excludes non-canonical media_id", () => {
+      const cols = getTableColumns(schema.productVariants);
+      expect(cols.id).toBeDefined();
+      expect(cols.productId).toBeDefined();
+      expect(cols.sku).toBeDefined();
+      expect(cols.title).toBeDefined();
+      expect(cols.priceCents).toBeDefined();
+      expect(cols.compareAtPriceCents).toBeDefined();
+      expect(cols.costCents).toBeDefined();
+      expect(cols.weightGrams).toBeDefined();
+      expect(cols.attributes).toBeDefined();
+      expect(cols.status).toBeDefined();
+      expect(cols.displayOrder).toBeDefined();
+      expect(cols.createdAt).toBeDefined();
+      expect(cols.updatedAt).toBeDefined();
+
+      // Ensure non-canonical media_id is NOT in product_variants
+      expect((cols as Record<string, unknown>).mediaId).toBeUndefined();
+    });
+  });
+});

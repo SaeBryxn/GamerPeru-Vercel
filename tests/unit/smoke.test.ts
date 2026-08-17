@@ -59,13 +59,18 @@ describe("GP-005 Smoke Tests", () => {
       })
     ).toThrow();
 
-    // Accepts valid production DATABASE_URL in production environment
+    // Accepts valid production DATABASE_URL and DATABASE_MIGRATION_URL in production environment
     const validProd = validateServerEnv({
       NODE_ENV: "production",
       DATABASE_URL:
         "postgres://db_user:secret_pass@aws-0-sa-east-1.pooler.supabase.com:6543/postgres",
+      DATABASE_MIGRATION_URL:
+        "postgres://db_user:secret_pass@db.xyzproject.supabase.co:5432/postgres",
     });
     expect(validProd.NODE_ENV).toBe("production");
+    expect(validProd.DATABASE_MIGRATION_URL).toBe(
+      "postgres://db_user:secret_pass@db.xyzproject.supabase.co:5432/postgres"
+    );
   });
 
   it("exposes canonical Cloudflare R2 bucket definitions", () => {

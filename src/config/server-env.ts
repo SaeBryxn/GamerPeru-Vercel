@@ -13,6 +13,7 @@ export const serverEnvSchema = z
       .string()
       .min(1, "DATABASE_URL cannot be empty")
       .default("postgres://postgres:postgres@127.0.0.1:54322/postgres"),
+    DATABASE_MIGRATION_URL: z.string().optional(),
     SUPABASE_SECRET_KEY: z.string().optional(),
     RESEND_API_KEY: z.string().optional(),
     R2_ACCOUNT_ID: z.string().optional(),
@@ -62,6 +63,7 @@ function parseServerEnv(): ServerEnv {
   return serverEnvSchema.parse({
     NODE_ENV: process.env.NODE_ENV,
     DATABASE_URL: process.env.DATABASE_URL,
+    DATABASE_MIGRATION_URL: process.env.DATABASE_MIGRATION_URL,
     SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
