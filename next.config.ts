@@ -27,6 +27,23 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "media.gamerperu.com",
+        port: "",
+        pathname: "/**",
+        search: "",
+      },
+    ],
+    localPatterns: [
+      {
+        pathname: "/media/**",
+        search: "",
+      },
+    ],
+  },
   async headers() {
     return [
       {

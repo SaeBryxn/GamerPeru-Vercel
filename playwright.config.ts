@@ -20,7 +20,12 @@ export default defineConfig({
   webServer: {
     command: "pnpm dev",
     url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120000,
+    env: {
+      ...process.env,
+      E2E_CATALOG_FIXTURES: "1",
+      PLAYWRIGHT_TEST: "1",
+    },
   },
 });
