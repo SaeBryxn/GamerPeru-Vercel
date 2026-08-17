@@ -316,7 +316,10 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
         if (!el) return false;
         const main = document.querySelector("#main-content");
         const header = document.querySelector("header");
-        return Boolean(main?.contains(el) || (header?.contains(el) && !document.querySelector("dialog")?.contains(el)));
+        const inMain = main?.contains(el) ?? false;
+        const inHeader =
+          (header?.contains(el) && !document.querySelector("dialog")?.contains(el)) ?? false;
+        return inMain || inHeader;
       });
       expect(hasBackgroundFocus).toBe(false);
     }
@@ -392,7 +395,9 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
 
     // Verified trust notice
     await expect(footer.getByText("Pagos en moneda nacional (PEN / S/).")).toBeVisible();
-    await expect(footer.getByText("© 2026 Gamer Perú. Todos los derechos reservados.")).toBeVisible();
+    await expect(
+      footer.getByText("© 2026 Gamer Perú. Todos los derechos reservados.")
+    ).toBeVisible();
   });
 
   test("L: verifies reduced-motion collapses MobileDrawer transition", async ({ page }) => {

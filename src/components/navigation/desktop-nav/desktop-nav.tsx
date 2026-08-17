@@ -63,10 +63,7 @@ export function DesktopNav({ items, className }: DesktopNavProps) {
               onMouseEnter={() => setActiveCategoryId(category.id)}
             >
               <div
-                className={[
-                  styles.navItemWrapper,
-                  isExpanded ? styles.navItemWrapperActive : "",
-                ]
+                className={[styles.navItemWrapper, isExpanded ? styles.navItemWrapperActive : ""]
                   .filter(Boolean)
                   .join(" ")}
               >
