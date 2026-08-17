@@ -44,6 +44,16 @@ describe("GP-009 Global Navigation — Unit Contracts & Drift Protection", () =>
           expect(brand.href).not.toContain("#");
         }
       }
+
+      // Previews
+      if (cat.previews) {
+        for (const preview of cat.previews) {
+          expect(preview.title).toBeTruthy();
+          expect(preview.subtitle).toBeTruthy();
+          expect(preview.href.startsWith("/")).toBe(true);
+          expect(preview.href).not.toContain("#");
+        }
+      }
     }
 
     // Utility links

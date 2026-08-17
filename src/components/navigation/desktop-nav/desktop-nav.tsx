@@ -109,64 +109,83 @@ export function DesktopNav({ items, className }: DesktopNavProps) {
                   aria-label={`Menú desplegable ${category.label}`}
                 >
                   <Container size="default">
-                    <div className={styles.megaMenuGrid}>
-                      {/* Category Sub-Sections */}
-                      {category.sections.map((section, idx) => (
-                        <div key={idx} className={styles.megaMenuColumn}>
-                          <h3 className={styles.columnTitle}>{section.title}</h3>
-                          <ul className={styles.columnList}>
-                            {section.items.map((item, itemIdx) => (
-                              <li key={itemIdx}>
-                                <Link
-                                  href={item.href}
-                                  className={styles.columnLink}
-                                  onClick={() => setActiveCategoryId(null)}
-                                >
-                                  {item.label}
-                                </Link>
-                              </li>
-                            ))}
-                          </ul>
+                    <div className={styles.megaMenuLayout}>
+                      {/* Left Zone: Category / Collection Hierarchy */}
+                      <div className={styles.megaSide}>
+                        <p className={styles.sideEyebrow}>Colecciones</p>
+                        <div className={styles.sideLinks}>
+                          {category.sections[0]?.items.map((item, itemIdx) => (
+                            <Link
+                              key={itemIdx}
+                              href={item.href}
+                              className={styles.sideLeadLink}
+                              onClick={() => setActiveCategoryId(null)}
+                            >
+                              {item.label}
+                            </Link>
+                          ))}
                         </div>
-                      ))}
 
-                      {/* Brand Directory Column */}
-                      {category.brands && category.brands.length > 0 && (
-                        <div className={styles.megaMenuColumn}>
-                          <h3 className={styles.columnTitle}>Marcas</h3>
-                          <ul className={styles.columnList}>
-                            {category.brands.map((brand, brandIdx) => (
-                              <li key={brandIdx}>
+                        {/* Secondary sections / Brands if present */}
+                        {category.brands && category.brands.length > 0 && (
+                          <div className={styles.sideBrands}>
+                            <p className={styles.sideSubEyebrow}>Marcas</p>
+                            <div className={styles.brandTags}>
+                              {category.brands.slice(0, 4).map((brand, brandIdx) => (
                                 <Link
+                                  key={brandIdx}
                                   href={brand.href}
-                                  className={styles.columnLink}
+                                  className={styles.brandTag}
                                   onClick={() => setActiveCategoryId(null)}
                                 >
                                   {brand.label}
                                 </Link>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
-                      {/* View All / Category Overview Column */}
-                      <div className={styles.megaMenuColumn}>
-                        <h3 className={styles.columnTitle}>Explorar Todo</h3>
-                        <p
-                          className="type-body-small"
-                          style={{ color: "var(--color-text-secondary)", margin: 0 }}
-                        >
-                          Catálogo completo de {category.label.toLowerCase()} seleccionados para
-                          alto rendimiento.
-                        </p>
                         <Link
                           href={category.href}
-                          className={styles.viewAllLink}
+                          className={styles.viewAllFooterLink}
                           onClick={() => setActiveCategoryId(null)}
                         >
-                          Ver todos los {category.label.toLowerCase()} →
+                          <span>Ver todos los {category.label.toLowerCase()}</span>
+                          <span aria-hidden="true">→</span>
                         </Link>
+                      </div>
+
+                      {/* Right / Center Zone: Visual Preview Tiles */}
+                      <div className={styles.megaPreviews}>
+                        <div className={styles.previewsHeader}>
+                          <p className={styles.sideEyebrow}>Líneas destacadas</p>
+                          <Link
+                            href={category.href}
+                            className={styles.topRightViewAll}
+                            onClick={() => setActiveCategoryId(null)}
+                          >
+                            Explorar catálogo completo →
+                          </Link>
+                        </div>
+
+                        <div className={styles.previewGrid}>
+                          {(category.previews ?? []).map((preview, previewIdx) => (
+                            <Link
+                              key={previewIdx}
+                              href={preview.href}
+                              className={styles.previewCard}
+                              onClick={() => setActiveCategoryId(null)}
+                            >
+                              <div className={styles.previewMedia} aria-hidden="true">
+                                <div className={styles.previewAmbient} />
+                              </div>
+                              <div className={styles.previewContent}>
+                                <h3 className={styles.previewTitle}>{preview.title}</h3>
+                                <p className={styles.previewSubtitle}>{preview.subtitle}</p>
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </Container>

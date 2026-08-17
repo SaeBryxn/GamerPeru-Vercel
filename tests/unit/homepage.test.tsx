@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
@@ -10,6 +12,13 @@ import {
   HOMEPAGE_DATA,
   TechnicalEditorial,
 } from "@/components/home";
+import type {
+  HomeCategoryItem,
+  HomeFeaturedEditorialData,
+  HomeGearPreviewItem,
+  HomeHeroData,
+  HomeTechnicalEditorialData,
+} from "@/components/home/types";
 
 describe("GP-010 Homepage — Presentation Model, Semantics & Business Policy Integrity", () => {
   describe("Static Presentation Seed Integrity", () => {
@@ -44,14 +53,13 @@ describe("GP-010 Homepage — Presentation Model, Semantics & Business Policy In
 
     it("contains zero raw style color strings in data contracts", () => {
       const json = JSON.stringify(HOMEPAGE_DATA);
-      // Data model should not contain raw hex or rgb color values
       expect(json).not.toMatch(/#[0-9a-fA-F]{3,8}/);
       expect(json).not.toContain("rgb(");
       expect(json).not.toContain("rgba(");
     });
   });
 
-  describe("Commercial Truth & Business Copy Drift Protection", () => {
+  describe("Commercial Truth & Business Policy Drift Protection", () => {
     it("contains zero unapproved partnership or reseller claims", () => {
       const json = JSON.stringify(HOMEPAGE_DATA).toLowerCase();
       expect(json).not.toContain("marcas oficiales");
@@ -138,14 +146,16 @@ describe("GP-010 Homepage — Presentation Model, Semantics & Business Policy In
       expect(html).toContain("/categorias/teclados?formato=magneticos");
     });
 
-    it("renders TechnicalEditorial with canonical giant stat typography and technology concepts", () => {
+    it("renders TechnicalEditorial with canonical giant stat typography and nominal polling intervals", () => {
       const html = renderToStaticMarkup(
         <TechnicalEditorial data={HOMEPAGE_DATA.technicalEditorial} />
       );
       expect(html).toContain("type-stat-giant");
       expect(html).toContain("8000Hz");
       expect(html).toContain("0.125ms");
-      expect(html).toContain("Tecnología para respuesta instantánea");
+      expect(html).toContain("Intervalo nominal de sondeo");
+      expect(html).not.toContain("Latencia de transmisión");
+      expect(html).not.toContain("input latency");
     });
 
     it("renders BrandDiscovery with section id='marcas' and 5 brand links", () => {
@@ -164,21 +174,269 @@ describe("GP-010 Homepage — Presentation Model, Semantics & Business Policy In
       expect(html).toContain("/marcas/ninjutso");
     });
 
-    it("renders HomeDiscoveryFooter with 4 grounded trust facts and SEO directory", () => {
+    it("renders HomeDiscoveryFooter with VisuallyHidden h2, 4 trust facts and SEO directory with h3 headings", () => {
       const html = renderToStaticMarkup(
         <HomeDiscoveryFooter
           trustFacts={HOMEPAGE_DATA.discoveryFooter.trustFacts}
           directoryColumns={HOMEPAGE_DATA.discoveryFooter.directoryColumns}
         />
       );
+      expect(html).toContain("<h2");
+      expect(html).toContain("Garantías y Directorio Gamer Perú");
       expect(html).toContain("Selección multimarca");
       expect(html).toContain("Precios y pagos en PEN / S/");
       expect(html).toContain("Verificación manual de pagos");
       expect(html).toContain("Plataforma enfocada en Perú");
+      expect(html).toContain("<h3");
       expect(html).toContain("Categorías");
       expect(html).toContain("Marcas");
       expect(html).toContain("Atención");
       expect(html).toContain("Legal");
+    });
+  });
+
+  describe("Media Contract Multi-Slot Polymorphism", () => {
+    it("renders HomeHero abstract fallback and image branches without crash", () => {
+      // Abstract branch
+      const abstractHero: HomeHeroData = {
+        ...HOMEPAGE_DATA.hero,
+        media: { kind: "abstract" },
+      };
+      const abstractHtml = renderToStaticMarkup(<HomeHero hero={abstractHero} />);
+      expect(abstractHtml).not.toContain("<img");
+
+      // Single Image branch
+      const singleImageHero: HomeHeroData = {
+        ...HOMEPAGE_DATA.hero,
+        media: {
+          kind: "image",
+          src: "/assets/hero-desktop.webp",
+          altText: "Flagship Hero Mouse",
+        },
+      };
+      const singleImageHtml = renderToStaticMarkup(<HomeHero hero={singleImageHero} />);
+      expect(singleImageHtml).toContain("<img");
+      expect(singleImageHtml).toContain('fetchPriority="high"');
+
+      // Art-directed desktop + mobile image branch
+      const artDirectedHero: HomeHeroData = {
+        ...HOMEPAGE_DATA.hero,
+        media: {
+          kind: "image",
+          src: "/assets/hero-desktop.webp",
+          mobileSrc: "/assets/hero-mobile.webp",
+          altText: "Flagship Art-Directed Hero",
+        },
+      };
+      const artDirectedHtml = renderToStaticMarkup(<HomeHero hero={artDirectedHero} />);
+      expect(artDirectedHtml).toContain("<picture");
+      expect(artDirectedHtml).toContain("<source");
+      expect(artDirectedHtml).toContain("<img");
+    });
+
+    it("renders FeaturedEditorial abstract and image branches", () => {
+      const abstractData: HomeFeaturedEditorialData = {
+        ...HOMEPAGE_DATA.featuredEditorial,
+        media: { kind: "abstract" },
+      };
+      const abstractHtml = renderToStaticMarkup(<FeaturedEditorial data={abstractData} />);
+      expect(abstractHtml).not.toContain("<img");
+
+      const imageData: HomeFeaturedEditorialData = {
+        ...HOMEPAGE_DATA.featuredEditorial,
+        media: {
+          kind: "image",
+          src: "/assets/featured-macro.webp",
+          altText: "Macro detalle de aleación de magnesio",
+        },
+      };
+      const imageHtml = renderToStaticMarkup(<FeaturedEditorial data={imageData} />);
+      expect(imageHtml).toContain("<img");
+    });
+
+    it("renders CategoryCard abstract and image branches", () => {
+      const abstractCategory: HomeCategoryItem = {
+        id: "mouses",
+        title: "Mouses",
+        subtitle: "Ultraligeros",
+        href: "/categorias/mouses",
+        theme: "dark",
+        media: { kind: "abstract" },
+      };
+      const abstractHtml = renderToStaticMarkup(
+        <CategoryShowcase categories={[abstractCategory]} />
+      );
+      expect(abstractHtml).not.toContain("<img");
+
+      const imageCategory: HomeCategoryItem = {
+        id: "mouses",
+        title: "Mouses",
+        subtitle: "Ultraligeros",
+        href: "/categorias/mouses",
+        theme: "dark",
+        media: {
+          kind: "image",
+          src: "/assets/cat-mouses.png",
+          altText: "Mouses gaming ultraligeros",
+        },
+      };
+      const imageHtml = renderToStaticMarkup(<CategoryShowcase categories={[imageCategory]} />);
+      expect(imageHtml).toContain("<img");
+    });
+
+    it("renders CuratedGear abstract and image branches", () => {
+      const abstractItem: HomeGearPreviewItem = {
+        id: "gear-1",
+        title: "Mouse 8K",
+        categoryLabel: "Mouses",
+        href: "/categorias/mouses",
+        media: { kind: "abstract" },
+      };
+      const abstractHtml = renderToStaticMarkup(
+        <CuratedGear eyebrow="Test" title="Test" items={[abstractItem]} />
+      );
+      expect(abstractHtml).not.toContain("<img");
+
+      const imageItem: HomeGearPreviewItem = {
+        id: "gear-1",
+        title: "Mouse 8K",
+        categoryLabel: "Mouses",
+        href: "/categorias/mouses",
+        media: {
+          kind: "image",
+          src: "/assets/gear-1.png",
+          altText: "Mouse ultraligero 8K",
+        },
+      };
+      const imageHtml = renderToStaticMarkup(
+        <CuratedGear eyebrow="Test" title="Test" items={[imageItem]} />
+      );
+      expect(imageHtml).toContain("<img");
+    });
+
+    it("renders TechnicalEditorial abstract and image branches", () => {
+      const abstractData: HomeTechnicalEditorialData = {
+        ...HOMEPAGE_DATA.technicalEditorial,
+        media: { kind: "abstract" },
+      };
+      const abstractHtml = renderToStaticMarkup(<TechnicalEditorial data={abstractData} />);
+      expect(abstractHtml).not.toContain("<img");
+
+      const imageData: HomeTechnicalEditorialData = {
+        ...HOMEPAGE_DATA.technicalEditorial,
+        media: {
+          kind: "image",
+          src: "/assets/sensor-pcb.webp",
+          altText: "Diagrama de sensor magnético",
+        },
+      };
+      const imageHtml = renderToStaticMarkup(<TechnicalEditorial data={imageData} />);
+      expect(imageHtml).toContain("<img");
+    });
+  });
+
+  describe("Homepage CSS Architecture & Token Validation", () => {
+    it("verifies zero direct color literals in all Homepage CSS Modules", () => {
+      const homeComponentsDir = path.resolve(__dirname, "../../src/components/home");
+
+      function findCssFiles(dir: string): string[] {
+        const results: string[] = [];
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            results.push(...findCssFiles(fullPath));
+          } else if (entry.name.endsWith(".module.css")) {
+            results.push(fullPath);
+          }
+        }
+        return results;
+      }
+
+      const cssFiles = findCssFiles(homeComponentsDir);
+      expect(cssFiles.length).toBeGreaterThanOrEqual(5);
+
+      for (const file of cssFiles) {
+        const content = fs.readFileSync(file, "utf8");
+        const lines = content.split("\n");
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i] ?? "";
+
+          // Skip comments
+          if (line.trim().startsWith("/*") || line.trim().startsWith("*")) continue;
+
+          // Reject raw hex colors (e.g. #09090B, #FFF)
+          const hexMatch = line.match(/#[0-9a-fA-F]{3,8}\b/);
+          expect(
+            hexMatch,
+            `Direct hex color '${hexMatch?.[0]}' found in ${path.basename(file)}: line ${i + 1}: ${line}`
+          ).toBeNull();
+
+          // Reject raw rgb() / rgba()
+          const rgbMatch = line.match(/\brgba?\s*\(/);
+          expect(
+            rgbMatch,
+            `Direct rgb/rgba color found in ${path.basename(file)}: line ${i + 1}: ${line}`
+          ).toBeNull();
+
+          // Reject raw hsl() / hsla()
+          const hslMatch = line.match(/\bhsla?\s*\(/);
+          expect(
+            hslMatch,
+            `Direct hsl/hsla color found in ${path.basename(file)}: line ${i + 1}: ${line}`
+          ).toBeNull();
+        }
+      }
+    });
+
+    it("verifies all referenced CSS custom properties exist in canonical tokens", () => {
+      const tokensFile = path.resolve(__dirname, "../../src/styles/tokens.css");
+      const tokensContent = fs.readFileSync(tokensFile, "utf8");
+
+      // Extract all defined tokens
+      const definedTokens = new Set<string>();
+      const tokenMatches = tokensContent.matchAll(/--[a-zA-Z0-9_-]+/g);
+      for (const m of tokenMatches) {
+        definedTokens.add(m[0]);
+      }
+
+      // Layout font variables and local contextual overrides
+      definedTokens.add("--font-heading");
+      definedTokens.add("--font-body");
+      definedTokens.add("--font-mono");
+      definedTokens.add("--focus-ring-color");
+
+      const homeComponentsDir = path.resolve(__dirname, "../../src/components/home");
+
+      function findCssFiles(dir: string): string[] {
+        const results: string[] = [];
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            results.push(...findCssFiles(fullPath));
+          } else if (entry.name.endsWith(".module.css")) {
+            results.push(fullPath);
+          }
+        }
+        return results;
+      }
+
+      const cssFiles = findCssFiles(homeComponentsDir);
+      for (const file of cssFiles) {
+        const content = fs.readFileSync(file, "utf8");
+        const usedVars = content.matchAll(/var\(\s*(--[a-zA-Z0-9_-]+)/g);
+
+        for (const uv of usedVars) {
+          const varName = uv[1];
+          if (!varName) continue;
+          expect(
+            definedTokens.has(varName),
+            `Undefined CSS token '${varName}' referenced in ${path.basename(file)}`
+          ).toBe(true);
+        }
+      }
     });
   });
 });

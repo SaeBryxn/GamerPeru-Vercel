@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Container, Icon } from "@/components/ui";
@@ -13,10 +14,12 @@ interface FeaturedEditorialProps {
  *
  * Visual Role: MAJOR (Light Surface #FFFFFF)
  * - Asymmetric 2-column open composition with minimal container chrome.
- * - Editorial focus on material craftsmanship and structural engineering.
- * - Zero fabricated product SKU specifications, fake prices, or fake stock claims.
+ * - Product photography stage geometry (16:10) with generous whitespace.
+ * - 100% Server Component emitting zero client JavaScript runtime.
  */
 export function FeaturedEditorial({ data }: FeaturedEditorialProps) {
+  const { media } = data;
+
   return (
     <section className={styles.section} aria-label="Ingeniería y diseño destacado">
       <Container size="default">
@@ -32,10 +35,19 @@ export function FeaturedEditorial({ data }: FeaturedEditorialProps) {
           </div>
 
           <div className={styles.mediaColumn} aria-hidden="true">
-            <div className={styles.abstractVisual}>
-              <div className={styles.schematicRing} />
-              <div className={styles.schematicAxis} />
-            </div>
+            {media.kind === "image" ? (
+              <Image
+                src={media.src}
+                alt={media.altText}
+                fill
+                sizes="(max-width: 1023px) 100vw, 50vw"
+                className={styles.mediaImage}
+              />
+            ) : (
+              <div className={styles.abstractVisual}>
+                <div className={styles.ambientStageCircle} />
+              </div>
+            )}
           </div>
         </div>
       </Container>

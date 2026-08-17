@@ -26,8 +26,7 @@ export const HOMEPAGE_DATA: HomepageData = {
       href: "#categorias",
     },
     media: {
-      mediaKind: "abstract",
-      altText: "Gamer Perú — Escenario de hardware gaming",
+      kind: "abstract",
     },
   },
   featuredEditorial: {
@@ -39,7 +38,9 @@ export const HOMEPAGE_DATA: HomepageData = {
       label: "Explorar mouses",
       href: "/categorias/mouses",
     },
-    mediaAlt: "Estructura de periférico ultraligero",
+    media: {
+      kind: "abstract",
+    },
   },
   categories: [
     {
@@ -48,7 +49,9 @@ export const HOMEPAGE_DATA: HomepageData = {
       subtitle: "Ultraligeros y ergonómicos",
       href: "/categorias/mouses",
       theme: "dark",
-      mediaAlt: "Categoría Mouses gaming",
+      media: {
+        kind: "abstract",
+      },
     },
     {
       id: "teclados",
@@ -56,7 +59,9 @@ export const HOMEPAGE_DATA: HomepageData = {
       subtitle: "Switches magnéticos y mecánicos",
       href: "/categorias/teclados",
       theme: "neutral",
-      mediaAlt: "Categoría Teclados gaming",
+      media: {
+        kind: "abstract",
+      },
     },
     {
       id: "mousepads",
@@ -64,7 +69,9 @@ export const HOMEPAGE_DATA: HomepageData = {
       subtitle: "Superficies de control y velocidad",
       href: "/categorias/mousepads",
       theme: "light",
-      mediaAlt: "Categoría Mousepads gaming",
+      media: {
+        kind: "abstract",
+      },
     },
     {
       id: "audio",
@@ -72,7 +79,9 @@ export const HOMEPAGE_DATA: HomepageData = {
       subtitle: "Monitoreo IEM y sonido espacial",
       href: "/categorias/audio",
       theme: "neutral",
-      mediaAlt: "Categoría Audio gaming",
+      media: {
+        kind: "abstract",
+      },
     },
     {
       id: "accesorios",
@@ -80,7 +89,9 @@ export const HOMEPAGE_DATA: HomepageData = {
       subtitle: "Skates, grip tapes y dongles 8K",
       href: "/categorias/accesorios",
       theme: "light",
-      mediaAlt: "Categoría Accesorios gaming",
+      media: {
+        kind: "abstract",
+      },
     },
   ],
   curatedGear: {
@@ -92,28 +103,36 @@ export const HOMEPAGE_DATA: HomepageData = {
         title: "Mouses ultraligeros",
         categoryLabel: "Mouses",
         href: "/categorias/mouses?tipo=ultraligeros",
-        imageAlt: "Selección de mouses ultraligeros",
+        media: {
+          kind: "abstract",
+        },
       },
       {
         id: "gear-teclados",
         title: "Teclados magnéticos",
         categoryLabel: "Teclados",
         href: "/categorias/teclados?formato=magneticos",
-        imageAlt: "Selección de teclados magnéticos",
+        media: {
+          kind: "abstract",
+        },
       },
       {
         id: "gear-mousepads",
         title: "Mousepads de control",
         categoryLabel: "Mousepads",
         href: "/categorias/mousepads",
-        imageAlt: "Selección de mousepads de control",
+        media: {
+          kind: "abstract",
+        },
       },
       {
         id: "gear-accesorios",
         title: "Dongles y accesorios",
         categoryLabel: "Accesorios",
         href: "/categorias/mouses?sub=dongles",
-        imageAlt: "Selección de dongles y accesorios",
+        media: {
+          kind: "abstract",
+        },
       },
     ],
   },
@@ -121,22 +140,25 @@ export const HOMEPAGE_DATA: HomepageData = {
     eyebrow: "Rendimiento Extremo",
     title: "Tecnología para respuesta instantánea",
     description:
-      "Las plataformas modernas pueden alcanzar tasas de sondeo de hasta 8000Hz y latencias mínimas de reporte para juego competitivo.",
+      "Las plataformas modernas pueden alcanzar frecuencias de sondeo de hasta 8000Hz e intervalos mínimos de reporte para juego competitivo.",
     stats: [
       {
         value: "8000Hz",
         label: "Tasa de sondeo ultra-alta",
-        description: "Intervalo de reporte de hasta 0.125ms",
+        description: "Frecuencia de sondeo hasta 8000 reportes por segundo",
       },
       {
         value: "0.125ms",
-        label: "Latencia de transmisión",
-        description: "Actualización continua en cada micro-movimiento",
+        label: "Intervalo nominal de sondeo",
+        description: "Actualización continua cada 0.125ms (1000ms / 8000Hz)",
       },
     ],
     cta: {
       label: "Ver tecnología de mouses",
       href: "/categorias/mouses",
+    },
+    media: {
+      kind: "abstract",
     },
   },
   brands: {

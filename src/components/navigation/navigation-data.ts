@@ -51,6 +51,28 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         { label: "ATK / VXE", href: "/marcas/atk" },
         { label: "Ninjutso", href: "/marcas/ninjutso" },
       ],
+      previews: [
+        {
+          title: "Ultraligeros",
+          subtitle: "Shapes < 45g",
+          href: "/categorias/mouses?tipo=ultraligeros",
+        },
+        {
+          title: "Ergonómicos",
+          subtitle: "Agarre natural",
+          href: "/categorias/mouses?tipo=ergonomicos",
+        },
+        {
+          title: "Simétricos",
+          subtitle: "Claw & fingertip",
+          href: "/categorias/mouses?tipo=simetricos",
+        },
+        {
+          title: "Wireless 8K",
+          subtitle: "Polling ultra-rápido",
+          href: "/categorias/mouses?tipo=wireless-8k",
+        },
+      ],
     },
     {
       id: "teclados",
@@ -82,6 +104,28 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         { label: "DrunkDeer", href: "/marcas/drunkdeer" },
         { label: "ATK", href: "/marcas/atk" },
         { label: "MelGeek", href: "/marcas/melgeek" },
+      ],
+      previews: [
+        {
+          title: "Rapid Trigger",
+          subtitle: "Switches magnéticos",
+          href: "/categorias/teclados?formato=magneticos",
+        },
+        {
+          title: "Compactos 60%",
+          subtitle: "Espacio para mouse",
+          href: "/categorias/teclados?formato=compactos",
+        },
+        {
+          title: "75% & TKL",
+          subtitle: "Formato balanceado",
+          href: "/categorias/teclados?formato=tkl-75",
+        },
+        {
+          title: "Modding",
+          subtitle: "Keycaps y switches",
+          href: "/categorias/teclados?sub=modding",
+        },
       ],
     },
     {
@@ -117,6 +161,28 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         { label: "Pulsar Superglide", href: "/marcas/pulsar" },
         { label: "Lamzu", href: "/marcas/lamzu" },
       ],
+      previews: [
+        {
+          title: "Vidrio (Glass)",
+          subtitle: "Deslizamiento extremo",
+          href: "/categorias/mousepads?superficie=vidrio",
+        },
+        {
+          title: "Poron Control",
+          subtitle: "Frenado de precisión",
+          href: "/categorias/mousepads?superficie=control",
+        },
+        {
+          title: "Speed Cordura",
+          subtitle: "Rapidez y durabilidad",
+          href: "/categorias/mousepads?superficie=speed",
+        },
+        {
+          title: "Deskmat XXL",
+          subtitle: "Cobertura completa",
+          href: "/categorias/mousepads?tamano=xxl",
+        },
+      ],
     },
     {
       id: "audio",
@@ -137,6 +203,23 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         { label: "Tangzu", href: "/marcas/tangzu" },
         { label: "Truthear", href: "/marcas/truthear" },
         { label: "Sennheiser", href: "/marcas/sennheiser" },
+      ],
+      previews: [
+        {
+          title: "IEMs Gaming",
+          subtitle: "Posicionamiento sonoro",
+          href: "/categorias/audio?tipo=iems",
+        },
+        {
+          title: "Open-Back",
+          subtitle: "Escena sonora abierta",
+          href: "/categorias/audio?tipo=open-back",
+        },
+        {
+          title: "DACs USB",
+          subtitle: "Amplificación limpia",
+          href: "/categorias/audio?tipo=dacs",
+        },
       ],
     },
     {
@@ -161,6 +244,28 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         { label: "Pulsar", href: "/marcas/pulsar" },
         { label: "Lamzu", href: "/marcas/lamzu" },
         { label: "WLMOUSE", href: "/marcas/wlmouse" },
+      ],
+      previews: [
+        {
+          title: "Dongles 8K",
+          subtitle: "Receptores ultra-rápidos",
+          href: "/categorias/accesorios?tipo=dongles",
+        },
+        {
+          title: "Skates PTFE",
+          subtitle: "Deslizamiento suave",
+          href: "/categorias/accesorios?tipo=skates",
+        },
+        {
+          title: "Grip Tapes",
+          subtitle: "Textura antideslizante",
+          href: "/categorias/accesorios?tipo=grip-tapes",
+        },
+        {
+          title: "Bungees",
+          subtitle: "Control de cable",
+          href: "/categorias/accesorios?tipo=bungees",
+        },
       ],
     },
   ],

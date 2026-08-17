@@ -7,14 +7,16 @@
  * It is NOT commerce database authority.
  */
 
-export type HomeMediaKind = "image" | "abstract";
-
-export interface HomeHeroMedia {
-  mediaKind: HomeMediaKind;
-  desktopImageSrc?: string;
-  mobileImageSrc?: string;
-  altText: string;
-}
+export type HomeMedia =
+  | {
+      kind: "abstract";
+    }
+  | {
+      kind: "image";
+      src: string;
+      mobileSrc?: string;
+      altText: string;
+    };
 
 export interface HomeHeroData {
   eyebrow: string;
@@ -28,7 +30,7 @@ export interface HomeHeroData {
     label: string;
     href: string;
   };
-  media: HomeHeroMedia;
+  media: HomeMedia;
 }
 
 export interface HomeFeaturedEditorialData {
@@ -39,7 +41,7 @@ export interface HomeFeaturedEditorialData {
     label: string;
     href: string;
   };
-  mediaAlt: string;
+  media: HomeMedia;
 }
 
 export interface HomeCategoryItem {
@@ -48,7 +50,7 @@ export interface HomeCategoryItem {
   subtitle: string;
   href: string;
   theme: "dark" | "light" | "neutral";
-  mediaAlt: string;
+  media: HomeMedia;
 }
 
 export interface HomeGearPreviewItem {
@@ -56,7 +58,7 @@ export interface HomeGearPreviewItem {
   title: string;
   categoryLabel: string;
   href: string;
-  imageAlt: string;
+  media: HomeMedia;
 }
 
 export interface HomeTechnicalStat {
@@ -74,6 +76,7 @@ export interface HomeTechnicalEditorialData {
     label: string;
     href: string;
   };
+  media?: HomeMedia;
 }
 
 export interface HomeBrandItem {

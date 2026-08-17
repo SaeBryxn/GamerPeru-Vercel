@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Container, Icon } from "@/components/ui";
@@ -15,8 +16,11 @@ interface TechnicalEditorialProps {
  * - Major contrast event between light sections.
  * - Oversized typography using canonical .type-stat-giant (Plus Jakarta Sans 800).
  * - Explains competitive peripheral technology benchmarks without fake SKU claims.
+ * - 100% Server Component emitting zero client JavaScript runtime.
  */
 export function TechnicalEditorial({ data }: TechnicalEditorialProps) {
+  const { media } = data;
+
   return (
     <section className={styles.section} aria-label="Ingeniería y especificaciones técnicas">
       <Container size="default">
@@ -32,6 +36,17 @@ export function TechnicalEditorial({ data }: TechnicalEditorialProps) {
           </div>
 
           <div className={styles.statsColumn}>
+            {media && media.kind === "image" && (
+              <div className={styles.schematicMedia} aria-hidden="true">
+                <Image
+                  src={media.src}
+                  alt={media.altText}
+                  fill
+                  sizes="(max-width: 1023px) 100vw, 50vw"
+                  className={styles.schematicImage}
+                />
+              </div>
+            )}
             {data.stats.map((stat, index) => (
               <div key={stat.value}>
                 {index > 0 && <div className={styles.statDivider} />}

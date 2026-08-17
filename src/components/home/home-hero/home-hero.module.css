@@ -72,7 +72,7 @@
     linear-gradient(to bottom, var(--color-border-dark-subtle) 1px, transparent 1px);
   background-size: 80px 80px;
   opacity: 0.25;
-  mask-image: radial-gradient(circle at 60% 50%, black 20%, transparent 75%);
+  mask-image: radial-gradient(circle at 60% 50%, currentColor 20%, transparent 75%);
 }
 
 .mediaOverlay {

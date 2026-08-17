@@ -20,12 +20,19 @@ export interface MegaMenuSection {
   items: NavLink[];
 }
 
+export interface MegaMenuPreview {
+  title: string;
+  subtitle: string;
+  href: string;
+}
+
 export interface MegaMenuCategory {
   id: string;
   label: string;
   href: string;
   sections: MegaMenuSection[];
   brands?: NavLink[];
+  previews?: MegaMenuPreview[];
   spotlight?: {
     title: string;
     description: string;

@@ -103,6 +103,19 @@
   border: 1px solid var(--color-border-dark-subtle);
 }
 
+.schematicMedia {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: var(--space-4);
+}
+
+.schematicImage {
+  object-fit: cover;
+}
+
 @media (max-width: 767px) {
   .statsColumn {
     padding: var(--space-6);
