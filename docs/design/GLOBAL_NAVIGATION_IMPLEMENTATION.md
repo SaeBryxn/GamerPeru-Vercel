@@ -98,8 +98,9 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
 
 - **Interaction Pattern**:
   - Primary category destination: semantic Next.js `<Link href="/categorias/...">` present in initial static SSR HTML.
-  - Separate disclosure button: `<button aria-label="Abrir menú desplegable de..." aria-expanded="..." aria-controls="...">` with canonical ChevronDown Icon.
+  - Separate disclosure button: `<button aria-label="Abrir menú desplegable de..." aria-expanded="..." aria-controls="...">` with canonical ChevronDown Icon (`size="sm"`: 16x16 / 1.25 stroke) inside a minimum `44x44px` interactive touch target.
   - 2px Signal Crimson (`var(--color-brand-primary)`) bottom underline on hover, focus-within, and active expanded states.
+  - Canonical keyboard focus ring: `outline: 2px solid var(--focus-ring-color, var(--color-border-focus)); outline-offset: 2px; border-radius: var(--radius-xs);`.
 - **Containing-Block Architecture**:
   - `SiteHeader` (which is `position: sticky; width: 100%;`) acts as the containing block.
   - Intermediate wrappers (`.navItem`, `.navList`, `.desktopNav`) use static positioning.
