@@ -14,7 +14,10 @@ import {
 
 export default function HomePage() {
   return (
-    <main style={{ padding: "var(--space-8) 0", minHeight: "100vh" }}>
+    <main
+      id="main-content"
+      style={{ padding: "var(--space-8) 0", minHeight: "calc(100vh - 64px - 36px)" }}
+    >
       <Container size="default">
         <Stack direction="vertical" gap={8} align="center">
           {/* Header Section */}

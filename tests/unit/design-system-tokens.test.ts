@@ -30,6 +30,7 @@ describe("GP-008 Design System — Token Contract & Drift Protection", () => {
     expect(tokensCss).toContain("--color-surface-card: #ffffff;");
     expect(tokensCss).toContain("--color-surface-secondary: #f4f4f5;");
     expect(tokensCss).toContain("--color-surface-tertiary: #e4e4e7;");
+    expect(tokensCss).toContain("--color-surface-header: rgba(255, 255, 255, 0.95);");
 
     // Dark
     expect(tokensCss).toContain("--color-surface-dark-canvas: #09090b;");

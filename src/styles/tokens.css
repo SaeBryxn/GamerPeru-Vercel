@@ -24,6 +24,7 @@
   --color-surface-secondary: #f4f4f5;
   --color-surface-tertiary: #e4e4e7;
   --color-surface-overlay: rgba(9, 9, 11, 0.65);
+  --color-surface-header: rgba(255, 255, 255, 0.95);
 
   /* -------------------------------------------------------------------------
    * 3. Inverted Neutral Surfaces (Dark Context & Editorial Blocks)

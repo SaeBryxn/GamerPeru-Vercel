@@ -128,7 +128,7 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
     const primaryBtn = page.getByRole("button", { name: "Acción primaria" });
 
     let isFocused = false;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 25; i++) {
       await page.keyboard.press("Tab");
       isFocused = await primaryBtn.evaluate((el) => document.activeElement === el);
       if (isFocused) break;
@@ -160,7 +160,7 @@ test.describe("GP-008 Design System — Primitives, Accessibility & Visual Contr
     const darkBtn = page.locator("#dark-surface-btn");
 
     let isFocused = false;
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 35; i++) {
       await page.keyboard.press("Tab");
       isFocused = await darkBtn.evaluate((el) => document.activeElement === el);
       if (isFocused) break;
