@@ -7,7 +7,7 @@
 ## Implementation Commits
 
 - Initial Implementation: `d0e90ca14d8e25c66be40afdb97ff00eec2bbe41` (`feat: implement GP-010 homepage`)
-- Visual Convergence & External Review Remediation: `80fb50b925b331006093d9842bc6f1bb9962a98f` (`fix: converge GP-010 storefront toward visual reference`)
+- Visual Convergence & External Review Remediation: `80fb50bc71a178d0aec29de2202f11ba216ac4da` (`fix: converge GP-010 storefront toward visual reference`)
 
 ---
 
@@ -36,16 +36,16 @@ Key achievements & visual convergence pass:
 
 ## Seven-Part Homepage Hierarchy & Visual Weight
 
-| Tier         | Section                                          | Surface              | Architectural & Visual Purpose                                                                                                                                      |
-| ------------ | ------------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **DOMINANT** | 1. Cinematic Hero (`HomeHero`)                   | Dark `#09090B`       | Flagship entrance; full-bleed stage; bounded content; fluid H1; multi-brand CTAs (`/categorias/mouses`, `#categorias`); abstract ambient stage.                     |
-| **MAJOR**    | 2. Featured Editorial (`FeaturedEditorial`)      | Light `#FFFFFF`      | Asymmetric 2-column open composition; craftsmanship and structural engineering focus; zero fake specs; 16:10 product photography stage.                             |
+| Tier         | Section                                          | Surface              | Architectural & Visual Purpose                                                                                                                                     |
+| ------------ | ------------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **DOMINANT** | 1. Cinematic Hero (`HomeHero`)                   | Dark `#09090B`       | Flagship entrance; full-bleed stage; bounded content; fluid H1; multi-brand CTAs (`/categorias/mouses`, `#categorias`); abstract ambient stage.                    |
+| **MAJOR**    | 2. Featured Editorial (`FeaturedEditorial`)      | Light `#FFFFFF`      | Asymmetric 2-column open composition; craftsmanship and structural engineering focus; zero fake specs; 16:10 product photography stage.                            |
 | **MAJOR**    | 3. Category Visual Doors (`CategoryShowcase`)    | Light + Neutral/Dark | Section `#categorias`; responsive 3+2 grid; 70-80% media dominance with ambient glow; direct route intents (`/categorias/[slug]`).                                 |
-| **MEDIUM**   | 4. Curated Gear Shelf (`CuratedGear`)            | Light `#FFFFFF`      | Clean 4-column shelf; 1:1 square media stages; neutral category doors; quiet typography; zero fake prices or fake PDP links.                                        |
+| **MEDIUM**   | 4. Curated Gear Shelf (`CuratedGear`)            | Light `#FFFFFF`      | Clean 4-column shelf; 1:1 square media stages; neutral category doors; quiet typography; zero fake prices or fake PDP links.                                       |
 | **DOMINANT** | 5. Technical Editorial (`TechnicalEditorial`)    | Dark `#09090B`       | Major contrast event; giant stats using canonical `.type-stat-giant` (`Plus Jakarta Sans 800`); explains 8000Hz polling rate and 0.125ms nominal polling interval. |
-| **MEDIUM**   | 6. Multi-Brand Discovery (`BrandDiscovery`)      | Light `#FFFFFF`      | Section `#marcas`; clean typographic brand cards linking to `/marcas/[slug]`; zero unverified partner claims.                                                       |
-| **COMPACT**  | 7. Trust + SEO Discovery (`HomeDiscoveryFooter`) | Subtle `#F4F4F5`     | Rhythmic transition into SiteFooter; 4 grounded local commerce facts; 4-column semantic crawlable link directory with h2/h3 hierarchy.                              |
-| —            | 8. Global Storefront Footer (`SiteFooter`)       | Dark `#09090B`       | Existing GP-009 Footer wrapping the page.                                                                                                                           |
+| **MEDIUM**   | 6. Multi-Brand Discovery (`BrandDiscovery`)      | Light `#FFFFFF`      | Section `#marcas`; clean typographic brand cards linking to `/marcas/[slug]`; zero unverified partner claims.                                                      |
+| **COMPACT**  | 7. Trust + SEO Discovery (`HomeDiscoveryFooter`) | Subtle `#F4F4F5`     | Rhythmic transition into SiteFooter; 4 grounded local commerce facts; 4-column semantic crawlable link directory with h2/h3 hierarchy.                             |
+| —            | 8. Global Storefront Footer (`SiteFooter`)       | Dark `#09090B`       | Existing GP-009 Footer wrapping the page.                                                                                                                          |
 
 ---
 

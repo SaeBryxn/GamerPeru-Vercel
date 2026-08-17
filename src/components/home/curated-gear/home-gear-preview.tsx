@@ -28,7 +28,7 @@ export function HomeGearPreview({ item }: HomeGearPreviewProps) {
         {media.kind === "image" ? (
           <Image
             src={media.src}
-            alt={media.altText}
+            alt=""
             fill
             sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, (max-width: 1279px) 33vw, 25vw"
             className={styles.gearImage}

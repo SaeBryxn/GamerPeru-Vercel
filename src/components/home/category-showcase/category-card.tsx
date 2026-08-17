@@ -46,7 +46,7 @@ export function CategoryCard({ category, isWide = false }: CategoryCardProps) {
         {media.kind === "image" ? (
           <Image
             src={media.src}
-            alt={media.altText}
+            alt=""
             fill
             sizes="(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 33vw"
             className={styles.cardImage}

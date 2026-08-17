@@ -110,10 +110,46 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   margin-bottom: var(--space-4);
+  background-color: var(--color-surface-dark-canvas);
+  border: 1px solid var(--color-border-dark-subtle);
 }
 
 .schematicImage {
   object-fit: cover;
+}
+
+.abstractStage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    circle at 50% 50%,
+    var(--color-surface-dark-card) 0%,
+    var(--color-surface-dark-canvas) 85%
+  );
+  overflow: hidden;
+}
+
+.abstractGrid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--color-border-dark-subtle) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-border-dark-subtle) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.4;
+}
+
+.abstractPulse {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-full);
+  border: 1px dashed var(--color-border-dark-strong);
+  background: radial-gradient(circle, var(--color-brand-primary) 0%, transparent 70%);
+  opacity: 0.25;
 }
 
 @media (max-width: 767px) {

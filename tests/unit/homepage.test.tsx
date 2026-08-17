@@ -321,6 +321,7 @@ describe("GP-010 Homepage — Presentation Model, Semantics & Business Policy In
       };
       const abstractHtml = renderToStaticMarkup(<TechnicalEditorial data={abstractData} />);
       expect(abstractHtml).not.toContain("<img");
+      expect(abstractHtml).toContain("schematicMedia");
 
       const imageData: HomeTechnicalEditorialData = {
         ...HOMEPAGE_DATA.technicalEditorial,
@@ -332,6 +333,236 @@ describe("GP-010 Homepage — Presentation Model, Semantics & Business Policy In
       };
       const imageHtml = renderToStaticMarkup(<TechnicalEditorial data={imageData} />);
       expect(imageHtml).toContain("<img");
+      expect(imageHtml).toContain("schematicMedia");
+    });
+  });
+
+  describe("Accessibility & Media Contract Semantics", () => {
+    describe("Abstract Media Stages", () => {
+      it("renders abstract media with aria-hidden='true' and zero informative img tags across all components", () => {
+        // Hero
+        const heroHtml = renderToStaticMarkup(
+          <HomeHero hero={{ ...HOMEPAGE_DATA.hero, media: { kind: "abstract" } }} />
+        );
+        expect(heroHtml).not.toContain("<img");
+        expect(heroHtml).toContain('aria-hidden="true"');
+
+        // FeaturedEditorial
+        const featuredHtml = renderToStaticMarkup(
+          <FeaturedEditorial
+            data={{ ...HOMEPAGE_DATA.featuredEditorial, media: { kind: "abstract" } }}
+          />
+        );
+        expect(featuredHtml).not.toContain("<img");
+        expect(featuredHtml).toContain('aria-hidden="true"');
+
+        // CategoryShowcase / Card
+        const categoryHtml = renderToStaticMarkup(
+          <CategoryShowcase
+            categories={[
+              {
+                id: "test-cat",
+                title: "Mouses",
+                subtitle: "Ultraligeros",
+                href: "/categorias/mouses",
+                theme: "dark",
+                media: { kind: "abstract" },
+              },
+            ]}
+          />
+        );
+        expect(categoryHtml).not.toContain("<img");
+        expect(categoryHtml).toContain('aria-hidden="true"');
+
+        // CuratedGear / HomeGearPreview
+        const gearHtml = renderToStaticMarkup(
+          <CuratedGear
+            eyebrow="Test"
+            title="Test"
+            items={[
+              {
+                id: "gear-test",
+                title: "Mouse Test",
+                categoryLabel: "Mouses",
+                href: "/categorias/mouses",
+                media: { kind: "abstract" },
+              },
+            ]}
+          />
+        );
+        expect(gearHtml).not.toContain("<img");
+        expect(gearHtml).toContain('aria-hidden="true"');
+
+        // TechnicalEditorial
+        const techHtml = renderToStaticMarkup(
+          <TechnicalEditorial
+            data={{ ...HOMEPAGE_DATA.technicalEditorial, media: { kind: "abstract" } }}
+          />
+        );
+        expect(techHtml).not.toContain("<img");
+        expect(techHtml).toContain('aria-hidden="true"');
+      });
+    });
+
+    describe("Decorative Image Media", () => {
+      it("renders alt='' and aria-hidden on decorative image wrappers to prevent duplicate announcements", () => {
+        // Hero with decorative: true
+        const heroHtml = renderToStaticMarkup(
+          <HomeHero
+            hero={{
+              ...HOMEPAGE_DATA.hero,
+              media: {
+                kind: "image",
+                src: "/assets/hero.webp",
+                altText: "Visual reinforcement",
+                decorative: true,
+              },
+            }}
+          />
+        );
+        expect(heroHtml).toContain('alt=""');
+        expect(heroHtml).toContain('aria-hidden="true"');
+
+        // FeaturedEditorial with decorative: true
+        const featuredHtml = renderToStaticMarkup(
+          <FeaturedEditorial
+            data={{
+              ...HOMEPAGE_DATA.featuredEditorial,
+              media: {
+                kind: "image",
+                src: "/assets/featured.webp",
+                altText: "Decorative macro",
+                decorative: true,
+              },
+            }}
+          />
+        );
+        expect(featuredHtml).toContain('alt=""');
+        expect(featuredHtml).toContain('aria-hidden="true"');
+
+        // CategoryCard image (decorative inside semantic labeled link)
+        const categoryHtml = renderToStaticMarkup(
+          <CategoryShowcase
+            categories={[
+              {
+                id: "mouses",
+                title: "Mouses",
+                subtitle: "Ultraligeros",
+                href: "/categorias/mouses",
+                theme: "dark",
+                media: {
+                  kind: "image",
+                  src: "/assets/mouses.webp",
+                  altText: "Mouses",
+                },
+              },
+            ]}
+          />
+        );
+        expect(categoryHtml).toContain('alt=""');
+        expect(categoryHtml).toContain('aria-hidden="true"');
+
+        // HomeGearPreview image (decorative inside semantic labeled link)
+        const gearHtml = renderToStaticMarkup(
+          <CuratedGear
+            eyebrow="Test"
+            title="Test"
+            items={[
+              {
+                id: "gear-1",
+                title: "Mouse 8K",
+                categoryLabel: "Mouses",
+                href: "/categorias/mouses",
+                media: {
+                  kind: "image",
+                  src: "/assets/gear.webp",
+                  altText: "Mouse",
+                },
+              },
+            ]}
+          />
+        );
+        expect(gearHtml).toContain('alt=""');
+        expect(gearHtml).toContain('aria-hidden="true"');
+
+        // TechnicalEditorial with decorative: true
+        const techHtml = renderToStaticMarkup(
+          <TechnicalEditorial
+            data={{
+              ...HOMEPAGE_DATA.technicalEditorial,
+              media: {
+                kind: "image",
+                src: "/assets/tech.webp",
+                altText: "Decorative schematic",
+                decorative: true,
+              },
+            }}
+          />
+        );
+        expect(techHtml).toContain('alt=""');
+        expect(techHtml).toContain('aria-hidden="true"');
+      });
+    });
+
+    describe("Informative Image Media", () => {
+      it("renders provided alt text and ensures informative images are NOT inside aria-hidden subtrees", () => {
+        // Informative Hero
+        const heroHtml = renderToStaticMarkup(
+          <HomeHero
+            hero={{
+              ...HOMEPAGE_DATA.hero,
+              media: {
+                kind: "image",
+                src: "/assets/hero-unique.webp",
+                altText: "Gamer Peru Flagship Mouse Edicion Magnesio",
+              },
+            }}
+          />
+        );
+        expect(heroHtml).toContain('alt="Gamer Peru Flagship Mouse Edicion Magnesio"');
+        // Container must NOT have aria-hidden
+        const heroImgMatch = heroHtml.match(/<div class="[^"]*mediaContainer[^"]*">/);
+        expect(heroImgMatch).not.toBeNull();
+        expect(heroImgMatch?.[0]).not.toContain("aria-hidden");
+
+        // Informative FeaturedEditorial
+        const featuredHtml = renderToStaticMarkup(
+          <FeaturedEditorial
+            data={{
+              ...HOMEPAGE_DATA.featuredEditorial,
+              media: {
+                kind: "image",
+                src: "/assets/featured-macro.webp",
+                altText: "Estructura de panal en aleacion de magnesio de 39 gramos",
+              },
+            }}
+          />
+        );
+        expect(featuredHtml).toContain(
+          'alt="Estructura de panal en aleacion de magnesio de 39 gramos"'
+        );
+        const featuredColMatch = featuredHtml.match(/<div class="[^"]*mediaColumn[^"]*">/);
+        expect(featuredColMatch).not.toBeNull();
+        expect(featuredColMatch?.[0]).not.toContain("aria-hidden");
+
+        // Informative TechnicalEditorial
+        const techHtml = renderToStaticMarkup(
+          <TechnicalEditorial
+            data={{
+              ...HOMEPAGE_DATA.technicalEditorial,
+              media: {
+                kind: "image",
+                src: "/assets/sensor-pcb.webp",
+                altText: "Diagrama esquematico del sensor optico 8000Hz",
+              },
+            }}
+          />
+        );
+        expect(techHtml).toContain('alt="Diagrama esquematico del sensor optico 8000Hz"');
+        const techMediaMatch = techHtml.match(/<div class="[^"]*schematicMedia[^"]*">/);
+        expect(techMediaMatch).not.toBeNull();
+        expect(techMediaMatch?.[0]).not.toContain("aria-hidden");
+      });
     });
   });
 

@@ -19,6 +19,8 @@ interface FeaturedEditorialProps {
  */
 export function FeaturedEditorial({ data }: FeaturedEditorialProps) {
   const { media } = data;
+  const isImage = media.kind === "image";
+  const isDecorative = !isImage || Boolean(media.decorative);
 
   return (
     <section className={styles.section} aria-label="Ingeniería y diseño destacado">
@@ -34,11 +36,11 @@ export function FeaturedEditorial({ data }: FeaturedEditorialProps) {
             </Link>
           </div>
 
-          <div className={styles.mediaColumn} aria-hidden="true">
-            {media.kind === "image" ? (
+          <div className={styles.mediaColumn} {...(isDecorative ? { "aria-hidden": "true" } : {})}>
+            {isImage ? (
               <Image
                 src={media.src}
-                alt={media.altText}
+                alt={isDecorative ? "" : media.altText}
                 fill
                 sizes="(max-width: 1023px) 100vw, 50vw"
                 className={styles.mediaImage}

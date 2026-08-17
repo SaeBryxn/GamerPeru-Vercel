@@ -16,6 +16,7 @@ export type HomeMedia =
       src: string;
       mobileSrc?: string;
       altText: string;
+      decorative?: boolean;
     };
 
 export interface HomeHeroData {

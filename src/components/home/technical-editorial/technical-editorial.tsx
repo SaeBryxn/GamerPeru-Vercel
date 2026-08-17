@@ -20,6 +20,8 @@ interface TechnicalEditorialProps {
  */
 export function TechnicalEditorial({ data }: TechnicalEditorialProps) {
   const { media } = data;
+  const isImage = media?.kind === "image";
+  const isDecorative = !isImage || Boolean(media?.decorative);
 
   return (
     <section className={styles.section} aria-label="Ingeniería y especificaciones técnicas">
@@ -36,15 +38,25 @@ export function TechnicalEditorial({ data }: TechnicalEditorialProps) {
           </div>
 
           <div className={styles.statsColumn}>
-            {media && media.kind === "image" && (
-              <div className={styles.schematicMedia} aria-hidden="true">
-                <Image
-                  src={media.src}
-                  alt={media.altText}
-                  fill
-                  sizes="(max-width: 1023px) 100vw, 50vw"
-                  className={styles.schematicImage}
-                />
+            {media && (
+              <div
+                className={styles.schematicMedia}
+                {...(isDecorative ? { "aria-hidden": "true" } : {})}
+              >
+                {isImage ? (
+                  <Image
+                    src={media.src}
+                    alt={isDecorative ? "" : media.altText}
+                    fill
+                    sizes="(max-width: 1023px) 100vw, 50vw"
+                    className={styles.schematicImage}
+                  />
+                ) : (
+                  <div className={styles.abstractStage}>
+                    <div className={styles.abstractGrid} />
+                    <div className={styles.abstractPulse} />
+                  </div>
+                )}
               </div>
             )}
             {data.stats.map((stat, index) => (

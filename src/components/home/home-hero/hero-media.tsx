@@ -18,10 +18,11 @@ interface HeroMediaProps {
  */
 export function HeroMedia({ media }: HeroMediaProps) {
   if (media.kind === "image") {
-    const { src, mobileSrc, altText } = media;
+    const { src, mobileSrc, altText, decorative = false } = media;
+    const resolvedAlt = decorative ? "" : altText;
 
     if (mobileSrc) {
-      const common = { alt: altText, fill: true };
+      const common = { alt: resolvedAlt, fill: true };
       const {
         props: { srcSet: mobileSrcSet },
       } = getImageProps({
@@ -38,35 +39,35 @@ export function HeroMedia({ media }: HeroMediaProps) {
       });
 
       return (
-        <div className={styles.mediaContainer} aria-hidden="true">
+        <div className={styles.mediaContainer} {...(decorative ? { "aria-hidden": "true" } : {})}>
           <picture className={styles.picture}>
             <source media="(max-width: 767px)" srcSet={mobileSrcSet} />
             <source media="(min-width: 768px)" srcSet={desktopSrcSet} />
             <img
               {...restDesktop}
               className={styles.mediaImage}
-              alt={altText}
+              alt={resolvedAlt}
               fetchPriority="high"
               loading="eager"
             />
           </picture>
-          <div className={styles.mediaOverlay} />
+          <div className={styles.mediaOverlay} aria-hidden="true" />
         </div>
       );
     }
 
     return (
-      <div className={styles.mediaContainer} aria-hidden="true">
+      <div className={styles.mediaContainer} {...(decorative ? { "aria-hidden": "true" } : {})}>
         <Image
           src={src}
-          alt={altText}
+          alt={resolvedAlt}
           fill
           fetchPriority="high"
           loading="eager"
           sizes="100vw"
           className={styles.mediaImage}
         />
-        <div className={styles.mediaOverlay} />
+        <div className={styles.mediaOverlay} aria-hidden="true" />
       </div>
     );
   }
