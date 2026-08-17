@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { Menu, Search, ShoppingCart } from "lucide-react";
+import { Menu, ShoppingCart } from "lucide-react";
 import { IconButton } from "@/components/ui";
+import { SearchLauncherButton } from "@/components/search";
 import { BrandMark } from "../brand-mark";
 import { HeaderUtilityLink } from "../header-utilities";
 import { MobileDrawer } from "../mobile-drawer";
@@ -19,7 +20,6 @@ export interface MobileHeaderProps {
 
 export function MobileHeader({
   items,
-  searchHref = "/buscar",
   cartHref = "/carrito",
   cartCount,
   className,
@@ -48,7 +48,7 @@ export function MobileHeader({
         </div>
 
         <div className={styles.rightGroup}>
-          <HeaderUtilityLink href={searchHref} label="Buscar productos" icon={Search} />
+          <SearchLauncherButton label="Buscar productos" />
           <HeaderUtilityLink
             href={cartHref}
             label="Carrito de compras"

@@ -1,5 +1,6 @@
 import React from "react";
-import { Heart, Search, ShoppingCart, User } from "lucide-react";
+import { Heart, ShoppingCart, User } from "lucide-react";
+import { SearchLauncherButton } from "@/components/search";
 import { HeaderUtilityLink } from "./header-utility-link";
 import styles from "./header-utilities.module.css";
 
@@ -17,7 +18,6 @@ export interface HeaderUtilitiesProps {
 }
 
 export function HeaderUtilities({
-  searchHref = "/buscar",
   searchLabel = "Buscar productos",
   accountHref = "/cuenta",
   accountLabel = "Mi cuenta",
@@ -32,7 +32,7 @@ export function HeaderUtilities({
 
   return (
     <div className={classNames} role="group" aria-label="Acciones de usuario">
-      <HeaderUtilityLink href={searchHref} label={searchLabel} icon={Search} />
+      <SearchLauncherButton label={searchLabel} />
       <HeaderUtilityLink href={wishlistHref} label={wishlistLabel} icon={Heart} />
       <HeaderUtilityLink href={accountHref} label={accountLabel} icon={User} />
       <HeaderUtilityLink

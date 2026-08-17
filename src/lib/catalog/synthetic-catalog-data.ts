@@ -303,13 +303,68 @@ export function generateSyntheticProducts(
   count: number,
   startIndex: number = 1
 ): ProductDiscoveryItem[] {
+  const getProductPrefix = (slug: string): string => {
+    switch (slug) {
+      case "mouses":
+        return "Mouse Pro Mod";
+      case "teclados":
+        return "Teclado QA";
+      case "mousepads":
+        return "Mousepad QA";
+      case "audio":
+        return "Audio QA";
+      case "accesorios":
+        return "Accesorio QA";
+      default:
+        return `${categoryName} QA`;
+    }
+  };
+
+  const getSlugPrefix = (slug: string): string => {
+    switch (slug) {
+      case "mouses":
+        return "mouse-pro-mod";
+      case "teclados":
+        return "teclado-qa";
+      case "mousepads":
+        return "mousepad-qa";
+      case "audio":
+        return "audio-qa";
+      case "accesorios":
+        return "accesorio-qa";
+      default:
+        return `${slug}-qa`;
+    }
+  };
+
+  const getSlugIdPrefix = (slug: string): string => {
+    switch (slug) {
+      case "mouses":
+        return "mous";
+      case "teclados":
+        return "tecl";
+      case "mousepads":
+        return "mpad";
+      case "audio":
+        return "audi";
+      case "accesorios":
+        return "acce";
+      default:
+        return slug.slice(0, 4).padEnd(4, "0");
+    }
+  };
+
+  const namePrefix = getProductPrefix(categorySlug);
+  const slugPrefix = getSlugPrefix(categorySlug);
+  const idPrefix = getSlugIdPrefix(categorySlug);
+
   return Array.from({ length: count }, (_, i) => {
     const num = String(startIndex + i).padStart(2, "0");
     const price = 12990 + (startIndex + i - 1) * 1000; // Synthetic PEN centavos
     return {
-      id: `018f0000-0000-7000-8000-${categorySlug.slice(0, 4).padEnd(4, "0")}${num.padStart(4, "0")}`,
-      name: `Mouse Pro Mod ${num}`,
-      slug: `mouse-pro-mod-${num}`,
+      id: `018f0000-0000-7000-8000-${idPrefix}${num.padStart(4, "0")}`,
+      name: `${namePrefix} ${num}`,
+      slug: `${slugPrefix}-${num}`,
       subtitle: `Edición de Rendimiento QA ${num}`,
       brand: {
         name: SYNTHETIC_QA_BRAND.name,

@@ -1,0 +1,31 @@
+/* ==========================================================================
+   Gamer Perú — Search Launcher Button Styles (GP-012)
+   ========================================================================== */
+
+.launcherButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-2, 8px);
+  color: var(--color-text-primary, #09090b);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition:
+    color var(--motion-duration-fast, 150ms) var(--motion-easing-standard, ease),
+    background-color var(--motion-duration-fast, 150ms) var(--motion-easing-standard, ease);
+}
+
+.launcherButton:hover {
+  color: var(--color-brand-primary, #e11d48);
+  background-color: var(--color-surface-secondary, #f4f4f5);
+}
+
+.launcherButton:focus-visible {
+  outline: 2px solid var(--color-border-focus, #09090b);
+  outline-offset: 2px;
+}
