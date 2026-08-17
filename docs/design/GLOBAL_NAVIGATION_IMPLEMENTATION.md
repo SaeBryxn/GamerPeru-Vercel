@@ -105,9 +105,11 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
   - `SiteHeader` (which is `position: sticky; width: 100%;`) acts as the containing block.
   - Intermediate wrappers (`.navItem`, `.navList`, `.desktopNav`) use static positioning.
   - `.megaMenuPanel` has `position: absolute; top: 100%; left: 0; right: 0; width: 100%;`, guaranteeing that rendered MegaMenu width equals 100% of `SiteHeader` across all desktop viewports.
-- **Mega-Menu Panel**:
+- **Mega-Menu Panel (WLMOUSE-Inspired 2-Zone Layout)**:
   - Background `var(--color-surface-card)` (`#FFFFFF`), elevation `var(--elevation-high)`, border-bottom `1px solid var(--color-border-subtle)`.
-  - 4 conceptual columns: Category sub-sections, Brand directory ("Marcas"), and Category overview / Explore links.
+  - Floating rounded container: `border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg);`.
+  - **Left Zone (240px)**: Category collections hierarchy with large bold typography (`20px / 800`), brand filter chips (e.g. WLMOUSE, Pulsar, Lamzu, ATK), and bottom category destination link (`/categorias/[id]`).
+  - **Right Zone (1fr)**: 4-column visual preview stage (1:1 aspect ratio) with subtle radial ambient glow, title, subtitle, and top-right "Explorar catálogo completo →" link.
   - Keyboard disclosure via Enter/Space; Escape closes panel and returns focus to disclosure button; click outside closes.
 
 ---

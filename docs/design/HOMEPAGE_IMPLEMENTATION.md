@@ -4,7 +4,7 @@
 
 ## 1. Purpose & Authority
 
-This document defines the canonical architecture, visual design system translation, component model, media contracts, and accessibility standards for the Gamer Perú Homepage (`src/app/(storefront)/page.tsx`), implemented in **GP-010**.
+This document defines the canonical architecture, visual design system translation, component model, media contracts, and accessibility standards for the Gamer Perú Homepage (`src/app/(storefront)/page.tsx`), implemented and visually converged in **GP-010**.
 
 **Canonical Authorities**:
 
@@ -16,24 +16,24 @@ This document defines the canonical architecture, visual design system translati
 
 ---
 
-## 2. WLMOUSE Reference Observations & Originality Boundary
+## 2. WLMOUSE Reference Visual Convergence & Originality Boundary
 
-The owner-supplied visual reference repository (`https://github.com/latamcreativa/wlmouse.git`) served as a visual and UX benchmark.
+The owner-supplied visual reference repository (`https://github.com/latamcreativa/wlmouse.git`) served as the structural and aesthetic target for near-parity in layout proportions, geometry, whitespace, card proportions, typography scale, product/media dominance, grid rhythm, viewport use, and responsive composition.
 
-### Benchmark Principles Extracted:
+### Visual Parity Standards Implemented:
 
-- **Product-First Dominance**: Hardware media commands visual authority with large scale and high contrast.
-- **Fluid Typographic Scale**: Oversized headings (`clamp(38px, 5.2vw, 72px)`) with tight line-heights and negative tracking.
-- **Generous Whitespace & Section Pacing**: Uncluttered sections with rhythmic vertical spacing (~96px on desktop).
-- **Alternating Surface Rhythm**: High-contrast oscillation between dark canvas and light content blocks.
-- **Quiet UI**: Minimalist card chrome, neutral media stages (`#F4F4F5`), and subtle hover transitions.
+- **Product-First Dominance**: Hardware media commands visual authority with 70–80% area dominance on category tiles and 1:1 square media stages on curated shelves.
+- **Fluid Typographic Scale**: Oversized display headings (`clamp(38px, 5.2vw, 72px)`) with tight line-heights (0.95–1.05) and negative tracking (-0.03em to -0.05em).
+- **Generous Whitespace & Section Pacing**: Uncluttered sections with rhythmic vertical spacing (`var(--space-12)` on desktop).
+- **Surface Rhythm**: Predominantly clean white (`#FFFFFF`) and neutral light gray (`#F4F4F5`) surfaces, with dark canvas (`#09090B`) used as deliberate cinematic events (Flagship Hero, Technical Editorial, SiteFooter).
+- **Global MegaMenu Convergence**: Full-width floating white panel with canonical `--radius-lg` rounded bottom corners, 240px collection sidebar with bold category links and brand chips, and 4-column 1:1 preview stage grid with ambient radial lighting.
 
 ### Strict Originality Boundaries (Deliberately NOT Copied):
 
 - **Zero Proprietary Code**: No HTML, CSS, or JavaScript was copied or ported from the reference.
 - **Zero Proprietary Media**: No WLMOUSE product renders, videos (`hero-pro.mp4`), cutouts, or brand logos are used.
 - **Zero Trademark Encroachment**: Gamer Perú represents an original multi-brand identity for the Peruvian competitive gaming community.
-- **Zero Fabricated Commercial Claims**: No fake prices, discounts, stock counts, review ratings, or unverified shipping promises.
+- **Zero Fabricated Commercial Claims**: No fake prices, discounts, stock counts, review ratings, or unverified shipping/distributor promises.
 
 ---
 
@@ -46,7 +46,7 @@ To maintain an editorial rhythm and prevent the page from feeling like a generic
 | **DOMINANT** | 1. Cinematic Hero<br>5. Technical Editorial       | High-contrast visual anchors; full-bleed or wide dark canvas; giant fluid typography (`clamp(38px, 5.2vw, 72px)` and `.type-stat-giant`); dramatic ambient lighting. |
 | **MAJOR**    | 2. Featured Editorial<br>3. Category Visual Doors | Large-scale editorial storytelling; open asymmetric layout; generous media fields; large fluid headings (`clamp(28px, 3.2vw, 48px)`).                                |
 | **MEDIUM**   | 4. Curated Gear Shelf<br>6. Multi-Brand Discovery | Clean, quiet structured grids; minimal card chrome; crisp typography (`14px - 18px`); high product dominance.                                                        |
-| **COMPACT**  | 7. Trust + SEO Discovery                          | Restrained transition block before Footer; compact typography-led trust row; subtle dividers; quiet directory links.                                                 |
+| **COMPACT**  | 7. Trust + SEO Discovery                          | Restrained transition block before Footer; compact typography-led trust row; subtle dividers; quiet directory links; `VisuallyHidden` H2 hierarchy.                  |
 
 ---
 
@@ -63,18 +63,26 @@ To maintain an editorial rhythm and prevent the page from feeling like a generic
 
 ---
 
-## 5. Hero Architecture & Art Direction
+## 5. Media Architecture & Polymorphism Contract
 
-- **Outer Dimension**: Full-bleed section with height `calc(100svh - 100px)` (min-height `590px`).
-- **Inner Content Alignment**: Bounded inside `Container size="default"` (1440px max width) with responsive gutters.
-- **Visible H1**: Eyebrow `"Gamer Perú"`, H1 `"Periféricos gaming de alto rendimiento"`.
-- **Multi-Brand CTAs**:
-  - Primary: `"Ver mouses"` -> `/categorias/mouses` (Signal Crimson accent).
-  - Secondary: `"Explorar categorías"` -> `#categorias` (Inverted ghost button).
-- **Art Direction Media API**:
-  - Independent `desktopImageSrc` and `mobileImageSrc` supported via Next.js `getImageProps()` + `<picture>`.
-  - Single image supported via Next.js `Image` with `preload`.
-  - Current abstract fallback renders a dark canvas with ambient radial lighting and subtle machining grid lines.
+Every media slot adheres to the finite `HomeMedia` contract:
+
+```ts
+export type HomeMedia =
+  | {
+      kind: "abstract";
+    }
+  | {
+      kind: "image";
+      src: string;
+      mobileSrc?: string;
+      altText: string;
+    };
+```
+
+- **Art-Direction**: When both `src` and `mobileSrc` are configured on Hero, renders via `getImageProps()` + `<picture>` using `fetchPriority="high"` and `loading="eager"` without duplicate preload tags.
+- **Single Image**: Uses Next.js `<Image ... fetchPriority="high" loading="eager" />`.
+- **Abstract Ambient Fallback**: Pure CSS token-driven ambient lighting stages with zero network image requests and zero image preloads.
 
 ---
 
@@ -99,36 +107,7 @@ Specifications for future production media:
 
 ## 7. Server / Client Component Boundaries
 
-- **Homepage-specific Client Components**: **ZERO (`0`)**.
-- 100% React Server Component composition for all Homepage layout and content.
-- GP-009 client islands (`MobileDrawer`, `HeaderUtilities`, `DesktopNav`) continue operating independently.
-
----
-
-## 8. Static Presentation Seed Boundary
-
-`src/components/home/home-data.ts` serves strictly as presentation configuration for layout and narrative structure. It is NOT database authority or canonical commerce truth.
-
-- Zero fake prices.
-- Zero fake stock numbers.
-- Zero fake review ratings.
-- Zero fake sales rankings ("Best Seller").
-- Zero unverified shipping promises ("Envíos a todo el Perú").
-
----
-
-## 9. Performance & SEO Strategy
-
-- **LCP Optimization**: Above-the-fold Hero image candidate configured with Next.js Image `preload`. Zero preload issued when abstract fallback is rendered.
-- **CLS Prevention**: Stable media containers with defined aspect ratios (`16:9`, `16:10`, `1:1`) reduce media-induced reflow risk across all viewports.
-- **Single `<h1>`**: Exactly one `<h1>` inside `HomeHero`.
-- **Crawlability**: All category, brand, and directory links use semantic `<Link href="...">` present in initial static SSR HTML.
-
----
-
-## 10. Accessibility (a11y) & Motion
-
-- **Touch Targets**: Dedicated interactive controls (buttons, category cards, brand cards) satisfy minimum `44x44px` hit areas.
-- **Focus Rings**: Canonical GP-008 focus outline: `outline: 2px solid var(--focus-ring-color, var(--color-border-focus)); outline-offset: 2px;`.
-- **Reduced Motion**: All hover scale transitions and reveals collapse under `@media (prefers-reduced-motion: reduce)` to `<= 0.01ms`.
-- **Axe Scanning**: Validated with zero detected Axe violations on the tested Homepage surface.
+- `src/app/(storefront)/page.tsx`: **Server Component** (0 client JS).
+- All 7 home components (`HomeHero`, `FeaturedEditorial`, `CategoryShowcase`, `CuratedGear`, `TechnicalEditorial`, `BrandDiscovery`, `HomeDiscoveryFooter`): **Server Components** (0 client JS).
+- Pure static presentation seed in `home-data.ts`.
+- Zero database queries, zero cookies access, zero authentication access on the Homepage.
