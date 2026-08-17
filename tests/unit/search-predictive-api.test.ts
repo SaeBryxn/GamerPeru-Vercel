@@ -11,8 +11,11 @@ describe("GP-012 — Predictive Search API (/api/search/predictive)", () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
-    process.env.DEV_CATALOG_PREVIEW = "1";
-    setNodeEnv("development");
+    delete process.env.CI;
+    delete process.env.DEV_CATALOG_PREVIEW;
+    process.env.E2E_CATALOG_FIXTURES = "1";
+    process.env.PLAYWRIGHT_TEST = "1";
+    setNodeEnv("test");
   });
 
   afterEach(() => {
