@@ -46,6 +46,7 @@ export const categories = pgTable(
     uniqueIndex("categories_slug_idx").on(table.slug),
     index("categories_parent_id_idx").on(table.parentId),
     index("categories_status_display_order_idx").on(table.status, table.displayOrder),
+    index("categories_name_trgm_idx").using("gin", table.name.op("extensions.gin_trgm_ops")),
     check("categories_slug_format", sql`${table.slug} ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'`),
     check("categories_display_order_non_negative", sql`${table.displayOrder} >= 0`),
     check(

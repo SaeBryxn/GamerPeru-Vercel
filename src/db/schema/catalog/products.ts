@@ -64,6 +64,8 @@ export const products = pgTable(
       table.id.desc()
     ),
     index("products_status_featured_idx").on(table.status, table.isFeatured),
+    index("products_name_trgm_idx").using("gin", table.name.op("extensions.gin_trgm_ops")),
+    index("products_subtitle_trgm_idx").using("gin", table.subtitle.op("extensions.gin_trgm_ops")),
     check("products_slug_format", sql`${table.slug} ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'`),
   ]
 );

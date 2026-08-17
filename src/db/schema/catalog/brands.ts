@@ -42,6 +42,7 @@ export const brands = pgTable(
     uniqueIndex("brands_name_idx").on(table.name),
     uniqueIndex("brands_slug_idx").on(table.slug),
     index("brands_status_idx").on(table.status),
+    index("brands_name_trgm_idx").using("gin", table.name.op("extensions.gin_trgm_ops")),
     check("brands_slug_format", sql`${table.slug} ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'`),
   ]
 );

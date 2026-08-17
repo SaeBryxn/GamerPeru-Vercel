@@ -26,6 +26,7 @@ export default defineConfig({
       ...process.env,
       E2E_CATALOG_FIXTURES: "1",
       PLAYWRIGHT_TEST: "1",
+      DEV_CATALOG_PREVIEW: "0",
     },
   },
 });

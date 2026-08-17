@@ -8,6 +8,13 @@
       "when": 1786940421722,
       "tag": "0000_superb_ink",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786981173767,
+      "tag": "0001_search_pg_trgm",
+      "breakpoints": true
     }
   ]
 }
