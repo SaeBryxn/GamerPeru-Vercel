@@ -4,10 +4,15 @@
 
 `cb03af53c79f61fdbce41017d50272a3b1412156`
 
-## Implementation Commits
+## Commit & CI History Trace
 
-- Initial Implementation: `d0e90ca14d8e25c66be40afdb97ff00eec2bbe41` (`feat: implement GP-010 homepage`)
-- Visual Convergence & External Review Remediation: `80fb50bc71a178d0aec29de2202f11ba216ac4da` (`fix: converge GP-010 storefront toward visual reference`)
+- **Original Implementation**: `d0e90ca14d8e25c66be40afdb97ff00eec2bbe41` (`feat: implement GP-010 homepage`) — CI Run `31987914808` = **SUCCESS**
+- **Visual Convergence Remediation**: `80fb50bc71a178d0aec29de2202f11ba216ac4da` (`fix: converge GP-010 storefront toward visual reference`) — CI Run `31990673266` = **CANCELLED** (concurrency cancellation on rapid push)
+- **Previous Closure Documentation**: `7ccea1543461ceb50e146f4cb5db1a223a75e549` (`docs: close GP-010 and record visual convergence evidence`) — CI Run `31990828782` = **FAILURE** (Check Formatting on markdown table in `docs/roadmap/GP-010-CLOSURE.md`)
+- **Final Remediation Commit**: `120ce24320faa7311a23ee030428839a1eb8111a` (`fix: finalize GP-010 media accessibility and closure integrity`) — CI Run `31991673029` = **SUCCESS** (Format, Typecheck, Lint, Test, Build & E2E)
+
+> [!NOTE]
+> **External Verification & Integrity Correction**: Direct GitHub history audit established that the visual-convergence commit was `80fb50bc71a178d0aec29de2202f11ba216ac4da` (previously mistyped as `80fb50b925b331006093d9842bc6f1bb9962a98f`). CI Run `31990673266` was cancelled and CI Run `31990828782` failed formatting. Full implementation integrity and accessibility semantics have been resolved and verified in commit `120ce24320faa7311a23ee030428839a1eb8111a` with confirmed CI SUCCESS in Run `31991673029`.
 
 ---
 
@@ -24,13 +29,18 @@ Key achievements & visual convergence pass:
   - Full-width white panel with canonical `--radius-lg` rounded bottom corners.
   - Left zone: Category collection hierarchy with large bold typography, brand chips, and bottom category destination link.
   - Right zone: 4-column visual preview stage (1:1 aspect ratio) with subtle radial ambient glow, title, subtitle, and top-right "Explorar catálogo completo →" link.
-- Media contract polymorphism: Created `HomeMedia` union (`{ kind: 'abstract' } | { kind: 'image', src: string, mobileSrc?: string, altText: string }`) across all 10 documented slots.
+- Media contract polymorphism: Created `HomeMedia` union (`{ kind: 'abstract' } | { kind: 'image', src: string, mobileSrc?: string, altText: string, decorative?: boolean }`) across all documented slots.
+- Abstract media & technical stages: Implemented dedicated dark token-driven abstract stage in `TechnicalEditorial` and ambient stages in all sections when image assets are pending.
+- Image accessibility semantics: Resolved `alt` and `aria-hidden` consistency:
+  - Abstract media: `aria-hidden="true"`, zero `<img>` tags emitted.
+  - Decorative images: `alt=""`, container has `aria-hidden="true"`.
+  - Informative images: meaningful `altText`, container has no `aria-hidden`.
 - Modern Next.js 16 image loading: Art-directed `<picture>` using `getImageProps()` with `fetchPriority="high"` / `loading="eager"` and zero duplicate preload tags; zero network requests on abstract fallback.
 - Design token correctness: Fixed `--elevation-medium` to `--elevation-mid`. Enforced automated test rejecting raw color literals (`#hex`, `rgb()`, `rgba()`, `hsl()`) in `src/components/home/**/*.module.css`.
 - Technical copy accuracy: Corrected 8000Hz / 0.125ms stat wording to "Intervalo nominal de sondeo" (1000ms / 8000Hz).
 - Heading hierarchy: Added `VisuallyHidden` `<h2>Garantías y Directorio Gamer Perú</h2>` in `HomeDiscoveryFooter`, with directory columns styled under `<h3>` headings.
 - Strict commercial truth: Zero fake prices, zero fake stock numbers, zero fake discount percentages, zero fake reviews, and zero ungrounded distributor/shipping claims.
-- Validated complete test suite: 71 Vitest unit tests and 45 Playwright E2E / Axe accessibility tests with 100% pass rate.
+- Validated complete test suite: 74 Vitest unit tests and 45 Playwright E2E / Axe accessibility tests with 100% pass rate.
 
 ---
 
@@ -86,23 +96,23 @@ Key achievements & visual convergence pass:
 2. `pnpm format:check`: 100% matched Prettier formatting.
 3. `pnpm typecheck`: 0 TypeScript errors (`tsc --noEmit`).
 4. `pnpm lint`: 0 ESLint errors, 0 warnings (`eslint . --max-warnings=0`).
-5. `pnpm test`: **71/71 Vitest unit tests passed** across 6 test suites (`app-foundation`, `design-system-tokens`, `design-system-components`, `smoke`, `global-navigation`, `homepage`).
+5. `pnpm test`: **74/74 Vitest unit tests passed** across 6 test suites (`app-foundation`, `design-system-tokens`, `design-system-components`, `smoke`, `global-navigation`, `homepage`).
 6. `pnpm build`: **0 Next.js 16 Turbopack production build errors**. Prerendered static `/` route successfully.
 7. `pnpm test:e2e`: **45/45 Playwright E2E tests passed** across 4 test specs (`bootstrap.spec.ts`, `design-system.spec.ts`, `global-navigation.spec.ts`, `homepage.spec.ts`).
 8. `git diff --check`: 0 whitespace or formatting errors.
 
 ---
 
-## Visual QA Evidence Artifacts
+## Visual QA Evidence & External Review Status
 
-Captured and archived in `scratch/visual-qa/`:
-
-- `home-1920-top.png` (1920x1080 Top Fold)
-- `home-1920-megamenu-mouses.png` (1920x1080 Mouses MegaMenu open)
-- `home-1920-megamenu-teclados.png` (1920x1080 Teclados MegaMenu open)
-- `home-1920-full.png` (1920x1080 Full Page)
-- `home-1280-top.png` (1280x800 Top Fold)
-- `home-1280-full.png` (1280x800 Full Page)
-- `home-360-top.png` (360x640 Top Fold)
-- `home-360-full.png` (360x640 Full Page)
-- `home-480-top.png` (480x800 Top Fold)
+- **Visual QA Evidence Artifacts** (Archived in `scratch/visual-qa/`):
+  - `home-1920-top.png` (1920x1080 Top Fold)
+  - `home-1920-megamenu-mouses.png` (1920x1080 Mouses MegaMenu open)
+  - `home-1920-megamenu-teclados.png` (1920x1080 Teclados MegaMenu open)
+  - `home-1920-full.png` (1920x1080 Full Page)
+  - `home-1280-top.png` (1280x800 Top Fold)
+  - `home-1280-full.png` (1280x800 Full Page)
+  - `home-360-top.png` (360x640 Top Fold)
+  - `home-360-full.png` (360x640 Full Page)
+  - `home-480-top.png` (480x800 Top Fold)
+- **External Visual Review**: **EXTERNAL VISUAL REVIEW PENDING** (Submitted for owner review).

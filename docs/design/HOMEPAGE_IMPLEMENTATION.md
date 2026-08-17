@@ -77,12 +77,14 @@ export type HomeMedia =
       src: string;
       mobileSrc?: string;
       altText: string;
+      decorative?: boolean;
     };
 ```
 
 - **Art-Direction**: When both `src` and `mobileSrc` are configured on Hero, renders via `getImageProps()` + `<picture>` using `fetchPriority="high"` and `loading="eager"` without duplicate preload tags.
 - **Single Image**: Uses Next.js `<Image ... fetchPriority="high" loading="eager" />`.
 - **Abstract Ambient Fallback**: Pure CSS token-driven ambient lighting stages with zero network image requests and zero image preloads.
+- **Accessibility & Decorative Semantics**: When `decorative: true` or inside a fully descriptive labeled link (such as category visual cards or curated gear preview links), images render with `alt=""` inside `aria-hidden="true"` containers. When informative, images render descriptive `altText` and their container does not have `aria-hidden`.
 
 ---
 
