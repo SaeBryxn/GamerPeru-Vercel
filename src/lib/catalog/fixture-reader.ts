@@ -7,6 +7,14 @@ import type {
   PaginationOptions,
   ProductDiscoveryItem,
 } from "./types";
+import {
+  SYNTHETIC_CATEGORIES,
+  SYNTHETIC_QA_BRAND,
+  SYNTHETIC_TEST_BRANDS,
+  SYNTHETIC_TEST_CATEGORIES,
+  generateSyntheticProducts,
+} from "./synthetic-catalog-data";
+import type { SyntheticBrandEntry, SyntheticCategoryEntry } from "./synthetic-catalog-data";
 
 /**
  * Synthetic Test Fixture Catalog Discovery Reader
@@ -21,125 +29,25 @@ import type {
  * 4. It can only be activated when E2E_CATALOG_FIXTURES=1 and PLAYWRIGHT_TEST=1 in non-production.
  */
 
-const FIXTURE_CATEGORIES: Record<
-  string,
-  CategoryDiscoveryEntity & { status: "PUBLISHED" | "DRAFT" | "ARCHIVED" }
-> = {
-  mouses: {
-    id: "018f0000-0000-7000-8000-000000000001",
-    name: "Mouses Gaming",
-    slug: "mouses",
-    description: "Mouses de alto rendimiento para gaming competitivo.",
-    parentId: null,
-    displayOrder: 1,
-    status: "PUBLISHED",
-  },
-  teclados: {
-    id: "018f0000-0000-7000-8000-000000000002",
-    name: "Teclados Mecánicos",
-    slug: "teclados",
-    description: "Teclados mecánicos y magnéticos de alta precisión.",
-    parentId: null,
-    displayOrder: 2,
-    status: "PUBLISHED",
-  },
-  "categoria-vacia": {
-    id: "018f0000-0000-7000-8000-000000000003",
-    name: "Categoría Vacía",
-    slug: "categoria-vacia",
-    description: "Categoría de prueba sin productos asociados.",
-    parentId: null,
-    displayOrder: 3,
-    status: "PUBLISHED",
-  },
-  "categoria-sin-descripcion": {
-    id: "018f0000-0000-7000-8000-000000000004",
-    name: "Categoría Sin Descripción",
-    slug: "categoria-sin-descripcion",
-    description: null,
-    parentId: null,
-    displayOrder: 4,
-    status: "PUBLISHED",
-  },
-  "categoria-draft": {
-    id: "018f0000-0000-7000-8000-000000000099",
-    name: "Categoría Borrador",
-    slug: "categoria-draft",
-    description: "Categoría no publicada.",
-    parentId: null,
-    displayOrder: 99,
-    status: "DRAFT",
-  },
-  "categoria-archived": {
-    id: "018f0000-0000-7000-8000-000000000100",
-    name: "Categoría Archivada",
-    slug: "categoria-archived",
-    description: "Categoría archivada del catálogo.",
-    parentId: null,
-    displayOrder: 100,
-    status: "ARCHIVED",
-  },
+const FIXTURE_CATEGORIES: Record<string, SyntheticCategoryEntry> = {
+  // Include the "mouses" and "teclados" categories used by existing E2E tests
+  mouses: SYNTHETIC_CATEGORIES["mouses"]!,
+  teclados: SYNTHETIC_CATEGORIES["teclados"]!,
+  // Test-only categories
+  ...SYNTHETIC_TEST_CATEGORIES,
 };
 
-const FIXTURE_BRANDS: Record<
-  string,
-  BrandDiscoveryEntity & { status: "PUBLISHED" | "DRAFT" | "ARCHIVED" }
-> = {
-  "marca-qa": {
-    id: "018f0000-0000-7000-8000-000000000010",
-    name: "Marca QA",
-    slug: "marca-qa",
-    description: "Fabricante de hardware de prueba para control de calidad.",
-    logo: null,
-    status: "PUBLISHED",
-  },
-  "marca-vacia": {
-    id: "018f0000-0000-7000-8000-000000000020",
-    name: "Marca Vacía",
-    slug: "marca-vacia",
-    description: "Marca de prueba sin productos asociados.",
-    logo: null,
-    status: "PUBLISHED",
-  },
-  "marca-draft": {
-    id: "018f0000-0000-7000-8000-000000000099",
-    name: "Marca Borrador",
-    slug: "marca-draft",
-    description: "Marca no publicada.",
-    logo: null,
-    status: "DRAFT",
-  },
-  "marca-archived": {
-    id: "018f0000-0000-7000-8000-000000000100",
-    name: "Marca Archivada",
-    slug: "marca-archived",
-    description: "Marca archivada del catálogo.",
-    logo: null,
-    status: "ARCHIVED",
-  },
+const FIXTURE_BRANDS: Record<string, SyntheticBrandEntry> = {
+  "marca-qa": SYNTHETIC_QA_BRAND,
+  ...SYNTHETIC_TEST_BRANDS,
 };
 
 // Generate 14 synthetic products to exercise 12-item pagination (Page 1 = 12, Page 2 = 2)
-const FIXTURE_PRODUCTS: ProductDiscoveryItem[] = Array.from({ length: 14 }, (_, index) => {
-  const num = String(index + 1).padStart(2, "0");
-  const price = 12990 + index * 1000; // e.g. S/ 129.90, S/ 139.90...
-  return {
-    id: `018f0000-0000-7000-8000-0000000001${num}`,
-    name: `Mouse Pro Mod ${num}`,
-    slug: `mouse-pro-mod-${num}`,
-    subtitle: `Edición de Rendimiento QA ${num}`,
-    brand: {
-      name: "Marca QA",
-      slug: "marca-qa",
-    },
-    category: {
-      name: "Mouses Gaming",
-      slug: "mouses",
-    },
-    primaryMedia: null,
-    startingPriceCents: price,
-  };
-});
+const FIXTURE_PRODUCTS: ProductDiscoveryItem[] = generateSyntheticProducts(
+  "mouses",
+  "Mouses Gaming",
+  14
+);
 
 export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
   async getPublishedCategoryBySlug(slug: string): Promise<CategoryDiscoveryEntity | null> {

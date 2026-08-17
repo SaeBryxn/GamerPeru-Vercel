@@ -32,6 +32,8 @@ export const serverEnvSchema = z
     SENTRY_AUTH_TOKEN: z.string().optional(),
     SENTRY_ORG: z.string().optional(),
     SENTRY_PROJECT: z.string().optional(),
+    // Local-only synthetic catalog preview. Never enable in production or CI.
+    DEV_CATALOG_PREVIEW: z.enum(["0", "1"]).optional(),
   })
   .refine(
     (data) => {
@@ -78,6 +80,7 @@ function parseServerEnv(): ServerEnv {
     SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN,
     SENTRY_ORG: process.env.SENTRY_ORG,
     SENTRY_PROJECT: process.env.SENTRY_PROJECT,
+    DEV_CATALOG_PREVIEW: process.env.DEV_CATALOG_PREVIEW,
   });
 }
 
