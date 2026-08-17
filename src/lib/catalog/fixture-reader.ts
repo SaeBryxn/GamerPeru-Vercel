@@ -23,7 +23,7 @@ import type {
 
 const FIXTURE_CATEGORIES: Record<
   string,
-  CategoryDiscoveryEntity & { status: "PUBLISHED" | "DRAFT" }
+  CategoryDiscoveryEntity & { status: "PUBLISHED" | "DRAFT" | "ARCHIVED" }
 > = {
   mouses: {
     id: "018f0000-0000-7000-8000-000000000001",
@@ -70,9 +70,21 @@ const FIXTURE_CATEGORIES: Record<
     displayOrder: 99,
     status: "DRAFT",
   },
+  "categoria-archived": {
+    id: "018f0000-0000-7000-8000-000000000100",
+    name: "Categoría Archivada",
+    slug: "categoria-archived",
+    description: "Categoría archivada del catálogo.",
+    parentId: null,
+    displayOrder: 100,
+    status: "ARCHIVED",
+  },
 };
 
-const FIXTURE_BRANDS: Record<string, BrandDiscoveryEntity & { status: "PUBLISHED" | "DRAFT" }> = {
+const FIXTURE_BRANDS: Record<
+  string,
+  BrandDiscoveryEntity & { status: "PUBLISHED" | "DRAFT" | "ARCHIVED" }
+> = {
   "marca-qa": {
     id: "018f0000-0000-7000-8000-000000000010",
     name: "Marca QA",
@@ -96,6 +108,14 @@ const FIXTURE_BRANDS: Record<string, BrandDiscoveryEntity & { status: "PUBLISHED
     description: "Marca no publicada.",
     logo: null,
     status: "DRAFT",
+  },
+  "marca-archived": {
+    id: "018f0000-0000-7000-8000-000000000100",
+    name: "Marca Archivada",
+    slug: "marca-archived",
+    description: "Marca archivada del catálogo.",
+    logo: null,
+    status: "ARCHIVED",
   },
 };
 

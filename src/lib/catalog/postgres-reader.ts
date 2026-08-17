@@ -1,7 +1,12 @@
 import "server-only";
-import { and, countDistinct, desc, eq, min } from "drizzle-orm";
-import { db } from "@/db";
-import { brands, categories, mediaAssets, products, productVariants } from "@/db/schema";
+import {
+  buildBrandProductCountQuery,
+  buildBrandProductsQuery,
+  buildCategoryProductCountQuery,
+  buildCategoryProductsQuery,
+  buildPublishedBrandBySlugQuery,
+  buildPublishedCategoryBySlugQuery,
+} from "./postgres-queries";
 import type { CatalogDiscoveryReader } from "./reader";
 import type {
   BrandDiscoveryEntity,
@@ -14,7 +19,8 @@ import type {
 /**
  * PostgreSQL Production Catalog Discovery Reader
  *
- * Implements server-side Drizzle queries against the physical PostgreSQL catalog.
+ * Implements server-side Drizzle queries against the physical PostgreSQL catalog
+ * by delegating to canonical query builders.
  *
  * Publication & Security Invariants:
  * 1. Requires Product.status = 'PUBLISHED', Brand.status = 'PUBLISHED', Category.status = 'PUBLISHED'.
@@ -26,44 +32,12 @@ import type {
  */
 export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
   async getPublishedCategoryBySlug(slug: string): Promise<CategoryDiscoveryEntity | null> {
-    const rows = await db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-        description: categories.description,
-        parentId: categories.parentId,
-        displayOrder: categories.displayOrder,
-      })
-      .from(categories)
-      .where(and(eq(categories.slug, slug), eq(categories.status, "PUBLISHED")))
-      .limit(1);
-
+    const rows = await buildPublishedCategoryBySlugQuery(slug);
     return rows[0] ?? null;
   }
 
   async getPublishedBrandBySlug(slug: string): Promise<BrandDiscoveryEntity | null> {
-    const rows = await db
-      .select({
-        id: brands.id,
-        name: brands.name,
-        slug: brands.slug,
-        description: brands.description,
-        logoObjectKey: mediaAssets.objectKey,
-        logoAltText: mediaAssets.altText,
-      })
-      .from(brands)
-      .leftJoin(
-        mediaAssets,
-        and(
-          eq(brands.logoMediaId, mediaAssets.id),
-          eq(mediaAssets.securityClass, "PUBLIC_MEDIA"),
-          eq(mediaAssets.mediaType, "IMAGE")
-        )
-      )
-      .where(and(eq(brands.slug, slug), eq(brands.status, "PUBLISHED")))
-      .limit(1);
-
+    const rows = await buildPublishedBrandBySlugQuery(slug);
     const row = rows[0];
     if (!row) return null;
 
@@ -87,25 +61,9 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
     const page = Math.max(1, Math.trunc(pagination.page));
     const pageSize = Math.max(1, Math.trunc(pagination.pageSize));
-    const offset = (page - 1) * pageSize;
 
     // Count eligible products (counting distinct product IDs)
-    const countResult = await db
-      .select({
-        count: countDistinct(products.id),
-      })
-      .from(products)
-      .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
-      .innerJoin(
-        categories,
-        and(eq(products.categoryId, categories.id), eq(categories.status, "PUBLISHED"))
-      )
-      .innerJoin(
-        productVariants,
-        and(eq(products.id, productVariants.productId), eq(productVariants.status, "ACTIVE"))
-      )
-      .where(and(eq(products.categoryId, categoryId), eq(products.status, "PUBLISHED")));
-
+    const countResult = await buildCategoryProductCountQuery(categoryId);
     const totalItems = Number(countResult[0]?.count ?? 0);
     const totalPages = Math.ceil(totalItems / pageSize);
 
@@ -120,59 +78,7 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
     }
 
     // Paginated product query
-    const rows = await db
-      .select({
-        id: products.id,
-        name: products.name,
-        slug: products.slug,
-        subtitle: products.subtitle,
-        brandName: brands.name,
-        brandSlug: brands.slug,
-        categoryName: categories.name,
-        categorySlug: categories.slug,
-        primaryMediaKey: mediaAssets.objectKey,
-        primaryMediaAlt: mediaAssets.altText,
-        primaryMediaWidth: mediaAssets.width,
-        primaryMediaHeight: mediaAssets.height,
-        startingPriceCents: min(productVariants.priceCents).mapWith(Number),
-      })
-      .from(products)
-      .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
-      .innerJoin(
-        categories,
-        and(eq(products.categoryId, categories.id), eq(categories.status, "PUBLISHED"))
-      )
-      .innerJoin(
-        productVariants,
-        and(eq(products.id, productVariants.productId), eq(productVariants.status, "ACTIVE"))
-      )
-      .leftJoin(
-        mediaAssets,
-        and(
-          eq(products.primaryMediaId, mediaAssets.id),
-          eq(mediaAssets.securityClass, "PUBLIC_MEDIA"),
-          eq(mediaAssets.mediaType, "IMAGE")
-        )
-      )
-      .where(and(eq(products.categoryId, categoryId), eq(products.status, "PUBLISHED")))
-      .groupBy(
-        products.id,
-        products.name,
-        products.slug,
-        products.subtitle,
-        products.createdAt,
-        brands.name,
-        brands.slug,
-        categories.name,
-        categories.slug,
-        mediaAssets.objectKey,
-        mediaAssets.altText,
-        mediaAssets.width,
-        mediaAssets.height
-      )
-      .orderBy(desc(products.createdAt), desc(products.id))
-      .limit(pageSize)
-      .offset(offset);
+    const rows = await buildCategoryProductsQuery(categoryId, page, pageSize);
 
     const items: ProductDiscoveryItem[] = rows.map((row) => ({
       id: row.id,
@@ -213,25 +119,9 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
     const page = Math.max(1, Math.trunc(pagination.page));
     const pageSize = Math.max(1, Math.trunc(pagination.pageSize));
-    const offset = (page - 1) * pageSize;
 
     // Count eligible products for brand
-    const countResult = await db
-      .select({
-        count: countDistinct(products.id),
-      })
-      .from(products)
-      .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
-      .innerJoin(
-        categories,
-        and(eq(products.categoryId, categories.id), eq(categories.status, "PUBLISHED"))
-      )
-      .innerJoin(
-        productVariants,
-        and(eq(products.id, productVariants.productId), eq(productVariants.status, "ACTIVE"))
-      )
-      .where(and(eq(products.brandId, brandId), eq(products.status, "PUBLISHED")));
-
+    const countResult = await buildBrandProductCountQuery(brandId);
     const totalItems = Number(countResult[0]?.count ?? 0);
     const totalPages = Math.ceil(totalItems / pageSize);
 
@@ -246,59 +136,7 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
     }
 
     // Paginated product query for brand
-    const rows = await db
-      .select({
-        id: products.id,
-        name: products.name,
-        slug: products.slug,
-        subtitle: products.subtitle,
-        brandName: brands.name,
-        brandSlug: brands.slug,
-        categoryName: categories.name,
-        categorySlug: categories.slug,
-        primaryMediaKey: mediaAssets.objectKey,
-        primaryMediaAlt: mediaAssets.altText,
-        primaryMediaWidth: mediaAssets.width,
-        primaryMediaHeight: mediaAssets.height,
-        startingPriceCents: min(productVariants.priceCents).mapWith(Number),
-      })
-      .from(products)
-      .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
-      .innerJoin(
-        categories,
-        and(eq(products.categoryId, categories.id), eq(categories.status, "PUBLISHED"))
-      )
-      .innerJoin(
-        productVariants,
-        and(eq(products.id, productVariants.productId), eq(productVariants.status, "ACTIVE"))
-      )
-      .leftJoin(
-        mediaAssets,
-        and(
-          eq(products.primaryMediaId, mediaAssets.id),
-          eq(mediaAssets.securityClass, "PUBLIC_MEDIA"),
-          eq(mediaAssets.mediaType, "IMAGE")
-        )
-      )
-      .where(and(eq(products.brandId, brandId), eq(products.status, "PUBLISHED")))
-      .groupBy(
-        products.id,
-        products.name,
-        products.slug,
-        products.subtitle,
-        products.createdAt,
-        brands.name,
-        brands.slug,
-        categories.name,
-        categories.slug,
-        mediaAssets.objectKey,
-        mediaAssets.altText,
-        mediaAssets.width,
-        mediaAssets.height
-      )
-      .orderBy(desc(products.createdAt), desc(products.id))
-      .limit(pageSize)
-      .offset(offset);
+    const rows = await buildBrandProductsQuery(brandId, page, pageSize);
 
     const items: ProductDiscoveryItem[] = rows.map((row) => ({
       id: row.id,

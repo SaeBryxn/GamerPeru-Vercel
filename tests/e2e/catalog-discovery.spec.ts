@@ -102,12 +102,15 @@ test.describe("GP-011 — Category & Brand Discovery E2E Suite", () => {
       expect(p2Response?.status()).toBe(404);
     });
 
-    test("F: returns 404 for unknown or draft category slugs", async ({ page }) => {
+    test("F: returns 404 for unknown, draft, or archived category slugs", async ({ page }) => {
       const nonexistent = await page.goto("/categorias/nonexistent-slug");
       expect(nonexistent?.status()).toBe(404);
 
       const draft = await page.goto("/categorias/categoria-draft");
       expect(draft?.status()).toBe(404);
+
+      const archived = await page.goto("/categorias/categoria-archived");
+      expect(archived?.status()).toBe(404);
     });
 
     test("G: handles unsupported future filter parameters with truthful notice and noindex", async ({
@@ -166,12 +169,15 @@ test.describe("GP-011 — Category & Brand Discovery E2E Suite", () => {
       await expect(emptyState).toBeVisible();
     });
 
-    test("J: returns 404 for unknown or draft brand slugs", async ({ page }) => {
+    test("J: returns 404 for unknown, draft, or archived brand slugs", async ({ page }) => {
       const nonexistent = await page.goto("/marcas/marca-inexistente");
       expect(nonexistent?.status()).toBe(404);
 
       const draft = await page.goto("/marcas/marca-draft");
       expect(draft?.status()).toBe(404);
+
+      const archived = await page.goto("/marcas/marca-archived");
+      expect(archived?.status()).toBe(404);
     });
   });
 

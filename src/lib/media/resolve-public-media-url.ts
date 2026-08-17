@@ -1,19 +1,26 @@
 import { publicEnv } from "@/config/public-env";
 
 /**
- * Gamer Perú — Safe Public Media CDN URL Resolver
+ * Pure media URL resolver.
  *
- * Resolves a MediaAsset object key into a secure, absolute or relative public CDN URL
- * under NEXT_PUBLIC_CDN_URL.
+ * Resolves a MediaAsset object key against CDN and Site base URLs.
  *
- * Security Invariants:
- * 1. Rejects path traversal attempts ("..", encoded %2e%2e, backslashes).
- * 2. Rejects absolute injection (http://, https://, protocol-relative //).
- * 3. Rejects query fragments (?) and hash fragments (#) in object keys.
- * 4. Rejects control characters.
- * 5. Returns null if objectKey is invalid, missing, or malformed.
+ * Invariants:
+ * 1. Same-origin CDN (e.g. http://localhost:3000/media with site http://localhost:3000)
+ *    resolves to a relative same-origin path ("/media/<key>") matching Next.js localPatterns.
+ * 2. Remote CDN (e.g. https://media.gamerperu.com with site https://gamerperu.com)
+ *    resolves to an absolute URL ("https://media.gamerperu.com/<key>") matching Next.js remotePatterns.
+ * 3. Rejects path traversal ("..", "%2e%2e", backslashes).
+ * 4. Rejects absolute injection (http://, https://, protocol-relative //, javascript:, data:).
+ * 5. Rejects query (?) and hash (#) fragments in object keys.
+ * 6. Rejects unprintable/control characters.
+ * 7. Returns null if objectKey or URLs are malformed.
  */
-export function resolvePublicMediaUrl(objectKey: string | null | undefined): string | null {
+export function resolveMediaUrl(
+  objectKey: string | null | undefined,
+  cdnBaseUrl: string,
+  siteBaseUrl: string
+): string | null {
   if (!objectKey || typeof objectKey !== "string") {
     return null;
   }
@@ -58,16 +65,32 @@ export function resolvePublicMediaUrl(objectKey: string | null | undefined): str
     }
   }
 
-  const rawCdnUrl = publicEnv.NEXT_PUBLIC_CDN_URL.trim();
   try {
-    const cdnBase = new URL(rawCdnUrl);
-    // Ensure CDN base ends with a slash and safely resolve path
-    const basePath = cdnBase.pathname.endsWith("/") ? cdnBase.pathname : `${cdnBase.pathname}/`;
-    cdnBase.pathname = `${basePath}${cleanKey}`.replace(/\/{2,}/g, "/");
-    return cdnBase.toString();
+    const cdnUrl = new URL(cdnBaseUrl.trim());
+    const siteUrl = new URL(siteBaseUrl.trim());
+
+    const cdnPath = cdnUrl.pathname.replace(/\/+$/, "");
+    const fullPath = `${cdnPath}/${cleanKey}`.replace(/\/{2,}/g, "/");
+
+    // Same-origin check: returns relative path for Next.js localPatterns
+    if (cdnUrl.origin.toLowerCase() === siteUrl.origin.toLowerCase()) {
+      return fullPath;
+    }
+
+    // Remote origin: returns absolute URL for Next.js remotePatterns
+    cdnUrl.pathname = fullPath;
+    return cdnUrl.toString();
   } catch {
-    // Fallback string join if URL parser encounters custom relative scheme
-    const baseClean = rawCdnUrl.replace(/\/+$/, "");
-    return `${baseClean}/${cleanKey}`;
+    return null;
   }
+}
+
+/**
+ * Gamer Perú — Safe Public Media CDN URL Resolver
+ *
+ * Resolves a MediaAsset object key into a secure local relative path or absolute remote CDN URL
+ * based on validated public environment configuration.
+ */
+export function resolvePublicMediaUrl(objectKey: string | null | undefined): string | null {
+  return resolveMediaUrl(objectKey, publicEnv.NEXT_PUBLIC_CDN_URL, publicEnv.NEXT_PUBLIC_SITE_URL);
 }

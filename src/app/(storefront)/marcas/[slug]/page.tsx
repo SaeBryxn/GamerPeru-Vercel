@@ -32,7 +32,7 @@ export async function generateMetadata({
 
   const { page } = parsePageParam(resolvedSearchParams.page);
   const title = `${brand.name} | Gamer Perú`;
-  const description = brand.description ?? `Catálogo oficial de ${brand.name} en Gamer Perú.`;
+  const description = brand.description ?? `Catálogo de ${brand.name} en Gamer Perú.`;
 
   const canonicalPath = page > 1 ? `/marcas/${slug}?page=${page}` : `/marcas/${slug}`;
   const canonicalUrl = `${publicEnv.NEXT_PUBLIC_SITE_URL}${canonicalPath}`;
