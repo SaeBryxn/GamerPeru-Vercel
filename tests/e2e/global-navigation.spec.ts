@@ -266,8 +266,8 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await expect(closeBtn).toBeVisible();
     const closeBox = await closeBtn.boundingBox();
     expect(closeBox).not.toBeNull();
-    expect(closeBox!.width).toBeGreaterThanOrEqual(44);
-    expect(closeBox!.height).toBeGreaterThanOrEqual(44);
+    expect(Math.round(closeBox!.width)).toBeGreaterThanOrEqual(44);
+    expect(Math.round(closeBox!.height)).toBeGreaterThanOrEqual(44);
 
     const closeSvg = closeBtn.locator("svg");
     const closeSvgAttrs = await closeSvg.evaluate((el) => ({

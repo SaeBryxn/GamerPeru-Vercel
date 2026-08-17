@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 test.describe("GP-007 Application Foundation E2E & Contract Verification", () => {
-  test("A: loads root page with valid title, heading, and foundation badge", async ({ page }) => {
+  test("A: loads root page with valid title and canonical H1 heading", async ({ page }) => {
     const response = await page.goto("/");
     expect(response?.status()).toBe(200);
 
@@ -12,11 +12,7 @@ test.describe("GP-007 Application Foundation E2E & Contract Verification", () =>
     // Verify main h1 heading
     const heading = page.locator("h1");
     await expect(heading).toBeVisible();
-    await expect(heading).toHaveText("Gamer Perú");
-
-    // Verify foundation indicator badge
-    const badge = page.getByText("Design System Initialized (GP-008)");
-    await expect(badge).toBeVisible();
+    await expect(heading).toHaveText("Periféricos gaming de alto rendimiento");
   });
 
   test("B: handles non-existent routes with real HTTP 404 and accessible not-found UI", async ({
