@@ -159,14 +159,32 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
       await expect(page2Cards).toHaveCount(4);
     });
 
-    test("G: handles canonical redirects for empty query and page=1", async ({ page }) => {
-      // /buscar?q= -> /buscar
+    test("G: handles canonical redirects for empty query, normalization, and duplicate parameters", async ({
+      page,
+    }) => {
+      // Empty query: /buscar?q= -> /buscar
       await page.goto("/buscar?q=");
       await expect(page).toHaveURL(/\/buscar$/);
 
-      // /buscar?q=mouse&page=1 -> /buscar?q=mouse
+      // Page 1 canonicalization: /buscar?q=mouse&page=1 -> /buscar?q=mouse
       await page.goto("/buscar?q=mouse&page=1");
       await expect(page).toHaveURL(/\/buscar\?q=mouse$/);
+
+      // Whitespace normalization: /buscar?q=%20Beast%20%20X%20 -> /buscar?q=Beast%20X
+      await page.goto("/buscar?q=%20Beast%20%20X%20");
+      await expect(page).toHaveURL(/\/buscar\?q=Beast(%20|\+)X$/);
+
+      // Duplicate q param with empty first candidate: /buscar?q=&q=mouse -> /buscar?q=mouse
+      await page.goto("/buscar?q=&q=mouse");
+      await expect(page).toHaveURL(/\/buscar\?q=mouse$/);
+
+      // Duplicate page with first-valid resolution: /buscar?q=mouse&page=abc&page=2 -> /buscar?q=mouse&page=2
+      await page.goto("/buscar?q=mouse&page=abc&page=2");
+      await expect(page).toHaveURL(/\/buscar\?q=mouse&page=2$/);
+
+      // Single emoji code point query shows guidance
+      await page.goto("/buscar?q=🎮");
+      await expect(page.getByText(/Escribe al menos 2 caracteres para buscar/i)).toBeVisible();
     });
 
     test("H: renders truthful zero-state for non-matching query with recovery actions", async ({

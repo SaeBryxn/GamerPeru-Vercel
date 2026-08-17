@@ -3,6 +3,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Search, X } from "lucide-react";
+import { getQueryCodePointLength } from "@/lib/search/normalization";
+import { MIN_SEARCH_QUERY_LENGTH } from "@/lib/search/types";
 import { PredictiveResults, type PredictiveProductDTO } from "./predictive-results";
 import styles from "./search-modal.module.css";
 
@@ -25,7 +27,6 @@ export function SearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalP
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  // Sync dialog modal state with isOpen prop
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -34,7 +35,6 @@ export function SearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalP
       if (!dialog.open) {
         dialog.showModal();
       }
-      // Focus input on open
       requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
@@ -47,11 +47,10 @@ export function SearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalP
     }
   }, [isOpen]);
 
-  // Debounced predictive search fetch (200ms) with AbortController & stale guard
   useEffect(() => {
     const cleanQuery = query.trim();
 
-    if (cleanQuery.length < 2) {
+    if (getQueryCodePointLength(cleanQuery) < MIN_SEARCH_QUERY_LENGTH) {
       abortControllerRef.current?.abort();
       setProducts([]);
       setBrands([]);
@@ -78,7 +77,6 @@ export function SearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalP
         });
 
         if (currentReqId !== reqIdRef.current) {
-          // Stale response: discard
           return;
         }
 
@@ -111,7 +109,6 @@ export function SearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalP
     };
   }, [query]);
 
-  // Handle native cancel event (Escape key)
   const handleCancel = useCallback(
     (e: React.SyntheticEvent<HTMLDialogElement, Event>) => {
       e.preventDefault();
@@ -120,7 +117,6 @@ export function SearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalP
     [onClose]
   );
 
-  // Handle click outside dialog body (backdrop click)
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent<HTMLDialogElement>) => {
       if (e.target === dialogRef.current) {
@@ -150,7 +146,6 @@ export function SearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalP
       onClick={handleBackdropClick}
       aria-label="Búsqueda de productos"
     >
-      {/* Modal Header */}
       <div className={styles.modalHeader}>
         <form method="GET" action="/buscar" className={styles.searchForm}>
           <div className={styles.inputWrapper}>
@@ -194,7 +189,6 @@ export function SearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalP
         </button>
       </div>
 
-      {/* Modal Body */}
       <div className={styles.modalBody}>
         <PredictiveResults
           query={query}
@@ -207,8 +201,7 @@ export function SearchModal({ isOpen, onClose, initialQuery = "" }: SearchModalP
         />
       </div>
 
-      {/* Modal Footer: Sticky Action for queries >= 2 */}
-      {cleanQuery.length >= 2 && (
+      {getQueryCodePointLength(cleanQuery) >= MIN_SEARCH_QUERY_LENGTH && (
         <div className={styles.modalFooter}>
           <Link
             href={`/buscar?q=${encodeURIComponent(cleanQuery)}`}

@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import { getSearchReader } from "@/lib/search/get-reader";
-import { normalizeSearchQuery } from "@/lib/search/normalization";
+import { getQueryCodePointLength, normalizeSearchQuery } from "@/lib/search/normalization";
 import { MAX_SEARCH_QUERY_LENGTH, MIN_SEARCH_QUERY_LENGTH } from "@/lib/search/types";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,6 @@ export async function GET(request: NextRequest) {
   try {
     const rawQ = request.nextUrl.searchParams.get("q");
 
-    // 1. Missing or empty query -> 200 with empty result (ZERO DB queries)
     if (!rawQ) {
       return NextResponse.json(
         { products: [], brands: [], categories: [] },
@@ -23,8 +22,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 2. Overlength check (> 100 characters before or after normalization)
-    if (Array.from(rawQ).length > MAX_SEARCH_QUERY_LENGTH) {
+    if (getQueryCodePointLength(rawQ) > MAX_SEARCH_QUERY_LENGTH) {
       return NextResponse.json(
         { error: "INVALID_SEARCH_QUERY" },
         { status: 400, headers: NO_STORE_HEADERS }
@@ -33,19 +31,16 @@ export async function GET(request: NextRequest) {
 
     const cleanQuery = normalizeSearchQuery(rawQ);
 
-    // 3. Normalized query < 2 characters -> 200 with empty result (ZERO DB queries)
-    if (cleanQuery.length < MIN_SEARCH_QUERY_LENGTH) {
+    if (getQueryCodePointLength(cleanQuery) < MIN_SEARCH_QUERY_LENGTH) {
       return NextResponse.json(
         { products: [], brands: [], categories: [] },
         { status: 200, headers: NO_STORE_HEADERS }
       );
     }
 
-    // 4. Execute predictive search via current Search Reader
     const reader = getSearchReader();
     const suggestions = await reader.getSearchSuggestions(cleanQuery);
 
-    // 5. Transform products into safe public DTO
     const products = suggestions.products.map((p) => ({
       id: p.id,
       name: p.name,

@@ -5,7 +5,6 @@ import { HeaderUtilityLink } from "./header-utility-link";
 import styles from "./header-utilities.module.css";
 
 export interface HeaderUtilitiesProps {
-  searchHref?: string;
   searchLabel?: string;
   accountHref?: string;
   accountLabel?: string;

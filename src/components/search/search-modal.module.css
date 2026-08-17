@@ -1,8 +1,3 @@
-/* ==========================================================================
-   Gamer Perú — Search Modal Dialog Styles (GP-012)
-   Accessibility: Native <dialog> modal with backdrop, focus trap, and right drawer
-   ========================================================================== */
-
 .dialog {
   position: fixed;
   top: 0;

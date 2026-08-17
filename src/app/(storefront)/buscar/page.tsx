@@ -7,16 +7,12 @@ import { Container } from "@/components/ui";
 import { ProductGrid, Pagination } from "@/components/catalog";
 import { getSearchReader } from "@/lib/search/get-reader";
 import {
+  getQueryCodePointLength,
   isSyntacticallyValidPage,
-  normalizeSearchQuery,
   parsePageParam,
   parseSearchQueryParam,
 } from "@/lib/search/normalization";
-import {
-  DEFAULT_SEARCH_PAGE_SIZE,
-  MAX_SEARCH_QUERY_LENGTH,
-  MIN_SEARCH_QUERY_LENGTH,
-} from "@/lib/search/types";
+import { DEFAULT_SEARCH_PAGE_SIZE, MIN_SEARCH_QUERY_LENGTH } from "@/lib/search/types";
 import styles from "./buscar.module.css";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +26,6 @@ export async function generateMetadata({ searchParams }: SearchPageProps): Promi
   const q = parseSearchQueryParam(params.q);
   const page = parsePageParam(params.page);
 
-  // 1. Bare /buscar landing metadata (Indexable)
   if (!q) {
     return {
       title: "Buscar Periféricos Gaming | Gamer Perú",
@@ -46,7 +41,6 @@ export async function generateMetadata({ searchParams }: SearchPageProps): Promi
     };
   }
 
-  // 2. Query search result metadata (Noindex, follow)
   const canonicalQuery = encodeURIComponent(q);
   const canonicalUrl =
     page > 1 ? `/buscar?q=${canonicalQuery}&page=${page}` : `/buscar?q=${canonicalQuery}`;
@@ -75,29 +69,37 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const page = parsePageParam(rawPageParam);
   const isPageValid = isSyntacticallyValidPage(rawPageParam);
 
-  // Canonical Redirect 1: Empty query parameter (/buscar?q= or /buscar?q=%20) -> /buscar
-  if (rawQParam !== undefined && q === "") {
-    redirect("/buscar");
+  // Canonical redirect checks
+  let needsRedirect = false;
+
+  if (rawQParam !== undefined) {
+    if (q === "") {
+      needsRedirect = true;
+    } else if (Array.isArray(rawQParam) || rawQParam !== q) {
+      needsRedirect = true;
+    }
   }
 
-  // Canonical Redirect 2: page=1 or invalid page parameter -> canonical URL without page parameter
-  if (rawPageParam !== undefined && (!isPageValid || page === 1)) {
-    redirect(q ? `/buscar?q=${encodeURIComponent(q)}` : "/buscar");
+  if (rawPageParam !== undefined) {
+    if (!isPageValid || page === 1) {
+      needsRedirect = true;
+    } else if (
+      Array.isArray(rawPageParam) ||
+      (typeof rawPageParam === "string" && rawPageParam.trim() !== String(page))
+    ) {
+      needsRedirect = true;
+    }
   }
 
-  // Canonical Redirect 3: Overlength raw query -> redirect to truncated 100-character canonical query
-  if (typeof rawQParam === "string" && Array.from(rawQParam).length > MAX_SEARCH_QUERY_LENGTH) {
-    const truncated = normalizeSearchQuery(rawQParam);
-    redirect(
-      page > 1
-        ? `/buscar?q=${encodeURIComponent(truncated)}&page=${page}`
-        : `/buscar?q=${encodeURIComponent(truncated)}`
-    );
+  if (needsRedirect) {
+    if (!q) {
+      redirect("/buscar");
+    }
+    const queryStr = `q=${encodeURIComponent(q)}`;
+    const pageStr = page > 1 && isPageValid ? `&page=${page}` : "";
+    redirect(`/buscar?${queryStr}${pageStr}`);
   }
 
-  // ---------------------------------------------------------------------------
-  // Case A: Bare /buscar Landing
-  // ---------------------------------------------------------------------------
   if (!q) {
     return (
       <main id="main-content" className={styles.searchPage}>
@@ -151,10 +153,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Case B: 1-Character Query (/buscar?q=x) — ZERO Search DB Queries
-  // ---------------------------------------------------------------------------
-  if (q.length < MIN_SEARCH_QUERY_LENGTH) {
+  if (getQueryCodePointLength(q) < MIN_SEARCH_QUERY_LENGTH) {
     return (
       <main id="main-content" className={styles.searchPage}>
         <Container>
@@ -205,21 +204,16 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Case C: Valid Query (q.length >= 2) — Database Search
-  // ---------------------------------------------------------------------------
   const reader = getSearchReader();
   const [productResults, entityMatches] = await Promise.all([
     reader.searchProducts(q, { page, pageSize: DEFAULT_SEARCH_PAGE_SIZE }),
     reader.searchMatchingEntities(q),
   ]);
 
-  // Out of bounds check: page > totalPages when products exist
   if (productResults.totalPages > 0 && page > productResults.totalPages) {
     notFound();
   }
 
-  // Out of bounds check: page > 1 when zero products exist
   if (productResults.totalItems === 0 && page > 1) {
     notFound();
   }
@@ -275,7 +269,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           )}
         </div>
 
-        {/* Bounded Matched Brands & Categories Section */}
         {hasEntities && (
           <section className={styles.entitySection} aria-label="Sugerencias de navegación">
             {entityMatches.brands.length > 0 && (
@@ -314,7 +307,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </section>
         )}
 
-        {/* Zero Results State */}
         {isZeroState ? (
           <div className={styles.guidanceContainer}>
             <h2 className={styles.guidanceTitle}>Sin resultados</h2>
@@ -329,7 +321,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             </div>
           </div>
         ) : (
-          /* Populated Product Grid & Pagination */
           <>
             <ProductGrid products={productResults.items} />
 

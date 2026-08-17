@@ -36,6 +36,18 @@
 For applicable work: Functional DoD, Visual DoD, Performance DoD, SEO
 DoD, Security DoD and Accessibility DoD, as codified in [Engineering Standards](docs/engineering/ENGINEERING_STANDARDS.md).
 
+## Production code hygiene
+
+- Production code should be concise and conventional.
+- No decorative comment banners.
+- Comments explain non-obvious WHY, not obvious WHAT.
+- No emojis in code/comments/logs/commits unless explicitly user-facing.
+- No AI/tool attribution comments in production source.
+- No dead commented-out code or temporary debug logs.
+- Errors/logs remain professional and operational.
+- Tests may have descriptive names but should avoid narrative/generated-style commentary.
+- Documentation Markdown may remain detailed because documentation is the correct place for architectural explanation.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

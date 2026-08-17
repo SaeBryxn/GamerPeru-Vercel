@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Package } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/currency";
+import { getQueryCodePointLength } from "@/lib/search/normalization";
 import styles from "./predictive-results.module.css";
 
 export interface PredictiveProductDTO {
@@ -43,9 +44,9 @@ export function PredictiveResults({
   onLinkClick,
 }: PredictiveResultsProps) {
   const cleanQuery = query.trim();
+  const codePointLength = getQueryCodePointLength(cleanQuery);
 
-  // 1. Empty state (no input yet)
-  if (cleanQuery.length === 0) {
+  if (codePointLength === 0) {
     return (
       <div className={styles.guidanceBox}>
         <p className={styles.guidanceTitle}>Búsqueda de Catálogo</p>
@@ -56,8 +57,7 @@ export function PredictiveResults({
     );
   }
 
-  // 2. Short query state (1 character)
-  if (cleanQuery.length === 1) {
+  if (codePointLength < 2) {
     return (
       <div className={styles.guidanceBox}>
         <p className={styles.guidanceTitle}>Búsqueda rápida</p>
@@ -66,7 +66,6 @@ export function PredictiveResults({
     );
   }
 
-  // 3. Error state
   if (hasError) {
     return (
       <div className={styles.errorBox}>
@@ -77,7 +76,6 @@ export function PredictiveResults({
     );
   }
 
-  // 4. Loading state
   if (isLoading && products.length === 0 && brands.length === 0 && categories.length === 0) {
     return (
       <div className={styles.loadingIndicator} aria-live="polite">
@@ -88,7 +86,6 @@ export function PredictiveResults({
 
   const hasAnyResults = products.length > 0 || brands.length > 0 || categories.length > 0;
 
-  // 5. Zero results state
   if (!hasAnyResults && !isLoading) {
     return (
       <div className={styles.guidanceBox}>
@@ -100,10 +97,8 @@ export function PredictiveResults({
     );
   }
 
-  // 6. Suggestion sections
   return (
     <div className={styles.container}>
-      {/* Brands Section */}
       {brands.length > 0 && (
         <section className={styles.section} aria-label="Marcas sugeridas">
           <h3 className={styles.sectionTitle}>Marcas</h3>
@@ -123,7 +118,6 @@ export function PredictiveResults({
         </section>
       )}
 
-      {/* Categories Section */}
       {categories.length > 0 && (
         <section className={styles.section} aria-label="Categorías sugeridas">
           <h3 className={styles.sectionTitle}>Categorías</h3>
@@ -143,7 +137,7 @@ export function PredictiveResults({
         </section>
       )}
 
-      {/* Products Section — Non-clickable row until GP-014 */}
+      {/* Product rows remain non-linkable until GP-014 owns the PDP route */}
       {products.length > 0 && (
         <section className={styles.section} aria-label="Productos sugeridos">
           <h3 className={styles.sectionTitle}>Productos</h3>

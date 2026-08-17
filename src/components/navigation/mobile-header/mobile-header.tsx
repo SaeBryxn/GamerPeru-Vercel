@@ -12,7 +12,6 @@ import styles from "./mobile-header.module.css";
 
 export interface MobileHeaderProps {
   items: MegaMenuCategory[];
-  searchHref?: string;
   cartHref?: string;
   cartCount?: number;
   className?: string;

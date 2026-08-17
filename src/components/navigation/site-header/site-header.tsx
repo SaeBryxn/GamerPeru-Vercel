@@ -27,7 +27,6 @@ export function SiteHeader({ config, cartCount, className }: SiteHeaderProps) {
               <DesktopNav items={config.primaryNav} />
             </div>
             <HeaderUtilities
-              searchHref={config.utilityLinks.search.href}
               searchLabel={config.utilityLinks.search.label}
               accountHref={config.utilityLinks.account.href}
               accountLabel={config.utilityLinks.account.label}
@@ -42,7 +41,6 @@ export function SiteHeader({ config, cartCount, className }: SiteHeaderProps) {
           {/* Mobile Layout (< 1024px) */}
           <MobileHeader
             items={config.primaryNav}
-            searchHref={config.utilityLinks.search.href}
             cartHref={config.utilityLinks.cart.href}
             cartCount={cartCount}
           />

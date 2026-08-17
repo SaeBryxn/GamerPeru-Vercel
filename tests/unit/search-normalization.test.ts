@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   escapeLikePattern,
+  getQueryCodePointLength,
   isSyntacticallyValidPage,
   normalizeSearchQuery,
   parsePageParam,
@@ -94,6 +95,18 @@ describe("GP-012 — Search Normalization & Escaping Utilities", () => {
     });
   });
 
+  describe("getQueryCodePointLength", () => {
+    it("counts code points rather than UTF-16 code units for surrogate pairs", () => {
+      expect(getQueryCodePointLength("")).toBe(0);
+      expect(getQueryCodePointLength("a")).toBe(1);
+      expect(getQueryCodePointLength("ab")).toBe(2);
+      // Single emoji surrogate pair (length is 2 in UTF-16, but 1 code point)
+      expect(getQueryCodePointLength("🎮")).toBe(1);
+      expect(getQueryCodePointLength("🖱️")).toBe(2); // emoji + variant selector
+      expect(getQueryCodePointLength("🎮a")).toBe(2);
+    });
+  });
+
   describe("isSyntacticallyValidPage & parsePageParam", () => {
     it("validates positive integer strings", () => {
       expect(isSyntacticallyValidPage("1")).toBe(true);
@@ -108,10 +121,19 @@ describe("GP-012 — Search Normalization & Escaping Utilities", () => {
       expect(isSyntacticallyValidPage(undefined)).toBe(false);
     });
 
-    it("parses valid pages and falls back to 1 for invalid values", () => {
+    it("evaluates array parameters and selects validity across candidates", () => {
+      expect(isSyntacticallyValidPage(["abc", "2"])).toBe(true);
+      expect(isSyntacticallyValidPage(["0", "3"])).toBe(true);
+      expect(isSyntacticallyValidPage(["abc", "xyz"])).toBe(false);
+    });
+
+    it("parses valid pages and selects first valid candidate from duplicate parameters", () => {
       expect(parsePageParam("2")).toBe(2);
       expect(parsePageParam("10")).toBe(10);
-      expect(parsePageParam(["3", "5"])).toBe(3);
+      expect(parsePageParam(["abc", "2"])).toBe(2);
+      expect(parsePageParam(["0", "3"])).toBe(3);
+      expect(parsePageParam(["2", "3"])).toBe(2);
+      expect(parsePageParam(["abc", "xyz"])).toBe(1);
 
       expect(parsePageParam("0")).toBe(1);
       expect(parsePageParam("-5")).toBe(1);
