@@ -14,7 +14,7 @@ import type { NavigationConfig } from "./types";
  */
 export const NAVIGATION_CONFIG: NavigationConfig = {
   announcement: {
-    message: "Envíos a todo el Perú | Periféricos gaming de alto rendimiento",
+    message: "Periféricos gaming multimarca para Perú",
   },
   brandMark: {
     label: "Gamer Perú",
@@ -179,16 +179,6 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         { label: "Mousepads de Control & Vidrio", href: "/categorias/mousepads" },
         { label: "Audio IEM para Gaming", href: "/categorias/audio" },
         { label: "Accesorios & Modding", href: "/categorias/accesorios" },
-      ],
-    },
-    {
-      title: "Marcas Oficiales",
-      links: [
-        { label: "WLMOUSE", href: "/marcas/wlmouse" },
-        { label: "Pulsar Gaming Gears", href: "/marcas/pulsar" },
-        { label: "Lamzu", href: "/marcas/lamzu" },
-        { label: "ATK / VXE", href: "/marcas/atk" },
-        { label: "Artisan Mousepads", href: "/marcas/artisan" },
       ],
     },
     {

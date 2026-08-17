@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Menu, Search, ShoppingCart } from "lucide-react";
 import { IconButton } from "@/components/ui";
 import { BrandMark } from "../brand-mark";
@@ -25,12 +25,19 @@ export function MobileHeader({
   className,
 }: MobileHeaderProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  const handleClose = () => {
+    setIsDrawerOpen(false);
+    menuButtonRef.current?.focus();
+  };
 
   return (
     <>
       <div className={[styles.mobileHeader, className].filter(Boolean).join(" ")}>
         <div className={styles.leftGroup}>
           <IconButton
+            ref={menuButtonRef}
             icon={Menu}
             iconSize="lg"
             variant="ghost"
@@ -51,7 +58,7 @@ export function MobileHeader({
         </div>
       </div>
 
-      <MobileDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} items={items} />
+      <MobileDrawer isOpen={isDrawerOpen} onClose={handleClose} items={items} />
     </>
   );
 }

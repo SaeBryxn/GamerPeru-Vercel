@@ -17,7 +17,7 @@ export function DesktopNav({ items, className }: DesktopNavProps) {
   const navRef = useRef<HTMLElement>(null);
   const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
-  // Close mega-menu on Escape key
+  // Close mega-menu on Escape key and return focus to the active disclosure trigger
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape" && activeCategoryId) {
@@ -44,13 +44,12 @@ export function DesktopNav({ items, className }: DesktopNavProps) {
     return () => window.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const activeCategory = items.find((item) => item.id === activeCategoryId);
-
   return (
     <nav
       ref={navRef}
       className={[styles.desktopNav, className].filter(Boolean).join(" ")}
       aria-label="Navegación principal"
+      onMouseLeave={() => setActiveCategoryId(null)}
     >
       <ul className={styles.navList}>
         {items.map((category) => {
@@ -62,26 +61,50 @@ export function DesktopNav({ items, className }: DesktopNavProps) {
               key={category.id}
               className={styles.navItem}
               onMouseEnter={() => setActiveCategoryId(category.id)}
-              onMouseLeave={() => setActiveCategoryId(null)}
             >
-              <button
-                ref={(el) => {
-                  if (el) triggerRefs.current.set(category.id, el);
-                  else triggerRefs.current.delete(category.id);
-                }}
-                type="button"
-                className={styles.navTrigger}
-                aria-expanded={isExpanded}
-                aria-controls={panelId}
-                onClick={() => setActiveCategoryId(isExpanded ? null : category.id)}
+              <div
+                className={[
+                  styles.navItemWrapper,
+                  isExpanded ? styles.navItemWrapperActive : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               >
-                <span>{category.label}</span>
-                <span className={styles.chevron}>
-                  <Icon icon={ChevronDown} size="sm" aria-hidden="true" />
-                </span>
-              </button>
+                {/* Primary Category Destination Link — Semantic & Crawlable */}
+                <Link
+                  href={category.href}
+                  className={[styles.categoryLink, isExpanded ? styles.categoryLinkActive : ""]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() => setActiveCategoryId(null)}
+                >
+                  {category.label}
+                </Link>
 
-              {isExpanded && activeCategory && (
+                {/* Separate Disclosure Button for MegaMenu Toggle */}
+                <button
+                  ref={(el) => {
+                    if (el) triggerRefs.current.set(category.id, el);
+                    else triggerRefs.current.delete(category.id);
+                  }}
+                  type="button"
+                  className={styles.disclosureTrigger}
+                  aria-label={`Abrir menú desplegable de ${category.label}`}
+                  aria-expanded={isExpanded}
+                  aria-controls={panelId}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveCategoryId(isExpanded ? null : category.id);
+                  }}
+                >
+                  <span className={styles.chevron}>
+                    <Icon icon={ChevronDown} size="sm" aria-hidden="true" />
+                  </span>
+                </button>
+              </div>
+
+              {/* Full-Width MegaMenu Panel — positioned relative to SiteHeader containing block */}
+              {isExpanded && (
                 <div
                   id={panelId}
                   className={styles.megaMenuPanel}
@@ -91,7 +114,7 @@ export function DesktopNav({ items, className }: DesktopNavProps) {
                   <Container size="default">
                     <div className={styles.megaMenuGrid}>
                       {/* Category Sub-Sections */}
-                      {activeCategory.sections.map((section, idx) => (
+                      {category.sections.map((section, idx) => (
                         <div key={idx} className={styles.megaMenuColumn}>
                           <h3 className={styles.columnTitle}>{section.title}</h3>
                           <ul className={styles.columnList}>
@@ -111,11 +134,11 @@ export function DesktopNav({ items, className }: DesktopNavProps) {
                       ))}
 
                       {/* Brand Directory Column */}
-                      {activeCategory.brands && activeCategory.brands.length > 0 && (
+                      {category.brands && category.brands.length > 0 && (
                         <div className={styles.megaMenuColumn}>
-                          <h3 className={styles.columnTitle}>Marcas Destacadas</h3>
+                          <h3 className={styles.columnTitle}>Marcas</h3>
                           <ul className={styles.columnList}>
-                            {activeCategory.brands.map((brand, brandIdx) => (
+                            {category.brands.map((brand, brandIdx) => (
                               <li key={brandIdx}>
                                 <Link
                                   href={brand.href}

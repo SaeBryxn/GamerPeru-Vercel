@@ -3,7 +3,12 @@ import path from "node:path";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AnnouncementBar, NAVIGATION_CONFIG } from "@/components/navigation";
+import {
+  AnnouncementBar,
+  DesktopNav,
+  NAVIGATION_CONFIG,
+  SiteFooter,
+} from "@/components/navigation";
 
 describe("GP-009 Global Navigation — Unit Contracts & Drift Protection", () => {
   it("verifies navigation seed data integrity and URL validity", () => {
@@ -49,8 +54,8 @@ describe("GP-009 Global Navigation — Unit Contracts & Drift Protection", () =>
       expect(util.href.startsWith("/")).toBe(true);
     }
 
-    // Footer columns
-    expect(NAVIGATION_CONFIG.footerColumns.length).toBeGreaterThanOrEqual(3);
+    // Footer columns (dynamic columns: Catalog and Support)
+    expect(NAVIGATION_CONFIG.footerColumns.length).toBe(2);
     for (const col of NAVIGATION_CONFIG.footerColumns) {
       expect(col.title).toBeTruthy();
       for (const link of col.links) {
@@ -63,14 +68,59 @@ describe("GP-009 Global Navigation — Unit Contracts & Drift Protection", () =>
   it("verifies AnnouncementBar rendering and collapse contract", () => {
     // Render with message
     const htmlWithMessage = renderToString(
-      React.createElement(AnnouncementBar, { message: "Envíos a todo el Perú" })
+      React.createElement(AnnouncementBar, { message: "Periféricos gaming multimarca para Perú" })
     );
-    expect(htmlWithMessage).toContain("Envíos a todo el Perú");
+    expect(htmlWithMessage).toContain("Periféricos gaming multimarca para Perú");
     expect(htmlWithMessage).toContain("<aside");
 
     // Render with undefined / empty message -> collapses to empty
     const htmlEmpty = renderToString(React.createElement(AnnouncementBar, {}));
     expect(htmlEmpty).toBe("");
+  });
+
+  it("ensures primary category destination links exist in initial static SSR markup", () => {
+    const html = renderToString(
+      React.createElement(DesktopNav, { items: NAVIGATION_CONFIG.primaryNav })
+    );
+
+    const expectedCategoryHrefs = [
+      "/categorias/mouses",
+      "/categorias/teclados",
+      "/categorias/mousepads",
+      "/categorias/audio",
+      "/categorias/accesorios",
+    ];
+
+    for (const href of expectedCategoryHrefs) {
+      expect(html).toContain(`href="${href}"`);
+    }
+
+    // Also assert disclosure button triggers exist with aria-expanded="false"
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-label="Abrir menú desplegable de Mouses"');
+  });
+
+  it("protects business copy against unapproved claims and unauthorized payment methods", () => {
+    const configString = JSON.stringify(NAVIGATION_CONFIG);
+    const footerHtml = renderToString(
+      React.createElement(SiteFooter, { columns: NAVIGATION_CONFIG.footerColumns })
+    );
+
+    const forbiddenPhrases = [
+      "Marcas Oficiales",
+      "Envíos a todo el Perú",
+      "provincias a nivel nacional",
+      "TRANSFERENCIA",
+    ];
+
+    for (const phrase of forbiddenPhrases) {
+      expect(configString).not.toContain(phrase);
+      expect(footerHtml).not.toContain(phrase);
+    }
+
+    // Assert authorized payment chips exist in Footer
+    expect(footerHtml).toContain("YAPE");
+    expect(footerHtml).toContain("PLIN");
   });
 
   it("ensures zero ad-hoc literal colors in navigation CSS modules", () => {

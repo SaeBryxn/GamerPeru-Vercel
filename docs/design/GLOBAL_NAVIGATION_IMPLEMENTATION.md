@@ -14,10 +14,10 @@ This document specifies the architecture, components, interaction contracts, and
   - Skip navigation link (`SkipLink`)
   - Announcement bar (`AnnouncementBar`)
   - Desktop header (`SiteHeader` / `BrandMark` / `DesktopNav` / `HeaderUtilities`)
-  - Desktop mega-menu interaction shell
+  - Desktop mega-menu interaction shell (full-width dropdown)
   - Mobile header (`MobileHeader`)
   - Native dialog mobile navigation drawer (`MobileDrawer`)
-  - Site footer (`SiteFooter`)
+  - Site footer (`SiteFooter` with 4 canonical columns)
   - Storefront layout integration (`src/app/(storefront)/layout.tsx`)
   - Storefront Route-Intent Contract
   - Static navigation presentation seed data model
@@ -70,7 +70,7 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
 - **Text**: `var(--color-text-dark-primary)` (`#F4F4F5`).
 - **Typography**: Explicitly resolved to `font-family: var(--font-body)`, `font-size: 13px`, `font-weight: 500`.
 - **Omission Contract**: If no announcement message is provided, the component renders `null` and collapses to 0px without reserving empty layout space.
-- **Content Boundary**: Factual, neutral brand/operational notice ("Envíos a todo el Perú | Periféricos gaming de alto rendimiento"). Zero invented delivery guarantees, sales percentages, or warranty claims.
+- **Content Boundary**: Factual, neutral brand identity notice ("Periféricos gaming multimarca para Perú"). Zero invented delivery guarantees, sales percentages, or warranty claims.
 
 ---
 
@@ -78,7 +78,7 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
 
 - **Breakpoint Threshold**: Desktop layout active at `>= 1024px` (`@media (min-width: 1024px)`).
 - **Dimensions**: Exact height `64px`.
-- **Positioning**: `position: sticky; top: 0; z-index: 100;`.
+- **Positioning**: `position: sticky; top: 0; z-index: 100;`. Acts as the full-width containing block for the absolute MegaMenu panel.
 - **Surface & Visuals**: `var(--color-surface-header)` (`rgba(255, 255, 255, 0.95)`) with `backdrop-filter: blur(8px)` and bottom border `1px solid var(--color-border-subtle)`.
 - **Layout Grid**: 3-part layout inside `Container size="default"` (1440px max width):
   - Left: `BrandMark`
@@ -96,14 +96,18 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
 
 ## 8. Primary Navigation & Mega-Menu
 
-- **Interaction Pattern**: Restrained horizontal link list styled in `Inter 500 / 15px`.
-- **Active & Hover Indicator**: 2px Signal Crimson (`var(--color-brand-primary)`) bottom underline.
+- **Interaction Pattern**:
+  - Primary category destination: semantic Next.js `<Link href="/categorias/...">` present in initial static SSR HTML.
+  - Separate disclosure button: `<button aria-label="Abrir menú desplegable de..." aria-expanded="..." aria-controls="...">` with canonical ChevronDown Icon.
+  - 2px Signal Crimson (`var(--color-brand-primary)`) bottom underline on hover, focus-within, and active expanded states.
+- **Containing-Block Architecture**:
+  - `SiteHeader` (which is `position: sticky; width: 100%;`) acts as the containing block.
+  - Intermediate wrappers (`.navItem`, `.navList`, `.desktopNav`) use static positioning.
+  - `.megaMenuPanel` has `position: absolute; top: 100%; left: 0; right: 0; width: 100%;`, guaranteeing that rendered MegaMenu width equals 100% of `SiteHeader` across all desktop viewports.
 - **Mega-Menu Panel**:
-  - Full-width panel below the 64px header (`top: 100%; left: 0; width: 100%;`).
   - Background `var(--color-surface-card)` (`#FFFFFF`), elevation `var(--elevation-high)`, border-bottom `1px solid var(--color-border-subtle)`.
-  - 4 conceptual columns: Category sub-sections, Brand directory, and Category overview / Explore links.
-  - Server-renderable links present in HTML for search engines and assistive technology.
-  - Keyboard disclosure via Enter/Space; Escape closes panel and returns focus to opener; click outside closes.
+  - 4 conceptual columns: Category sub-sections, Brand directory ("Marcas"), and Category overview / Explore links.
+  - Keyboard disclosure via Enter/Space; Escape closes panel and returns focus to disclosure button; click outside closes.
 
 ---
 
@@ -119,20 +123,20 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
 ## 10. Mobile Header
 
 - **Breakpoint Threshold**: Mobile header active below `1024px` (`@media (max-width: 1023px)`).
-- **Layout**: Left: Menu trigger (`IconButton` `iconSize="lg"`) + `BrandMark`; Right: Search link + Cart link.
-- **Touch Targets**: All interactive controls satisfy `>= 44x44px` hit areas.
+- **Layout**: Left: Menu opener trigger (`IconButton` `iconSize="lg"`, hit target >= 44x44) + `BrandMark`; Right: Search link + Cart link.
+- **Focus Return**: When the mobile drawer closes, focus explicitly returns to the Menu opener button.
 
 ---
 
 ## 11. Mobile Navigation Drawer
 
 - **Implementation**: Native browser `<dialog>` element with `showModal()` / `close()` methods for top-layer modal containment and native background inertness.
-- **Dimensions**: Left slide-out drawer, width `320px` (`max-width: 85vw`).
+- **Dimensions**: Left slide-out drawer, width `min(320px, 100vw)` (yielding exact 320px at 360px viewport).
 - **Surface**: `var(--color-surface-card)` (`#FFFFFF`) with backdrop `var(--color-surface-overlay)` (`rgba(9, 9, 11, 0.65)`).
 - **Close Controls**:
   - Close button: `IconButton` with `iconSize="md"` (20x20 / 1.5 stroke) inside a `>= 44x44px` target, `aria-label="Cerrar navegación"`.
-  - Native Escape key cancellation.
-  - Backdrop click handler (closing when click targets `<dialog>` backdrop).
+  - Native Escape key cancellation with focus return.
+  - Backdrop click handler with focus return (clicks inside drawer panel do not close).
 - **Motion**: 350ms transition with `var(--motion-easing-snappy)` (`cubic-bezier(0.16, 1, 0.3, 1)`), collapsed under `prefers-reduced-motion: reduce`.
 - **Sections**:
   - Header: BrandMark + Close button.
@@ -185,11 +189,11 @@ _Destination pages are NOT implemented in GP-009 merely to avoid temporary 404s.
 
 - **Surface**: `var(--color-surface-dark-canvas)` (`#09090B`) with top border `1px solid var(--color-border-dark-subtle)`.
 - **Typography & Colors**: Text `var(--color-text-dark-secondary)` (`#A1A1AA`), headings `var(--color-text-dark-primary)` (`#F4F4F5`).
-- **4-Column Layout**:
-  1. Brand Story / Gamer Perú mission.
-  2. Explorar Catálogo (Mouses, Teclados, Mousepads, Audio, Accesorios).
-  3. Atención al Cliente (Centro de Ayuda, Envíos, Cambios y Devoluciones, Privacidad, Términos).
-  4. Métodos de Pago & Confianza (YAPE, PLIN, TRANSFERENCIA neutral text chips, Soles PEN notice).
+- **4-Column Canonical Desktop Structure**:
+  1. **Brand Story**: Gamer Perú multi-brand mission.
+  2. **Explorar Catálogo**: Direct category links (Mouses, Teclados, Mousepads, Audio, Accesorios).
+  3. **Atención al Cliente**: Customer support & policy destinations (Centro de Ayuda, Envíos, Cambios y Devoluciones, Privacidad, Términos).
+  4. **Métodos de Pago & Confianza**: `YAPE` and `PLIN` neutral text badges, Soles PEN currency notice ("Pagos en moneda nacional (PEN / S/)."). Zero unauthorized Transferencia chips or nationwide shipping promises.
 - **Responsive Layout**: 4 columns on desktop (`>= 1024px`), 2 columns on tablet (`768px - 1023px`), 1 column stacked on mobile (`< 768px`).
 
 ---
@@ -199,8 +203,8 @@ _Destination pages are NOT implemented in GP-009 merely to avoid temporary 404s.
 - **Semantic HTML5 Landmarks**: `<aside aria-label="Anuncio">`, `<header>`, `<nav aria-label="Navegación principal">`, `<dialog aria-label="Menú de navegación móvil">`, `<footer aria-label="Pie de página">`.
 - **Keyboard Navigation**:
   - `SkipLink`: First Tab stop jumps to `#main-content`.
-  - MegaMenu: Enter/Space triggers disclosure, Escape closes and restores focus.
-  - Mobile Drawer: Menu opener opens dialog; focus trapped inside `<dialog>`; Escape closes and restores focus to Menu button.
+  - MegaMenu: Tab focuses disclosure button; Enter/Space toggles disclosure; Tab moves focus into MegaMenu sub-links; Escape closes and restores focus to disclosure button.
+  - Mobile Drawer: Menu opener opens dialog; focus trapped inside `<dialog>`; Escape, close button, or backdrop click closes dialog and returns focus to Menu opener button.
 - **Focus Rings**: Contextual `:focus-visible` 2px solid outline (`#09090B` on light, `#F4F4F5` on dark).
 - **Touch Targets**: Minimum 44x44px on all interactive controls.
 - **Automated Axe Audits**: Zero detected violations on desktop header, open MegaMenu, open mobile drawer, and footer.
@@ -209,14 +213,16 @@ _Destination pages are NOT implemented in GP-009 merely to avoid temporary 404s.
 
 ## 16. Keyboard Behavior
 
-| Component             | Key               | Action                                          |
-| --------------------- | ----------------- | ----------------------------------------------- |
-| `SkipLink`            | `Tab` / `Enter`   | Focuses and jumps focus to `#main-content`      |
-| `DesktopNav` Trigger  | `Enter` / `Space` | Toggles MegaMenu disclosure panel               |
-| `DesktopNav` Panel    | `Escape`          | Closes MegaMenu and restores focus to trigger   |
-| `MobileHeader` Opener | `Enter` / `Space` | Opens `<dialog>` modal drawer and traps focus   |
-| `MobileDrawer`        | `Escape`          | Closes modal drawer and returns focus to opener |
-| `MobileDrawer` Close  | `Enter` / `Space` | Closes modal drawer and returns focus to opener |
+| Component                       | Key               | Action                                                   |
+| ------------------------------- | ----------------- | -------------------------------------------------------- |
+| `SkipLink`                      | `Tab` / `Enter`   | Focuses and jumps focus to `#main-content`               |
+| `DesktopNav` Category Link      | `Tab` / `Enter`   | Focuses and navigates to `/categorias/[slug]`            |
+| `DesktopNav` Disclosure Trigger | `Enter` / `Space` | Toggles MegaMenu disclosure panel                        |
+| `DesktopNav` Panel Link         | `Tab`             | Traverses links inside MegaMenu                          |
+| `DesktopNav` Panel              | `Escape`          | Closes MegaMenu and restores focus to disclosure trigger |
+| `MobileHeader` Opener           | `Enter` / `Space` | Opens `<dialog>` modal drawer and traps focus            |
+| `MobileDrawer`                  | `Escape`          | Closes modal drawer and returns focus to opener          |
+| `MobileDrawer` Close Button     | `Enter` / `Space` | Closes modal drawer and returns focus to opener          |
 
 ---
 
@@ -233,8 +239,8 @@ _Destination pages are NOT implemented in GP-009 merely to avoid temporary 404s.
 - **360px (Compact Mobile)**: Mobile header active, 320px drawer slide-out, footer stacked 1-column, zero horizontal overflow.
 - **768px (Tablet)**: Mobile header active, 2-column footer grid, zero horizontal overflow.
 - **1023px (Breakpoint Boundary)**: Mobile header active, desktop nav hidden.
-- **1024px (Breakpoint Boundary)**: Desktop header active (64px), desktop nav visible, mobile header hidden.
-- **1280px / 1536px (Desktop & Wide)**: Full desktop navigation and mega-menu active, 4-column footer, max container 1440px clamped.
+- **1024px (Breakpoint Boundary)**: Desktop header active (64px), desktop nav visible, full-width MegaMenu, mobile header hidden.
+- **1280px / 1536px (Desktop & Wide)**: Full desktop navigation and full-width mega-menu active, 4-column footer, max container 1440px clamped.
 
 ---
 
@@ -248,8 +254,8 @@ _Destination pages are NOT implemented in GP-009 merely to avoid temporary 404s.
 
 ## 20. SEO & Crawlability
 
-- **Semantic Anchors**: All navigation destinations use standard Next.js `<Link>` elements rendering `<a href="...">`.
-- **No JavaScript Dependency for Discovery**: Primary category and brand URLs exist in server-renderable HTML markup.
+- **Semantic Anchors**: All primary category and utility destinations use standard Next.js `<Link>` elements rendering `<a href="...">`.
+- **No JavaScript Dependency for Discovery**: Primary category destinations exist in initial server-renderable HTML markup before interaction.
 - **Zero Empty / Hash Links**: No `href="#"`, `href=""`, or `javascript:` links.
 - **Brand Mark**: Always points to `/` with descriptive accessible text.
 
@@ -286,19 +292,19 @@ _Destination pages are NOT implemented in GP-009 merely to avoid temporary 404s.
 ## 23. Business-Policy Boundaries
 
 - **No Fake SLAs**: Zero hardcoded shipping delivery promises, support phone numbers, or warranty guarantees.
-- **Payment Badges**: Yape and Plin are presented as text chips without claiming instant automated gateway validation or official partnerships.
+- **Payment Badges**: Yape and Plin are presented as text chips without claiming instant automated gateway validation, official partnerships, or unauthorized bank transfer payment methods.
 
 ---
 
 ## 24. Definition of Done (DoD)
 
 - [x] `SkipLink` functional and jumps to `#main-content`.
-- [x] `AnnouncementBar` conforms to 36px, `#09090B`, 13px Inter 500.
+- [x] `AnnouncementBar` conforms to 36px, `#09090B`, 13px Inter 500, neutral copy.
 - [x] `SiteHeader` sticky 64px with `--color-surface-header`.
 - [x] `BrandMark` text wordmark links to `/`.
-- [x] `DesktopNav` with 2px Crimson indicator and accessible MegaMenu.
+- [x] `DesktopNav` with semantic category destination links, separate disclosure buttons, and full-width MegaMenu.
 - [x] `HeaderUtilities` semantic `<Link>` elements with 24px/1.5 icons and 44x44 targets.
-- [x] `MobileHeader` and native `<dialog>` `MobileDrawer` (320px, 20px close icon, Escape close, focus return).
-- [x] `SiteFooter` 4-column dark layout with Yape/Plin badges.
+- [x] `MobileHeader` and native `<dialog>` `MobileDrawer` (exact 320px at 360px viewport, 20px close icon, Escape close, backdrop close, focus return).
+- [x] `SiteFooter` exactly 4-column dark layout with Yape/Plin badges.
 - [x] Verified breakpoint boundary at 1023px vs 1024px.
 - [x] 100% test pass rate across unit contracts, Playwright E2E, and Axe audits.

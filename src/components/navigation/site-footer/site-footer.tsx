@@ -26,7 +26,7 @@ export function SiteFooter({ columns = [], className }: SiteFooterProps) {
             </p>
           </div>
 
-          {/* Column 2 & 3: Dynamic Footer Navigation Columns */}
+          {/* Column 2 & 3: Dynamic Footer Navigation Columns (Catalog & Customer Support) */}
           {columns.map((column, idx) => (
             <div key={idx} className={styles.footerColumn}>
               <h3 className={styles.columnTitle}>{column.title}</h3>
@@ -49,12 +49,8 @@ export function SiteFooter({ columns = [], className }: SiteFooterProps) {
               <div className={styles.paymentBadges} aria-label="Métodos de pago aceptados">
                 <span className={styles.paymentBadge}>YAPE</span>
                 <span className={styles.paymentBadge}>PLIN</span>
-                <span className={styles.paymentBadge}>TRANSFERENCIA</span>
               </div>
-              <p className={styles.trustNote}>
-                Pagos en moneda nacional (PEN / S/). Envíos a Lima Metropolitana y provincias a
-                nivel nacional.
-              </p>
+              <p className={styles.trustNote}>Pagos en moneda nacional (PEN / S/).</p>
             </div>
           </div>
         </div>

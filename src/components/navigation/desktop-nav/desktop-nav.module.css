@@ -7,6 +7,7 @@
     display: flex;
     align-items: center;
     height: 100%;
+    position: static;
   }
 }
 
@@ -18,39 +19,43 @@
   margin: 0;
   padding: 0;
   height: 100%;
+  position: static;
 }
 
 .navItem {
-  position: relative;
   display: flex;
+  align-items: center;
+  height: 100%;
+  position: static;
+}
+
+.navItemWrapper {
+  position: static;
+  display: inline-flex;
   align-items: center;
   height: 100%;
 }
 
-.navTrigger {
+.categoryLink {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
   height: 100%;
   padding: 0 var(--space-1);
-  background: transparent;
-  border: none;
   font-family: var(--font-body);
   font-size: 15px;
   font-weight: 500;
   color: var(--color-text-primary);
   text-decoration: none;
-  cursor: pointer;
-  position: relative;
   transition: color var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
-.navTrigger:hover,
-.navTrigger[aria-expanded="true"] {
+.categoryLink:hover,
+.categoryLinkActive {
   color: var(--color-brand-primary);
 }
 
-.navTrigger::after {
+.categoryLink::after {
   content: "";
   position: absolute;
   bottom: 0;
@@ -61,28 +66,56 @@
   transform: scaleX(0);
   transform-origin: center;
   transition: transform var(--motion-duration-fast) var(--motion-easing-snappy);
+  pointer-events: none;
 }
 
-.navTrigger:hover::after,
-.navTrigger[aria-expanded="true"]::after {
+.categoryLink:hover::after,
+.categoryLink:focus-visible::after,
+.categoryLinkActive::after {
   transform: scaleX(1);
 }
 
-.navTrigger:focus-visible {
+.categoryLink:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+  border-radius: var(--radius-xs);
+}
+
+.disclosureTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-width: 24px;
+  padding: 0 var(--space-1);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.disclosureTrigger:hover,
+.disclosureTrigger[aria-expanded="true"] {
+  color: var(--color-brand-primary);
+}
+
+.disclosureTrigger:focus-visible {
   outline: 2px solid var(--color-border-focus);
   outline-offset: -2px;
   border-radius: var(--radius-xs);
 }
 
 .chevron {
+  display: inline-flex;
   transition: transform var(--motion-duration-fast) var(--motion-easing-snappy);
 }
 
-.navTrigger[aria-expanded="true"] .chevron {
+.disclosureTrigger[aria-expanded="true"] .chevron {
   transform: rotate(180deg);
 }
 
-/* Mega Menu Dropdown Panel */
+/* Mega Menu Dropdown Panel — Positions against full-width SiteHeader containing block */
 .megaMenuPanel {
   position: absolute;
   top: 100%;
