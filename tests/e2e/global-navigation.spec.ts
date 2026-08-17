@@ -400,7 +400,9 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     ).toBeVisible();
   });
 
-  test("L: verifies reduced-motion collapses MobileDrawer transition", async ({ page }) => {
+  test("L: verifies reduced-motion collapses MobileDrawer transition duration to <= 0.01ms", async ({
+    page,
+  }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto("/");
@@ -410,6 +412,16 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
 
     const dialog = page.locator("dialog[aria-label='Menú de navegación móvil']");
     await expect(dialog).toBeVisible();
+
+    const drawerPanel = dialog.locator("div[role='document']");
+    const transitionDuration = await drawerPanel.evaluate((el) => {
+      const computed = window.getComputedStyle(el);
+      return computed.transitionDuration;
+    });
+
+    // In reduced motion, transition duration is 0.01ms (evaluates to 0.00001s or <= 0.001s)
+    const durationSeconds = parseFloat(transitionDuration);
+    expect(durationSeconds).toBeLessThanOrEqual(0.001);
 
     // Close via escape
     await page.keyboard.press("Escape");
@@ -452,5 +464,111 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
 
     const accessibilityScanResults = await new AxeBuilder({ page }).analyze();
     expect(accessibilityScanResults.violations).toEqual([]);
+  });
+
+  test("P: verifies desktop navigation disclosure triggers meet minimum 44x44px bounding box at 1024px and 1280px without overflow", async ({
+    page,
+  }) => {
+    const viewports = [
+      { width: 1024, height: 800 },
+      { width: 1280, height: 800 },
+    ];
+
+    const categoryNames = ["Mouses", "Teclados", "Mousepads", "Audio", "Accesorios"];
+
+    for (const vp of viewports) {
+      await page.setViewportSize(vp);
+      await page.goto("/");
+
+      // Verify zero horizontal overflow
+      const hasHorizontalOverflow = await page.evaluate(() => {
+        return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+      });
+      expect(hasHorizontalOverflow).toBe(false);
+
+      // Verify BrandMark is visible
+      const brandMark = page.locator("header").getByRole("link", { name: /Gamer Perú/ });
+      await expect(brandMark).toBeVisible();
+
+      // Verify each disclosure trigger meets minimum 44x44px interactive bounding box
+      for (const name of categoryNames) {
+        const trigger = page.getByRole("button", {
+          name: `Abrir menú desplegable de ${name}`,
+        });
+        await expect(trigger).toBeVisible();
+
+        const box = await trigger.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.width).toBeGreaterThanOrEqual(44);
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+      }
+
+      // Verify utility links remain visible
+      const searchLink = page.getByRole("link", { name: "Buscar productos" });
+      const cartLink = page.getByRole("link", { name: "Carrito de compras" });
+      await expect(searchLink).toBeVisible();
+      await expect(cartLink).toBeVisible();
+    }
+  });
+
+  test("Q: verifies computed keyboard focus outline contract (+2px offset, 2px solid #09090B) via actual Tab navigation", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+
+    // Tab through skip link and brand mark into first primary category link
+    const categoryLink = page
+      .locator("nav[aria-label='Navegación principal']")
+      .getByRole("link", { name: "Mouses" });
+
+    let isLinkFocused = false;
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press("Tab");
+      isLinkFocused = await categoryLink.evaluate((el) => document.activeElement === el);
+      if (isLinkFocused) break;
+    }
+    expect(isLinkFocused).toBe(true);
+
+    // Assert computed focus styles on category link
+    const linkFocusStyles = await categoryLink.evaluate((el) => {
+      const computed = window.getComputedStyle(el);
+      return {
+        outlineWidth: computed.outlineWidth,
+        outlineStyle: computed.outlineStyle,
+        outlineOffset: computed.outlineOffset,
+        outlineColor: computed.outlineColor,
+      };
+    });
+
+    expect(linkFocusStyles.outlineWidth).toBe("2px");
+    expect(linkFocusStyles.outlineStyle).toBe("solid");
+    expect(linkFocusStyles.outlineOffset).toBe("2px");
+    // Canonical light focus color #09090B -> rgb(9, 9, 11)
+    expect(linkFocusStyles.outlineColor).toBe("rgb(9, 9, 11)");
+
+    // Tab into adjacent disclosure button
+    await page.keyboard.press("Tab");
+
+    const disclosureBtn = page.getByRole("button", {
+      name: "Abrir menú desplegable de Mouses",
+    });
+    await expect(disclosureBtn).toBeFocused();
+
+    // Assert computed focus styles on disclosure button
+    const btnFocusStyles = await disclosureBtn.evaluate((el) => {
+      const computed = window.getComputedStyle(el);
+      return {
+        outlineWidth: computed.outlineWidth,
+        outlineStyle: computed.outlineStyle,
+        outlineOffset: computed.outlineOffset,
+        outlineColor: computed.outlineColor,
+      };
+    });
+
+    expect(btnFocusStyles.outlineWidth).toBe("2px");
+    expect(btnFocusStyles.outlineStyle).toBe("solid");
+    expect(btnFocusStyles.outlineOffset).toBe("2px");
+    expect(btnFocusStyles.outlineColor).toBe("rgb(9, 9, 11)");
   });
 });
