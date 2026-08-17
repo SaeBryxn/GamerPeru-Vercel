@@ -22,6 +22,14 @@ CLOSED
 
 `679086efc6d235fe8b8c5068c9c6e41b2a399f1f`
 
+## Final Accepted Implementation Checkpoint
+
+`734ecab2fc8a7a83a1f3de2a801506bfe4588fd5`
+
+## Original Closure Checkpoint
+
+`9d3e6bd192fbec4bbb2b25ab40a296bc5d2781e3`
+
 ## Canonical Implementation History
 
 1. **Pre-GP-012 Planning Checkpoint**: `679086efc6d235fe8b8c5068c9c6e41b2a399f1f`
@@ -56,7 +64,8 @@ CLOSED
   3. `products_name_trgm_idx` (GIN on `products.name` via `gin_trgm_ops`)
   4. `products_subtitle_trgm_idx` (GIN on `products.subtitle` via `gin_trgm_ops`)
 - **Total Application Physical Indexes**: 22
-- **Drizzle Migration Records**: 2 (`0000_fluffy_iron_fist`, `0001_search_pg_trgm`)
+- **Drizzle Migration Journal Entries**: 2 (`0000_superb_ink`, `0001_search_pg_trgm`)
+- **Remote Migration Records**: 2
 - **Commercial Catalog Rows**:
   - `media_assets`: 0
   - `brands`: 0
@@ -131,11 +140,19 @@ External remediation verified PostgreSQL LIKE ESCAPE semantics live against Supa
 
 ## Tests & CI Evidence
 
-- **Accepted Implementation Checkpoint**: `734ecab2fc8a7a83a1f3de2a801506bfe4588fd5`
-- **GitHub Actions CI Run**: `32053998763`
-- **CI Workflow Status**: `completed`
-- **CI Workflow Conclusion**: `success`
-- **CI Job**: `Format, Typecheck, Lint, Test, Build & E2E` (Passed, 4m 22s)
+- **Final Accepted Implementation CI**:
+  - **Commit SHA**: `734ecab2fc8a7a83a1f3de2a801506bfe4588fd5`
+  - **Run ID**: `32053998763`
+  - **Workflow**: `CI`
+  - **Status**: `completed`
+  - **Conclusion**: `success`
+- **Original Closure CI**:
+  - **Commit SHA**: `9d3e6bd192fbec4bbb2b25ab40a296bc5d2781e3`
+  - **Run ID**: `32055629624`
+  - **Workflow**: `CI`
+  - **Status**: `completed`
+  - **Conclusion**: `success`
+  - **Job**: `Format, Typecheck, Lint, Test, Build & E2E` (Passed, 4m 5s)
 - **Vitest Unit Suite**: 23 test files, 219 passed, 1 skipped (remote PostgreSQL smoke without DB in CI), 220 total tests.
 - **Playwright E2E Suite**: 80 passed across 6 test files.
 - **Production Build (`pnpm build`)**: Passed (11 static/dynamic routes compiled).
