@@ -31,6 +31,7 @@ describe("getCatalogReader — reader selection", () => {
     delete process.env.E2E_CATALOG_FIXTURES;
     delete process.env.PLAYWRIGHT_TEST;
     delete process.env.DEV_CATALOG_PREVIEW;
+    delete process.env.CI;
     vi.doMock("../../src/lib/catalog/postgres-reader", () => ({
       PostgresCatalogDiscoveryReader: class MockPostgres {
         _type = "postgres";
