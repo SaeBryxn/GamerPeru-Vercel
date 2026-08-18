@@ -129,75 +129,140 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
     });
   });
 
-  test.describe("Legacy Aliases & Exact HTTP 308 Permanent Redirections", () => {
-    test("A: /categorias/mouses?tipo=ultraligeros returns HTTP 308 to /categorias/mouses?peso_max=45", async ({
+  test.describe("Legacy Aliases, Canonical Keyboard URLs & Exact Direct HTTP Assertions", () => {
+    test("Canonical 1: /categorias/teclados?formato=60 resolves directly with HTTP 200 without redirect", async ({
       request,
     }) => {
-      const response = await request.get("/categorias/mouses?tipo=ultraligeros", {
+      const response = await request.get("/categorias/teclados?formato=60", {
         maxRedirects: 0,
       });
-      expect(response.status()).toBe(308);
-      expect(response.headers()["location"]).toBe("/categorias/mouses?peso_max=45");
+      expect(response.status()).toBe(200);
+      expect(response.headers()["location"]).toBeUndefined();
     });
 
-    test("B: /categorias/mouses?sub=skates returns HTTP 308 to /categorias/accesorios?tipo_accesorio=skates", async ({
+    test("Canonical 2: /categorias/teclados?formato=60&formato=65 resolves directly with HTTP 200 without redirect", async ({
       request,
     }) => {
-      const response = await request.get("/categorias/mouses?sub=skates", {
+      const response = await request.get("/categorias/teclados?formato=60&formato=65", {
         maxRedirects: 0,
       });
-      expect(response.status()).toBe(308);
-      expect(response.headers()["location"]).toBe("/categorias/accesorios?tipo_accesorio=skates");
+      expect(response.status()).toBe(200);
+      expect(response.headers()["location"]).toBeUndefined();
     });
 
-    test("C: /categorias/teclados?formato=compactos returns HTTP 308 to /categorias/teclados?formato=60&formato=65", async ({
+    test("Canonical 3: /categorias/teclados?formato=75&formato=tkl resolves directly with HTTP 200 without redirect", async ({
       request,
     }) => {
-      const response = await request.get("/categorias/teclados?formato=compactos", {
+      const response = await request.get("/categorias/teclados?formato=75&formato=tkl", {
         maxRedirects: 0,
       });
-      expect(response.status()).toBe(308);
-      expect(response.headers()["location"]).toBe("/categorias/teclados?formato=60&formato=65");
+      expect(response.status()).toBe(200);
+      expect(response.headers()["location"]).toBeUndefined();
     });
 
-    test("D: /categorias/teclados?formato=tkl-75 returns HTTP 308 to /categorias/teclados?formato=75&formato=tkl", async ({
+    test("A: /categorias/mouses?tipo=ultraligeros returns HTTP 308 and terminates in 200", async ({
       request,
     }) => {
-      const response = await request.get("/categorias/teclados?formato=tkl-75", {
+      const hop1 = await request.get("/categorias/mouses?tipo=ultraligeros", {
         maxRedirects: 0,
       });
-      expect(response.status()).toBe(308);
-      expect(response.headers()["location"]).toBe("/categorias/teclados?formato=75&formato=tkl");
+      expect(hop1.status()).toBe(308);
+      const loc = hop1.headers()["location"];
+      expect(loc).toBe("/categorias/mouses?peso_max=45");
+
+      const hop2 = await request.get(loc!, { maxRedirects: 0 });
+      expect(hop2.status()).toBe(200);
+      expect(hop2.headers()["location"]).toBeUndefined();
     });
 
-    test("E: /categorias/teclados?formato=magneticos returns HTTP 308 to /categorias/teclados?tipo_switch=magnetico", async ({
+    test("B: /categorias/mouses?sub=skates returns HTTP 308 cross-category and terminates in 200", async ({
       request,
     }) => {
-      const response = await request.get("/categorias/teclados?formato=magneticos", {
+      const hop1 = await request.get("/categorias/mouses?sub=skates", {
         maxRedirects: 0,
       });
-      expect(response.status()).toBe(308);
-      expect(response.headers()["location"]).toBe("/categorias/teclados?tipo_switch=magnetico");
+      expect(hop1.status()).toBe(308);
+      const loc = hop1.headers()["location"];
+      expect(loc).toBe("/categorias/accesorios?tipo_accesorio=skates");
+
+      const hop2 = await request.get(loc!, { maxRedirects: 0 });
+      expect(hop2.status()).toBe(200);
+      expect(hop2.headers()["location"]).toBeUndefined();
     });
 
-    test("F: /categorias/audio?tipo=iems returns HTTP 308 to /categorias/audio?tipo_audio=iem", async ({
+    test("C: /categorias/teclados?formato=compactos returns HTTP 308 and terminates in 200", async ({
       request,
     }) => {
-      const response = await request.get("/categorias/audio?tipo=iems", {
+      const hop1 = await request.get("/categorias/teclados?formato=compactos", {
         maxRedirects: 0,
       });
-      expect(response.status()).toBe(308);
-      expect(response.headers()["location"]).toBe("/categorias/audio?tipo_audio=iem");
+      expect(hop1.status()).toBe(308);
+      const loc = hop1.headers()["location"];
+      expect(loc).toBe("/categorias/teclados?formato=60&formato=65");
+
+      const hop2 = await request.get(loc!, { maxRedirects: 0 });
+      expect(hop2.status()).toBe(200);
+      expect(hop2.headers()["location"]).toBeUndefined();
     });
 
-    test("G: /categorias/accesorios?tipo=skates returns HTTP 308 to /categorias/accesorios?tipo_accesorio=skates", async ({
+    test("D: /categorias/teclados?formato=tkl-75 returns HTTP 308 and terminates in 200", async ({
       request,
     }) => {
-      const response = await request.get("/categorias/accesorios?tipo=skates", {
+      const hop1 = await request.get("/categorias/teclados?formato=tkl-75", {
         maxRedirects: 0,
       });
-      expect(response.status()).toBe(308);
-      expect(response.headers()["location"]).toBe("/categorias/accesorios?tipo_accesorio=skates");
+      expect(hop1.status()).toBe(308);
+      const loc = hop1.headers()["location"];
+      expect(loc).toBe("/categorias/teclados?formato=75&formato=tkl");
+
+      const hop2 = await request.get(loc!, { maxRedirects: 0 });
+      expect(hop2.status()).toBe(200);
+      expect(hop2.headers()["location"]).toBeUndefined();
+    });
+
+    test("E: /categorias/teclados?formato=magneticos returns HTTP 308 and terminates in 200", async ({
+      request,
+    }) => {
+      const hop1 = await request.get("/categorias/teclados?formato=magneticos", {
+        maxRedirects: 0,
+      });
+      expect(hop1.status()).toBe(308);
+      const loc = hop1.headers()["location"];
+      expect(loc).toBe("/categorias/teclados?tipo_switch=magnetico");
+
+      const hop2 = await request.get(loc!, { maxRedirects: 0 });
+      expect(hop2.status()).toBe(200);
+      expect(hop2.headers()["location"]).toBeUndefined();
+    });
+
+    test("F: /categorias/audio?tipo=iems returns HTTP 308 and terminates in 200", async ({
+      request,
+    }) => {
+      const hop1 = await request.get("/categorias/audio?tipo=iems", {
+        maxRedirects: 0,
+      });
+      expect(hop1.status()).toBe(308);
+      const loc = hop1.headers()["location"];
+      expect(loc).toBe("/categorias/audio?tipo_audio=iem");
+
+      const hop2 = await request.get(loc!, { maxRedirects: 0 });
+      expect(hop2.status()).toBe(200);
+      expect(hop2.headers()["location"]).toBeUndefined();
+    });
+
+    test("G: /categorias/accesorios?tipo=skates returns HTTP 308 and terminates in 200", async ({
+      request,
+    }) => {
+      const hop1 = await request.get("/categorias/accesorios?tipo=skates", {
+        maxRedirects: 0,
+      });
+      expect(hop1.status()).toBe(308);
+      const loc = hop1.headers()["location"];
+      expect(loc).toBe("/categorias/accesorios?tipo_accesorio=skates");
+
+      const hop2 = await request.get(loc!, { maxRedirects: 0 });
+      expect(hop2.status()).toBe(200);
+      expect(hop2.headers()["location"]).toBeUndefined();
     });
 
     test("Non-legacy mousepad canonical parameters resolve directly with 200 without redirect", async ({
@@ -207,10 +272,11 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
         maxRedirects: 0,
       });
       expect(response.status()).toBe(200);
+      expect(response.headers()["location"]).toBeUndefined();
     });
   });
 
-  test.describe("Brand Surface Conditional Technical Facets", () => {
+  test.describe("Brand Surface Conditional Technical Facets & Truthfulness", () => {
     test("G1: brand without category does not show technical facets", async ({ page }) => {
       await page.goto("/marcas/marca-qa");
 
@@ -245,18 +311,30 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
       await expect(page).toHaveURL(/.*\/marcas\/marca-qa$/);
     });
 
-    test("G5: brand technical ENUM and NUMBER_RANGE filter updates products truthfully", async ({
+    test("G5: brand technical filter truthfully updates deterministic product identities", async ({
       page,
     }) => {
-      await page.goto("/marcas/marca-qa?categoria=mouses&forma=ergonomico&peso_max=45");
-      const cards = page.getByTestId("product-card");
-      const count = await cards.count();
-      expect(count).toBeGreaterThan(0);
-      expect(count).toBeLessThan(14);
+      // Unfiltered brand + category (all 12 page-1 items: Mouse Pro Mod 01..12)
+      await page.goto("/marcas/marca-qa?categoria=mouses");
+      const initialCards = page.getByTestId("product-card");
+      await expect(initialCards).toHaveCount(12);
+
+      // Apply shape=ergonomico: only idx % 3 === 0 items (03, 06, 09, 12)
+      await page.goto("/marcas/marca-qa?categoria=mouses&forma=ergonomico");
+      const ergoCards = page.getByTestId("product-card");
+      const ergoCount = await ergoCards.count();
+      expect(ergoCount).toBe(4);
+
+      // Verify specific expected titles
+      const ergoText = await page.getByTestId("product-grid").innerText();
+      expect(ergoText).toContain("Mouse Pro Mod 03");
+      expect(ergoText).toContain("Mouse Pro Mod 06");
+      expect(ergoText).not.toContain("Mouse Pro Mod 01");
+      expect(ergoText).not.toContain("Mouse Pro Mod 02");
     });
   });
 
-  test.describe("Search Surface Conditional Technical Facets & Sort", () => {
+  test.describe("Search Surface Conditional Technical Facets, Truthfulness & Sort Behavior", () => {
     test("H1: search without category does not show technical facets", async ({ page }) => {
       await page.goto("/buscar?q=mouse");
 
@@ -287,15 +365,34 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
       await expect(page).toHaveURL(/.*\/buscar\?q=mouse$/);
     });
 
-    test("H4: search explicit sorts preserve candidate search predicate", async ({ page }) => {
-      const sorts = ["precio-menor", "precio-mayor", "nombre-asc", "nombre-desc", "recientes"];
-      for (const sortVal of sorts) {
-        await page.goto(`/buscar?q=mouse&sort=${sortVal}`);
-        await expect(page.getByTestId("product-grid")).toBeVisible();
-        const cards = page.getByTestId("product-card");
-        const count = await cards.count();
-        expect(count).toBeGreaterThan(0);
-      }
+    test("H4: search sorts produce deterministic, distinct product orderings", async ({ page }) => {
+      // 1. sort=precio-menor (price ascending: S/ 129.90, S/ 149.90...)
+      await page.goto("/buscar?q=mouse&categoria=mouses&sort=precio-menor");
+      const lowCards = page.getByTestId("product-card");
+      expect(await lowCards.nth(0).innerText()).toContain("Mouse Pro Mod 01");
+      expect(await lowCards.nth(0).innerText()).toContain("S/ 129.90");
+      expect(await lowCards.nth(1).innerText()).toContain("Mouse Pro Mod 02");
+      expect(await lowCards.nth(1).innerText()).toContain("S/ 149.90");
+
+      // 2. sort=precio-mayor (price descending: S/ 349.90, S/ 329.90...)
+      await page.goto("/buscar?q=mouse&categoria=mouses&sort=precio-mayor");
+      const highCards = page.getByTestId("product-card");
+      expect(await highCards.nth(0).innerText()).toContain("Mouse Pro Mod 12");
+      expect(await highCards.nth(0).innerText()).toContain("S/ 349.90");
+      expect(await highCards.nth(1).innerText()).toContain("Mouse Pro Mod 11");
+      expect(await highCards.nth(1).innerText()).toContain("S/ 329.90");
+
+      // 3. sort=nombre-asc (name ascending: "Mouse Pro Mod 01", "Mouse Pro Mod 02"...)
+      await page.goto("/buscar?q=mouse&categoria=mouses&sort=nombre-asc");
+      const ascCards = page.getByTestId("product-card");
+      expect(await ascCards.nth(0).innerText()).toContain("Mouse Pro Mod 01");
+      expect(await ascCards.nth(1).innerText()).toContain("Mouse Pro Mod 02");
+
+      // 4. sort=nombre-desc (name descending: "Mouse Pro Mod 12", "Mouse Pro Mod 11"...)
+      await page.goto("/buscar?q=mouse&categoria=mouses&sort=nombre-desc");
+      const descCards = page.getByTestId("product-card");
+      expect(await descCards.nth(0).innerText()).toContain("Mouse Pro Mod 12");
+      expect(await descCards.nth(1).innerText()).toContain("Mouse Pro Mod 11");
     });
   });
 
@@ -349,15 +446,23 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
     test("V1: filtered price reflects lowest active eligible variant and excludes non-matching products", async ({
       page,
     }) => {
+      // Filter precio_min=140: excludes Mouse Pro Mod 01 (S/ 129.90)
       await page.goto("/categorias/mouses?precio_min=140&precio_max=200");
       const cards = page.getByTestId("product-card");
       const count = await cards.count();
       expect(count).toBeGreaterThan(0);
 
+      // Verify that no product card displays a price below 140
       for (let i = 0; i < count; i++) {
         const text = await cards.nth(i).innerText();
         expect(text).not.toContain("S/ 129.90");
+        expect(text).not.toContain("cost_cents");
+        expect(text).not.toContain("margin");
       }
+
+      // Lowest matching product is Mouse Pro Mod 02 at S/ 149.90
+      const firstCardText = await cards.nth(0).innerText();
+      expect(firstCardText).toContain("S/ 149.90");
     });
 
     test("V2: zero-state on page 1 returns 200 HTTP status", async ({ page }) => {

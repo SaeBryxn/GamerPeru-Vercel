@@ -45,13 +45,15 @@ export function translateLegacyCategoryUrl(
       }
     } else if (categorySlug === "teclados") {
       if (key === "formato") {
-        hasLegacy = true;
         for (const v of values) {
           if (v === "compactos") {
+            hasLegacy = true;
             translated["formato"] = [...(translated["formato"] ?? []), "60", "65"];
           } else if (v === "tkl-75") {
+            hasLegacy = true;
             translated["formato"] = [...(translated["formato"] ?? []), "75", "tkl"];
           } else if (v === "magneticos") {
+            hasLegacy = true;
             translated["tipo_switch"] = [...(translated["tipo_switch"] ?? []), "magnetico"];
           } else {
             translated["formato"] = [...(translated["formato"] ?? []), v];

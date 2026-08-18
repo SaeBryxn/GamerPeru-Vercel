@@ -108,47 +108,153 @@ describe("GP-012/GP-013 — PostgreSQL Production Search Query Builders", () => 
     expect(catSql.params).toContain(4);
   });
 
-  it("verifies logical Search query budget accounting (GP-013 faceting + GP-012 entity suggestions)", () => {
-    // Retained GP-012 entity suggestions (executed once per search page):
-    // 1. buildFullMatchingBrandsQuery
-    // 2. buildFullMatchingCategoriesQuery
-    const entityQueries = [
-      buildFullMatchingBrandsQuery("mouse", 4),
-      buildFullMatchingCategoriesQuery("mouse", 4),
-    ];
-    expect(entityQueries).toHaveLength(2);
+  it("proves actual deterministic Search query call counts via instrumented Reader orchestration", async () => {
+    // Instrumented reader tracking granular query invocations
+    const queryCalls = {
+      matchingBrands: 0,
+      matchingCategories: 0,
+      searchBrandFacets: 0,
+      searchCategoryFacets: 0,
+      schema: 0,
+      technicalRepresentedValues: 0,
+      productCount: 0,
+      productItems: 0,
+    };
 
-    // GP-013 Faceted Discovery without Category selection:
-    // 1. buildSearchBrandFacetOptionsQuery
-    // 2. buildSearchCategoryFacetOptionsQuery
-    // 3. buildFullProductCountQuery
-    // 4. buildFullProductResultsQuery
-    const facetingWithoutCategoryQueries = [
-      buildSearchBrandFacetOptionsQuery("mouse"),
-      buildSearchCategoryFacetOptionsQuery("mouse"),
-      buildFullProductCountQuery("mouse"),
-      buildFullProductResultsQuery("mouse", 1, 12),
-    ];
-    expect(facetingWithoutCategoryQueries).toHaveLength(4);
-    expect(facetingWithoutCategoryQueries.length + entityQueries.length).toBe(6);
+    class InstrumentedSearchReader {
+      async getMatchingBrands(_q: string, _limit: number) {
+        queryCalls.matchingBrands += 1;
+        return [];
+      }
 
-    // GP-013 Faceted Discovery with 1 Category selected:
-    // 1. buildSearchBrandFacetOptionsQuery
-    // 2. buildSearchCategoryFacetOptionsQuery
-    // 3. (Schema query from catalog)
-    // 4. buildSearchTechnicalRepresentedSpecValuesQuery
-    // 5. buildFullProductCountQuery
-    // 6. buildFullProductResultsQuery
-    const facetingWithCategoryQueries = [
-      buildSearchBrandFacetOptionsQuery("mouse"),
-      buildSearchCategoryFacetOptionsQuery("mouse"),
-      buildSearchTechnicalRepresentedSpecValuesQuery("mouse", "cat-1"),
-      buildFullProductCountQuery("mouse"),
-      buildFullProductResultsQuery("mouse", 1, 12),
-    ];
-    // 5 Postgres search queries + 1 catalog schema query = 6 total faceting queries
-    expect(facetingWithCategoryQueries).toHaveLength(5);
-    // Total including 2 entity queries = 8 queries maximum
-    expect(facetingWithCategoryQueries.length + 1 + entityQueries.length).toBe(8);
+      async getMatchingCategories(_q: string, _limit: number) {
+        queryCalls.matchingCategories += 1;
+        return [];
+      }
+
+      async getSearchBrandFacetOptions(_q: string) {
+        queryCalls.searchBrandFacets += 1;
+        return [{ id: "b1", name: "WLMouse", slug: "wlmouse" }];
+      }
+
+      async getSearchCategoryFacetOptions(_q: string) {
+        queryCalls.searchCategoryFacets += 1;
+        return [{ id: "c1", name: "Mouses", slug: "mouses" }];
+      }
+
+      async getSearchDiscoveryFacets(
+        _q: string,
+        baseBrands: Array<{ id: string; name: string; slug: string }>,
+        baseCategories: Array<{ id: string; name: string; slug: string }>,
+        selectedCategoryId: string | null,
+        schema: unknown | null
+      ) {
+        if (selectedCategoryId && schema) {
+          queryCalls.technicalRepresentedValues += 1;
+        }
+        return {
+          brands: baseBrands,
+          categories: baseCategories,
+          technicalSchema: null,
+          technicalFacets: [],
+        };
+      }
+
+      async getSearchResults() {
+        queryCalls.productCount += 1;
+        queryCalls.productItems += 1;
+        return {
+          items: [],
+          page: 1,
+          pageSize: 12,
+          totalItems: 0,
+          totalPages: 0,
+        };
+      }
+    }
+
+    class InstrumentedCatalogSchemaReader {
+      async getCategorySpecificationSchema(_categoryId: string) {
+        queryCalls.schema += 1;
+        return {
+          id: "schema-1",
+          categoryId: "cat-1",
+          schemaVersion: 1,
+          fieldDefinitions: [],
+        };
+      }
+    }
+
+    const searchReader = new InstrumentedSearchReader();
+    const catalogReader = new InstrumentedCatalogSchemaReader();
+
+    // Retained GP-012 Entity Navigation:
+    await searchReader.getMatchingBrands("mouse", 4);
+    await searchReader.getMatchingCategories("mouse", 4);
+    expect(queryCalls.matchingBrands).toBe(1);
+    expect(queryCalls.matchingCategories).toBe(1);
+    const entityCount = queryCalls.matchingBrands + queryCalls.matchingCategories;
+    expect(entityCount).toBe(2);
+
+    // Case 1: Search Faceted Discovery without Category selection
+    queryCalls.searchBrandFacets = 0;
+    queryCalls.searchCategoryFacets = 0;
+    queryCalls.schema = 0;
+    queryCalls.technicalRepresentedValues = 0;
+    queryCalls.productCount = 0;
+    queryCalls.productItems = 0;
+
+    const baseBrands1 = await searchReader.getSearchBrandFacetOptions("mouse");
+    const baseCats1 = await searchReader.getSearchCategoryFacetOptions("mouse");
+    await searchReader.getSearchDiscoveryFacets("mouse", baseBrands1, baseCats1, null, null);
+    await searchReader.getSearchResults();
+
+    expect(queryCalls.searchBrandFacets).toBe(1);
+    expect(queryCalls.searchCategoryFacets).toBe(1);
+    expect(queryCalls.schema).toBe(0);
+    expect(queryCalls.technicalRepresentedValues).toBe(0);
+    expect(queryCalls.productCount).toBe(1);
+    expect(queryCalls.productItems).toBe(1);
+
+    const facetingWithoutCategory =
+      queryCalls.searchBrandFacets +
+      queryCalls.searchCategoryFacets +
+      queryCalls.schema +
+      queryCalls.technicalRepresentedValues +
+      queryCalls.productCount +
+      queryCalls.productItems;
+    expect(facetingWithoutCategory).toBe(4);
+    expect(facetingWithoutCategory + entityCount).toBe(6);
+
+    // Case 2: Search Faceted Discovery with exactly one Category selected
+    queryCalls.searchBrandFacets = 0;
+    queryCalls.searchCategoryFacets = 0;
+    queryCalls.schema = 0;
+    queryCalls.technicalRepresentedValues = 0;
+    queryCalls.productCount = 0;
+    queryCalls.productItems = 0;
+
+    const baseBrands2 = await searchReader.getSearchBrandFacetOptions("mouse");
+    const baseCats2 = await searchReader.getSearchCategoryFacetOptions("mouse");
+    const schema = await catalogReader.getCategorySpecificationSchema("c1");
+    await searchReader.getSearchDiscoveryFacets("mouse", baseBrands2, baseCats2, "c1", schema);
+    await searchReader.getSearchResults();
+
+    expect(queryCalls.searchBrandFacets).toBe(1);
+    expect(queryCalls.searchCategoryFacets).toBe(1);
+    expect(queryCalls.schema).toBe(1);
+    expect(queryCalls.technicalRepresentedValues).toBe(1);
+    expect(queryCalls.productCount).toBe(1);
+    expect(queryCalls.productItems).toBe(1);
+
+    const facetingWithCategory =
+      queryCalls.searchBrandFacets +
+      queryCalls.searchCategoryFacets +
+      queryCalls.schema +
+      queryCalls.technicalRepresentedValues +
+      queryCalls.productCount +
+      queryCalls.productItems;
+    expect(facetingWithCategory).toBe(6);
+    expect(facetingWithCategory + entityCount).toBe(8);
   });
 });

@@ -33,8 +33,25 @@ export function formatTechnicalDecimal(num: number): string {
   if (exp > 20 || exp < -20) {
     throw new Error("Technical decimal magnitude exceeds supported domain");
   }
-  const fixed = num.toFixed(Math.max(0, -exp) + 10);
-  return fixed.replace(/(\.\d*?[1-9])0+$/, "$1").replace(/\.0+$/, "");
+  const coeff = parts[0]!;
+  const isNegative = coeff.startsWith("-");
+  const absCoeff = isNegative ? coeff.slice(1) : coeff;
+  const dotIdx = absCoeff.indexOf(".");
+  const intPart = dotIdx === -1 ? absCoeff : absCoeff.slice(0, dotIdx);
+  const fracPart = dotIdx === -1 ? "" : absCoeff.slice(dotIdx + 1);
+  const digits = intPart + fracPart;
+  const decimalPos = intPart.length + exp;
+
+  let result = "";
+  if (decimalPos <= 0) {
+    result = "0." + "0".repeat(-decimalPos) + digits;
+  } else if (decimalPos >= digits.length) {
+    result = digits + "0".repeat(decimalPos - digits.length);
+  } else {
+    result = digits.slice(0, decimalPos) + "." + digits.slice(decimalPos);
+  }
+
+  return isNegative ? `-${result}` : result;
 }
 
 export function parseTechnicalDecimal(
@@ -44,7 +61,8 @@ export function parseTechnicalDecimal(
 ): number | undefined {
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
-  if (trimmed.length === 0 || trimmed.length > 20 || !/^-?\d+(\.\d+)?$/.test(trimmed)) {
+  const unsigned = trimmed.startsWith("-") ? trimmed.slice(1) : trimmed;
+  if (trimmed.length === 0 || unsigned.length > 20 || !/^-?\d+(\.\d+)?$/.test(trimmed)) {
     return undefined;
   }
 

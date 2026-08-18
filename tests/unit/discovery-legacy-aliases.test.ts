@@ -73,11 +73,31 @@ describe("Legacy Category Navigation URL Translation (GP-013 Section 1 Policy)",
     expect(res.translatedParams?.tipo_accesorio).toEqual(["skates"]);
   });
 
-  it("does NOT trigger redirect for already canonical parameters on mousepads or other categories", () => {
+  it("does NOT trigger redirect for already canonical parameters on mousepads, teclados, or other categories", () => {
     const res1 = translateLegacyCategoryUrl("mousepads", { superficie: "vidrio", tamano: "xl" });
     expect(res1.hasLegacyParams).toBe(false);
 
     const res2 = translateLegacyCategoryUrl("mouses", { marca: "wlmouse", sort: "precio-menor" });
     expect(res2.hasLegacyParams).toBe(false);
+
+    // Canonical keyboard single values must not trigger legacy redirects
+    expect(translateLegacyCategoryUrl("teclados", { formato: "60" }).hasLegacyParams).toBe(false);
+    expect(translateLegacyCategoryUrl("teclados", { formato: "65" }).hasLegacyParams).toBe(false);
+    expect(translateLegacyCategoryUrl("teclados", { formato: "75" }).hasLegacyParams).toBe(false);
+    expect(translateLegacyCategoryUrl("teclados", { formato: "tkl" }).hasLegacyParams).toBe(false);
+
+    // Canonical keyboard repeated values must not trigger legacy redirects
+    expect(translateLegacyCategoryUrl("teclados", { formato: ["60", "65"] }).hasLegacyParams).toBe(
+      false
+    );
+    expect(translateLegacyCategoryUrl("teclados", { formato: ["75", "tkl"] }).hasLegacyParams).toBe(
+      false
+    );
+  });
+
+  it("handles mixed canonical + legacy keyboard values correctly", () => {
+    const mixed = translateLegacyCategoryUrl("teclados", { formato: ["60", "compactos"] });
+    expect(mixed.hasLegacyParams).toBe(true);
+    expect(mixed.translatedParams?.formato).toEqual(["60", "60", "65"]);
   });
 });

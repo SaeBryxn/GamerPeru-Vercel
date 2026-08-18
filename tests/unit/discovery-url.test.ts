@@ -234,7 +234,10 @@ describe("Discovery URL Parser and Serializer (GP-013 Contract & Canonicalizatio
       expect(formatTechnicalDecimal(0.5)).toBe("0.5");
       expect(formatTechnicalDecimal(0.01)).toBe("0.01");
       expect(formatTechnicalDecimal(0.0000001)).toBe("0.0000001");
+      expect(formatTechnicalDecimal(0.000000123456789012)).toBe("0.000000123456789012");
+      expect(formatTechnicalDecimal(-0.000000123456789012)).toBe("-0.000000123456789012");
       expect(formatTechnicalDecimal(123456.78)).toBe("123456.78");
+      expect(formatTechnicalDecimal(-45.5)).toBe("-45.5");
     });
 
     it("rejects scientific notation in raw technical number input", () => {
@@ -244,15 +247,30 @@ describe("Discovery URL Parser and Serializer (GP-013 Contract & Canonicalizatio
     });
 
     it("guarantees round-trip decimal stability (parse -> format -> parse)", () => {
-      const testCases = ["45", "45.5", "0.5", "0.01", "0.0000001", "68.25"];
+      const testCases = [
+        "45",
+        "45.5",
+        "0.5",
+        "0.01",
+        "0.0000001",
+        "0.000000123456789012",
+        "-0.000000123456789012",
+        "-45.5",
+        "68.25",
+      ];
       for (const input of testCases) {
         const parsed = parseTechnicalDecimal(input);
         expect(parsed).toBeDefined();
         const serialized = formatTechnicalDecimal(parsed!);
         expect(serialized).toBe(input);
+        expect(serialized).not.toMatch(/[eE]/);
         const reparsed = parseTechnicalDecimal(serialized);
         expect(reparsed).toBe(parsed);
       }
+    });
+
+    it("rejects inputs exceeding maximum 20-character safety bound", () => {
+      expect(parseTechnicalDecimal("0.123456789012345678901")).toBeUndefined();
     });
   });
 });
