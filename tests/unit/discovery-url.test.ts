@@ -246,7 +246,31 @@ describe("Discovery URL Parser and Serializer (GP-013 Contract & Canonicalizatio
       expect(parseTechnicalDecimal("1e5")).toBeUndefined();
     });
 
-    it("guarantees round-trip decimal stability (parse -> format -> parse)", () => {
+    it("rejects 20-character inputs whose normalized canonical representation exceeds 20 characters", () => {
+      // 99999999999999999999 is 20 chars, but normalizes to 100000000000000000000 (21 chars)
+      expect(parseTechnicalDecimal("99999999999999999999")).toBeUndefined();
+      expect(parseTechnicalDecimal("-99999999999999999999")).toBeUndefined();
+    });
+
+    it("accepts valid large numbers whose canonical representation remains within the 20-character bound", () => {
+      const validLargeInputs = [
+        "1000000000000000000", // 19 chars (10^18)
+        "1234567890123456789", // 19 chars
+        "-1000000000000000000",
+      ];
+      for (const input of validLargeInputs) {
+        const parsed = parseTechnicalDecimal(input);
+        expect(parsed).toBeDefined();
+        const serialized = formatTechnicalDecimal(parsed!);
+        const unsignedSerialized = serialized.startsWith("-") ? serialized.slice(1) : serialized;
+        expect(unsignedSerialized.length).toBeLessThanOrEqual(20);
+        expect(serialized).not.toMatch(/[eE]/);
+        const reparsed = parseTechnicalDecimal(serialized);
+        expect(reparsed).toBe(parsed);
+      }
+    });
+
+    it("guarantees round-trip decimal stability (parse -> format -> parse) across all accepted boundary fixtures", () => {
       const testCases = [
         "45",
         "45.5",
@@ -257,6 +281,8 @@ describe("Discovery URL Parser and Serializer (GP-013 Contract & Canonicalizatio
         "-0.000000123456789012",
         "-45.5",
         "68.25",
+        "1000000000000000000",
+        "-1000000000000000000",
       ];
       for (const input of testCases) {
         const parsed = parseTechnicalDecimal(input);
@@ -264,6 +290,8 @@ describe("Discovery URL Parser and Serializer (GP-013 Contract & Canonicalizatio
         const serialized = formatTechnicalDecimal(parsed!);
         expect(serialized).toBe(input);
         expect(serialized).not.toMatch(/[eE]/);
+        const unsignedSerialized = serialized.startsWith("-") ? serialized.slice(1) : serialized;
+        expect(unsignedSerialized.length).toBeLessThanOrEqual(20);
         const reparsed = parseTechnicalDecimal(serialized);
         expect(reparsed).toBe(parsed);
       }

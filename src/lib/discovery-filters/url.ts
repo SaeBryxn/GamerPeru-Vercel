@@ -72,6 +72,16 @@ export function parseTechnicalDecimal(
   if (fieldMin !== undefined && num < fieldMin) return undefined;
   if (fieldMax !== undefined && num > fieldMax) return undefined;
 
+  try {
+    const canonical = formatTechnicalDecimal(num);
+    const unsignedCanonical = canonical.startsWith("-") ? canonical.slice(1) : canonical;
+    if (unsignedCanonical.length > 20 || /[eE]/.test(canonical)) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+
   return num;
 }
 
