@@ -13,14 +13,12 @@ import {
 } from "drizzle-orm/pg-core";
 import { generateUuidV7 } from "../../utils/uuid";
 import { catalogStatusEnum } from "../enums";
+import { categorySpecificationSchemas } from "./category-specification-schemas";
 
 /**
  * Categories Entity
  *
  * Represents the multi-tier gaming peripherals taxonomy (Mouses, Teclados, Audio, Mousepads, Accesorios).
- *
- * Note on Canonical Deferred Field:
- * - `current_spec_schema_id` (FK -> CategorySpecificationSchema) is deferred to GP-013/GP-014.
  */
 export const categories = pgTable(
   "categories",
@@ -33,6 +31,12 @@ export const categories = pgTable(
     parentId: uuid("parent_id").references((): AnyPgColumn => categories.id, {
       onDelete: "restrict",
     }),
+    currentSpecSchemaId: uuid("current_spec_schema_id").references(
+      (): AnyPgColumn => categorySpecificationSchemas.id,
+      {
+        onDelete: "set null",
+      }
+    ),
     description: text("description"),
     displayOrder: integer("display_order").notNull().default(0),
     status: catalogStatusEnum("status").notNull().default("DRAFT"),

@@ -3,18 +3,18 @@ import * as schema from "@/db/schema";
 import { getTableColumns } from "drizzle-orm";
 
 describe("Catalog Schema — Physical Bootstrap Integrity", () => {
-  it("exports exactly the 5 approved canonical catalog tables", () => {
+  it("exports exactly the 7 approved canonical catalog tables", () => {
     expect(schema.mediaAssets).toBeDefined();
     expect(schema.brands).toBeDefined();
     expect(schema.categories).toBeDefined();
     expect(schema.products).toBeDefined();
     expect(schema.productVariants).toBeDefined();
+    expect(schema.categorySpecificationSchemas).toBeDefined();
+    expect(schema.productSpecifications).toBeDefined();
 
     // Verify deferred tables are NOT present in this gate
     expect((schema as Record<string, unknown>).collections).toBeUndefined();
     expect((schema as Record<string, unknown>).productCollections).toBeUndefined();
-    expect((schema as Record<string, unknown>).categorySpecificationSchemas).toBeUndefined();
-    expect((schema as Record<string, unknown>).productSpecifications).toBeUndefined();
     expect((schema as Record<string, unknown>).productStories).toBeUndefined();
     expect((schema as Record<string, unknown>).customerProfiles).toBeUndefined();
     expect((schema as Record<string, unknown>).orders).toBeUndefined();
@@ -65,12 +65,13 @@ describe("Catalog Schema — Physical Bootstrap Integrity", () => {
   });
 
   describe("categories table", () => {
-    it("has canonical column definitions and excludes non-canonical hero_media_id", () => {
+    it("has canonical column definitions including current_spec_schema_id", () => {
       const cols = getTableColumns(schema.categories);
       expect(cols.id).toBeDefined();
       expect(cols.name).toBeDefined();
       expect(cols.slug).toBeDefined();
       expect(cols.parentId).toBeDefined();
+      expect(cols.currentSpecSchemaId).toBeDefined();
       expect(cols.description).toBeDefined();
       expect(cols.displayOrder).toBeDefined();
       expect(cols.status).toBeDefined();
@@ -79,8 +80,29 @@ describe("Catalog Schema — Physical Bootstrap Integrity", () => {
 
       // Ensure non-canonical hero_media_id is NOT in categories
       expect((cols as Record<string, unknown>).heroMediaId).toBeUndefined();
-      // Ensure deferred spec schema is NOT in categories yet
-      expect((cols as Record<string, unknown>).currentSpecSchemaId).toBeUndefined();
+    });
+  });
+
+  describe("category_specification_schemas table", () => {
+    it("has canonical column definitions", () => {
+      const cols = getTableColumns(schema.categorySpecificationSchemas);
+      expect(cols.id).toBeDefined();
+      expect(cols.categoryId).toBeDefined();
+      expect(cols.schemaVersion).toBeDefined();
+      expect(cols.fieldDefinitions).toBeDefined();
+      expect(cols.isActive).toBeDefined();
+      expect(cols.createdAt).toBeDefined();
+    });
+  });
+
+  describe("product_specifications table", () => {
+    it("has canonical column definitions", () => {
+      const cols = getTableColumns(schema.productSpecifications);
+      expect(cols.productId).toBeDefined();
+      expect(cols.schemaId).toBeDefined();
+      expect(cols.schemaVersion).toBeDefined();
+      expect(cols.specValues).toBeDefined();
+      expect(cols.updatedAt).toBeDefined();
     });
   });
 

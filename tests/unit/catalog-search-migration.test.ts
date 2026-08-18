@@ -85,7 +85,7 @@ describe("GP-012 — Search Migration and Schema Trigram Index Integrity", () =>
     expect(existsSync(journalPath)).toBe(true);
 
     const journal = JSON.parse(readFileSync(journalPath, "utf8"));
-    expect(journal.entries).toHaveLength(2);
+    expect(journal.entries.length).toBeGreaterThanOrEqual(2);
     expect(journal.entries[0].tag).toBe("0000_superb_ink");
     expect(journal.entries[1].tag).toBe("0001_search_pg_trgm");
   });

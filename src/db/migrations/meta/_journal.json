@@ -15,6 +15,13 @@
       "when": 1786981173767,
       "tag": "0001_search_pg_trgm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787025464371,
+      "tag": "0002_silky_dazzler",
+      "breakpoints": true
     }
   ]
 }
