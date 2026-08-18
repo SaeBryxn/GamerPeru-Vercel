@@ -62,3 +62,16 @@ export interface PaginatedResult<T> {
   pageSize: number;
   totalPages: number;
 }
+
+export type {
+  DiscoveryFilterState,
+  DiscoverySort,
+  DiscoveryFacets,
+  ValidatedSpecificationSchema,
+  TechnicalFacet,
+  TechnicalEnumFacet,
+  TechnicalNumberFacet,
+  TechnicalBooleanFacet,
+  SpecificationEnumOption,
+  AppliedFilterChip,
+} from "@/lib/discovery-filters/types";

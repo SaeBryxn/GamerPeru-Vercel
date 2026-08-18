@@ -68,7 +68,7 @@ describe("Synthetic FixtureCatalogDiscoveryReader (Lifecycle & Discovery Verific
 
   it("returns empty result for empty category", async () => {
     const result = await reader.getPublishedProductsByCategory(
-      "018f0000-0000-7000-8000-000000000003",
+      "018f0000-0000-7000-8000-000000000090",
       { page: 1, pageSize: 12 }
     );
     expect(result.totalItems).toBe(0);

@@ -1,7 +1,14 @@
 import "server-only";
-import type { PaginatedResult, ProductDiscoveryItem } from "@/lib/catalog/types";
+import type {
+  DiscoveryFacets,
+  DiscoveryFilterState,
+  PaginatedResult,
+  ProductDiscoveryItem,
+  ValidatedSpecificationSchema,
+} from "@/lib/catalog/types";
 import type { CatalogSearchReader } from "./reader";
 import {
+  getSyntheticSearchDiscoveryFacets,
   getSyntheticSuggestions,
   searchSyntheticMatchingEntities,
   searchSyntheticProducts,
@@ -19,11 +26,20 @@ export class DevCatalogSearchReader implements CatalogSearchReader {
     return getSyntheticSuggestions(query);
   }
 
+  async getSearchDiscoveryFacets(
+    query: string,
+    selectedCategorySlug: string | null
+  ): Promise<DiscoveryFacets> {
+    return getSyntheticSearchDiscoveryFacets(query, selectedCategorySlug);
+  }
+
   async searchProducts(
     query: string,
-    pagination: SearchPagination
+    pagination: SearchPagination,
+    filterState?: DiscoveryFilterState,
+    schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
-    return searchSyntheticProducts(query, pagination);
+    return searchSyntheticProducts(query, pagination, filterState, schema);
   }
 
   async searchMatchingEntities(query: string): Promise<SearchEntityMatches> {

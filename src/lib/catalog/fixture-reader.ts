@@ -1,5 +1,27 @@
 import "server-only";
+import type {
+  DiscoveryFacets,
+  DiscoveryFilterState,
+  SpecificationEnumOption,
+  TechnicalFacet,
+  ValidatedSpecificationSchema,
+} from "@/lib/discovery-filters/types";
+
 import type { CatalogDiscoveryReader } from "./reader";
+import {
+  SYNTHETIC_CATEGORIES,
+  SYNTHETIC_NAV_BRANDS,
+  SYNTHETIC_QA_BRAND,
+  SYNTHETIC_SPEC_SCHEMAS,
+  SYNTHETIC_TEST_BRANDS,
+  SYNTHETIC_TEST_CATEGORIES,
+  filterAndSortSyntheticProducts,
+  generateSyntheticProducts,
+  type SyntheticBrandEntry,
+  type SyntheticCategoryEntry,
+  type SyntheticProductWithSpecs,
+} from "./synthetic-catalog-data";
+
 import type {
   BrandDiscoveryEntity,
   CategoryDiscoveryEntity,
@@ -7,51 +29,93 @@ import type {
   PaginationOptions,
   ProductDiscoveryItem,
 } from "./types";
-import {
-  SYNTHETIC_CATEGORIES,
-  SYNTHETIC_QA_BRAND,
-  SYNTHETIC_TEST_BRANDS,
-  SYNTHETIC_TEST_CATEGORIES,
-  generateSyntheticProducts,
-} from "./synthetic-catalog-data";
-import type { SyntheticBrandEntry, SyntheticCategoryEntry } from "./synthetic-catalog-data";
 
-/**
- * Synthetic Test Fixture Catalog Discovery Reader
- *
- * Provides deterministic, isolated test fixtures for Playwright E2E and visual QA
- * suites without requiring live Supabase credentials in CI.
- *
- * Security & Data Invariant:
- * 1. This reader contains purely synthetic TEST DATA.
- * 2. It is NEVER used in production.
- * 3. It never writes to PostgreSQL.
- * 4. It can only be activated when E2E_CATALOG_FIXTURES=1 and PLAYWRIGHT_TEST=1 in non-production.
- */
-
-const FIXTURE_CATEGORIES: Record<string, SyntheticCategoryEntry> = {
-  // Include the "mouses" and "teclados" categories used by existing E2E tests
-  mouses: SYNTHETIC_CATEGORIES["mouses"]!,
-  teclados: SYNTHETIC_CATEGORIES["teclados"]!,
-  // Test-only categories
+const ALL_FIXTURE_CATEGORIES: Record<string, SyntheticCategoryEntry> = {
+  ...SYNTHETIC_CATEGORIES,
   ...SYNTHETIC_TEST_CATEGORIES,
 };
 
-const FIXTURE_BRANDS: Record<string, SyntheticBrandEntry> = {
+const ALL_FIXTURE_BRANDS: Record<string, SyntheticBrandEntry> = {
   "marca-qa": SYNTHETIC_QA_BRAND,
+  ...SYNTHETIC_NAV_BRANDS,
   ...SYNTHETIC_TEST_BRANDS,
 };
 
-// Generate 14 synthetic products to exercise 12-item pagination (Page 1 = 12, Page 2 = 2)
-const FIXTURE_PRODUCTS: ProductDiscoveryItem[] = generateSyntheticProducts(
-  "mouses",
-  "Mouses Gaming",
-  14
-);
+const FIXTURE_PRODUCTS: SyntheticProductWithSpecs[] = [
+  ...generateSyntheticProducts("mouses", "Mouses Gaming", 14, 1),
+  ...generateSyntheticProducts("teclados", "Teclados Gaming", 4, 1),
+  ...generateSyntheticProducts("mousepads", "Mousepads Gaming", 4, 1),
+  ...generateSyntheticProducts("audio", "Audio Gaming", 4, 1),
+  ...generateSyntheticProducts("accesorios", "Accesorios Gaming", 4, 1),
+];
+
+function deriveSyntheticTechnicalFacets(
+  schema: ValidatedSpecificationSchema,
+  products: SyntheticProductWithSpecs[]
+): TechnicalFacet[] {
+  const facets: TechnicalFacet[] = [];
+
+  for (const field of schema.fieldDefinitions) {
+    if (!field.filterable) continue;
+
+    if (field.filterKind === "ENUM_MULTI") {
+      const representedValues = new Set<string>();
+      for (const p of products) {
+        const val = p.specValues[field.key];
+        if (typeof val === "string") {
+          representedValues.add(val);
+        }
+      }
+
+      const representedOptions: SpecificationEnumOption[] = (field.options ?? []).filter((opt) =>
+        representedValues.has(opt.value)
+      );
+
+      if (representedOptions.length > 0) {
+        facets.push({
+          field,
+          kind: "ENUM_MULTI",
+          representedOptions,
+        });
+      }
+    } else if (field.filterKind === "NUMBER_RANGE") {
+      let minObserved: number | null = null;
+      let maxObserved: number | null = null;
+
+      for (const p of products) {
+        const val = p.specValues[field.key];
+        if (typeof val === "number" && Number.isFinite(val)) {
+          if (minObserved === null || val < minObserved) minObserved = val;
+          if (maxObserved === null || val > maxObserved) maxObserved = val;
+        }
+      }
+
+      if (minObserved !== null && maxObserved !== null) {
+        facets.push({
+          field,
+          kind: "NUMBER_RANGE",
+          minRepresented: minObserved,
+          maxRepresented: maxObserved,
+        });
+      }
+    } else if (field.filterKind === "BOOLEAN") {
+      const hasTrue = products.some((p) => p.specValues[field.key] === true);
+      if (hasTrue) {
+        facets.push({
+          field,
+          kind: "BOOLEAN",
+          hasRepresentedTrue: true,
+        });
+      }
+    }
+  }
+
+  return facets;
+}
 
 export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
   async getPublishedCategoryBySlug(slug: string): Promise<CategoryDiscoveryEntity | null> {
-    const item = FIXTURE_CATEGORIES[slug];
+    const item = ALL_FIXTURE_CATEGORIES[slug];
     if (!item || item.status !== "PUBLISHED") {
       return null;
     }
@@ -66,7 +130,7 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
   }
 
   async getPublishedBrandBySlug(slug: string): Promise<BrandDiscoveryEntity | null> {
-    const item = FIXTURE_BRANDS[slug];
+    const item = ALL_FIXTURE_BRANDS[slug];
     if (!item || item.status !== "PUBLISHED") {
       return null;
     }
@@ -79,11 +143,83 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
     };
   }
 
+  async getCategorySpecificationSchema(
+    categoryId: string
+  ): Promise<ValidatedSpecificationSchema | null> {
+    const category = Object.values(ALL_FIXTURE_CATEGORIES).find((c) => c.id === categoryId);
+    if (!category) return null;
+    return SYNTHETIC_SPEC_SCHEMAS[category.slug] ?? null;
+  }
+
+  async getCategoryDiscoveryFacets(
+    categoryId: string,
+    schema: ValidatedSpecificationSchema | null
+  ): Promise<DiscoveryFacets> {
+    const targetCategory = Object.values(ALL_FIXTURE_CATEGORIES).find((c) => c.id === categoryId);
+    if (!targetCategory) {
+      return { brands: [], categories: [], technicalSchema: null, technicalFacets: [] };
+    }
+
+    const baseProducts = FIXTURE_PRODUCTS.filter((p) => p.category.slug === targetCategory.slug);
+    const representedBrandSlugs = new Set(baseProducts.map((p) => p.brand.slug));
+    const brandOptions = Object.values(ALL_FIXTURE_BRANDS)
+      .filter((b) => b.status === "PUBLISHED" && representedBrandSlugs.has(b.slug))
+      .map((b) => ({ id: b.id, name: b.name, slug: b.slug }));
+
+    const resolvedSchema = schema ?? SYNTHETIC_SPEC_SCHEMAS[targetCategory.slug] ?? null;
+    const techFacets = resolvedSchema
+      ? deriveSyntheticTechnicalFacets(resolvedSchema, baseProducts)
+      : [];
+
+    return {
+      brands: brandOptions,
+      categories: [],
+      technicalSchema: resolvedSchema,
+      technicalFacets: techFacets,
+    };
+  }
+
+  async getBrandDiscoveryFacets(
+    brandId: string,
+    selectedCategorySlug: string | null
+  ): Promise<DiscoveryFacets> {
+    const targetBrand = Object.values(ALL_FIXTURE_BRANDS).find((b) => b.id === brandId);
+    if (!targetBrand) {
+      return { brands: [], categories: [], technicalSchema: null, technicalFacets: [] };
+    }
+
+    const baseProducts = FIXTURE_PRODUCTS.filter((p) => p.brand.slug === targetBrand.slug);
+    const representedCategorySlugs = new Set(baseProducts.map((p) => p.category.slug));
+    const categoryOptions = Object.values(ALL_FIXTURE_CATEGORIES)
+      .filter((c) => c.status === "PUBLISHED" && representedCategorySlugs.has(c.slug))
+      .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
+
+    let techFacets: TechnicalFacet[] = [];
+    let techSchema: ValidatedSpecificationSchema | null = null;
+
+    if (selectedCategorySlug) {
+      techSchema = SYNTHETIC_SPEC_SCHEMAS[selectedCategorySlug] ?? null;
+      if (techSchema) {
+        const catProducts = baseProducts.filter((p) => p.category.slug === selectedCategorySlug);
+        techFacets = deriveSyntheticTechnicalFacets(techSchema, catProducts);
+      }
+    }
+
+    return {
+      brands: [],
+      categories: categoryOptions,
+      technicalSchema: techSchema,
+      technicalFacets: techFacets,
+    };
+  }
+
   async getPublishedProductsByCategory(
     categoryId: string,
-    pagination: PaginationOptions
+    pagination: PaginationOptions,
+    filterState?: DiscoveryFilterState,
+    schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
-    const targetCategory = Object.values(FIXTURE_CATEGORIES).find(
+    const targetCategory = Object.values(ALL_FIXTURE_CATEGORIES).find(
       (c) => c.id === categoryId && c.status === "PUBLISHED"
     );
 
@@ -97,7 +233,15 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
       };
     }
 
-    const filtered = FIXTURE_PRODUCTS.filter((p) => p.category.slug === targetCategory.slug);
+    const baseProducts = FIXTURE_PRODUCTS.filter((p) => p.category.slug === targetCategory.slug);
+    const resolvedSchema = schema ?? SYNTHETIC_SPEC_SCHEMAS[targetCategory.slug] ?? null;
+    const filtered = filterAndSortSyntheticProducts(
+      baseProducts,
+      filterState,
+      "category",
+      resolvedSchema
+    );
+
     const totalItems = filtered.length;
     const pageSize = Math.max(1, Math.trunc(pagination.pageSize));
     const totalPages = Math.ceil(totalItems / pageSize);
@@ -116,9 +260,11 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
 
   async getPublishedProductsByBrand(
     brandId: string,
-    pagination: PaginationOptions
+    pagination: PaginationOptions,
+    filterState?: DiscoveryFilterState,
+    schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
-    const targetBrand = Object.values(FIXTURE_BRANDS).find(
+    const targetBrand = Object.values(ALL_FIXTURE_BRANDS).find(
       (b) => b.id === brandId && b.status === "PUBLISHED"
     );
 
@@ -132,7 +278,14 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
       };
     }
 
-    const filtered = FIXTURE_PRODUCTS.filter((p) => p.brand.slug === targetBrand.slug);
+    const baseProducts = FIXTURE_PRODUCTS.filter((p) => p.brand.slug === targetBrand.slug);
+    const filtered = filterAndSortSyntheticProducts(
+      baseProducts,
+      filterState,
+      "brand",
+      schema ?? null
+    );
+
     const totalItems = filtered.length;
     const pageSize = Math.max(1, Math.trunc(pagination.pageSize));
     const totalPages = Math.ceil(totalItems / pageSize);

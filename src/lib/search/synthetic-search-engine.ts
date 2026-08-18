@@ -1,11 +1,23 @@
 import "server-only";
 import {
-  generateSyntheticProducts,
   SYNTHETIC_CATEGORIES,
   SYNTHETIC_NAV_BRANDS,
   SYNTHETIC_QA_BRAND,
+  SYNTHETIC_SPEC_SCHEMAS,
+  filterAndSortSyntheticProducts,
+  generateSyntheticProducts,
+  type SyntheticProductWithSpecs,
 } from "@/lib/catalog/synthetic-catalog-data";
-import type { PaginatedResult, ProductDiscoveryItem } from "@/lib/catalog/types";
+import type {
+  DiscoveryFacets,
+  DiscoveryFilterState,
+  PaginatedResult,
+  ProductDiscoveryItem,
+  SpecificationEnumOption,
+  TechnicalFacet,
+  ValidatedSpecificationSchema,
+} from "@/lib/catalog/types";
+
 import { getQueryCodePointLength, normalizeSearchQuery } from "./normalization";
 import {
   MIN_SEARCH_QUERY_LENGTH,
@@ -17,7 +29,7 @@ import {
   type SearchSuggestionsResult,
 } from "./types";
 
-export function getAllSyntheticProducts(): ProductDiscoveryItem[] {
+export function getAllSyntheticProducts(): SyntheticProductWithSpecs[] {
   const mouses = generateSyntheticProducts("mouses", "Mouses Gaming", 12, 1);
   const teclados = generateSyntheticProducts("teclados", "Teclados Gaming", 4, 1);
   const mousepads = generateSyntheticProducts("mousepads", "Mousepads Gaming", 4, 1);
@@ -129,6 +141,70 @@ export function executeSyntheticSearch(query: string) {
   };
 }
 
+function deriveSyntheticTechnicalFacets(
+  schema: ValidatedSpecificationSchema,
+  products: SyntheticProductWithSpecs[]
+): TechnicalFacet[] {
+  const facets: TechnicalFacet[] = [];
+
+  for (const field of schema.fieldDefinitions) {
+    if (!field.filterable) continue;
+
+    if (field.filterKind === "ENUM_MULTI") {
+      const representedValues = new Set<string>();
+      for (const p of products) {
+        const val = p.specValues[field.key];
+        if (typeof val === "string") {
+          representedValues.add(val);
+        }
+      }
+
+      const representedOptions: SpecificationEnumOption[] = (field.options ?? []).filter((opt) =>
+        representedValues.has(opt.value)
+      );
+
+      if (representedOptions.length > 0) {
+        facets.push({
+          field,
+          kind: "ENUM_MULTI",
+          representedOptions,
+        });
+      }
+    } else if (field.filterKind === "NUMBER_RANGE") {
+      let minObserved: number | null = null;
+      let maxObserved: number | null = null;
+
+      for (const p of products) {
+        const val = p.specValues[field.key];
+        if (typeof val === "number" && Number.isFinite(val)) {
+          if (minObserved === null || val < minObserved) minObserved = val;
+          if (maxObserved === null || val > maxObserved) maxObserved = val;
+        }
+      }
+
+      if (minObserved !== null && maxObserved !== null) {
+        facets.push({
+          field,
+          kind: "NUMBER_RANGE",
+          minRepresented: minObserved,
+          maxRepresented: maxObserved,
+        });
+      }
+    } else if (field.filterKind === "BOOLEAN") {
+      const hasTrue = products.some((p) => p.specValues[field.key] === true);
+      if (hasTrue) {
+        facets.push({
+          field,
+          kind: "BOOLEAN",
+          hasRepresentedTrue: true,
+        });
+      }
+    }
+  }
+
+  return facets;
+}
+
 export async function getSyntheticSuggestions(query: string): Promise<SearchSuggestionsResult> {
   const { products, brands, categories } = executeSyntheticSearch(query);
 
@@ -149,9 +225,56 @@ export async function getSyntheticSuggestions(query: string): Promise<SearchSugg
   };
 }
 
+export async function getSyntheticSearchDiscoveryFacets(
+  query: string,
+  selectedCategorySlug: string | null
+): Promise<DiscoveryFacets> {
+  const { products } = executeSyntheticSearch(query);
+
+  const representedBrandSlugs = new Set(products.map((p) => p.brand.slug));
+  const representedCategorySlugs = new Set(products.map((p) => p.category.slug));
+
+  const brandOptions = Object.values(SYNTHETIC_NAV_BRANDS)
+    .filter((b) => b.status === "PUBLISHED" && representedBrandSlugs.has(b.slug))
+    .map((b) => ({ id: b.id, name: b.name, slug: b.slug }));
+
+  // Always include Marca QA if represented
+  if (representedBrandSlugs.has(SYNTHETIC_QA_BRAND.slug)) {
+    brandOptions.push({
+      id: SYNTHETIC_QA_BRAND.id,
+      name: SYNTHETIC_QA_BRAND.name,
+      slug: SYNTHETIC_QA_BRAND.slug,
+    });
+  }
+
+  const categoryOptions = Object.values(SYNTHETIC_CATEGORIES)
+    .filter((c) => c.status === "PUBLISHED" && representedCategorySlugs.has(c.slug))
+    .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
+
+  let techFacets: TechnicalFacet[] = [];
+  let techSchema: ValidatedSpecificationSchema | null = null;
+
+  if (selectedCategorySlug) {
+    techSchema = SYNTHETIC_SPEC_SCHEMAS[selectedCategorySlug] ?? null;
+    if (techSchema) {
+      const catProducts = products.filter((p) => p.category.slug === selectedCategorySlug);
+      techFacets = deriveSyntheticTechnicalFacets(techSchema, catProducts);
+    }
+  }
+
+  return {
+    brands: brandOptions,
+    categories: categoryOptions,
+    technicalSchema: techSchema,
+    technicalFacets: techFacets,
+  };
+}
+
 export async function searchSyntheticProducts(
   query: string,
-  pagination: SearchPagination
+  pagination: SearchPagination,
+  filterState?: DiscoveryFilterState,
+  schema?: ValidatedSpecificationSchema | null
 ): Promise<PaginatedResult<ProductDiscoveryItem>> {
   const cleanQuery = normalizeSearchQuery(query);
   const safePage = Math.max(1, Math.trunc(pagination.page));
@@ -167,11 +290,19 @@ export async function searchSyntheticProducts(
     };
   }
 
-  const { products } = executeSyntheticSearch(cleanQuery);
-  const totalItems = products.length;
+  const { products: candidateProducts } = executeSyntheticSearch(cleanQuery);
+
+  const filtered = filterAndSortSyntheticProducts(
+    candidateProducts,
+    filterState,
+    "search",
+    schema ?? null
+  );
+
+  const totalItems = filtered.length;
   const totalPages = Math.ceil(totalItems / safePageSize);
   const offset = (safePage - 1) * safePageSize;
-  const items = products.slice(offset, offset + safePageSize);
+  const items = filtered.slice(offset, offset + safePageSize);
 
   return {
     items,

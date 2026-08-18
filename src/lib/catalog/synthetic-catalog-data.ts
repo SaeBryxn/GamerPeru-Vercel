@@ -13,6 +13,11 @@
  * 5. No real commercial product models, SKUs, or inventory claims.
  */
 
+import type {
+  DiscoveryFilterState,
+  ValidatedSpecificationSchema,
+} from "@/lib/discovery-filters/types";
+
 import type { BrandDiscoveryEntity, CategoryDiscoveryEntity, ProductDiscoveryItem } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -23,10 +28,6 @@ export type SyntheticCategoryEntry = CategoryDiscoveryEntity & {
   status: "PUBLISHED" | "DRAFT" | "ARCHIVED";
 };
 
-/**
- * Core navigation categories matching the storefront global navigation.
- * Descriptions are neutral development-only copy.
- */
 export const SYNTHETIC_CATEGORIES: Record<string, SyntheticCategoryEntry> = {
   mouses: {
     id: "018f0000-0000-7000-8000-000000000001",
@@ -75,10 +76,6 @@ export const SYNTHETIC_CATEGORIES: Record<string, SyntheticCategoryEntry> = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Test-only categories (not part of storefront navigation)
-// ---------------------------------------------------------------------------
-
 export const SYNTHETIC_TEST_CATEGORIES: Record<string, SyntheticCategoryEntry> = {
   "categoria-vacia": {
     id: "018f0000-0000-7000-8000-000000000090",
@@ -119,6 +116,195 @@ export const SYNTHETIC_TEST_CATEGORIES: Record<string, SyntheticCategoryEntry> =
 };
 
 // ---------------------------------------------------------------------------
+// Specification Schemas
+// ---------------------------------------------------------------------------
+
+export const SYNTHETIC_SPEC_SCHEMAS: Record<string, ValidatedSpecificationSchema> = {
+  mouses: {
+    id: "018f0000-0000-7000-8000-000000000s01",
+    categoryId: "018f0000-0000-7000-8000-000000000001",
+    schemaVersion: 1,
+    fieldDefinitions: [
+      {
+        key: "weight_g",
+        label: "Peso",
+        dataType: "number",
+        unit: "g",
+        filterable: true,
+        filterKind: "NUMBER_RANGE",
+        publicParam: "peso",
+        displayOrder: 1,
+        min: 30,
+        max: 70,
+      },
+      {
+        key: "shape",
+        label: "Forma",
+        dataType: "enum",
+        filterable: true,
+        filterKind: "ENUM_MULTI",
+        publicParam: "forma",
+        displayOrder: 2,
+        options: [
+          { value: "simetrico", label: "Simétrico" },
+          { value: "ergonomico", label: "Ergonómico" },
+        ],
+      },
+      {
+        key: "sensor",
+        label: "Sensor",
+        dataType: "enum",
+        filterable: true,
+        filterKind: "ENUM_MULTI",
+        publicParam: "sensor",
+        displayOrder: 3,
+        options: [
+          { value: "paw3950", label: "PAW3950" },
+          { value: "paw3395", label: "PAW3395" },
+        ],
+      },
+      {
+        key: "polling_rate_hz",
+        label: "Polling Rate",
+        dataType: "number",
+        unit: "Hz",
+        filterable: true,
+        filterKind: "NUMBER_RANGE",
+        publicParam: "polling",
+        displayOrder: 4,
+      },
+      {
+        key: "hotswap",
+        label: "Hot-Swap",
+        dataType: "boolean",
+        filterable: true,
+        filterKind: "BOOLEAN",
+        publicParam: "hotswap",
+        displayOrder: 5,
+      },
+    ],
+  },
+  teclados: {
+    id: "018f0000-0000-7000-8000-000000000s02",
+    categoryId: "018f0000-0000-7000-8000-000000000002",
+    schemaVersion: 1,
+    fieldDefinitions: [
+      {
+        key: "formato",
+        label: "Formato",
+        dataType: "enum",
+        filterable: true,
+        filterKind: "ENUM_MULTI",
+        publicParam: "formato",
+        displayOrder: 1,
+        options: [
+          { value: "60", label: "60%" },
+          { value: "65", label: "65%" },
+          { value: "75", label: "75%" },
+          { value: "tkl", label: "TKL" },
+        ],
+      },
+      {
+        key: "switch_type",
+        label: "Tipo de Switch",
+        dataType: "enum",
+        filterable: true,
+        filterKind: "ENUM_MULTI",
+        publicParam: "tipo_switch",
+        displayOrder: 2,
+        options: [
+          { value: "magnetico", label: "Magnético" },
+          { value: "mecanico", label: "Mecánico" },
+        ],
+      },
+    ],
+  },
+  mousepads: {
+    id: "018f0000-0000-7000-8000-000000000s03",
+    categoryId: "018f0000-0000-7000-8000-000000000003",
+    schemaVersion: 1,
+    fieldDefinitions: [
+      {
+        key: "surface",
+        label: "Superficie",
+        dataType: "enum",
+        filterable: true,
+        filterKind: "ENUM_MULTI",
+        publicParam: "superficie",
+        displayOrder: 1,
+        options: [
+          { value: "vidrio", label: "Vidrio" },
+          { value: "control", label: "Control" },
+          { value: "speed", label: "Speed" },
+        ],
+      },
+      {
+        key: "size_class",
+        label: "Tamaño",
+        dataType: "enum",
+        filterable: true,
+        filterKind: "ENUM_MULTI",
+        publicParam: "tamano",
+        displayOrder: 2,
+        options: [
+          { value: "xl", label: "XL" },
+          { value: "xxl", label: "XXL" },
+        ],
+      },
+    ],
+  },
+  audio: {
+    id: "018f0000-0000-7000-8000-000000000s04",
+    categoryId: "018f0000-0000-7000-8000-000000000004",
+    schemaVersion: 1,
+    fieldDefinitions: [
+      {
+        key: "audio_type",
+        label: "Tipo de Audio",
+        dataType: "enum",
+        filterable: true,
+        filterKind: "ENUM_MULTI",
+        publicParam: "tipo_audio",
+        displayOrder: 1,
+        options: [
+          { value: "iem", label: "IEM" },
+          { value: "open-back", label: "Open-Back" },
+          { value: "dac", label: "DAC" },
+        ],
+      },
+    ],
+  },
+  accesorios: {
+    id: "018f0000-0000-7000-8000-000000000s05",
+    categoryId: "018f0000-0000-7000-8000-000000000005",
+    schemaVersion: 1,
+    fieldDefinitions: [
+      {
+        key: "accessory_type",
+        label: "Tipo de Accesorio",
+        dataType: "enum",
+        filterable: true,
+        filterKind: "ENUM_MULTI",
+        publicParam: "tipo_accesorio",
+        displayOrder: 1,
+        options: [
+          { value: "skates", label: "Skates" },
+          { value: "grip-tapes", label: "Grip Tapes" },
+          { value: "dongles", label: "Dongles" },
+          { value: "switches", label: "Switches" },
+          { value: "keycaps", label: "Keycaps" },
+          { value: "modding", label: "Modding" },
+          { value: "cables", label: "Cables" },
+          { value: "bungees", label: "Bungees" },
+          { value: "soportes", label: "Soportes" },
+          { value: "herramientas", label: "Herramientas" },
+        ],
+      },
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Brands
 // ---------------------------------------------------------------------------
 
@@ -126,23 +312,6 @@ export type SyntheticBrandEntry = BrandDiscoveryEntity & {
   status: "PUBLISHED" | "DRAFT" | "ARCHIVED";
 };
 
-/** Neutral synthetic brand used for populated preview products. */
-export const SYNTHETIC_QA_BRAND: SyntheticBrandEntry = {
-  id: "018f0000-0000-7000-8000-000000000010",
-  name: "Marca QA",
-  slug: "marca-qa",
-  description: "Fabricante de hardware de prueba para control de calidad.",
-  logo: null,
-  status: "PUBLISHED",
-};
-
-/**
- * Navigation brand entities — LOCAL PREVIEW ROUTE ENTITIES ONLY.
- *
- * These do NOT assert that Gamer Perú currently stocks, distributes,
- * imports, or officially represents these brands. No commercial claims.
- * No logos. No remote media.
- */
 export const SYNTHETIC_NAV_BRANDS: Record<string, SyntheticBrandEntry> = {
   wlmouse: {
     id: "018f0000-0000-7000-8000-000000000b01",
@@ -258,7 +427,15 @@ export const SYNTHETIC_NAV_BRANDS: Record<string, SyntheticBrandEntry> = {
   },
 };
 
-/** Test-only brands (not part of storefront navigation). */
+export const SYNTHETIC_QA_BRAND: SyntheticBrandEntry = {
+  id: "018f0000-0000-7000-8000-000000000010",
+  name: "Marca QA",
+  slug: "marca-qa",
+  description: "Fabricante de hardware de prueba para control de calidad.",
+  logo: null,
+  status: "PUBLISHED",
+};
+
 export const SYNTHETIC_TEST_BRANDS: Record<string, SyntheticBrandEntry> = {
   "marca-vacia": {
     id: "018f0000-0000-7000-8000-000000000020",
@@ -287,22 +464,20 @@ export const SYNTHETIC_TEST_BRANDS: Record<string, SyntheticBrandEntry> = {
 };
 
 // ---------------------------------------------------------------------------
-// Synthetic Products — NOT COMMERCIAL DATA
+// Synthetic Products & Specifications Data
 // ---------------------------------------------------------------------------
 
-/**
- * Generates synthetic QA products for a given category.
- *
- * All products use the neutral "Marca QA" brand.
- * Prices are synthetic test values (NOT commercial pricing).
- * primaryMedia is null to exercise the GP-011 fallback media stage.
- */
+export interface SyntheticProductWithSpecs extends ProductDiscoveryItem {
+  specValues: Record<string, string | number | boolean | null>;
+  createdAt: string;
+}
+
 export function generateSyntheticProducts(
   categorySlug: string,
   categoryName: string,
   count: number,
   startIndex: number = 1
-): ProductDiscoveryItem[] {
+): SyntheticProductWithSpecs[] {
   const getProductPrefix = (slug: string): string => {
     switch (slug) {
       case "mouses":
@@ -337,38 +512,65 @@ export function generateSyntheticProducts(
     }
   };
 
-  const getSlugIdPrefix = (slug: string): string => {
-    switch (slug) {
-      case "mouses":
-        return "mous";
-      case "teclados":
-        return "tecl";
-      case "mousepads":
-        return "mpad";
-      case "audio":
-        return "audi";
-      case "accesorios":
-        return "acce";
-      default:
-        return slug.slice(0, 4).padEnd(4, "0");
-    }
-  };
-
   const namePrefix = getProductPrefix(categorySlug);
   const slugPrefix = getSlugPrefix(categorySlug);
-  const idPrefix = getSlugIdPrefix(categorySlug);
+
+  const prefixMap: Record<string, string> = {
+    mouses: "mous",
+    teclados: "tecl",
+    mousepads: "mpad",
+    audio: "audi",
+    accesorios: "acce",
+  };
+  const prefix = prefixMap[categorySlug] ?? categorySlug.slice(0, 4).padEnd(4, "0");
 
   return Array.from({ length: count }, (_, i) => {
-    const num = String(startIndex + i).padStart(2, "0");
-    const price = 12990 + (startIndex + i - 1) * 1000; // Synthetic PEN centavos
+    const idx = startIndex + i;
+    const id = `018f0000-0000-7000-8000-${prefix}${String(idx).padStart(4, "0")}`;
+    const num = String(idx).padStart(2, "0");
+    const price = 12990 + (idx - 1) * 2000; // S/ 129.90, S/ 149.90, S/ 169.90...
+    const brand = SYNTHETIC_QA_BRAND;
+
+    // Rich technical specs depending on category
+    let specValues: Record<string, string | number | boolean | null> = {};
+    if (categorySlug === "mouses") {
+      specValues = {
+        weight_g: idx % 2 === 0 ? 39 : 52, // Under 45g or over 45g
+        shape: idx % 3 === 0 ? "ergonomico" : "simetrico",
+        sensor: idx % 2 === 0 ? "paw3950" : "paw3395",
+        polling_rate_hz: idx % 2 === 0 ? 8000 : 1000,
+        hotswap: idx % 2 === 0,
+      };
+    } else if (categorySlug === "teclados") {
+      specValues = {
+        formato: idx % 2 === 0 ? "60" : "75",
+        switch_type: idx % 2 === 0 ? "magnetico" : "mecanico",
+      };
+    } else if (categorySlug === "mousepads") {
+      specValues = {
+        surface: idx % 3 === 0 ? "vidrio" : idx % 3 === 1 ? "control" : "speed",
+        size_class: idx % 2 === 0 ? "xl" : "xxl",
+      };
+    } else if (categorySlug === "audio") {
+      specValues = {
+        tipo_audio: idx % 3 === 0 ? "iem" : idx % 3 === 1 ? "open-back" : "dac",
+      };
+    } else if (categorySlug === "accesorios") {
+      const types = ["skates", "grip-tapes", "dongles", "switches", "keycaps", "modding"];
+      specValues = {
+        tipo_accesorio: types[(idx - 1) % types.length]!,
+      };
+    }
+
     return {
-      id: `018f0000-0000-7000-8000-${idPrefix}${num.padStart(4, "0")}`,
+      id,
       name: `${namePrefix} ${num}`,
+
       slug: `${slugPrefix}-${num}`,
       subtitle: `Edición de Rendimiento QA ${num}`,
       brand: {
-        name: SYNTHETIC_QA_BRAND.name,
-        slug: SYNTHETIC_QA_BRAND.slug,
+        name: brand.name,
+        slug: brand.slug,
       },
       category: {
         name: categoryName,
@@ -376,6 +578,89 @@ export function generateSyntheticProducts(
       },
       primaryMedia: null,
       startingPriceCents: price,
+      specValues,
+      createdAt: new Date(1700000000000 - idx * 100000).toISOString(),
+      updatedAt: new Date(1700000000000 - idx * 100000).toISOString(),
     };
   });
+}
+
+/**
+ * In-memory filter and sort helper for synthetic preview/fixture products.
+ */
+export function filterAndSortSyntheticProducts(
+  allProducts: SyntheticProductWithSpecs[],
+  filterState?: DiscoveryFilterState,
+  surface: "category" | "brand" | "search" = "category",
+  schema?: ValidatedSpecificationSchema | null
+): SyntheticProductWithSpecs[] {
+  if (!filterState) return [...allProducts];
+
+  let filtered = allProducts.filter((p) => {
+    // Brand filter
+    if (surface !== "brand" && filterState.brands.length > 0) {
+      if (!filterState.brands.includes(p.brand.slug)) return false;
+    }
+
+    // Category filter
+    if (surface !== "category" && filterState.categories.length > 0) {
+      if (!filterState.categories.includes(p.category.slug)) return false;
+    }
+
+    // Price min
+    if (filterState.price.minCents !== null && p.startingPriceCents < filterState.price.minCents) {
+      return false;
+    }
+
+    // Price max
+    if (filterState.price.maxCents !== null && p.startingPriceCents > filterState.price.maxCents) {
+      return false;
+    }
+
+    // Technical specifications filter
+    if (schema && Object.keys(filterState.technical).length > 0) {
+      for (const [key, filterVal] of Object.entries(filterState.technical)) {
+        const prodVal = p.specValues[key];
+        if (prodVal === undefined || prodVal === null) return false;
+
+        if (Array.isArray(filterVal)) {
+          // ENUM_MULTI: OR
+          if (!filterVal.includes(String(prodVal))) return false;
+        } else if (typeof filterVal === "object" && filterVal !== null) {
+          // NUMBER_RANGE
+          const range = filterVal;
+          const numVal = Number(prodVal);
+
+          if (Number.isNaN(numVal)) return false;
+          if (range.min !== undefined && numVal < range.min) return false;
+          if (range.max !== undefined && numVal > range.max) return false;
+        } else if (typeof filterVal === "boolean") {
+          // BOOLEAN
+          if (prodVal !== true) return false;
+        }
+      }
+    }
+
+    return true;
+  });
+
+  // Sorting
+  const sort = filterState.sort;
+  if (sort === "precio-menor") {
+    filtered.sort(
+      (a, b) => a.startingPriceCents - b.startingPriceCents || a.id.localeCompare(b.id)
+    );
+  } else if (sort === "precio-mayor") {
+    filtered.sort(
+      (a, b) => b.startingPriceCents - a.startingPriceCents || a.id.localeCompare(b.id)
+    );
+  } else if (sort === "nombre-asc") {
+    filtered.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  } else if (sort === "nombre-desc") {
+    filtered.sort((a, b) => b.name.localeCompare(a.name) || a.id.localeCompare(b.id));
+  } else if (sort === "recientes" || surface !== "search") {
+    filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
+  }
+
+  return filtered;
 }

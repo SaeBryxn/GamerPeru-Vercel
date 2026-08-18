@@ -94,7 +94,7 @@ describe("GP-012 — Synthetic Search Engine & Relevance Ranking", () => {
   it("executes synthetic search for 'mouse' and returns products, categories, and brands", () => {
     const results = executeSyntheticSearch("mouse");
 
-    expect(results.products.length).toBeGreaterThan(0);
+    expect(results.products.length).toBe(16);
     expect(results.products.every((p) => p.name.toLowerCase().includes("mouse"))).toBe(true);
 
     const suggestionsPromise = getSyntheticSuggestions("mouse");

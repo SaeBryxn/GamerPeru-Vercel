@@ -1,5 +1,25 @@
 import "server-only";
+import type {
+  DiscoveryFacets,
+  DiscoveryFilterState,
+  SpecificationEnumOption,
+  TechnicalFacet,
+  ValidatedSpecificationSchema,
+} from "@/lib/discovery-filters/types";
+
 import type { CatalogDiscoveryReader } from "./reader";
+import {
+  SYNTHETIC_CATEGORIES,
+  SYNTHETIC_NAV_BRANDS,
+  SYNTHETIC_QA_BRAND,
+  SYNTHETIC_SPEC_SCHEMAS,
+  filterAndSortSyntheticProducts,
+  generateSyntheticProducts,
+  type SyntheticBrandEntry,
+  type SyntheticCategoryEntry,
+  type SyntheticProductWithSpecs,
+} from "./synthetic-catalog-data";
+
 import type {
   BrandDiscoveryEntity,
   CategoryDiscoveryEntity,
@@ -7,35 +27,6 @@ import type {
   PaginationOptions,
   ProductDiscoveryItem,
 } from "./types";
-import {
-  SYNTHETIC_CATEGORIES,
-  SYNTHETIC_NAV_BRANDS,
-  SYNTHETIC_QA_BRAND,
-  generateSyntheticProducts,
-} from "./synthetic-catalog-data";
-import type { SyntheticBrandEntry, SyntheticCategoryEntry } from "./synthetic-catalog-data";
-
-/**
- * Development-Only Catalog Preview Reader
- *
- * Provides synthetic preview data for local storefront inspection when
- * the authoritative Supabase catalog contains zero commercial rows.
- *
- * INVARIANTS:
- * 1. PREVIEW DATA ONLY — not authoritative commerce truth.
- * 2. NEVER used in production (NODE_ENV !== "development" throws).
- * 3. NEVER used in CI (process.env.CI truthy throws).
- * 4. NEVER written to PostgreSQL.
- * 5. NEVER used as a database outage fallback.
- * 6. Activation requires explicit DEV_CATALOG_PREVIEW=1.
- *
- * Synthetic products use the neutral "Marca QA" brand exclusively.
- * No real commercial product models, SKUs, or inventory claims.
- */
-
-// ---------------------------------------------------------------------------
-// Preview entity maps
-// ---------------------------------------------------------------------------
 
 const PREVIEW_CATEGORIES: Record<string, SyntheticCategoryEntry> = {
   ...SYNTHETIC_CATEGORIES,
@@ -46,11 +37,7 @@ const PREVIEW_BRANDS: Record<string, SyntheticBrandEntry> = {
   ...SYNTHETIC_NAV_BRANDS,
 };
 
-// ---------------------------------------------------------------------------
-// Synthetic products by category — NOT COMMERCIAL DATA
-// ---------------------------------------------------------------------------
-
-const PREVIEW_PRODUCTS_BY_CATEGORY: Record<string, ProductDiscoveryItem[]> = {
+const PREVIEW_PRODUCTS_BY_CATEGORY: Record<string, SyntheticProductWithSpecs[]> = {
   mouses: generateSyntheticProducts("mouses", "Mouses Gaming", 14),
   teclados: generateSyntheticProducts("teclados", "Teclados Gaming", 4),
   mousepads: generateSyntheticProducts("mousepads", "Mousepads Gaming", 4),
@@ -58,14 +45,73 @@ const PREVIEW_PRODUCTS_BY_CATEGORY: Record<string, ProductDiscoveryItem[]> = {
   accesorios: generateSyntheticProducts("accesorios", "Accesorios Gaming", 4),
 };
 
-// All preview products belong to "Marca QA"
-const ALL_PREVIEW_PRODUCTS: ProductDiscoveryItem[] = Object.values(
+const ALL_PREVIEW_PRODUCTS: SyntheticProductWithSpecs[] = Object.values(
   PREVIEW_PRODUCTS_BY_CATEGORY
 ).flat();
 
-// ---------------------------------------------------------------------------
-// Reader implementation
-// ---------------------------------------------------------------------------
+function deriveSyntheticTechnicalFacets(
+  schema: ValidatedSpecificationSchema,
+  products: SyntheticProductWithSpecs[]
+): TechnicalFacet[] {
+  const facets: TechnicalFacet[] = [];
+
+  for (const field of schema.fieldDefinitions) {
+    if (!field.filterable) continue;
+
+    if (field.filterKind === "ENUM_MULTI") {
+      const representedValues = new Set<string>();
+      for (const p of products) {
+        const val = p.specValues[field.key];
+        if (typeof val === "string") {
+          representedValues.add(val);
+        }
+      }
+
+      const representedOptions: SpecificationEnumOption[] = (field.options ?? []).filter((opt) =>
+        representedValues.has(opt.value)
+      );
+
+      if (representedOptions.length > 0) {
+        facets.push({
+          field,
+          kind: "ENUM_MULTI",
+          representedOptions,
+        });
+      }
+    } else if (field.filterKind === "NUMBER_RANGE") {
+      let minObserved: number | null = null;
+      let maxObserved: number | null = null;
+
+      for (const p of products) {
+        const val = p.specValues[field.key];
+        if (typeof val === "number" && Number.isFinite(val)) {
+          if (minObserved === null || val < minObserved) minObserved = val;
+          if (maxObserved === null || val > maxObserved) maxObserved = val;
+        }
+      }
+
+      if (minObserved !== null && maxObserved !== null) {
+        facets.push({
+          field,
+          kind: "NUMBER_RANGE",
+          minRepresented: minObserved,
+          maxRepresented: maxObserved,
+        });
+      }
+    } else if (field.filterKind === "BOOLEAN") {
+      const hasTrue = products.some((p) => p.specValues[field.key] === true);
+      if (hasTrue) {
+        facets.push({
+          field,
+          kind: "BOOLEAN",
+          hasRepresentedTrue: true,
+        });
+      }
+    }
+  }
+
+  return facets;
+}
 
 export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
   async getPublishedCategoryBySlug(slug: string): Promise<CategoryDiscoveryEntity | null> {
@@ -97,9 +143,81 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
     };
   }
 
+  async getCategorySpecificationSchema(
+    categoryId: string
+  ): Promise<ValidatedSpecificationSchema | null> {
+    const category = Object.values(PREVIEW_CATEGORIES).find((c) => c.id === categoryId);
+    if (!category) return null;
+    return SYNTHETIC_SPEC_SCHEMAS[category.slug] ?? null;
+  }
+
+  async getCategoryDiscoveryFacets(
+    categoryId: string,
+    schema: ValidatedSpecificationSchema | null
+  ): Promise<DiscoveryFacets> {
+    const category = Object.values(PREVIEW_CATEGORIES).find((c) => c.id === categoryId);
+    if (!category) {
+      return { brands: [], categories: [], technicalSchema: null, technicalFacets: [] };
+    }
+
+    const baseProducts = PREVIEW_PRODUCTS_BY_CATEGORY[category.slug] ?? [];
+    const representedBrandSlugs = new Set(baseProducts.map((p) => p.brand.slug));
+    const brandOptions = Object.values(PREVIEW_BRANDS)
+      .filter((b) => b.status === "PUBLISHED" && representedBrandSlugs.has(b.slug))
+      .map((b) => ({ id: b.id, name: b.name, slug: b.slug }));
+
+    const resolvedSchema = schema ?? SYNTHETIC_SPEC_SCHEMAS[category.slug] ?? null;
+    const techFacets = resolvedSchema
+      ? deriveSyntheticTechnicalFacets(resolvedSchema, baseProducts)
+      : [];
+
+    return {
+      brands: brandOptions,
+      categories: [],
+      technicalSchema: resolvedSchema,
+      technicalFacets: techFacets,
+    };
+  }
+
+  async getBrandDiscoveryFacets(
+    brandId: string,
+    selectedCategorySlug: string | null
+  ): Promise<DiscoveryFacets> {
+    const brand = Object.values(PREVIEW_BRANDS).find((b) => b.id === brandId);
+    if (!brand) {
+      return { brands: [], categories: [], technicalSchema: null, technicalFacets: [] };
+    }
+
+    const baseProducts = ALL_PREVIEW_PRODUCTS.filter((p) => p.brand.slug === brand.slug);
+    const representedCategorySlugs = new Set(baseProducts.map((p) => p.category.slug));
+    const categoryOptions = Object.values(PREVIEW_CATEGORIES)
+      .filter((c) => c.status === "PUBLISHED" && representedCategorySlugs.has(c.slug))
+      .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
+
+    let techFacets: TechnicalFacet[] = [];
+    let techSchema: ValidatedSpecificationSchema | null = null;
+
+    if (selectedCategorySlug) {
+      techSchema = SYNTHETIC_SPEC_SCHEMAS[selectedCategorySlug] ?? null;
+      if (techSchema) {
+        const catProducts = baseProducts.filter((p) => p.category.slug === selectedCategorySlug);
+        techFacets = deriveSyntheticTechnicalFacets(techSchema, catProducts);
+      }
+    }
+
+    return {
+      brands: [],
+      categories: categoryOptions,
+      technicalSchema: techSchema,
+      technicalFacets: techFacets,
+    };
+  }
+
   async getPublishedProductsByCategory(
     categoryId: string,
-    pagination: PaginationOptions
+    pagination: PaginationOptions,
+    filterState?: DiscoveryFilterState,
+    schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
     const category = Object.values(PREVIEW_CATEGORIES).find(
       (c) => c.id === categoryId && c.status === "PUBLISHED"
@@ -109,13 +227,23 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
       return emptyPage(pagination);
     }
 
-    const products = PREVIEW_PRODUCTS_BY_CATEGORY[category.slug] ?? [];
-    return paginate(products, pagination);
+    const baseProducts = PREVIEW_PRODUCTS_BY_CATEGORY[category.slug] ?? [];
+    const resolvedSchema = schema ?? SYNTHETIC_SPEC_SCHEMAS[category.slug] ?? null;
+    const filtered = filterAndSortSyntheticProducts(
+      baseProducts,
+      filterState,
+      "category",
+      resolvedSchema
+    );
+
+    return paginate(filtered, pagination);
   }
 
   async getPublishedProductsByBrand(
     brandId: string,
-    pagination: PaginationOptions
+    pagination: PaginationOptions,
+    filterState?: DiscoveryFilterState,
+    schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
     const brand = Object.values(PREVIEW_BRANDS).find(
       (b) => b.id === brandId && b.status === "PUBLISHED"
@@ -125,14 +253,17 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
       return emptyPage(pagination);
     }
 
-    const products = ALL_PREVIEW_PRODUCTS.filter((p) => p.brand.slug === brand.slug);
-    return paginate(products, pagination);
+    const baseProducts = ALL_PREVIEW_PRODUCTS.filter((p) => p.brand.slug === brand.slug);
+    const filtered = filterAndSortSyntheticProducts(
+      baseProducts,
+      filterState,
+      "brand",
+      schema ?? null
+    );
+
+    return paginate(filtered, pagination);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function paginate(
   items: ProductDiscoveryItem[],

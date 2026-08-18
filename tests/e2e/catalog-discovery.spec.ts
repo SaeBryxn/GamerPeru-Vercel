@@ -113,29 +113,21 @@ test.describe("GP-011 — Category & Brand Discovery E2E Suite", () => {
       expect(archived?.status()).toBe(404);
     });
 
-    test("G: handles unsupported future filter parameters with truthful notice and noindex", async ({
+    test("G: translates legacy category aliases (?tipo=ultraligeros) via redirect to canonical filters", async ({
       page,
     }) => {
-      const response = await page.goto("/categorias/mouses?tipo=ultraligeros");
-      expect(response?.status()).toBe(200);
+      await page.goto("/categorias/mouses?tipo=ultraligeros");
 
-      // Truthful notice is rendered
-      const notice = page.getByRole("status");
-      await expect(notice).toContainText(
-        "Este filtro aún no está disponible. Mostrando todos los productos de esta categoría."
-      );
+      // Redirects to canonical GP-013 URL
+      await expect(page).toHaveURL(/.*\/categorias\/mouses\?peso_max=45$/);
 
-      // Canonical points to clean base URL
-      const canonical = page.locator('link[rel="canonical"]');
-      await expect(canonical).toHaveAttribute("href", /http.*\/categorias\/mouses$/);
-
-      // Meta robots contains noindex, follow
+      // Meta robots contains noindex, follow on filtered URL
       const robots = page.locator('meta[name="robots"]');
       await expect(robots).toHaveAttribute("content", /noindex/);
 
-      // All 12 base products are still displayed
-      const cards = page.getByTestId("product-card");
-      await expect(cards).toHaveCount(12);
+      // Canonical points to filtered URL
+      const canonical = page.locator('link[rel="canonical"]');
+      await expect(canonical).toHaveAttribute("href", /http.*\/categorias\/mouses\?peso_max=45$/);
     });
   });
 

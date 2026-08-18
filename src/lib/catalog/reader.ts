@@ -1,9 +1,12 @@
 import type {
   BrandDiscoveryEntity,
   CategoryDiscoveryEntity,
+  DiscoveryFacets,
+  DiscoveryFilterState,
   PaginatedResult,
   PaginationOptions,
   ProductDiscoveryItem,
+  ValidatedSpecificationSchema,
 } from "./types";
 
 /**
@@ -26,22 +29,43 @@ export interface CatalogDiscoveryReader {
   getPublishedBrandBySlug(slug: string): Promise<BrandDiscoveryEntity | null>;
 
   /**
-   * Retrieves paginated published products for a category.
-   * Products must have Product=PUBLISHED, Brand=PUBLISHED, Category=PUBLISHED,
-   * and at least one ProductVariant=ACTIVE.
+   * Retrieves and validates the active specification schema for a category.
+   */
+  getCategorySpecificationSchema(categoryId: string): Promise<ValidatedSpecificationSchema | null>;
+
+  /**
+   * Retrieves discovery facets for a category (brand options, technical schema and represented options).
+   */
+  getCategoryDiscoveryFacets(
+    categoryId: string,
+    schema: ValidatedSpecificationSchema | null
+  ): Promise<DiscoveryFacets>;
+
+  /**
+   * Retrieves discovery facets for a brand (category options, conditional technical schema and represented options).
+   */
+  getBrandDiscoveryFacets(
+    brandId: string,
+    selectedCategorySlug: string | null
+  ): Promise<DiscoveryFacets>;
+
+  /**
+   * Retrieves paginated published products for a category matching filter state.
    */
   getPublishedProductsByCategory(
     categoryId: string,
-    pagination: PaginationOptions
+    pagination: PaginationOptions,
+    filterState?: DiscoveryFilterState,
+    schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>>;
 
   /**
-   * Retrieves paginated published products for a brand.
-   * Products must have Product=PUBLISHED, Brand=PUBLISHED, Category=PUBLISHED,
-   * and at least one ProductVariant=ACTIVE.
+   * Retrieves paginated published products for a brand matching filter state.
    */
   getPublishedProductsByBrand(
     brandId: string,
-    pagination: PaginationOptions
+    pagination: PaginationOptions,
+    filterState?: DiscoveryFilterState,
+    schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>>;
 }

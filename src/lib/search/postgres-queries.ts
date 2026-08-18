@@ -2,18 +2,19 @@ import "server-only";
 import { and, countDistinct, desc, eq, min, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { brands, categories, mediaAssets, products, productVariants } from "@/db/schema";
+import {
+  buildEligibleStartingPriceSql,
+  buildProductDiscoveryWhereClause,
+  buildProductSortOrderBy,
+} from "@/lib/discovery-filters/postgres-predicates";
+import type {
+  DiscoveryFilterState,
+  ValidatedSpecificationSchema,
+} from "@/lib/discovery-filters/types";
 import { escapeLikePattern } from "./normalization";
 
 /**
  * Builds candidate filtering predicate for search queries (length >= 2).
- * Matches:
- * - products.name ILIKE '%escaped%'
- * - products.subtitle ILIKE '%escaped%'
- * - products.slug = cleanSlug (exact)
- * - brands.name ILIKE '%escaped%'
- * - brands.slug = cleanSlug (exact)
- * - categories.name ILIKE '%escaped%'
- * - categories.slug = cleanSlug (exact)
  */
 export function buildSearchCandidateWhereClause(cleanQuery: string) {
   const escaped = escapeLikePattern(cleanQuery);
@@ -33,20 +34,6 @@ export function buildSearchCandidateWhereClause(cleanQuery: string) {
 
 /**
  * Builds deterministic non-overlapping relevance ranking score expression.
- *
- * For length == 2:
- * - Strict literal matching only (no pg_trgm word_similarity).
- *
- * For length >= 3:
- * - Exact Product Name / Slug (1000 / 900)
- * - Product Name Prefix (800)
- * - Product Name Contains (600 + bounded trigram subscore 0..99 -> [600..699])
- * - Exact Brand Name / Slug (300)
- * - Brand Name Contains (250)
- * - Exact Category Name / Slug (200)
- * - Category Name Contains (150)
- * - Product Subtitle Contains (100 + bounded subtitle similarity 0..49 -> [100..149])
- * - Fallback: 10
  */
 export function buildRelevanceScoreExpression(cleanQuery: string) {
   const escaped = escapeLikePattern(cleanQuery);
@@ -214,8 +201,82 @@ export function buildPredictiveCategoriesQuery(cleanQuery: string, limit = 3) {
     .limit(safeLimit);
 }
 
-export function buildFullProductCountQuery(cleanQuery: string) {
+export function buildSearchBrandFacetOptionsQuery(cleanQuery: string) {
   const candidateWhere = buildSearchCandidateWhereClause(cleanQuery);
+
+  return db
+    .select({
+      id: brands.id,
+      name: brands.name,
+      slug: brands.slug,
+    })
+    .from(brands)
+    .where(
+      and(
+        eq(brands.status, "PUBLISHED"),
+        sql`EXISTS (
+          SELECT 1
+          FROM ${products}
+          JOIN ${categories} ON ${categories.id} = ${products.categoryId}
+          JOIN ${productVariants} ON ${productVariants.productId} = ${products.id}
+          WHERE ${products.brandId} = ${brands.id}
+            AND ${products.status} = 'PUBLISHED'
+            AND ${categories.status} = 'PUBLISHED'
+            AND ${productVariants.status} = 'ACTIVE'
+            AND ${candidateWhere}
+        )`
+      )
+    )
+    .orderBy(brands.name);
+}
+
+export function buildSearchCategoryFacetOptionsQuery(cleanQuery: string) {
+  const candidateWhere = buildSearchCandidateWhereClause(cleanQuery);
+
+  return db
+    .select({
+      id: categories.id,
+      name: categories.name,
+      slug: categories.slug,
+    })
+    .from(categories)
+    .where(
+      and(
+        eq(categories.status, "PUBLISHED"),
+        sql`EXISTS (
+          SELECT 1
+          FROM ${products}
+          JOIN ${brands} ON ${brands.id} = ${products.brandId}
+          JOIN ${productVariants} ON ${productVariants.productId} = ${products.id}
+          WHERE ${products.categoryId} = ${categories.id}
+            AND ${products.status} = 'PUBLISHED'
+            AND ${brands.status} = 'PUBLISHED'
+            AND ${productVariants.status} = 'ACTIVE'
+            AND ${candidateWhere}
+        )`
+      )
+    )
+    .orderBy(categories.name);
+}
+
+export function buildFullProductCountQuery(
+  cleanQuery: string,
+  filterState?: DiscoveryFilterState,
+  schema?: ValidatedSpecificationSchema | null
+) {
+  const candidateWhere = buildSearchCandidateWhereClause(cleanQuery);
+  const state: DiscoveryFilterState = filterState ?? {
+    brands: [],
+    categories: [],
+    price: { minCents: null, maxCents: null },
+    technical: {},
+    sort: null,
+    page: 1,
+  };
+
+  const discoveryWhere = buildProductDiscoveryWhereClause(state, {
+    validatedSchema: schema ?? null,
+  });
 
   return db
     .select({
@@ -227,19 +288,52 @@ export function buildFullProductCountQuery(cleanQuery: string) {
       categories,
       and(eq(products.categoryId, categories.id), eq(categories.status, "PUBLISHED"))
     )
-    .innerJoin(
-      productVariants,
-      and(eq(products.id, productVariants.productId), eq(productVariants.status, "ACTIVE"))
-    )
-    .where(and(eq(products.status, "PUBLISHED"), candidateWhere));
+    .where(and(discoveryWhere, candidateWhere));
 }
 
-export function buildFullProductResultsQuery(cleanQuery: string, page: number, pageSize: number) {
+export function buildFullProductResultsQuery(
+  cleanQuery: string,
+  page: number,
+  pageSize: number,
+  filterState?: DiscoveryFilterState,
+  schema?: ValidatedSpecificationSchema | null
+) {
   const safePage = Math.max(1, Math.trunc(page));
   const safePageSize = Math.max(1, Math.trunc(pageSize));
   const offset = (safePage - 1) * safePageSize;
   const relevance = buildRelevanceScoreExpression(cleanQuery);
   const candidateWhere = buildSearchCandidateWhereClause(cleanQuery);
+
+  const state: DiscoveryFilterState = filterState ?? {
+    brands: [],
+    categories: [],
+    price: { minCents: null, maxCents: null },
+    technical: {},
+    sort: null,
+    page: safePage,
+  };
+
+  const discoveryWhere = buildProductDiscoveryWhereClause(state, {
+    validatedSchema: schema ?? null,
+  });
+
+  const startingPriceSql = buildEligibleStartingPriceSql(
+    state.price.minCents,
+    state.price.maxCents
+  );
+
+  let orderByClauses: ReturnType<typeof desc>[] = [];
+  if (state.sort !== null) {
+    orderByClauses = buildProductSortOrderBy(
+      state.sort,
+      "search",
+      state.price.minCents,
+      state.price.maxCents
+    );
+  } else {
+    // Default search ordering: relevance first
+    orderByClauses = [desc(relevance), desc(products.createdAt), desc(products.id)];
+  }
 
   return db
     .select({
@@ -255,7 +349,7 @@ export function buildFullProductResultsQuery(cleanQuery: string, page: number, p
       primaryMediaAlt: mediaAssets.altText,
       primaryMediaWidth: mediaAssets.width,
       primaryMediaHeight: mediaAssets.height,
-      startingPriceCents: min(productVariants.priceCents).mapWith(Number),
+      startingPriceCents: startingPriceSql.mapWith(Number),
       relevanceScore: relevance,
     })
     .from(products)
@@ -263,10 +357,6 @@ export function buildFullProductResultsQuery(cleanQuery: string, page: number, p
     .innerJoin(
       categories,
       and(eq(products.categoryId, categories.id), eq(categories.status, "PUBLISHED"))
-    )
-    .innerJoin(
-      productVariants,
-      and(eq(products.id, productVariants.productId), eq(productVariants.status, "ACTIVE"))
     )
     .leftJoin(
       mediaAssets,
@@ -276,23 +366,8 @@ export function buildFullProductResultsQuery(cleanQuery: string, page: number, p
         eq(mediaAssets.mediaType, "IMAGE")
       )
     )
-    .where(and(eq(products.status, "PUBLISHED"), candidateWhere))
-    .groupBy(
-      products.id,
-      products.name,
-      products.slug,
-      products.subtitle,
-      products.createdAt,
-      brands.name,
-      brands.slug,
-      categories.name,
-      categories.slug,
-      mediaAssets.objectKey,
-      mediaAssets.altText,
-      mediaAssets.width,
-      mediaAssets.height
-    )
-    .orderBy(desc(relevance), desc(products.createdAt), desc(products.id))
+    .where(and(discoveryWhere, candidateWhere))
+    .orderBy(...orderByClauses)
     .limit(safePageSize)
     .offset(offset);
 }

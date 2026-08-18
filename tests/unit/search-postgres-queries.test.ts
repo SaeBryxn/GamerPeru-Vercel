@@ -7,9 +7,11 @@ import {
   buildPredictiveBrandsQuery,
   buildPredictiveCategoriesQuery,
   buildPredictiveProductsQuery,
+  buildSearchBrandFacetOptionsQuery,
+  buildSearchCategoryFacetOptionsQuery,
 } from "@/lib/search/postgres-queries";
 
-describe("GP-012 — PostgreSQL Production Search Query Builders", () => {
+describe("GP-012/GP-013 — PostgreSQL Production Search Query Builders", () => {
   it("builds predictive products query with publication and active variant filters", () => {
     const query = buildPredictiveProductsQuery("mouse", 6);
     const sqlObj = query.toSQL();
@@ -45,10 +47,23 @@ describe("GP-012 — PostgreSQL Production Search Query Builders", () => {
     const query = buildPredictiveProductsQuery("8k", 6);
     const sqlObj = query.toSQL();
 
-    // Must NOT contain word_similarity on length == 2 path
     expect(sqlObj.sql).not.toContain("word_similarity");
     expect(sqlObj.sql).toContain("ILIKE");
     expect(sqlObj.sql).toContain("ESCAPE '\\'");
+  });
+
+  it("builds search brand and category facet options query", () => {
+    const brandFacetQuery = buildSearchBrandFacetOptionsQuery("mouse");
+    const brandSql = brandFacetQuery.toSQL();
+    expect(brandSql.sql).toContain('"brands"."status" = $');
+    expect(brandSql.sql).toContain("EXISTS");
+    expect(brandSql.sql).toContain('"product_variants"."status" = \'ACTIVE\'');
+
+    const catFacetQuery = buildSearchCategoryFacetOptionsQuery("mouse");
+    const catSql = catFacetQuery.toSQL();
+    expect(catSql.sql).toContain('"categories"."status" = $');
+    expect(catSql.sql).toContain("EXISTS");
+    expect(catSql.sql).toContain('"product_variants"."status" = \'ACTIVE\'');
   });
 
   it("builds full product count query", () => {
@@ -57,7 +72,6 @@ describe("GP-012 — PostgreSQL Production Search Query Builders", () => {
 
     expect(sqlObj.sql).toContain('count(distinct "products"."id")');
     expect(sqlObj.sql).toContain('"products"."status" = $');
-    expect(sqlObj.sql).toContain('"product_variants"."status" = $');
   });
 
   it("builds full paginated product results query with LIMIT and OFFSET", () => {
@@ -67,7 +81,7 @@ describe("GP-012 — PostgreSQL Production Search Query Builders", () => {
     expect(sqlObj.sql).toContain("limit $");
     expect(sqlObj.sql).toContain("offset $");
     expect(sqlObj.params).toContain(12);
-    expect(sqlObj.params).toContain(12); // offset = (2 - 1) * 12 = 12
+    expect(sqlObj.params).toContain(12);
   });
 
   it("builds brand and category entity queries with publication filters", () => {

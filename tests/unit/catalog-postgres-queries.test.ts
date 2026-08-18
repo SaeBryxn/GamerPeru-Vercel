@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildBrandProductCountQuery,
-  buildBrandProductsQuery,
-  buildCategoryProductCountQuery,
-  buildCategoryProductsQuery,
+  buildBrandCategoryFacetOptionsQuery,
+  buildBrandFilteredProductCountQuery,
+  buildBrandFilteredProductsQuery,
+  buildCategoryBrandFacetOptionsQuery,
+  buildCategoryFilteredProductCountQuery,
+  buildCategoryFilteredProductsQuery,
+  buildCategorySpecificationSchemaQuery,
   buildPublishedBrandBySlugQuery,
   buildPublishedCategoryBySlugQuery,
+  buildTechnicalRepresentedSpecValuesQuery,
 } from "@/lib/catalog/postgres-queries";
 
-describe("Production Drizzle SQL Query Builders (Contract & Security Verification)", () => {
+describe("Production Drizzle SQL Query Builders (Catalog Contract & Security Verification)", () => {
   it("builds published category lookup with exact PUBLISHED status filter", () => {
     const query = buildPublishedCategoryBySlugQuery("mouses");
     const sqlObj = query.toSQL();
@@ -30,37 +34,75 @@ describe("Production Drizzle SQL Query Builders (Contract & Security Verificatio
     expect(sqlObj.params).toContain("IMAGE");
   });
 
-  it("builds category product count query using countDistinct(products.id) with published invariants", () => {
-    const query = buildCategoryProductCountQuery("cat-123");
+  it("builds category specification schema query joining published categories and active schema", () => {
+    const query = buildCategorySpecificationSchemaQuery("018f0000-0000-7000-8000-000000000001");
+    const sqlObj = query.toSQL();
+
+    expect(sqlObj.sql).toContain('"category_specification_schemas"."category_id" = $');
+    expect(sqlObj.sql).toContain('"category_specification_schemas"."is_active" = $');
+    expect(sqlObj.sql).toContain(
+      '"categories"."current_spec_schema_id" = "category_specification_schemas"."id"'
+    );
+  });
+
+  it("builds category brand facet options query asserting published invariants and active variants", () => {
+    const query = buildCategoryBrandFacetOptionsQuery("018f0000-0000-7000-8000-000000000001");
+    const sqlObj = query.toSQL();
+
+    expect(sqlObj.sql).toContain('"brands"."status" = $');
+    expect(sqlObj.sql).toContain("EXISTS");
+    expect(sqlObj.sql).toContain('"products"."status" = \'PUBLISHED\'');
+    expect(sqlObj.sql).toContain('"product_variants"."status" = \'ACTIVE\'');
+  });
+
+  it("builds brand category facet options query asserting published invariants and active variants", () => {
+    const query = buildBrandCategoryFacetOptionsQuery("018f0000-0000-7000-8000-000000000b01");
+    const sqlObj = query.toSQL();
+
+    expect(sqlObj.sql).toContain('"categories"."status" = $');
+    expect(sqlObj.sql).toContain("EXISTS");
+    expect(sqlObj.sql).toContain('"products"."status" = \'PUBLISHED\'');
+    expect(sqlObj.sql).toContain('"product_variants"."status" = \'ACTIVE\'');
+  });
+
+  it("builds technical represented spec values query with schema version match and active variants", () => {
+    const query = buildTechnicalRepresentedSpecValuesQuery(
+      "018f0000-0000-7000-8000-000000000001",
+      "018f0000-0000-7000-8000-000000000s01",
+      1
+    );
+    const sqlObj = query.toSQL();
+
+    expect(sqlObj.sql).toContain('"product_specifications"."spec_values"');
+    expect(sqlObj.sql).toContain('"product_specifications"."schema_id" = $');
+    expect(sqlObj.sql).toContain('"product_specifications"."schema_version" = $');
+  });
+
+  it("builds category filtered product count query with countDistinct(products.id)", () => {
+    const query = buildCategoryFilteredProductCountQuery("018f0000-0000-7000-8000-000000000001");
     const sqlObj = query.toSQL();
 
     expect(sqlObj.sql).toContain("count(distinct");
     expect(sqlObj.sql).toContain('"products"."status" = $');
     expect(sqlObj.sql).toContain('"brands"."status" = $');
     expect(sqlObj.sql).toContain('"categories"."status" = $');
-    expect(sqlObj.sql).toContain('"product_variants"."status" = $');
-    expect(sqlObj.params).toContain("ACTIVE");
-    expect(sqlObj.params).toContain("PUBLISHED");
   });
 
-  it("builds brand product count query using countDistinct(products.id) with published invariants", () => {
-    const query = buildBrandProductCountQuery("brand-123");
+  it("builds brand filtered product count query with countDistinct(products.id)", () => {
+    const query = buildBrandFilteredProductCountQuery("018f0000-0000-7000-8000-000000000b01");
     const sqlObj = query.toSQL();
 
     expect(sqlObj.sql).toContain("count(distinct");
     expect(sqlObj.sql).toContain('"products"."status" = $');
     expect(sqlObj.sql).toContain('"brands"."status" = $');
     expect(sqlObj.sql).toContain('"categories"."status" = $');
-    expect(sqlObj.sql).toContain('"product_variants"."status" = $');
-    expect(sqlObj.params).toContain("ACTIVE");
-    expect(sqlObj.params).toContain("PUBLISHED");
   });
 
-  it("builds category product projection with MIN(price_cents), PUBLIC_MEDIA join, and no cost_cents", () => {
-    const query = buildCategoryProductsQuery("cat-123", 2, 12);
+  it("builds category product projection with startingPriceCents subquery and no cost_cents", () => {
+    const query = buildCategoryFilteredProductsQuery("018f0000-0000-7000-8000-000000000001", 2, 12);
     const sqlObj = query.toSQL();
 
-    expect(sqlObj.sql).toContain("min(");
+    expect(sqlObj.sql).toContain('MIN("product_variants"."price_cents")');
     expect(sqlObj.sql).not.toContain("cost_cents");
     expect(sqlObj.sql).toContain('"media_assets"."security_class" = $');
     expect(sqlObj.sql).toContain('"media_assets"."media_type" = $');
@@ -69,11 +111,11 @@ describe("Production Drizzle SQL Query Builders (Contract & Security Verificatio
     expect(sqlObj.sql).toContain("offset $");
   });
 
-  it("builds brand product projection with MIN(price_cents), PUBLIC_MEDIA join, and no cost_cents", () => {
-    const query = buildBrandProductsQuery("brand-123", 1, 12);
+  it("builds brand product projection with startingPriceCents subquery and no cost_cents", () => {
+    const query = buildBrandFilteredProductsQuery("018f0000-0000-7000-8000-000000000b01", 1, 12);
     const sqlObj = query.toSQL();
 
-    expect(sqlObj.sql).toContain("min(");
+    expect(sqlObj.sql).toContain('MIN("product_variants"."price_cents")');
     expect(sqlObj.sql).not.toContain("cost_cents");
     expect(sqlObj.sql).toContain('"media_assets"."security_class" = $');
     expect(sqlObj.sql).toContain('"media_assets"."media_type" = $');

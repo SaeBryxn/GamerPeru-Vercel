@@ -5,12 +5,8 @@ import type { NavigationConfig } from "./types";
  *
  * IMPORTANT ARCHITECTURAL BOUNDARY:
  * 1. This file contains presentation seed configuration for the Storefront navigation shell.
- * 2. It is NOT database authority or canonical commerce catalog truth.
+ * 2. It emits canonical GP-013 parameter destinations.
  * 3. Modifying this seed does not mutate catalog state.
- * 4. GP-011 (Catalog Discovery) and future catalog tasks will derive or replace
- *    public navigation dynamically from published database truth.
- * 5. Route destinations represent documented Route-Intent contracts; their destination
- *    pages are implemented by later assigned GPs.
  */
 export const NAVIGATION_CONFIG: NavigationConfig = {
   announcement: {
@@ -29,18 +25,21 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         {
           title: "Por Tipo",
           items: [
-            { label: "Ultraligeros (< 45g)", href: "/categorias/mouses?tipo=ultraligeros" },
-            { label: "Ergonómicos", href: "/categorias/mouses?tipo=ergonomicos" },
-            { label: "Simétricos (Ambi)", href: "/categorias/mouses?tipo=simetricos" },
-            { label: "Wireless 8000Hz", href: "/categorias/mouses?tipo=wireless-8k" },
+            { label: "Ultraligeros (< 45g)", href: "/categorias/mouses?peso_max=45" },
+            { label: "Ergonómicos", href: "/categorias/mouses?forma=ergonomico" },
+            { label: "Simétricos (Ambi)", href: "/categorias/mouses?forma=simetrico" },
+            { label: "Polling 8000Hz", href: "/categorias/mouses?polling_min=8000" },
           ],
         },
         {
           title: "Accesorios para Mouse",
           items: [
-            { label: "Skates de Vidrio & PTFE", href: "/categorias/mouses?sub=skates" },
-            { label: "Grip Tapes", href: "/categorias/mouses?sub=grip-tapes" },
-            { label: "Dongles 4K / 8K", href: "/categorias/mouses?sub=dongles" },
+            {
+              label: "Skates de Vidrio & PTFE",
+              href: "/categorias/accesorios?tipo_accesorio=skates",
+            },
+            { label: "Grip Tapes", href: "/categorias/accesorios?tipo_accesorio=grip-tapes" },
+            { label: "Dongles 4K / 8K", href: "/categorias/accesorios?tipo_accesorio=dongles" },
           ],
         },
       ],
@@ -55,22 +54,22 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         {
           title: "Ultraligeros",
           subtitle: "Shapes < 45g",
-          href: "/categorias/mouses?tipo=ultraligeros",
+          href: "/categorias/mouses?peso_max=45",
         },
         {
           title: "Ergonómicos",
           subtitle: "Agarre natural",
-          href: "/categorias/mouses?tipo=ergonomicos",
+          href: "/categorias/mouses?forma=ergonomico",
         },
         {
           title: "Simétricos",
           subtitle: "Claw & fingertip",
-          href: "/categorias/mouses?tipo=simetricos",
+          href: "/categorias/mouses?forma=simetrico",
         },
         {
-          title: "Wireless 8K",
-          subtitle: "Polling ultra-rápido",
-          href: "/categorias/mouses?tipo=wireless-8k",
+          title: "Polling 8000Hz",
+          subtitle: "Respuesta ultra-rápida",
+          href: "/categorias/mouses?polling_min=8000",
         },
       ],
     },
@@ -82,20 +81,26 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         {
           title: "Por Formato",
           items: [
-            { label: "60% & 65% Compactos", href: "/categorias/teclados?formato=compactos" },
-            { label: "75% & TKL", href: "/categorias/teclados?formato=tkl-75" },
+            {
+              label: "60% & 65% Compactos",
+              href: "/categorias/teclados?formato=60&formato=65",
+            },
+            { label: "75% & TKL", href: "/categorias/teclados?formato=75&formato=tkl" },
             {
               label: "Magnéticos (Rapid Trigger)",
-              href: "/categorias/teclados?formato=magneticos",
+              href: "/categorias/teclados?tipo_switch=magnetico",
             },
           ],
         },
         {
           title: "Componentes & Modding",
           items: [
-            { label: "Switches Magnéticos & Mecánicos", href: "/categorias/teclados?sub=switches" },
-            { label: "Keycaps PBT", href: "/categorias/teclados?sub=keycaps" },
-            { label: "Placas & Gaskets", href: "/categorias/teclados?sub=modding" },
+            {
+              label: "Switches Magnéticos & Mecánicos",
+              href: "/categorias/accesorios?tipo_accesorio=switches",
+            },
+            { label: "Keycaps PBT", href: "/categorias/accesorios?tipo_accesorio=keycaps" },
+            { label: "Placas & Modding", href: "/categorias/accesorios?tipo_accesorio=modding" },
           ],
         },
       ],
@@ -109,22 +114,22 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         {
           title: "Rapid Trigger",
           subtitle: "Switches magnéticos",
-          href: "/categorias/teclados?formato=magneticos",
+          href: "/categorias/teclados?tipo_switch=magnetico",
         },
         {
           title: "Compactos 60%",
           subtitle: "Espacio para mouse",
-          href: "/categorias/teclados?formato=compactos",
+          href: "/categorias/teclados?formato=60&formato=65",
         },
         {
           title: "75% & TKL",
           subtitle: "Formato balanceado",
-          href: "/categorias/teclados?formato=tkl-75",
+          href: "/categorias/teclados?formato=75&formato=tkl",
         },
         {
           title: "Modding",
           subtitle: "Keycaps y switches",
-          href: "/categorias/teclados?sub=modding",
+          href: "/categorias/accesorios?tipo_accesorio=modding",
         },
       ],
     },
@@ -144,7 +149,10 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
               label: "Superficie Poron / Control",
               href: "/categorias/mousepads?superficie=control",
             },
-            { label: "Superficie Speed / Cordura", href: "/categorias/mousepads?superficie=speed" },
+            {
+              label: "Superficie Speed / Cordura",
+              href: "/categorias/mousepads?superficie=speed",
+            },
           ],
         },
         {
@@ -192,9 +200,9 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         {
           title: "Categorías",
           items: [
-            { label: "IEMs para Gaming Competitivo", href: "/categorias/audio?tipo=iems" },
-            { label: "Auriculares Open-Back", href: "/categorias/audio?tipo=open-back" },
-            { label: "DACs & Amplificadores USB", href: "/categorias/audio?tipo=dacs" },
+            { label: "IEMs para Gaming Competitivo", href: "/categorias/audio?tipo_audio=iem" },
+            { label: "Auriculares Open-Back", href: "/categorias/audio?tipo_audio=open-back" },
+            { label: "DACs & Amplificadores USB", href: "/categorias/audio?tipo_audio=dac" },
           ],
         },
       ],
@@ -208,17 +216,17 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         {
           title: "IEMs Gaming",
           subtitle: "Posicionamiento sonoro",
-          href: "/categorias/audio?tipo=iems",
+          href: "/categorias/audio?tipo_audio=iem",
         },
         {
           title: "Open-Back",
           subtitle: "Escena sonora abierta",
-          href: "/categorias/audio?tipo=open-back",
+          href: "/categorias/audio?tipo_audio=open-back",
         },
         {
           title: "DACs USB",
           subtitle: "Amplificación limpia",
-          href: "/categorias/audio?tipo=dacs",
+          href: "/categorias/audio?tipo_audio=dac",
         },
       ],
     },
@@ -230,12 +238,18 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         {
           title: "Complementos",
           items: [
-            { label: "Cables Paracord & Coiled", href: "/categorias/accesorios?tipo=cables" },
-            { label: "Bungees de Mouse", href: "/categorias/accesorios?tipo=bungees" },
-            { label: "Soportes de Auriculares", href: "/categorias/accesorios?tipo=soportes" },
+            {
+              label: "Cables Paracord & Coiled",
+              href: "/categorias/accesorios?tipo_accesorio=cables",
+            },
+            { label: "Bungees de Mouse", href: "/categorias/accesorios?tipo_accesorio=bungees" },
+            {
+              label: "Soportes de Auriculares",
+              href: "/categorias/accesorios?tipo_accesorio=soportes",
+            },
             {
               label: "Herramientas de Mantenimiento",
-              href: "/categorias/accesorios?tipo=herramientas",
+              href: "/categorias/accesorios?tipo_accesorio=herramientas",
             },
           ],
         },
@@ -249,22 +263,22 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         {
           title: "Dongles 8K",
           subtitle: "Receptores ultra-rápidos",
-          href: "/categorias/accesorios?tipo=dongles",
+          href: "/categorias/accesorios?tipo_accesorio=dongles",
         },
         {
           title: "Skates PTFE",
           subtitle: "Deslizamiento suave",
-          href: "/categorias/accesorios?tipo=skates",
+          href: "/categorias/accesorios?tipo_accesorio=skates",
         },
         {
           title: "Grip Tapes",
           subtitle: "Textura antideslizante",
-          href: "/categorias/accesorios?tipo=grip-tapes",
+          href: "/categorias/accesorios?tipo_accesorio=grip-tapes",
         },
         {
           title: "Bungees",
           subtitle: "Control de cable",
-          href: "/categorias/accesorios?tipo=bungees",
+          href: "/categorias/accesorios?tipo_accesorio=bungees",
         },
       ],
     },
