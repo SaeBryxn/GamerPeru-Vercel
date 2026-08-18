@@ -38,9 +38,10 @@ GP-013 (Filters & Sorting) establishes the faceted discovery architecture across
    - Active schemas are pointed to by `categories.current_spec_schema_id`.
    - Product technical specifications are stored in `product_specifications.spec_values` as JSONB key-value records.
 
-2. **Reader Pattern & Query Budgets**:
+2. **Reader Pattern & Request-Scoped Deduplication**:
    - Discovery surfaces access data through `CatalogDiscoveryReader` and `CatalogSearchReader` interfaces, with zero N+1 queries and bounded query execution budgets.
-   - Category base queries and specification schemas are cached using Next.js `unstable_cache`.
+   - Category base queries, schemas, and entity lookups use `React cache()` from `react` for request-scoped deduplication between `generateMetadata()` and page rendering within the same HTTP request.
+   - No cross-request business caching is introduced by these helpers.
 
 3. **Closed Decimal Domain Authority**:
    - `parseTechnicalDecimal` strictly bounds public numeric inputs and ensures closure under its own canonical serializer `formatTechnicalDecimal` (`parse(raw) -> format -> parse(canonical) === parse(raw)`).
@@ -61,15 +62,19 @@ GP-013 (Filters & Sorting) establishes the faceted discovery architecture across
   - `product_specifications`
 - **Columns Added**:
   - `categories.current_spec_schema_id`
-- **New Physical Indexes (6 added in GP-013)**:
-  - `cat_spec_schemas_category_id_idx` (`category_specification_schemas.category_id`)
-  - `cat_spec_schemas_is_active_idx` (`category_specification_schemas.is_active`)
-  - `prod_specs_product_id_idx` (`product_specifications.product_id`)
-  - `prod_specs_schema_id_idx` (`product_specifications.schema_id`)
-  - `prod_specs_values_gin_idx` (`product_specifications.spec_values` USING gin)
-  - `categories_current_spec_schema_id_idx` (`categories.current_spec_schema_id`)
+- **Physical Index Delta (+6 added in GP-013)**:
+  - **Primary-Key-Backed Physical Indexes (2)**:
+    1. `category_specification_schemas_pkey` (on `category_specification_schemas.id`)
+    2. `product_specifications_pkey` (on `product_specifications.product_id`)
+  - **Unique-Constraint-Backed Physical Index (1)**: 3. `category_spec_schemas_category_id_schema_version_key` (UNIQUE on `category_specification_schemas(category_id, schema_version)`)
+  - **Explicit Physical Indexes (3)**: 4. `category_spec_schemas_category_idx` (btree on `category_specification_schemas(category_id, is_active)`) 5. `product_specifications_schema_id_idx` (btree on `product_specifications(schema_id)`) 6. `product_specifications_spec_values_gin_idx` (GIN on `product_specifications(spec_values jsonb_path_ops)`)
+- **Index Composition**:
+  - PK indexes: 2
+  - Unique indexes: 1
+  - Explicit indexes: 3
+  - GP-013 index delta: +6
 - **Total Application Physical Indexes**: 28
-- **Foreign Keys Added**:
+- **Foreign Keys Added (4)**:
   - `category_specification_schemas.category_id` -> `categories.id` (`ON DELETE RESTRICT`)
   - `product_specifications.product_id` -> `products.id` (`ON DELETE CASCADE`)
   - `product_specifications.schema_id` -> `category_specification_schemas.id` (`ON DELETE RESTRICT`)
@@ -112,7 +117,10 @@ GP-013 (Filters & Sorting) establishes the faceted discovery architecture across
 ## Technical Specifications
 
 - `field_definitions` validated prior to SQL query construction.
-- Strict validation of machine `key` and `publicParam` identifiers (`/^[a-z0-9_]{1,32}$/`).
+- Strict validation of machine `key` and `publicParam` identifiers (`/^[a-z][a-z0-9_]{0,39}$/`):
+  - Total length <= 40 characters (`FILTER_SAFETY_BOUNDS.MAX_PUBLIC_PARAM_LENGTH = 40`).
+  - First character must be lowercase `a-z`.
+  - Remaining characters may be lowercase letters, digits, or underscores.
 - Collision protection against reserved parameter names (`marca`, `categoria`, `precio_min`, `precio_max`, `sort`, `page`, `q`).
 - Protection against duplicate effective query parameters.
 - Validated ENUM options (non-empty string values and labels).
@@ -179,13 +187,15 @@ GP-013 (Filters & Sorting) establishes the faceted discovery architecture across
 
 ## Query Budgets
 
-- **Category Discovery**: Maximum 5 logical PostgreSQL queries when technical schema is active (1 Category entity + 1 Brand facet options + 1 Technical represented values + 1 Product count + 1 Product items).
+- **Category Discovery (with technical context)**:
+  - GP-013 faceted-discovery queries: **MAX 5** (1. current specification schema, 2. Brand facet options, 3. represented technical values, 4. filtered Product count, 5. filtered Product items).
+  - The fixed Category entity lookup by route slug is outside this faceting budget and is request-deduplicated through `React cache()`.
 - **Brand Discovery**:
-  - Without selected category: Maximum 3 logical queries (1 Brand entity + 1 Category facet options + 1 Product count + 1 Product items).
-  - With 1 selected category: Maximum 5 logical queries (+1 Schema lookup + 1 Technical represented values).
+  - Without selected Category: **MAX 3** GP-013 faceted-discovery queries (1. Category facet options, 2. filtered Product count, 3. filtered Product items). Fixed Brand entity lookup: outside faceting budget.
+  - With exactly one selected Category: **MAX 5** GP-013 faceted-discovery queries (1. Category facet options, 2. current specification schema, 3. represented technical values, 4. filtered Product count, 5. filtered Product items). Fixed Brand entity lookup: outside faceting budget.
 - **Search Discovery**:
-  - Without selected category: Maximum 4 faceting queries (+2 retained GP-012 entity suggestions = 6 total).
-  - With 1 selected category: Maximum 6 faceting queries (+2 retained GP-012 entity suggestions = 8 maximum total).
+  - Without selected Category: GP-013 faceting **MAX 4** (1. Brand facets, 2. Category facets, 3. filtered Search count, 4. filtered Search items) + GP-012 entity-navigation suggestion queries: **2** (matching brands, matching categories) = **6 maximum total**.
+  - With exactly one selected Category: GP-013 faceting **MAX 6** (1. Brand facets, 2. Category facets, 3. current specification schema, 4. represented technical values, 5. filtered Search count, 6. filtered Search items) + GP-012 entity-navigation queries: **2** = **8 maximum total**.
 - **N+1 Prevention**: Zero N+1 query patterns; all aggregations and facet options execute in bounded single queries.
 
 ---
@@ -201,7 +211,9 @@ GP-013 (Filters & Sorting) establishes the faceted discovery architecture across
   - Total: 285
 - **End-to-End Suite (Playwright)**:
   - Passed: 118 across 7 test suites
-  - Accessibility Audits: WCAG 2.1 AA compliant across all drawer states, filtered views, and zero states.
+  - Automated Axe accessibility checks: PASS
+  - Keyboard/focus behavior: covered by Playwright GP-013 tests
+  - External visual/manual review: PASS WITH NON-BLOCKING NOTES
 - **Code Quality Gates**:
   - `pnpm format:check`: PASS (Clean Prettier code style)
   - `pnpm typecheck`: PASS (Zero TypeScript errors)
