@@ -1,11 +1,11 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@/db/schema";
 
 describe("GP-014 — Product Detail Schema and Migration Candidate Integrity", () => {
-  it("defines canonical indexes and constraints on product_media", () => {
+  it("defines canonical indexes, checks, and explicit binding FK constraint names on product_media", () => {
     const tableConfig = getTableConfig(schema.productMedia);
 
     // Indexes
@@ -17,23 +17,26 @@ describe("GP-014 — Product Detail Schema and Migration Candidate Integrity", (
     const checkNames = tableConfig.checks.map((chk) => chk.name);
     expect(checkNames).toContain("product_media_display_order_check");
 
-    // Foreign keys
+    // Foreign keys with explicit Plan v2.2 binding constraint names & semantics
     const fks = tableConfig.foreignKeys;
-    const prodFk = fks.find((fk) => fk.reference().foreignTable === schema.products);
-    const mediaFk = fks.find((fk) => fk.reference().foreignTable === schema.mediaAssets);
-    const varFk = fks.find((fk) => fk.reference().foreignTable === schema.productVariants);
+    const prodFk = fks.find((fk) => fk.getName() === "product_media_product_fk");
+    const mediaFk = fks.find((fk) => fk.getName() === "product_media_media_asset_fk");
+    const varFk = fks.find((fk) => fk.getName() === "product_media_variant_fk");
 
-    expect(prodFk).toBeDefined();
+    expect(prodFk, "Missing binding constraint product_media_product_fk").toBeDefined();
+    expect(prodFk?.reference().foreignTable).toBe(schema.products);
     expect(prodFk?.onDelete).toBe("cascade");
 
-    expect(mediaFk).toBeDefined();
+    expect(mediaFk, "Missing binding constraint product_media_media_asset_fk").toBeDefined();
+    expect(mediaFk?.reference().foreignTable).toBe(schema.mediaAssets);
     expect(mediaFk?.onDelete).toBe("restrict");
 
-    expect(varFk).toBeDefined();
+    expect(varFk, "Missing binding constraint product_media_variant_fk").toBeDefined();
+    expect(varFk?.reference().foreignTable).toBe(schema.productVariants);
     expect(varFk?.onDelete).toBe("cascade");
   });
 
-  it("defines canonical indexes and constraints on product_story_revisions", () => {
+  it("defines canonical indexes, unique constraints, checks, and explicit binding FK constraint names on product_story_revisions", () => {
     const tableConfig = getTableConfig(schema.productStoryRevisions);
 
     // Indexes
@@ -51,27 +54,31 @@ describe("GP-014 — Product Detail Schema and Migration Candidate Integrity", (
     expect(checkNames).toContain("product_story_revisions_blocks_array");
     expect(checkNames).toContain("product_story_revisions_published_at_check");
 
-    // Foreign keys
+    // Foreign keys with explicit Plan v2.2 binding constraint names & semantics
     const fks = tableConfig.foreignKeys;
-    const prodFk = fks.find((fk) => fk.reference().foreignTable === schema.products);
-    expect(prodFk).toBeDefined();
+    const prodFk = fks.find((fk) => fk.getName() === "product_story_revisions_product_fk");
+    expect(prodFk, "Missing binding constraint product_story_revisions_product_fk").toBeDefined();
+    expect(prodFk?.reference().foreignTable).toBe(schema.products);
     expect(prodFk?.onDelete).toBe("cascade");
 
+    // Auth FK (references auth.users on delete set null)
     const authFk = fks.find((fk) => fk.reference().columns[0]?.name === "created_by_auth_user_id");
-    expect(authFk).toBeDefined();
+    expect(authFk, "Missing auth.users FK on product_story_revisions").toBeDefined();
     expect(authFk?.onDelete).toBe("set null");
   });
 
-  it("defines canonical foreign keys on product_stories", () => {
+  it("defines explicit binding FK constraint names on product_stories", () => {
     const tableConfig = getTableConfig(schema.productStories);
     const fks = tableConfig.foreignKeys;
 
-    const prodFk = fks.find((fk) => fk.reference().foreignTable === schema.products);
-    expect(prodFk).toBeDefined();
+    const prodFk = fks.find((fk) => fk.getName() === "product_stories_product_fk");
+    expect(prodFk, "Missing binding constraint product_stories_product_fk").toBeDefined();
+    expect(prodFk?.reference().foreignTable).toBe(schema.products);
     expect(prodFk?.onDelete).toBe("cascade");
 
-    const revFk = fks.find((fk) => fk.reference().foreignTable === schema.productStoryRevisions);
-    expect(revFk).toBeDefined();
+    const revFk = fks.find((fk) => fk.getName() === "product_stories_published_revision_fk");
+    expect(revFk, "Missing binding constraint product_stories_published_revision_fk").toBeDefined();
+    expect(revFk?.reference().foreignTable).toBe(schema.productStoryRevisions);
     expect(revFk?.onDelete).toBe("set null");
   });
 
@@ -81,8 +88,16 @@ describe("GP-014 — Product Detail Schema and Migration Candidate Integrity", (
     expect(uniqueNames).not.toContain("product_variants_product_id_id_unique");
   });
 
-  it("verifies generated 0003 migration file exists, is pure, and contains approved DDL", () => {
-    const migrationPath = resolve(process.cwd(), "src/db/migrations/0003_faulty_quentin_quire.sql");
+  it("verifies generated 0003 migration file exists, is pure, and contains exact binding FK constraint names", () => {
+    const migrationsDir = resolve(process.cwd(), "src/db/migrations");
+    const migrationFiles = readdirSync(migrationsDir).filter(
+      (f) => f.startsWith("0003_") && f.endsWith(".sql")
+    );
+    expect(migrationFiles).toHaveLength(1);
+    const migrationFileName = migrationFiles[0];
+    expect(migrationFileName).toBeDefined();
+
+    const migrationPath = resolve(migrationsDir, migrationFileName!);
     expect(existsSync(migrationPath)).toBe(true);
 
     const content = readFileSync(migrationPath, "utf8");
@@ -92,18 +107,24 @@ describe("GP-014 — Product Detail Schema and Migration Candidate Integrity", (
     expect(content).toContain('CREATE TABLE "product_stories"');
     expect(content).toContain('CREATE TABLE "product_story_revisions"');
 
-    // Foreign keys with explicit delete actions
+    // Exactly 6 explicit Plan v2.2 binding foreign key constraints + auth FK
     expect(content).toContain(
-      'FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade'
+      'ALTER TABLE "product_media" ADD CONSTRAINT "product_media_product_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade'
     );
     expect(content).toContain(
-      'FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict'
+      'ALTER TABLE "product_media" ADD CONSTRAINT "product_media_media_asset_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict'
     );
     expect(content).toContain(
-      'FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE cascade'
+      'ALTER TABLE "product_media" ADD CONSTRAINT "product_media_variant_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE cascade'
     );
     expect(content).toContain(
-      'FOREIGN KEY ("published_revision_id") REFERENCES "public"."product_story_revisions"("id") ON DELETE set null'
+      'ALTER TABLE "product_story_revisions" ADD CONSTRAINT "product_story_revisions_product_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade'
+    );
+    expect(content).toContain(
+      'ALTER TABLE "product_stories" ADD CONSTRAINT "product_stories_product_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade'
+    );
+    expect(content).toContain(
+      'ALTER TABLE "product_stories" ADD CONSTRAINT "product_stories_published_revision_fk" FOREIGN KEY ("published_revision_id") REFERENCES "public"."product_story_revisions"("id") ON DELETE set null'
     );
     expect(content).toContain(
       'FOREIGN KEY ("created_by_auth_user_id") REFERENCES "auth"."users"("id") ON DELETE set null'
@@ -145,6 +166,30 @@ describe("GP-014 — Product Detail Schema and Migration Candidate Integrity", (
     expect(content).not.toMatch(/DELETE\s+FROM/i);
   });
 
+  it("verifies Drizzle snapshot metadata records the exact binding FK constraint names", () => {
+    const snapshotPath = resolve(process.cwd(), "src/db/migrations/meta/0003_snapshot.json");
+    expect(existsSync(snapshotPath)).toBe(true);
+
+    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+    const mediaFks = snapshot.tables["public.product_media"].foreignKeys;
+    expect(mediaFks).toHaveProperty("product_media_product_fk");
+    expect(mediaFks.product_media_product_fk.onDelete).toBe("cascade");
+    expect(mediaFks).toHaveProperty("product_media_media_asset_fk");
+    expect(mediaFks.product_media_media_asset_fk.onDelete).toBe("restrict");
+    expect(mediaFks).toHaveProperty("product_media_variant_fk");
+    expect(mediaFks.product_media_variant_fk.onDelete).toBe("cascade");
+
+    const storyRevFks = snapshot.tables["public.product_story_revisions"].foreignKeys;
+    expect(storyRevFks).toHaveProperty("product_story_revisions_product_fk");
+    expect(storyRevFks.product_story_revisions_product_fk.onDelete).toBe("cascade");
+
+    const storyFks = snapshot.tables["public.product_stories"].foreignKeys;
+    expect(storyFks).toHaveProperty("product_stories_product_fk");
+    expect(storyFks.product_stories_product_fk.onDelete).toBe("cascade");
+    expect(storyFks).toHaveProperty("product_stories_published_revision_fk");
+    expect(storyFks.product_stories_published_revision_fk.onDelete).toBe("set null");
+  });
+
   it("verifies Drizzle journal records exactly 4 migrations in correct sequence", () => {
     const journalPath = resolve(process.cwd(), "src/db/migrations/meta/_journal.json");
     expect(existsSync(journalPath)).toBe(true);
@@ -157,7 +202,7 @@ describe("GP-014 — Product Detail Schema and Migration Candidate Integrity", (
     expect(journal.entries[1].idx).toBe(1);
     expect(journal.entries[2].tag).toBe("0002_silky_dazzler");
     expect(journal.entries[2].idx).toBe(2);
-    expect(journal.entries[3].tag).toBe("0003_faulty_quentin_quire");
+    expect(journal.entries[3].tag).toMatch(/^0003_/);
     expect(journal.entries[3].idx).toBe(3);
   });
 

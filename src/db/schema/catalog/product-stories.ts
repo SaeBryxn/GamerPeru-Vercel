@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -48,9 +49,7 @@ export const productStoryRevisions = pgTable(
     id: uuid("id")
       .primaryKey()
       .$defaultFn(() => generateUuidV7()),
-    productId: uuid("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+    productId: uuid("product_id").notNull(),
     revisionNumber: integer("revision_number").notNull(),
     status: catalogStatusEnum("status").notNull().default("DRAFT"),
     blocks: jsonb("blocks").$type<PersistedStoryBlock[]>().notNull().default([]),
@@ -61,6 +60,11 @@ export const productStoryRevisions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "product_story_revisions_product_fk",
+      columns: [table.productId],
+      foreignColumns: [products.id],
+    }).onDelete("cascade"),
     unique("product_story_revisions_product_revision_unique").on(
       table.productId,
       table.revisionNumber
@@ -80,18 +84,29 @@ export const productStoryRevisions = pgTable(
  *
  * Aggregate root linking a Product to its active published story revision.
  */
-export const productStories = pgTable("product_stories", {
-  productId: uuid("product_id")
-    .primaryKey()
-    .references(() => products.id, { onDelete: "cascade" }),
-  publishedRevisionId: uuid("published_revision_id").references(() => productStoryRevisions.id, {
-    onDelete: "set null",
-  }),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdateFn(() => new Date()),
-});
+export const productStories = pgTable(
+  "product_stories",
+  {
+    productId: uuid("product_id").primaryKey(),
+    publishedRevisionId: uuid("published_revision_id"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
+  },
+  (table) => [
+    foreignKey({
+      name: "product_stories_product_fk",
+      columns: [table.productId],
+      foreignColumns: [products.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "product_stories_published_revision_fk",
+      columns: [table.publishedRevisionId],
+      foreignColumns: [productStoryRevisions.id],
+    }).onDelete("set null"),
+  ]
+);
 
 export type ProductStoryRevision = typeof productStoryRevisions.$inferSelect;
 export type NewProductStoryRevision = typeof productStoryRevisions.$inferInsert;

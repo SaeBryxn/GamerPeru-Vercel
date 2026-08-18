@@ -1,5 +1,5 @@
 {
-  "id": "1868aaeb-2b67-4264-a781-208bf843aed9",
+  "id": "6364530d-ade9-45f6-81bf-516bd8fda242",
   "prevId": "d525efa8-94fa-4fd9-93e1-5488cfdadcfc",
   "version": "7",
   "dialect": "postgresql",
@@ -1198,8 +1198,8 @@
         }
       },
       "foreignKeys": {
-        "product_media_product_id_products_id_fk": {
-          "name": "product_media_product_id_products_id_fk",
+        "product_media_product_fk": {
+          "name": "product_media_product_fk",
           "tableFrom": "product_media",
           "tableTo": "products",
           "columnsFrom": [
@@ -1211,8 +1211,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "product_media_media_asset_id_media_assets_id_fk": {
-          "name": "product_media_media_asset_id_media_assets_id_fk",
+        "product_media_media_asset_fk": {
+          "name": "product_media_media_asset_fk",
           "tableFrom": "product_media",
           "tableTo": "media_assets",
           "columnsFrom": [
@@ -1224,8 +1224,8 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "product_media_variant_id_product_variants_id_fk": {
-          "name": "product_media_variant_id_product_variants_id_fk",
+        "product_media_variant_fk": {
+          "name": "product_media_variant_fk",
           "tableFrom": "product_media",
           "tableTo": "product_variants",
           "columnsFrom": [
@@ -1275,8 +1275,8 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "product_stories_product_id_products_id_fk": {
-          "name": "product_stories_product_id_products_id_fk",
+        "product_stories_product_fk": {
+          "name": "product_stories_product_fk",
           "tableFrom": "product_stories",
           "tableTo": "products",
           "columnsFrom": [
@@ -1288,8 +1288,8 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "product_stories_published_revision_id_product_story_revisions_id_fk": {
-          "name": "product_stories_published_revision_id_product_story_revisions_id_fk",
+        "product_stories_published_revision_fk": {
+          "name": "product_stories_published_revision_fk",
           "tableFrom": "product_stories",
           "tableTo": "product_story_revisions",
           "columnsFrom": [
@@ -1389,19 +1389,6 @@
         }
       },
       "foreignKeys": {
-        "product_story_revisions_product_id_products_id_fk": {
-          "name": "product_story_revisions_product_id_products_id_fk",
-          "tableFrom": "product_story_revisions",
-          "tableTo": "products",
-          "columnsFrom": [
-            "product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "product_story_revisions_created_by_auth_user_id_users_id_fk": {
           "name": "product_story_revisions_created_by_auth_user_id_users_id_fk",
           "tableFrom": "product_story_revisions",
@@ -1414,6 +1401,19 @@
             "id"
           ],
           "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "product_story_revisions_product_fk": {
+          "name": "product_story_revisions_product_fk",
+          "tableFrom": "product_story_revisions",
+          "tableTo": "products",
+          "columnsFrom": [
+            "product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
