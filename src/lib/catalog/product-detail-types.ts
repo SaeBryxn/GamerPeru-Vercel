@@ -1,5 +1,7 @@
 import type { ValidatedSpecificationSchema } from "@/lib/discovery-filters/types";
-import type { PersistedStoryBlock } from "@/db/schema/catalog/product-stories";
+import type { ValidatedStoryBlock } from "./story-validation";
+
+export type { ValidatedStoryBlock } from "./story-validation";
 
 export interface ProductDetailBrand {
   id: string;
@@ -26,7 +28,6 @@ export interface ProductVariantDetail {
   title: string;
   priceCents: number;
   compareAtPriceCents: number | null;
-  costCents: number | null;
   weightGrams: number | null;
   displayOrder: number;
   status: "ACTIVE";
@@ -63,7 +64,7 @@ export interface ProductStoryDetail {
   publishedRevisionId: string;
   revisionNumber: number;
   publishedAt: string;
-  blocks: PersistedStoryBlock[];
+  blocks: ValidatedStoryBlock[];
 }
 
 export interface ProductDetailEntity {

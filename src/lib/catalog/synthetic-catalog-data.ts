@@ -726,7 +726,6 @@ export function buildSyntheticProductDetail(
       title: "Negro Mate / 8K",
       priceCents: p.startingPriceCents,
       compareAtPriceCents: p.startingPriceCents + 3000,
-      costCents: Math.round(p.startingPriceCents * 0.6),
       weightGrams: typeof p.specValues.weight_g === "number" ? p.specValues.weight_g : 49,
       displayOrder: 1,
       status: "ACTIVE",
@@ -742,7 +741,6 @@ export function buildSyntheticProductDetail(
       title: "Blanco Glaciar / 8K",
       priceCents: p.startingPriceCents + 1000,
       compareAtPriceCents: p.startingPriceCents + 4000,
-      costCents: Math.round((p.startingPriceCents + 1000) * 0.6),
       weightGrams: typeof p.specValues.weight_g === "number" ? p.specValues.weight_g : 49,
       displayOrder: 2,
       status: "ACTIVE",
@@ -820,7 +818,7 @@ export function buildSyntheticProductDetail(
     publishedAt: new Date(1700000000000).toISOString(),
     blocks: [
       {
-        block_id: `${p.id}-b01`,
+        blockId: `${p.id}-b01`,
         type: "hero",
         order: 1,
         payload: {
@@ -830,7 +828,7 @@ export function buildSyntheticProductDetail(
         },
       },
       {
-        block_id: `${p.id}-b02`,
+        blockId: `${p.id}-b02`,
         type: "features_grid",
         order: 2,
         payload: {

@@ -17,6 +17,7 @@ import {
   buildPublishedProductBaseBySlugQuery,
   buildPublishedProductStoryByProductIdQuery,
 } from "./postgres-product-detail-queries";
+import { validateStoryBlocks } from "./story-validation";
 
 export class PostgresProductDetailReader implements ProductDetailReader {
   async getPublishedProductBySlug(slug: string): Promise<ProductDetailEntity | null> {
@@ -45,7 +46,6 @@ export class PostgresProductDetailReader implements ProductDetailReader {
         title: v.title,
         priceCents: v.priceCents,
         compareAtPriceCents: v.compareAtPriceCents,
-        costCents: v.costCents,
         weightGrams: v.weightGrams,
         displayOrder: v.displayOrder,
         status: "ACTIVE",
@@ -157,22 +157,51 @@ export class PostgresProductDetailReader implements ProductDetailReader {
     const specRows = await buildProductSpecificationByProductIdQuery(productBase.id);
     const specRow = specRows[0];
     if (specRow) {
-      const validatedSchema = validateSpecificationSchema({
-        id: specRow.schemaId,
-        categoryId: specRow.schemaCategoryId,
-        schemaVersion: specRow.schemaVersion,
-        fieldDefinitions: specRow.schemaFieldDefinitions,
-      });
-
-      if (validatedSchema) {
-        specifications = {
-          id: specRow.productId,
-          productId: specRow.productId,
+      // Invariant A: Schema Category Ownership
+      if (specRow.schemaCategoryId !== productBase.category.id) {
+        logger.warn({
+          event: "pdp_cross_category_specification_schema_dropped",
+          productId: productBase.id,
+          productCategoryId: productBase.category.id,
+          schemaCategoryId: specRow.schemaCategoryId,
           schemaId: specRow.schemaId,
-          schemaVersion: specRow.schemaVersion,
-          specValues: specRow.specValues ?? {},
-          schema: validatedSchema,
-        };
+        });
+      }
+      // Invariant B: Schema Version Consistency
+      else if (specRow.productSchemaVersion !== specRow.categorySchemaVersion) {
+        logger.warn({
+          event: "pdp_specification_schema_version_mismatch_dropped",
+          productId: productBase.id,
+          productSchemaVersion: specRow.productSchemaVersion,
+          categorySchemaVersion: specRow.categorySchemaVersion,
+          schemaId: specRow.schemaId,
+        });
+      }
+      // Invariant C: Schema Definition Validation
+      else {
+        const validatedSchema = validateSpecificationSchema({
+          id: specRow.schemaId,
+          categoryId: specRow.schemaCategoryId,
+          schemaVersion: specRow.categorySchemaVersion,
+          fieldDefinitions: specRow.schemaFieldDefinitions,
+        });
+
+        if (validatedSchema) {
+          specifications = {
+            id: specRow.productId,
+            productId: specRow.productId,
+            schemaId: specRow.schemaId,
+            schemaVersion: specRow.categorySchemaVersion,
+            specValues: specRow.specValues ?? {},
+            schema: validatedSchema,
+          };
+        } else {
+          logger.warn({
+            event: "pdp_invalid_specification_field_definitions_dropped",
+            productId: productBase.id,
+            schemaId: specRow.schemaId,
+          });
+        }
       }
     }
 
@@ -187,13 +216,26 @@ export class PostgresProductDetailReader implements ProductDetailReader {
         storyRow.revisionStatus === "PUBLISHED" &&
         storyRow.publishedAt !== null
       ) {
-        story = {
-          productId: storyRow.productId,
-          publishedRevisionId: storyRow.publishedRevisionId as string,
-          revisionNumber: storyRow.revisionNumber,
-          publishedAt: storyRow.publishedAt.toISOString(),
-          blocks: Array.isArray(storyRow.blocks) ? storyRow.blocks : [],
-        };
+        const validatedBlocks = validateStoryBlocks(storyRow.blocks, {
+          productId: productBase.id,
+          revisionId: storyRow.publishedRevisionId ?? undefined,
+        });
+
+        if (validatedBlocks && validatedBlocks.length > 0) {
+          story = {
+            productId: storyRow.productId,
+            publishedRevisionId: storyRow.publishedRevisionId as string,
+            revisionNumber: storyRow.revisionNumber,
+            publishedAt: storyRow.publishedAt.toISOString(),
+            blocks: validatedBlocks,
+          };
+        } else {
+          logger.warn({
+            event: "pdp_story_no_valid_blocks_dropped",
+            productId: productBase.id,
+            publishedRevisionId: storyRow.publishedRevisionId,
+          });
+        }
       } else {
         logger.warn({
           event: "pdp_invalid_published_story_revision_dropped",

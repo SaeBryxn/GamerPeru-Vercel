@@ -67,7 +67,6 @@ export function buildActiveProductVariantsByProductIdQuery(productId: string) {
       title: productVariants.title,
       priceCents: productVariants.priceCents,
       compareAtPriceCents: productVariants.compareAtPriceCents,
-      costCents: productVariants.costCents,
       weightGrams: productVariants.weightGrams,
       displayOrder: productVariants.displayOrder,
       status: productVariants.status,
@@ -132,10 +131,11 @@ export function buildProductSpecificationByProductIdQuery(productId: string) {
     .select({
       productId: productSpecifications.productId,
       schemaId: productSpecifications.schemaId,
-      schemaVersion: productSpecifications.schemaVersion,
+      productSchemaVersion: productSpecifications.schemaVersion,
       specValues: productSpecifications.specValues,
       schemaFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
       schemaCategoryId: categorySpecificationSchemas.categoryId,
+      categorySchemaVersion: categorySpecificationSchemas.schemaVersion,
     })
     .from(productSpecifications)
     .innerJoin(

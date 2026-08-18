@@ -51,7 +51,6 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       title: "Metallic Black / 8K",
       priceCents: 59900,
       compareAtPriceCents: 64900,
-      costCents: 38000,
       weightGrams: 42,
       displayOrder: 1,
       status: "ACTIVE" as const,
@@ -64,7 +63,6 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       title: "Silver Edition / 8K",
       priceCents: 61900,
       compareAtPriceCents: null,
-      costCents: 39000,
       weightGrams: 42,
       displayOrder: 2,
       status: "ACTIVE" as const,
@@ -117,7 +115,8 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
   const defaultMockSpec = {
     productId: mockProductId,
     schemaId: mockSchemaId,
-    schemaVersion: 1,
+    productSchemaVersion: 1,
+    categorySchemaVersion: 1,
     specValues: {
       weight_g: 42,
       sensor: "paw3950",
@@ -186,7 +185,8 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     spec?: {
       productId: string;
       schemaId: string;
-      schemaVersion: number;
+      productSchemaVersion: number;
+      categorySchemaVersion: number;
       specValues: Record<string, unknown>;
       schemaCategoryId: string;
       schemaFieldDefinitions: unknown;
@@ -270,7 +270,6 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
 
   // --- Scenario C ---
   it("C: DRAFT or unpublished Product returns null", async () => {
-    // Database query builder filters by status = 'PUBLISHED', so query returns empty
     setupPostgresMocks({ productBase: null });
     const reader = new PostgresProductDetailReader();
     const result = await reader.getPublishedProductBySlug("draft-product");
@@ -280,7 +279,6 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
 
   // --- Scenario D ---
   it("D: unpublished Brand causes product query to return null", async () => {
-    // Inner join on brands with status = 'PUBLISHED' produces 0 rows
     setupPostgresMocks({ productBase: null });
     const reader = new PostgresProductDetailReader();
     const result = await reader.getPublishedProductBySlug("product-with-draft-brand");
@@ -290,7 +288,6 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
 
   // --- Scenario E ---
   it("E: unpublished Category causes product query to return null", async () => {
-    // Inner join on categories with status = 'PUBLISHED' produces 0 rows
     setupPostgresMocks({ productBase: null });
     const reader = new PostgresProductDetailReader();
     const result = await reader.getPublishedProductBySlug("product-with-draft-category");
@@ -321,8 +318,8 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     expect(result?.variants[0]?.status).toBe("ACTIVE");
   });
 
-  // --- Scenario H ---
-  it("H: Product Variant price, SKU, displayOrder, and attributes project accurately", async () => {
+  // --- Scenario H (with Remediation A assertions) ---
+  it("H: Product Variant price, SKU, displayOrder, attributes project accurately and costCents is NEVER exposed", async () => {
     setupPostgresMocks();
     const reader = new PostgresProductDetailReader();
     const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
@@ -334,6 +331,12 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     expect(v1?.weightGrams).toBe(42);
     expect(v1?.displayOrder).toBe(1);
     expect(v1?.attributes).toEqual({ color: "Metallic Black", pollingRate: 8000 });
+
+    // Remediation A assertions: wholesale cost must NEVER leak
+    expect(v1).not.toHaveProperty("costCents");
+    expect(v1).not.toHaveProperty("cost_cents");
+    expect((v1 as unknown as Record<string, unknown>).costCents).toBeUndefined();
+    expect((v1 as unknown as Record<string, unknown>).cost_cents).toBeUndefined();
   });
 
   // --- Scenario I ---
@@ -498,6 +501,7 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     expect(result?.story?.publishedRevisionId).toBe(mockStoryRevId);
     expect(result?.story?.blocks).toHaveLength(1);
     expect(result?.story?.blocks[0]?.type).toBe("hero");
+    expect(result?.story?.blocks[0]?.blockId).toBe("blk-01");
   });
 
   // --- Scenario Q ---
@@ -644,5 +648,275 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     expect(await fixtureReader.getPublishedProductBySlug("producto-categoria-draft")).toBeNull();
     expect(await fixtureReader.getPublishedProductBySlug("producto-sin-variantes")).toBeNull();
     expect(await fixtureReader.getPublishedProductBySlug("non-existent-slug")).toBeNull();
+  });
+
+  // =========================================================================
+  // REMEDIATION REGRESSION TESTS (Findings A, B, C)
+  // =========================================================================
+
+  describe("Remediation A — Public Data Safety (costCents absence)", () => {
+    it("proves PostgresProductDetailReader variant never exposes costCents or cost_cents", async () => {
+      setupPostgresMocks();
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      expect(result).not.toBeNull();
+      for (const variant of result!.variants) {
+        expect(variant).not.toHaveProperty("costCents");
+        expect(variant).not.toHaveProperty("cost_cents");
+        expect((variant as unknown as Record<string, unknown>).costCents).toBeUndefined();
+        expect((variant as unknown as Record<string, unknown>).cost_cents).toBeUndefined();
+      }
+    });
+
+    it("proves synthetic / fixture / preview variants never expose costCents or cost_cents", async () => {
+      const devReader = new DevCatalogPreviewReader();
+      const fixtureReader = new FixtureCatalogDiscoveryReader();
+
+      const devProduct = await devReader.getPublishedProductBySlug("mouse-pro-mod-01");
+      const fixtureProduct = await fixtureReader.getPublishedProductBySlug("mouse-pro-mod-01");
+
+      expect(devProduct).not.toBeNull();
+      for (const variant of devProduct!.variants) {
+        expect(variant).not.toHaveProperty("costCents");
+        expect(variant).not.toHaveProperty("cost_cents");
+        expect((variant as unknown as Record<string, unknown>).costCents).toBeUndefined();
+      }
+
+      expect(fixtureProduct).not.toBeNull();
+      for (const variant of fixtureProduct!.variants) {
+        expect(variant).not.toHaveProperty("costCents");
+        expect(variant).not.toHaveProperty("cost_cents");
+        expect((variant as unknown as Record<string, unknown>).costCents).toBeUndefined();
+      }
+    });
+  });
+
+  describe("Remediation B — Story Blocks Runtime Validation", () => {
+    it("handles non-array Story blocks safely without throwing", async () => {
+      setupPostgresMocks({
+        story: {
+          ...defaultMockStory,
+          blocks: "not an array",
+        },
+      });
+      const warnSpy = vi.spyOn(logger, "warn");
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      expect(result).not.toBeNull();
+      expect(result?.story).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_story_blocks_non_array_dropped",
+          productId: mockProductId,
+        })
+      );
+    });
+
+    it("drops individual blocks with invalid envelope structure (e.g. missing block_id)", async () => {
+      setupPostgresMocks({
+        story: {
+          ...defaultMockStory,
+          blocks: [
+            { type: "hero", order: 1, payload: { headline: "No ID" } }, // missing block_id
+            { block_id: "blk-valid", type: "hero", order: 2, payload: { headline: "Valid Block" } },
+          ],
+        },
+      });
+      const warnSpy = vi.spyOn(logger, "warn");
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      expect(result?.story).not.toBeNull();
+      expect(result?.story?.blocks).toHaveLength(1);
+      expect(result?.story?.blocks[0]?.blockId).toBe("blk-valid");
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_story_block_validation_failed",
+          reason: "invalid_envelope_structure",
+        })
+      );
+    });
+
+    it("drops individual blocks with unrecognized block type", async () => {
+      setupPostgresMocks({
+        story: {
+          ...defaultMockStory,
+          blocks: [
+            {
+              block_id: "blk-bad-type",
+              type: "malicious_unrecognized_type",
+              order: 1,
+              payload: {},
+            },
+            { block_id: "blk-valid", type: "hero", order: 2, payload: { headline: "Valid Block" } },
+          ],
+        },
+      });
+      const warnSpy = vi.spyOn(logger, "warn");
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      expect(result?.story?.blocks).toHaveLength(1);
+      expect(result?.story?.blocks[0]?.blockId).toBe("blk-valid");
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_story_block_validation_failed",
+          reason: "unrecognized_block_type",
+        })
+      );
+    });
+
+    it("drops blocks with payload validation failures", async () => {
+      setupPostgresMocks({
+        story: {
+          ...defaultMockStory,
+          blocks: [
+            {
+              block_id: "blk-bad-payload",
+              type: "hero",
+              order: 1,
+              payload: { headline: 12345 }, // invalid data type!
+            },
+          ],
+        },
+      });
+      const warnSpy = vi.spyOn(logger, "warn");
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      // All blocks invalid -> story becomes null
+      expect(result?.story).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_story_block_validation_failed",
+          reason: "payload_validation_failed",
+        })
+      );
+    });
+
+    it("rejects forbidden raw HTML / script tag injection in story block payload", async () => {
+      setupPostgresMocks({
+        story: {
+          ...defaultMockStory,
+          blocks: [
+            {
+              block_id: "blk-xss",
+              type: "hero",
+              order: 1,
+              payload: { headline: "Normal title <script>alert(1)</script>" },
+            },
+          ],
+        },
+      });
+      const warnSpy = vi.spyOn(logger, "warn");
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      expect(result?.story).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_story_block_validation_failed",
+          reason: "payload_validation_failed",
+        })
+      );
+    });
+  });
+
+  describe("Remediation C — Product Specification Defensive Consistency", () => {
+    it("omits specifications when schema belongs to a different Category (cross-category inconsistency)", async () => {
+      const foreignCategoryId = "018f0000-0000-7000-8000-foreigncat01";
+      setupPostgresMocks({
+        spec: {
+          ...defaultMockSpec,
+          schemaCategoryId: foreignCategoryId, // belongs to different category!
+        },
+      });
+      const warnSpy = vi.spyOn(logger, "warn");
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      expect(result).not.toBeNull();
+      expect(result?.name).toBe("WLMouse Beast X Max");
+      // Specifications omitted cleanly
+      expect(result?.specifications).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_cross_category_specification_schema_dropped",
+          productId: mockProductId,
+          productCategoryId: mockCategoryId,
+          schemaCategoryId: foreignCategoryId,
+        })
+      );
+    });
+
+    it("omits specifications when product and category schema versions mismatch", async () => {
+      setupPostgresMocks({
+        spec: {
+          ...defaultMockSpec,
+          productSchemaVersion: 1,
+          categorySchemaVersion: 2, // version mismatch!
+        },
+      });
+      const warnSpy = vi.spyOn(logger, "warn");
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      expect(result).not.toBeNull();
+      expect(result?.specifications).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_specification_schema_version_mismatch_dropped",
+          productId: mockProductId,
+          productSchemaVersion: 1,
+          categorySchemaVersion: 2,
+        })
+      );
+    });
+
+    it("omits specifications when category schema field definitions fail GP-013 validation", async () => {
+      setupPostgresMocks({
+        spec: {
+          ...defaultMockSpec,
+          schemaFieldDefinitions: [
+            {
+              key: "bad_field",
+              label: "Bad Field",
+              dataType: "number",
+              filterable: true,
+              filterKind: "NUMBER_RANGE",
+              publicParam: "bad_field",
+              min: 100,
+              max: 50, // min > max violates validation!
+            },
+          ],
+        },
+      });
+      const warnSpy = vi.spyOn(logger, "warn");
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      expect(result).not.toBeNull();
+      expect(result?.specifications).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_invalid_specification_field_definitions_dropped",
+          productId: mockProductId,
+        })
+      );
+    });
+
+    it("projects specifications accurately when schema category and version match and validate", async () => {
+      setupPostgresMocks();
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      expect(result?.specifications).not.toBeNull();
+      expect(result?.specifications?.schemaId).toBe(mockSchemaId);
+      expect(result?.specifications?.schemaVersion).toBe(1);
+      expect(result?.specifications?.specValues.weight_g).toBe(42);
+      expect(result?.specifications?.schema.fieldDefinitions).toHaveLength(2);
+    });
   });
 });
