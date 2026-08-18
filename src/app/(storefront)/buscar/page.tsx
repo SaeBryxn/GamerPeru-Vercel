@@ -3,79 +3,84 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Search } from "lucide-react";
-import { DiscoveryShell, FilteredEmptyState, Pagination, ProductGrid } from "@/components/catalog";
 import { Container } from "@/components/ui";
-import { getCatalogReader } from "@/lib/catalog/get-reader";
+import { DiscoveryShell } from "@/components/catalog/discovery-shell/discovery-shell";
+import { FilteredEmptyState } from "@/components/catalog/filtered-empty-state/filtered-empty-state";
+import { Pagination } from "@/components/catalog/pagination/pagination";
+import { ProductGrid } from "@/components/catalog/product-grid/product-grid";
+import { getCatalogReader } from "@/lib/catalog/reader";
+import type {
+  BrandFacetOption,
+  CategoryFacetOption,
+  DiscoveryFacets,
+  DiscoveryFilterState,
+  ValidatedSpecificationSchema,
+} from "@/lib/discovery-filters/types";
 import {
   buildAppliedFilterChips,
   parseDiscoveryUrl,
   reconstructIncomingDiscoveryUrl,
   serializeDiscoveryUrl,
 } from "@/lib/discovery-filters/url";
-
-import { getSearchReader } from "@/lib/search/get-reader";
-import { getQueryCodePointLength, parseSearchQueryParam } from "@/lib/search/normalization";
-import { DEFAULT_SEARCH_PAGE_SIZE, MIN_SEARCH_QUERY_LENGTH } from "@/lib/search/types";
+import {
+  getQueryCodePointLength,
+  normalizeSearchQuery,
+  parseSearchQueryParam,
+} from "@/lib/search/normalization";
+import { getSearchReader } from "@/lib/search/reader";
+import {
+  DEFAULT_SEARCH_PAGE_SIZE,
+  MIN_SEARCH_QUERY_LENGTH,
+  type SearchBrandSuggestion,
+  type SearchCategorySuggestion,
+} from "@/lib/search/types";
 import styles from "./buscar.module.css";
 
-export const dynamic = "force-dynamic";
-
 interface SearchPageProps {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({ searchParams }: SearchPageProps): Promise<Metadata> {
   const params = await searchParams;
   const q = parseSearchQueryParam(params.q);
+  const pageStr = typeof params.page === "string" ? params.page : undefined;
+  const pageNum = pageStr && /^[1-9]\d*$/.test(pageStr) ? parseInt(pageStr, 10) : 1;
 
   if (!q) {
     return {
       title: "Buscar Periféricos Gaming | Gamer Perú",
       description:
-        "Encuentra mouses ultraligeros, teclados mecánicos, mousepads y audio de alto rendimiento en Gamer Perú.",
-      robots: {
-        index: true,
-        follow: true,
-      },
+        "Busca mouses, teclados, mousepads y periféricos gamer de alto rendimiento en Gamer Perú.",
+      robots: { index: true, follow: true },
       alternates: {
         canonical: "/buscar",
       },
     };
   }
 
-  const catalogReader = getCatalogReader();
-  const rawState = parseDiscoveryUrl(params, "search", null);
+  const title =
+    pageNum > 1 ? `Búsqueda: ${q} (Página ${pageNum}) | Gamer Perú` : `Búsqueda: ${q} | Gamer Perú`;
 
-  let schema = null;
-  if (rawState.categories.length === 1) {
-    const singleCat = await catalogReader.getPublishedCategoryBySlug(rawState.categories[0]!);
-    if (singleCat) {
-      schema = await catalogReader.getCategorySpecificationSchema(singleCat.id);
-    }
-  }
+  const canonical =
+    pageNum > 1
+      ? `/buscar?q=${encodeURIComponent(q)}&page=${pageNum}`
+      : `/buscar?q=${encodeURIComponent(q)}`;
 
-  const filterState = parseDiscoveryUrl(params, "search", schema);
-  const canonicalPath = serializeDiscoveryUrl("/buscar", filterState, "search", schema, {
-    searchQuery: q,
-    preservePage: true,
-  });
-
-  const titleSuffix = filterState.page > 1 ? ` (Página ${filterState.page})` : "";
+  const description = `Resultados de búsqueda para "${q}" en Gamer Perú. Encuentra periféricos para esports con garantía local y envíos a todo el Perú.`;
 
   return {
-    title: `Búsqueda: ${q}${titleSuffix} | Gamer Perú`,
-    description: `Resultados de búsqueda para ${q} en Gamer Perú.`,
-    robots: {
-      index: false,
-      follow: true,
-    },
+    title,
+    description,
+    robots: { index: false, follow: true },
     alternates: {
-      canonical: canonicalPath,
+      canonical,
     },
   };
 }
 
-export default async function SearchPage({ searchParams }: SearchPageProps) {
+export default async function SearchPage({
+  searchParams,
+}: SearchPageProps): Promise<React.JSX.Element> {
   const params = await searchParams;
   const rawQParam = params.q;
   const q = parseSearchQueryParam(rawQParam);
@@ -188,22 +193,58 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     );
   }
 
+  const cleanQuery = normalizeSearchQuery(q);
+  const searchReader = getSearchReader();
   const catalogReader = getCatalogReader();
-  const rawState = parseDiscoveryUrl(params, "search", null);
 
-  // If exactly one category is selected on Search, resolve its schema
-  let schema = null;
-  const selectedCatSlug = rawState.categories.length === 1 ? rawState.categories[0]! : null;
-  if (selectedCatSlug) {
-    const singleCat = await catalogReader.getPublishedCategoryBySlug(selectedCatSlug);
+  const [baseFacets, entityMatches] = await Promise.all([
+    searchReader.getSearchBaseFacetOptions(cleanQuery),
+    searchReader.searchMatchingEntities(cleanQuery),
+  ]);
+
+  const allowedBrands = new Set<string>(baseFacets.brands.map((b: BrandFacetOption) => b.slug));
+  const allowedCategories = new Set<string>(
+    baseFacets.categories.map((c: CategoryFacetOption) => c.slug)
+  );
+
+  const rawState = parseDiscoveryUrl(params, "search", null, {
+    allowedBrands,
+    allowedCategories,
+  });
+
+  let schema: ValidatedSpecificationSchema | null = null;
+  let facets: DiscoveryFacets;
+  let filterState: DiscoveryFilterState;
+
+  if (rawState.categories.length === 1) {
+    const selectedCatSlug = rawState.categories[0]!;
+    const singleCat = baseFacets.categories.find(
+      (c: CategoryFacetOption) => c.slug === selectedCatSlug
+    );
     if (singleCat) {
       schema = await catalogReader.getCategorySpecificationSchema(singleCat.id);
     }
+    filterState = parseDiscoveryUrl(params, "search", schema, {
+      allowedBrands,
+      allowedCategories,
+    });
+    facets = await searchReader.getSearchDiscoveryFacets(
+      cleanQuery,
+      baseFacets.brands,
+      baseFacets.categories,
+      singleCat ? singleCat.id : null,
+      schema
+    );
+  } else {
+    filterState = rawState;
+    facets = {
+      brands: baseFacets.brands,
+      categories: baseFacets.categories,
+      technicalSchema: null,
+      technicalFacets: [],
+    };
   }
 
-  const filterState = parseDiscoveryUrl(params, "search", schema);
-
-  // Canonical URL check
   const canonicalPath = serializeDiscoveryUrl("/buscar", filterState, "search", schema, {
     searchQuery: q,
     preservePage: true,
@@ -215,17 +256,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     redirect(canonicalPath);
   }
 
-  const searchReader = getSearchReader();
-  const [facets, entityMatches, productResults] = await Promise.all([
-    searchReader.getSearchDiscoveryFacets(q, selectedCatSlug),
-    searchReader.searchMatchingEntities(q),
-    searchReader.searchProducts(
-      q,
-      { page: filterState.page, pageSize: DEFAULT_SEARCH_PAGE_SIZE },
-      filterState,
-      schema
-    ),
-  ]);
+  const productResults = await searchReader.searchProducts(
+    cleanQuery,
+    { page: filterState.page, pageSize: DEFAULT_SEARCH_PAGE_SIZE },
+    filterState,
+    schema
+  );
 
   if (productResults.totalPages > 0 && filterState.page > productResults.totalPages) {
     notFound();
@@ -244,14 +280,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     filterState.price.maxCents !== null ||
     Object.keys(filterState.technical).length > 0;
 
-  const appliedChips = buildAppliedFilterChips("/buscar", filterState, "search", facets, q);
+  const appliedChips = buildAppliedFilterChips("/buscar", filterState, "search", facets, {
+    searchQuery: q,
+  });
 
   const cleanSearchUrl = `/buscar?q=${encodeURIComponent(q)}`;
 
-  const paginationBaseUrl = serializeDiscoveryUrl("/buscar", filterState, "search", schema, {
-    searchQuery: q,
-    overridePage: 1,
-  });
+  const getPageUrl = (page: number) => {
+    return serializeDiscoveryUrl("/buscar", filterState, "search", schema, {
+      searchQuery: q,
+      overridePage: page,
+    });
+  };
 
   return (
     <main id="main-content" className={styles.searchPage}>
@@ -302,16 +342,33 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         </div>
 
         {hasEntities && (
-          <section className={styles.entitySection} aria-label="Sugerencias de navegación">
+          <div className={styles.entitiesSection}>
+            {entityMatches.categories.length > 0 && (
+              <div className={styles.entityGroup}>
+                <span className={styles.entityGroupLabel}>Categorías sugeridas:</span>
+                <div className={styles.entityChips}>
+                  {entityMatches.categories.map((cat: SearchCategorySuggestion) => (
+                    <Link
+                      key={cat.slug}
+                      href={`/categorias/${cat.slug}`}
+                      className={styles.entityChip}
+                    >
+                      {cat.name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {entityMatches.brands.length > 0 && (
               <div className={styles.entityGroup}>
-                <span className={styles.entityGroupTitle}>Marcas:</span>
-                <div className={styles.entityPills}>
-                  {entityMatches.brands.map((brand) => (
+                <span className={styles.entityGroupLabel}>Marcas sugeridas:</span>
+                <div className={styles.entityChips}>
+                  {entityMatches.brands.map((brand: SearchBrandSuggestion) => (
                     <Link
                       key={brand.slug}
                       href={`/marcas/${brand.slug}`}
-                      className={styles.entityPill}
+                      className={styles.entityChip}
                     >
                       {brand.name}
                     </Link>
@@ -319,24 +376,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                 </div>
               </div>
             )}
-
-            {entityMatches.categories.length > 0 && (
-              <div className={styles.entityGroup}>
-                <span className={styles.entityGroupTitle}>Categorías:</span>
-                <div className={styles.entityPills}>
-                  {entityMatches.categories.map((category) => (
-                    <Link
-                      key={category.slug}
-                      href={`/categorias/${category.slug}`}
-                      className={styles.entityPill}
-                    >
-                      {category.name}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+          </div>
         )}
 
         <DiscoveryShell
@@ -350,31 +390,35 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           clearAllHref={cleanSearchUrl}
         />
 
-        {productResults.items.length > 0 ? (
+        {!isZeroState ? (
           <>
             <ProductGrid products={productResults.items} />
             <Pagination
               currentPage={productResults.page}
               totalPages={productResults.totalPages}
-              baseUrl={paginationBaseUrl}
+              getPageUrl={getPageUrl}
             />
           </>
         ) : isFiltered ? (
-          <FilteredEmptyState clearHref={cleanSearchUrl} />
-        ) : isZeroState ? (
-          <div className={styles.guidanceContainer}>
-            <h2 className={styles.guidanceTitle}>Sin resultados</h2>
-            <p className={styles.guidanceText}>No encontramos resultados para &ldquo;{q}&rdquo;.</p>
+          <FilteredEmptyState onClearFiltersHref={cleanSearchUrl} />
+        ) : (
+          <div className={styles.emptyState}>
+            <p className={styles.emptyStateTitle}>
+              No encontramos resultados para &ldquo;{q}&rdquo;
+            </p>
+            <p className={styles.emptyStateMessage}>
+              Revisa la ortografía o intenta buscar con términos más generales.
+            </p>
             <div className={styles.zeroStateActions}>
-              <Link href="/buscar" className={styles.secondaryActionLink}>
+              <Link href="/buscar" className={styles.primaryActionLink}>
                 Limpiar búsqueda
               </Link>
-              <Link href="/" className={styles.primaryActionLink}>
+              <Link href="/" className={styles.secondaryActionLink}>
                 Volver al inicio
               </Link>
             </div>
           </div>
-        ) : null}
+        )}
       </Container>
     </main>
   );

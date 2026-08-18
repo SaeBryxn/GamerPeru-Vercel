@@ -1,6 +1,7 @@
 import "server-only";
 import { validateSpecificationSchema } from "@/lib/discovery-filters/schema-validation";
 import type {
+  CategoryFacetOption,
   DiscoveryFacets,
   DiscoveryFilterState,
   SpecificationEnumOption,
@@ -29,11 +30,7 @@ import type {
   ProductDiscoveryItem,
 } from "./types";
 
-/**
- * Derives TechnicalFacet[] by intersecting validated schema field definitions
- * with actual represented data in public ProductSpecifications rows.
- */
-function deriveTechnicalFacets(
+export function deriveTechnicalFacets(
   schema: ValidatedSpecificationSchema,
   specValueRows: Array<{ specValues: unknown }>
 ): TechnicalFacet[] {
@@ -53,7 +50,6 @@ function deriveTechnicalFacets(
         }
       }
 
-      // Preserve schema definition order, but include only represented options
       const representedOptions: SpecificationEnumOption[] = (field.options ?? []).filter((opt) =>
         representedValues.has(opt.value)
       );
@@ -112,9 +108,6 @@ function deriveTechnicalFacets(
   return facets;
 }
 
-/**
- * PostgreSQL Production Catalog Discovery Reader
- */
 export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
   async getPublishedCategoryBySlug(slug: string): Promise<CategoryDiscoveryEntity | null> {
     const rows = await buildPublishedCategoryBySlugQuery(slug);
@@ -160,7 +153,7 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
     if (schema) {
       const [brandRows, specRows] = await Promise.all([
         brandRowsPromise,
-        buildTechnicalRepresentedSpecValuesQuery(categoryId, schema.id, schema.schemaVersion),
+        buildTechnicalRepresentedSpecValuesQuery(categoryId),
       ]);
       techFacets = deriveTechnicalFacets(schema, specRows);
       return {
@@ -180,31 +173,26 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
     };
   }
 
+  async getBrandCategoryFacetOptions(brandId: string): Promise<CategoryFacetOption[]> {
+    return buildBrandCategoryFacetOptionsQuery(brandId);
+  }
+
   async getBrandDiscoveryFacets(
     brandId: string,
-    selectedCategorySlug: string | null
+    selectedCategoryId: string | null,
+    schema: ValidatedSpecificationSchema | null
   ): Promise<DiscoveryFacets> {
     const categoryRows = await buildBrandCategoryFacetOptionsQuery(brandId);
 
-    if (selectedCategorySlug) {
-      const cat = categoryRows.find((c) => c.slug === selectedCategorySlug);
-      if (cat) {
-        const schema = await this.getCategorySpecificationSchema(cat.id);
-        if (schema) {
-          const specRows = await buildTechnicalRepresentedSpecValuesQuery(
-            cat.id,
-            schema.id,
-            schema.schemaVersion
-          );
-          const techFacets = deriveTechnicalFacets(schema, specRows);
-          return {
-            brands: [],
-            categories: categoryRows,
-            technicalSchema: schema,
-            technicalFacets: techFacets,
-          };
-        }
-      }
+    if (selectedCategoryId && schema) {
+      const specRows = await buildTechnicalRepresentedSpecValuesQuery(selectedCategoryId, brandId);
+      const techFacets = deriveTechnicalFacets(schema, specRows);
+      return {
+        brands: [],
+        categories: categoryRows,
+        technicalSchema: schema,
+        technicalFacets: techFacets,
+      };
     }
 
     return {
@@ -221,18 +209,18 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
     filterState?: DiscoveryFilterState,
     schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
-    const page = Math.max(1, Math.trunc(pagination.page));
-    const pageSize = Math.max(1, Math.trunc(pagination.pageSize));
+    const safePage = Math.max(1, Math.trunc(pagination.page));
+    const safePageSize = Math.max(1, Math.trunc(pagination.pageSize));
 
-    const [countResult, rows] = await Promise.all([
+    const [countRows, productRows] = await Promise.all([
       buildCategoryFilteredProductCountQuery(categoryId, filterState, schema),
-      buildCategoryFilteredProductsQuery(categoryId, page, pageSize, filterState, schema),
+      buildCategoryFilteredProductsQuery(categoryId, safePage, safePageSize, filterState, schema),
     ]);
 
-    const totalItems = Number(countResult[0]?.count ?? 0);
-    const totalPages = Math.ceil(totalItems / pageSize);
+    const totalItems = countRows[0]?.count ?? 0;
+    const totalPages = Math.ceil(totalItems / safePageSize);
 
-    const items: ProductDiscoveryItem[] = rows.map((row) => ({
+    const items: ProductDiscoveryItem[] = productRows.map((row) => ({
       id: row.id,
       name: row.name,
       slug: row.slug,
@@ -253,14 +241,14 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
             height: row.primaryMediaHeight,
           }
         : null,
-      startingPriceCents: row.startingPriceCents ?? 0,
+      startingPriceCents: row.startingPriceCents,
     }));
 
     return {
       items,
       totalItems,
-      page,
-      pageSize,
+      page: safePage,
+      pageSize: safePageSize,
       totalPages,
     };
   }
@@ -271,18 +259,18 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
     filterState?: DiscoveryFilterState,
     schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
-    const page = Math.max(1, Math.trunc(pagination.page));
-    const pageSize = Math.max(1, Math.trunc(pagination.pageSize));
+    const safePage = Math.max(1, Math.trunc(pagination.page));
+    const safePageSize = Math.max(1, Math.trunc(pagination.pageSize));
 
-    const [countResult, rows] = await Promise.all([
+    const [countRows, productRows] = await Promise.all([
       buildBrandFilteredProductCountQuery(brandId, filterState, schema),
-      buildBrandFilteredProductsQuery(brandId, page, pageSize, filterState, schema),
+      buildBrandFilteredProductsQuery(brandId, safePage, safePageSize, filterState, schema),
     ]);
 
-    const totalItems = Number(countResult[0]?.count ?? 0);
-    const totalPages = Math.ceil(totalItems / pageSize);
+    const totalItems = countRows[0]?.count ?? 0;
+    const totalPages = Math.ceil(totalItems / safePageSize);
 
-    const items: ProductDiscoveryItem[] = rows.map((row) => ({
+    const items: ProductDiscoveryItem[] = productRows.map((row) => ({
       id: row.id,
       name: row.name,
       slug: row.slug,
@@ -303,15 +291,17 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
             height: row.primaryMediaHeight,
           }
         : null,
-      startingPriceCents: row.startingPriceCents ?? 0,
+      startingPriceCents: row.startingPriceCents,
     }));
 
     return {
       items,
       totalItems,
-      page,
-      pageSize,
+      page: safePage,
+      pageSize: safePageSize,
       totalPages,
     };
   }
 }
+
+export { getCachedBrand, getCachedCategory } from "./cached-queries";

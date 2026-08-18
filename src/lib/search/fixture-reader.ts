@@ -1,5 +1,7 @@
 import "server-only";
 import type {
+  BrandFacetOption,
+  CategoryFacetOption,
   DiscoveryFacets,
   DiscoveryFilterState,
   PaginatedResult,
@@ -8,6 +10,7 @@ import type {
 } from "@/lib/catalog/types";
 import type { CatalogSearchReader } from "./reader";
 import {
+  getSyntheticSearchBaseFacetOptions,
   getSyntheticSearchDiscoveryFacets,
   getSyntheticSuggestions,
   searchSyntheticMatchingEntities,
@@ -15,19 +18,31 @@ import {
 } from "./synthetic-search-engine";
 import type { SearchEntityMatches, SearchPagination, SearchSuggestionsResult } from "./types";
 
-/**
- * Playwright E2E Fixture Search Reader
- */
 export class FixtureCatalogSearchReader implements CatalogSearchReader {
   async getSearchSuggestions(query: string): Promise<SearchSuggestionsResult> {
     return getSyntheticSuggestions(query);
   }
 
+  async getSearchBaseFacetOptions(
+    query: string
+  ): Promise<{ brands: BrandFacetOption[]; categories: CategoryFacetOption[] }> {
+    return getSyntheticSearchBaseFacetOptions(query);
+  }
+
   async getSearchDiscoveryFacets(
     query: string,
-    selectedCategorySlug: string | null
+    baseBrands: BrandFacetOption[],
+    baseCategories: CategoryFacetOption[],
+    selectedCategoryId: string | null,
+    schema: ValidatedSpecificationSchema | null
   ): Promise<DiscoveryFacets> {
-    return getSyntheticSearchDiscoveryFacets(query, selectedCategorySlug);
+    return getSyntheticSearchDiscoveryFacets(
+      query,
+      baseBrands,
+      baseCategories,
+      selectedCategoryId,
+      schema
+    );
   }
 
   async searchProducts(

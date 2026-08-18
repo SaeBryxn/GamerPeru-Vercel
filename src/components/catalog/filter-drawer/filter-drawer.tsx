@@ -3,7 +3,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
-import { serializeDiscoveryUrl } from "@/lib/discovery-filters/url";
+import { formatCentsToPenDecimal, parsePenStringToCents } from "@/lib/discovery-filters/pen-parser";
+import { parseTechnicalDecimal, serializeDiscoveryUrl } from "@/lib/discovery-filters/url";
 import type {
   DiscoveryFacets,
   DiscoveryFilterState,
@@ -33,31 +34,34 @@ export function FilterDrawer({
 }: FilterDrawerProps) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Local draft state for filters
   const [draftBrands, setDraftBrands] = useState<string[]>(filterState.brands);
   const [draftCategories, setDraftCategories] = useState<string[]>(filterState.categories);
   const [draftMinPrice, setDraftMinPrice] = useState<string>(
-    filterState.price.minCents !== null ? String(filterState.price.minCents / 100) : ""
+    filterState.price.minCents !== null ? formatCentsToPenDecimal(filterState.price.minCents) : ""
   );
   const [draftMaxPrice, setDraftMaxPrice] = useState<string>(
-    filterState.price.maxCents !== null ? String(filterState.price.maxCents / 100) : ""
+    filterState.price.maxCents !== null ? formatCentsToPenDecimal(filterState.price.maxCents) : ""
   );
   const [draftTechnical, setDraftTechnical] = useState<Record<string, TechnicalFilterValue>>(
     filterState.technical
   );
 
-  // Sync draft state when drawer opens
   useEffect(() => {
     if (isOpen) {
       setDraftBrands(filterState.brands);
       setDraftCategories(filterState.categories);
       setDraftMinPrice(
-        filterState.price.minCents !== null ? String(filterState.price.minCents / 100) : ""
+        filterState.price.minCents !== null
+          ? formatCentsToPenDecimal(filterState.price.minCents)
+          : ""
       );
       setDraftMaxPrice(
-        filterState.price.maxCents !== null ? String(filterState.price.maxCents / 100) : ""
+        filterState.price.maxCents !== null
+          ? formatCentsToPenDecimal(filterState.price.maxCents)
+          : ""
       );
       setDraftTechnical(filterState.technical);
     }
@@ -73,6 +77,14 @@ export function FilterDrawer({
         dialogRef.current.close();
       }
       onClose();
+      if (triggerRef.current && typeof triggerRef.current.focus === "function") {
+        triggerRef.current.focus();
+      } else {
+        const launcher = document.querySelector<HTMLElement>(
+          '[data-testid="filter-drawer-launcher"]'
+        );
+        launcher?.focus();
+      }
     }, delay);
 
     return () => clearTimeout(timeout);
@@ -83,6 +95,7 @@ export function FilterDrawer({
     if (!dialog) return;
 
     if (isOpen) {
+      triggerRef.current = document.activeElement as HTMLElement;
       if (!dialog.open) {
         dialog.showModal();
       }
@@ -94,27 +107,47 @@ export function FilterDrawer({
     }
   }, [isOpen, handleClose]);
 
-  // Handle native cancel (Escape key)
   const handleCancel = (e: React.SyntheticEvent) => {
     e.preventDefault();
     handleClose();
   };
 
-  // Toggle brand
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDialogElement>) => {
+    if (e.key === "Tab") {
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (first && last) {
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    }
+  };
+
   const handleBrandToggle = (brandSlug: string) => {
     setDraftBrands((prev) =>
       prev.includes(brandSlug) ? prev.filter((b) => b !== brandSlug) : [...prev, brandSlug]
     );
   };
 
-  // Toggle category
   const handleCategoryToggle = (categorySlug: string) => {
     setDraftCategories((prev) =>
       prev.includes(categorySlug) ? prev.filter((c) => c !== categorySlug) : [...prev, categorySlug]
     );
   };
 
-  // Toggle technical enum option
   const handleTechEnumToggle = (fieldKey: string, optionValue: string) => {
     setDraftTechnical((prev) => {
       const current = (prev[fieldKey] as string[]) ?? [];
@@ -131,15 +164,14 @@ export function FilterDrawer({
     });
   };
 
-  // Update technical number range
   const handleTechNumberChange = (fieldKey: string, bound: "min" | "max", rawVal: string) => {
     setDraftTechnical((prev) => {
       const current = (prev[fieldKey] as { min?: number; max?: number }) ?? {};
-      const numVal = rawVal.trim() === "" ? undefined : parseFloat(rawVal.trim());
+      const numVal = parseTechnicalDecimal(rawVal.trim());
 
       const updated = {
         ...current,
-        [bound]: Number.isFinite(numVal) ? numVal : undefined,
+        [bound]: numVal,
       };
 
       if (updated.min === undefined && updated.max === undefined) {
@@ -151,7 +183,6 @@ export function FilterDrawer({
     });
   };
 
-  // Toggle technical boolean
   const handleTechBooleanToggle = (fieldKey: string) => {
     setDraftTechnical((prev) => {
       const current = prev[fieldKey] === true;
@@ -164,24 +195,9 @@ export function FilterDrawer({
     });
   };
 
-  // Apply filters
   const handleApply = () => {
-    let minCents: number | null = null;
-    let maxCents: number | null = null;
-
-    if (draftMinPrice.trim() !== "") {
-      const parsed = parseFloat(draftMinPrice.trim());
-      if (Number.isFinite(parsed) && parsed >= 0) {
-        minCents = Math.round(parsed * 100);
-      }
-    }
-
-    if (draftMaxPrice.trim() !== "") {
-      const parsed = parseFloat(draftMaxPrice.trim());
-      if (Number.isFinite(parsed) && parsed >= 0) {
-        maxCents = Math.round(parsed * 100);
-      }
-    }
+    let minCents = parsePenStringToCents(draftMinPrice.trim());
+    let maxCents = parsePenStringToCents(draftMaxPrice.trim());
 
     if (minCents !== null && maxCents !== null && minCents > maxCents) {
       minCents = null;
@@ -206,7 +222,6 @@ export function FilterDrawer({
     router.push(targetUrl);
   };
 
-  // Clear draft
   const handleClearDraft = () => {
     setDraftBrands([]);
     setDraftCategories([]);
@@ -220,6 +235,7 @@ export function FilterDrawer({
       ref={dialogRef}
       className={`${styles.dialog} ${isTransitioning ? styles.open : ""}`}
       onCancel={handleCancel}
+      onKeyDown={handleKeyDown}
       aria-label="Filtros de catálogo"
       data-testid="filter-drawer"
     >
@@ -240,7 +256,6 @@ export function FilterDrawer({
         </header>
 
         <div className={styles.body}>
-          {/* 1. Brands (if applicable) */}
           {surface !== "brand" && facets.brands.length > 0 && (
             <div className={styles.group}>
               <h3 className={styles.groupTitle}>Marcas</h3>
@@ -264,7 +279,6 @@ export function FilterDrawer({
             </div>
           )}
 
-          {/* 2. Categories (if applicable) */}
           {surface !== "category" && facets.categories.length > 0 && (
             <div className={styles.group}>
               <h3 className={styles.groupTitle}>Categorías</h3>
@@ -288,7 +302,6 @@ export function FilterDrawer({
             </div>
           )}
 
-          {/* 3. Price Filter */}
           <div className={styles.group}>
             <h3 className={styles.groupTitle}>Precio (PEN)</h3>
             <div className={styles.priceInputs}>
@@ -325,7 +338,6 @@ export function FilterDrawer({
             </div>
           </div>
 
-          {/* 4. Technical Specifications */}
           {facets.technicalFacets.map((facet) => {
             if (facet.kind === "ENUM_MULTI") {
               const selectedValues = (draftTechnical[facet.field.key] as string[]) ?? [];

@@ -1,13 +1,3 @@
-/**
- * Gamer Perú — Catalog Discovery Domain Types
- *
- * Public projection types for category and brand discovery pages.
- *
- * Security Invariant:
- * cost_cents, internal supplier metadata, private security classes, and
- * unpublished records are NEVER included in these projections.
- */
-
 export interface CategoryDiscoveryEntity {
   id: string;
   name: string;
@@ -63,7 +53,11 @@ export interface PaginatedResult<T> {
   totalPages: number;
 }
 
+export const CATALOG_PAGE_SIZE = 12;
+
 export type {
+  BrandFacetOption,
+  CategoryFacetOption,
   DiscoveryFilterState,
   DiscoverySort,
   DiscoveryFacets,

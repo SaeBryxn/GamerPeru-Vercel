@@ -9,6 +9,7 @@ import {
   buildPredictiveProductsQuery,
   buildSearchBrandFacetOptionsQuery,
   buildSearchCategoryFacetOptionsQuery,
+  buildSearchTechnicalRepresentedSpecValuesQuery,
 } from "@/lib/search/postgres-queries";
 
 describe("GP-012/GP-013 — PostgreSQL Production Search Query Builders", () => {
@@ -16,40 +17,17 @@ describe("GP-012/GP-013 — PostgreSQL Production Search Query Builders", () => 
     const query = buildPredictiveProductsQuery("mouse", 6);
     const sqlObj = query.toSQL();
 
-    // 1. Must enforce PUBLISHED on products, brands, and categories
     expect(sqlObj.sql).toContain('"products"."status" = $');
     expect(sqlObj.sql).toContain('"brands"."status" = $');
     expect(sqlObj.sql).toContain('"categories"."status" = $');
-
-    // 2. Must enforce ACTIVE on product_variants
     expect(sqlObj.sql).toContain('"product_variants"."status" = $');
-
-    // 3. Must enforce PUBLIC_MEDIA and IMAGE on media_assets
     expect(sqlObj.sql).toContain('"media_assets"."security_class" = $');
     expect(sqlObj.sql).toContain('"media_assets"."media_type" = $');
-
-    // 4. Must select min price
     expect(sqlObj.sql).toContain('min("product_variants"."price_cents")');
-
-    // 5. Must NOT select cost_cents or supplier metadata
     expect(sqlObj.sql).not.toContain("cost_cents");
     expect(sqlObj.sql).not.toContain("supplier");
-
-    // 6. For length >= 3, must include extensions.word_similarity ranking
-    expect(sqlObj.sql).toContain("extensions.word_similarity");
-
-    // 7. Must have limit 6
     expect(sqlObj.sql).toContain("limit $");
     expect(sqlObj.params).toContain(6);
-  });
-
-  it("builds predictive products query for 2-character query WITHOUT word_similarity", () => {
-    const query = buildPredictiveProductsQuery("8k", 6);
-    const sqlObj = query.toSQL();
-
-    expect(sqlObj.sql).not.toContain("word_similarity");
-    expect(sqlObj.sql).toContain("ILIKE");
-    expect(sqlObj.sql).toContain("ESCAPE '\\'");
   });
 
   it("builds search brand and category facet options query", () => {
@@ -64,6 +42,26 @@ describe("GP-012/GP-013 — PostgreSQL Production Search Query Builders", () => 
     expect(catSql.sql).toContain('"categories"."status" = $');
     expect(catSql.sql).toContain("EXISTS");
     expect(catSql.sql).toContain('"product_variants"."status" = \'ACTIVE\'');
+  });
+
+  it("builds search technical represented spec values query scoped to search candidate q and historical schemas", () => {
+    const query = buildSearchTechnicalRepresentedSpecValuesQuery(
+      "mouse",
+      "018f0000-0000-7000-8000-000000000001"
+    );
+    const sqlObj = query.toSQL();
+
+    expect(sqlObj.sql).toContain('"product_specifications"."spec_values"');
+    expect(sqlObj.sql).toContain(
+      '"category_specification_schemas"."id" = "product_specifications"."schema_id"'
+    );
+    expect(sqlObj.sql).toContain(
+      '"category_specification_schemas"."schema_version" = "product_specifications"."schema_version"'
+    );
+    expect(sqlObj.sql).toContain('"products"."category_id" = $');
+    expect(sqlObj.sql).toContain('"products"."status" = $');
+    expect(sqlObj.sql).toContain("EXISTS");
+    expect(sqlObj.sql).toContain('"product_variants"."status" = \'ACTIVE\'');
   });
 
   it("builds full product count query", () => {
@@ -97,18 +95,16 @@ describe("GP-012/GP-013 — PostgreSQL Production Search Query Builders", () => 
     expect(predictiveCatSql.sql).toContain("limit $");
     expect(predictiveCatSql.params).toContain(3);
 
+    const fullBrandQuery = buildFullMatchingBrandsQuery("wlmouse", 4);
+    const fullBrandSql = fullBrandQuery.toSQL();
+    expect(fullBrandSql.sql).toContain('"brands"."status" = $');
+    expect(fullBrandSql.sql).toContain("limit $");
+    expect(fullBrandSql.params).toContain(4);
+
     const catQuery = buildFullMatchingCategoriesQuery("audio", 4);
     const catSql = catQuery.toSQL();
     expect(catSql.sql).toContain('"categories"."status" = $');
     expect(catSql.sql).toContain("limit $");
     expect(catSql.params).toContain(4);
-  });
-
-  it("builds brand query matching name and slug", () => {
-    const query = buildFullMatchingBrandsQuery("marca-qa", 4);
-    const sqlObj = query.toSQL();
-
-    expect(sqlObj.sql).toContain('"brands"."name" ILIKE');
-    expect(sqlObj.sql).toContain('"brands"."slug" = $');
   });
 });

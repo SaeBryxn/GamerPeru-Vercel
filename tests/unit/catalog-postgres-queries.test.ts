@@ -65,17 +65,28 @@ describe("Production Drizzle SQL Query Builders (Catalog Contract & Security Ver
     expect(sqlObj.sql).toContain('"product_variants"."status" = \'ACTIVE\'');
   });
 
-  it("builds technical represented spec values query with schema version match and active variants", () => {
-    const query = buildTechnicalRepresentedSpecValuesQuery(
-      "018f0000-0000-7000-8000-000000000001",
-      "018f0000-0000-7000-8000-000000000s01",
-      1
+  it("builds technical represented spec values query supporting historical linked schemas and brand scoping", () => {
+    const categoryQuery = buildTechnicalRepresentedSpecValuesQuery(
+      "018f0000-0000-7000-8000-000000000001"
     );
-    const sqlObj = query.toSQL();
+    const categorySql = categoryQuery.toSQL();
 
-    expect(sqlObj.sql).toContain('"product_specifications"."spec_values"');
-    expect(sqlObj.sql).toContain('"product_specifications"."schema_id" = $');
-    expect(sqlObj.sql).toContain('"product_specifications"."schema_version" = $');
+    expect(categorySql.sql).toContain('"product_specifications"."spec_values"');
+    expect(categorySql.sql).toContain(
+      '"category_specification_schemas"."id" = "product_specifications"."schema_id"'
+    );
+    expect(categorySql.sql).toContain(
+      '"category_specification_schemas"."schema_version" = "product_specifications"."schema_version"'
+    );
+
+    const brandScopedQuery = buildTechnicalRepresentedSpecValuesQuery(
+      "018f0000-0000-7000-8000-000000000001",
+      "018f0000-0000-7000-8000-000000000b01"
+    );
+    const brandSql = brandScopedQuery.toSQL();
+
+    expect(brandSql.sql).toContain('"products"."brand_id" = $');
+    expect(brandSql.params).toContain("018f0000-0000-7000-8000-000000000b01");
   });
 
   it("builds category filtered product count query with countDistinct(products.id)", () => {

@@ -54,7 +54,7 @@ describe("Category Specification Schema Validation (GP-013 Defensive Invariants)
         {
           key: "bad_param",
           label: "Bad",
-          dataType: "string",
+          dataType: "enum",
           filterable: true,
           filterKind: "ENUM_MULTI",
           publicParam: "marca", // RESERVED
@@ -68,31 +68,22 @@ describe("Category Specification Schema Validation (GP-013 Defensive Invariants)
     expect(validated).toBeNull();
   });
 
-  it("fails defensively when duplicate publicParams exist across fields", () => {
+  it("fails defensively on derived NUMBER_RANGE collision with core params (e.g. precio)", () => {
     const rawRow = {
       id: "018f0000-0000-7000-8000-000000000s01",
       categoryId: "018f0000-0000-7000-8000-000000000001",
       schemaVersion: 1,
       fieldDefinitions: [
         {
-          key: "field_one",
-          label: "Field 1",
-          dataType: "string",
+          key: "price_spec",
+          label: "Precio Spec",
+          dataType: "number",
           filterable: true,
-          filterKind: "ENUM_MULTI",
-          publicParam: "custom",
+          filterKind: "NUMBER_RANGE",
+          publicParam: "precio", // DERIVES precio_min / precio_max (COLLIDES WITH RESERVED)
           displayOrder: 1,
-          options: [{ value: "a", label: "A" }],
-        },
-        {
-          key: "field_two",
-          label: "Field 2",
-          dataType: "string",
-          filterable: true,
-          filterKind: "ENUM_MULTI",
-          publicParam: "custom", // DUPLICATE
-          displayOrder: 2,
-          options: [{ value: "b", label: "B" }],
+          min: 10,
+          max: 100,
         },
       ],
     };
@@ -101,41 +92,132 @@ describe("Category Specification Schema Validation (GP-013 Defensive Invariants)
     expect(validated).toBeNull();
   });
 
-  it("fails defensively when ENUM_MULTI has no options defined", () => {
+  it("fails defensively when sibling field effective parameters overlap", () => {
     const rawRow = {
       id: "018f0000-0000-7000-8000-000000000s01",
       categoryId: "018f0000-0000-7000-8000-000000000001",
       schemaVersion: 1,
       fieldDefinitions: [
         {
-          key: "field_one",
+          key: "weight_range",
+          label: "Weight Range",
+          dataType: "number",
+          filterable: true,
+          filterKind: "NUMBER_RANGE",
+          publicParam: "peso", // creates peso_min and peso_max
+          displayOrder: 1,
+          min: 10,
+          max: 100,
+        },
+        {
+          key: "weight_min_direct",
+          label: "Direct Min",
+          dataType: "enum",
+          filterable: true,
+          filterKind: "ENUM_MULTI",
+          publicParam: "peso_min", // COLLIDES WITH DERIVED PARAM
+          displayOrder: 2,
+          options: [{ value: "a", label: "A" }],
+        },
+      ],
+    };
+
+    const validated = validateSpecificationSchema(rawRow);
+    expect(validated).toBeNull();
+  });
+
+  it("fails defensively when duplicate enum machine values exist in a field", () => {
+    const rawRow = {
+      id: "018f0000-0000-7000-8000-000000000s01",
+      categoryId: "018f0000-0000-7000-8000-000000000001",
+      schemaVersion: 1,
+      fieldDefinitions: [
+        {
+          key: "sensor",
+          label: "Sensor",
+          dataType: "enum",
+          filterable: true,
+          filterKind: "ENUM_MULTI",
+          publicParam: "sensor",
+          displayOrder: 1,
+          options: [
+            { value: "paw3950", label: "PAW 3950" },
+            { value: "paw3950", label: "PAW 3950 Duplicate" },
+          ],
+        },
+      ],
+    };
+
+    const validated = validateSpecificationSchema(rawRow);
+    expect(validated).toBeNull();
+  });
+
+  it("fails defensively when number min > max or step <= 0", () => {
+    const rawRow1 = {
+      id: "018f0000-0000-7000-8000-000000000s01",
+      categoryId: "018f0000-0000-7000-8000-000000000001",
+      schemaVersion: 1,
+      fieldDefinitions: [
+        {
+          key: "bad_range",
+          label: "Bad Range",
+          dataType: "number",
+          filterable: true,
+          filterKind: "NUMBER_RANGE",
+          publicParam: "bad_range",
+          displayOrder: 1,
+          min: 100,
+          max: 50, // min > max
+        },
+      ],
+    };
+    expect(validateSpecificationSchema(rawRow1)).toBeNull();
+
+    const rawRow2 = {
+      id: "018f0000-0000-7000-8000-000000000s01",
+      categoryId: "018f0000-0000-7000-8000-000000000001",
+      schemaVersion: 1,
+      fieldDefinitions: [
+        {
+          key: "bad_step",
+          label: "Bad Step",
+          dataType: "number",
+          filterable: true,
+          filterKind: "NUMBER_RANGE",
+          publicParam: "bad_step",
+          displayOrder: 1,
+          step: -1, // invalid step
+        },
+      ],
+    };
+    expect(validateSpecificationSchema(rawRow2)).toBeNull();
+  });
+
+  it("fails defensively when duplicate keys exist", () => {
+    const rawRow = {
+      id: "018f0000-0000-7000-8000-000000000s01",
+      categoryId: "018f0000-0000-7000-8000-000000000001",
+      schemaVersion: 1,
+      fieldDefinitions: [
+        {
+          key: "same_key",
           label: "Field 1",
           dataType: "enum",
           filterable: true,
           filterKind: "ENUM_MULTI",
-          publicParam: "custom",
+          publicParam: "param_1",
           displayOrder: 1,
-          options: [], // EMPTY OPTIONS
+          options: [{ value: "a", label: "A" }],
         },
-      ],
-    };
-
-    const validated = validateSpecificationSchema(rawRow);
-    expect(validated).toBeNull();
-  });
-
-  it("fails defensively when field key violates snake_case regex", () => {
-    const rawRow = {
-      id: "018f0000-0000-7000-8000-000000000s01",
-      categoryId: "018f0000-0000-7000-8000-000000000001",
-      schemaVersion: 1,
-      fieldDefinitions: [
         {
-          key: "InvalidKeyWithCapitals",
-          label: "Field 1",
-          dataType: "string",
-          filterable: false,
-          displayOrder: 1,
+          key: "same_key",
+          label: "Field 2",
+          dataType: "enum",
+          filterable: true,
+          filterKind: "ENUM_MULTI",
+          publicParam: "param_2",
+          displayOrder: 2,
+          options: [{ value: "b", label: "B" }],
         },
       ],
     };

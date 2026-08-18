@@ -1,5 +1,6 @@
 import "server-only";
 import type {
+  CategoryFacetOption,
   DiscoveryFacets,
   DiscoveryFilterState,
   SpecificationEnumOption,
@@ -42,11 +43,11 @@ const ALL_FIXTURE_BRANDS: Record<string, SyntheticBrandEntry> = {
 };
 
 const FIXTURE_PRODUCTS: SyntheticProductWithSpecs[] = [
-  ...generateSyntheticProducts("mouses", "Mouses Gaming", 14, 1),
-  ...generateSyntheticProducts("teclados", "Teclados Gaming", 4, 1),
-  ...generateSyntheticProducts("mousepads", "Mousepads Gaming", 4, 1),
-  ...generateSyntheticProducts("audio", "Audio Gaming", 4, 1),
-  ...generateSyntheticProducts("accesorios", "Accesorios Gaming", 4, 1),
+  ...generateSyntheticProducts("mouses", "Mouses Gaming", 14),
+  ...generateSyntheticProducts("teclados", "Teclados Gaming", 4),
+  ...generateSyntheticProducts("mousepads", "Mousepads Gaming", 4),
+  ...generateSyntheticProducts("audio", "Audio Gaming", 4),
+  ...generateSyntheticProducts("accesorios", "Accesorios Gaming", 4),
 ];
 
 function deriveSyntheticTechnicalFacets(
@@ -99,7 +100,15 @@ function deriveSyntheticTechnicalFacets(
         });
       }
     } else if (field.filterKind === "BOOLEAN") {
-      const hasTrue = products.some((p) => p.specValues[field.key] === true);
+      let hasTrue = false;
+      for (const p of products) {
+        const val = p.specValues[field.key];
+        if (val === true) {
+          hasTrue = true;
+          break;
+        }
+      }
+
       if (hasTrue) {
         facets.push({
           field,
@@ -179,9 +188,21 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
     };
   }
 
+  async getBrandCategoryFacetOptions(brandId: string): Promise<CategoryFacetOption[]> {
+    const targetBrand = Object.values(ALL_FIXTURE_BRANDS).find((b) => b.id === brandId);
+    if (!targetBrand) return [];
+
+    const baseProducts = FIXTURE_PRODUCTS.filter((p) => p.brand.slug === targetBrand.slug);
+    const representedCategorySlugs = new Set(baseProducts.map((p) => p.category.slug));
+    return Object.values(ALL_FIXTURE_CATEGORIES)
+      .filter((c) => c.status === "PUBLISHED" && representedCategorySlugs.has(c.slug))
+      .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
+  }
+
   async getBrandDiscoveryFacets(
     brandId: string,
-    selectedCategorySlug: string | null
+    selectedCategoryId: string | null,
+    schema: ValidatedSpecificationSchema | null
   ): Promise<DiscoveryFacets> {
     const targetBrand = Object.values(ALL_FIXTURE_BRANDS).find((b) => b.id === brandId);
     if (!targetBrand) {
@@ -195,21 +216,28 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
       .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
 
     let techFacets: TechnicalFacet[] = [];
-    let techSchema: ValidatedSpecificationSchema | null = null;
 
-    if (selectedCategorySlug) {
-      techSchema = SYNTHETIC_SPEC_SCHEMAS[selectedCategorySlug] ?? null;
-      if (techSchema) {
-        const catProducts = baseProducts.filter((p) => p.category.slug === selectedCategorySlug);
-        techFacets = deriveSyntheticTechnicalFacets(techSchema, catProducts);
-      }
+    if (selectedCategoryId && schema) {
+      const selectedCat = Object.values(ALL_FIXTURE_CATEGORIES).find(
+        (c) => c.id === selectedCategoryId
+      );
+      const catProducts = selectedCat
+        ? baseProducts.filter((p) => p.category.slug === selectedCat.slug)
+        : [];
+      techFacets = deriveSyntheticTechnicalFacets(schema, catProducts);
+      return {
+        brands: [],
+        categories: categoryOptions,
+        technicalSchema: schema,
+        technicalFacets: techFacets,
+      };
     }
 
     return {
       brands: [],
       categories: categoryOptions,
-      technicalSchema: techSchema,
-      technicalFacets: techFacets,
+      technicalSchema: null,
+      technicalFacets: [],
     };
   }
 
@@ -219,22 +247,14 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
     filterState?: DiscoveryFilterState,
     schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
-    const targetCategory = Object.values(ALL_FIXTURE_CATEGORIES).find(
-      (c) => c.id === categoryId && c.status === "PUBLISHED"
-    );
-
-    if (!targetCategory || targetCategory.slug === "categoria-vacia") {
-      return {
-        items: [],
-        totalItems: 0,
-        page: pagination.page,
-        pageSize: pagination.pageSize,
-        totalPages: 0,
-      };
+    const category = Object.values(ALL_FIXTURE_CATEGORIES).find((c) => c.id === categoryId);
+    if (!category) {
+      return { items: [], totalItems: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 };
     }
 
-    const baseProducts = FIXTURE_PRODUCTS.filter((p) => p.category.slug === targetCategory.slug);
-    const resolvedSchema = schema ?? SYNTHETIC_SPEC_SCHEMAS[targetCategory.slug] ?? null;
+    const baseProducts = FIXTURE_PRODUCTS.filter((p) => p.category.slug === category.slug);
+    const resolvedSchema = schema ?? SYNTHETIC_SPEC_SCHEMAS[category.slug] ?? null;
+
     const filtered = filterAndSortSyntheticProducts(
       baseProducts,
       filterState,
@@ -242,18 +262,27 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
       resolvedSchema
     );
 
+    const safePage = Math.max(1, Math.trunc(pagination.page));
+    const safePageSize = Math.max(1, Math.trunc(pagination.pageSize));
     const totalItems = filtered.length;
-    const pageSize = Math.max(1, Math.trunc(pagination.pageSize));
-    const totalPages = Math.ceil(totalItems / pageSize);
-    const page = Math.max(1, Math.trunc(pagination.page));
-    const offset = (page - 1) * pageSize;
-    const items = filtered.slice(offset, offset + pageSize);
+    const totalPages = Math.ceil(totalItems / safePageSize);
+    const offset = (safePage - 1) * safePageSize;
+    const items = filtered.slice(offset, offset + safePageSize).map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      subtitle: p.subtitle,
+      brand: p.brand,
+      category: p.category,
+      primaryMedia: p.primaryMedia,
+      startingPriceCents: p.startingPriceCents,
+    }));
 
     return {
       items,
       totalItems,
-      page,
-      pageSize,
+      page: safePage,
+      pageSize: safePageSize,
       totalPages,
     };
   }
@@ -264,21 +293,13 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
     filterState?: DiscoveryFilterState,
     schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
-    const targetBrand = Object.values(ALL_FIXTURE_BRANDS).find(
-      (b) => b.id === brandId && b.status === "PUBLISHED"
-    );
-
-    if (!targetBrand || targetBrand.slug === "marca-vacia") {
-      return {
-        items: [],
-        totalItems: 0,
-        page: pagination.page,
-        pageSize: pagination.pageSize,
-        totalPages: 0,
-      };
+    const brand = Object.values(ALL_FIXTURE_BRANDS).find((b) => b.id === brandId);
+    if (!brand) {
+      return { items: [], totalItems: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 };
     }
 
-    const baseProducts = FIXTURE_PRODUCTS.filter((p) => p.brand.slug === targetBrand.slug);
+    const baseProducts = FIXTURE_PRODUCTS.filter((p) => p.brand.slug === brand.slug);
+
     const filtered = filterAndSortSyntheticProducts(
       baseProducts,
       filterState,
@@ -286,18 +307,27 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
       schema ?? null
     );
 
+    const safePage = Math.max(1, Math.trunc(pagination.page));
+    const safePageSize = Math.max(1, Math.trunc(pagination.pageSize));
     const totalItems = filtered.length;
-    const pageSize = Math.max(1, Math.trunc(pagination.pageSize));
-    const totalPages = Math.ceil(totalItems / pageSize);
-    const page = Math.max(1, Math.trunc(pagination.page));
-    const offset = (page - 1) * pageSize;
-    const items = filtered.slice(offset, offset + pageSize);
+    const totalPages = Math.ceil(totalItems / safePageSize);
+    const offset = (safePage - 1) * safePageSize;
+    const items = filtered.slice(offset, offset + safePageSize).map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      subtitle: p.subtitle,
+      brand: p.brand,
+      category: p.category,
+      primaryMedia: p.primaryMedia,
+      startingPriceCents: p.startingPriceCents,
+    }));
 
     return {
       items,
       totalItems,
-      page,
-      pageSize,
+      page: safePage,
+      pageSize: safePageSize,
       totalPages,
     };
   }

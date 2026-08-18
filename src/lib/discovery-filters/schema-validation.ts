@@ -1,8 +1,13 @@
 import { z } from "zod";
 import { logger } from "@/lib/logger";
-import type { ValidatedSpecificationField, ValidatedSpecificationSchema } from "./types";
+import {
+  FILTER_SAFETY_BOUNDS,
+  RESERVED_CORE_PARAMS,
+  type ValidatedSpecificationField,
+  type ValidatedSpecificationSchema,
+} from "./types";
 
-const IDENTIFIER_REGEX = /^[a-z][a-z0-9_]{1,40}$/;
+const IDENTIFIER_REGEX = /^[a-z][a-z0-9_]{0,39}$/;
 
 const EnumOptionSchema = z.object({
   value: z.string().min(1).max(80),
@@ -11,13 +16,17 @@ const EnumOptionSchema = z.object({
 
 const SpecificationFieldDefinitionSchema = z
   .object({
-    key: z.string().regex(IDENTIFIER_REGEX),
+    key: z.string().max(FILTER_SAFETY_BOUNDS.MAX_PUBLIC_PARAM_LENGTH).regex(IDENTIFIER_REGEX),
     label: z.string().min(1).max(100),
     dataType: z.enum(["enum", "number", "boolean", "string"]),
     unit: z.string().max(20).nullable().optional(),
     filterable: z.boolean(),
     filterKind: z.enum(["ENUM_MULTI", "NUMBER_RANGE", "BOOLEAN"]).optional(),
-    publicParam: z.string().regex(IDENTIFIER_REGEX).optional(),
+    publicParam: z
+      .string()
+      .max(FILTER_SAFETY_BOUNDS.MAX_PUBLIC_PARAM_LENGTH)
+      .regex(IDENTIFIER_REGEX)
+      .optional(),
     displayOrder: z.number().int().min(0).default(0),
     options: z.array(EnumOptionSchema).optional(),
     min: z.number().optional(),
@@ -40,26 +49,70 @@ const SpecificationFieldDefinitionSchema = z
           path: ["publicParam"],
         });
       }
-      if (val.dataType === "enum" && val.filterKind !== "ENUM_MULTI") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Enum field ${val.key} must have filterKind ENUM_MULTI`,
-          path: ["filterKind"],
-        });
+      if (val.dataType === "enum") {
+        if (val.filterKind !== "ENUM_MULTI") {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Enum field ${val.key} must have filterKind ENUM_MULTI`,
+            path: ["filterKind"],
+          });
+        }
+        if (!val.options || val.options.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Enum field ${val.key} must provide options`,
+            path: ["options"],
+          });
+        } else {
+          const seenOptionValues = new Set<string>();
+          for (const opt of val.options) {
+            if (seenOptionValues.has(opt.value)) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Enum field ${val.key} has duplicate option value "${opt.value}"`,
+                path: ["options"],
+              });
+            }
+            seenOptionValues.add(opt.value);
+          }
+        }
       }
-      if (val.dataType === "enum" && (!val.options || val.options.length === 0)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Enum field ${val.key} must provide options`,
-          path: ["options"],
-        });
-      }
-      if (val.dataType === "number" && val.filterKind !== "NUMBER_RANGE") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Number field ${val.key} must have filterKind NUMBER_RANGE`,
-          path: ["filterKind"],
-        });
+      if (val.dataType === "number") {
+        if (val.filterKind !== "NUMBER_RANGE") {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Number field ${val.key} must have filterKind NUMBER_RANGE`,
+            path: ["filterKind"],
+          });
+        }
+        if (val.min !== undefined && !Number.isFinite(val.min)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Number field ${val.key} min must be finite`,
+            path: ["min"],
+          });
+        }
+        if (val.max !== undefined && !Number.isFinite(val.max)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Number field ${val.key} max must be finite`,
+            path: ["max"],
+          });
+        }
+        if (val.min !== undefined && val.max !== undefined && val.min > val.max) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Number field ${val.key} min cannot exceed max`,
+            path: ["min"],
+          });
+        }
+        if (val.step !== undefined && (!Number.isFinite(val.step) || val.step <= 0)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Number field ${val.key} step must be finite and > 0`,
+            path: ["step"],
+          });
+        }
       }
       if (val.dataType === "boolean" && val.filterKind !== "BOOLEAN") {
         ctx.addIssue({
@@ -80,10 +133,16 @@ const SpecificationFieldDefinitionSchema = z
 
 const FieldDefinitionsArraySchema = z.array(SpecificationFieldDefinitionSchema);
 
-/**
- * Validates raw category specification field definitions from the database.
- * Returns validated fields or null if validation fails.
- */
+export function getFieldEffectivePublicParams(
+  publicParam: string,
+  filterKind?: "ENUM_MULTI" | "NUMBER_RANGE" | "BOOLEAN"
+): string[] {
+  if (filterKind === "NUMBER_RANGE") {
+    return [`${publicParam}_min`, `${publicParam}_max`];
+  }
+  return [publicParam];
+}
+
 export function validateSpecificationFieldDefinitions(
   rawDefs: unknown,
   diagnosticContext?: { categoryId?: string; schemaId?: string }
@@ -106,7 +165,7 @@ export function validateSpecificationFieldDefinitions(
 
   const validated: ValidatedSpecificationField[] = [];
   const seenKeys = new Set<string>();
-  const seenParams = new Set<string>();
+  const seenEffectiveParams = new Set<string>();
 
   for (const item of parseResult.data) {
     if (seenKeys.has(item.key)) {
@@ -120,15 +179,30 @@ export function validateSpecificationFieldDefinitions(
     seenKeys.add(item.key);
 
     if (item.filterable && item.publicParam) {
-      if (seenParams.has(item.publicParam)) {
-        logger.warn({
-          event: "specification_schema_duplicate_public_param",
-          publicParam: item.publicParam,
-          categoryId: diagnosticContext?.categoryId,
-        });
-        return null;
+      const effectiveParams = getFieldEffectivePublicParams(item.publicParam, item.filterKind);
+
+      for (const param of effectiveParams) {
+        if (RESERVED_CORE_PARAMS.has(param)) {
+          logger.warn({
+            event: "specification_schema_reserved_param_collision",
+            param,
+            fieldKey: item.key,
+            categoryId: diagnosticContext?.categoryId,
+          });
+          return null;
+        }
+
+        if (seenEffectiveParams.has(param)) {
+          logger.warn({
+            event: "specification_schema_duplicate_public_param",
+            param,
+            fieldKey: item.key,
+            categoryId: diagnosticContext?.categoryId,
+          });
+          return null;
+        }
+        seenEffectiveParams.add(param);
       }
-      seenParams.add(item.publicParam);
     }
 
     validated.push({
@@ -150,9 +224,6 @@ export function validateSpecificationFieldDefinitions(
   return validated.sort((a, b) => a.displayOrder - b.displayOrder);
 }
 
-/**
- * Builds a validated specification schema structure from raw database record.
- */
 export function validateSpecificationSchema(
   rawSchema: {
     id: string;

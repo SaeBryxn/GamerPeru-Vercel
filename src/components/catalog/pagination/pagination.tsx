@@ -7,12 +7,9 @@ export interface PaginationProps {
   totalPages: number;
   baseUrl?: string;
   basePath?: string;
+  getPageUrl?: (page: number) => string;
 }
 
-/**
- * Computes a deterministic bounded list of page numbers and ellipsis markers.
- * Max items returned is at most 7 for any totalPages count.
- */
 export function getPaginationPageItems(
   currentPage: number,
   totalPages: number
@@ -40,20 +37,13 @@ export function getPaginationPageItems(
   return [1, "ellipsis", currentPage - 1, currentPage, currentPage + 1, "ellipsis", totalPages];
 }
 
-/**
- * Gamer Perú — Accessible Bounded Catalog Pagination Component
- *
- * Renders crawlable links with compact windowed pagination for large catalogs.
- *
- * Invariants:
- * 1. Base URL represents page 1 (canonical clean URL).
- * 2. Subsequent pages render `?page=N`.
- * 3. Previous/Next buttons use disabled spans when at boundaries.
- * 4. Current page uses `aria-current="page"`.
- * 5. Ellipsis separators use `aria-hidden="true"` and are non-interactive.
- * 6. Minimum 44x44px interaction targets on all interactive controls.
- */
-export function Pagination({ currentPage, totalPages, baseUrl, basePath }: PaginationProps) {
+export function Pagination({
+  currentPage,
+  totalPages,
+  baseUrl,
+  basePath,
+  getPageUrl,
+}: PaginationProps) {
   if (totalPages <= 1) {
     return null;
   }
@@ -61,6 +51,9 @@ export function Pagination({ currentPage, totalPages, baseUrl, basePath }: Pagin
   const effectiveBaseUrl = baseUrl ?? basePath ?? "";
 
   const buildPageUrl = (page: number) => {
+    if (getPageUrl) {
+      return getPageUrl(page);
+    }
     if (page <= 1) {
       return effectiveBaseUrl;
     }
@@ -96,32 +89,30 @@ export function Pagination({ currentPage, totalPages, baseUrl, basePath }: Pagin
             return (
               <li key={`ellipsis-${index}`} className={styles.item}>
                 <span className={styles.ellipsis} aria-hidden="true">
-                  …
+                  &hellip;
                 </span>
               </li>
             );
           }
 
-          const pageNum = item;
-          const isCurrent = pageNum === currentPage;
-
+          const isCurrent = item === currentPage;
           return (
-            <li key={pageNum} className={styles.item}>
+            <li key={`page-${item}`} className={styles.item}>
               {isCurrent ? (
                 <span
-                  className={styles.currentPage}
+                  className={`${styles.link} ${styles.current}`}
                   aria-current="page"
-                  aria-label={`Página actual, página ${pageNum}`}
+                  aria-label={`Página ${item}, página actual`}
                 >
-                  {pageNum}
+                  {item}
                 </span>
               ) : (
                 <Link
-                  href={buildPageUrl(pageNum)}
-                  className={styles.pageLink}
-                  aria-label={`Ir a página ${pageNum}`}
+                  href={buildPageUrl(item)}
+                  className={styles.link}
+                  aria-label={`Ir a página ${item}`}
                 >
-                  {pageNum}
+                  {item}
                 </Link>
               )}
             </li>

@@ -3,12 +3,13 @@ import {
   SYNTHETIC_CATEGORIES,
   SYNTHETIC_NAV_BRANDS,
   SYNTHETIC_QA_BRAND,
-  SYNTHETIC_SPEC_SCHEMAS,
   filterAndSortSyntheticProducts,
   generateSyntheticProducts,
   type SyntheticProductWithSpecs,
 } from "@/lib/catalog/synthetic-catalog-data";
 import type {
+  BrandFacetOption,
+  CategoryFacetOption,
   DiscoveryFacets,
   DiscoveryFilterState,
   PaginatedResult,
@@ -58,86 +59,94 @@ export function scoreSyntheticProduct(product: ProductDiscoveryItem, cleanQuery:
   const q = cleanQuery.toLowerCase();
   const name = product.name.toLowerCase();
   const slug = product.slug.toLowerCase();
-  const subtitle = (product.subtitle ?? "").toLowerCase();
   const brandName = product.brand.name.toLowerCase();
   const brandSlug = product.brand.slug.toLowerCase();
-  const catName = product.category.name.toLowerCase();
-  const catSlug = product.category.slug.toLowerCase();
+  const categoryName = product.category.name.toLowerCase();
+  const categorySlug = product.category.slug.toLowerCase();
+  const subtitle = (product.subtitle ?? "").toLowerCase();
 
   if (name === q) return 1000;
   if (slug === q) return 900;
   if (name.startsWith(q)) return 800;
   if (name.includes(q)) return 600;
   if (brandName === q || brandSlug === q) return 300;
-  if (brandName.includes(q)) return 250;
-  if (catName === q || catSlug === q) return 200;
-  if (catName.includes(q)) return 150;
+  if (brandName.includes(q) || brandSlug.includes(q)) return 250;
+  if (categoryName === q || categorySlug === q) return 200;
+  if (categoryName.includes(q) || categorySlug.includes(q)) return 150;
   if (subtitle.includes(q)) return 100;
-
   return 0;
 }
 
-export function scoreSyntheticBrand(brand: SearchBrandSuggestion, cleanQuery: string): number {
+export function scoreSyntheticBrand(
+  brand: { name: string; slug: string },
+  cleanQuery: string
+): number {
   const q = cleanQuery.toLowerCase();
   const name = brand.name.toLowerCase();
   const slug = brand.slug.toLowerCase();
-
   if (name === q) return 100;
   if (slug === q) return 90;
   if (name.startsWith(q)) return 80;
   if (name.includes(q) || slug.includes(q)) return 50;
-
   return 0;
 }
 
 export function scoreSyntheticCategory(
-  category: SearchCategorySuggestion,
+  category: { name: string; slug: string },
   cleanQuery: string
 ): number {
   const q = cleanQuery.toLowerCase();
   const name = category.name.toLowerCase();
   const slug = category.slug.toLowerCase();
-
   if (name === q) return 100;
   if (slug === q) return 90;
   if (name.startsWith(q)) return 80;
   if (name.includes(q) || slug.includes(q)) return 50;
-
   return 0;
 }
 
-export function executeSyntheticSearch(query: string) {
-  const cleanQuery = normalizeSearchQuery(query);
-  if (getQueryCodePointLength(cleanQuery) < MIN_SEARCH_QUERY_LENGTH) {
-    return {
-      products: [],
-      brands: [],
-      categories: [],
-    };
+export function executeSyntheticSearch(cleanQuery: string) {
+  const allProducts = getAllSyntheticProducts();
+  const allBrands = getAllSyntheticBrands();
+  const allCategories = getAllSyntheticCategories();
+
+  const matchingProducts: Array<{ product: SyntheticProductWithSpecs; score: number }> = [];
+  for (const p of allProducts) {
+    const score = scoreSyntheticProduct(p, cleanQuery);
+    if (score > 0) {
+      matchingProducts.push({ product: p, score });
+    }
   }
 
-  const scoredProducts = getAllSyntheticProducts()
-    .map((p) => ({ product: p, score: scoreSyntheticProduct(p, cleanQuery) }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score || b.product.id.localeCompare(a.product.id))
-    .map((entry) => entry.product);
+  matchingProducts.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.product.name.localeCompare(b.product.name);
+  });
 
-  const scoredBrands = getAllSyntheticBrands()
-    .map((b) => ({ brand: b, score: scoreSyntheticBrand(b, cleanQuery) }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score || a.brand.name.localeCompare(b.brand.name))
-    .map((entry) => entry.brand);
+  const matchingBrands: Array<{ brand: SearchBrandSuggestion; score: number }> = [];
+  for (const b of allBrands) {
+    const score = scoreSyntheticBrand(b, cleanQuery);
+    if (score > 0) {
+      matchingBrands.push({ brand: b, score });
+    }
+  }
+  matchingBrands.sort((a, b) => b.score - a.score || a.brand.name.localeCompare(b.brand.name));
 
-  const scoredCategories = getAllSyntheticCategories()
-    .map((c) => ({ category: c, score: scoreSyntheticCategory(c, cleanQuery) }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score || a.category.name.localeCompare(b.category.name))
-    .map((entry) => entry.category);
+  const matchingCategories: Array<{ category: SearchCategorySuggestion; score: number }> = [];
+  for (const c of allCategories) {
+    const score = scoreSyntheticCategory(c, cleanQuery);
+    if (score > 0) {
+      matchingCategories.push({ category: c, score });
+    }
+  }
+  matchingCategories.sort(
+    (a, b) => b.score - a.score || a.category.name.localeCompare(b.category.name)
+  );
 
   return {
-    products: scoredProducts,
-    brands: scoredBrands,
-    categories: scoredCategories,
+    products: matchingProducts.map((m) => m.product),
+    brands: matchingBrands.map((m) => m.brand),
+    categories: matchingCategories.map((m) => m.category),
   };
 }
 
@@ -225,12 +234,16 @@ export async function getSyntheticSuggestions(query: string): Promise<SearchSugg
   };
 }
 
-export async function getSyntheticSearchDiscoveryFacets(
-  query: string,
-  selectedCategorySlug: string | null
-): Promise<DiscoveryFacets> {
-  const { products } = executeSyntheticSearch(query);
+export async function getSyntheticSearchBaseFacetOptions(query: string): Promise<{
+  brands: BrandFacetOption[];
+  categories: CategoryFacetOption[];
+}> {
+  const cleanQuery = normalizeSearchQuery(query);
+  if (getQueryCodePointLength(cleanQuery) < MIN_SEARCH_QUERY_LENGTH) {
+    return { brands: [], categories: [] };
+  }
 
+  const { products } = executeSyntheticSearch(cleanQuery);
   const representedBrandSlugs = new Set(products.map((p) => p.brand.slug));
   const representedCategorySlugs = new Set(products.map((p) => p.category.slug));
 
@@ -238,7 +251,6 @@ export async function getSyntheticSearchDiscoveryFacets(
     .filter((b) => b.status === "PUBLISHED" && representedBrandSlugs.has(b.slug))
     .map((b) => ({ id: b.id, name: b.name, slug: b.slug }));
 
-  // Always include Marca QA if represented
   if (representedBrandSlugs.has(SYNTHETIC_QA_BRAND.slug)) {
     brandOptions.push({
       id: SYNTHETIC_QA_BRAND.id,
@@ -251,22 +263,53 @@ export async function getSyntheticSearchDiscoveryFacets(
     .filter((c) => c.status === "PUBLISHED" && representedCategorySlugs.has(c.slug))
     .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
 
-  let techFacets: TechnicalFacet[] = [];
-  let techSchema: ValidatedSpecificationSchema | null = null;
-
-  if (selectedCategorySlug) {
-    techSchema = SYNTHETIC_SPEC_SCHEMAS[selectedCategorySlug] ?? null;
-    if (techSchema) {
-      const catProducts = products.filter((p) => p.category.slug === selectedCategorySlug);
-      techFacets = deriveSyntheticTechnicalFacets(techSchema, catProducts);
-    }
-  }
-
   return {
     brands: brandOptions,
     categories: categoryOptions,
-    technicalSchema: techSchema,
-    technicalFacets: techFacets,
+  };
+}
+
+export async function getSyntheticSearchDiscoveryFacets(
+  query: string,
+  baseBrands: BrandFacetOption[],
+  baseCategories: CategoryFacetOption[],
+  selectedCategoryId: string | null,
+  schema: ValidatedSpecificationSchema | null
+): Promise<DiscoveryFacets> {
+  const cleanQuery = normalizeSearchQuery(query);
+  if (getQueryCodePointLength(cleanQuery) < MIN_SEARCH_QUERY_LENGTH) {
+    return {
+      brands: [],
+      categories: [],
+      technicalSchema: null,
+      technicalFacets: [],
+    };
+  }
+
+  let techFacets: TechnicalFacet[] = [];
+
+  if (selectedCategoryId && schema) {
+    const { products } = executeSyntheticSearch(cleanQuery);
+    const selectedCat = Object.values(SYNTHETIC_CATEGORIES).find(
+      (c) => c.id === selectedCategoryId
+    );
+    const catProducts = selectedCat
+      ? products.filter((p) => p.category.slug === selectedCat.slug)
+      : [];
+    techFacets = deriveSyntheticTechnicalFacets(schema, catProducts);
+    return {
+      brands: baseBrands,
+      categories: baseCategories,
+      technicalSchema: schema,
+      technicalFacets: techFacets,
+    };
+  }
+
+  return {
+    brands: baseBrands,
+    categories: baseCategories,
+    technicalSchema: null,
+    technicalFacets: [],
   };
 }
 

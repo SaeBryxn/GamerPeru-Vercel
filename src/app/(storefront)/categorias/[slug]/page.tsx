@@ -1,6 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound, permanentRedirect, redirect } from "next/navigation";
 import {
   CatalogEmptyState,
   DiscoveryHeader,
@@ -10,10 +10,9 @@ import {
   ProductGrid,
 } from "@/components/catalog";
 import styles from "@/components/catalog/catalog-page.module.css";
-import { publicEnv } from "@/config/public-env";
-import { getCachedCategory } from "@/lib/catalog/cached-queries";
-import { getCatalogReader } from "@/lib/catalog/get-reader";
-import { CATALOG_PAGE_SIZE } from "@/lib/catalog/pagination";
+import { getCatalogReader } from "@/lib/catalog/reader";
+import { getCachedCategory } from "@/lib/catalog/postgres-reader";
+import { CATALOG_PAGE_SIZE } from "@/lib/catalog/types";
 import { translateLegacyCategoryUrl } from "@/lib/discovery-filters/legacy-aliases";
 import {
   buildAppliedFilterChips,
@@ -21,8 +20,6 @@ import {
   reconstructIncomingDiscoveryUrl,
   serializeDiscoveryUrl,
 } from "@/lib/discovery-filters/url";
-
-export const dynamic = "force-dynamic";
 
 interface CategoryPageProps {
   params: Promise<{ slug: string }>;
@@ -40,16 +37,13 @@ export async function generateMetadata({
   if (!category) {
     return {
       title: "Categoría no encontrada | Gamer Perú",
-      robots: { index: false, follow: false },
+      description: "La categoría solicitada no existe o no está disponible.",
     };
   }
 
   const reader = getCatalogReader();
   const schema = await reader.getCategorySpecificationSchema(category.id);
   const filterState = parseDiscoveryUrl(resolvedSearchParams, "category", schema);
-
-  const title = `${category.name} | Gamer Perú`;
-  const description = category.description ?? `Catálogo de ${category.name} en Gamer Perú.`;
 
   const canonicalPath = serializeDiscoveryUrl(
     `/categorias/${slug}`,
@@ -58,7 +52,7 @@ export async function generateMetadata({
     schema,
     { preservePage: true }
   );
-  const canonicalUrl = `${publicEnv.NEXT_PUBLIC_SITE_URL}${canonicalPath}`;
+  const canonicalUrl = `https://gamerperu.com${canonicalPath}`;
 
   const isFilteredOrSorted =
     filterState.brands.length > 0 ||
@@ -68,15 +62,17 @@ export async function generateMetadata({
     filterState.sort !== null;
 
   return {
-    title,
-    description,
+    title: `${category.name} | Gamer Perú`,
+    description: `Explora nuestra selección de ${category.name.toLowerCase()} para esports de alto rendimiento en Perú. Envíos a todo el país.`,
     alternates: {
       canonical: canonicalUrl,
     },
     openGraph: {
-      title,
-      description,
+      title: `${category.name} | Gamer Perú`,
+      description: `Explora nuestra selección de ${category.name.toLowerCase()} para esports de alto rendimiento en Perú.`,
       url: canonicalUrl,
+      siteName: "Gamer Perú",
+      locale: "es_PE",
       type: "website",
     },
     robots: isFilteredOrSorted ? { index: false, follow: true } : { index: true, follow: true },
@@ -90,12 +86,15 @@ export default async function CategoryPage({
   const { slug } = await params;
   const resolvedSearchParams = await searchParams;
 
-  // 1. Check for legacy URL aliases (e.g. ?tipo=ultraligeros -> ?peso_max=45)
   const legacyCheck = translateLegacyCategoryUrl(slug, resolvedSearchParams);
   if (legacyCheck.hasLegacyParams && legacyCheck.targetPath && legacyCheck.translatedParams) {
     const reader = getCatalogReader();
-    const targetCat = await getCachedCategory(slug);
-    const schema = targetCat ? await reader.getCategorySpecificationSchema(targetCat.id) : null;
+    const targetCategorySlug = legacyCheck.targetCategorySlug ?? slug;
+    const targetCat = await getCachedCategory(targetCategorySlug);
+    if (!targetCat) {
+      notFound();
+    }
+    const schema = await reader.getCategorySpecificationSchema(targetCat.id);
     const translatedState = parseDiscoveryUrl(legacyCheck.translatedParams, "category", schema);
     const destinationUrl = serializeDiscoveryUrl(
       legacyCheck.targetPath,
@@ -104,7 +103,7 @@ export default async function CategoryPage({
       schema,
       { overridePage: 1 }
     );
-    redirect(destinationUrl);
+    permanentRedirect(destinationUrl);
   }
 
   const category = await getCachedCategory(slug);
@@ -114,9 +113,13 @@ export default async function CategoryPage({
 
   const reader = getCatalogReader();
   const schema = await reader.getCategorySpecificationSchema(category.id);
-  const filterState = parseDiscoveryUrl(resolvedSearchParams, "category", schema);
+  const facets = await reader.getCategoryDiscoveryFacets(category.id, schema);
+  const allowedBrands = new Set(facets.brands.map((b) => b.slug));
 
-  // 2. Canonical URL normalization check
+  const filterState = parseDiscoveryUrl(resolvedSearchParams, "category", schema, {
+    allowedBrands,
+  });
+
   const canonicalPath = serializeDiscoveryUrl(
     `/categorias/${slug}`,
     filterState,
@@ -125,29 +128,22 @@ export default async function CategoryPage({
     { preservePage: true }
   );
 
-  // Reconstruct current request path to compare with canonical representation
   const currentRawPath = reconstructIncomingDiscoveryUrl(
     `/categorias/${slug}`,
     resolvedSearchParams
   );
 
-  // If the incoming URL is not canonical, issue redirect
   if (currentRawPath !== canonicalPath) {
     redirect(canonicalPath);
   }
 
-  // 3. Fetch facets and filtered products in parallel
-  const [facets, paginated] = await Promise.all([
-    reader.getCategoryDiscoveryFacets(category.id, schema),
-    reader.getPublishedProductsByCategory(
-      category.id,
-      { page: filterState.page, pageSize: CATALOG_PAGE_SIZE },
-      filterState,
-      schema
-    ),
-  ]);
+  const paginated = await reader.getPublishedProductsByCategory(
+    category.id,
+    { page: filterState.page, pageSize: CATALOG_PAGE_SIZE },
+    filterState,
+    schema
+  );
 
-  // Out of bounds validation
   if (paginated.totalItems === 0) {
     if (filterState.page > 1) {
       notFound();
@@ -177,20 +173,20 @@ export default async function CategoryPage({
     { label: category.name },
   ];
 
-  // Base path for pagination preserving current filter & sort state
-  const paginationBaseUrl = serializeDiscoveryUrl(
-    `/categorias/${slug}`,
-    filterState,
-    "category",
-    schema,
-    { overridePage: 1 }
-  );
+  const getPageUrl = (page: number) => {
+    return serializeDiscoveryUrl(`/categorias/${slug}`, filterState, "category", schema, {
+      overridePage: page,
+    });
+  };
 
   return (
     <main id="main-content" className={styles.container}>
       <DiscoveryHeader
         title={category.name}
-        description={category.description}
+        description={
+          category.description ??
+          `Catálogo completo de ${category.name.toLowerCase()} para gaming competitivo.`
+        }
         breadcrumbs={breadcrumbs}
         totalProducts={paginated.totalItems}
       />
@@ -211,7 +207,7 @@ export default async function CategoryPage({
           <Pagination
             currentPage={paginated.page}
             totalPages={paginated.totalPages}
-            baseUrl={paginationBaseUrl}
+            getPageUrl={getPageUrl}
           />
         </>
       ) : isFiltered ? (

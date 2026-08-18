@@ -1,7 +1,6 @@
 import "server-only";
 import { and, countDistinct, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-
 import {
   brands,
   categories,
@@ -21,13 +20,6 @@ import type {
   DiscoveryFilterState,
   ValidatedSpecificationSchema,
 } from "@/lib/discovery-filters/types";
-
-/**
- * Production Drizzle Query Builders for PostgreSQL Catalog Discovery
- *
- * Exposes the exact query builder instances used by PostgresCatalogDiscoveryReader,
- * allowing unit tests to inspect query structure via `.toSQL()` without connecting to PostgreSQL.
- */
 
 export function buildPublishedCategoryBySlugQuery(slug: string) {
   return db
@@ -151,9 +143,20 @@ export function buildBrandCategoryFacetOptionsQuery(brandId: string) {
 
 export function buildTechnicalRepresentedSpecValuesQuery(
   categoryId: string,
-  schemaId: string,
-  schemaVersion: number
+  brandId?: string | null
 ) {
+  const whereConditions = [
+    eq(products.categoryId, categoryId),
+    eq(products.status, "PUBLISHED"),
+    eq(brands.status, "PUBLISHED"),
+    eq(categories.status, "PUBLISHED"),
+    buildEligibleVariantExistsClause(null, null),
+  ];
+
+  if (brandId) {
+    whereConditions.push(eq(products.brandId, brandId));
+  }
+
   return db
     .select({
       specValues: productSpecifications.specValues,
@@ -165,15 +168,15 @@ export function buildTechnicalRepresentedSpecValuesQuery(
       categories,
       and(eq(categories.id, products.categoryId), eq(categories.status, "PUBLISHED"))
     )
-    .where(
+    .innerJoin(
+      categorySpecificationSchemas,
       and(
-        eq(products.categoryId, categoryId),
-        eq(products.status, "PUBLISHED"),
-        eq(productSpecifications.schemaId, schemaId),
-        eq(productSpecifications.schemaVersion, schemaVersion),
-        buildEligibleVariantExistsClause(null, null)
+        eq(categorySpecificationSchemas.id, productSpecifications.schemaId),
+        eq(categorySpecificationSchemas.categoryId, products.categoryId),
+        eq(categorySpecificationSchemas.schemaVersion, productSpecifications.schemaVersion)
       )
-    );
+    )
+    .where(and(...whereConditions));
 }
 
 export function buildCategoryFilteredProductCountQuery(

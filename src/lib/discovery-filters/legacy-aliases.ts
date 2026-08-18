@@ -1,20 +1,10 @@
-/**
- * Gamer Perú — Legacy Navigation URL Alias Translation
- *
- * Implements strict allowlist-based 308 permanent redirect translations for
- * historical navigation parameters without arbitrary key injection.
- */
-
 export interface LegacyAliasResult {
   hasLegacyParams: boolean;
+  targetCategorySlug?: string;
   targetPath?: string;
   translatedParams?: Record<string, string[]>;
 }
 
-/**
- * Checks if a category URL contains recognized legacy parameters and translates them
- * to their canonical GP-013 parameter destinations.
- */
 export function translateLegacyCategoryUrl(
   categorySlug: string,
   rawParams: Record<string, string | string[] | undefined>
@@ -128,6 +118,7 @@ export function translateLegacyCategoryUrl(
 
   return {
     hasLegacyParams: true,
+    targetCategorySlug,
     targetPath: `/categorias/${targetCategorySlug}`,
     translatedParams: translated,
   };

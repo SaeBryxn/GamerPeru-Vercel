@@ -8,49 +8,39 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
     }) => {
       await page.goto("/categorias/mouses");
 
-      // Verify initial state: 14 products total, toolbar button visible
       const launcherBtn = page.getByTestId("filter-launcher-button");
       await expect(launcherBtn).toBeVisible();
       await expect(launcherBtn).toContainText("Filtros");
 
-      // Open drawer
       await launcherBtn.click();
       const drawer = page.getByTestId("filter-drawer");
       await expect(drawer).toBeVisible();
 
-      // Check Brand (Marca QA)
       const brandCheckbox = page.getByTestId("filter-brand-marca-qa");
       await expect(brandCheckbox).toBeVisible();
       await brandCheckbox.check();
 
-      // Enter price min
       const priceMin = page.getByTestId("price-min-input");
       await priceMin.fill("130");
 
-      // Check Shape (forma=ergonomico)
       const shapeCheckbox = page.getByTestId("filter-tech-shape-ergonomico");
       if (await shapeCheckbox.isVisible()) {
         await shapeCheckbox.check();
       }
 
-      // Apply filters
       const applyBtn = page.getByTestId("apply-filters-button");
       await applyBtn.click();
 
-      // Drawer closes
       await expect(drawer).toBeHidden();
 
-      // Verify canonical URL
       await expect(page).toHaveURL(/.*\/categorias\/mouses\?.*marca=marca-qa.*/);
       await expect(page).toHaveURL(/.*precio_min=130.*/);
 
-      // Verify applied chips
       const brandChip = page.getByText("Marca: Marca QA");
       await expect(brandChip).toBeVisible();
       const priceChip = page.getByText("Precio: Desde S/ 130");
       await expect(priceChip).toBeVisible();
 
-      // Launcher button shows count badge
       await expect(launcherBtn).toContainText("Filtros");
       await expect(launcherBtn).toContainText("3");
     });
@@ -61,11 +51,9 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
       const brandChip = page.getByText("Marca: Marca QA");
       await expect(brandChip).toBeVisible();
 
-      // Click remove button on Brand chip
       const removeBrandBtn = page.getByTestId("remove-filter-brand-marca-qa");
       await removeBrandBtn.click();
 
-      // URL should now only have precio_min=130
       await expect(page).toHaveURL(/.*\/categorias\/mouses\?precio_min=130$/);
       await expect(page.getByText("Marca: Marca QA")).toHaveCount(0);
       await expect(page.getByText("Precio: Desde S/ 130")).toBeVisible();
@@ -88,17 +76,14 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
       const sortSelect = page.getByTestId("catalog-sort-select");
       await expect(sortSelect).toBeVisible();
 
-      // Change to Precio: menor a mayor
       await sortSelect.selectOption("precio-menor");
       await expect(page).toHaveURL(/.*\/categorias\/mouses\?sort=precio-menor$/);
 
-      // Change to Nombre: A a Z
       await sortSelect.selectOption("nombre-asc");
       await expect(page).toHaveURL(/.*\/categorias\/mouses\?sort=nombre-asc$/);
     });
 
     test("E: renders filtered zero state when no products match filters", async ({ page }) => {
-      // Set impossible price
       await page.goto("/categorias/mouses?precio_max=10");
 
       const emptyState = page.getByTestId("filtered-empty-state");
@@ -123,9 +108,48 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
       const drawer = page.getByTestId("filter-drawer");
       await expect(drawer).toBeVisible();
 
-      // Press Escape
       await page.keyboard.press("Escape");
       await expect(drawer).toBeHidden();
+      await expect(launcherBtn).toBeFocused();
+    });
+
+    test("F2: drawer close button closes drawer and restores focus", async ({ page }) => {
+      await page.goto("/categorias/mouses");
+
+      const launcherBtn = page.getByTestId("filter-launcher-button");
+      await launcherBtn.click();
+
+      const drawer = page.getByTestId("filter-drawer");
+      await expect(drawer).toBeVisible();
+
+      const closeBtn = page.getByTestId("close-filter-drawer-button");
+      await closeBtn.click();
+      await expect(drawer).toBeHidden();
+      await expect(launcherBtn).toBeFocused();
+    });
+  });
+
+  test.describe("Legacy Aliases & Cross-Category Redirection", () => {
+    test("Legacy 1: /categorias/mouses?tipo=ultraligeros permanently redirects to canonical peso_max=45", async ({
+      page,
+    }) => {
+      const response = await page.goto("/categorias/mouses?tipo=ultraligeros");
+      expect(response).not.toBeNull();
+      await expect(page).toHaveURL(/.*\/categorias\/mouses\?peso_max=45$/);
+    });
+
+    test("Legacy 2: /categorias/mouses?sub=skates permanently redirects to cross-category /categorias/accesorios?tipo_accesorio=skates", async ({
+      page,
+    }) => {
+      const response = await page.goto("/categorias/mouses?sub=skates");
+      expect(response).not.toBeNull();
+      await expect(page).toHaveURL(/.*\/categorias\/accesorios\?tipo_accesorio=skates$/);
+    });
+
+    test("Legacy 3: mousepad canonical parameters do not loop", async ({ page }) => {
+      const response = await page.goto("/categorias/mousepads?superficie=vidrio&tamano=xl");
+      expect(response?.status()).toBe(200);
+      await expect(page).toHaveURL(/.*\/categorias\/mousepads\?superficie=vidrio&tamano=xl$/);
     });
   });
 
@@ -138,12 +162,10 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
       const launcherBtn = page.getByTestId("filter-launcher-button");
       await launcherBtn.click();
 
-      // On brand page, Category checkboxes are present, Brand checkboxes are absent
       const catCheckbox = page.getByTestId("filter-category-mouses");
       await expect(catCheckbox).toBeVisible();
       await expect(page.locator('[data-testid^="filter-brand-"]')).toHaveCount(0);
 
-      // Select category mouses
       await catCheckbox.check();
       const applyBtn = page.getByTestId("apply-filters-button");
       await applyBtn.click();

@@ -1,9 +1,3 @@
-/**
- * Gamer Perú — Discovery Filters Domain Types
- *
- * Core type definitions for faceted discovery across Category, Brand, and Search surfaces.
- */
-
 export type DiscoverySurface = "category" | "brand" | "search";
 
 export type DiscoverySort =
@@ -40,8 +34,18 @@ export const FILTER_SAFETY_BOUNDS = {
   MAX_PRICE_PARAM_LENGTH: 12,
   MAX_SORT_VALUE_LENGTH: 32,
   MIN_PRICE_CENTS: 1,
-  MAX_PRICE_CENTS: 9999999, // S/ 99,999.99
+  MAX_PRICE_CENTS: 9999999,
 } as const;
+
+export const RESERVED_CORE_PARAMS = new Set([
+  "q",
+  "marca",
+  "categoria",
+  "precio_min",
+  "precio_max",
+  "sort",
+  "page",
+]);
 
 export type SpecificationDataType = "enum" | "number" | "boolean" | "string";
 export type SpecificationFilterKind = "ENUM_MULTI" | "NUMBER_RANGE" | "BOOLEAN";

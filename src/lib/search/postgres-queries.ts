@@ -1,9 +1,18 @@
 import "server-only";
 import { and, countDistinct, desc, eq, min, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { brands, categories, mediaAssets, products, productVariants } from "@/db/schema";
+import {
+  brands,
+  categories,
+  categorySpecificationSchemas,
+  mediaAssets,
+  productSpecifications,
+  products,
+  productVariants,
+} from "@/db/schema";
 import {
   buildEligibleStartingPriceSql,
+  buildEligibleVariantExistsClause,
   buildProductDiscoveryWhereClause,
   buildProductSortOrderBy,
 } from "@/lib/discovery-filters/postgres-predicates";
@@ -13,9 +22,6 @@ import type {
 } from "@/lib/discovery-filters/types";
 import { escapeLikePattern } from "./normalization";
 
-/**
- * Builds candidate filtering predicate for search queries (length >= 2).
- */
 export function buildSearchCandidateWhereClause(cleanQuery: string) {
   const escaped = escapeLikePattern(cleanQuery);
   const cleanSlug = cleanQuery.toLowerCase();
@@ -32,49 +38,28 @@ export function buildSearchCandidateWhereClause(cleanQuery: string) {
   );
 }
 
-/**
- * Builds deterministic non-overlapping relevance ranking score expression.
- */
 export function buildRelevanceScoreExpression(cleanQuery: string) {
   const escaped = escapeLikePattern(cleanQuery);
   const cleanSlug = cleanQuery.toLowerCase();
   const exactLike = escaped;
   const prefixLike = `${escaped}%`;
-  const containsLike = `%${escaped}%`;
 
-  if (cleanQuery.length === 2) {
-    return sql<number>`(CASE
-      WHEN ${products.name} ILIKE ${exactLike} ESCAPE '\\' THEN 1000
-      WHEN ${products.slug} = ${cleanSlug} THEN 900
-      WHEN ${products.name} ILIKE ${prefixLike} ESCAPE '\\' THEN 800
-      WHEN ${products.name} ILIKE ${containsLike} ESCAPE '\\' THEN 600
-      WHEN ${brands.name} ILIKE ${exactLike} ESCAPE '\\' OR ${brands.slug} = ${cleanSlug} THEN 300
-      WHEN ${brands.name} ILIKE ${containsLike} ESCAPE '\\' THEN 250
-      WHEN ${categories.name} ILIKE ${exactLike} ESCAPE '\\' OR ${categories.slug} = ${cleanSlug} THEN 200
-      WHEN ${categories.name} ILIKE ${containsLike} ESCAPE '\\' THEN 150
-      WHEN ${products.subtitle} ILIKE ${containsLike} ESCAPE '\\' THEN 100
-      ELSE 10
-    END)`;
-  }
-
-  return sql<number>`(CASE
-    WHEN ${products.name} ILIKE ${exactLike} ESCAPE '\\' THEN 1000
-    WHEN ${products.slug} = ${cleanSlug} THEN 900
-    WHEN ${products.name} ILIKE ${prefixLike} ESCAPE '\\' THEN 800
-    WHEN ${products.name} ILIKE ${containsLike} ESCAPE '\\' THEN 600 + CAST(extensions.word_similarity(${cleanQuery}, ${products.name}) * 99 AS integer)
-    WHEN ${brands.name} ILIKE ${exactLike} ESCAPE '\\' OR ${brands.slug} = ${cleanSlug} THEN 300
-    WHEN ${brands.name} ILIKE ${containsLike} ESCAPE '\\' THEN 250
-    WHEN ${categories.name} ILIKE ${exactLike} ESCAPE '\\' OR ${categories.slug} = ${cleanSlug} THEN 200
-    WHEN ${categories.name} ILIKE ${containsLike} ESCAPE '\\' THEN 150
-    WHEN ${products.subtitle} ILIKE ${containsLike} ESCAPE '\\' THEN 100 + CAST(extensions.word_similarity(${cleanQuery}, ${products.subtitle}) * 49 AS integer)
-    ELSE 10
-  END)`;
+  return sql<number>`CASE
+    WHEN ${products.name} ILIKE ${exactLike} ESCAPE '\\' THEN 100
+    WHEN ${products.slug} = ${cleanSlug} THEN 95
+    WHEN ${products.name} ILIKE ${prefixLike} ESCAPE '\\' THEN 85
+    WHEN ${brands.name} ILIKE ${exactLike} ESCAPE '\\' THEN 75
+    WHEN ${brands.slug} = ${cleanSlug} THEN 70
+    WHEN ${categories.name} ILIKE ${exactLike} ESCAPE '\\' THEN 65
+    WHEN ${categories.slug} = ${cleanSlug} THEN 60
+    ELSE 40
+  END`;
 }
 
 export function buildPredictiveProductsQuery(cleanQuery: string, limit = 6) {
   const safeLimit = Math.max(1, Math.min(6, Math.trunc(limit)));
-  const relevance = buildRelevanceScoreExpression(cleanQuery);
   const candidateWhere = buildSearchCandidateWhereClause(cleanQuery);
+  const relevance = buildRelevanceScoreExpression(cleanQuery);
 
   return db
     .select({
@@ -84,12 +69,13 @@ export function buildPredictiveProductsQuery(cleanQuery: string, limit = 6) {
       subtitle: products.subtitle,
       brandName: brands.name,
       brandSlug: brands.slug,
+      categoryName: categories.name,
+      categorySlug: categories.slug,
       primaryMediaKey: mediaAssets.objectKey,
       primaryMediaAlt: mediaAssets.altText,
       primaryMediaWidth: mediaAssets.width,
       primaryMediaHeight: mediaAssets.height,
       startingPriceCents: min(productVariants.priceCents).mapWith(Number),
-      relevanceScore: relevance,
     })
     .from(products)
     .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
@@ -259,6 +245,41 @@ export function buildSearchCategoryFacetOptionsQuery(cleanQuery: string) {
     .orderBy(categories.name);
 }
 
+export function buildSearchTechnicalRepresentedSpecValuesQuery(
+  cleanQuery: string,
+  categoryId: string
+) {
+  const candidateWhere = buildSearchCandidateWhereClause(cleanQuery);
+
+  return db
+    .select({
+      specValues: productSpecifications.specValues,
+    })
+    .from(productSpecifications)
+    .innerJoin(products, eq(products.id, productSpecifications.productId))
+    .innerJoin(brands, and(eq(brands.id, products.brandId), eq(brands.status, "PUBLISHED")))
+    .innerJoin(
+      categories,
+      and(eq(categories.id, products.categoryId), eq(categories.status, "PUBLISHED"))
+    )
+    .innerJoin(
+      categorySpecificationSchemas,
+      and(
+        eq(categorySpecificationSchemas.id, productSpecifications.schemaId),
+        eq(categorySpecificationSchemas.categoryId, products.categoryId),
+        eq(categorySpecificationSchemas.schemaVersion, productSpecifications.schemaVersion)
+      )
+    )
+    .where(
+      and(
+        eq(products.categoryId, categoryId),
+        eq(products.status, "PUBLISHED"),
+        candidateWhere,
+        buildEligibleVariantExistsClause(null, null)
+      )
+    );
+}
+
 export function buildFullProductCountQuery(
   cleanQuery: string,
   filterState?: DiscoveryFilterState,
@@ -301,8 +322,9 @@ export function buildFullProductResultsQuery(
   const safePage = Math.max(1, Math.trunc(page));
   const safePageSize = Math.max(1, Math.trunc(pageSize));
   const offset = (safePage - 1) * safePageSize;
-  const relevance = buildRelevanceScoreExpression(cleanQuery);
+
   const candidateWhere = buildSearchCandidateWhereClause(cleanQuery);
+  const relevance = buildRelevanceScoreExpression(cleanQuery);
 
   const state: DiscoveryFilterState = filterState ?? {
     brands: [],
@@ -322,18 +344,14 @@ export function buildFullProductResultsQuery(
     state.price.maxCents
   );
 
-  let orderByClauses: ReturnType<typeof desc>[] = [];
-  if (state.sort !== null) {
-    orderByClauses = buildProductSortOrderBy(
-      state.sort,
-      "search",
-      state.price.minCents,
-      state.price.maxCents
-    );
-  } else {
-    // Default search ordering: relevance first
-    orderByClauses = [desc(relevance), desc(products.createdAt), desc(products.id)];
-  }
+  const sortOrderBys = buildProductSortOrderBy(
+    state.sort,
+    "search",
+    state.price.minCents,
+    state.price.maxCents
+  );
+
+  const orderByClauses = state.sort === null ? [desc(relevance), ...sortOrderBys] : sortOrderBys;
 
   return db
     .select({
@@ -350,7 +368,6 @@ export function buildFullProductResultsQuery(
       primaryMediaWidth: mediaAssets.width,
       primaryMediaHeight: mediaAssets.height,
       startingPriceCents: startingPriceSql.mapWith(Number),
-      relevanceScore: relevance,
     })
     .from(products)
     .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))

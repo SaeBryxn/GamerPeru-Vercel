@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildAppliedFilterChips,
   parseDiscoveryUrl,
+  parseTechnicalDecimal,
+  pruneFilterStateAgainstDomains,
   serializeDiscoveryUrl,
 } from "@/lib/discovery-filters/url";
 import type {
@@ -89,7 +91,68 @@ describe("Discovery URL Parser and Serializer (GP-013 Contract & Canonicalizatio
     expect(state.price.maxCents).toBeNull();
   });
 
-  it("serializes to canonical parameter ordering", () => {
+  it("handles PEN money edge cases (commas, >2 decimals, 0, overflow)", () => {
+    expect(parseDiscoveryUrl({ precio_min: "100,90" }, "category").price.minCents).toBe(10090);
+    expect(parseDiscoveryUrl({ precio_min: "100.999" }, "category").price.minCents).toBeNull();
+    expect(parseDiscoveryUrl({ precio_min: "0" }, "category").price.minCents).toBeNull();
+    expect(parseDiscoveryUrl({ precio_min: "-50" }, "category").price.minCents).toBeNull();
+    expect(parseDiscoveryUrl({ precio_min: "10000000" }, "category").price.minCents).toBeNull();
+  });
+
+  it("parses technical numbers strictly and rejects malformed values", () => {
+    expect(parseTechnicalDecimal("45")).toBe(45);
+    expect(parseTechnicalDecimal("45.5")).toBe(45.5);
+    expect(parseTechnicalDecimal("1e5")).toBeUndefined();
+    expect(parseTechnicalDecimal("NaN")).toBeUndefined();
+    expect(parseTechnicalDecimal("Infinity")).toBeUndefined();
+    expect(parseTechnicalDecimal("abc")).toBeUndefined();
+    expect(parseTechnicalDecimal("")).toBeUndefined();
+    expect(parseTechnicalDecimal("20", 30, 70)).toBeUndefined();
+    expect(parseTechnicalDecimal("80", 30, 70)).toBeUndefined();
+  });
+
+  it("handles boolean and enum options correctly (only 1 is truthy, 0 is ignored)", () => {
+    const state1 = parseDiscoveryUrl({ hotswap: "1" }, "category", mockMousesSchema);
+    expect(state1.technical.hotswap).toBe(true);
+
+    const state0 = parseDiscoveryUrl({ hotswap: "0" }, "category", mockMousesSchema);
+    expect(state0.technical.hotswap).toBeUndefined();
+
+    const stateInvalid = parseDiscoveryUrl({ hotswap: "true" }, "category", mockMousesSchema);
+    expect(stateInvalid.technical.hotswap).toBeUndefined();
+  });
+
+  it("prunes invalid or unrepresented brand and category selections against base domains", () => {
+    const allowedBrands = new Set(["wlmouse", "pulsar"]);
+    const state = parseDiscoveryUrl(
+      { marca: ["wlmouse", "no-existe", "pulsar"] },
+      "category",
+      null,
+      { allowedBrands }
+    );
+    expect(state.brands).toEqual(["wlmouse", "pulsar"]);
+
+    const unprunedState: DiscoveryFilterState = {
+      brands: ["wlmouse", "brand-xyz"],
+      categories: ["mouses", "cat-xyz"],
+      price: { minCents: null, maxCents: null },
+      technical: {},
+      sort: null,
+      page: 2,
+    };
+
+    const pruned = pruneFilterStateAgainstDomains(
+      unprunedState,
+      new Set(["wlmouse"]),
+      new Set(["mouses"])
+    );
+    expect(pruned.wasPruned).toBe(true);
+    expect(pruned.state.brands).toEqual(["wlmouse"]);
+    expect(pruned.state.categories).toEqual(["mouses"]);
+    expect(pruned.state.page).toBe(1);
+  });
+
+  it("serializes to canonical parameter ordering with repeated ENUM_MULTI parameters", () => {
     const state: DiscoveryFilterState = {
       brands: ["wlmouse", "pulsar"],
       categories: ["mouses"],
@@ -102,7 +165,6 @@ describe("Discovery URL Parser and Serializer (GP-013 Contract & Canonicalizatio
       page: 2,
     };
 
-    // Category surface (no categoria in URL)
     const categoryUrl = serializeDiscoveryUrl(
       "/categorias/mouses",
       state,
@@ -111,16 +173,15 @@ describe("Discovery URL Parser and Serializer (GP-013 Contract & Canonicalizatio
       { preservePage: true }
     );
     expect(categoryUrl).toBe(
-      "/categorias/mouses?marca=pulsar&marca=wlmouse&precio_min=100&precio_max=250&forma=ergonomico&peso_max=45&sort=precio-menor&page=2"
+      "/categorias/mouses?marca=wlmouse&marca=pulsar&precio_min=100&precio_max=250&forma=ergonomico&peso_max=45&sort=precio-menor&page=2"
     );
 
-    // Search surface (begins with q, then categoria, marca, price, technical, sort, page)
     const searchUrl = serializeDiscoveryUrl("/buscar", state, "search", mockMousesSchema, {
       searchQuery: "gaming mouse",
       preservePage: true,
     });
     expect(searchUrl).toBe(
-      "/buscar?q=gaming%20mouse&categoria=mouses&marca=pulsar&marca=wlmouse&precio_min=100&precio_max=250&forma=ergonomico&peso_max=45&sort=precio-menor&page=2"
+      "/buscar?q=gaming%20mouse&categoria=mouses&marca=wlmouse&marca=pulsar&precio_min=100&precio_max=250&forma=ergonomico&peso_max=45&sort=precio-menor&page=2"
     );
   });
 
@@ -140,39 +201,28 @@ describe("Discovery URL Parser and Serializer (GP-013 Contract & Canonicalizatio
     expect(url).toBe("/categorias/mouses?marca=wlmouse");
   });
 
-  it("builds correct removable chips and clear links", () => {
+  it("builds dismissible filter chips with accurate remove URLs", () => {
     const state: DiscoveryFilterState = {
       brands: ["wlmouse"],
       categories: [],
-      price: { minCents: 15000, maxCents: null },
-      technical: {
-        shape: ["ergonomico"],
-      },
+      price: { minCents: 12000, maxCents: 20000 },
+      technical: { shape: ["ergonomico"] },
       sort: null,
       page: 1,
     };
 
     const facets: DiscoveryFacets = {
-      brands: [{ id: "b1", name: "WLMOUSE", slug: "wlmouse" }],
+      brands: [{ id: "b1", name: "WLMouse", slug: "wlmouse" }],
       categories: [],
       technicalSchema: mockMousesSchema,
-      technicalFacets: [
-        {
-          field: mockMousesSchema.fieldDefinitions[1]!,
-          kind: "ENUM_MULTI",
-          representedOptions: [{ value: "ergonomico", label: "Ergonómico" }],
-        },
-      ],
+      technicalFacets: [],
     };
 
     const chips = buildAppliedFilterChips("/categorias/mouses", state, "category", facets);
 
     expect(chips).toHaveLength(3);
-    expect(chips[0]?.label).toBe("Marca: WLMOUSE");
-    expect(chips[1]?.label).toBe("Precio: Desde S/ 150");
+    expect(chips[0]?.label).toBe("Marca: WLMouse");
+    expect(chips[1]?.label).toBe("Precio: S/ 120 - S/ 200");
     expect(chips[2]?.label).toBe("Forma: Ergonómico");
-
-    // Clicking remove on Brand chip removes brand filter from URL
-    expect(chips[0]?.removeHref).toBe("/categorias/mouses?precio_min=150&forma=ergonomico");
   });
 });

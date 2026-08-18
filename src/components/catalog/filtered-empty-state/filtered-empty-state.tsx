@@ -4,10 +4,13 @@ import { FilterX } from "lucide-react";
 import styles from "./filtered-empty-state.module.css";
 
 export interface FilteredEmptyStateProps {
-  clearHref: string;
+  clearHref?: string;
+  onClearFiltersHref?: string;
 }
 
-export function FilteredEmptyState({ clearHref }: FilteredEmptyStateProps) {
+export function FilteredEmptyState({ clearHref, onClearFiltersHref }: FilteredEmptyStateProps) {
+  const targetHref = clearHref ?? onClearFiltersHref ?? "/";
+
   return (
     <div className={styles.container} data-testid="filtered-empty-state">
       <div className={styles.iconWrapper} aria-hidden="true">
@@ -19,7 +22,7 @@ export function FilteredEmptyState({ clearHref }: FilteredEmptyStateProps) {
       </p>
       <div className={styles.actions}>
         <Link
-          href={clearHref}
+          href={targetHref}
           className={styles.primaryAction}
           data-testid="filtered-empty-clear-button"
         >

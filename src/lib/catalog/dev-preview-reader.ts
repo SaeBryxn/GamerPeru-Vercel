@@ -1,5 +1,6 @@
 import "server-only";
 import type {
+  CategoryFacetOption,
   DiscoveryFacets,
   DiscoveryFilterState,
   SpecificationEnumOption,
@@ -13,6 +14,8 @@ import {
   SYNTHETIC_NAV_BRANDS,
   SYNTHETIC_QA_BRAND,
   SYNTHETIC_SPEC_SCHEMAS,
+  SYNTHETIC_TEST_BRANDS,
+  SYNTHETIC_TEST_CATEGORIES,
   filterAndSortSyntheticProducts,
   generateSyntheticProducts,
   type SyntheticBrandEntry,
@@ -30,11 +33,13 @@ import type {
 
 const PREVIEW_CATEGORIES: Record<string, SyntheticCategoryEntry> = {
   ...SYNTHETIC_CATEGORIES,
+  ...SYNTHETIC_TEST_CATEGORIES,
 };
 
 const PREVIEW_BRANDS: Record<string, SyntheticBrandEntry> = {
   "marca-qa": SYNTHETIC_QA_BRAND,
   ...SYNTHETIC_NAV_BRANDS,
+  ...SYNTHETIC_TEST_BRANDS,
 };
 
 const PREVIEW_PRODUCTS_BY_CATEGORY: Record<string, SyntheticProductWithSpecs[]> = {
@@ -99,7 +104,15 @@ function deriveSyntheticTechnicalFacets(
         });
       }
     } else if (field.filterKind === "BOOLEAN") {
-      const hasTrue = products.some((p) => p.specValues[field.key] === true);
+      let hasTrue = false;
+      for (const p of products) {
+        const val = p.specValues[field.key];
+        if (val === true) {
+          hasTrue = true;
+          break;
+        }
+      }
+
       if (hasTrue) {
         facets.push({
           field,
@@ -179,9 +192,21 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
     };
   }
 
+  async getBrandCategoryFacetOptions(brandId: string): Promise<CategoryFacetOption[]> {
+    const brand = Object.values(PREVIEW_BRANDS).find((b) => b.id === brandId);
+    if (!brand) return [];
+
+    const baseProducts = ALL_PREVIEW_PRODUCTS.filter((p) => p.brand.slug === brand.slug);
+    const representedCategorySlugs = new Set(baseProducts.map((p) => p.category.slug));
+    return Object.values(PREVIEW_CATEGORIES)
+      .filter((c) => c.status === "PUBLISHED" && representedCategorySlugs.has(c.slug))
+      .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
+  }
+
   async getBrandDiscoveryFacets(
     brandId: string,
-    selectedCategorySlug: string | null
+    selectedCategoryId: string | null,
+    schema: ValidatedSpecificationSchema | null
   ): Promise<DiscoveryFacets> {
     const brand = Object.values(PREVIEW_BRANDS).find((b) => b.id === brandId);
     if (!brand) {
@@ -195,21 +220,28 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
       .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
 
     let techFacets: TechnicalFacet[] = [];
-    let techSchema: ValidatedSpecificationSchema | null = null;
 
-    if (selectedCategorySlug) {
-      techSchema = SYNTHETIC_SPEC_SCHEMAS[selectedCategorySlug] ?? null;
-      if (techSchema) {
-        const catProducts = baseProducts.filter((p) => p.category.slug === selectedCategorySlug);
-        techFacets = deriveSyntheticTechnicalFacets(techSchema, catProducts);
-      }
+    if (selectedCategoryId && schema) {
+      const selectedCat = Object.values(PREVIEW_CATEGORIES).find(
+        (c) => c.id === selectedCategoryId
+      );
+      const catProducts = selectedCat
+        ? baseProducts.filter((p) => p.category.slug === selectedCat.slug)
+        : [];
+      techFacets = deriveSyntheticTechnicalFacets(schema, catProducts);
+      return {
+        brands: [],
+        categories: categoryOptions,
+        technicalSchema: schema,
+        technicalFacets: techFacets,
+      };
     }
 
     return {
       brands: [],
       categories: categoryOptions,
-      technicalSchema: techSchema,
-      technicalFacets: techFacets,
+      technicalSchema: null,
+      technicalFacets: [],
     };
   }
 
@@ -219,16 +251,14 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
     filterState?: DiscoveryFilterState,
     schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
-    const category = Object.values(PREVIEW_CATEGORIES).find(
-      (c) => c.id === categoryId && c.status === "PUBLISHED"
-    );
-
+    const category = Object.values(PREVIEW_CATEGORIES).find((c) => c.id === categoryId);
     if (!category) {
-      return emptyPage(pagination);
+      return { items: [], totalItems: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 };
     }
 
     const baseProducts = PREVIEW_PRODUCTS_BY_CATEGORY[category.slug] ?? [];
     const resolvedSchema = schema ?? SYNTHETIC_SPEC_SCHEMAS[category.slug] ?? null;
+
     const filtered = filterAndSortSyntheticProducts(
       baseProducts,
       filterState,
@@ -236,7 +266,29 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
       resolvedSchema
     );
 
-    return paginate(filtered, pagination);
+    const safePage = Math.max(1, Math.trunc(pagination.page));
+    const safePageSize = Math.max(1, Math.trunc(pagination.pageSize));
+    const totalItems = filtered.length;
+    const totalPages = Math.ceil(totalItems / safePageSize);
+    const offset = (safePage - 1) * safePageSize;
+    const items = filtered.slice(offset, offset + safePageSize).map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      subtitle: p.subtitle,
+      brand: p.brand,
+      category: p.category,
+      primaryMedia: p.primaryMedia,
+      startingPriceCents: p.startingPriceCents,
+    }));
+
+    return {
+      items,
+      totalItems,
+      page: safePage,
+      pageSize: safePageSize,
+      totalPages,
+    };
   }
 
   async getPublishedProductsByBrand(
@@ -245,15 +297,13 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
     filterState?: DiscoveryFilterState,
     schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>> {
-    const brand = Object.values(PREVIEW_BRANDS).find(
-      (b) => b.id === brandId && b.status === "PUBLISHED"
-    );
-
+    const brand = Object.values(PREVIEW_BRANDS).find((b) => b.id === brandId);
     if (!brand) {
-      return emptyPage(pagination);
+      return { items: [], totalItems: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 };
     }
 
     const baseProducts = ALL_PREVIEW_PRODUCTS.filter((p) => p.brand.slug === brand.slug);
+
     const filtered = filterAndSortSyntheticProducts(
       baseProducts,
       filterState,
@@ -261,35 +311,28 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
       schema ?? null
     );
 
-    return paginate(filtered, pagination);
+    const safePage = Math.max(1, Math.trunc(pagination.page));
+    const safePageSize = Math.max(1, Math.trunc(pagination.pageSize));
+    const totalItems = filtered.length;
+    const totalPages = Math.ceil(totalItems / safePageSize);
+    const offset = (safePage - 1) * safePageSize;
+    const items = filtered.slice(offset, offset + safePageSize).map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      subtitle: p.subtitle,
+      brand: p.brand,
+      category: p.category,
+      primaryMedia: p.primaryMedia,
+      startingPriceCents: p.startingPriceCents,
+    }));
+
+    return {
+      items,
+      totalItems,
+      page: safePage,
+      pageSize: safePageSize,
+      totalPages,
+    };
   }
-}
-
-function paginate(
-  items: ProductDiscoveryItem[],
-  pagination: PaginationOptions
-): PaginatedResult<ProductDiscoveryItem> {
-  const totalItems = items.length;
-  const pageSize = Math.max(1, Math.trunc(pagination.pageSize));
-  const totalPages = Math.ceil(totalItems / pageSize);
-  const page = Math.max(1, Math.trunc(pagination.page));
-  const offset = (page - 1) * pageSize;
-
-  return {
-    items: items.slice(offset, offset + pageSize),
-    totalItems,
-    page,
-    pageSize,
-    totalPages,
-  };
-}
-
-function emptyPage(pagination: PaginationOptions): PaginatedResult<ProductDiscoveryItem> {
-  return {
-    items: [],
-    totalItems: 0,
-    page: pagination.page,
-    pageSize: pagination.pageSize,
-    totalPages: 0,
-  };
 }

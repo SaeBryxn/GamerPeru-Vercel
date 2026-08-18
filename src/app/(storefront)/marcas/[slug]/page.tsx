@@ -10,18 +10,21 @@ import {
   ProductGrid,
 } from "@/components/catalog";
 import styles from "@/components/catalog/catalog-page.module.css";
-import { publicEnv } from "@/config/public-env";
-import { getCachedBrand } from "@/lib/catalog/cached-queries";
-import { getCatalogReader } from "@/lib/catalog/get-reader";
-import { CATALOG_PAGE_SIZE } from "@/lib/catalog/pagination";
+import { getCatalogReader } from "@/lib/catalog/reader";
+import { getCachedBrand } from "@/lib/catalog/postgres-reader";
+import { CATALOG_PAGE_SIZE } from "@/lib/catalog/types";
+import type {
+  CategoryFacetOption,
+  DiscoveryFacets,
+  DiscoveryFilterState,
+  ValidatedSpecificationSchema,
+} from "@/lib/discovery-filters/types";
 import {
   buildAppliedFilterChips,
   parseDiscoveryUrl,
   reconstructIncomingDiscoveryUrl,
   serializeDiscoveryUrl,
 } from "@/lib/discovery-filters/url";
-
-export const dynamic = "force-dynamic";
 
 interface BrandPageProps {
   params: Promise<{ slug: string }>;
@@ -39,32 +42,17 @@ export async function generateMetadata({
   if (!brand) {
     return {
       title: "Marca no encontrada | Gamer Perú",
-      robots: { index: false, follow: false },
+      description: "La marca solicitada no existe o no está disponible.",
     };
   }
 
-  const reader = getCatalogReader();
-  const rawState = parseDiscoveryUrl(resolvedSearchParams, "brand", null);
-
-  // If exactly one category is selected on Brand, resolve its schema
-  let schema = null;
-  if (rawState.categories.length === 1) {
-    const singleCat = await reader.getPublishedCategoryBySlug(rawState.categories[0]!);
-    if (singleCat) {
-      schema = await reader.getCategorySpecificationSchema(singleCat.id);
-    }
-  }
-
-  const filterState = parseDiscoveryUrl(resolvedSearchParams, "brand", schema);
-
   const title = `${brand.name} | Gamer Perú`;
-  const description = brand.description ?? `Catálogo de ${brand.name} en Gamer Perú.`;
+  const description =
+    brand.description ??
+    `Explora el catálogo oficial de ${brand.name} en Gamer Perú. Periféricos gaming de alto rendimiento con garantía local y envíos a todo el Perú.`;
 
-  const canonicalPath = serializeDiscoveryUrl(`/marcas/${slug}`, filterState, "brand", schema, {
-    preservePage: true,
-  });
-  const canonicalUrl = `${publicEnv.NEXT_PUBLIC_SITE_URL}${canonicalPath}`;
-
+  const canonicalUrl = `https://gamerperu.com/marcas/${slug}`;
+  const filterState = parseDiscoveryUrl(resolvedSearchParams, "brand", null);
   const isFilteredOrSorted =
     filterState.categories.length > 0 ||
     filterState.price.minCents !== null ||
@@ -101,47 +89,140 @@ export default async function BrandPage({
   }
 
   const reader = getCatalogReader();
-  const rawState = parseDiscoveryUrl(resolvedSearchParams, "brand", null);
+  const categoryFacetOptions: CategoryFacetOption[] = await reader.getBrandCategoryFacetOptions(
+    brand.id
+  );
+  const allowedCategories = new Set(categoryFacetOptions.map((c: CategoryFacetOption) => c.slug));
 
-  // If exactly one category is selected on Brand, resolve its schema
-  let schema = null;
-  const selectedCatSlug = rawState.categories.length === 1 ? rawState.categories[0]! : null;
-  if (selectedCatSlug) {
-    const singleCat = await reader.getPublishedCategoryBySlug(selectedCatSlug);
+  const rawState = parseDiscoveryUrl(resolvedSearchParams, "brand", null, { allowedCategories });
+
+  let schema: ValidatedSpecificationSchema | null = null;
+  let facets: DiscoveryFacets;
+
+  if (rawState.categories.length === 1) {
+    const selectedCatSlug = rawState.categories[0]!;
+    const singleCat = categoryFacetOptions.find(
+      (c: CategoryFacetOption) => c.slug === selectedCatSlug
+    );
     if (singleCat) {
       schema = await reader.getCategorySpecificationSchema(singleCat.id);
     }
-  }
+    const filterState: DiscoveryFilterState = parseDiscoveryUrl(
+      resolvedSearchParams,
+      "brand",
+      schema,
+      { allowedCategories }
+    );
+    facets = await reader.getBrandDiscoveryFacets(
+      brand.id,
+      singleCat ? singleCat.id : null,
+      schema
+    );
 
-  const filterState = parseDiscoveryUrl(resolvedSearchParams, "brand", schema);
+    const canonicalPath = serializeDiscoveryUrl(`/marcas/${slug}`, filterState, "brand", schema, {
+      preservePage: true,
+    });
+    const currentRawPath = reconstructIncomingDiscoveryUrl(`/marcas/${slug}`, resolvedSearchParams);
+    if (currentRawPath !== canonicalPath) {
+      redirect(canonicalPath);
+    }
 
-  // Canonical URL normalization check
-  const canonicalPath = serializeDiscoveryUrl(`/marcas/${slug}`, filterState, "brand", schema, {
-    preservePage: true,
-  });
-
-  const currentRawPath = reconstructIncomingDiscoveryUrl(`/marcas/${slug}`, resolvedSearchParams);
-
-  if (currentRawPath !== canonicalPath) {
-    redirect(canonicalPath);
-  }
-
-  // Fetch facets and filtered products in parallel
-  const [facets, paginated] = await Promise.all([
-    reader.getBrandDiscoveryFacets(brand.id, selectedCatSlug),
-    reader.getPublishedProductsByBrand(
+    const paginated = await reader.getPublishedProductsByBrand(
       brand.id,
       { page: filterState.page, pageSize: CATALOG_PAGE_SIZE },
       filterState,
       schema
-    ),
-  ]);
+    );
 
-  // Out of bounds validation
-  if (paginated.totalItems === 0) {
-    if (filterState.page > 1) {
+    if (paginated.totalItems === 0) {
+      if (filterState.page > 1) notFound();
+    } else if (filterState.page > paginated.totalPages) {
       notFound();
     }
+
+    const isFiltered =
+      filterState.categories.length > 0 ||
+      filterState.price.minCents !== null ||
+      filterState.price.maxCents !== null ||
+      Object.keys(filterState.technical).length > 0;
+
+    const appliedChips = buildAppliedFilterChips(`/marcas/${slug}`, filterState, "brand", facets);
+    const cleanBrandUrl = `/marcas/${slug}`;
+
+    const breadcrumbs = [
+      { label: "Inicio", href: "/" },
+      { label: "Marcas", href: "/#marcas" },
+      { label: brand.name },
+    ];
+
+    const getPageUrl = (page: number) => {
+      return serializeDiscoveryUrl(`/marcas/${slug}`, filterState, "brand", schema, {
+        overridePage: page,
+      });
+    };
+
+    return (
+      <main id="main-content" className={styles.container}>
+        <DiscoveryHeader
+          title={brand.name}
+          description={brand.description}
+          breadcrumbs={breadcrumbs}
+          totalProducts={paginated.totalItems}
+        />
+
+        <DiscoveryShell
+          basePath={`/marcas/${slug}`}
+          totalProducts={paginated.totalItems}
+          filterState={filterState}
+          facets={facets}
+          surface="brand"
+          appliedChips={appliedChips}
+          clearAllHref={cleanBrandUrl}
+        />
+
+        {paginated.items.length > 0 ? (
+          <>
+            <ProductGrid products={paginated.items} showBrandLink={false} />
+            <Pagination
+              currentPage={paginated.page}
+              totalPages={paginated.totalPages}
+              getPageUrl={getPageUrl}
+            />
+          </>
+        ) : isFiltered ? (
+          <FilteredEmptyState clearHref={cleanBrandUrl} />
+        ) : (
+          <CatalogEmptyState />
+        )}
+      </main>
+    );
+  }
+
+  const filterState = rawState;
+  facets = {
+    brands: [],
+    categories: categoryFacetOptions,
+    technicalSchema: null,
+    technicalFacets: [],
+  };
+
+  const canonicalPath = serializeDiscoveryUrl(`/marcas/${slug}`, filterState, "brand", null, {
+    preservePage: true,
+  });
+  const currentRawPath = reconstructIncomingDiscoveryUrl(`/marcas/${slug}`, resolvedSearchParams);
+  if (currentRawPath !== canonicalPath) {
+    redirect(canonicalPath);
+  }
+
+  const paginated = await reader.getPublishedProductsByBrand(
+    brand.id,
+    { page: filterState.page, pageSize: CATALOG_PAGE_SIZE },
+    filterState,
+    null
+  );
+
+  if (paginated.totalItems === 0) {
+    if (filterState.page > 1) notFound();
   } else if (filterState.page > paginated.totalPages) {
     notFound();
   }
@@ -149,11 +230,9 @@ export default async function BrandPage({
   const isFiltered =
     filterState.categories.length > 0 ||
     filterState.price.minCents !== null ||
-    filterState.price.maxCents !== null ||
-    Object.keys(filterState.technical).length > 0;
+    filterState.price.maxCents !== null;
 
   const appliedChips = buildAppliedFilterChips(`/marcas/${slug}`, filterState, "brand", facets);
-
   const cleanBrandUrl = `/marcas/${slug}`;
 
   const breadcrumbs = [
@@ -162,9 +241,11 @@ export default async function BrandPage({
     { label: brand.name },
   ];
 
-  const paginationBaseUrl = serializeDiscoveryUrl(`/marcas/${slug}`, filterState, "brand", schema, {
-    overridePage: 1,
-  });
+  const getPageUrl = (page: number) => {
+    return serializeDiscoveryUrl(`/marcas/${slug}`, filterState, "brand", null, {
+      overridePage: page,
+    });
+  };
 
   return (
     <main id="main-content" className={styles.container}>
@@ -191,7 +272,7 @@ export default async function BrandPage({
           <Pagination
             currentPage={paginated.page}
             totalPages={paginated.totalPages}
-            baseUrl={paginationBaseUrl}
+            getPageUrl={getPageUrl}
           />
         </>
       ) : isFiltered ? (
