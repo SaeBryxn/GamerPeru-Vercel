@@ -39,4 +39,5 @@ export interface CatalogDiscoveryReader {
   ): Promise<PaginatedResult<ProductDiscoveryItem>>;
 }
 
-export { getCatalogReader } from "./get-reader";
+export type { ProductDetailReader } from "./product-detail-reader";
+export { getCatalogReader, getProductDetailReader } from "./get-reader";

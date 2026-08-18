@@ -1,11 +1,12 @@
 import "server-only";
 import { cache } from "react";
-import { getCatalogReader } from "./get-reader";
+import { getCatalogReader, getProductDetailReader } from "./get-reader";
 import type {
   BrandDiscoveryEntity,
   CategoryDiscoveryEntity,
   CategoryFacetOption,
   DiscoveryFacets,
+  ProductDetailEntity,
   ValidatedSpecificationSchema,
 } from "./types";
 
@@ -53,3 +54,8 @@ export const getCachedBrandCategoryFacetOptions = cache(
     return reader.getBrandCategoryFacetOptions(brandId);
   }
 );
+
+export const getCachedProduct = cache(async (slug: string): Promise<ProductDetailEntity | null> => {
+  const reader = getProductDetailReader();
+  return reader.getPublishedProductBySlug(slug);
+});

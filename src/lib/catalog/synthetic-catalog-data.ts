@@ -18,7 +18,16 @@ import type {
   ValidatedSpecificationSchema,
 } from "@/lib/discovery-filters/types";
 
-import type { BrandDiscoveryEntity, CategoryDiscoveryEntity, ProductDiscoveryItem } from "./types";
+import type {
+  BrandDiscoveryEntity,
+  CategoryDiscoveryEntity,
+  ProductDiscoveryItem,
+  ProductDetailEntity,
+  ProductMediaItem,
+  ProductVariantDetail,
+  ProductSpecificationDetail,
+  ProductStoryDetail,
+} from "./types";
 
 // ---------------------------------------------------------------------------
 // Categories
@@ -470,6 +479,7 @@ export const SYNTHETIC_TEST_BRANDS: Record<string, SyntheticBrandEntry> = {
 export interface SyntheticProductWithSpecs extends ProductDiscoveryItem {
   specValues: Record<string, string | number | boolean | null>;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export function generateSyntheticProducts(
@@ -663,4 +673,207 @@ export function filterAndSortSyntheticProducts(
   }
 
   return filtered;
+}
+
+export const SYNTHETIC_DEFAULT_PRODUCTS: SyntheticProductWithSpecs[] = [
+  ...generateSyntheticProducts("mouses", "Mouses Gaming", 14),
+  ...generateSyntheticProducts("teclados", "Teclados Gaming", 4),
+  ...generateSyntheticProducts("mousepads", "Mousepads Gaming", 4),
+  ...generateSyntheticProducts("audio", "Audio Gaming", 4),
+  ...generateSyntheticProducts("accesorios", "Accesorios Gaming", 4),
+];
+
+export function buildSyntheticProductDetail(
+  slug: string,
+  allProducts: SyntheticProductWithSpecs[] = SYNTHETIC_DEFAULT_PRODUCTS
+): ProductDetailEntity | null {
+  // Test special-cases for defensive testing
+  if (slug === "producto-draft" || slug === "producto-sin-variantes") {
+    return null;
+  }
+  if (slug === "producto-marca-draft") {
+    return null;
+  }
+  if (slug === "producto-categoria-draft") {
+    return null;
+  }
+
+  const p = allProducts.find((item) => item.slug === slug);
+  if (!p) return null;
+
+  const category =
+    SYNTHETIC_CATEGORIES[p.category.slug] ?? SYNTHETIC_TEST_CATEGORIES[p.category.slug];
+  if (!category || category.status !== "PUBLISHED") {
+    return null;
+  }
+
+  const brand =
+    SYNTHETIC_NAV_BRANDS[p.brand.slug] ??
+    SYNTHETIC_TEST_BRANDS[p.brand.slug] ??
+    (p.brand.slug === SYNTHETIC_QA_BRAND.slug ? SYNTHETIC_QA_BRAND : null);
+  if (!brand || brand.status !== "PUBLISHED") {
+    return null;
+  }
+
+  const variant1Id = `${p.id}-v01`;
+  const variant2Id = `${p.id}-v02`;
+
+  const variants: ProductVariantDetail[] = [
+    {
+      id: variant1Id,
+      productId: p.id,
+      sku: `SKU-${p.slug.toUpperCase()}-BLK`,
+      title: "Negro Mate / 8K",
+      priceCents: p.startingPriceCents,
+      compareAtPriceCents: p.startingPriceCents + 3000,
+      costCents: Math.round(p.startingPriceCents * 0.6),
+      weightGrams: typeof p.specValues.weight_g === "number" ? p.specValues.weight_g : 49,
+      displayOrder: 1,
+      status: "ACTIVE",
+      attributes: {
+        color: "Negro",
+        edicion: "Standard",
+      },
+    },
+    {
+      id: variant2Id,
+      productId: p.id,
+      sku: `SKU-${p.slug.toUpperCase()}-WHT`,
+      title: "Blanco Glaciar / 8K",
+      priceCents: p.startingPriceCents + 1000,
+      compareAtPriceCents: p.startingPriceCents + 4000,
+      costCents: Math.round((p.startingPriceCents + 1000) * 0.6),
+      weightGrams: typeof p.specValues.weight_g === "number" ? p.specValues.weight_g : 49,
+      displayOrder: 2,
+      status: "ACTIVE",
+      attributes: {
+        color: "Blanco",
+        edicion: "Especial",
+      },
+    },
+  ];
+
+  const media: ProductMediaItem[] = [
+    {
+      id: `${p.id}-m01`,
+      productId: p.id,
+      mediaAssetId: `${p.id}-a01`,
+      variantId: null, // Global
+      displayOrder: 1,
+      asset: {
+        objectKey: `products/${p.slug}/hero.png`,
+        mimeType: "image/png",
+        fileSizeBytes: 204800,
+        width: 1200,
+        height: 1200,
+        altText: `${p.name} Vista Frontal`,
+      },
+    },
+    {
+      id: `${p.id}-m02`,
+      productId: p.id,
+      mediaAssetId: `${p.id}-a02`,
+      variantId: variant1Id, // Variant specific
+      displayOrder: 2,
+      asset: {
+        objectKey: `products/${p.slug}/variant-black.png`,
+        mimeType: "image/png",
+        fileSizeBytes: 184320,
+        width: 1200,
+        height: 1200,
+        altText: `${p.name} Negro`,
+      },
+    },
+    {
+      id: `${p.id}-m03`,
+      productId: p.id,
+      mediaAssetId: `${p.id}-a03`,
+      variantId: variant2Id, // Variant specific
+      displayOrder: 3,
+      asset: {
+        objectKey: `products/${p.slug}/variant-white.png`,
+        mimeType: "image/png",
+        fileSizeBytes: 194560,
+        width: 1200,
+        height: 1200,
+        altText: `${p.name} Blanco`,
+      },
+    },
+  ];
+
+  const schema = SYNTHETIC_SPEC_SCHEMAS[p.category.slug];
+  const specifications: ProductSpecificationDetail | null = schema
+    ? {
+        id: p.id,
+        productId: p.id,
+        schemaId: schema.id,
+        schemaVersion: schema.schemaVersion,
+        specValues: p.specValues,
+        schema,
+      }
+    : null;
+
+  const story: ProductStoryDetail = {
+    productId: p.id,
+    publishedRevisionId: `${p.id}-r01`,
+    revisionNumber: 1,
+    publishedAt: new Date(1700000000000).toISOString(),
+    blocks: [
+      {
+        block_id: `${p.id}-b01`,
+        type: "hero",
+        order: 1,
+        payload: {
+          headline: `Ingeniería de Precisión: ${p.name}`,
+          tagline: "Desarrollado para la máxima consistencia en esports competitivos.",
+          mediaKey: `stories/${p.slug}/story-hero.png`,
+        },
+      },
+      {
+        block_id: `${p.id}-b02`,
+        type: "features_grid",
+        order: 2,
+        payload: {
+          items: [
+            {
+              title: "Sensor Flagship",
+              description: "Precisión 1:1 sin suavizado artificial.",
+            },
+            {
+              title: "Estructura Ultraligera",
+              description: "Chasis reforzado con balance de peso centralizado.",
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  return {
+    id: p.id,
+    name: p.name,
+    slug: p.slug,
+    subtitle: p.subtitle,
+    description: `Descripción completa de ingeniería y rendimiento para ${p.name}.`,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt ?? p.createdAt,
+    brand: {
+      id: brand.id,
+      name: brand.name,
+      slug: brand.slug,
+      description: brand.description,
+      logo: brand.logo,
+    },
+    category: {
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+      description: category.description,
+    },
+    primaryMedia: media[0] ?? null,
+    variants,
+    media,
+    specifications,
+    story,
+  };
 }

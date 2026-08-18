@@ -9,6 +9,7 @@ import type {
 } from "@/lib/discovery-filters/types";
 
 import type { CatalogDiscoveryReader } from "./reader";
+import type { ProductDetailReader } from "./product-detail-reader";
 import {
   SYNTHETIC_CATEGORIES,
   SYNTHETIC_NAV_BRANDS,
@@ -16,6 +17,7 @@ import {
   SYNTHETIC_SPEC_SCHEMAS,
   SYNTHETIC_TEST_BRANDS,
   SYNTHETIC_TEST_CATEGORIES,
+  buildSyntheticProductDetail,
   filterAndSortSyntheticProducts,
   generateSyntheticProducts,
   type SyntheticBrandEntry,
@@ -29,6 +31,7 @@ import type {
   PaginatedResult,
   PaginationOptions,
   ProductDiscoveryItem,
+  ProductDetailEntity,
 } from "./types";
 
 const ALL_FIXTURE_CATEGORIES: Record<string, SyntheticCategoryEntry> = {
@@ -122,7 +125,11 @@ function deriveSyntheticTechnicalFacets(
   return facets;
 }
 
-export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
+export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader, ProductDetailReader {
+  async getPublishedProductBySlug(slug: string): Promise<ProductDetailEntity | null> {
+    return buildSyntheticProductDetail(slug, FIXTURE_PRODUCTS);
+  }
+
   async getPublishedCategoryBySlug(slug: string): Promise<CategoryDiscoveryEntity | null> {
     const item = ALL_FIXTURE_CATEGORIES[slug];
     if (!item || item.status !== "PUBLISHED") {

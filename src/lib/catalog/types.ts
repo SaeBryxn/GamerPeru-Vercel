@@ -69,3 +69,5 @@ export type {
   SpecificationEnumOption,
   AppliedFilterChip,
 } from "@/lib/discovery-filters/types";
+
+export * from "./product-detail-types";

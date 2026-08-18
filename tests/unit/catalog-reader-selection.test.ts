@@ -31,7 +31,26 @@ describe("getCatalogReader — reader selection", () => {
     delete process.env.E2E_CATALOG_FIXTURES;
     delete process.env.PLAYWRIGHT_TEST;
     delete process.env.DEV_CATALOG_PREVIEW;
-    delete process.env.CI;
+    vi.doMock("../../src/lib/catalog/postgres-reader", () => ({
+      PostgresCatalogDiscoveryReader: class MockPostgres {
+        _type = "postgres";
+      },
+    }));
+    vi.doMock("../../src/lib/catalog/postgres-product-detail-reader", () => ({
+      PostgresProductDetailReader: class MockPostgresProductDetail {
+        _type = "postgres-product-detail";
+      },
+    }));
+    vi.doMock("../../src/lib/catalog/fixture-reader", () => ({
+      FixtureCatalogDiscoveryReader: class MockFixture {
+        _type = "fixture";
+      },
+    }));
+    vi.doMock("../../src/lib/catalog/dev-preview-reader", () => ({
+      DevCatalogPreviewReader: class MockDevPreview {
+        _type = "dev-preview";
+      },
+    }));
   });
 
   afterEach(() => {
@@ -41,22 +60,6 @@ describe("getCatalogReader — reader selection", () => {
 
   it("returns PostgresCatalogDiscoveryReader when no flags are set (development)", async () => {
     setNodeEnv("development");
-    vi.doMock("../../src/lib/catalog/postgres-reader", () => ({
-      PostgresCatalogDiscoveryReader: class MockPostgres {
-        _type = "postgres";
-      },
-    }));
-    vi.doMock("../../src/lib/catalog/fixture-reader", () => ({
-      FixtureCatalogDiscoveryReader: class MockFixture {
-        _type = "fixture";
-      },
-    }));
-    vi.doMock("../../src/lib/catalog/dev-preview-reader", () => ({
-      DevCatalogPreviewReader: class MockDevPreview {
-        _type = "dev-preview";
-      },
-    }));
-
     const { getCatalogReader } = await import("../../src/lib/catalog/get-reader");
     const reader = getCatalogReader();
     expect((reader as unknown as { _type: string })._type).toBe("postgres");
@@ -65,22 +68,6 @@ describe("getCatalogReader — reader selection", () => {
   it("returns DevCatalogPreviewReader when DEV_CATALOG_PREVIEW=1 in development", async () => {
     setNodeEnv("development");
     process.env.DEV_CATALOG_PREVIEW = "1";
-    vi.doMock("../../src/lib/catalog/postgres-reader", () => ({
-      PostgresCatalogDiscoveryReader: class MockPostgres {
-        _type = "postgres";
-      },
-    }));
-    vi.doMock("../../src/lib/catalog/fixture-reader", () => ({
-      FixtureCatalogDiscoveryReader: class MockFixture {
-        _type = "fixture";
-      },
-    }));
-    vi.doMock("../../src/lib/catalog/dev-preview-reader", () => ({
-      DevCatalogPreviewReader: class MockDevPreview {
-        _type = "dev-preview";
-      },
-    }));
-
     const { getCatalogReader } = await import("../../src/lib/catalog/get-reader");
     const reader = getCatalogReader();
     expect((reader as unknown as { _type: string })._type).toBe("dev-preview");
@@ -89,16 +76,6 @@ describe("getCatalogReader — reader selection", () => {
   it("throws when DEV_CATALOG_PREVIEW=1 in production", async () => {
     setNodeEnv("production");
     process.env.DEV_CATALOG_PREVIEW = "1";
-    vi.doMock("../../src/lib/catalog/postgres-reader", () => ({
-      PostgresCatalogDiscoveryReader: class {},
-    }));
-    vi.doMock("../../src/lib/catalog/fixture-reader", () => ({
-      FixtureCatalogDiscoveryReader: class {},
-    }));
-    vi.doMock("../../src/lib/catalog/dev-preview-reader", () => ({
-      DevCatalogPreviewReader: class {},
-    }));
-
     const { getCatalogReader } = await import("../../src/lib/catalog/get-reader");
     expect(() => getCatalogReader()).toThrow(/only allowed in development/);
   });
@@ -106,16 +83,6 @@ describe("getCatalogReader — reader selection", () => {
   it("throws when DEV_CATALOG_PREVIEW=1 in test environment", async () => {
     setNodeEnv("test");
     process.env.DEV_CATALOG_PREVIEW = "1";
-    vi.doMock("../../src/lib/catalog/postgres-reader", () => ({
-      PostgresCatalogDiscoveryReader: class {},
-    }));
-    vi.doMock("../../src/lib/catalog/fixture-reader", () => ({
-      FixtureCatalogDiscoveryReader: class {},
-    }));
-    vi.doMock("../../src/lib/catalog/dev-preview-reader", () => ({
-      DevCatalogPreviewReader: class {},
-    }));
-
     const { getCatalogReader } = await import("../../src/lib/catalog/get-reader");
     expect(() => getCatalogReader()).toThrow(/only allowed in development/);
   });
@@ -124,16 +91,6 @@ describe("getCatalogReader — reader selection", () => {
     setNodeEnv("development");
     process.env.DEV_CATALOG_PREVIEW = "1";
     process.env.CI = "true";
-    vi.doMock("../../src/lib/catalog/postgres-reader", () => ({
-      PostgresCatalogDiscoveryReader: class {},
-    }));
-    vi.doMock("../../src/lib/catalog/fixture-reader", () => ({
-      FixtureCatalogDiscoveryReader: class {},
-    }));
-    vi.doMock("../../src/lib/catalog/dev-preview-reader", () => ({
-      DevCatalogPreviewReader: class {},
-    }));
-
     const { getCatalogReader } = await import("../../src/lib/catalog/get-reader");
     expect(() => getCatalogReader()).toThrow(/NEVER be enabled in CI/);
   });
@@ -142,22 +99,6 @@ describe("getCatalogReader — reader selection", () => {
     setNodeEnv("test");
     process.env.E2E_CATALOG_FIXTURES = "1";
     process.env.PLAYWRIGHT_TEST = "1";
-    vi.doMock("../../src/lib/catalog/postgres-reader", () => ({
-      PostgresCatalogDiscoveryReader: class MockPostgres {
-        _type = "postgres";
-      },
-    }));
-    vi.doMock("../../src/lib/catalog/fixture-reader", () => ({
-      FixtureCatalogDiscoveryReader: class MockFixture {
-        _type = "fixture";
-      },
-    }));
-    vi.doMock("../../src/lib/catalog/dev-preview-reader", () => ({
-      DevCatalogPreviewReader: class MockDevPreview {
-        _type = "dev-preview";
-      },
-    }));
-
     const { getCatalogReader } = await import("../../src/lib/catalog/get-reader");
     const reader = getCatalogReader();
     expect((reader as unknown as { _type: string })._type).toBe("fixture");
@@ -168,16 +109,6 @@ describe("getCatalogReader — reader selection", () => {
     process.env.E2E_CATALOG_FIXTURES = "1";
     process.env.PLAYWRIGHT_TEST = "1";
     process.env.DEV_CATALOG_PREVIEW = "1";
-    vi.doMock("../../src/lib/catalog/postgres-reader", () => ({
-      PostgresCatalogDiscoveryReader: class {},
-    }));
-    vi.doMock("../../src/lib/catalog/fixture-reader", () => ({
-      FixtureCatalogDiscoveryReader: class {},
-    }));
-    vi.doMock("../../src/lib/catalog/dev-preview-reader", () => ({
-      DevCatalogPreviewReader: class {},
-    }));
-
     const { getCatalogReader } = await import("../../src/lib/catalog/get-reader");
     expect(() => getCatalogReader()).toThrow(/Ambiguous catalog reader configuration/);
   });
@@ -185,25 +116,24 @@ describe("getCatalogReader — reader selection", () => {
   it("returns PostgresCatalogDiscoveryReader when DEV_CATALOG_PREVIEW=0 in development", async () => {
     setNodeEnv("development");
     process.env.DEV_CATALOG_PREVIEW = "0";
-    vi.doMock("../../src/lib/catalog/postgres-reader", () => ({
-      PostgresCatalogDiscoveryReader: class MockPostgres {
-        _type = "postgres";
-      },
-    }));
-    vi.doMock("../../src/lib/catalog/fixture-reader", () => ({
-      FixtureCatalogDiscoveryReader: class MockFixture {
-        _type = "fixture";
-      },
-    }));
-    vi.doMock("../../src/lib/catalog/dev-preview-reader", () => ({
-      DevCatalogPreviewReader: class MockDevPreview {
-        _type = "dev-preview";
-      },
-    }));
-
     const { getCatalogReader } = await import("../../src/lib/catalog/get-reader");
     const reader = getCatalogReader();
     expect((reader as unknown as { _type: string })._type).toBe("postgres");
+  });
+
+  it("returns PostgresProductDetailReader for getProductDetailReader in default mode", async () => {
+    setNodeEnv("development");
+    const { getProductDetailReader } = await import("../../src/lib/catalog/get-reader");
+    const reader = getProductDetailReader();
+    expect((reader as unknown as { _type: string })._type).toBe("postgres-product-detail");
+  });
+
+  it("returns DevCatalogPreviewReader for getProductDetailReader in preview mode", async () => {
+    setNodeEnv("development");
+    process.env.DEV_CATALOG_PREVIEW = "1";
+    const { getProductDetailReader } = await import("../../src/lib/catalog/get-reader");
+    const reader = getProductDetailReader();
+    expect((reader as unknown as { _type: string })._type).toBe("dev-preview");
   });
 });
 
