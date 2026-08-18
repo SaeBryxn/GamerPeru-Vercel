@@ -819,7 +819,7 @@ export function buildSyntheticProductDetail(
     blocks: [
       {
         blockId: `${p.id}-b01`,
-        type: "hero",
+        type: "hero_media",
         order: 1,
         payload: {
           headline: `Ingeniería de Precisión: ${p.name}`,
@@ -829,19 +829,11 @@ export function buildSyntheticProductDetail(
       },
       {
         blockId: `${p.id}-b02`,
-        type: "features_grid",
+        type: "spec_feature",
         order: 2,
         payload: {
-          items: [
-            {
-              title: "Sensor Flagship",
-              description: "Precisión 1:1 sin suavizado artificial.",
-            },
-            {
-              title: "Estructura Ultraligera",
-              description: "Chasis reforzado con balance de peso centralizado.",
-            },
-          ],
+          title: "Sensor Flagship",
+          description: "Precisión 1:1 sin suavizado artificial.",
         },
       },
     ],

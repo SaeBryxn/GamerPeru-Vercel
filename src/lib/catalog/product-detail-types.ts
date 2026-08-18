@@ -1,7 +1,7 @@
 import type { ValidatedSpecificationSchema } from "@/lib/discovery-filters/types";
 import type { ValidatedStoryBlock } from "./story-validation";
 
-export type { ValidatedStoryBlock } from "./story-validation";
+export type { CanonicalStoryBlockType, ValidatedStoryBlock } from "./story-validation";
 
 export interface ProductDetailBrand {
   id: string;

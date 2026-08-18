@@ -1,179 +1,232 @@
 import { z } from "zod";
 import { logger } from "@/lib/logger";
 
-const NO_HTML_SCRIPT_REGEX = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/i;
+const NO_HTML_SCRIPT_REGEX = /<[^>]*>/;
 
-function isSafeString(val: string): boolean {
+function isSafePlainText(val: string): boolean {
   return !NO_HTML_SCRIPT_REGEX.test(val);
 }
 
-const SafeString = (maxLen: number) =>
+const SafeString = (minLen: number, maxLen: number) =>
   z
     .string()
+    .min(minLen)
     .max(maxLen)
-    .refine((val) => isSafeString(val), {
-      message: "Forbidden HTML/script tag in text payload",
+    .refine((val) => isSafePlainText(val), {
+      message: "Forbidden HTML tags or characters in text payload",
     });
 
-const HeroMediaPayloadSchema = z.object({
-  headline: SafeString(200),
-  tagline: SafeString(500).optional(),
-  body: SafeString(1000).optional(),
-  mediaKey: SafeString(300).optional(),
-  posterKey: SafeString(300).optional(),
-  videoKey: SafeString(300).optional(),
+// 1. HeroMedia (hero_media)
+export const HeroMediaPayloadSchema = z.object({
+  headline: SafeString(1, 200),
+  tagline: SafeString(1, 500).optional(),
+  body: SafeString(1, 1000).optional(),
+  mediaKey: SafeString(1, 300).optional(),
+  posterKey: SafeString(1, 300).optional(),
+  videoKey: SafeString(1, 300).optional(),
 });
+export type HeroMediaPayload = z.infer<typeof HeroMediaPayloadSchema>;
 
-const FullBleedImagePayloadSchema = z.object({
-  mediaKey: SafeString(300),
-  altText: SafeString(200).optional(),
-  caption: SafeString(300).optional(),
+// 2. FullBleedImage (full_bleed_image)
+export const FullBleedImagePayloadSchema = z.object({
+  mediaKey: SafeString(1, 300),
+  altText: SafeString(1, 200).optional(),
+  caption: SafeString(1, 300).optional(),
 });
+export type FullBleedImagePayload = z.infer<typeof FullBleedImagePayloadSchema>;
 
-const ImageTextPayloadSchema = z.object({
-  headline: SafeString(200),
-  body: SafeString(2000),
-  mediaKey: SafeString(300),
+// 3. ImageText (image_text)
+export const ImageTextPayloadSchema = z.object({
+  headline: SafeString(1, 200),
+  body: SafeString(1, 2000),
+  mediaKey: SafeString(1, 300),
   imagePosition: z.enum(["left", "right"]).optional().default("left"),
 });
+export type ImageTextPayload = z.infer<typeof ImageTextPayloadSchema>;
 
-const StatItemSchema = z.object({
-  value: SafeString(50),
-  label: SafeString(100),
-  unit: SafeString(20).optional(),
+// 4. StatHighlight (stat_highlight)
+export const StatItemSchema = z.object({
+  value: SafeString(1, 50),
+  label: SafeString(1, 100),
+  unit: SafeString(1, 20).optional(),
 });
-
-const StatHighlightPayloadSchema = z.object({
-  title: SafeString(200).optional(),
-  stats: z.array(StatItemSchema).min(1).max(6).optional(),
-  items: z
-    .array(
-      z.object({
-        title: SafeString(100),
-        description: SafeString(500),
-      })
-    )
-    .min(1)
-    .max(6)
-    .optional(),
+export const StatHighlightPayloadSchema = z.object({
+  title: SafeString(1, 200).optional(),
+  stats: z.array(StatItemSchema).min(1).max(6),
 });
+export type StatHighlightPayload = z.infer<typeof StatHighlightPayloadSchema>;
 
-const FeaturesGridPayloadSchema = z.object({
-  title: SafeString(200).optional(),
-  items: z
-    .array(
-      z.object({
-        title: SafeString(100),
-        description: SafeString(500),
-      })
-    )
-    .min(1)
-    .max(8),
+// 5. SpecFeature (spec_feature)
+export const SpecFeaturePayloadSchema = z.object({
+  title: SafeString(1, 200),
+  description: SafeString(1, 2000),
+  mediaKey: SafeString(1, 300).optional(),
+  badge: SafeString(1, 50).optional(),
 });
+export type SpecFeaturePayload = z.infer<typeof SpecFeaturePayloadSchema>;
 
-const SpecFeaturePayloadSchema = z.object({
-  title: SafeString(200),
-  description: SafeString(2000),
-  mediaKey: SafeString(300).optional(),
-  badge: SafeString(50).optional(),
+// 6. Video (video)
+export const VideoPayloadSchema = z.object({
+  videoKey: SafeString(1, 300),
+  posterKey: SafeString(1, 300).optional(),
+  title: SafeString(1, 200).optional(),
+  caption: SafeString(1, 500).optional(),
 });
+export type VideoPayload = z.infer<typeof VideoPayloadSchema>;
 
-const VideoPayloadSchema = z.object({
-  videoKey: SafeString(300),
-  posterKey: SafeString(300).optional(),
-  title: SafeString(200).optional(),
-  caption: SafeString(500).optional(),
+// 7. Gallery (gallery)
+export const GalleryItemSchema = z.object({
+  mediaKey: SafeString(1, 300),
+  altText: SafeString(1, 200).optional(),
+  caption: SafeString(1, 300).optional(),
 });
-
-const GalleryItemSchema = z.object({
-  mediaKey: SafeString(300),
-  altText: SafeString(200).optional(),
-  caption: SafeString(300).optional(),
+export const GalleryPayloadSchema = z.object({
+  title: SafeString(1, 200).optional(),
+  items: z.array(GalleryItemSchema).min(2).max(8),
 });
+export type GalleryPayload = z.infer<typeof GalleryPayloadSchema>;
 
-const GalleryPayloadSchema = z.object({
-  title: SafeString(200).optional(),
-  items: z.array(GalleryItemSchema).min(1).max(8),
-});
-
-const ComparisonPayloadSchema = z.object({
-  title: SafeString(200).optional(),
-  headers: z.array(SafeString(100)).min(2).max(6),
+// 8. Comparison (comparison)
+export const ComparisonPayloadSchema = z.object({
+  title: SafeString(1, 200).optional(),
+  headers: z.array(SafeString(1, 100)).min(2).max(6),
   rows: z
-    .array(z.array(SafeString(200)).min(2).max(6))
+    .array(z.array(SafeString(1, 200)).min(2).max(6))
     .min(1)
     .max(20),
 });
+export type ComparisonPayload = z.infer<typeof ComparisonPayloadSchema>;
 
-const DimensionsPayloadSchema = z.object({
-  blueprintMediaKey: SafeString(300).optional(),
-  lengthMm: z.number().positive().max(1000).optional(),
-  widthMm: z.number().positive().max(1000).optional(),
-  heightMm: z.number().positive().max(1000).optional(),
-  gripTypes: z.array(SafeString(50)).max(10).optional(),
-});
+// 9. Dimensions (dimensions)
+export const DimensionsPayloadSchema = z
+  .object({
+    blueprintMediaKey: SafeString(1, 300).optional(),
+    lengthMm: z.number().positive().max(1000).optional(),
+    widthMm: z.number().positive().max(1000).optional(),
+    heightMm: z.number().positive().max(1000).optional(),
+    gripTypes: z.array(SafeString(1, 50)).min(1).max(10).optional(),
+  })
+  .refine(
+    (data) =>
+      data.blueprintMediaKey !== undefined ||
+      data.lengthMm !== undefined ||
+      data.widthMm !== undefined ||
+      data.heightMm !== undefined ||
+      (data.gripTypes !== undefined && data.gripTypes.length > 0),
+    {
+      message: "Dimensions block requires at least one dimension, blueprint, or grip type",
+    }
+  );
+export type DimensionsPayload = z.infer<typeof DimensionsPayloadSchema>;
 
-const BoxContentsItemSchema = z.object({
-  title: SafeString(100),
-  mediaKey: SafeString(300).optional(),
+// 10. BoxContents (box_contents)
+export const BoxContentsItemSchema = z.object({
+  title: SafeString(1, 100),
+  mediaKey: SafeString(1, 300).optional(),
   count: z.number().int().min(1).max(100).optional(),
 });
-
-const BoxContentsPayloadSchema = z.object({
-  title: SafeString(200).optional(),
+export const BoxContentsPayloadSchema = z.object({
+  title: SafeString(1, 200).optional(),
   items: z.array(BoxContentsItemSchema).min(1).max(12),
 });
+export type BoxContentsPayload = z.infer<typeof BoxContentsPayloadSchema>;
 
-const TechnicalSpecsGroupSchema = z.object({
-  groupName: SafeString(100),
+// 11. TechnicalSpecs (technical_specs)
+export const TechnicalSpecsGroupSchema = z.object({
+  groupName: SafeString(1, 100),
   specs: z
     .array(
       z.object({
-        label: SafeString(100),
-        value: SafeString(200),
+        label: SafeString(1, 100),
+        value: SafeString(1, 200),
       })
     )
     .min(1)
     .max(20),
 });
-
-const TechnicalSpecsPayloadSchema = z.object({
-  title: SafeString(200).optional(),
+export const TechnicalSpecsPayloadSchema = z.object({
+  title: SafeString(1, 200).optional(),
   groups: z.array(TechnicalSpecsGroupSchema).min(1).max(10),
 });
+export type TechnicalSpecsPayload = z.infer<typeof TechnicalSpecsPayloadSchema>;
 
-const FaqItemSchema = z.object({
-  question: SafeString(300),
-  answer: SafeString(2000),
+// 12. FAQ (faq)
+export const FaqItemSchema = z.object({
+  question: SafeString(1, 300),
+  answer: SafeString(1, 2000),
 });
-
-const FaqPayloadSchema = z.object({
-  title: SafeString(200).optional(),
+export const FaqPayloadSchema = z.object({
+  title: SafeString(1, 200).optional(),
   items: z.array(FaqItemSchema).min(1).max(15),
 });
+export type FaqPayload = z.infer<typeof FaqPayloadSchema>;
 
-const RelatedProductsPayloadSchema = z.object({
-  title: SafeString(200).optional(),
-  categorySlugs: z.array(SafeString(100)).max(10).optional(),
-  productSlugs: z.array(SafeString(100)).max(10).optional(),
-});
+// 13. RelatedProducts (related_products)
+export const RelatedProductsPayloadSchema = z
+  .object({
+    title: SafeString(1, 200).optional(),
+    categorySlugs: z.array(SafeString(1, 100)).min(1).max(10).optional(),
+    productSlugs: z.array(SafeString(1, 100)).min(1).max(10).optional(),
+  })
+  .refine(
+    (data) =>
+      (data.categorySlugs !== undefined && data.categorySlugs.length > 0) ||
+      (data.productSlugs !== undefined && data.productSlugs.length > 0),
+    {
+      message: "RelatedProducts block requires at least one categorySlug or productSlug",
+    }
+  );
+export type RelatedProductsPayload = z.infer<typeof RelatedProductsPayloadSchema>;
 
-export const StoryBlockPayloadSchemas: Record<string, z.ZodTypeAny> = {
-  hero_media: HeroMediaPayloadSchema,
-  hero: HeroMediaPayloadSchema,
-  full_bleed_image: FullBleedImagePayloadSchema,
-  image_text: ImageTextPayloadSchema,
-  stat_highlight: StatHighlightPayloadSchema,
-  features_grid: FeaturesGridPayloadSchema,
-  spec_feature: SpecFeaturePayloadSchema,
-  video: VideoPayloadSchema,
-  gallery: GalleryPayloadSchema,
-  comparison: ComparisonPayloadSchema,
-  dimensions: DimensionsPayloadSchema,
-  box_contents: BoxContentsPayloadSchema,
-  technical_specs: TechnicalSpecsPayloadSchema,
-  faq: FaqPayloadSchema,
-  related_products: RelatedProductsPayloadSchema,
+export type CanonicalStoryBlockType =
+  | "hero_media"
+  | "full_bleed_image"
+  | "image_text"
+  | "stat_highlight"
+  | "spec_feature"
+  | "video"
+  | "gallery"
+  | "comparison"
+  | "dimensions"
+  | "box_contents"
+  | "technical_specs"
+  | "faq"
+  | "related_products";
+
+export const CANONICAL_STORY_BLOCK_TYPES: readonly CanonicalStoryBlockType[] = [
+  "hero_media",
+  "full_bleed_image",
+  "image_text",
+  "stat_highlight",
+  "spec_feature",
+  "video",
+  "gallery",
+  "comparison",
+  "dimensions",
+  "box_contents",
+  "technical_specs",
+  "faq",
+  "related_products",
+] as const;
+
+export const StoryBlockPayloadSchemas: Record<
+  string,
+  { canonicalType: CanonicalStoryBlockType; schema: z.ZodTypeAny }
+> = {
+  hero_media: { canonicalType: "hero_media", schema: HeroMediaPayloadSchema },
+  hero: { canonicalType: "hero_media", schema: HeroMediaPayloadSchema }, // Backwards-compatible persisted alias normalizes to hero_media
+  full_bleed_image: { canonicalType: "full_bleed_image", schema: FullBleedImagePayloadSchema },
+  image_text: { canonicalType: "image_text", schema: ImageTextPayloadSchema },
+  stat_highlight: { canonicalType: "stat_highlight", schema: StatHighlightPayloadSchema },
+  spec_feature: { canonicalType: "spec_feature", schema: SpecFeaturePayloadSchema },
+  video: { canonicalType: "video", schema: VideoPayloadSchema },
+  gallery: { canonicalType: "gallery", schema: GalleryPayloadSchema },
+  comparison: { canonicalType: "comparison", schema: ComparisonPayloadSchema },
+  dimensions: { canonicalType: "dimensions", schema: DimensionsPayloadSchema },
+  box_contents: { canonicalType: "box_contents", schema: BoxContentsPayloadSchema },
+  technical_specs: { canonicalType: "technical_specs", schema: TechnicalSpecsPayloadSchema },
+  faq: { canonicalType: "faq", schema: FaqPayloadSchema },
+  related_products: { canonicalType: "related_products", schema: RelatedProductsPayloadSchema },
 };
 
 const RawStoryBlockEnvelopeSchema = z.object({
@@ -183,12 +236,20 @@ const RawStoryBlockEnvelopeSchema = z.object({
   payload: z.record(z.string(), z.unknown()),
 });
 
-export interface ValidatedStoryBlock {
-  blockId: string;
-  type: string;
-  order: number;
-  payload: Record<string, unknown>;
-}
+export type ValidatedStoryBlock =
+  | { blockId: string; type: "hero_media"; order: number; payload: HeroMediaPayload }
+  | { blockId: string; type: "full_bleed_image"; order: number; payload: FullBleedImagePayload }
+  | { blockId: string; type: "image_text"; order: number; payload: ImageTextPayload }
+  | { blockId: string; type: "stat_highlight"; order: number; payload: StatHighlightPayload }
+  | { blockId: string; type: "spec_feature"; order: number; payload: SpecFeaturePayload }
+  | { blockId: string; type: "video"; order: number; payload: VideoPayload }
+  | { blockId: string; type: "gallery"; order: number; payload: GalleryPayload }
+  | { blockId: string; type: "comparison"; order: number; payload: ComparisonPayload }
+  | { blockId: string; type: "dimensions"; order: number; payload: DimensionsPayload }
+  | { blockId: string; type: "box_contents"; order: number; payload: BoxContentsPayload }
+  | { blockId: string; type: "technical_specs"; order: number; payload: TechnicalSpecsPayload }
+  | { blockId: string; type: "faq"; order: number; payload: FaqPayload }
+  | { blockId: string; type: "related_products"; order: number; payload: RelatedProductsPayload };
 
 export function validateStoryBlocks(
   rawBlocks: unknown,
@@ -229,8 +290,8 @@ export function validateStoryBlocks(
 
     const { block_id, type, order, payload } = envelopeResult.data;
 
-    const payloadSchema = StoryBlockPayloadSchemas[type];
-    if (!payloadSchema) {
+    const entry = StoryBlockPayloadSchemas[type];
+    if (!entry) {
       logger.warn({
         event: "pdp_story_block_validation_failed",
         productId: diagnosticContext?.productId,
@@ -243,7 +304,7 @@ export function validateStoryBlocks(
       continue;
     }
 
-    const payloadResult = payloadSchema.safeParse(payload);
+    const payloadResult = entry.schema.safeParse(payload);
     if (!payloadResult.success) {
       logger.warn({
         event: "pdp_story_block_validation_failed",
@@ -260,9 +321,9 @@ export function validateStoryBlocks(
 
     validated.push({
       blockId: block_id,
-      type,
+      type: entry.canonicalType,
       order,
-      payload: payloadResult.data as Record<string, unknown>,
+      payload: payloadResult.data as never,
     });
   }
 

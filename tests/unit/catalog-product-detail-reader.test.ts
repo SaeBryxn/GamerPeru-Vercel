@@ -6,6 +6,7 @@ import { FixtureCatalogDiscoveryReader } from "@/lib/catalog/fixture-reader";
 import { getProductDetailReader } from "@/lib/catalog/get-reader";
 import { getCachedProduct } from "@/lib/catalog/cached-queries";
 import * as postgresDetailQueries from "@/lib/catalog/postgres-product-detail-queries";
+import { CANONICAL_STORY_BLOCK_TYPES, validateStoryBlocks } from "@/lib/catalog/story-validation";
 
 describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
   const mockProductId = "018f0000-0000-7000-8000-000000000p01";
@@ -163,7 +164,7 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     blocks: [
       {
         block_id: "blk-01",
-        type: "hero",
+        type: "hero_media",
         order: 1,
         payload: {
           headline: "Magnesium Precision",
@@ -492,7 +493,7 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
   });
 
   // --- Scenario P ---
-  it("P: valid PUBLISHED Story revision participates in ProductDetailEntity", async () => {
+  it("P: valid PUBLISHED Story revision participates in ProductDetailEntity with canonical hero_media type", async () => {
     setupPostgresMocks();
     const reader = new PostgresProductDetailReader();
     const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
@@ -500,7 +501,7 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     expect(result?.story).not.toBeNull();
     expect(result?.story?.publishedRevisionId).toBe(mockStoryRevId);
     expect(result?.story?.blocks).toHaveLength(1);
-    expect(result?.story?.blocks[0]?.type).toBe("hero");
+    expect(result?.story?.blocks[0]?.type).toBe("hero_media");
     expect(result?.story?.blocks[0]?.blockId).toBe("blk-01");
   });
 
@@ -692,8 +693,218 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     });
   });
 
-  describe("Remediation B — Story Blocks Runtime Validation", () => {
-    it("handles non-array Story blocks safely without throwing", async () => {
+  describe("Remediation B — Canonical 13 Story Blocks Runtime Validation", () => {
+    it("A: exactly 13 canonical semantic Story block types exist in registry", () => {
+      expect(CANONICAL_STORY_BLOCK_TYPES).toHaveLength(13);
+      expect(CANONICAL_STORY_BLOCK_TYPES).toEqual([
+        "hero_media",
+        "full_bleed_image",
+        "image_text",
+        "stat_highlight",
+        "spec_feature",
+        "video",
+        "gallery",
+        "comparison",
+        "dimensions",
+        "box_contents",
+        "technical_specs",
+        "faq",
+        "related_products",
+      ]);
+    });
+
+    it("B: validates all 13 canonical Story block types with valid payloads", () => {
+      const all13Blocks = [
+        {
+          block_id: "blk-01",
+          type: "hero_media",
+          order: 1,
+          payload: { headline: "Hero Headline", tagline: "Hero Tagline" },
+        },
+        {
+          block_id: "blk-02",
+          type: "full_bleed_image",
+          order: 2,
+          payload: { mediaKey: "media/fullbleed.png", altText: "Macro shot" },
+        },
+        {
+          block_id: "blk-03",
+          type: "image_text",
+          order: 3,
+          payload: { headline: "Chassis", body: "Magnesium body", mediaKey: "media/chassis.png" },
+        },
+        {
+          block_id: "blk-04",
+          type: "stat_highlight",
+          order: 4,
+          payload: { stats: [{ value: "39", label: "Peso", unit: "g" }] },
+        },
+        {
+          block_id: "blk-05",
+          type: "spec_feature",
+          order: 5,
+          payload: { title: "8K Polling", description: "Ultra-fast response", badge: "Flagship" },
+        },
+        {
+          block_id: "blk-06",
+          type: "video",
+          order: 6,
+          payload: { videoKey: "videos/sound-test.mp4", posterKey: "videos/poster.png" },
+        },
+        {
+          block_id: "blk-07",
+          type: "gallery",
+          order: 7,
+          payload: {
+            items: [
+              { mediaKey: "gallery/1.png", altText: "Angle 1" },
+              { mediaKey: "gallery/2.png", altText: "Angle 2" },
+            ],
+          },
+        },
+        {
+          block_id: "blk-08",
+          type: "comparison",
+          order: 8,
+          payload: {
+            headers: ["Feature", "Beast X", "Beast X Max"],
+            rows: [["Weight", "39g", "42g"]],
+          },
+        },
+        {
+          block_id: "blk-09",
+          type: "dimensions",
+          order: 9,
+          payload: { lengthMm: 122, widthMm: 62, heightMm: 37, gripTypes: ["Claw", "Fingertip"] },
+        },
+        {
+          block_id: "blk-10",
+          type: "box_contents",
+          order: 10,
+          payload: { items: [{ title: "WLMouse Beast X Max", count: 1 }] },
+        },
+        {
+          block_id: "blk-11",
+          type: "technical_specs",
+          order: 11,
+          payload: {
+            groups: [
+              {
+                groupName: "General",
+                specs: [{ label: "Sensor", value: "PAW3950" }],
+              },
+            ],
+          },
+        },
+        {
+          block_id: "blk-12",
+          type: "faq",
+          order: 12,
+          payload: {
+            items: [{ question: "How to update firmware?", answer: "Use the web driver." }],
+          },
+        },
+        {
+          block_id: "blk-13",
+          type: "related_products",
+          order: 13,
+          payload: { categorySlugs: ["mousepads", "accesorios"] },
+        },
+      ];
+
+      const validated = validateStoryBlocks(all13Blocks);
+      expect(validated).not.toBeNull();
+      expect(validated).toHaveLength(13);
+      for (let i = 0; i < 13; i++) {
+        expect(validated![i]!.type).toBe(CANONICAL_STORY_BLOCK_TYPES[i]);
+      }
+    });
+
+    it("C: rejects unknown 14th block type safely", () => {
+      const warnSpy = vi.spyOn(logger, "warn");
+      const blocks = [
+        {
+          block_id: "blk-bad",
+          type: "unknown_arbitrary_component",
+          order: 1,
+          payload: { data: "test" },
+        },
+      ];
+      const validated = validateStoryBlocks(blocks);
+      expect(validated).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_story_block_validation_failed",
+          reason: "unrecognized_block_type",
+        })
+      );
+    });
+
+    it("D: rejects un-canonical features_grid block", () => {
+      const blocks = [
+        {
+          block_id: "blk-grid",
+          type: "features_grid",
+          order: 1,
+          payload: { items: [{ title: "Test", description: "Desc" }] },
+        },
+      ];
+      const validated = validateStoryBlocks(blocks);
+      expect(validated).toBeNull();
+    });
+
+    it("E: normalizes persisted hero alias to canonical hero_media", () => {
+      const blocks = [
+        {
+          block_id: "blk-hero",
+          type: "hero",
+          order: 1,
+          payload: { headline: "Hero Headline" },
+        },
+      ];
+      const validated = validateStoryBlocks(blocks);
+      expect(validated).not.toBeNull();
+      expect(validated).toHaveLength(1);
+      expect(validated![0]!.type).toBe("hero_media");
+    });
+
+    it("F: direct canonical hero_media representation succeeds", () => {
+      const blocks = [
+        {
+          block_id: "blk-heromedia",
+          type: "hero_media",
+          order: 1,
+          payload: { headline: "Direct Hero Media" },
+        },
+      ];
+      const validated = validateStoryBlocks(blocks);
+      expect(validated).not.toBeNull();
+      expect(validated![0]!.type).toBe("hero_media");
+    });
+
+    it("G: rejects semantically empty payload structures (e.g. empty dimensions or related_products)", () => {
+      const emptyDimensions = [
+        {
+          block_id: "blk-dim",
+          type: "dimensions",
+          order: 1,
+          payload: {}, // No dimensions, no blueprint, no gripTypes
+        },
+      ];
+      expect(validateStoryBlocks(emptyDimensions)).toBeNull();
+
+      const emptyRelated = [
+        {
+          block_id: "blk-rel",
+          type: "related_products",
+          order: 1,
+          payload: {}, // No categorySlugs, no productSlugs
+        },
+      ];
+      expect(validateStoryBlocks(emptyRelated)).toBeNull();
+    });
+
+    it("H: handles non-array Story blocks safely without throwing", async () => {
       setupPostgresMocks({
         story: {
           ...defaultMockStory,
@@ -714,13 +925,18 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       );
     });
 
-    it("drops individual blocks with invalid envelope structure (e.g. missing block_id)", async () => {
+    it("I: drops individual blocks with invalid envelope structure and preserves valid blocks", async () => {
       setupPostgresMocks({
         story: {
           ...defaultMockStory,
           blocks: [
-            { type: "hero", order: 1, payload: { headline: "No ID" } }, // missing block_id
-            { block_id: "blk-valid", type: "hero", order: 2, payload: { headline: "Valid Block" } },
+            { type: "hero_media", order: 1, payload: { headline: "No ID" } }, // missing block_id
+            {
+              block_id: "blk-valid",
+              type: "hero_media",
+              order: 2,
+              payload: { headline: "Valid Block" },
+            },
           ],
         },
       });
@@ -731,6 +947,7 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       expect(result?.story).not.toBeNull();
       expect(result?.story?.blocks).toHaveLength(1);
       expect(result?.story?.blocks[0]?.blockId).toBe("blk-valid");
+      expect(result?.story?.blocks[0]?.type).toBe("hero_media");
       expect(warnSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           event: "pdp_story_block_validation_failed",
@@ -739,43 +956,14 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       );
     });
 
-    it("drops individual blocks with unrecognized block type", async () => {
-      setupPostgresMocks({
-        story: {
-          ...defaultMockStory,
-          blocks: [
-            {
-              block_id: "blk-bad-type",
-              type: "malicious_unrecognized_type",
-              order: 1,
-              payload: {},
-            },
-            { block_id: "blk-valid", type: "hero", order: 2, payload: { headline: "Valid Block" } },
-          ],
-        },
-      });
-      const warnSpy = vi.spyOn(logger, "warn");
-      const reader = new PostgresProductDetailReader();
-      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
-
-      expect(result?.story?.blocks).toHaveLength(1);
-      expect(result?.story?.blocks[0]?.blockId).toBe("blk-valid");
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          event: "pdp_story_block_validation_failed",
-          reason: "unrecognized_block_type",
-        })
-      );
-    });
-
-    it("drops blocks with payload validation failures", async () => {
+    it("J: drops blocks with payload validation failures and omits story if zero valid blocks remain", async () => {
       setupPostgresMocks({
         story: {
           ...defaultMockStory,
           blocks: [
             {
               block_id: "blk-bad-payload",
-              type: "hero",
+              type: "hero_media",
               order: 1,
               payload: { headline: 12345 }, // invalid data type!
             },
@@ -786,7 +974,6 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       const reader = new PostgresProductDetailReader();
       const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
 
-      // All blocks invalid -> story becomes null
       expect(result?.story).toBeNull();
       expect(warnSpy).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -796,14 +983,14 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       );
     });
 
-    it("rejects forbidden raw HTML / script tag injection in story block payload", async () => {
+    it("K: rejects raw HTML / script tag injection in story block payload", async () => {
       setupPostgresMocks({
         story: {
           ...defaultMockStory,
           blocks: [
             {
               block_id: "blk-xss",
-              type: "hero",
+              type: "hero_media",
               order: 1,
               payload: { headline: "Normal title <script>alert(1)</script>" },
             },
@@ -822,6 +1009,15 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
         })
       );
     });
+
+    it("L: synthetic Product Detail uses only canonical Story block types", async () => {
+      const devReader = new DevCatalogPreviewReader();
+      const product = await devReader.getPublishedProductBySlug("mouse-pro-mod-01");
+      expect(product?.story).not.toBeNull();
+      for (const block of product!.story!.blocks) {
+        expect(CANONICAL_STORY_BLOCK_TYPES).toContain(block.type);
+      }
+    });
   });
 
   describe("Remediation C — Product Specification Defensive Consistency", () => {
@@ -839,7 +1035,6 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
 
       expect(result).not.toBeNull();
       expect(result?.name).toBe("WLMouse Beast X Max");
-      // Specifications omitted cleanly
       expect(result?.specifications).toBeNull();
       expect(warnSpy).toHaveBeenCalledWith(
         expect.objectContaining({
