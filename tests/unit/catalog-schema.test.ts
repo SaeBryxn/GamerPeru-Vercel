@@ -3,7 +3,7 @@ import * as schema from "@/db/schema";
 import { getTableColumns } from "drizzle-orm";
 
 describe("Catalog Schema — Physical Bootstrap Integrity", () => {
-  it("exports exactly the 7 approved canonical catalog tables", () => {
+  it("exports exactly the 10 approved canonical catalog tables", () => {
     expect(schema.mediaAssets).toBeDefined();
     expect(schema.brands).toBeDefined();
     expect(schema.categories).toBeDefined();
@@ -11,14 +11,18 @@ describe("Catalog Schema — Physical Bootstrap Integrity", () => {
     expect(schema.productVariants).toBeDefined();
     expect(schema.categorySpecificationSchemas).toBeDefined();
     expect(schema.productSpecifications).toBeDefined();
+    expect(schema.productMedia).toBeDefined();
+    expect(schema.productStoryRevisions).toBeDefined();
+    expect(schema.productStories).toBeDefined();
 
     // Verify deferred tables are NOT present in this gate
     expect((schema as Record<string, unknown>).collections).toBeUndefined();
     expect((schema as Record<string, unknown>).productCollections).toBeUndefined();
-    expect((schema as Record<string, unknown>).productStories).toBeUndefined();
     expect((schema as Record<string, unknown>).customerProfiles).toBeUndefined();
     expect((schema as Record<string, unknown>).orders).toBeUndefined();
     expect((schema as Record<string, unknown>).payments).toBeUndefined();
+    expect((schema as Record<string, unknown>).inventory).toBeUndefined();
+    expect((schema as Record<string, unknown>).carts).toBeUndefined();
   });
 
   it("exports the 4 canonical catalog PostgreSQL enums", () => {
@@ -143,6 +147,41 @@ describe("Catalog Schema — Physical Bootstrap Integrity", () => {
 
       // Ensure non-canonical media_id is NOT in product_variants
       expect((cols as Record<string, unknown>).mediaId).toBeUndefined();
+    });
+  });
+
+  describe("product_media table", () => {
+    it("has canonical column definitions", () => {
+      const cols = getTableColumns(schema.productMedia);
+      expect(cols.id).toBeDefined();
+      expect(cols.productId).toBeDefined();
+      expect(cols.mediaAssetId).toBeDefined();
+      expect(cols.variantId).toBeDefined();
+      expect(cols.displayOrder).toBeDefined();
+      expect(cols.createdAt).toBeDefined();
+    });
+  });
+
+  describe("product_story_revisions table", () => {
+    it("has canonical column definitions", () => {
+      const cols = getTableColumns(schema.productStoryRevisions);
+      expect(cols.id).toBeDefined();
+      expect(cols.productId).toBeDefined();
+      expect(cols.revisionNumber).toBeDefined();
+      expect(cols.status).toBeDefined();
+      expect(cols.blocks).toBeDefined();
+      expect(cols.publishedAt).toBeDefined();
+      expect(cols.createdByAuthUserId).toBeDefined();
+      expect(cols.createdAt).toBeDefined();
+    });
+  });
+
+  describe("product_stories table", () => {
+    it("has canonical column definitions", () => {
+      const cols = getTableColumns(schema.productStories);
+      expect(cols.productId).toBeDefined();
+      expect(cols.publishedRevisionId).toBeDefined();
+      expect(cols.updatedAt).toBeDefined();
     });
   });
 });

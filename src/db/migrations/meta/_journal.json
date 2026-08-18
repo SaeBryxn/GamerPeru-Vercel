@@ -22,6 +22,13 @@
       "when": 1787025464371,
       "tag": "0002_silky_dazzler",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787075939137,
+      "tag": "0003_faulty_quentin_quire",
+      "breakpoints": true
     }
   ]
 }

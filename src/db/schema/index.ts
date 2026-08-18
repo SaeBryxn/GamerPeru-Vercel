@@ -13,3 +13,5 @@ export * from "./catalog/products";
 export * from "./catalog/product-variants";
 export * from "./catalog/category-specification-schemas";
 export * from "./catalog/product-specifications";
+export * from "./catalog/product-media";
+export * from "./catalog/product-stories";
