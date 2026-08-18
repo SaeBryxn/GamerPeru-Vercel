@@ -10,8 +10,12 @@ import {
   ProductGrid,
 } from "@/components/catalog";
 import styles from "@/components/catalog/catalog-page.module.css";
+import {
+  getCachedBrand,
+  getCachedBrandCategoryFacetOptions,
+  getCachedCategorySchema,
+} from "@/lib/catalog/cached-queries";
 import { getCatalogReader } from "@/lib/catalog/reader";
-import { getCachedBrand } from "@/lib/catalog/postgres-reader";
 import { CATALOG_PAGE_SIZE } from "@/lib/catalog/types";
 import type {
   CategoryFacetOption,
@@ -46,19 +50,40 @@ export async function generateMetadata({
     };
   }
 
-  const title = `${brand.name} | Gamer Perú`;
-  const description =
-    brand.description ??
-    `Explora el catálogo oficial de ${brand.name} en Gamer Perú. Periféricos gaming de alto rendimiento con garantía local y envíos a todo el Perú.`;
+  const categoryFacetOptions = await getCachedBrandCategoryFacetOptions(brand.id);
+  const allowedCategories = new Set(categoryFacetOptions.map((c: CategoryFacetOption) => c.slug));
+  const rawState = parseDiscoveryUrl(resolvedSearchParams, "brand", null, { allowedCategories });
 
-  const canonicalUrl = `https://gamerperu.com/marcas/${slug}`;
-  const filterState = parseDiscoveryUrl(resolvedSearchParams, "brand", null);
+  let schema: ValidatedSpecificationSchema | null = null;
+  let filterState = rawState;
+
+  if (rawState.categories.length === 1) {
+    const singleCat = categoryFacetOptions.find(
+      (c: CategoryFacetOption) => c.slug === rawState.categories[0]
+    );
+    if (singleCat) {
+      schema = await getCachedCategorySchema(singleCat.id);
+    }
+    filterState = parseDiscoveryUrl(resolvedSearchParams, "brand", schema, { allowedCategories });
+  }
+
+  const canonicalPath = serializeDiscoveryUrl(`/marcas/${slug}`, filterState, "brand", schema, {
+    preservePage: true,
+  });
+  const canonicalUrl = `https://gamerperu.com${canonicalPath}`;
+
   const isFilteredOrSorted =
     filterState.categories.length > 0 ||
     filterState.price.minCents !== null ||
     filterState.price.maxCents !== null ||
     Object.keys(filterState.technical).length > 0 ||
-    filterState.sort !== null;
+    filterState.sort !== null ||
+    filterState.page > 1;
+
+  const title = `${brand.name} | Gamer Perú`;
+  const description =
+    brand.description ??
+    `Explora el catálogo oficial de ${brand.name} en Gamer Perú. Periféricos gaming de alto rendimiento con garantía local y envíos a todo el Perú.`;
 
   return {
     title,
@@ -89,9 +114,7 @@ export default async function BrandPage({
   }
 
   const reader = getCatalogReader();
-  const categoryFacetOptions: CategoryFacetOption[] = await reader.getBrandCategoryFacetOptions(
-    brand.id
-  );
+  const categoryFacetOptions = await getCachedBrandCategoryFacetOptions(brand.id);
   const allowedCategories = new Set(categoryFacetOptions.map((c: CategoryFacetOption) => c.slug));
 
   const rawState = parseDiscoveryUrl(resolvedSearchParams, "brand", null, { allowedCategories });
@@ -105,7 +128,7 @@ export default async function BrandPage({
       (c: CategoryFacetOption) => c.slug === selectedCatSlug
     );
     if (singleCat) {
-      schema = await reader.getCategorySpecificationSchema(singleCat.id);
+      schema = await getCachedCategorySchema(singleCat.id);
     }
     const filterState: DiscoveryFilterState = parseDiscoveryUrl(
       resolvedSearchParams,
@@ -115,6 +138,7 @@ export default async function BrandPage({
     );
     facets = await reader.getBrandDiscoveryFacets(
       brand.id,
+      categoryFacetOptions,
       singleCat ? singleCat.id : null,
       schema
     );

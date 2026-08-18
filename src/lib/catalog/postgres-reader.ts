@@ -179,17 +179,16 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
 
   async getBrandDiscoveryFacets(
     brandId: string,
+    baseCategories: CategoryFacetOption[],
     selectedCategoryId: string | null,
     schema: ValidatedSpecificationSchema | null
   ): Promise<DiscoveryFacets> {
-    const categoryRows = await buildBrandCategoryFacetOptionsQuery(brandId);
-
     if (selectedCategoryId && schema) {
       const specRows = await buildTechnicalRepresentedSpecValuesQuery(selectedCategoryId, brandId);
       const techFacets = deriveTechnicalFacets(schema, specRows);
       return {
         brands: [],
-        categories: categoryRows,
+        categories: baseCategories,
         technicalSchema: schema,
         technicalFacets: techFacets,
       };
@@ -197,7 +196,7 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
 
     return {
       brands: [],
-      categories: categoryRows,
+      categories: baseCategories,
       technicalSchema: null,
       technicalFacets: [],
     };

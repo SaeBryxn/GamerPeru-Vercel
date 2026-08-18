@@ -201,6 +201,7 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
 
   async getBrandDiscoveryFacets(
     brandId: string,
+    baseCategories: CategoryFacetOption[],
     selectedCategoryId: string | null,
     schema: ValidatedSpecificationSchema | null
   ): Promise<DiscoveryFacets> {
@@ -210,11 +211,6 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
     }
 
     const baseProducts = FIXTURE_PRODUCTS.filter((p) => p.brand.slug === targetBrand.slug);
-    const representedCategorySlugs = new Set(baseProducts.map((p) => p.category.slug));
-    const categoryOptions = Object.values(ALL_FIXTURE_CATEGORIES)
-      .filter((c) => c.status === "PUBLISHED" && representedCategorySlugs.has(c.slug))
-      .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
-
     let techFacets: TechnicalFacet[] = [];
 
     if (selectedCategoryId && schema) {
@@ -227,7 +223,7 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
       techFacets = deriveSyntheticTechnicalFacets(schema, catProducts);
       return {
         brands: [],
-        categories: categoryOptions,
+        categories: baseCategories,
         technicalSchema: schema,
         technicalFacets: techFacets,
       };
@@ -235,7 +231,7 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader {
 
     return {
       brands: [],
-      categories: categoryOptions,
+      categories: baseCategories,
       technicalSchema: null,
       technicalFacets: [],
     };

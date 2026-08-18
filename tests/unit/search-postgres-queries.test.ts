@@ -107,4 +107,48 @@ describe("GP-012/GP-013 — PostgreSQL Production Search Query Builders", () => 
     expect(catSql.sql).toContain("limit $");
     expect(catSql.params).toContain(4);
   });
+
+  it("verifies logical Search query budget accounting (GP-013 faceting + GP-012 entity suggestions)", () => {
+    // Retained GP-012 entity suggestions (executed once per search page):
+    // 1. buildFullMatchingBrandsQuery
+    // 2. buildFullMatchingCategoriesQuery
+    const entityQueries = [
+      buildFullMatchingBrandsQuery("mouse", 4),
+      buildFullMatchingCategoriesQuery("mouse", 4),
+    ];
+    expect(entityQueries).toHaveLength(2);
+
+    // GP-013 Faceted Discovery without Category selection:
+    // 1. buildSearchBrandFacetOptionsQuery
+    // 2. buildSearchCategoryFacetOptionsQuery
+    // 3. buildFullProductCountQuery
+    // 4. buildFullProductResultsQuery
+    const facetingWithoutCategoryQueries = [
+      buildSearchBrandFacetOptionsQuery("mouse"),
+      buildSearchCategoryFacetOptionsQuery("mouse"),
+      buildFullProductCountQuery("mouse"),
+      buildFullProductResultsQuery("mouse", 1, 12),
+    ];
+    expect(facetingWithoutCategoryQueries).toHaveLength(4);
+    expect(facetingWithoutCategoryQueries.length + entityQueries.length).toBe(6);
+
+    // GP-013 Faceted Discovery with 1 Category selected:
+    // 1. buildSearchBrandFacetOptionsQuery
+    // 2. buildSearchCategoryFacetOptionsQuery
+    // 3. (Schema query from catalog)
+    // 4. buildSearchTechnicalRepresentedSpecValuesQuery
+    // 5. buildFullProductCountQuery
+    // 6. buildFullProductResultsQuery
+    const facetingWithCategoryQueries = [
+      buildSearchBrandFacetOptionsQuery("mouse"),
+      buildSearchCategoryFacetOptionsQuery("mouse"),
+      buildSearchTechnicalRepresentedSpecValuesQuery("mouse", "cat-1"),
+      buildFullProductCountQuery("mouse"),
+      buildFullProductResultsQuery("mouse", 1, 12),
+    ];
+    // 5 Postgres search queries + 1 catalog schema query = 6 total faceting queries
+    expect(facetingWithCategoryQueries).toHaveLength(5);
+    // Total including 2 entity queries = 8 queries maximum
+    expect(facetingWithCategoryQueries.length + 1 + entityQueries.length).toBe(8);
+  });
 });

@@ -205,6 +205,7 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
 
   async getBrandDiscoveryFacets(
     brandId: string,
+    baseCategories: CategoryFacetOption[],
     selectedCategoryId: string | null,
     schema: ValidatedSpecificationSchema | null
   ): Promise<DiscoveryFacets> {
@@ -214,11 +215,6 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
     }
 
     const baseProducts = ALL_PREVIEW_PRODUCTS.filter((p) => p.brand.slug === brand.slug);
-    const representedCategorySlugs = new Set(baseProducts.map((p) => p.category.slug));
-    const categoryOptions = Object.values(PREVIEW_CATEGORIES)
-      .filter((c) => c.status === "PUBLISHED" && representedCategorySlugs.has(c.slug))
-      .map((c) => ({ id: c.id, name: c.name, slug: c.slug }));
-
     let techFacets: TechnicalFacet[] = [];
 
     if (selectedCategoryId && schema) {
@@ -231,7 +227,7 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
       techFacets = deriveSyntheticTechnicalFacets(schema, catProducts);
       return {
         brands: [],
-        categories: categoryOptions,
+        categories: baseCategories,
         technicalSchema: schema,
         technicalFacets: techFacets,
       };
@@ -239,7 +235,7 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader {
 
     return {
       brands: [],
-      categories: categoryOptions,
+      categories: baseCategories,
       technicalSchema: null,
       technicalFacets: [],
     };

@@ -21,6 +21,7 @@ export interface CatalogDiscoveryReader {
   getBrandCategoryFacetOptions(brandId: string): Promise<CategoryFacetOption[]>;
   getBrandDiscoveryFacets(
     brandId: string,
+    baseCategories: CategoryFacetOption[],
     selectedCategoryId: string | null,
     schema: ValidatedSpecificationSchema | null
   ): Promise<DiscoveryFacets>;

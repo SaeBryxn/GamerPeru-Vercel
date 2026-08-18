@@ -133,4 +133,32 @@ describe("Production Drizzle SQL Query Builders (Catalog Contract & Security Ver
     expect(sqlObj.sql).toContain('order by "products"."created_at" desc, "products"."id" desc');
     expect(sqlObj.sql).toContain("limit $");
   });
+
+  it("verifies logical Brand query budget strictly bounds queries without duplication", () => {
+    // Case 1: Brand without category selection:
+    // 1. buildBrandCategoryFacetOptionsQuery
+    // 2. buildBrandFilteredProductCountQuery
+    // 3. buildBrandFilteredProductsQuery
+    const withoutCategoryQueries = [
+      buildBrandCategoryFacetOptionsQuery("brand-1"),
+      buildBrandFilteredProductCountQuery("brand-1"),
+      buildBrandFilteredProductsQuery("brand-1", 1, 12),
+    ];
+    expect(withoutCategoryQueries).toHaveLength(3);
+
+    // Case 2: Brand with 1 category selected:
+    // 1. buildBrandCategoryFacetOptionsQuery
+    // 2. buildCategorySpecificationSchemaQuery
+    // 3. buildTechnicalRepresentedSpecValuesQuery
+    // 4. buildBrandFilteredProductCountQuery
+    // 5. buildBrandFilteredProductsQuery
+    const withCategoryQueries = [
+      buildBrandCategoryFacetOptionsQuery("brand-1"),
+      buildCategorySpecificationSchemaQuery("cat-1"),
+      buildTechnicalRepresentedSpecValuesQuery("cat-1", "brand-1"),
+      buildBrandFilteredProductCountQuery("brand-1"),
+      buildBrandFilteredProductsQuery("brand-1", 1, 12),
+    ];
+    expect(withCategoryQueries).toHaveLength(5);
+  });
 });

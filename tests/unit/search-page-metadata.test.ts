@@ -1,8 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { generateMetadata } from "@/app/(storefront)/buscar/page";
 import { sanitizeObject, sanitizeString } from "@/lib/observability/sentry-sanitize";
 
+function setNodeEnv(value: string): void {
+  (process.env as Record<string, string | undefined>).NODE_ENV = value;
+}
+
 describe("GP-012 — Search Page Metadata & Sentry Privacy", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.CI;
+    delete process.env.DEV_CATALOG_PREVIEW;
+    process.env.E2E_CATALOG_FIXTURES = "1";
+    process.env.PLAYWRIGHT_TEST = "1";
+    setNodeEnv("test");
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
   describe("generateMetadata", () => {
     it("generates indexable metadata for bare /buscar landing", async () => {
       const meta = await generateMetadata({

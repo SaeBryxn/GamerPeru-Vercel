@@ -16,10 +16,6 @@ import type {
   ValidatedSpecificationSchema,
 } from "./types";
 
-/**
- * Builds the SQL expression for the single authoritative startingPriceCents
- * computed only from EligibleVariants matching price filters.
- */
 export function buildEligibleStartingPriceSql(
   minPriceCents: number | null,
   maxPriceCents: number | null
@@ -43,9 +39,6 @@ export function buildEligibleStartingPriceSql(
   )`;
 }
 
-/**
- * Builds the EXISTS condition ensuring at least one EligibleVariant exists for the Product.
- */
 export function buildEligibleVariantExistsClause(
   minPriceCents: number | null,
   maxPriceCents: number | null
@@ -69,9 +62,6 @@ export function buildEligibleVariantExistsClause(
   )`;
 }
 
-/**
- * Builds defensive technical specification filter conditions for ProductSpecifications.
- */
 export function buildTechnicalFilterConditions(
   technicalFilters: Record<string, unknown>,
   validatedSchema: ValidatedSpecificationSchema | null
@@ -100,7 +90,6 @@ export function buildTechnicalFilterConditions(
       );
       if (filteredVals.length === 0) continue;
 
-      // OR across same facet values: ps.spec_values @> '{"key": "val1"}' OR ps.spec_values @> '{"key": "val2"}'
       const orClauses = filteredVals.map((v) => {
         const jsonSnippet = JSON.stringify({ [field.key]: v });
         return sql`${productSpecifications.specValues} @> ${jsonSnippet}::jsonb`;
@@ -174,9 +163,6 @@ export function buildTechnicalFilterConditions(
   return conditions;
 }
 
-/**
- * Builds the complete WHERE clause for filtered product discovery.
- */
 export function buildProductDiscoveryWhereClause(
   filterState: DiscoveryFilterState,
   options?: {
@@ -192,17 +178,14 @@ export function buildProductDiscoveryWhereClause(
     buildEligibleVariantExistsClause(filterState.price.minCents, filterState.price.maxCents),
   ];
 
-  // Fixed Category (on /categorias/[slug])
   if (options?.categoryId) {
     conditions.push(eq(products.categoryId, options.categoryId));
   }
 
-  // Fixed Brand (on /marcas/[slug])
   if (options?.brandId) {
     conditions.push(eq(products.brandId, options.brandId));
   }
 
-  // Selected Brands multi-filter
   if (filterState.brands.length > 0) {
     conditions.push(
       sql`${products.brandId} IN (
@@ -214,7 +197,6 @@ export function buildProductDiscoveryWhereClause(
     );
   }
 
-  // Selected Categories multi-filter (on Brand / Search)
   if (filterState.categories.length > 0) {
     conditions.push(
       sql`${products.categoryId} IN (
@@ -226,7 +208,6 @@ export function buildProductDiscoveryWhereClause(
     );
   }
 
-  // Technical specification filters
   const techConditions = buildTechnicalFilterConditions(
     filterState.technical,
     options?.validatedSchema ?? null
@@ -238,12 +219,9 @@ export function buildProductDiscoveryWhereClause(
   return and(...conditions)!;
 }
 
-/**
- * Maps DiscoverySort to SQL ORDER BY clauses.
- */
 export function buildProductSortOrderBy(
   sort: DiscoverySort,
-  surface: DiscoverySurface,
+  _surface: DiscoverySurface,
   minPriceCents: number | null,
   maxPriceCents: number | null
 ): SQL[] {
@@ -265,12 +243,5 @@ export function buildProductSortOrderBy(
     return [desc(products.name), desc(products.id)];
   }
 
-  if (sort === "recientes") {
-    return [desc(products.createdAt), desc(products.id)];
-  }
-
-  // Default:
-  // For Category/Brand: newest first
-  // For Search: relevance expression is handled outside (or fallback to newest)
   return [desc(products.createdAt), desc(products.id)];
 }

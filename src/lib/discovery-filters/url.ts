@@ -20,6 +20,23 @@ const VALID_SORTS_SET = new Set<string>([
   "nombre-desc",
 ]);
 
+export function formatTechnicalDecimal(num: number): string {
+  if (!Number.isFinite(num)) {
+    throw new Error("Invalid technical decimal: number must be finite");
+  }
+  const str = num.toString();
+  if (!str.includes("e") && !str.includes("E")) {
+    return str;
+  }
+  const parts = str.toLowerCase().split("e");
+  const exp = parseInt(parts[1]!, 10);
+  if (exp > 20 || exp < -20) {
+    throw new Error("Technical decimal magnitude exceeds supported domain");
+  }
+  const fixed = num.toFixed(Math.max(0, -exp) + 10);
+  return fixed.replace(/(\.\d*?[1-9])0+$/, "$1").replace(/\.0+$/, "");
+}
+
 export function parseTechnicalDecimal(
   raw: unknown,
   fieldMin?: number,
@@ -331,10 +348,10 @@ export function serializeDiscoveryUrl(
       } else if (field.filterKind === "NUMBER_RANGE" && typeof val === "object" && val !== null) {
         const range = val as NumberRangeFilter;
         if (range.min !== undefined) {
-          technicalEntries.push([`${field.publicParam}_min`, String(range.min)]);
+          technicalEntries.push([`${field.publicParam}_min`, formatTechnicalDecimal(range.min)]);
         }
         if (range.max !== undefined) {
-          technicalEntries.push([`${field.publicParam}_max`, String(range.max)]);
+          technicalEntries.push([`${field.publicParam}_max`, formatTechnicalDecimal(range.max)]);
         }
       } else if (field.filterKind === "BOOLEAN" && val === true) {
         technicalEntries.push([field.publicParam, "1"]);

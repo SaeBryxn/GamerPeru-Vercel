@@ -2,9 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
 import { formatCentsToPenDecimal, parsePenStringToCents } from "@/lib/discovery-filters/pen-parser";
-import { parseTechnicalDecimal, serializeDiscoveryUrl } from "@/lib/discovery-filters/url";
+import {
+  formatTechnicalDecimal,
+  parseTechnicalDecimal,
+  serializeDiscoveryUrl,
+} from "@/lib/discovery-filters/url";
 import type {
   DiscoveryFacets,
   DiscoveryFilterState,
@@ -48,6 +51,20 @@ export function FilterDrawer({
   const [draftTechnical, setDraftTechnical] = useState<Record<string, TechnicalFilterValue>>(
     filterState.technical
   );
+  const [draftTechRawNumbers, setDraftTechRawNumbers] = useState<
+    Record<string, { min?: string; max?: string }>
+  >(() => {
+    const initial: Record<string, { min?: string; max?: string }> = {};
+    for (const [k, v] of Object.entries(filterState.technical)) {
+      if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+        initial[k] = {
+          min: v.min !== undefined ? formatTechnicalDecimal(v.min) : "",
+          max: v.max !== undefined ? formatTechnicalDecimal(v.max) : "",
+        };
+      }
+    }
+    return initial;
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -64,6 +81,17 @@ export function FilterDrawer({
           : ""
       );
       setDraftTechnical(filterState.technical);
+
+      const rawNums: Record<string, { min?: string; max?: string }> = {};
+      for (const [k, v] of Object.entries(filterState.technical)) {
+        if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+          rawNums[k] = {
+            min: v.min !== undefined ? formatTechnicalDecimal(v.min) : "",
+            max: v.max !== undefined ? formatTechnicalDecimal(v.max) : "",
+          };
+        }
+      }
+      setDraftTechRawNumbers(rawNums);
     }
   }, [isOpen, filterState]);
 
@@ -165,22 +193,13 @@ export function FilterDrawer({
   };
 
   const handleTechNumberChange = (fieldKey: string, bound: "min" | "max", rawVal: string) => {
-    setDraftTechnical((prev) => {
-      const current = (prev[fieldKey] as { min?: number; max?: number }) ?? {};
-      const numVal = parseTechnicalDecimal(rawVal.trim());
-
-      const updated = {
-        ...current,
-        [bound]: numVal,
-      };
-
-      if (updated.min === undefined && updated.max === undefined) {
-        const copy = { ...prev };
-        delete copy[fieldKey];
-        return copy;
-      }
-      return { ...prev, [fieldKey]: updated };
-    });
+    setDraftTechRawNumbers((prev) => ({
+      ...prev,
+      [fieldKey]: {
+        ...prev[fieldKey],
+        [bound]: rawVal,
+      },
+    }));
   };
 
   const handleTechBooleanToggle = (fieldKey: string) => {
@@ -204,11 +223,45 @@ export function FilterDrawer({
       maxCents = null;
     }
 
+    const committedTechnical: Record<string, TechnicalFilterValue> = {};
+    for (const [k, v] of Object.entries(draftTechnical)) {
+      if (Array.isArray(v) || typeof v === "boolean") {
+        committedTechnical[k] = v;
+      }
+    }
+
+    if (facets.technicalFacets) {
+      for (const facet of facets.technicalFacets) {
+        if (facet.kind === "NUMBER_RANGE") {
+          const raw = draftTechRawNumbers[facet.field.key];
+          if (raw) {
+            const minNum =
+              raw.min !== undefined && raw.min.trim() !== ""
+                ? parseTechnicalDecimal(raw.min.trim(), facet.field.min, facet.field.max)
+                : undefined;
+            const maxNum =
+              raw.max !== undefined && raw.max.trim() !== ""
+                ? parseTechnicalDecimal(raw.max.trim(), facet.field.min, facet.field.max)
+                : undefined;
+
+            if (minNum !== undefined && maxNum !== undefined && minNum > maxNum) {
+              // Invalid bounds min > max rejected
+            } else if (minNum !== undefined || maxNum !== undefined) {
+              committedTechnical[facet.field.key] = {
+                min: minNum,
+                max: maxNum,
+              };
+            }
+          }
+        }
+      }
+    }
+
     const nextState: DiscoveryFilterState = {
       brands: draftBrands,
       categories: draftCategories,
       price: { minCents, maxCents },
-      technical: draftTechnical,
+      technical: committedTechnical,
       sort: filterState.sort,
       page: 1,
     };
@@ -228,7 +281,11 @@ export function FilterDrawer({
     setDraftMinPrice("");
     setDraftMaxPrice("");
     setDraftTechnical({});
+    setDraftTechRawNumbers({});
   };
+
+  const showCategoryFilter = surface !== "category" && facets.categories.length > 0;
+  const showBrandFilter = surface !== "brand" && facets.brands.length > 0;
 
   return (
     <dialog
@@ -251,19 +308,42 @@ export function FilterDrawer({
             aria-label="Cerrar filtros"
             data-testid="close-filter-drawer-button"
           >
-            <X size={20} aria-hidden="true" />
+            ✕
           </button>
         </header>
 
         <div className={styles.body}>
-          {surface !== "brand" && facets.brands.length > 0 && (
+          {showCategoryFilter && (
+            <div className={styles.group}>
+              <h3 className={styles.groupTitle}>Categorías</h3>
+              <div className={styles.checkboxList}>
+                {facets.categories.map((cat) => {
+                  const isChecked = draftCategories.includes(cat.slug);
+                  return (
+                    <label key={cat.id} className={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleCategoryToggle(cat.slug)}
+                        className={styles.checkbox}
+                        data-testid={`filter-category-${cat.slug}`}
+                      />
+                      <span>{cat.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {showBrandFilter && (
             <div className={styles.group}>
               <h3 className={styles.groupTitle}>Marcas</h3>
               <div className={styles.checkboxList}>
                 {facets.brands.map((brand) => {
                   const isChecked = draftBrands.includes(brand.slug);
                   return (
-                    <label key={brand.slug} className={styles.checkboxLabel}>
+                    <label key={brand.id} className={styles.checkboxLabel}>
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -279,59 +359,36 @@ export function FilterDrawer({
             </div>
           )}
 
-          {surface !== "category" && facets.categories.length > 0 && (
-            <div className={styles.group}>
-              <h3 className={styles.groupTitle}>Categorías</h3>
-              <div className={styles.checkboxList}>
-                {facets.categories.map((category) => {
-                  const isChecked = draftCategories.includes(category.slug);
-                  return (
-                    <label key={category.slug} className={styles.checkboxLabel}>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => handleCategoryToggle(category.slug)}
-                        className={styles.checkbox}
-                        data-testid={`filter-category-${category.slug}`}
-                      />
-                      <span>{category.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           <div className={styles.group}>
-            <h3 className={styles.groupTitle}>Precio (PEN)</h3>
-            <div className={styles.priceInputs}>
-              <div className={styles.priceField}>
-                <label htmlFor="price-min-input" className={styles.priceLabel}>
-                  Precio mínimo (S/)
+            <h3 className={styles.groupTitle}>Rango de Precio (S/)</h3>
+            <div className={styles.rangeInputs}>
+              <div className={styles.rangeField}>
+                <label htmlFor="price-min" className={styles.rangeLabel}>
+                  Mínimo
                 </label>
                 <input
-                  id="price-min-input"
+                  id="price-min"
                   type="text"
                   inputMode="decimal"
-                  placeholder="Min"
+                  placeholder="0.00"
                   value={draftMinPrice}
                   onChange={(e) => setDraftMinPrice(e.target.value)}
-                  className={styles.priceInput}
+                  className={styles.rangeInput}
                   data-testid="price-min-input"
                 />
               </div>
-              <div className={styles.priceField}>
-                <label htmlFor="price-max-input" className={styles.priceLabel}>
-                  Precio máximo (S/)
+              <div className={styles.rangeField}>
+                <label htmlFor="price-max" className={styles.rangeLabel}>
+                  Máximo
                 </label>
                 <input
-                  id="price-max-input"
+                  id="price-max"
                   type="text"
                   inputMode="decimal"
-                  placeholder="Max"
+                  placeholder="9999.00"
                   value={draftMaxPrice}
                   onChange={(e) => setDraftMaxPrice(e.target.value)}
-                  className={styles.priceInput}
+                  className={styles.rangeInput}
                   data-testid="price-max-input"
                 />
               </div>
@@ -366,15 +423,10 @@ export function FilterDrawer({
             }
 
             if (facet.kind === "NUMBER_RANGE") {
-              const range =
-                (draftTechnical[facet.field.key] as { min?: number; max?: number }) ?? {};
-              const unitSuffix = facet.field.unit ? ` (${facet.field.unit})` : "";
+              const rawRange = draftTechRawNumbers[facet.field.key] ?? {};
               return (
                 <div key={facet.field.key} className={styles.group}>
-                  <h3 className={styles.groupTitle}>
-                    {facet.field.label}
-                    {unitSuffix}
-                  </h3>
+                  <h3 className={styles.groupTitle}>{facet.field.label}</h3>
                   <div className={styles.rangeInputs}>
                     <div className={styles.rangeField}>
                       <label htmlFor={`range-min-${facet.field.key}`} className={styles.rangeLabel}>
@@ -383,8 +435,11 @@ export function FilterDrawer({
                       <input
                         id={`range-min-${facet.field.key}`}
                         type="number"
+                        min={facet.field.min}
+                        max={facet.field.max}
+                        step={facet.field.step}
                         placeholder={String(facet.minRepresented)}
-                        value={range.min ?? ""}
+                        value={rawRange.min ?? ""}
                         onChange={(e) =>
                           handleTechNumberChange(facet.field.key, "min", e.target.value)
                         }
@@ -399,8 +454,11 @@ export function FilterDrawer({
                       <input
                         id={`range-max-${facet.field.key}`}
                         type="number"
+                        min={facet.field.min}
+                        max={facet.field.max}
+                        step={facet.field.step}
                         placeholder={String(facet.maxRepresented)}
-                        value={range.max ?? ""}
+                        value={rawRange.max ?? ""}
                         onChange={(e) =>
                           handleTechNumberChange(facet.field.key, "max", e.target.value)
                         }

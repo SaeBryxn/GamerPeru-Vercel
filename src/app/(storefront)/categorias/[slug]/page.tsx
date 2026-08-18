@@ -10,8 +10,12 @@ import {
   ProductGrid,
 } from "@/components/catalog";
 import styles from "@/components/catalog/catalog-page.module.css";
+import {
+  getCachedCategory,
+  getCachedCategoryDiscoveryFacets,
+  getCachedCategorySchema,
+} from "@/lib/catalog/cached-queries";
 import { getCatalogReader } from "@/lib/catalog/reader";
-import { getCachedCategory } from "@/lib/catalog/postgres-reader";
 import { CATALOG_PAGE_SIZE } from "@/lib/catalog/types";
 import { translateLegacyCategoryUrl } from "@/lib/discovery-filters/legacy-aliases";
 import {
@@ -41,9 +45,13 @@ export async function generateMetadata({
     };
   }
 
-  const reader = getCatalogReader();
-  const schema = await reader.getCategorySpecificationSchema(category.id);
-  const filterState = parseDiscoveryUrl(resolvedSearchParams, "category", schema);
+  const schema = await getCachedCategorySchema(category.id);
+  const facets = await getCachedCategoryDiscoveryFacets(category.id, schema);
+  const allowedBrands = new Set(facets.brands.map((b) => b.slug));
+
+  const filterState = parseDiscoveryUrl(resolvedSearchParams, "category", schema, {
+    allowedBrands,
+  });
 
   const canonicalPath = serializeDiscoveryUrl(
     `/categorias/${slug}`,
@@ -59,7 +67,8 @@ export async function generateMetadata({
     filterState.price.minCents !== null ||
     filterState.price.maxCents !== null ||
     Object.keys(filterState.technical).length > 0 ||
-    filterState.sort !== null;
+    filterState.sort !== null ||
+    filterState.page > 1;
 
   return {
     title: `${category.name} | Gamer Perú`,
@@ -88,19 +97,25 @@ export default async function CategoryPage({
 
   const legacyCheck = translateLegacyCategoryUrl(slug, resolvedSearchParams);
   if (legacyCheck.hasLegacyParams && legacyCheck.targetPath && legacyCheck.translatedParams) {
-    const reader = getCatalogReader();
     const targetCategorySlug = legacyCheck.targetCategorySlug ?? slug;
     const targetCat = await getCachedCategory(targetCategorySlug);
     if (!targetCat) {
       notFound();
     }
-    const schema = await reader.getCategorySpecificationSchema(targetCat.id);
-    const translatedState = parseDiscoveryUrl(legacyCheck.translatedParams, "category", schema);
+    const targetSchema = await getCachedCategorySchema(targetCat.id);
+    const targetFacets = await getCachedCategoryDiscoveryFacets(targetCat.id, targetSchema);
+    const allowedTargetBrands = new Set(targetFacets.brands.map((b) => b.slug));
+    const translatedState = parseDiscoveryUrl(
+      legacyCheck.translatedParams,
+      "category",
+      targetSchema,
+      { allowedBrands: allowedTargetBrands }
+    );
     const destinationUrl = serializeDiscoveryUrl(
       legacyCheck.targetPath,
       translatedState,
       "category",
-      schema,
+      targetSchema,
       { overridePage: 1 }
     );
     permanentRedirect(destinationUrl);
@@ -112,8 +127,8 @@ export default async function CategoryPage({
   }
 
   const reader = getCatalogReader();
-  const schema = await reader.getCategorySpecificationSchema(category.id);
-  const facets = await reader.getCategoryDiscoveryFacets(category.id, schema);
+  const schema = await getCachedCategorySchema(category.id);
+  const facets = await getCachedCategoryDiscoveryFacets(category.id, schema);
   const allowedBrands = new Set(facets.brands.map((b) => b.slug));
 
   const filterState = parseDiscoveryUrl(resolvedSearchParams, "category", schema, {

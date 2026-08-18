@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAppliedFilterChips,
+  formatTechnicalDecimal,
   parseDiscoveryUrl,
   parseTechnicalDecimal,
   pruneFilterStateAgainstDomains,
@@ -224,5 +225,34 @@ describe("Discovery URL Parser and Serializer (GP-013 Contract & Canonicalizatio
     expect(chips[0]?.label).toBe("Marca: WLMouse");
     expect(chips[1]?.label).toBe("Precio: S/ 120 - S/ 200");
     expect(chips[2]?.label).toBe("Forma: Ergonómico");
+  });
+
+  describe("Stable Technical Decimal Formatting & Round-Trip", () => {
+    it("formats standard numbers without scientific notation", () => {
+      expect(formatTechnicalDecimal(45)).toBe("45");
+      expect(formatTechnicalDecimal(45.5)).toBe("45.5");
+      expect(formatTechnicalDecimal(0.5)).toBe("0.5");
+      expect(formatTechnicalDecimal(0.01)).toBe("0.01");
+      expect(formatTechnicalDecimal(0.0000001)).toBe("0.0000001");
+      expect(formatTechnicalDecimal(123456.78)).toBe("123456.78");
+    });
+
+    it("rejects scientific notation in raw technical number input", () => {
+      expect(parseTechnicalDecimal("1e-7")).toBeUndefined();
+      expect(parseTechnicalDecimal("2E+5")).toBeUndefined();
+      expect(parseTechnicalDecimal("1e5")).toBeUndefined();
+    });
+
+    it("guarantees round-trip decimal stability (parse -> format -> parse)", () => {
+      const testCases = ["45", "45.5", "0.5", "0.01", "0.0000001", "68.25"];
+      for (const input of testCases) {
+        const parsed = parseTechnicalDecimal(input);
+        expect(parsed).toBeDefined();
+        const serialized = formatTechnicalDecimal(parsed!);
+        expect(serialized).toBe(input);
+        const reparsed = parseTechnicalDecimal(serialized);
+        expect(reparsed).toBe(parsed);
+      }
+    });
   });
 });

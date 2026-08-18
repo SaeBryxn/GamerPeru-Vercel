@@ -8,7 +8,7 @@ import { DiscoveryShell } from "@/components/catalog/discovery-shell/discovery-s
 import { FilteredEmptyState } from "@/components/catalog/filtered-empty-state/filtered-empty-state";
 import { Pagination } from "@/components/catalog/pagination/pagination";
 import { ProductGrid } from "@/components/catalog/product-grid/product-grid";
-import { getCatalogReader } from "@/lib/catalog/reader";
+import { getCachedCategorySchema } from "@/lib/catalog/cached-queries";
 import type {
   BrandFacetOption,
   CategoryFacetOption,
@@ -22,6 +22,10 @@ import {
   reconstructIncomingDiscoveryUrl,
   serializeDiscoveryUrl,
 } from "@/lib/discovery-filters/url";
+import {
+  getCachedSearchBaseFacetOptions,
+  getCachedSearchMatchingEntities,
+} from "@/lib/search/cached-queries";
 import {
   getQueryCodePointLength,
   normalizeSearchQuery,
@@ -42,9 +46,8 @@ interface SearchPageProps {
 
 export async function generateMetadata({ searchParams }: SearchPageProps): Promise<Metadata> {
   const params = await searchParams;
-  const q = parseSearchQueryParam(params.q);
-  const pageStr = typeof params.page === "string" ? params.page : undefined;
-  const pageNum = pageStr && /^[1-9]\d*$/.test(pageStr) ? parseInt(pageStr, 10) : 1;
+  const rawQParam = params.q;
+  const q = parseSearchQueryParam(rawQParam);
 
   if (!q) {
     return {
@@ -58,13 +61,51 @@ export async function generateMetadata({ searchParams }: SearchPageProps): Promi
     };
   }
 
+  if (getQueryCodePointLength(q) < MIN_SEARCH_QUERY_LENGTH) {
+    return {
+      title: `Búsqueda: ${q} | Gamer Perú`,
+      description: `Resultados de búsqueda para "${q}" en Gamer Perú.`,
+      robots: { index: false, follow: true },
+      alternates: {
+        canonical: `/buscar?q=${encodeURIComponent(q)}`,
+      },
+    };
+  }
+
+  const cleanQuery = normalizeSearchQuery(q);
+  const baseFacets = await getCachedSearchBaseFacetOptions(cleanQuery);
+  const allowedBrands = new Set(baseFacets.brands.map((b: BrandFacetOption) => b.slug));
+  const allowedCategories = new Set(baseFacets.categories.map((c: CategoryFacetOption) => c.slug));
+
+  const rawState = parseDiscoveryUrl(params, "search", null, {
+    allowedBrands,
+    allowedCategories,
+  });
+
+  let schema: ValidatedSpecificationSchema | null = null;
+  let filterState = rawState;
+
+  if (rawState.categories.length === 1) {
+    const singleCat = baseFacets.categories.find(
+      (c: CategoryFacetOption) => c.slug === rawState.categories[0]
+    );
+    if (singleCat) {
+      schema = await getCachedCategorySchema(singleCat.id);
+    }
+    filterState = parseDiscoveryUrl(params, "search", schema, {
+      allowedBrands,
+      allowedCategories,
+    });
+  }
+
+  const canonicalPath = serializeDiscoveryUrl("/buscar", filterState, "search", schema, {
+    searchQuery: q,
+    preservePage: true,
+  });
+
+  const pageNum = filterState.page;
   const title =
     pageNum > 1 ? `Búsqueda: ${q} (Página ${pageNum}) | Gamer Perú` : `Búsqueda: ${q} | Gamer Perú`;
-
-  const canonical =
-    pageNum > 1
-      ? `/buscar?q=${encodeURIComponent(q)}&page=${pageNum}`
-      : `/buscar?q=${encodeURIComponent(q)}`;
 
   const description = `Resultados de búsqueda para "${q}" en Gamer Perú. Encuentra periféricos para esports con garantía local y envíos a todo el Perú.`;
 
@@ -73,7 +114,7 @@ export async function generateMetadata({ searchParams }: SearchPageProps): Promi
     description,
     robots: { index: false, follow: true },
     alternates: {
-      canonical,
+      canonical: canonicalPath,
     },
   };
 }
@@ -195,11 +236,10 @@ export default async function SearchPage({
 
   const cleanQuery = normalizeSearchQuery(q);
   const searchReader = getSearchReader();
-  const catalogReader = getCatalogReader();
 
   const [baseFacets, entityMatches] = await Promise.all([
-    searchReader.getSearchBaseFacetOptions(cleanQuery),
-    searchReader.searchMatchingEntities(cleanQuery),
+    getCachedSearchBaseFacetOptions(cleanQuery),
+    getCachedSearchMatchingEntities(cleanQuery),
   ]);
 
   const allowedBrands = new Set<string>(baseFacets.brands.map((b: BrandFacetOption) => b.slug));
@@ -222,7 +262,7 @@ export default async function SearchPage({
       (c: CategoryFacetOption) => c.slug === selectedCatSlug
     );
     if (singleCat) {
-      schema = await catalogReader.getCategorySpecificationSchema(singleCat.id);
+      schema = await getCachedCategorySchema(singleCat.id);
     }
     filterState = parseDiscoveryUrl(params, "search", schema, {
       allowedBrands,
