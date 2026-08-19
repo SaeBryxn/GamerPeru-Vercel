@@ -19,6 +19,10 @@ import {
   formatSpecFieldValue,
   resolveCanonicalDefaultVariant,
   resolveDefaultFocusedIndex,
+  resolveInitialLcpMediaAssetId,
+  resolveSwipeDirection,
+  isVariantOptionCompatible,
+  resolveVariantForOption,
   resolveDimensions,
   SWATCH_ALLOWLIST,
   type CommerceHeroProjection,
@@ -731,6 +735,257 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
       const eligible = buildEligibleGallery(allMedia, docMedia, "var-1");
       expect(eligible).toHaveLength(1);
       expect(eligible[0]?.id).toBe(MOCK_GLOBAL_MEDIA.id);
+    });
+  });
+
+  describe("Initial LCP Media Authority (Finding A)", () => {
+    it("identifies the canonical initial visible variant image as LCP even when global image is at index 0", () => {
+      // Global media at displayOrder 1 -> index 0 in sorted gallery
+      const globalMedia: ProductMediaItem = {
+        ...MOCK_GLOBAL_MEDIA,
+        displayOrder: 1,
+        mediaAssetId: "asset-global-1",
+      };
+      // Selected variant media at displayOrder 2 -> index 1 in sorted gallery
+      const variantMedia: ProductMediaItem = {
+        ...MOCK_VARIANT_1_MEDIA,
+        displayOrder: 2,
+        mediaAssetId: "asset-v1",
+        variantId: "var-1",
+      };
+
+      const gallery = buildEligibleGallery([globalMedia, variantMedia], globalMedia, "var-1");
+      // Verify sorting placed global media at index 0 and variant media at index 1
+      expect(gallery[0]?.mediaAssetId).toBe("asset-global-1");
+      expect(gallery[1]?.mediaAssetId).toBe("asset-v1");
+
+      // Canonical initial focus selects variant-specific media (index 1)
+      const lcpAssetId = resolveInitialLcpMediaAssetId(gallery, globalMedia, "var-1");
+      expect(lcpAssetId).toBe("asset-v1");
+      // Proves index 0 is NOT incorrectly treated as LCP authority
+      expect(lcpAssetId).not.toBe("asset-global-1");
+    });
+
+    it("returns null for initial LCP candidate when the initial visible media is a VIDEO", () => {
+      const videoMedia: ProductMediaItem = {
+        id: "med-video-1",
+        productId: "prod-1",
+        mediaAssetId: "asset-video-1",
+        variantId: "var-1",
+        displayOrder: 1,
+        asset: {
+          objectKey: "products/wlmouse/demo.mp4",
+          mimeType: "video/mp4",
+          fileSizeBytes: 1048576,
+          width: 1920,
+          height: 1080,
+          altText: "Beast X Video",
+        },
+      };
+
+      const gallery = [videoMedia];
+      const lcpAssetId = resolveInitialLcpMediaAssetId(gallery, null, "var-1");
+      // Video is never a Next.js Image priority candidate
+      expect(lcpAssetId).toBeNull();
+    });
+  });
+
+  describe("Sparse Matrix Pure Resolution & No Arbitrary Fallback", () => {
+    const vSparse1: ProductVariantDetail = {
+      id: "v-sparse-1",
+      productId: "p1",
+      sku: "SKU-BLK-8K",
+      title: "Negro / 8K",
+      priceCents: 59900,
+      compareAtPriceCents: null,
+      weightGrams: 39,
+      displayOrder: 1,
+      status: "ACTIVE",
+      attributes: { colorway: "Negro", polling: "8K" },
+    };
+    const vSparse2: ProductVariantDetail = {
+      id: "v-sparse-2",
+      productId: "p1",
+      sku: "SKU-BLK-1K",
+      title: "Negro / 1K",
+      priceCents: 49900,
+      compareAtPriceCents: null,
+      weightGrams: 39,
+      displayOrder: 2,
+      status: "ACTIVE",
+      attributes: { colorway: "Negro", polling: "1K" },
+    };
+    const vSparse3: ProductVariantDetail = {
+      id: "v-sparse-3",
+      productId: "p1",
+      sku: "SKU-WHT-1K",
+      title: "Blanco / 1K",
+      priceCents: 49900,
+      compareAtPriceCents: null,
+      weightGrams: 39,
+      displayOrder: 3,
+      status: "ACTIVE",
+      attributes: { colorway: "Blanco", polling: "1K" },
+    };
+
+    const sparseVariants = [vSparse1, vSparse2, vSparse3];
+    const { dimensions } = resolveDimensions(sparseVariants);
+
+    it("A: Current Negro / 8K + Candidate Blanco is incompatible and returns null target (no arbitrary fallback)", () => {
+      const isCompat = isVariantOptionCompatible(
+        sparseVariants,
+        dimensions,
+        vSparse1,
+        "colorway",
+        "Blanco"
+      );
+      expect(isCompat).toBe(false);
+
+      const target = resolveVariantForOption(
+        sparseVariants,
+        dimensions,
+        vSparse1,
+        "colorway",
+        "Blanco"
+      );
+      // Must not silently select Blanco / 1K (vSparse3) or Negro / 1K
+      expect(target).toBeNull();
+    });
+
+    it("B: Current Negro / 1K + Candidate Blanco is compatible and resolves exact Blanco / 1K variant preserving polling", () => {
+      const isCompat = isVariantOptionCompatible(
+        sparseVariants,
+        dimensions,
+        vSparse2,
+        "colorway",
+        "Blanco"
+      );
+      expect(isCompat).toBe(true);
+
+      const target = resolveVariantForOption(
+        sparseVariants,
+        dimensions,
+        vSparse2,
+        "colorway",
+        "Blanco"
+      );
+      expect(target).toBe(vSparse3);
+      expect(target?.sku).toBe("SKU-WHT-1K");
+      expect(target?.attributes.polling).toBe("1K");
+    });
+
+    it("C: Non-existent candidate option returns null target", () => {
+      const isCompat = isVariantOptionCompatible(
+        sparseVariants,
+        dimensions,
+        vSparse1,
+        "colorway",
+        "Rojo"
+      );
+      expect(isCompat).toBe(false);
+
+      const target = resolveVariantForOption(
+        sparseVariants,
+        dimensions,
+        vSparse1,
+        "colorway",
+        "Rojo"
+      );
+      expect(target).toBeNull();
+    });
+
+    it("E: Changing polling dimension preserves colorway dimension selection", () => {
+      // Current: Negro / 1K, Candidate: polling = 8K
+      const target = resolveVariantForOption(sparseVariants, dimensions, vSparse2, "polling", "8K");
+      expect(target).toBe(vSparse1);
+      expect(target?.attributes.colorway).toBe("Negro");
+      expect(target?.attributes.polling).toBe("8K");
+    });
+  });
+
+  describe("Pure Horizontal Gesture Resolver (resolveSwipeDirection)", () => {
+    it("A: horizontal left >= threshold returns 'next'", () => {
+      expect(
+        resolveSwipeDirection({ deltaX: -45, deltaY: 10, itemCount: 3, minDistance: 40 })
+      ).toBe("next");
+    });
+
+    it("B: horizontal right >= threshold returns 'prev'", () => {
+      expect(
+        resolveSwipeDirection({ deltaX: 50, deltaY: -15, itemCount: 3, minDistance: 40 })
+      ).toBe("prev");
+    });
+
+    it("C: horizontal movement below threshold returns 'none'", () => {
+      expect(resolveSwipeDirection({ deltaX: -35, deltaY: 5, itemCount: 3, minDistance: 40 })).toBe(
+        "none"
+      );
+      expect(resolveSwipeDirection({ deltaX: 20, deltaY: 0, itemCount: 3, minDistance: 40 })).toBe(
+        "none"
+      );
+    });
+
+    it("D: vertical-dominant movement returns 'none'", () => {
+      expect(resolveSwipeDirection({ deltaX: 45, deltaY: 80, itemCount: 3, minDistance: 40 })).toBe(
+        "none"
+      );
+    });
+
+    it("E: equal horizontal and vertical movement returns 'none'", () => {
+      expect(resolveSwipeDirection({ deltaX: 50, deltaY: 50, itemCount: 3, minDistance: 40 })).toBe(
+        "none"
+      );
+    });
+
+    it("F: gallery with itemCount <= 1 returns 'none'", () => {
+      expect(
+        resolveSwipeDirection({ deltaX: -100, deltaY: 0, itemCount: 1, minDistance: 40 })
+      ).toBe("none");
+      expect(resolveSwipeDirection({ deltaX: 100, deltaY: 0, itemCount: 0, minDistance: 40 })).toBe(
+        "none"
+      );
+    });
+
+    it("G: exact boundary at 40px returns deterministic direction", () => {
+      expect(resolveSwipeDirection({ deltaX: -40, deltaY: 0, itemCount: 2, minDistance: 40 })).toBe(
+        "next"
+      );
+      expect(resolveSwipeDirection({ deltaX: 40, deltaY: 0, itemCount: 2, minDistance: 40 })).toBe(
+        "prev"
+      );
+    });
+  });
+
+  describe("Video Stage Isolation", () => {
+    it("renders video stage with mainStageVideo class to ensure native controls touch-action", () => {
+      const videoMedia: ProductMediaItem = {
+        id: "med-video-1",
+        productId: "prod-1",
+        mediaAssetId: "asset-video-1",
+        variantId: null,
+        displayOrder: 1,
+        asset: {
+          objectKey: "products/wlmouse/sound-test.mp4",
+          mimeType: "video/mp4",
+          fileSizeBytes: 1048576,
+          width: 1920,
+          height: 1080,
+          altText: "Beast X Pro Switch Sound Test",
+        },
+      };
+
+      const html = renderToStaticMarkup(
+        <ProductMediaGallery
+          media={[videoMedia]}
+          primaryMedia={null}
+          selectedVariant={MOCK_VARIANT_1}
+          productName="Beast X Pro"
+          brandName="WLMOUSE"
+        />
+      );
+
+      expect(html).toContain("mainStageVideo");
+      expect(html).toContain("<video");
     });
   });
 });

@@ -16,8 +16,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.mainStageImage {
   touch-action: pan-y;
   user-select: none;
+}
+
+.mainStageVideo {
+  touch-action: auto;
+  user-select: auto;
 }
 
 .mainImage {

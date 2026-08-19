@@ -17,6 +17,15 @@ export interface ProductMediaGalleryProps {
 
 export type GalleryMediaType = "image" | "video" | "unsupported";
 
+export type SwipeDirection = "next" | "prev" | "none";
+
+export interface ResolveSwipeParams {
+  deltaX: number;
+  deltaY: number;
+  itemCount: number;
+  minDistance?: number;
+}
+
 /**
  * Classifies public media assets based on trusted MIME metadata.
  */
@@ -130,6 +139,61 @@ export function resolveDefaultFocusedIndex(
   return 0;
 }
 
+/**
+ * Resolves the canonical initial LCP mediaAssetId for the initial selected variant.
+ * Only the initial visible IMAGE candidate receives high/priority loading.
+ * Returns null if the initial visible asset is VIDEO or if no valid image is resolved.
+ */
+export function resolveInitialLcpMediaAssetId(
+  gallery: ProductMediaItem[],
+  primaryMedia: ProductMediaItem | null,
+  initialVariantId: string
+): string | null {
+  const initialIndex = resolveDefaultFocusedIndex(gallery, primaryMedia, initialVariantId);
+  if (initialIndex < 0 || initialIndex >= gallery.length) {
+    return null;
+  }
+
+  const initialItem = gallery[initialIndex];
+  if (!initialItem) {
+    return null;
+  }
+
+  const mediaType = getGalleryMediaType(initialItem.asset?.mimeType);
+  if (mediaType === "image") {
+    return initialItem.mediaAssetId;
+  }
+
+  return null;
+}
+
+/**
+ * Pure gesture resolver for horizontal stage swipe navigation.
+ * Requirements:
+ * - Horizontal movement must dominate (|deltaX| > |deltaY|)
+ * - Movement must meet or exceed minDistance threshold (default: 40px)
+ * - Trivial taps, vertical scrolling, and <=1 item galleries return 'none'
+ */
+export function resolveSwipeDirection({
+  deltaX,
+  deltaY,
+  itemCount,
+  minDistance = 40,
+}: ResolveSwipeParams): SwipeDirection {
+  if (itemCount <= 1) {
+    return "none";
+  }
+
+  const absX = Math.abs(deltaX);
+  const absY = Math.abs(deltaY);
+
+  if (absX < minDistance || absX <= absY) {
+    return "none";
+  }
+
+  return deltaX < 0 ? "next" : "prev";
+}
+
 export function ProductMediaGallery({
   media,
   primaryMedia,
@@ -164,50 +228,59 @@ export function ProductMediaGallery({
       ? userSelectedIndex
       : defaultIndex;
 
+  // Initial LCP asset ID computed once on initial render
+  const [initialLcpAssetId] = useState<string | null>(() =>
+    resolveInitialLcpMediaAssetId(eligibleGallery, primaryMedia, selectedVariant.id)
+  );
+
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // Pointer / Touch Swipe State for horizontal gallery navigation
+  const activeMedia =
+    activeIndex >= 0 && activeIndex < eligibleGallery.length ? eligibleGallery[activeIndex] : null;
+  const activeMediaUrl = resolvePublicMediaUrl(activeMedia?.asset.objectKey);
+  const activeMediaType = getGalleryMediaType(activeMedia?.asset.mimeType);
+
+  // Pointer / Touch Swipe State for horizontal gallery navigation on IMAGE stage only
   const pointerStartRef = useRef<{ x: number; y: number; id: number } | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Only track swipe on images to avoid competing with video native controls
+    if (activeMediaType !== "image") return;
     if (!e.isPrimary) return;
     pointerStartRef.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (activeMediaType !== "image") {
+      pointerStartRef.current = null;
+      return;
+    }
     if (!pointerStartRef.current || pointerStartRef.current.id !== e.pointerId) return;
 
     const deltaX = e.clientX - pointerStartRef.current.x;
     const deltaY = e.clientY - pointerStartRef.current.y;
     pointerStartRef.current = null;
 
-    // Minimum swipe threshold: 40px with horizontal dominance
-    const minSwipeDistance = 40;
-    if (Math.abs(deltaX) >= minSwipeDistance && Math.abs(deltaX) > Math.abs(deltaY)) {
-      if (eligibleGallery.length <= 1) return;
+    const swipeDir = resolveSwipeDirection({
+      deltaX,
+      deltaY,
+      itemCount: eligibleGallery.length,
+    });
 
-      if (deltaX < 0) {
-        // Swipe left -> next image
-        const next = (activeIndex + 1) % eligibleGallery.length;
-        setUserSelectedIndex(next);
-        buttonRefs.current[next]?.focus();
-      } else {
-        // Swipe right -> prev image
-        const prev = (activeIndex - 1 + eligibleGallery.length) % eligibleGallery.length;
-        setUserSelectedIndex(prev);
-        buttonRefs.current[prev]?.focus();
-      }
+    if (swipeDir === "next") {
+      const next = (activeIndex + 1) % eligibleGallery.length;
+      setUserSelectedIndex(next);
+      buttonRefs.current[next]?.focus();
+    } else if (swipeDir === "prev") {
+      const prev = (activeIndex - 1 + eligibleGallery.length) % eligibleGallery.length;
+      setUserSelectedIndex(prev);
+      buttonRefs.current[prev]?.focus();
     }
   };
 
   const handlePointerCancel = () => {
     pointerStartRef.current = null;
   };
-
-  const activeMedia =
-    activeIndex >= 0 && activeIndex < eligibleGallery.length ? eligibleGallery[activeIndex] : null;
-  const activeMediaUrl = resolvePublicMediaUrl(activeMedia?.asset.objectKey);
-  const activeMediaType = getGalleryMediaType(activeMedia?.asset.mimeType);
 
   const activeAltText =
     activeMedia?.asset.altText ??
@@ -227,10 +300,18 @@ export function ProductMediaGallery({
     }
   };
 
+  const isLcpImage = Boolean(
+    activeMedia && activeMedia.mediaAssetId === initialLcpAssetId && activeMediaType === "image"
+  );
+
+  const stageClassName = `${styles.mainStage} ${
+    activeMediaType === "video" ? styles.mainStageVideo : styles.mainStageImage
+  }`;
+
   return (
     <div className={styles.galleryContainer} data-testid="product-media-gallery">
       <div
-        className={styles.mainStage}
+        className={stageClassName}
         data-testid="gallery-main-stage"
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
@@ -241,7 +322,7 @@ export function ProductMediaGallery({
             src={activeMediaUrl}
             alt={activeAltText}
             fill
-            priority={activeIndex === 0}
+            priority={isLcpImage}
             sizes="(max-width: 768px) 100vw, (max-width: 1280px) 58vw, 800px"
             className={styles.mainImage}
           />

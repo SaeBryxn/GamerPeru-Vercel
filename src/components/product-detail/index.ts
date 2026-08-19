@@ -11,15 +11,28 @@ export {
   ProductMediaGallery,
   buildEligibleGallery,
   resolveDefaultFocusedIndex,
+  resolveInitialLcpMediaAssetId,
+  resolveSwipeDirection,
   getGalleryMediaType,
   isSupportedGalleryMime,
 } from "./product-media-gallery";
-export type { ProductMediaGalleryProps, GalleryMediaType } from "./product-media-gallery";
+export type {
+  ProductMediaGalleryProps,
+  GalleryMediaType,
+  SwipeDirection,
+  ResolveSwipeParams,
+} from "./product-media-gallery";
 
 export { ProductCommercePanel } from "./product-commerce-panel";
 export type { ProductCommercePanelProps } from "./product-commerce-panel";
 
-export { VariantSelector, resolveDimensions, SWATCH_ALLOWLIST } from "./variant-selector";
+export {
+  VariantSelector,
+  resolveDimensions,
+  isVariantOptionCompatible,
+  resolveVariantForOption,
+  SWATCH_ALLOWLIST,
+} from "./variant-selector";
 export type { VariantSelectorProps, ResolvedDimension } from "./variant-selector";
 
 export { HardwareSpecifications, formatSpecFieldValue } from "./hardware-specifications";

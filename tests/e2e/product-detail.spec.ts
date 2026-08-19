@@ -147,4 +147,28 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
 
     expect(results.violations).toEqual([]);
   });
+
+  test("H: operates normally under prefers-reduced-motion: reduce", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/productos/mouse-pro-mod-01");
+
+    // Verify initial variant state
+    await expect(page.getByTestId("selling-price")).toHaveText("S/ 129.90");
+
+    // Select White swatch and verify reactive update under reduced motion
+    const whiteSwatch = page.getByTestId("swatch-option-Blanco");
+    await whiteSwatch.click();
+    await expect(page.getByTestId("selling-price")).toHaveText("S/ 139.90");
+    await expect(page.getByTestId("variant-sku")).toContainText("SKU-MOUSE-PRO-MOD-01-WHT");
+
+    // Verify gallery update
+    const mainImg = page.getByTestId("gallery-main-stage").locator("img");
+    await expect(mainImg).toHaveAttribute("src", /variant-white/);
+
+    // Verify accessibility audit remains clean under reduced motion
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(results.violations).toEqual([]);
+  });
 });

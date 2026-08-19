@@ -116,6 +116,61 @@ export function resolveDimensions(variants: ProductVariantDetail[]): {
   return { dimensions, useFallback: false };
 }
 
+/**
+ * Evaluates whether a candidate option for dimensionKey is compatible with the current
+ * selection across all other active rendered dimensions.
+ */
+export function isVariantOptionCompatible(
+  variants: ProductVariantDetail[],
+  dimensions: ResolvedDimension[],
+  selectedVariant: ProductVariantDetail,
+  dimensionKey: string,
+  candidateOption: string
+): boolean {
+  return variants.some((v) => {
+    if (String(v.attributes[dimensionKey]) !== candidateOption) return false;
+    for (const otherDim of dimensions) {
+      if (otherDim.key !== dimensionKey) {
+        if (
+          String(v.attributes[otherDim.key]) !== String(selectedVariant.attributes[otherDim.key])
+        ) {
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+}
+
+/**
+ * Resolves the exact active ProductVariant matching the candidate option and all current
+ * other dimension selections. Returns null if no exact combination exists (never falls back
+ * to an arbitrary variant).
+ */
+export function resolveVariantForOption(
+  variants: ProductVariantDetail[],
+  dimensions: ResolvedDimension[],
+  selectedVariant: ProductVariantDetail,
+  dimensionKey: string,
+  candidateOption: string
+): ProductVariantDetail | null {
+  const match = variants.find((v) => {
+    if (String(v.attributes[dimensionKey]) !== candidateOption) return false;
+    for (const otherDim of dimensions) {
+      if (otherDim.key !== dimensionKey) {
+        if (
+          String(v.attributes[otherDim.key]) !== String(selectedVariant.attributes[otherDim.key])
+        ) {
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+
+  return match ?? null;
+}
+
 export function VariantSelector({
   variants,
   selectedVariant,
@@ -123,30 +178,22 @@ export function VariantSelector({
 }: VariantSelectorProps): React.JSX.Element {
   const { dimensions, useFallback } = useMemo(() => resolveDimensions(variants), [variants]);
 
-  // Check if duplicate titles exist for fallback disambiguation
-  const titleCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const v of variants) {
-      counts.set(v.title, (counts.get(v.title) ?? 0) + 1);
-    }
-    return counts;
-  }, [variants]);
-
   if (variants.length <= 1) {
     return <></>;
   }
 
-  // Full-Title Fallback Rendering
-  if (useFallback) {
+  // Full-title fallback mode when generic dimensions are ambiguous or missing
+  if (useFallback || dimensions.length === 0) {
+    const hasDuplicateTitles = new Set(variants.map((v) => v.title)).size !== variants.length;
+
     return (
       <div className={styles.selectorContainer} data-testid="variant-selector-fallback">
         <div className={styles.fallbackTitleSelector}>
-          <span className={styles.dimensionLabel}>Opción</span>
+          <span className={styles.dimensionLabel}>Variante:</span>
           <div className={styles.optionsGroup} role="radiogroup" aria-label="Seleccionar variante">
             {variants.map((variant) => {
               const isSelected = variant.id === selectedVariant.id;
-              const hasDuplicates = (titleCounts.get(variant.title) ?? 0) > 1;
-              const displayLabel = hasDuplicates
+              const displayLabel = hasDuplicateTitles
                 ? `${variant.title} — ${variant.sku}`
                 : variant.title;
 
@@ -191,42 +238,25 @@ export function VariantSelector({
               {dim.options.map((option) => {
                 const isSelected = option === currentValue;
 
-                // Check combination compatibility: exists active variant with this option + all other current selections
-                const isCompatible = variants.some((v) => {
-                  if (String(v.attributes[dim.key]) !== option) return false;
-                  for (const otherDim of dimensions) {
-                    if (otherDim.key !== dim.key) {
-                      if (
-                        String(v.attributes[otherDim.key]) !==
-                        String(selectedVariant.attributes[otherDim.key])
-                      ) {
-                        return false;
-                      }
-                    }
-                  }
-                  return true;
-                });
+                // Check combination compatibility
+                const isCompatible = isVariantOptionCompatible(
+                  variants,
+                  dimensions,
+                  selectedVariant,
+                  dim.key,
+                  option
+                );
 
                 // Find target variant when clicking this option
                 const handleOptionClick = () => {
                   if (isSelected || !isCompatible) return;
-
-                  // Find exact variant matching candidate option + current other selections
-                  const target = variants.find((v) => {
-                    if (String(v.attributes[dim.key]) !== option) return false;
-                    for (const otherDim of dimensions) {
-                      if (otherDim.key !== dim.key) {
-                        if (
-                          String(v.attributes[otherDim.key]) !==
-                          String(selectedVariant.attributes[otherDim.key])
-                        ) {
-                          return false;
-                        }
-                      }
-                    }
-                    return true;
-                  });
-
+                  const target = resolveVariantForOption(
+                    variants,
+                    dimensions,
+                    selectedVariant,
+                    dim.key,
+                    option
+                  );
                   if (target) {
                     onSelectVariant(target);
                   }
