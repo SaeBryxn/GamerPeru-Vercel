@@ -1,5 +1,107 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+
+/**
+ * Injected test harness for HTMLMediaElement.play/pause and controlled IntersectionObserver dispatch.
+ */
+async function installStoryMediaTestHarness(page: Page) {
+  await page.addInitScript(() => {
+    interface MediaCallEntry {
+      role: "content" | "hero" | "unknown";
+      timestamp: number;
+    }
+
+    const mediaCalls = {
+      playCalls: [] as MediaCallEntry[],
+      pauseCalls: [] as MediaCallEntry[],
+    };
+
+    function classifyVideo(el: HTMLMediaElement): "content" | "hero" | "unknown" {
+      if (el.closest('[data-testid="story-video-player"]')) return "content";
+      if (el.closest('[data-testid="story-hero-media-block"]')) return "hero";
+      return "unknown";
+    }
+
+    HTMLMediaElement.prototype.play = async function (this: HTMLMediaElement) {
+      const role = classifyVideo(this);
+      mediaCalls.playCalls.push({ role, timestamp: Date.now() });
+
+      Object.defineProperty(this, "paused", { value: false, writable: true, configurable: true });
+      this.dispatchEvent(new Event("play"));
+      this.dispatchEvent(new Event("playing"));
+
+      return Promise.resolve();
+    };
+
+    HTMLMediaElement.prototype.pause = function (this: HTMLMediaElement) {
+      const role = classifyVideo(this);
+      mediaCalls.pauseCalls.push({ role, timestamp: Date.now() });
+
+      Object.defineProperty(this, "paused", { value: true, writable: true, configurable: true });
+      this.dispatchEvent(new Event("pause"));
+    };
+
+    const observerInstances: Array<{
+      target: Element;
+      callback: IntersectionObserverCallback;
+      options?: IntersectionObserverInit;
+    }> = [];
+
+    window.IntersectionObserver = class ControlledIntersectionObserver {
+      private targetElements: Element[] = [];
+      private callback: IntersectionObserverCallback;
+      private options?: IntersectionObserverInit;
+
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        this.callback = callback;
+        this.options = options;
+      }
+
+      observe(target: Element) {
+        this.targetElements.push(target);
+        observerInstances.push({ target, callback: this.callback, options: this.options });
+      }
+
+      unobserve(target: Element) {
+        this.targetElements = this.targetElements.filter((t) => t !== target);
+      }
+
+      disconnect() {
+        this.targetElements = [];
+      }
+
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+    } as unknown as typeof IntersectionObserver;
+
+    (window as unknown as { __storyMediaTest: unknown }).__storyMediaTest = {
+      mediaCalls,
+      observerInstances,
+      dispatchIntersection: (role: "content" | "hero", ratio: number, isIntersecting = true) => {
+        for (const inst of observerInstances) {
+          const isContent = inst.target.closest('[data-testid="story-video-player"]');
+          const isHero = inst.target.closest('[data-testid="story-hero-media-block"]');
+          if ((role === "content" && isContent) || (role === "hero" && isHero)) {
+            const entry: Partial<IntersectionObserverEntry> = {
+              target: inst.target,
+              isIntersecting,
+              intersectionRatio: ratio,
+              boundingClientRect: inst.target.getBoundingClientRect(),
+              intersectionRect: inst.target.getBoundingClientRect(),
+              rootBounds: null,
+              time: Date.now(),
+            };
+            inst.callback(
+              [entry as IntersectionObserverEntry],
+              inst as unknown as IntersectionObserver
+            );
+          }
+        }
+      },
+    };
+  });
+}
 
 test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => {
   test("A: renders Product Story section with all 13 canonical block types on PDP", async ({
@@ -76,8 +178,9 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
   test("E: operates safely under prefers-reduced-motion: reduce without autoplay", async ({
     page,
   }) => {
-    // Emulate reduced motion before navigation
+    // 1. Emulate reduced motion before navigation and install controlled media harness
     await page.emulateMedia({ reducedMotion: "reduce" });
+    await installStoryMediaTestHarness(page);
     await page.goto("/productos/mouse-pro-mod-01");
 
     const storySection = page.getByTestId("product-story-section");
@@ -86,63 +189,273 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
     // Hero headline and static content remain clearly visible
     await expect(page.getByTestId("hero-headline")).toBeVisible();
 
-    // Verify all video elements on page are NOT playing (paused === true)
-    const videos = page.locator("video");
-    const videoCount = await videos.count();
-    expect(videoCount).toBeGreaterThanOrEqual(1);
+    // 2. Dispatch simulated intersection on hero and content video to test observer immunity
+    await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: {
+            dispatchIntersection: (role: string, ratio: number, isIntersecting?: boolean) => void;
+          };
+        }
+      ).__storyMediaTest;
+      testHarness?.dispatchIntersection("hero", 1.0, true);
+      testHarness?.dispatchIntersection("content", 1.0, true);
+    });
 
-    for (let i = 0; i < videoCount; i++) {
-      const isPaused = await videos.nth(i).evaluate((el) => (el as HTMLVideoElement).paused);
-      expect(isPaused).toBe(true);
-    }
+    // 3. Verify ZERO automatic play calls occurred under reduced motion
+    const playCallsCount = await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { mediaCalls: { playCalls: unknown[] } };
+        }
+      ).__storyMediaTest;
+      return testHarness?.mediaCalls.playCalls.length ?? 0;
+    });
+    expect(playCallsCount).toBe(0);
 
-    // Video player toggle button remains visible with manual play action available
+    // 4. Video player toggle button remains visible with manual play action available
     const playToggle = page.getByTestId("story-video-toggle");
     await expect(playToggle).toBeVisible();
     await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
+    await expect(playToggle).toHaveText("Reproducir");
   });
 
   test("E2: allows explicit manual video playback under prefers-reduced-motion", async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
+    await installStoryMediaTestHarness(page);
     await page.goto("/productos/mouse-pro-mod-01");
 
     const playToggle = page.getByTestId("story-video-toggle");
     await expect(playToggle).toBeVisible();
     await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
+    await expect(playToggle).toHaveText("Reproducir");
+
+    // Confirm 0 play calls before manual click
+    const initialPlayCalls = await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
+        }
+      ).__storyMediaTest;
+      return (
+        testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
+          .length ?? 0
+      );
+    });
+    expect(initialPlayCalls).toBe(0);
 
     // Click to start manual playback
     await playToggle.click();
 
-    // Toggle button aria-label reflects interactive state
-    await expect(playToggle).toHaveAttribute("aria-label", /Pausar video|Reproducir video/);
+    // Assert that HTMLMediaElement.play() was invoked for the content video
+    const postClickPlayCalls = await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
+        }
+      ).__storyMediaTest;
+      return (
+        testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
+          .length ?? 0
+      );
+    });
+    expect(postClickPlayCalls).toBe(1);
+
+    // Toggle button MUST transition to exact "Pausar video"
+    await expect(playToggle).toHaveAttribute("aria-label", "Pausar video");
+    await expect(playToggle).toHaveText("Pausar");
+
+    // Click again to manually pause
+    await playToggle.click();
+
+    // Assert pause was invoked and control returned to "Reproducir video"
+    const postPauseCalls = await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { mediaCalls: { pauseCalls: Array<{ role: string }> } };
+        }
+      ).__storyMediaTest;
+      return (
+        testHarness?.mediaCalls.pauseCalls.filter((c: { role: string }) => c.role === "content")
+          .length ?? 0
+      );
+    });
+    expect(postPauseCalls).toBeGreaterThanOrEqual(1);
+    await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
+    await expect(playToggle).toHaveText("Reproducir");
   });
 
-  test("E3: pauses active automatic video playback when runtime motion preference changes to reduce", async ({
+  test("E3: proves autoplay occurs under normal motion and transitions to paused when reduced motion becomes active", async ({
     page,
   }) => {
     // 1. Start with no preference
     await page.emulateMedia({ reducedMotion: "no-preference" });
+    await installStoryMediaTestHarness(page);
     await page.goto("/productos/mouse-pro-mod-01");
 
     const videoPlayer = page.getByTestId("story-video-player");
     await expect(videoPlayer).toBeVisible();
 
-    // 2. Transition preference to reduce at runtime
-    await page.emulateMedia({ reducedMotion: "reduce" });
-
-    // 3. Verify all video elements are paused immediately upon preference change
-    const videos = page.locator("video");
-    const videoCount = await videos.count();
-    for (let i = 0; i < videoCount; i++) {
-      const isPaused = await videos.nth(i).evaluate((el) => (el as HTMLVideoElement).paused);
-      expect(isPaused).toBe(true);
-    }
-
-    // 4. Content video player toggle remains accessible for manual control
     const playToggle = page.getByTestId("story-video-toggle");
     await expect(playToggle).toBeVisible();
+
+    // 2. Trigger meaningful intersection (ratio 0.75 >= 0.50) to start automatic playback
+    await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: {
+            dispatchIntersection: (role: string, ratio: number, isIntersecting?: boolean) => void;
+          };
+        }
+      ).__storyMediaTest;
+      testHarness?.dispatchIntersection("content", 0.75, true);
+    });
+
+    // 3. Verify positive evidence: play() was invoked and UI reflects playing state BEFORE transition
+    const preTransitionPlayCalls = await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
+        }
+      ).__storyMediaTest;
+      return (
+        testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
+          .length ?? 0
+      );
+    });
+    expect(preTransitionPlayCalls).toBe(1);
+    await expect(playToggle).toHaveAttribute("aria-label", "Pausar video");
+    await expect(playToggle).toHaveText("Pausar");
+
+    // Record pause count prior to motion preference transition
+    const preTransitionPauseCalls = await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { mediaCalls: { pauseCalls: Array<{ role: string }> } };
+        }
+      ).__storyMediaTest;
+      return (
+        testHarness?.mediaCalls.pauseCalls.filter((c: { role: string }) => c.role === "content")
+          .length ?? 0
+      );
+    });
+
+    // 4. Transition preference to reduce at runtime
+    await page.emulateMedia({ reducedMotion: "reduce" });
+
+    // 5. Verify a NEW pause() call occurred upon switching to reduced motion
+    await expect
+      .poll(async () => {
+        return page.evaluate(() => {
+          const testHarness = (
+            window as unknown as {
+              __storyMediaTest?: { mediaCalls: { pauseCalls: Array<{ role: string }> } };
+            }
+          ).__storyMediaTest;
+          return (
+            testHarness?.mediaCalls.pauseCalls.filter((c: { role: string }) => c.role === "content")
+              .length ?? 0
+          );
+        });
+      })
+      .toBeGreaterThan(preTransitionPauseCalls);
+
+    // 6. Content video player toggle returns to non-playing state and remains operable
+    await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
+    await expect(playToggle).toHaveText("Reproducir");
+  });
+
+  test("E4: verifies viewport threshold boundary 0.49 vs 0.50 and 0.75->0.40 regression through browser observer", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await installStoryMediaTestHarness(page);
+    await page.goto("/productos/mouse-pro-mod-01");
+
+    const playToggle = page.getByTestId("story-video-toggle");
+    await expect(playToggle).toBeVisible();
+
+    // Step 1: ratio = 0.49 (< 0.50 boundary) -> no autoplay
+    await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: {
+            dispatchIntersection: (role: string, ratio: number, isIntersecting?: boolean) => void;
+          };
+        }
+      ).__storyMediaTest;
+      testHarness?.dispatchIntersection("content", 0.49, true);
+    });
+
+    const playCallsAt49 = await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
+        }
+      ).__storyMediaTest;
+      return (
+        testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
+          .length ?? 0
+      );
+    });
+    expect(playCallsAt49).toBe(0);
+    await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
+
+    // Step 2: ratio = 0.50 (exact >= 0.50 threshold) -> autoplay permitted
+    await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: {
+            dispatchIntersection: (role: string, ratio: number, isIntersecting?: boolean) => void;
+          };
+        }
+      ).__storyMediaTest;
+      testHarness?.dispatchIntersection("content", 0.5, true);
+    });
+
+    const playCallsAt50 = await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
+        }
+      ).__storyMediaTest;
+      return (
+        testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
+          .length ?? 0
+      );
+    });
+    expect(playCallsAt50).toBe(1);
+    await expect(playToggle).toHaveAttribute("aria-label", "Pausar video");
+
+    // Step 3: ratio = 0.75 -> still active
+    await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: {
+            dispatchIntersection: (role: string, ratio: number, isIntersecting?: boolean) => void;
+          };
+        }
+      ).__storyMediaTest;
+      testHarness?.dispatchIntersection("content", 0.75, true);
+    });
+    await expect(playToggle).toHaveAttribute("aria-label", "Pausar video");
+
+    // Step 4 (Regression): ratio drops from 0.75 to 0.40 with isIntersecting = true -> MUST PAUSE
+    await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: {
+            dispatchIntersection: (role: string, ratio: number, isIntersecting?: boolean) => void;
+          };
+        }
+      ).__storyMediaTest;
+      testHarness?.dispatchIntersection("content", 0.4, true);
+    });
+
+    await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
+    await expect(playToggle).toHaveText("Reproducir");
   });
 
   test("F: related products cards render with valid links and pricing", async ({ page }) => {
