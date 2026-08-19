@@ -1,12 +1,14 @@
 import React from "react";
 import { notFound } from "next/navigation";
-import { getCachedProduct } from "@/lib/catalog/cached-queries";
+import { getCachedProduct, getCachedStoryRelatedProducts } from "@/lib/catalog/cached-queries";
 import {
   CommerceHeroContainer,
   HardwareSpecifications,
   ProductBreadcrumb,
   type CommerceHeroProjection,
 } from "@/components/product-detail";
+import { ProductStoryRenderer } from "@/components/product-story";
+import type { ProductDiscoveryItem } from "@/lib/catalog/types";
 import styles from "./page.module.css";
 
 interface ProductPageProps {
@@ -39,6 +41,27 @@ export default async function ProductDetailPage({
     media: product.media,
   };
 
+  // Single-query page-level RelatedProducts hydration for Story cross-sell
+  let relatedProductsMap: Map<string, ProductDiscoveryItem> | undefined;
+
+  if (product.story?.blocks && product.story.blocks.length > 0) {
+    const rawSlugs: string[] = [];
+    for (const block of product.story.blocks) {
+      if (block.type === "related_products" && block.payload.productSlugs) {
+        rawSlugs.push(...block.payload.productSlugs);
+      }
+    }
+
+    const uniqueSlugs = Array.from(
+      new Set(rawSlugs.map((s) => s.trim()).filter((s) => Boolean(s) && s !== product.slug))
+    );
+
+    if (uniqueSlugs.length > 0) {
+      const hydratedProducts = await getCachedStoryRelatedProducts(uniqueSlugs, product.id);
+      relatedProductsMap = new Map(hydratedProducts.map((p) => [p.slug, p]));
+    }
+  }
+
   return (
     <main className={styles.pageWrapper} data-testid="product-detail-page">
       <ProductBreadcrumb category={product.category} productName={product.name} />
@@ -46,6 +69,15 @@ export default async function ProductDetailPage({
       <CommerceHeroContainer projection={heroProjection} />
 
       {product.specifications && <HardwareSpecifications specifications={product.specifications} />}
+
+      {product.story && (
+        <ProductStoryRenderer
+          story={product.story}
+          currentProductId={product.id}
+          productName={product.name}
+          relatedProductsMap={relatedProductsMap}
+        />
+      )}
     </main>
   );
 }

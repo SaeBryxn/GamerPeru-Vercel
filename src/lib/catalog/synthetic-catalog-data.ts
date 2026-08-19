@@ -823,15 +823,191 @@ export function buildSyntheticProductDetail(
           headline: `Ingeniería de Precisión: ${p.name}`,
           tagline: "Desarrollado para la máxima consistencia en esports competitivos.",
           mediaKey: `stories/${p.slug}/story-hero.png`,
+          videoKey: `stories/${p.slug}/hero-ambient.mp4`,
+          posterKey: `stories/${p.slug}/hero-poster.png`,
+          body: "Diseñado meticulosamente para garantizar un control absoluto y tiempos de respuesta instantáneos.",
         },
       },
       {
         blockId: `${p.id}-b02`,
-        type: "spec_feature",
+        type: "full_bleed_image",
         order: 2,
         payload: {
-          title: "Sensor Flagship",
-          description: "Precisión 1:1 sin suavizado artificial.",
+          mediaKey: `stories/${p.slug}/full-bleed-detail.png`,
+          caption: "Estructura de aleación ultraligera con acabado mate antideslizante.",
+          altText: `${p.name} en vista panorámica de ingeniería`,
+        },
+      },
+      {
+        blockId: `${p.id}-b03`,
+        type: "image_text",
+        order: 3,
+        payload: {
+          headline: "Chasis Ergonómico Avanzado",
+          body: "La curvatura anatómica optimiza el agarre y reduce la fatiga en sesiones de entrenamiento prolongadas.",
+          mediaKey: `stories/${p.slug}/ergonomics.png`,
+          imagePosition: "left",
+        },
+      },
+      {
+        blockId: `${p.id}-b04`,
+        type: "stat_highlight",
+        order: 4,
+        payload: {
+          title: "Métricas Clave de Rendimiento",
+          stats: [
+            { value: "39", unit: "g", label: "Peso ultraligero sin perforaciones visibles" },
+            { value: "8000", unit: "Hz", label: "Polling rate nativo inalámbrico" },
+            { value: "30000", unit: "DPI", label: "Resolución óptica máxima" },
+          ],
+        },
+      },
+      {
+        blockId: `${p.id}-b05`,
+        type: "spec_feature",
+        order: 5,
+        payload: {
+          title: "Switches Ópticos Flagship",
+          description:
+            "Actuación por haz de luz con 0.2 ms de latencia y durabilidad de 100 millones de clics.",
+          badge: "Tecnología Óptica",
+          mediaKey: `stories/${p.slug}/optical-switches.png`,
+        },
+      },
+      {
+        blockId: `${p.id}-b06`,
+        type: "video",
+        order: 6,
+        payload: {
+          videoKey: `stories/${p.slug}/performance-demo.mp4`,
+          posterKey: `stories/${p.slug}/demo-poster.png`,
+          title: "Demostración de Seguimiento 1:1",
+          caption: "Prueba de estabilidad y seguimiento dinámico a 8000 Hz.",
+        },
+      },
+      {
+        blockId: `${p.id}-b07`,
+        type: "gallery",
+        order: 7,
+        payload: {
+          title: "Galería de Perspectivas",
+          items: [
+            { mediaKey: `stories/${p.slug}/gallery-top.png`, caption: "Vista superior simétrica" },
+            {
+              mediaKey: `stories/${p.slug}/gallery-side.png`,
+              caption: "Perfil ergonómico lateral",
+            },
+            {
+              mediaKey: `stories/${p.slug}/gallery-bottom.png`,
+              caption: "Skates 100% PTFE virgen",
+            },
+          ],
+        },
+      },
+      {
+        blockId: `${p.id}-b08`,
+        type: "comparison",
+        order: 8,
+        payload: {
+          title: "Comparativa Generacional",
+          headers: ["Característica", "Versión Estándar", "Versión Pro"],
+          rows: [
+            ["Polling Rate", "1000 Hz", "8000 Hz"],
+            ["Peso", "49 gramos", "39 gramos"],
+            ["Sensor Óptico", "PAW3395", "PAW3950 Flagship"],
+          ],
+        },
+      },
+      {
+        blockId: `${p.id}-b09`,
+        type: "dimensions",
+        order: 9,
+        payload: {
+          lengthMm: 122,
+          widthMm: 62,
+          heightMm: 38,
+          gripTypes: ["Claw Grip", "Fingertip Grip", "Palm Grip"],
+          blueprintMediaKey: `stories/${p.slug}/dimensions-blueprint.png`,
+        },
+      },
+      {
+        blockId: `${p.id}-b10`,
+        type: "box_contents",
+        order: 10,
+        payload: {
+          title: "Contenido del Empaque",
+          items: [
+            { title: p.name, count: 1, mediaKey: `stories/${p.slug}/item-mouse.png` },
+            {
+              title: "Receptor 8K Dongle",
+              count: 1,
+              mediaKey: `stories/${p.slug}/item-dongle.png`,
+            },
+            {
+              title: "Cable Paracord Tipo-C",
+              count: 1,
+              mediaKey: `stories/${p.slug}/item-cable.png`,
+            },
+            { title: "Set de Skates PTFE de Repuesto", count: 2 },
+          ],
+        },
+      },
+      {
+        blockId: `${p.id}-b11`,
+        type: "technical_specs",
+        order: 11,
+        payload: {
+          title: "Ficha Técnica Completa",
+          groups: [
+            {
+              groupName: "Conectividad y Batería",
+              specs: [
+                { label: "Modos de Conexión", value: "2.4 GHz Inalámbrico / USB-C Alámbrico" },
+                { label: "Autonomía", value: "Hasta 80 horas continuas a 1000 Hz" },
+              ],
+            },
+            {
+              groupName: "Físico y Construcción",
+              specs: [
+                { label: "Material del Chasis", value: "Aleación de Magnesio Grado Aeroespacial" },
+                { label: "Tipo de Skates", value: "100% PTFE Virgen con bordes redondeados" },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        blockId: `${p.id}-b12`,
+        type: "faq",
+        order: 12,
+        payload: {
+          title: "Preguntas Frecuentes",
+          items: [
+            {
+              question: "¿El dongle 8000 Hz viene incluido en la caja?",
+              answer:
+                "Sí, todos los modelos Gamer Perú Pro incluyen el receptor inalámbrico de 8K sin costo adicional.",
+            },
+            {
+              question: "¿Es compatible con software web sin necesidad de instalación?",
+              answer:
+                "Sí, puedes configurar perfiles, debounce y LOD directamente desde el configurador web oficial en navegadores basados en Chromium.",
+            },
+            {
+              question: "¿Qué garantía ofrece Gamer Perú?",
+              answer:
+                "Gamer Perú ofrece garantía oficial local de 12 meses con reemplazo directo por defectos de fabricación.",
+            },
+          ],
+        },
+      },
+      {
+        blockId: `${p.id}-b13`,
+        type: "related_products",
+        order: 13,
+        payload: {
+          title: "Accesorios y Productos Recomendados",
+          productSlugs: ["mouse-pro-mod-02", "teclado-qa-01"],
         },
       },
     ],

@@ -52,6 +52,21 @@ describe("getCatalogReader — reader selection", () => {
         _type = "dev-preview";
       },
     }));
+    vi.doMock("../../src/lib/catalog/postgres-story-related-products-reader", () => ({
+      PostgresStoryRelatedProductsReader: class MockPostgresStoryRelated {
+        _type = "postgres-story-related";
+      },
+    }));
+    vi.doMock("../../src/lib/catalog/fixture-story-related-products-reader", () => ({
+      FixtureStoryRelatedProductsReader: class MockFixtureStoryRelated {
+        _type = "fixture-story-related";
+      },
+    }));
+    vi.doMock("../../src/lib/catalog/dev-preview-story-related-products-reader", () => ({
+      DevPreviewStoryRelatedProductsReader: class MockDevPreviewStoryRelated {
+        _type = "dev-preview-story-related";
+      },
+    }));
   });
 
   afterEach(() => {

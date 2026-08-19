@@ -45,7 +45,7 @@ const ALL_FIXTURE_BRANDS: Record<string, SyntheticBrandEntry> = {
   ...SYNTHETIC_TEST_BRANDS,
 };
 
-const FIXTURE_PRODUCTS: SyntheticProductWithSpecs[] = [
+export const FIXTURE_PRODUCTS: SyntheticProductWithSpecs[] = [
   ...generateSyntheticProducts("mouses", "Mouses Gaming", 14),
   ...generateSyntheticProducts("teclados", "Teclados Gaming", 4),
   ...generateSyntheticProducts("mousepads", "Mousepads Gaming", 4),

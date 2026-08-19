@@ -1,0 +1,70 @@
+.section {
+  width: 100%;
+  margin: var(--space-8, 32px) 0;
+  padding: var(--space-8, 32px) var(--space-6, 24px);
+  background-color: var(--color-surface-dark-canvas, #09090b);
+  border-radius: var(--radius-lg, 12px);
+  color: var(--color-text-dark-primary, #f4f4f5);
+}
+
+.title {
+  font-family: var(--font-family-heading, "Plus Jakarta Sans", sans-serif);
+  font-size: var(--type-h2-size, 1.75rem);
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 var(--space-8, 32px) 0;
+  color: var(--color-text-dark-primary, #f4f4f5);
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6, 24px);
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .statsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-8, 32px);
+  }
+}
+
+.statCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2, 8px);
+}
+
+.valueWrapper {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1, 4px);
+}
+
+.value {
+  font-family: var(--font-family-heading, "Plus Jakarta Sans", sans-serif);
+  font-size: clamp(2.5rem, 6vw, 4.25rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--color-brand-primary, #e11d48);
+}
+
+.unit {
+  font-family: var(--font-family-heading, "Plus Jakarta Sans", sans-serif);
+  font-size: var(--type-h3-size, 1.25rem);
+  font-weight: 700;
+  color: var(--color-text-dark-muted, #9ca3af);
+}
+
+.label {
+  font-family: var(--font-family-body, Inter, sans-serif);
+  font-size: var(--type-body-small-size, 0.8125rem);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--color-text-dark-secondary, #a1a1aa);
+  max-width: 220px;
+}

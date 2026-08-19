@@ -53,7 +53,7 @@ const PREVIEW_PRODUCTS_BY_CATEGORY: Record<string, SyntheticProductWithSpecs[]> 
   accesorios: generateSyntheticProducts("accesorios", "Accesorios Gaming", 4),
 };
 
-const ALL_PREVIEW_PRODUCTS: SyntheticProductWithSpecs[] = Object.values(
+export const ALL_PREVIEW_PRODUCTS: SyntheticProductWithSpecs[] = Object.values(
   PREVIEW_PRODUCTS_BY_CATEGORY
 ).flat();
 

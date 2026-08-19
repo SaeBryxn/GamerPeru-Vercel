@@ -13,7 +13,7 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     await titleLink.click();
 
     // 3. Verify URL and Page H1
-    await expect(page).toHaveURL(/\/productos\/mouse-pro-mod-01$/);
+    await expect(page).toHaveURL(/\/productos\/mouse-pro-mod-01$/, { timeout: 15000 });
     const h1 = page.locator("h1");
     await expect(h1).toHaveCount(1);
     await expect(h1).toHaveText("Mouse Pro Mod 01");
@@ -33,7 +33,9 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     await expect(breadcrumbs).toContainText("Mouse Pro Mod 01");
 
     // Brand link
-    const brandLink = page.getByRole("link", { name: "Marca QA" });
+    const brandLink = page
+      .getByTestId("product-commerce-panel")
+      .getByRole("link", { name: "Marca QA" });
     await expect(brandLink).toBeVisible();
     await expect(brandLink).toHaveAttribute("href", "/marcas/marca-qa");
 

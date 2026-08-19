@@ -1,0 +1,64 @@
+.playerContainer {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+  background-color: var(--color-surface-dark-canvas, #09090b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.controlsOverlay {
+  position: absolute;
+  bottom: var(--space-4, 16px);
+  right: var(--space-4, 16px);
+  z-index: 4;
+}
+
+.playToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  background-color: rgba(9, 9, 11, 0.8);
+  color: var(--color-text-dark-primary, #f4f4f5);
+  border: 1px solid var(--color-border-dark-control, #8e8e93);
+  border-radius: var(--radius-sm, 4px);
+  font-family: var(--font-family-body, Inter, sans-serif);
+  font-size: var(--type-body-small-size, 0.8125rem);
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.playToggle:hover {
+  background-color: rgba(9, 9, 11, 0.95);
+  border-color: var(--color-brand-primary, #e11d48);
+}
+
+.playToggle:focus-visible {
+  outline: 2px solid var(--color-border-dark-focus, #f4f4f5);
+  outline-offset: 2px;
+}
+
+.posterFallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
