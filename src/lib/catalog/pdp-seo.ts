@@ -29,7 +29,8 @@ export function resolveProductDescription(product: ProductDetailEntity): string 
   if (product.description?.trim()) {
     return normalizeSeoText(product.description);
   }
-  return `Conoce ${product.name} de ${product.brand.name} en Gamer Perú. Revisa sus características, variantes y precio en soles.`;
+  const fallback = `Conoce ${product.name} de ${product.brand.name} en Gamer Perú. Revisa sus características, variantes y precio en soles.`;
+  return normalizeSeoText(fallback);
 }
 
 export interface ResolvedSocialImage {
@@ -210,12 +211,10 @@ export function buildProductStructuredData(
     for (const block of product.story.blocks) {
       if (block.type === "faq" && Array.isArray(block.payload.items)) {
         for (const item of block.payload.items) {
-          if (item.question?.trim() && item.answer?.trim()) {
-            faqItems.push({
-              question: item.question.trim(),
-              answer: item.answer.trim(),
-            });
-          }
+          faqItems.push({
+            question: item.question,
+            answer: item.answer,
+          });
         }
       }
     }

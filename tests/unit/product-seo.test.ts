@@ -146,6 +146,32 @@ describe("GP-014 DB3D — Product SEO & Structured Data Suite", () => {
       expect(fallback.toLowerCase()).not.toContain("stock");
       expect(fallback.toLowerCase()).not.toContain("descuento");
     });
+
+    it("bounds neutral deterministic fallback to <= 160 characters when product/brand names are long", () => {
+      const product = createMockProduct({
+        name: "Mouse Gaming Pro Ultraligero Magnesium Edición Especial Torneo 2026 Con Sensor Óptico Avanzado Y Switches Ópticos De Respuesta Inmediata Para Competencia Profesional En Deportes Electrónicos",
+        subtitle: null,
+        description: null,
+        brand: {
+          id: "brand-long",
+          name: "WLmouse Esports Engineering Corporation Global International",
+          slug: "wlmouse-esports-engineering-corporation-global-international",
+          description: null,
+          logo: null,
+        },
+      });
+      const fallback = resolveProductDescription(product);
+      expect(fallback.length).toBeLessThanOrEqual(160);
+      expect(fallback.endsWith(" ")).toBe(false);
+      expect(fallback).toBe(
+        "Conoce Mouse Gaming Pro Ultraligero Magnesium Edición Especial Torneo 2026 Con Sensor Óptico Avanzado Y Switches Ópticos De Respuesta Inmediata Para Competencia"
+      );
+      // Verify no fabricated claims in fallback
+      expect(fallback.toLowerCase()).not.toContain("garantía");
+      expect(fallback.toLowerCase()).not.toContain("envío");
+      expect(fallback.toLowerCase()).not.toContain("stock");
+      expect(fallback.toLowerCase()).not.toContain("descuento");
+    });
   });
 
   describe("Metadata Builder & Canonical Origin", () => {
@@ -655,6 +681,51 @@ describe("GP-014 DB3D — Product SEO & Structured Data Suite", () => {
         acceptedAnswer: {
           "@type": "Answer",
           text: "Soporta 1000Hz a 8000Hz.",
+        },
+      });
+    });
+
+    it("preserves exact validated FAQ strings without trim mutation (exact parity with visible DTO)", () => {
+      const product = createMockProduct({
+        story: {
+          productId: "p1",
+          publishedRevisionId: "rev1",
+          revisionNumber: 1,
+          publishedAt: "2026-01-01T00:00:00Z",
+          blocks: [
+            {
+              blockId: "blk-faq-exact",
+              type: "faq",
+              order: 1,
+              payload: {
+                title: "FAQ Parity",
+                items: [
+                  {
+                    question: "  ¿Qué polling rate soporta?  ",
+                    answer: "  Soporta hasta 8000Hz.  ",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+
+      const structured = buildProductStructuredData(product);
+      const graph = structured?.["@graph"] as Array<Record<string, unknown>>;
+      const faqNode = graph.find((n) => n["@type"] === "FAQPage");
+
+      expect(faqNode).toBeDefined();
+      const mainEntity = faqNode?.mainEntity as Array<Record<string, unknown>>;
+      expect(mainEntity).toHaveLength(1);
+
+      // Must be EXACTLY the source string without trimming
+      expect(mainEntity[0]).toEqual({
+        "@type": "Question",
+        name: "  ¿Qué polling rate soporta?  ",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "  Soporta hasta 8000Hz.  ",
         },
       });
     });
