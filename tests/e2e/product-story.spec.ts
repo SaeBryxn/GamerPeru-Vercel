@@ -17,6 +17,8 @@ async function installStoryMediaTestHarness(page: Page) {
     };
 
     const pausedState = new WeakMap<HTMLMediaElement, boolean>();
+    const pendingPlayResolvers: Array<() => void> = [];
+    let deferPlayPromise = false;
 
     function classifyVideo(el: HTMLMediaElement): "content" | "hero" | "unknown" {
       if (el.closest('[data-testid="story-video-player"]')) return "content";
@@ -38,6 +40,12 @@ async function installStoryMediaTestHarness(page: Page) {
       pausedState.set(this, false);
       this.dispatchEvent(new Event("play"));
       this.dispatchEvent(new Event("playing"));
+
+      if (deferPlayPromise && role === "content") {
+        return new Promise<void>((resolve) => {
+          pendingPlayResolvers.push(resolve);
+        });
+      }
 
       return Promise.resolve();
     };
@@ -94,6 +102,20 @@ async function installStoryMediaTestHarness(page: Page) {
     (window as unknown as { __storyMediaTest: unknown }).__storyMediaTest = {
       mediaCalls,
       activeObservers,
+      setDeferPlayPromise: (defer: boolean) => {
+        deferPlayPromise = defer;
+      },
+      getPendingPlayPromiseCount: () => {
+        return pendingPlayResolvers.length;
+      },
+      resolvePendingPlayPromises: () => {
+        const count = pendingPlayResolvers.length;
+        while (pendingPlayResolvers.length > 0) {
+          const resolver = pendingPlayResolvers.shift();
+          resolver?.();
+        }
+        return count;
+      },
       hasActiveObserver: (role: "content" | "hero") => {
         return activeObservers.some((obs) =>
           obs.targetElements.some((target) => {
@@ -247,7 +269,7 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
     await expect(playToggle).toHaveText("Reproducir");
   });
 
-  test("E2: allows explicit manual video playback under prefers-reduced-motion", async ({
+  test("E2: allows explicit manual video playback under prefers-reduced-motion and resists stale-Promise race", async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -259,7 +281,7 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
     await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
     await expect(playToggle).toHaveText("Reproducir");
 
-    // Confirm 0 play calls before manual click
+    // 1. Confirm 0 play calls before manual click
     const initialPlayCalls = await page.evaluate(() => {
       const testHarness = (
         window as unknown as {
@@ -273,10 +295,20 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
     });
     expect(initialPlayCalls).toBe(0);
 
-    // Click to start manual playback
+    // 2. Enable deferred play promise to simulate an asynchronous / slow play promise resolution
+    await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { setDeferPlayPromise: (defer: boolean) => void };
+        }
+      ).__storyMediaTest;
+      testHarness?.setDeferPlayPromise(true);
+    });
+
+    // 3. Click to start manual playback
     await playToggle.click();
 
-    // Assert that HTMLMediaElement.play() was invoked for the content video
+    // 4. Assert that HTMLMediaElement.play() was invoked for the content video and native "play" event immediately drove UI to "Pausar"
     await expect
       .poll(async () => {
         return page.evaluate(() => {
@@ -297,10 +329,21 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
     await expect(playToggle).toHaveAttribute("aria-label", "Pausar video");
     await expect(playToggle).toHaveText("Pausar");
 
-    // Click again to manually pause
+    // Confirm that the play promise is currently pending
+    const pendingCount = await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { getPendingPlayPromiseCount: () => number };
+        }
+      ).__storyMediaTest;
+      return testHarness?.getPendingPlayPromiseCount() ?? 0;
+    });
+    expect(pendingCount).toBe(1);
+
+    // 5. Click again to manually pause while the original play promise is still pending
     await playToggle.click();
 
-    // Assert pause was invoked and control returned to "Reproducir video"
+    // 6. Assert pause was invoked and control returned to "Reproducir video"
     await expect
       .poll(async () => {
         return page.evaluate(() => {
@@ -317,6 +360,23 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
       })
       .toBeGreaterThanOrEqual(1);
 
+    await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
+    await expect(playToggle).toHaveText("Reproducir");
+
+    // 7. Canonical Race Regression Assertion:
+    // Resolve the old delayed play() Promise now. If duplicate Promise-based state authority existed,
+    // this would have erroneously flipped isPlaying back to true ("Pausar video").
+    const resolvedCount = await page.evaluate(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { resolvePendingPlayPromises: () => number };
+        }
+      ).__storyMediaTest;
+      return testHarness?.resolvePendingPlayPromises() ?? 0;
+    });
+    expect(resolvedCount).toBe(1);
+
+    // 8. Assert that UI firmly REMAINS in "Reproducir video" state
     await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
     await expect(playToggle).toHaveText("Reproducir");
   });

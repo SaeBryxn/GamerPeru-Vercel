@@ -93,10 +93,9 @@ export function StoryVideoPlayer({
           });
 
           if (eligible) {
-            video
-              .play()
-              .then(() => setIsPlaying(true))
-              .catch(() => setIsPlaying(false));
+            void video.play().catch(() => {
+              // Playback rejection handled safely; native media events remain canonical state authority
+            });
           } else {
             video.pause();
             setIsPlaying(false);
@@ -125,10 +124,9 @@ export function StoryVideoPlayer({
     isManualInteractingRef.current = true;
 
     if (video.paused) {
-      video
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch(() => setIsPlaying(false));
+      void video.play().catch(() => {
+        // Playback rejection handled safely; native media events remain canonical state authority
+      });
     } else {
       video.pause();
       setIsPlaying(false);
