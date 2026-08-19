@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { shouldAutoplayStoryVideo } from "../helpers/should-autoplay-story-video";
 import styles from "./story-ambient-video.module.css";
 
 export interface StoryAmbientVideoProps {
@@ -8,34 +9,66 @@ export interface StoryAmbientVideoProps {
   posterUrl?: string | null;
 }
 
+type MotionPreference = "unknown" | "reduce" | "no-preference";
+
 export function StoryAmbientVideo({
   videoUrl,
   posterUrl,
 }: StoryAmbientVideoProps): React.JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hasError, setHasError] = useState<boolean>(false);
-  const [isReducedMotion, setIsReducedMotion] = useState<boolean>(false);
+  const [motionPreference, setMotionPreference] = useState<MotionPreference>("unknown");
 
+  // 1. Resolve initial reduced-motion preference and subscribe to runtime changes
   useEffect(() => {
-    // Check initial reduced motion preference
-    if (typeof window !== "undefined" && window.matchMedia) {
-      const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-      setIsReducedMotion(mediaQuery.matches);
-
-      const handler = (e: MediaQueryListEvent) => setIsReducedMotion(e.matches);
-      mediaQuery.addEventListener("change", handler);
-      return () => mediaQuery.removeEventListener("change", handler);
+    if (typeof window === "undefined" || !window.matchMedia) {
+      setMotionPreference("no-preference");
+      return;
     }
+
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setMotionPreference(mediaQuery.matches ? "reduce" : "no-preference");
+
+    const handler = (e: MediaQueryListEvent) => {
+      setMotionPreference(e.matches ? "reduce" : "no-preference");
+    };
+
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
   }, []);
 
+  // 2. React to reduced-motion transition: pause immediately if reduced motion becomes active
+  useEffect(() => {
+    if (motionPreference === "reduce") {
+      const video = videoRef.current;
+      if (video && !video.paused) {
+        video.pause();
+      }
+    }
+  }, [motionPreference]);
+
+  // 3. Viewport-gated autoplay observer with meaningful visibility threshold
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || isReducedMotion || hasError) return;
+    const isReduced = motionPreference === "reduce";
+    const isUnknown = motionPreference === "unknown";
+
+    // Stay paused and do not observe while unknown, reduced, or in error state
+    if (!video || isUnknown || isReduced || hasError) {
+      return;
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting) {
+          const eligible = shouldAutoplayStoryVideo({
+            isIntersecting: entry.isIntersecting,
+            intersectionRatio: entry.intersectionRatio,
+            prefersReducedMotion: false,
+            hasError,
+          });
+
+          if (eligible) {
             video.play().catch(() => {
               // Ignore standard browser autoplay denial
             });
@@ -44,17 +77,18 @@ export function StoryAmbientVideo({
           }
         }
       },
-      { threshold: 0.5 }
+      { threshold: [0, 0.5] }
     );
 
     observer.observe(video);
 
     return () => {
       observer.disconnect();
+      video.pause();
     };
-  }, [isReducedMotion, hasError]);
+  }, [motionPreference, hasError]);
 
-  const shouldHide = hasError || isReducedMotion;
+  const shouldHide = hasError || motionPreference === "reduce" || motionPreference === "unknown";
 
   return (
     <div

@@ -17,10 +17,121 @@ import {
   RelatedProductsBlock,
   resolveStoryAlt,
   sanitizeComparisonRows,
+  shouldAutoplayStoryVideo,
 } from "@/components/product-story";
 import type { ProductDiscoveryItem } from "@/lib/catalog/types";
 
 describe("Product Story — Helpers", () => {
+  describe("shouldAutoplayStoryVideo (Canonical Viewport & Motion Decision Rule)", () => {
+    it("A: returns false when isIntersecting is true but ratio is 0", () => {
+      expect(
+        shouldAutoplayStoryVideo({
+          isIntersecting: true,
+          intersectionRatio: 0,
+          prefersReducedMotion: false,
+        })
+      ).toBe(false);
+    });
+
+    it("B: returns false when ratio is 0.10 (< 0.50)", () => {
+      expect(
+        shouldAutoplayStoryVideo({
+          isIntersecting: true,
+          intersectionRatio: 0.1,
+          prefersReducedMotion: false,
+        })
+      ).toBe(false);
+    });
+
+    it("C: returns false when ratio is 0.49 (< 0.50 boundary)", () => {
+      expect(
+        shouldAutoplayStoryVideo({
+          isIntersecting: true,
+          intersectionRatio: 0.49,
+          prefersReducedMotion: false,
+        })
+      ).toBe(false);
+    });
+
+    it("D: returns true at exact 0.50 ratio boundary", () => {
+      expect(
+        shouldAutoplayStoryVideo({
+          isIntersecting: true,
+          intersectionRatio: 0.5,
+          prefersReducedMotion: false,
+        })
+      ).toBe(true);
+    });
+
+    it("E: returns true at 0.75 ratio", () => {
+      expect(
+        shouldAutoplayStoryVideo({
+          isIntersecting: true,
+          intersectionRatio: 0.75,
+          prefersReducedMotion: false,
+        })
+      ).toBe(true);
+    });
+
+    it("F: returns true at 1.0 (fully visible)", () => {
+      expect(
+        shouldAutoplayStoryVideo({
+          isIntersecting: true,
+          intersectionRatio: 1.0,
+          prefersReducedMotion: false,
+        })
+      ).toBe(true);
+    });
+
+    it("G: returns false when isIntersecting is false even if ratio is 1.0", () => {
+      expect(
+        shouldAutoplayStoryVideo({
+          isIntersecting: false,
+          intersectionRatio: 1.0,
+          prefersReducedMotion: false,
+        })
+      ).toBe(false);
+    });
+
+    it("H: returns false when prefersReducedMotion is true even with 0.75 ratio", () => {
+      expect(
+        shouldAutoplayStoryVideo({
+          isIntersecting: true,
+          intersectionRatio: 0.75,
+          prefersReducedMotion: true,
+        })
+      ).toBe(false);
+    });
+
+    it("I: returns false when hasError is true even with 0.75 ratio", () => {
+      expect(
+        shouldAutoplayStoryVideo({
+          isIntersecting: true,
+          intersectionRatio: 0.75,
+          prefersReducedMotion: false,
+          hasError: true,
+        })
+      ).toBe(false);
+    });
+
+    it("J (REGRESSION): crossing from 0.75 down to 0.40 pauses even while isIntersecting remains true", () => {
+      // 1. Initial eligible state at 0.75
+      const state1 = shouldAutoplayStoryVideo({
+        isIntersecting: true,
+        intersectionRatio: 0.75,
+        prefersReducedMotion: false,
+      });
+      expect(state1).toBe(true);
+
+      // 2. Target scrolls out to 0.40 (still intersecting)
+      const state2 = shouldAutoplayStoryVideo({
+        isIntersecting: true,
+        intersectionRatio: 0.4,
+        prefersReducedMotion: false,
+      });
+      expect(state2).toBe(false); // Must PAUSE
+    });
+  });
   describe("resolveStoryAlt", () => {
     it("uses authored alt text directly when provided", () => {
       const alt = resolveStoryAlt(

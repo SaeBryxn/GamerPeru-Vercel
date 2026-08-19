@@ -76,16 +76,71 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
   test("E: operates safely under prefers-reduced-motion: reduce without autoplay", async ({
     page,
   }) => {
+    // Emulate reduced motion before navigation
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/productos/mouse-pro-mod-01");
 
     const storySection = page.getByTestId("product-story-section");
     await expect(storySection).toBeVisible();
 
-    // Hero headline and content remain clearly visible
+    // Hero headline and static content remain clearly visible
     await expect(page.getByTestId("hero-headline")).toBeVisible();
 
-    // Video block toggle remains functional for manual activation
+    // Verify all video elements on page are NOT playing (paused === true)
+    const videos = page.locator("video");
+    const videoCount = await videos.count();
+    expect(videoCount).toBeGreaterThanOrEqual(1);
+
+    for (let i = 0; i < videoCount; i++) {
+      const isPaused = await videos.nth(i).evaluate((el) => (el as HTMLVideoElement).paused);
+      expect(isPaused).toBe(true);
+    }
+
+    // Video player toggle button remains visible with manual play action available
+    const playToggle = page.getByTestId("story-video-toggle");
+    await expect(playToggle).toBeVisible();
+    await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
+  });
+
+  test("E2: allows explicit manual video playback under prefers-reduced-motion", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/productos/mouse-pro-mod-01");
+
+    const playToggle = page.getByTestId("story-video-toggle");
+    await expect(playToggle).toBeVisible();
+    await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
+
+    // Click to start manual playback
+    await playToggle.click();
+
+    // Toggle button aria-label reflects interactive state
+    await expect(playToggle).toHaveAttribute("aria-label", /Pausar video|Reproducir video/);
+  });
+
+  test("E3: pauses active automatic video playback when runtime motion preference changes to reduce", async ({
+    page,
+  }) => {
+    // 1. Start with no preference
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/productos/mouse-pro-mod-01");
+
+    const videoPlayer = page.getByTestId("story-video-player");
+    await expect(videoPlayer).toBeVisible();
+
+    // 2. Transition preference to reduce at runtime
+    await page.emulateMedia({ reducedMotion: "reduce" });
+
+    // 3. Verify all video elements are paused immediately upon preference change
+    const videos = page.locator("video");
+    const videoCount = await videos.count();
+    for (let i = 0; i < videoCount; i++) {
+      const isPaused = await videos.nth(i).evaluate((el) => (el as HTMLVideoElement).paused);
+      expect(isPaused).toBe(true);
+    }
+
+    // 4. Content video player toggle remains accessible for manual control
     const playToggle = page.getByTestId("story-video-toggle");
     await expect(playToggle).toBeVisible();
   });

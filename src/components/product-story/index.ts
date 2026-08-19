@@ -2,6 +2,7 @@ export { ProductStoryRenderer } from "./product-story-renderer";
 export type { ProductStoryRendererProps } from "./types";
 export { resolveStoryAlt } from "./helpers/resolve-story-alt";
 export { sanitizeComparisonRows } from "./helpers/comparison-matrix";
+export { shouldAutoplayStoryVideo } from "./helpers/should-autoplay-story-video";
 
 // Export blocks for testing/modular reuse
 export { HeroMediaBlock } from "./blocks/hero-media-block";
