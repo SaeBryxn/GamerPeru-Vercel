@@ -16,17 +16,26 @@ async function installStoryMediaTestHarness(page: Page) {
       pauseCalls: [] as MediaCallEntry[],
     };
 
+    const pausedState = new WeakMap<HTMLMediaElement, boolean>();
+
     function classifyVideo(el: HTMLMediaElement): "content" | "hero" | "unknown" {
       if (el.closest('[data-testid="story-video-player"]')) return "content";
       if (el.closest('[data-testid="story-hero-media-block"]')) return "hero";
       return "unknown";
     }
 
+    Object.defineProperty(HTMLMediaElement.prototype, "paused", {
+      get(this: HTMLMediaElement) {
+        return pausedState.has(this) ? pausedState.get(this)! : true;
+      },
+      configurable: true,
+    });
+
     HTMLMediaElement.prototype.play = async function (this: HTMLMediaElement) {
       const role = classifyVideo(this);
       mediaCalls.playCalls.push({ role, timestamp: Date.now() });
 
-      Object.defineProperty(this, "paused", { value: false, writable: true, configurable: true });
+      pausedState.set(this, false);
       this.dispatchEvent(new Event("play"));
       this.dispatchEvent(new Event("playing"));
 
@@ -37,7 +46,7 @@ async function installStoryMediaTestHarness(page: Page) {
       const role = classifyVideo(this);
       mediaCalls.pauseCalls.push({ role, timestamp: Date.now() });
 
-      Object.defineProperty(this, "paused", { value: true, writable: true, configurable: true });
+      pausedState.set(this, true);
       this.dispatchEvent(new Event("pause"));
     };
 
@@ -85,11 +94,20 @@ async function installStoryMediaTestHarness(page: Page) {
     (window as unknown as { __storyMediaTest: unknown }).__storyMediaTest = {
       mediaCalls,
       activeObservers,
+      hasActiveObserver: (role: "content" | "hero") => {
+        return activeObservers.some((obs) =>
+          obs.targetElements.some((target) => {
+            const isContent = Boolean(target.closest('[data-testid="story-video-player"]'));
+            const isHero = Boolean(target.closest('[data-testid="story-hero-media-block"]'));
+            return (role === "content" && isContent) || (role === "hero" && isHero);
+          })
+        );
+      },
       dispatchIntersection: (role: "content" | "hero", ratio: number, isIntersecting = true) => {
         for (const obs of activeObservers) {
           for (const target of obs.targetElements) {
-            const isContent = target.closest('[data-testid="story-video-player"]');
-            const isHero = target.closest('[data-testid="story-hero-media-block"]');
+            const isContent = Boolean(target.closest('[data-testid="story-video-player"]'));
+            const isHero = Boolean(target.closest('[data-testid="story-hero-media-block"]'));
             if ((role === "content" && isContent) || (role === "hero" && isHero)) {
               const entry: Partial<IntersectionObserverEntry> = {
                 target,
@@ -317,6 +335,16 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
     const playToggle = page.getByTestId("story-video-toggle");
     await expect(playToggle).toBeVisible();
 
+    // Wait until component has mounted and observer is active
+    await page.waitForFunction(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { hasActiveObserver: (role: string) => boolean };
+        }
+      ).__storyMediaTest;
+      return testHarness?.hasActiveObserver("content");
+    });
+
     // 2. Trigger meaningful intersection (ratio 0.75 >= 0.50) to start automatic playback
     await page.evaluate(() => {
       const testHarness = (
@@ -396,6 +424,16 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
 
     const playToggle = page.getByTestId("story-video-toggle");
     await expect(playToggle).toBeVisible();
+
+    // Wait until component has mounted and observer is active
+    await page.waitForFunction(() => {
+      const testHarness = (
+        window as unknown as {
+          __storyMediaTest?: { hasActiveObserver: (role: string) => boolean };
+        }
+      ).__storyMediaTest;
+      return testHarness?.hasActiveObserver("content");
+    });
 
     // Step 1: ratio = 0.49 (< 0.50 boundary) -> no autoplay
     await page.evaluate(() => {
