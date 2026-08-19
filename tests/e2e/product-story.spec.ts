@@ -41,33 +41,40 @@ async function installStoryMediaTestHarness(page: Page) {
       this.dispatchEvent(new Event("pause"));
     };
 
-    const observerInstances: Array<{
-      target: Element;
+    const activeObservers: Array<{
+      targetElements: Element[];
       callback: IntersectionObserverCallback;
       options?: IntersectionObserverInit;
     }> = [];
 
     window.IntersectionObserver = class ControlledIntersectionObserver {
-      private targetElements: Element[] = [];
-      private callback: IntersectionObserverCallback;
-      private options?: IntersectionObserverInit;
+      private entry: {
+        targetElements: Element[];
+        callback: IntersectionObserverCallback;
+        options?: IntersectionObserverInit;
+      };
 
       constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
-        this.callback = callback;
-        this.options = options;
+        this.entry = { targetElements: [], callback, options };
+        activeObservers.push(this.entry);
       }
 
       observe(target: Element) {
-        this.targetElements.push(target);
-        observerInstances.push({ target, callback: this.callback, options: this.options });
+        if (!this.entry.targetElements.includes(target)) {
+          this.entry.targetElements.push(target);
+        }
       }
 
       unobserve(target: Element) {
-        this.targetElements = this.targetElements.filter((t) => t !== target);
+        this.entry.targetElements = this.entry.targetElements.filter((t) => t !== target);
       }
 
       disconnect() {
-        this.targetElements = [];
+        this.entry.targetElements = [];
+        const idx = activeObservers.indexOf(this.entry);
+        if (idx !== -1) {
+          activeObservers.splice(idx, 1);
+        }
       }
 
       takeRecords(): IntersectionObserverEntry[] {
@@ -77,25 +84,27 @@ async function installStoryMediaTestHarness(page: Page) {
 
     (window as unknown as { __storyMediaTest: unknown }).__storyMediaTest = {
       mediaCalls,
-      observerInstances,
+      activeObservers,
       dispatchIntersection: (role: "content" | "hero", ratio: number, isIntersecting = true) => {
-        for (const inst of observerInstances) {
-          const isContent = inst.target.closest('[data-testid="story-video-player"]');
-          const isHero = inst.target.closest('[data-testid="story-hero-media-block"]');
-          if ((role === "content" && isContent) || (role === "hero" && isHero)) {
-            const entry: Partial<IntersectionObserverEntry> = {
-              target: inst.target,
-              isIntersecting,
-              intersectionRatio: ratio,
-              boundingClientRect: inst.target.getBoundingClientRect(),
-              intersectionRect: inst.target.getBoundingClientRect(),
-              rootBounds: null,
-              time: Date.now(),
-            };
-            inst.callback(
-              [entry as IntersectionObserverEntry],
-              inst as unknown as IntersectionObserver
-            );
+        for (const obs of activeObservers) {
+          for (const target of obs.targetElements) {
+            const isContent = target.closest('[data-testid="story-video-player"]');
+            const isHero = target.closest('[data-testid="story-hero-media-block"]');
+            if ((role === "content" && isContent) || (role === "hero" && isHero)) {
+              const entry: Partial<IntersectionObserverEntry> = {
+                target,
+                isIntersecting,
+                intersectionRatio: ratio,
+                boundingClientRect: target.getBoundingClientRect(),
+                intersectionRect: target.getBoundingClientRect(),
+                rootBounds: null,
+                time: Date.now(),
+              };
+              obs.callback(
+                [entry as IntersectionObserverEntry],
+                obs as unknown as IntersectionObserver
+              );
+            }
           }
         }
       },
@@ -250,18 +259,21 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
     await playToggle.click();
 
     // Assert that HTMLMediaElement.play() was invoked for the content video
-    const postClickPlayCalls = await page.evaluate(() => {
-      const testHarness = (
-        window as unknown as {
-          __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
-        }
-      ).__storyMediaTest;
-      return (
-        testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
-          .length ?? 0
-      );
-    });
-    expect(postClickPlayCalls).toBe(1);
+    await expect
+      .poll(async () => {
+        return page.evaluate(() => {
+          const testHarness = (
+            window as unknown as {
+              __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
+            }
+          ).__storyMediaTest;
+          return (
+            testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
+              .length ?? 0
+          );
+        });
+      })
+      .toBe(1);
 
     // Toggle button MUST transition to exact "Pausar video"
     await expect(playToggle).toHaveAttribute("aria-label", "Pausar video");
@@ -271,18 +283,22 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
     await playToggle.click();
 
     // Assert pause was invoked and control returned to "Reproducir video"
-    const postPauseCalls = await page.evaluate(() => {
-      const testHarness = (
-        window as unknown as {
-          __storyMediaTest?: { mediaCalls: { pauseCalls: Array<{ role: string }> } };
-        }
-      ).__storyMediaTest;
-      return (
-        testHarness?.mediaCalls.pauseCalls.filter((c: { role: string }) => c.role === "content")
-          .length ?? 0
-      );
-    });
-    expect(postPauseCalls).toBeGreaterThanOrEqual(1);
+    await expect
+      .poll(async () => {
+        return page.evaluate(() => {
+          const testHarness = (
+            window as unknown as {
+              __storyMediaTest?: { mediaCalls: { pauseCalls: Array<{ role: string }> } };
+            }
+          ).__storyMediaTest;
+          return (
+            testHarness?.mediaCalls.pauseCalls.filter((c: { role: string }) => c.role === "content")
+              .length ?? 0
+          );
+        });
+      })
+      .toBeGreaterThanOrEqual(1);
+
     await expect(playToggle).toHaveAttribute("aria-label", "Reproducir video");
     await expect(playToggle).toHaveText("Reproducir");
   });
@@ -314,18 +330,22 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
     });
 
     // 3. Verify positive evidence: play() was invoked and UI reflects playing state BEFORE transition
-    const preTransitionPlayCalls = await page.evaluate(() => {
-      const testHarness = (
-        window as unknown as {
-          __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
-        }
-      ).__storyMediaTest;
-      return (
-        testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
-          .length ?? 0
-      );
-    });
-    expect(preTransitionPlayCalls).toBe(1);
+    await expect
+      .poll(async () => {
+        return page.evaluate(() => {
+          const testHarness = (
+            window as unknown as {
+              __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
+            }
+          ).__storyMediaTest;
+          return (
+            testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
+              .length ?? 0
+          );
+        });
+      })
+      .toBe(1);
+
     await expect(playToggle).toHaveAttribute("aria-label", "Pausar video");
     await expect(playToggle).toHaveText("Pausar");
 
@@ -415,18 +435,22 @@ test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => 
       testHarness?.dispatchIntersection("content", 0.5, true);
     });
 
-    const playCallsAt50 = await page.evaluate(() => {
-      const testHarness = (
-        window as unknown as {
-          __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
-        }
-      ).__storyMediaTest;
-      return (
-        testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
-          .length ?? 0
-      );
-    });
-    expect(playCallsAt50).toBe(1);
+    await expect
+      .poll(async () => {
+        return page.evaluate(() => {
+          const testHarness = (
+            window as unknown as {
+              __storyMediaTest?: { mediaCalls: { playCalls: Array<{ role: string }> } };
+            }
+          ).__storyMediaTest;
+          return (
+            testHarness?.mediaCalls.playCalls.filter((c: { role: string }) => c.role === "content")
+              .length ?? 0
+          );
+        });
+      })
+      .toBe(1);
+
     await expect(playToggle).toHaveAttribute("aria-label", "Pausar video");
 
     // Step 3: ratio = 0.75 -> still active
