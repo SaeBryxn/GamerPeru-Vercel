@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { logger } from "@/lib/logger";
 
+export const MAX_STORY_BLOCKS_PER_REVISION = 30;
+
 const NO_HTML_SCRIPT_REGEX = /<[^>]*>/;
 
 function isSafePlainText(val: string): boolean {
@@ -74,7 +76,7 @@ export const VideoPayloadSchema = z.object({
 });
 export type VideoPayload = z.infer<typeof VideoPayloadSchema>;
 
-// 7. Gallery (gallery)
+// 7. Gallery (gallery) — 3 to 6 high-resolution images
 export const GalleryItemSchema = z.object({
   mediaKey: SafeString(1, 300),
   altText: SafeString(1, 200).optional(),
@@ -82,7 +84,7 @@ export const GalleryItemSchema = z.object({
 });
 export const GalleryPayloadSchema = z.object({
   title: SafeString(1, 200).optional(),
-  items: z.array(GalleryItemSchema).min(2).max(8),
+  items: z.array(GalleryItemSchema).min(3).max(6),
 });
 export type GalleryPayload = z.infer<typeof GalleryPayloadSchema>;
 
@@ -210,11 +212,10 @@ export const CANONICAL_STORY_BLOCK_TYPES: readonly CanonicalStoryBlockType[] = [
 ] as const;
 
 export const StoryBlockPayloadSchemas: Record<
-  string,
+  CanonicalStoryBlockType,
   { canonicalType: CanonicalStoryBlockType; schema: z.ZodTypeAny }
 > = {
   hero_media: { canonicalType: "hero_media", schema: HeroMediaPayloadSchema },
-  hero: { canonicalType: "hero_media", schema: HeroMediaPayloadSchema }, // Backwards-compatible persisted alias normalizes to hero_media
   full_bleed_image: { canonicalType: "full_bleed_image", schema: FullBleedImagePayloadSchema },
   image_text: { canonicalType: "image_text", schema: ImageTextPayloadSchema },
   stat_highlight: { canonicalType: "stat_highlight", schema: StatHighlightPayloadSchema },
@@ -264,6 +265,17 @@ export function validateStoryBlocks(
     return null;
   }
 
+  if (rawBlocks.length > MAX_STORY_BLOCKS_PER_REVISION) {
+    logger.warn({
+      event: "pdp_story_block_count_exceeded",
+      productId: diagnosticContext?.productId,
+      revisionId: diagnosticContext?.revisionId,
+      blockCount: rawBlocks.length,
+      maxAllowed: MAX_STORY_BLOCKS_PER_REVISION,
+    });
+    return null;
+  }
+
   const validated: ValidatedStoryBlock[] = [];
 
   for (let i = 0; i < rawBlocks.length; i++) {
@@ -290,7 +302,12 @@ export function validateStoryBlocks(
 
     const { block_id, type, order, payload } = envelopeResult.data;
 
-    const entry = StoryBlockPayloadSchemas[type];
+    const entry = (
+      StoryBlockPayloadSchemas as Record<
+        string,
+        { canonicalType: CanonicalStoryBlockType; schema: z.ZodTypeAny }
+      >
+    )[type];
     if (!entry) {
       logger.warn({
         event: "pdp_story_block_validation_failed",

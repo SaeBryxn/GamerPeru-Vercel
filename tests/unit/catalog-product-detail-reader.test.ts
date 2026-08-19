@@ -6,7 +6,11 @@ import { FixtureCatalogDiscoveryReader } from "@/lib/catalog/fixture-reader";
 import { getProductDetailReader } from "@/lib/catalog/get-reader";
 import { getCachedProduct } from "@/lib/catalog/cached-queries";
 import * as postgresDetailQueries from "@/lib/catalog/postgres-product-detail-queries";
-import { CANONICAL_STORY_BLOCK_TYPES, validateStoryBlocks } from "@/lib/catalog/story-validation";
+import {
+  CANONICAL_STORY_BLOCK_TYPES,
+  MAX_STORY_BLOCKS_PER_REVISION,
+  validateStoryBlocks,
+} from "@/lib/catalog/story-validation";
 
 describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
   const mockProductId = "018f0000-0000-7000-8000-000000000p01";
@@ -693,7 +697,7 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     });
   });
 
-  describe("Remediation B — Canonical 13 Story Blocks Runtime Validation", () => {
+  describe("Remediation B — Canonical 13 Story Blocks Runtime Validation & Bounds", () => {
     it("A: exactly 13 canonical semantic Story block types exist in registry", () => {
       expect(CANONICAL_STORY_BLOCK_TYPES).toHaveLength(13);
       expect(CANONICAL_STORY_BLOCK_TYPES).toEqual([
@@ -759,6 +763,7 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
             items: [
               { mediaKey: "gallery/1.png", altText: "Angle 1" },
               { mediaKey: "gallery/2.png", altText: "Angle 2" },
+              { mediaKey: "gallery/3.png", altText: "Angle 3" },
             ],
           },
         },
@@ -853,7 +858,8 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       expect(validated).toBeNull();
     });
 
-    it("E: normalizes persisted hero alias to canonical hero_media", () => {
+    it("E: rejects unproven hero alias and logs unrecognized_block_type", () => {
+      const warnSpy = vi.spyOn(logger, "warn");
       const blocks = [
         {
           block_id: "blk-hero",
@@ -863,9 +869,14 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
         },
       ];
       const validated = validateStoryBlocks(blocks);
-      expect(validated).not.toBeNull();
-      expect(validated).toHaveLength(1);
-      expect(validated![0]!.type).toBe("hero_media");
+      expect(validated).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_story_block_validation_failed",
+          reason: "unrecognized_block_type",
+          blockType: "hero",
+        })
+      );
     });
 
     it("F: direct canonical hero_media representation succeeds", () => {
@@ -879,6 +890,7 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       ];
       const validated = validateStoryBlocks(blocks);
       expect(validated).not.toBeNull();
+      expect(validated).toHaveLength(1);
       expect(validated![0]!.type).toBe("hero_media");
     });
 
@@ -1017,6 +1029,103 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       for (const block of product!.story!.blocks) {
         expect(CANONICAL_STORY_BLOCK_TYPES).toContain(block.type);
       }
+    });
+
+    // --- Global 30-Block Bound Tests ---
+    it("M: accepts exactly MAX_STORY_BLOCKS_PER_REVISION (30) valid blocks", () => {
+      expect(MAX_STORY_BLOCKS_PER_REVISION).toBe(30);
+      const blocks30 = Array.from({ length: 30 }, (_, idx) => ({
+        block_id: `blk-${idx + 1}`,
+        type: "spec_feature",
+        order: idx + 1,
+        payload: { title: `Feature ${idx + 1}`, description: `Description ${idx + 1}` },
+      }));
+
+      const validated = validateStoryBlocks(blocks30);
+      expect(validated).not.toBeNull();
+      expect(validated).toHaveLength(30);
+    });
+
+    it("N: rejects oversized Story revision (> 30 blocks) without processing individual blocks", () => {
+      const warnSpy = vi.spyOn(logger, "warn");
+      const blocks31 = Array.from({ length: 31 }, (_, idx) => ({
+        block_id: `blk-${idx + 1}`,
+        type: "spec_feature",
+        order: idx + 1,
+        payload: { title: `Feature ${idx + 1}`, description: `Description ${idx + 1}` },
+      }));
+
+      const validated = validateStoryBlocks(blocks31, {
+        productId: mockProductId,
+        revisionId: mockStoryRevId,
+      });
+      expect(validated).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "pdp_story_block_count_exceeded",
+          productId: mockProductId,
+          revisionId: mockStoryRevId,
+          blockCount: 31,
+          maxAllowed: 30,
+        })
+      );
+    });
+
+    it("O: huge oversized array (100 blocks) safely omits story and does not throw or 500", async () => {
+      const blocks100 = Array.from({ length: 100 }, (_, idx) => ({
+        block_id: `blk-${idx + 1}`,
+        type: "spec_feature",
+        order: idx + 1,
+        payload: { title: `Feature ${idx + 1}`, description: `Description ${idx + 1}` },
+      }));
+
+      setupPostgresMocks({
+        story: {
+          ...defaultMockStory,
+          blocks: blocks100,
+        },
+      });
+
+      const reader = new PostgresProductDetailReader();
+      const result = await reader.getPublishedProductBySlug("wlmouse-beast-x-max");
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe(mockProductId);
+      // Story safely omitted without breaking the Product response
+      expect(result?.story).toBeNull();
+    });
+
+    // --- Gallery Bounds Tests (min 3, max 6) ---
+    it("P: Gallery payload enforces min 3 and max 6 images (rejects 2, accepts 3-6, rejects 7)", () => {
+      const makeGallery = (count: number) => [
+        {
+          block_id: "blk-gal",
+          type: "gallery",
+          order: 1,
+          payload: {
+            items: Array.from({ length: count }, (_, i) => ({
+              mediaKey: `gallery/${i + 1}.png`,
+              altText: `Photo ${i + 1}`,
+            })),
+          },
+        },
+      ];
+
+      // 2 images -> rejected
+      expect(validateStoryBlocks(makeGallery(2))).toBeNull();
+
+      // 3 images -> accepted
+      const gal3 = validateStoryBlocks(makeGallery(3));
+      expect(gal3).not.toBeNull();
+      expect(gal3![0]!.type).toBe("gallery");
+
+      // 6 images -> accepted
+      const gal6 = validateStoryBlocks(makeGallery(6));
+      expect(gal6).not.toBeNull();
+      expect(gal6![0]!.type).toBe("gallery");
+
+      // 7 images -> rejected
+      expect(validateStoryBlocks(makeGallery(7))).toBeNull();
     });
   });
 
