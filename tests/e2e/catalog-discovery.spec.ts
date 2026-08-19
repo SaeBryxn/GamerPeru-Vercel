@@ -34,9 +34,9 @@ test.describe("GP-011 — Category & Brand Discovery E2E Suite", () => {
       await expect(firstCard).toContainText("Desde");
       await expect(firstCard).toContainText("S/ 129.90");
 
-      // Verify product card is NOT a link to an unestablished PDP
+      // Verify product card links to legitimate PDP in GP-014
       const pdpLink = firstCard.locator('a[href*="/productos/"]');
-      await expect(pdpLink).toHaveCount(0);
+      await expect(pdpLink.first()).toHaveAttribute("href", "/productos/mouse-pro-mod-01");
 
       // Brand link is present on card
       const brandLink = firstCard.getByRole("link", { name: "Marca QA" });

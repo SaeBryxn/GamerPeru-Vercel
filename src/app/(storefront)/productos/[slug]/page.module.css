@@ -1,0 +1,27 @@
+.pageWrapper {
+  width: 100%;
+  max-width: var(--container-default, 1440px);
+  margin: 0 auto;
+  padding: var(--space-6, 24px) var(--space-4, 16px) var(--space-16, 64px);
+}
+
+@media (min-width: 768px) {
+  .pageWrapper {
+    padding-left: var(--space-6, 24px);
+    padding-right: var(--space-6, 24px);
+  }
+}
+
+@media (min-width: 1024px) {
+  .pageWrapper {
+    padding-left: var(--space-8, 32px);
+    padding-right: var(--space-8, 32px);
+  }
+}
+
+@media (min-width: 1280px) {
+  .pageWrapper {
+    padding-left: var(--space-12, 48px);
+    padding-right: var(--space-12, 48px);
+  }
+}

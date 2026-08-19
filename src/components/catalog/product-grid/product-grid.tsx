@@ -22,7 +22,11 @@ export function ProductGrid({
     <ul className={styles.gridList} data-testid="product-grid">
       {products.map((product) => (
         <li key={product.id} className={styles.gridItem}>
-          <ProductCard product={product} showBrandLink={showBrandLink} />
+          <ProductCard
+            product={product}
+            href={`/productos/${product.slug}`}
+            showBrandLink={showBrandLink}
+          />
         </li>
       ))}
     </ul>

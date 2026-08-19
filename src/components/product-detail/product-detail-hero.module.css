@@ -1,0 +1,30 @@
+.heroLayout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8, 32px);
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .heroLayout {
+    grid-template-columns: 58fr 42fr;
+    align-items: start;
+    gap: var(--space-10, 40px);
+  }
+}
+
+.galleryColumn {
+  width: 100%;
+}
+
+.commerceColumn {
+  width: 100%;
+  position: relative;
+}
+
+@media (min-width: 1024px) {
+  .commerceColumn {
+    position: sticky;
+    top: 96px;
+  }
+}

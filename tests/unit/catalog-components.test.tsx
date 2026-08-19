@@ -186,11 +186,12 @@ describe("Catalog Components (Server Markup)", () => {
   });
 
   describe("ProductGrid", () => {
-    it("renders semantic ul and li items", () => {
+    it("renders semantic ul and li items with legitimate PDP links", () => {
       const html = renderToStaticMarkup(<ProductGrid products={[MOCK_PRODUCT]} />);
       expect(html).toContain("<ul");
       expect(html).toContain("<li");
       expect(html).toContain("Mouse Pro QA 01");
+      expect(html).toContain('href="/productos/mouse-pro-qa-01"');
     });
   });
 });
