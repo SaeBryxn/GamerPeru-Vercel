@@ -1,7 +1,12 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { installGp014MediaFixtures } from "./helpers/gp014-media-fixtures";
 
 test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
+  test.beforeEach(async ({ page }) => {
+    await installGp014MediaFixtures(page);
+  });
+
   test("A: navigates from category discovery grid to product detail page", async ({ page }) => {
     // 1. Visit category page
     await page.goto("/categorias/mouses");
@@ -273,5 +278,48 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     expect(productNode?.review).toBeUndefined();
     expect(productNode?.shippingDetails).toBeUndefined();
     expect(productNode?.availability).toBeUndefined();
+  });
+
+  test("K: handles pointer swipe gestures on image stage while isolating vertical and sub-threshold gestures", async ({
+    page,
+  }) => {
+    await page.goto("/productos/mouse-pro-mod-01");
+
+    const stage = page.getByTestId("gallery-main-stage");
+    await expect(stage).toBeVisible();
+
+    const box = await stage.boundingBox();
+    expect(box).toBeTruthy();
+    if (!box) return;
+
+    const startX = box.x + box.width * 0.7;
+    const startY = box.y + box.height * 0.5;
+
+    // 1. Horizontal dominant swipe left (deltaX = -80px, deltaY = 0px) -> navigates to next image
+    const initialImg = stage.locator("img");
+    const initialSrc = await initialImg.getAttribute("src");
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX - 80, startY, { steps: 5 });
+    await page.mouse.up();
+
+    // Verify stage image changed
+    await expect(stage.locator("img")).not.toHaveAttribute("src", initialSrc ?? "");
+
+    // 2. Vertical dominant gesture (deltaX = 10px, deltaY = 60px) -> no navigation
+    const currentSrc = await stage.locator("img").getAttribute("src");
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 10, startY + 60, { steps: 5 });
+    await page.mouse.up();
+    await expect(stage.locator("img")).toHaveAttribute("src", currentSrc ?? "");
+
+    // 3. Sub-threshold horizontal gesture (deltaX = 15px < 40px) -> no navigation
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX - 15, startY, { steps: 5 });
+    await page.mouse.up();
+    await expect(stage.locator("img")).toHaveAttribute("src", currentSrc ?? "");
   });
 });

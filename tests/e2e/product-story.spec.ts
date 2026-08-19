@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
+import { installGp014MediaFixtures } from "./helpers/gp014-media-fixtures";
 
 /**
  * Injected test harness for HTMLMediaElement.play/pause and controlled IntersectionObserver dispatch.
@@ -153,6 +154,10 @@ async function installStoryMediaTestHarness(page: Page) {
 }
 
 test.describe("GP-014 DB3C — Product Story Modular Renderer E2E Suite", () => {
+  test.beforeEach(async ({ page }) => {
+    await installGp014MediaFixtures(page);
+  });
+
   test("A: renders Product Story section with all 13 canonical block types on PDP", async ({
     page,
   }) => {
