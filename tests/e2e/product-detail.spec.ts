@@ -173,4 +173,105 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
       .analyze();
     expect(results.violations).toEqual([]);
   });
+
+  test("I: renders accurate metadata, canonical link, and OpenGraph tags", async ({ page }) => {
+    await page.goto("/productos/mouse-pro-mod-01");
+
+    // Title: "${product.name} — ${product.brand.name} | Gamer Perú"
+    await expect(page).toHaveTitle("Mouse Pro Mod 01 — Marca QA | Gamer Perú");
+
+    // Canonical link: strictly production canonical origin
+    const canonicalLink = page.locator('link[rel="canonical"]');
+    await expect(canonicalLink).toHaveAttribute(
+      "href",
+      "https://gamerperu.com/productos/mouse-pro-mod-01"
+    );
+
+    // Description meta
+    const metaDescription = page.locator('meta[name="description"]');
+    await expect(metaDescription).toHaveAttribute("content", "Edición de Rendimiento QA 01");
+
+    // OpenGraph meta tags
+    const ogTitle = page.locator('meta[property="og:title"]');
+    await expect(ogTitle).toHaveAttribute("content", "Mouse Pro Mod 01 — Marca QA | Gamer Perú");
+
+    const ogUrl = page.locator('meta[property="og:url"]');
+    await expect(ogUrl).toHaveAttribute(
+      "content",
+      "https://gamerperu.com/productos/mouse-pro-mod-01"
+    );
+
+    const ogSiteName = page.locator('meta[property="og:site_name"]');
+    await expect(ogSiteName).toHaveAttribute("content", "Gamer Perú");
+
+    const ogLocale = page.locator('meta[property="og:locale"]');
+    await expect(ogLocale).toHaveAttribute("content", "es_PE");
+  });
+
+  test("J: renders valid Schema.org JSON-LD @graph with Product, BreadcrumbList, and FAQPage", async ({
+    page,
+  }) => {
+    await page.goto("/productos/mouse-pro-mod-01");
+
+    // Extract application/ld+json script
+    const jsonLdScript = page.locator('script[type="application/ld+json"]');
+    await expect(jsonLdScript).toHaveCount(1);
+
+    const content = await jsonLdScript.textContent();
+    expect(content).toBeTruthy();
+
+    const parsed = JSON.parse(content ?? "{}");
+    expect(parsed["@context"]).toBe("https://schema.org");
+
+    const graph = parsed["@graph"] as Array<Record<string, unknown>>;
+    expect(Array.isArray(graph)).toBe(true);
+
+    // 1. Product Node
+    const productNode = graph.find((n) => n["@type"] === "Product");
+    expect(productNode).toBeDefined();
+    expect(productNode?.name).toBe("Mouse Pro Mod 01");
+    expect(productNode?.url).toBe("https://gamerperu.com/productos/mouse-pro-mod-01");
+    expect(productNode?.brand).toEqual({ "@type": "Brand", name: "Marca QA" });
+    expect(productNode?.category).toBe("Mouses Gaming");
+
+    // Variable prices in fixture (S/ 129.90 and S/ 139.90) -> offers is omitted
+    expect(productNode?.offers).toBeUndefined();
+
+    // 2. BreadcrumbList Node
+    const breadcrumbNode = graph.find((n) => n["@type"] === "BreadcrumbList");
+    expect(breadcrumbNode).toBeDefined();
+    const items = breadcrumbNode?.itemListElement as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(3);
+    expect(items[0]).toEqual({
+      "@type": "ListItem",
+      position: 1,
+      name: "Inicio",
+      item: "https://gamerperu.com/",
+    });
+    expect(items[1]).toEqual({
+      "@type": "ListItem",
+      position: 2,
+      name: "Mouses Gaming",
+      item: "https://gamerperu.com/categorias/mouses",
+    });
+    expect(items[2]).toEqual({
+      "@type": "ListItem",
+      position: 3,
+      name: "Mouse Pro Mod 01",
+      item: "https://gamerperu.com/productos/mouse-pro-mod-01",
+    });
+
+    // 3. FAQPage Node
+    const faqNode = graph.find((n) => n["@type"] === "FAQPage");
+    expect(faqNode).toBeDefined();
+    const mainEntity = faqNode?.mainEntity as Array<Record<string, unknown>>;
+    expect(Array.isArray(mainEntity)).toBe(true);
+    expect(mainEntity.length).toBeGreaterThanOrEqual(1);
+
+    // Omission invariants: No ratings, reviews, inventory, or shipping promises in JSON-LD
+    expect(productNode?.aggregateRating).toBeUndefined();
+    expect(productNode?.review).toBeUndefined();
+    expect(productNode?.shippingDetails).toBeUndefined();
+    expect(productNode?.availability).toBeUndefined();
+  });
 });

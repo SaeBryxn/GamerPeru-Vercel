@@ -1,10 +1,13 @@
 import React from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getCachedProduct, getCachedStoryRelatedProducts } from "@/lib/catalog/cached-queries";
+import { buildProductMetadata } from "@/lib/catalog/pdp-seo";
 import {
   CommerceHeroContainer,
   HardwareSpecifications,
   ProductBreadcrumb,
+  ProductJsonLd,
   type CommerceHeroProjection,
 } from "@/components/product-detail";
 import { ProductStoryRenderer } from "@/components/product-story";
@@ -13,6 +16,17 @@ import styles from "./page.module.css";
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
+}
+
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await getCachedProduct(slug);
+
+  if (!product || product.variants.length === 0) {
+    notFound();
+  }
+
+  return buildProductMetadata(product);
 }
 
 export default async function ProductDetailPage({
@@ -64,6 +78,8 @@ export default async function ProductDetailPage({
 
   return (
     <main className={styles.pageWrapper} data-testid="product-detail-page">
+      <ProductJsonLd product={product} />
+
       <ProductBreadcrumb category={product.category} productName={product.name} />
 
       <CommerceHeroContainer projection={heroProjection} />

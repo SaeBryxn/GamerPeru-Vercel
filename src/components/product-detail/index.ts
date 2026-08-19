@@ -39,4 +39,7 @@ export type { VariantSelectorProps, ResolvedDimension } from "./variant-selector
 export { HardwareSpecifications, formatSpecFieldValue } from "./hardware-specifications";
 export type { HardwareSpecificationsProps, FormattedSpecRow } from "./hardware-specifications";
 
+export { ProductJsonLd } from "./product-json-ld";
+export type { ProductJsonLdProps } from "./product-json-ld";
+
 export type { CommerceHeroProjection } from "./types";
