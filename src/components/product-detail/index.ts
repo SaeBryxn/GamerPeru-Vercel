@@ -11,8 +11,10 @@ export {
   ProductMediaGallery,
   buildEligibleGallery,
   resolveDefaultFocusedIndex,
+  getGalleryMediaType,
+  isSupportedGalleryMime,
 } from "./product-media-gallery";
-export type { ProductMediaGalleryProps } from "./product-media-gallery";
+export type { ProductMediaGalleryProps, GalleryMediaType } from "./product-media-gallery";
 
 export { ProductCommercePanel } from "./product-commerce-panel";
 export type { ProductCommercePanelProps } from "./product-commerce-panel";

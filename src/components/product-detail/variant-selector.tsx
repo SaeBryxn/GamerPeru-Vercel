@@ -191,15 +191,28 @@ export function VariantSelector({
               {dim.options.map((option) => {
                 const isSelected = option === currentValue;
 
-                // Check compatibility: Is there at least one ACTIVE variant with this option?
-                const isCompatible = variants.some((v) => String(v.attributes[dim.key]) === option);
+                // Check combination compatibility: exists active variant with this option + all other current selections
+                const isCompatible = variants.some((v) => {
+                  if (String(v.attributes[dim.key]) !== option) return false;
+                  for (const otherDim of dimensions) {
+                    if (otherDim.key !== dim.key) {
+                      if (
+                        String(v.attributes[otherDim.key]) !==
+                        String(selectedVariant.attributes[otherDim.key])
+                      ) {
+                        return false;
+                      }
+                    }
+                  }
+                  return true;
+                });
 
                 // Find target variant when clicking this option
                 const handleOptionClick = () => {
                   if (isSelected || !isCompatible) return;
 
-                  // 1. Try to find exact variant matching current selections + new option
-                  let target = variants.find((v) => {
+                  // Find exact variant matching candidate option + current other selections
+                  const target = variants.find((v) => {
                     if (String(v.attributes[dim.key]) !== option) return false;
                     for (const otherDim of dimensions) {
                       if (otherDim.key !== dim.key) {
@@ -213,9 +226,6 @@ export function VariantSelector({
                     }
                     return true;
                   });
-
-                  // 2. If not found, find the best compatible variant with this option
-                  target ??= variants.find((v) => String(v.attributes[dim.key]) === option);
 
                   if (target) {
                     onSelectVariant(target);

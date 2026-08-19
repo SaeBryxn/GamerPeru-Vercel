@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Package } from "lucide-react";
+import { Package, Video } from "lucide-react";
 import type { ProductMediaItem, ProductVariantDetail } from "@/lib/catalog/product-detail-types";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import styles from "./product-media-gallery.module.css";
@@ -15,15 +15,39 @@ export interface ProductMediaGalleryProps {
   brandName: string;
 }
 
+export type GalleryMediaType = "image" | "video" | "unsupported";
+
+/**
+ * Classifies public media assets based on trusted MIME metadata.
+ */
+export function getGalleryMediaType(mimeType: string | null | undefined): GalleryMediaType {
+  if (!mimeType || typeof mimeType !== "string") {
+    return "unsupported";
+  }
+  const lower = mimeType.toLowerCase().trim();
+  if (lower.startsWith("image/")) {
+    return "image";
+  }
+  if (lower.startsWith("video/")) {
+    return "video";
+  }
+  return "unsupported";
+}
+
+export function isSupportedGalleryMime(mimeType: string | null | undefined): boolean {
+  const type = getGalleryMediaType(mimeType);
+  return type === "image" || type === "video";
+}
+
 /**
  * Builds the canonical eligible and deduplicated gallery set for the selected variant.
  *
  * Rules:
- * 1. Collect media rows where `variantId === null` or `variantId === selectedVariant.id`.
- * 2. Exclude rows belonging to other variants (`variantId !== null && variantId !== selectedVariant.id`).
- * 3. Evaluate `primaryMedia`: safe only if `variantId === null` or `variantId === selectedVariant.id`.
+ * 1. Variant eligibility: media rows where `variantId === null` or `variantId === selectedVariantId`.
+ * 2. safePrimaryMedia: included if `primaryMedia !== null`, variant eligible, and supported MIME.
+ * 3. MIME filtering: Omit unsupported DOCUMENT/arbitrary MIME assets from the PDP gallery.
  * 4. Deduplicate deterministically by `mediaAssetId`.
- * 5. Sort by `displayOrder ASC`.
+ * 5. Sort deterministically by `displayOrder ASC`.
  */
 export function buildEligibleGallery(
   media: ProductMediaItem[],
@@ -36,7 +60,8 @@ export function buildEligibleGallery(
   // 1. Safe primaryMedia check
   const isPrimarySafe =
     primaryMedia !== null &&
-    (primaryMedia.variantId === null || primaryMedia.variantId === selectedVariantId);
+    (primaryMedia.variantId === null || primaryMedia.variantId === selectedVariantId) &&
+    isSupportedGalleryMime(primaryMedia.asset?.mimeType);
 
   if (isPrimarySafe && primaryMedia) {
     seenAssetIds.add(primaryMedia.mediaAssetId);
@@ -45,8 +70,10 @@ export function buildEligibleGallery(
 
   // 2. Filter eligible media rows
   for (const item of media) {
-    const isEligible = item.variantId === null || item.variantId === selectedVariantId;
-    if (isEligible && !seenAssetIds.has(item.mediaAssetId)) {
+    const isVariantEligible = item.variantId === null || item.variantId === selectedVariantId;
+    const isMimeSupported = isSupportedGalleryMime(item.asset?.mimeType);
+
+    if (isVariantEligible && isMimeSupported && !seenAssetIds.has(item.mediaAssetId)) {
       seenAssetIds.add(item.mediaAssetId);
       items.push(item);
     }
@@ -57,11 +84,11 @@ export function buildEligibleGallery(
 }
 
 /**
- * Resolves the initial or default focused media index given the eligible gallery.
+ * Resolves the canonical default focused media index given the eligible gallery.
  *
  * Precedence:
  * 1. First selected-variant-specific media (`variantId === selectedVariantId`)
- * 2. safePrimaryMedia (if eligible and exists)
+ * 2. safePrimaryMedia (if eligible and supported)
  * 3. First global media (`variantId === null`)
  * 4. Fallback index (-1 or 0)
  */
@@ -83,7 +110,8 @@ export function resolveDefaultFocusedIndex(
   // 2. safePrimaryMedia
   const isPrimarySafe =
     primaryMedia !== null &&
-    (primaryMedia.variantId === null || primaryMedia.variantId === selectedVariantId);
+    (primaryMedia.variantId === null || primaryMedia.variantId === selectedVariantId) &&
+    isSupportedGalleryMime(primaryMedia.asset?.mimeType);
 
   if (isPrimarySafe && primaryMedia) {
     const primaryIndex = gallery.findIndex((m) => m.mediaAssetId === primaryMedia.mediaAssetId);
@@ -114,20 +142,73 @@ export function ProductMediaGallery({
     [media, primaryMedia, selectedVariant.id]
   );
 
-  const [activeIndex, setActiveIndex] = useState(() =>
-    resolveDefaultFocusedIndex(eligibleGallery, primaryMedia, selectedVariant.id)
-  );
-  const buttonRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
+  // Synchronous variant-scoped focus state
+  const [userSelectedIndex, setUserSelectedIndex] = useState<number | null>(null);
+  const [prevVariantId, setPrevVariantId] = useState(selectedVariant.id);
 
-  // Sync focus on variant change
-  useEffect(() => {
-    const nextIndex = resolveDefaultFocusedIndex(eligibleGallery, primaryMedia, selectedVariant.id);
-    setActiveIndex(nextIndex);
-  }, [eligibleGallery, primaryMedia, selectedVariant.id]);
+  // When selectedVariant changes, synchronously reset manual user override during render
+  if (prevVariantId !== selectedVariant.id) {
+    setPrevVariantId(selectedVariant.id);
+    setUserSelectedIndex(null);
+  }
+
+  const defaultIndex = useMemo(
+    () => resolveDefaultFocusedIndex(eligibleGallery, primaryMedia, selectedVariant.id),
+    [eligibleGallery, primaryMedia, selectedVariant.id]
+  );
+
+  const activeIndex =
+    userSelectedIndex !== null &&
+    userSelectedIndex >= 0 &&
+    userSelectedIndex < eligibleGallery.length
+      ? userSelectedIndex
+      : defaultIndex;
+
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // Pointer / Touch Swipe State for horizontal gallery navigation
+  const pointerStartRef = useRef<{ x: number; y: number; id: number } | null>(null);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!e.isPrimary) return;
+    pointerStartRef.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointerStartRef.current || pointerStartRef.current.id !== e.pointerId) return;
+
+    const deltaX = e.clientX - pointerStartRef.current.x;
+    const deltaY = e.clientY - pointerStartRef.current.y;
+    pointerStartRef.current = null;
+
+    // Minimum swipe threshold: 40px with horizontal dominance
+    const minSwipeDistance = 40;
+    if (Math.abs(deltaX) >= minSwipeDistance && Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (eligibleGallery.length <= 1) return;
+
+      if (deltaX < 0) {
+        // Swipe left -> next image
+        const next = (activeIndex + 1) % eligibleGallery.length;
+        setUserSelectedIndex(next);
+        buttonRefs.current[next]?.focus();
+      } else {
+        // Swipe right -> prev image
+        const prev = (activeIndex - 1 + eligibleGallery.length) % eligibleGallery.length;
+        setUserSelectedIndex(prev);
+        buttonRefs.current[prev]?.focus();
+      }
+    }
+  };
+
+  const handlePointerCancel = () => {
+    pointerStartRef.current = null;
+  };
 
   const activeMedia =
     activeIndex >= 0 && activeIndex < eligibleGallery.length ? eligibleGallery[activeIndex] : null;
   const activeMediaUrl = resolvePublicMediaUrl(activeMedia?.asset.objectKey);
+  const activeMediaType = getGalleryMediaType(activeMedia?.asset.mimeType);
+
   const activeAltText =
     activeMedia?.asset.altText ??
     `${brandName} ${productName} - ${selectedVariant.title} - Vista ${activeIndex + 1}`;
@@ -136,27 +217,43 @@ export function ProductMediaGallery({
     if (e.key === "ArrowRight" || e.key === "ArrowDown") {
       e.preventDefault();
       const next = (index + 1) % eligibleGallery.length;
-      setActiveIndex(next);
+      setUserSelectedIndex(next);
       buttonRefs.current[next]?.focus();
     } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
       e.preventDefault();
       const prev = (index - 1 + eligibleGallery.length) % eligibleGallery.length;
-      setActiveIndex(prev);
+      setUserSelectedIndex(prev);
       buttonRefs.current[prev]?.focus();
     }
   };
 
   return (
     <div className={styles.galleryContainer} data-testid="product-media-gallery">
-      <div className={styles.mainStage} data-testid="gallery-main-stage">
-        {activeMediaUrl ? (
+      <div
+        className={styles.mainStage}
+        data-testid="gallery-main-stage"
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+      >
+        {activeMediaUrl && activeMediaType === "image" ? (
           <Image
             src={activeMediaUrl}
             alt={activeAltText}
             fill
-            priority
+            priority={activeIndex === 0}
             sizes="(max-width: 768px) 100vw, (max-width: 1280px) 58vw, 800px"
             className={styles.mainImage}
+          />
+        ) : activeMediaUrl && activeMediaType === "video" ? (
+          <video
+            src={activeMediaUrl}
+            controls
+            playsInline
+            preload="metadata"
+            className={styles.mainVideo}
+            aria-label={activeAltText}
+            data-testid="gallery-video-player"
           />
         ) : (
           <div className={styles.fallbackStage} data-testid="gallery-fallback">
@@ -177,8 +274,11 @@ export function ProductMediaGallery({
           {eligibleGallery.map((item, index) => {
             const url = resolvePublicMediaUrl(item.asset.objectKey);
             const isCurrent = index === activeIndex;
+            const itemType = getGalleryMediaType(item.asset.mimeType);
+            const isVideo = itemType === "video";
             const thumbAlt =
-              item.asset.altText ?? `Miniatura ${index + 1} de ${eligibleGallery.length}`;
+              item.asset.altText ??
+              `${isVideo ? "Video" : "Miniatura"} ${index + 1} de ${eligibleGallery.length}`;
 
             return (
               <li key={item.mediaAssetId} className={styles.thumbnailItem}>
@@ -187,13 +287,18 @@ export function ProductMediaGallery({
                     buttonRefs.current[index] = el;
                   }}
                   type="button"
-                  onClick={() => setActiveIndex(index)}
+                  onClick={() => setUserSelectedIndex(index)}
                   onKeyDown={(e) => handleKeyDown(e, index)}
                   className={`${styles.thumbnailButton} ${isCurrent ? styles.thumbnailButtonActive : ""}`}
-                  aria-label={`Ver imagen ${index + 1} de ${eligibleGallery.length}`}
+                  aria-label={`Ver ${isVideo ? "video" : "imagen"} ${index + 1} de ${eligibleGallery.length}`}
                   aria-current={isCurrent ? "true" : undefined}
                 >
-                  {url ? (
+                  {isVideo ? (
+                    <div className={styles.thumbnailVideoIcon}>
+                      <Video size={20} aria-hidden="true" />
+                      <span className={styles.thumbnailVideoLabel}>Video</span>
+                    </div>
+                  ) : url ? (
                     <Image
                       src={url}
                       alt={thumbAlt}

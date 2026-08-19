@@ -731,7 +731,6 @@ export function buildSyntheticProductDetail(
       status: "ACTIVE",
       attributes: {
         color: "Negro",
-        edicion: "Standard",
       },
     },
     {
@@ -746,7 +745,6 @@ export function buildSyntheticProductDetail(
       status: "ACTIVE",
       attributes: {
         color: "Blanco",
-        edicion: "Especial",
       },
     },
   ];

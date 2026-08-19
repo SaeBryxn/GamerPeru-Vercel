@@ -572,4 +572,165 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
       expect(formatSpecFieldValue(strField, "   ")).toBeNull();
     });
   });
+
+  describe("Non-Cartesian Sparse Matrix Combination Compatibility", () => {
+    // Sparse matrix fixture:
+    // V1: Negro / 8K
+    // V2: Negro / 1K
+    // V3: Blanco / 1K
+    const vSparse1: ProductVariantDetail = {
+      id: "v-sparse-1",
+      productId: "p1",
+      sku: "SKU-BLK-8K",
+      title: "Negro / 8K",
+      priceCents: 59900,
+      compareAtPriceCents: null,
+      weightGrams: 39,
+      displayOrder: 1,
+      status: "ACTIVE",
+      attributes: {
+        colorway: "Negro",
+        polling: "8K",
+      },
+    };
+    const vSparse2: ProductVariantDetail = {
+      id: "v-sparse-2",
+      productId: "p1",
+      sku: "SKU-BLK-1K",
+      title: "Negro / 1K",
+      priceCents: 49900,
+      compareAtPriceCents: null,
+      weightGrams: 39,
+      displayOrder: 2,
+      status: "ACTIVE",
+      attributes: {
+        colorway: "Negro",
+        polling: "1K",
+      },
+    };
+    const vSparse3: ProductVariantDetail = {
+      id: "v-sparse-3",
+      productId: "p1",
+      sku: "SKU-WHT-1K",
+      title: "Blanco / 1K",
+      priceCents: 49900,
+      compareAtPriceCents: null,
+      weightGrams: 39,
+      displayOrder: 3,
+      status: "ACTIVE",
+      attributes: {
+        colorway: "Blanco",
+        polling: "1K",
+      },
+    };
+
+    const sparseVariants = [vSparse1, vSparse2, vSparse3];
+
+    it("disables Blanco when Negro / 8K is selected because Blanco / 8K does not exist", () => {
+      const html = renderToStaticMarkup(
+        <VariantSelector
+          variants={sparseVariants}
+          selectedVariant={vSparse1} // Negro / 8K
+          onSelectVariant={() => {}}
+        />
+      );
+
+      // In colorway dimension: Blanco must be disabled and aria-label indicates (No disponible)
+      expect(html).toContain('aria-label="Blanco (No disponible)"');
+      expect(html).toMatch(/disabled=""[^>]*data-testid="swatch-option-Blanco"/);
+
+      // In polling dimension: 1K is enabled (because Negro / 1K exists)
+      expect(html).toContain('data-testid="dimension-option-polling-1K"');
+      expect(html).not.toMatch(/disabled=""[^>]*data-testid="dimension-option-polling-1K"/);
+    });
+
+    it("enables Blanco when Negro / 1K is selected because Blanco / 1K exists", () => {
+      const html = renderToStaticMarkup(
+        <VariantSelector
+          variants={sparseVariants}
+          selectedVariant={vSparse2} // Negro / 1K
+          onSelectVariant={() => {}}
+        />
+      );
+
+      // In colorway dimension: Blanco is enabled!
+      expect(html).toContain('aria-label="Blanco"');
+      expect(html).not.toMatch(/disabled=""[^>]*data-testid="swatch-option-Blanco"/);
+
+      // In polling dimension: 8K is enabled (because Negro / 8K exists)
+      expect(html).not.toMatch(/disabled=""[^>]*data-testid="dimension-option-polling-8K"/);
+    });
+  });
+
+  describe("MIME / Media-Type Classification & Video Rendering", () => {
+    const videoMedia: ProductMediaItem = {
+      id: "med-video-1",
+      productId: "prod-1",
+      mediaAssetId: "asset-video-1",
+      variantId: null,
+      displayOrder: 3,
+      asset: {
+        objectKey: "products/wlmouse/sound-test.mp4",
+        mimeType: "video/mp4",
+        fileSizeBytes: 1048576,
+        width: 1920,
+        height: 1080,
+        altText: "Beast X Pro Switch Sound Test",
+      },
+    };
+
+    const docMedia: ProductMediaItem = {
+      id: "med-doc-1",
+      productId: "prod-1",
+      mediaAssetId: "asset-doc-1",
+      variantId: null,
+      displayOrder: 4,
+      asset: {
+        objectKey: "products/wlmouse/manual.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 524288,
+        width: null,
+        height: null,
+        altText: "User Manual PDF",
+      },
+    };
+
+    it("includes VIDEO in eligible gallery and omits DOCUMENT media", () => {
+      const allMedia = [MOCK_GLOBAL_MEDIA, videoMedia, docMedia];
+      const eligible = buildEligibleGallery(allMedia, MOCK_GLOBAL_MEDIA, "var-1");
+
+      expect(eligible.some((m) => m.id === MOCK_GLOBAL_MEDIA.id)).toBe(true);
+      expect(eligible.some((m) => m.id === videoMedia.id)).toBe(true);
+      // PDF Document is completely omitted from storefront PDP gallery
+      expect(eligible.some((m) => m.id === docMedia.id)).toBe(false);
+    });
+
+    it("renders <video> element with controls and playsInline when VIDEO media is active", () => {
+      const html = renderToStaticMarkup(
+        <ProductMediaGallery
+          media={[videoMedia]}
+          primaryMedia={null}
+          selectedVariant={MOCK_VARIANT_1}
+          productName="Beast X Pro"
+          brandName="WLMOUSE"
+        />
+      );
+
+      expect(html).toContain("<video");
+      expect(html).toContain("controls");
+      expect(html.toLowerCase()).toContain("playsinline");
+      expect(html).toContain('preload="metadata"');
+      expect(html).toContain('data-testid="gallery-video-player"');
+      // Must not render <img> for video media
+      expect(html).not.toContain("<img");
+    });
+
+    it("ignores unsupported primaryMedia (e.g. PDF) without displacing valid supported images", () => {
+      const allMedia = [MOCK_GLOBAL_MEDIA];
+      // primaryMedia has unsupported PDF MIME
+      const eligible = buildEligibleGallery(allMedia, docMedia, "var-1");
+      expect(eligible).toHaveLength(1);
+      expect(eligible[0]?.id).toBe(MOCK_GLOBAL_MEDIA.id);
+    });
+  });
 });

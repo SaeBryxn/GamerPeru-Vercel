@@ -75,6 +75,10 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     await expect(page.getByTestId("selling-price")).toHaveText("S/ 129.90");
     await expect(page.getByTestId("variant-sku")).toContainText("SKU-MOUSE-PRO-MOD-01-BLK");
 
+    // Verify initial gallery main image shows black variant
+    const mainImg = page.getByTestId("gallery-main-stage").locator("img");
+    await expect(mainImg).toHaveAttribute("src", /variant-black/);
+
     // Track network requests during variant selection
     const apiRequests: string[] = [];
     page.on("request", (req) => {
@@ -97,6 +101,9 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     // Synchronous state update: Price becomes S/ 139.90, SKU becomes -WHT
     await expect(page.getByTestId("selling-price")).toHaveText("S/ 139.90");
     await expect(page.getByTestId("variant-sku")).toContainText("SKU-MOUSE-PRO-MOD-01-WHT");
+
+    // Verify main gallery image changes to white variant
+    await expect(mainImg).toHaveAttribute("src", /variant-white/);
 
     // Zero data/API network requests made
     expect(apiRequests).toHaveLength(0);

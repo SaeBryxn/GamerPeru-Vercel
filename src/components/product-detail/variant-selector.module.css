@@ -167,3 +167,11 @@
   flex-direction: column;
   gap: var(--space-2, 8px);
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .optionChip,
+  .swatchButton {
+    transition: none !important;
+    transform: none !important;
+  }
+}
