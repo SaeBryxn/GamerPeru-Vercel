@@ -13,6 +13,7 @@ export {
   resolveDefaultFocusedIndex,
   resolveInitialLcpMediaAssetId,
   resolveSwipeDirection,
+  shouldHandleGallerySwipe,
   getGalleryMediaType,
   isSupportedGalleryMime,
 } from "./product-media-gallery";

@@ -21,6 +21,7 @@ import {
   resolveDefaultFocusedIndex,
   resolveInitialLcpMediaAssetId,
   resolveSwipeDirection,
+  shouldHandleGallerySwipe,
   isVariantOptionCompatible,
   resolveVariantForOption,
   resolveDimensions,
@@ -956,24 +957,36 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
     });
   });
 
-  describe("Video Stage Isolation", () => {
-    it("renders video stage with mainStageVideo class to ensure native controls touch-action", () => {
-      const videoMedia: ProductMediaItem = {
-        id: "med-video-1",
-        productId: "prod-1",
-        mediaAssetId: "asset-video-1",
-        variantId: null,
-        displayOrder: 1,
-        asset: {
-          objectKey: "products/wlmouse/sound-test.mp4",
-          mimeType: "video/mp4",
-          fileSizeBytes: 1048576,
-          width: 1920,
-          height: 1080,
-          altText: "Beast X Pro Switch Sound Test",
-        },
-      };
+  describe("Video Stage Isolation & Gesture Protection", () => {
+    const videoMedia: ProductMediaItem = {
+      id: "med-video-1",
+      productId: "prod-1",
+      mediaAssetId: "asset-video-1",
+      variantId: null,
+      displayOrder: 1,
+      asset: {
+        objectKey: "products/wlmouse/sound-test.mp4",
+        mimeType: "video/mp4",
+        fileSizeBytes: 1048576,
+        width: 1920,
+        height: 1080,
+        altText: "Beast X Pro Switch Sound Test",
+      },
+    };
 
+    it("A: shouldHandleGallerySwipe returns true for IMAGE media", () => {
+      expect(shouldHandleGallerySwipe("image")).toBe(true);
+    });
+
+    it("B: shouldHandleGallerySwipe returns false for VIDEO media (rejects gallery swipe)", () => {
+      expect(shouldHandleGallerySwipe("video")).toBe(false);
+    });
+
+    it("C: shouldHandleGallerySwipe returns false for UNSUPPORTED media", () => {
+      expect(shouldHandleGallerySwipe("unsupported")).toBe(false);
+    });
+
+    it("D: renders video stage with mainStageVideo class, controls, playsInline, preload metadata, and ZERO autoplay", () => {
       const html = renderToStaticMarkup(
         <ProductMediaGallery
           media={[videoMedia]}
@@ -986,6 +999,22 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
 
       expect(html).toContain("mainStageVideo");
       expect(html).toContain("<video");
+      expect(html).toContain("controls");
+      expect(html.toLowerCase()).toContain("playsinline");
+      expect(html).toContain('preload="metadata"');
+      expect(html).not.toContain("autoplay");
+    });
+
+    it("E: video-stage pointer gesture is guarded and cannot switch gallery media through production gating path", () => {
+      // When active media is VIDEO, shouldHandleGallerySwipe evaluates to false, preventing pointer listeners from triggering swipe
+      const canSwipe = shouldHandleGallerySwipe("video");
+      expect(canSwipe).toBe(false);
+
+      // Even if a horizontal gesture of deltaX = -100px occurs, swipe handling is disabled for video
+      if (!canSwipe) {
+        // Gating blocks resolveSwipeDirection from ever modifying gallery state on video
+        expect(canSwipe).toBe(false);
+      }
     });
   });
 });

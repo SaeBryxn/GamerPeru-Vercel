@@ -49,6 +49,15 @@ export function isSupportedGalleryMime(mimeType: string | null | undefined): boo
 }
 
 /**
+ * Pure guard establishing whether stage horizontal swipe gesture handling is permitted.
+ * Permitted only for IMAGE media so native video controls (seeking, scrubbing, volume, fullscreen)
+ * and unsupported fallback surfaces never compete with gallery swipe navigation.
+ */
+export function shouldHandleGallerySwipe(activeMediaType: GalleryMediaType): boolean {
+  return activeMediaType === "image";
+}
+
+/**
  * Builds the canonical eligible and deduplicated gallery set for the selected variant.
  *
  * Rules:
@@ -245,13 +254,13 @@ export function ProductMediaGallery({
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     // Only track swipe on images to avoid competing with video native controls
-    if (activeMediaType !== "image") return;
+    if (!shouldHandleGallerySwipe(activeMediaType)) return;
     if (!e.isPrimary) return;
     pointerStartRef.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (activeMediaType !== "image") {
+    if (!shouldHandleGallerySwipe(activeMediaType)) {
       pointerStartRef.current = null;
       return;
     }
