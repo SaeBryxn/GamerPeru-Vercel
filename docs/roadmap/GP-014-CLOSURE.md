@@ -11,7 +11,8 @@ COMPLETE
 - **Prerequisite GP-013 Accepted Implementation Checkpoint**: `0d8e4c04b73d3d22ce3ddbcd9380f45b224767cd`
 - **Canonical GP-014 DB0 Starting Repository Checkpoint**: `72d227cea8934194bf3eef20d6d807041fbd4087`
 - **Accepted GP-014 Implementation / DB3E Checkpoint**: `4bc45cf7a446269050c6ce50e8d9ff4d26465101`
-- **Prior Formal Closure Documentation Checkpoint**: `e67f64176a2d64c66270da1954bb00fb7b6e5aaa`
+- **Initial Formal Closure Documentation Checkpoint**: `e67f64176a2d64c66270da1954bb00fb7b6e5aaa`
+- **First Closure Documentation Remediation Checkpoint**: `8cc558ca151dc2f925eca45657da599ed0068bc3`
 
 ---
 
@@ -34,8 +35,9 @@ GP-014 (Product Detail System) establishes the end-to-end Product Detail Page (`
 
 ### 1. Product Detail Page Route (`/productos/[slug]`)
 
-- Server-rendered dynamic route utilizing Next.js `generateMetadata()` for SEO and `getProductDetailReader()` for data retrieval.
-- Request-scoped deduplication via `React cache()` ensuring zero redundant queries between metadata generation and page rendering within the same HTTP request.
+- Server-rendered dynamic route utilizing Next.js `generateMetadata()` for SEO and `getCachedProduct(slug)` from `src/lib/catalog/cached-queries.ts` for data retrieval.
+- `getCachedProduct()` is wrapped with `React cache()` and internally obtains `getProductDetailReader()`, calling `reader.getPublishedProductBySlug(slug)`.
+- Metadata generation and page rendering share the same request-scoped product-detail retrieval path, guaranteeing zero redundant queries within the same HTTP request cycle.
 - Strict HTTP 404 handling for non-existent or unpublished product slugs.
 
 ### 2. Commerce Hero & Variant Selection
@@ -122,7 +124,7 @@ GP-014 (Product Detail System) establishes the end-to-end Product Detail Page (`
 6. **DB3C (Modular Product Story Renderer)**:
    - Implemented all 13 story block components, runtime validation, video autoplay intersection observer, and related product hydration.
 7. **DB3D (PDP SEO & Structured Data)**:
-   - Implemented `buildProductMetadata(product)` and `buildProductStructuredData(product)` in `src/lib/catalog/pdp-seo.ts`.
+   - Implemented `buildProductMetadata(product)` and `buildProductStructuredData(product)` in `src/lib/catalog/pdp-seo.ts` (consumed via `generateMetadata()` in `page.tsx`).
 8. **DB3E (Comprehensive Testing & Visual QA Closure)**:
    - Built Playwright-only media fixture routing (`tests/fixtures/gp014-media/`, `tests/e2e/helpers/gp014-media-fixtures.ts`).
    - Remediated initial mount reduced-motion race (`shouldPauseForReducedMotionTransition`).
@@ -252,6 +254,12 @@ GP-014 (Product Detail System) establishes the end-to-end Product Detail Page (`
    - **Vitest Suite**: 37 files passed, 469 passed, 1 skipped (470 total)
    - **Playwright Suite**: 141 passed, 1 flaky (Non-blocking note: Unrelated GP-009 legacy navigation test `tests/e2e/global-navigation.spec.ts:110` had a retry #1; all GP-014 tests passed on initial execution).
 
+3. **First Closure Documentation Remediation CI Run ([Run 32337446976](https://github.com/latamcreativa/GamerPeru/actions/runs/32337446976))**:
+   - **Head SHA**: `8cc558ca151dc2f925eca45657da599ed0068bc3`
+   - **Status / Conclusion**: `completed / success` (Attempt 1)
+   - **Vitest Suite**: 37 files passed, 469 passed, 1 skipped (470 total)
+   - **Playwright Suite**: **142 passed, 0 failed, 0 flaky, 0 retries** (Execution time: 3.2m)
+
 ---
 
 ## External Reviews & Visual Approval
@@ -278,17 +286,23 @@ GP-014 (Product Detail System) establishes the end-to-end Product Detail Page (`
 
 ## Canonical Checkpoints
 
-- **Prerequisite GP-013 Accepted Checkpoint**: `0d8e4c04b73d3d22ce3ddbcd9380f45b224767cd`
-- **GP-014 DB0 Starting Checkpoint**: `72d227cea8934194bf3eef20d6d807041fbd4087`
-- **DB1 Migration Candidate**: `41249b6b9ae9bfae18feaa0ad4e3981881cf7ca2` (`feat(db): add GP-014 product stories and revisions schema`)
-- **DB2**: Remote migration applied to Supabase PostgreSQL (no repository commit).
-- **DB3A Implementation**: `d85207908b981f4a9b699971db4145781a7051b8` (`feat(storefront): implement GP-014 PDP data layer and readers`)
-- **DB3B Implementation**: `198f7e25ea4bcae28d492666ad63d350b556b6b7` (`feat(storefront): implement GP-014 commerce hero and hardware specs`)
-- **DB3C Implementation**: `ba14092b3a09e075037d7bf265bb6d0c6444da93` (`feat(storefront): implement GP-014 modular product story renderer`)
-- **DB3D Implementation**: `77d30818ee86394a90cc8d83a2ad08975685a828` (`fix(storefront): finalize GP-014 PDP SEO text integrity`)
+- **Prerequisite GP-013 Accepted Checkpoint**: `0d8e4c04b73d3d22ce3ddbcd9380f45b224767cd` (`fix: close GP-013 decimal domain`)
+- **GP-014 DB0 Starting Checkpoint**: `72d227cea8934194bf3eef20d6d807041fbd4087` (`docs: correct GP-013 closure evidence`)
+- **DB1 Initial Schema Commit**: `4880200c22ccf42c5c4b72a2171194f6f0290287` (`feat(db): add GP-014 product detail system schema`)
+- **DB1 Accepted Final Checkpoint**: `005bbef0d4edb045ec817b1e07dc19a81e72980f` (`fix(db): align GP-014 FK constraint names`)
+- **DB2 Application Phase**: Authorized remote migration application (no repository commit created; code checkpoint remained `005bbef0d4edb045ec817b1e07dc19a81e72980f`)
+- **DB3A Initial Implementation**: `47da01c066025b9a2c534a21be893b53b598d549` (`feat(catalog): implement GP-014 product detail reader (DB3A)`)
+- **DB3A Accepted Final Checkpoint**: `6d6604bb4ae91c50e98f4c5749a3ce2a6b4d46d0` (`fix(catalog): enforce GP-014 story validation bounds`)
+- **DB3B Initial Implementation**: `4a405e99361e4b87d5ab7f3f97df7c3c3ce0d2db` (`feat(storefront): implement GP-014 product commerce hero`)
+- **DB3B Accepted Final Checkpoint**: `4a6762d4bcbf742b2b09d327a8a1ab29d9a8558f` (`test(storefront): verify GP-014 video gesture isolation`)
+- **DB3C Initial Implementation**: `92a057b23c4be4fab498afa04252ba410e93dd4c` (`feat(storefront): implement GP-014 modular product story renderer`)
+- **DB3C Accepted Final Checkpoint**: `02aa367ba25fd22e6ab5860a410d6a32da7b63d1` (`fix(storefront): stabilize GP-014 story video playback state`)
+- **DB3D Initial Implementation**: `e33dc42d08a4a95be077f90c499409dac9a8fa7b` (`feat(storefront): implement GP-014 PDP SEO metadata`)
+- **DB3D Accepted Final Checkpoint**: `77d30818ee86394a90cc8d83a2ad08975685a828` (`fix(storefront): finalize GP-014 PDP SEO text integrity`)
 - **DB3E Initial Implementation**: `3698311ee0c7e29b633182ea820cb81bc0e2b8d7` (`test(storefront): complete GP-014 visual QA`)
-- **DB3E Final Remediation Checkpoint**: `4bc45cf7a446269050c6ce50e8d9ff4d26465101` (`fix(storefront): stabilize GP-014 reduced-motion playback`)
-- **Formal Closure Documentation Checkpoint**: `e67f64176a2d64c66270da1954bb00fb7b6e5aaa` (`docs(roadmap): close GP-014 Product Detail System`)
+- **DB3E Accepted Final Checkpoint**: `4bc45cf7a446269050c6ce50e8d9ff4d26465101` (`fix(storefront): stabilize GP-014 reduced-motion playback`)
+- **Initial Formal Closure Documentation Checkpoint**: `e67f64176a2d64c66270da1954bb00fb7b6e5aaa` (`docs(roadmap): close GP-014 Product Detail System`)
+- **First Closure Documentation Remediation Checkpoint**: `8cc558ca151dc2f925eca45657da599ed0068bc3` (`docs(roadmap): correct GP-014 closure evidence`)
 
 ---
 
