@@ -36,14 +36,19 @@ async function waitForImagesReady(locator: Locator): Promise<void> {
   const count = await images.count();
   for (let i = 0; i < count; i++) {
     const img = images.nth(i);
-    await img.evaluate(async (element: HTMLImageElement) => {
-      if (element.complete && element.naturalWidth > 0) return;
-      await new Promise<void>((resolve) => {
-        element.onload = () => resolve();
-        element.onerror = () => resolve();
-        if (element.complete) resolve();
-      });
-    });
+    await expect
+      .poll(
+        async () => {
+          return await img.evaluate((element: HTMLImageElement) => {
+            return element.complete && element.naturalWidth > 0;
+          });
+        },
+        {
+          message: "Image failed to load or has 0 naturalWidth",
+          timeout: 5000,
+        }
+      )
+      .toBe(true);
   }
 }
 

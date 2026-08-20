@@ -3,6 +3,7 @@ export type { ProductStoryRendererProps } from "./types";
 export { resolveStoryAlt } from "./helpers/resolve-story-alt";
 export { sanitizeComparisonRows } from "./helpers/comparison-matrix";
 export { shouldAutoplayStoryVideo } from "./helpers/should-autoplay-story-video";
+export { shouldPauseForReducedMotionTransition } from "./helpers/should-pause-for-reduced-motion-transition";
 
 // Export blocks for testing/modular reuse
 export { HeroMediaBlock } from "./blocks/hero-media-block";

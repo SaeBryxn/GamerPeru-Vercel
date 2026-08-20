@@ -18,10 +18,33 @@ import {
   resolveStoryAlt,
   sanitizeComparisonRows,
   shouldAutoplayStoryVideo,
+  shouldPauseForReducedMotionTransition,
 } from "@/components/product-story";
 import type { ProductDiscoveryItem } from "@/lib/catalog/types";
 
 describe("Product Story — Helpers", () => {
+  describe("shouldPauseForReducedMotionTransition (Runtime vs Mount Motion Guard)", () => {
+    it("A: returns false for unknown -> reduce (initial mount resolution does NOT pause manual playback)", () => {
+      expect(shouldPauseForReducedMotionTransition("unknown", "reduce")).toBe(false);
+    });
+
+    it("B: returns true for no-preference -> reduce (runtime user transition MUST pause active playback)", () => {
+      expect(shouldPauseForReducedMotionTransition("no-preference", "reduce")).toBe(true);
+    });
+
+    it("C: returns false for reduce -> reduce (steady state)", () => {
+      expect(shouldPauseForReducedMotionTransition("reduce", "reduce")).toBe(false);
+    });
+
+    it("D: returns false for unknown -> no-preference (initial mount resolution)", () => {
+      expect(shouldPauseForReducedMotionTransition("unknown", "no-preference")).toBe(false);
+    });
+
+    it("E: returns false for reduce -> no-preference (motion enabled does not force pause)", () => {
+      expect(shouldPauseForReducedMotionTransition("reduce", "no-preference")).toBe(false);
+    });
+  });
+
   describe("shouldAutoplayStoryVideo (Canonical Viewport & Motion Decision Rule)", () => {
     it("A: returns false when isIntersecting is true but ratio is 0", () => {
       expect(

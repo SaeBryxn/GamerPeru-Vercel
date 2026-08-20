@@ -3,6 +3,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { shouldAutoplayStoryVideo } from "../helpers/should-autoplay-story-video";
+import {
+  type MotionPreference,
+  shouldPauseForReducedMotionTransition,
+} from "../helpers/should-pause-for-reduced-motion-transition";
 import styles from "./story-video-player.module.css";
 
 export interface StoryVideoPlayerProps {
@@ -10,8 +14,6 @@ export interface StoryVideoPlayerProps {
   posterUrl?: string | null;
   title?: string;
 }
-
-type MotionPreference = "unknown" | "reduce" | "no-preference";
 
 export function StoryVideoPlayer({
   videoUrl,
@@ -22,6 +24,7 @@ export function StoryVideoPlayer({
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [hasError, setHasError] = useState<boolean>(false);
   const [motionPreference, setMotionPreference] = useState<MotionPreference>("unknown");
+  const previousMotionPreferenceRef = useRef<MotionPreference>("unknown");
   const isManualInteractingRef = useRef<boolean>(false);
 
   // 1. Resolve initial reduced-motion preference and subscribe to runtime changes
@@ -42,9 +45,12 @@ export function StoryVideoPlayer({
     return () => mediaQuery.removeEventListener("change", handler);
   }, []);
 
-  // 2. React to reduced-motion transition: pause automatic playback immediately
+  // 2. React to runtime reduced-motion transition: pause active playback immediately
   useEffect(() => {
-    if (motionPreference === "reduce") {
+    const previous = previousMotionPreferenceRef.current;
+    previousMotionPreferenceRef.current = motionPreference;
+
+    if (shouldPauseForReducedMotionTransition(previous, motionPreference)) {
       const video = videoRef.current;
       if (video && !video.paused) {
         video.pause();
