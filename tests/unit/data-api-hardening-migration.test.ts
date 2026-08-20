@@ -48,29 +48,37 @@ describe("GP-015 — Data API Hardening Migration Candidate Integrity", () => {
     expect(content).toMatch(/REVOKE\s+ALL\s+PRIVILEGES\s+ON\s+TABLE/i);
   });
 
-  it("verifies 0005 migration alters default privileges for tables, sequences, and functions", () => {
+  it("verifies 0005 migration alters per-schema and global default privileges correctly", () => {
     const migrationPath = resolve(process.cwd(), "src/db/migrations/0005_data_api_hardening.sql");
     const content = readFileSync(migrationPath, "utf8");
 
-    // Table default privileges revoked
+    // Table default privileges revoked in schema public
     expect(content).toMatch(
       /ALTER\s+DEFAULT\s+PRIVILEGES\s+FOR\s+ROLE\s+"postgres"\s+IN\s+SCHEMA\s+"public"\s+REVOKE\s+ALL\s+PRIVILEGES\s+ON\s+TABLES\s+FROM\s+"anon",\s*"authenticated",\s*"service_role";/i
     );
 
-    // Sequence default privileges revoked
+    // Sequence default privileges revoked in schema public
     expect(content).toMatch(
       /ALTER\s+DEFAULT\s+PRIVILEGES\s+FOR\s+ROLE\s+"postgres"\s+IN\s+SCHEMA\s+"public"\s+REVOKE\s+ALL\s+PRIVILEGES\s+ON\s+SEQUENCES\s+FROM\s+"anon",\s*"authenticated",\s*"service_role";/i
     );
 
-    // Function default privileges revoked from client roles
+    // Function default privileges revoked from client roles in schema public
     expect(content).toMatch(
       /ALTER\s+DEFAULT\s+PRIVILEGES\s+FOR\s+ROLE\s+"postgres"\s+IN\s+SCHEMA\s+"public"\s+REVOKE\s+EXECUTE\s+ON\s+FUNCTIONS\s+FROM\s+"anon",\s*"authenticated",\s*"service_role";/i
     );
 
-    // Function default privileges revoked from PUBLIC
+    // Global function default privileges revoked from unquoted pseudo-role PUBLIC (without IN SCHEMA clause)
     expect(content).toMatch(
-      /ALTER\s+DEFAULT\s+PRIVILEGES\s+FOR\s+ROLE\s+"postgres"\s+IN\s+SCHEMA\s+"public"\s+REVOKE\s+EXECUTE\s+ON\s+FUNCTIONS\s+FROM\s+"PUBLIC";/i
+      /ALTER\s+DEFAULT\s+PRIVILEGES\s+FOR\s+ROLE\s+"postgres"\s+REVOKE\s+EXECUTE\s+ON\s+FUNCTIONS\s+FROM\s+PUBLIC;/i
     );
+
+    // Assert that the PUBLIC statement does NOT have an IN SCHEMA clause
+    expect(content).not.toMatch(
+      /ALTER\s+DEFAULT\s+PRIVILEGES[^\n;]*IN\s+SCHEMA[^\n;]*FROM\s+PUBLIC/i
+    );
+
+    // Assert that PUBLIC is never quoted as a role identifier ("PUBLIC")
+    expect(content).not.toMatch(/FROM\s+"PUBLIC"/i);
   });
 
   it("verifies 0005 migration contains zero GRANT, RLS, policy, structural DDL, or DML statements", () => {
