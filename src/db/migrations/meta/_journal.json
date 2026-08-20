@@ -29,6 +29,13 @@
       "when": 1787090287769,
       "tag": "0003_small_slyde",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787212905967,
+      "tag": "0004_friendly_shriek",
+      "breakpoints": true
     }
   ]
 }

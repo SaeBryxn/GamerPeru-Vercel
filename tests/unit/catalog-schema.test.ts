@@ -18,7 +18,6 @@ describe("Catalog Schema — Physical Bootstrap Integrity", () => {
     // Verify deferred tables are NOT present in this gate
     expect((schema as Record<string, unknown>).collections).toBeUndefined();
     expect((schema as Record<string, unknown>).productCollections).toBeUndefined();
-    expect((schema as Record<string, unknown>).customerProfiles).toBeUndefined();
     expect((schema as Record<string, unknown>).orders).toBeUndefined();
     expect((schema as Record<string, unknown>).payments).toBeUndefined();
     expect((schema as Record<string, unknown>).inventory).toBeUndefined();
