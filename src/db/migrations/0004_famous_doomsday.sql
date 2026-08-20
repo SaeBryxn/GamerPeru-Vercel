@@ -16,31 +16,24 @@ CREATE TABLE "roles" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"name" varchar(50) NOT NULL,
 	"description" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "roles_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
 CREATE TABLE "permissions" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"name" varchar(100) NOT NULL,
-	"description" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "permissions_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
 CREATE TABLE "role_permissions" (
 	"role_id" uuid NOT NULL,
 	"permission_id" uuid NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "role_permissions_pkey" PRIMARY KEY("role_id","permission_id")
 );
 --> statement-breakpoint
 CREATE TABLE "user_roles" (
 	"auth_user_id" uuid NOT NULL,
 	"role_id" uuid NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "user_roles_pkey" PRIMARY KEY("auth_user_id","role_id")
 );
 --> statement-breakpoint

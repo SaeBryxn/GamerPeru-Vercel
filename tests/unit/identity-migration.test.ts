@@ -140,6 +140,15 @@ describe("GP-015 — Identity & RBAC Schema and Migration Candidate Integrity", 
       'CREATE INDEX "user_roles_role_id_idx" ON "user_roles" USING btree ("role_id");'
     );
 
+    // Assert absence of unauthorized columns in RBAC tables
+    expect(content).not.toMatch(/"roles"[^;]*"created_at"/s);
+    expect(content).not.toMatch(/"roles"[^;]*"updated_at"/s);
+    expect(content).not.toMatch(/"permissions"[^;]*"description"/s);
+    expect(content).not.toMatch(/"permissions"[^;]*"created_at"/s);
+    expect(content).not.toMatch(/"permissions"[^;]*"updated_at"/s);
+    expect(content).not.toMatch(/"role_permissions"[^;]*"created_at"/s);
+    expect(content).not.toMatch(/"user_roles"[^;]*"created_at"/s);
+
     // Purity: No DROP or DML
     expect(content).not.toMatch(/^\s*DROP\s+/im);
     expect(content).not.toMatch(/INSERT\s+INTO/i);
@@ -157,6 +166,22 @@ describe("GP-015 — Identity & RBAC Schema and Migration Candidate Integrity", 
     expect(snapshot.tables).toHaveProperty("public.permissions");
     expect(snapshot.tables).toHaveProperty("public.role_permissions");
     expect(snapshot.tables).toHaveProperty("public.user_roles");
+
+    // Check column counts
+    expect(Object.keys(snapshot.tables["public.roles"].columns)).toEqual([
+      "id",
+      "name",
+      "description",
+    ]);
+    expect(Object.keys(snapshot.tables["public.permissions"].columns)).toEqual(["id", "name"]);
+    expect(Object.keys(snapshot.tables["public.role_permissions"].columns)).toEqual([
+      "role_id",
+      "permission_id",
+    ]);
+    expect(Object.keys(snapshot.tables["public.user_roles"].columns)).toEqual([
+      "auth_user_id",
+      "role_id",
+    ]);
 
     const custFks = snapshot.tables["public.customer_profiles"].foreignKeys;
     expect(custFks).toHaveProperty("customer_profiles_auth_user_fk");

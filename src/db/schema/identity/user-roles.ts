@@ -1,4 +1,4 @@
-import { foreignKey, index, pgTable, primaryKey, timestamp, uuid } from "drizzle-orm/pg-core";
+import { foreignKey, index, pgTable, primaryKey, uuid } from "drizzle-orm/pg-core";
 import { authUsers } from "./auth-users";
 import { roles } from "./roles";
 
@@ -12,7 +12,6 @@ export const userRoles = pgTable(
   {
     authUserId: uuid("auth_user_id").notNull(),
     roleId: uuid("role_id").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     primaryKey({

@@ -42,48 +42,54 @@ describe("Identity & RBAC Schema — Physical Bootstrap Integrity (GP-015)", () 
   });
 
   describe("roles table", () => {
-    it("has canonical column definitions", () => {
+    it("has canonical column definitions and excludes unauthorized timestamps", () => {
       const cols = getTableColumns(schema.roles);
       expect(cols.id).toBeDefined();
       expect(cols.name).toBeDefined();
       expect(cols.description).toBeDefined();
-      expect(cols.createdAt).toBeDefined();
-      expect(cols.updatedAt).toBeDefined();
+
+      // Ensure unauthorized columns are NOT present
+      expect((cols as Record<string, unknown>).createdAt).toBeUndefined();
+      expect((cols as Record<string, unknown>).updatedAt).toBeUndefined();
     });
   });
 
   describe("permissions table", () => {
-    it("has canonical column definitions", () => {
+    it("has canonical column definitions and excludes unauthorized description and timestamps", () => {
       const cols = getTableColumns(schema.permissions);
       expect(cols.id).toBeDefined();
       expect(cols.name).toBeDefined();
-      expect(cols.description).toBeDefined();
-      expect(cols.createdAt).toBeDefined();
-      expect(cols.updatedAt).toBeDefined();
+
+      // Ensure unauthorized columns are NOT present
+      expect((cols as Record<string, unknown>).description).toBeUndefined();
+      expect((cols as Record<string, unknown>).createdAt).toBeUndefined();
+      expect((cols as Record<string, unknown>).updatedAt).toBeUndefined();
     });
   });
 
   describe("role_permissions table", () => {
-    it("has canonical composite key column definitions", () => {
+    it("has canonical composite key column definitions and excludes unauthorized timestamps", () => {
       const cols = getTableColumns(schema.rolePermissions);
       expect(cols.roleId).toBeDefined();
       expect(cols.permissionId).toBeDefined();
-      expect(cols.createdAt).toBeDefined();
 
-      // Verify no surrogate ID
+      // Verify no surrogate ID or timestamps
       expect((cols as Record<string, unknown>).id).toBeUndefined();
+      expect((cols as Record<string, unknown>).createdAt).toBeUndefined();
+      expect((cols as Record<string, unknown>).updatedAt).toBeUndefined();
     });
   });
 
   describe("user_roles table", () => {
-    it("has canonical composite key column definitions", () => {
+    it("has canonical composite key column definitions and excludes unauthorized timestamps", () => {
       const cols = getTableColumns(schema.userRoles);
       expect(cols.authUserId).toBeDefined();
       expect(cols.roleId).toBeDefined();
-      expect(cols.createdAt).toBeDefined();
 
-      // Verify no surrogate ID
+      // Verify no surrogate ID or timestamps
       expect((cols as Record<string, unknown>).id).toBeUndefined();
+      expect((cols as Record<string, unknown>).createdAt).toBeUndefined();
+      expect((cols as Record<string, unknown>).updatedAt).toBeUndefined();
     });
   });
 });
