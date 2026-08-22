@@ -336,4 +336,92 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
       expect(content).toContain('autoComplete="new-password"');
     });
   });
+
+  describe("GP-015 AUTH6-A: Google OAuth PKCE Architecture & Security Invariants", () => {
+    const rootDir = path.resolve(__dirname, "../../");
+
+    it("A & B: exposes 'Continuar con Google' on both login and registration forms", () => {
+      const loginContent = fs.readFileSync(
+        path.join(rootDir, "src/components/auth/login-form.tsx"),
+        "utf-8"
+      );
+      const registerContent = fs.readFileSync(
+        path.join(rootDir, "src/components/auth/register-form.tsx"),
+        "utf-8"
+      );
+
+      expect(loginContent).toContain("Continuar con Google");
+      expect(loginContent).toContain("oauth_error");
+      expect(registerContent).toContain("Continuar con Google");
+    });
+
+    it("C, D, E: initiates Google OAuth from browser client with first-party callback URL", () => {
+      const helperContent = fs.readFileSync(
+        path.join(rootDir, "src/lib/auth/google-oauth.ts"),
+        "utf-8"
+      );
+
+      expect(helperContent).toContain("createBrowserSupabaseClient");
+      expect(helperContent).toContain('provider: "google"');
+      expect(helperContent).toContain("/auth/callback");
+      expect(helperContent).toContain("NEXT_PUBLIC_SITE_URL");
+    });
+
+    it("F, G, H: enforces no arbitrary redirect, no elevated scopes, and no offline access params", () => {
+      const helperContent = fs.readFileSync(
+        path.join(rootDir, "src/lib/auth/google-oauth.ts"),
+        "utf-8"
+      );
+
+      expect(helperContent).not.toContain("access_type");
+      expect(helperContent).not.toContain("prompt");
+      expect(helperContent).not.toContain("scopes");
+      expect(helperContent).not.toContain("searchParams");
+      expect(helperContent).not.toContain("next");
+    });
+
+    it("I, J, K, L, M, N: callback route exchanges code for session and uses fixed safe redirects", async () => {
+      const callbackPath = path.join(rootDir, "src/app/auth/callback/route.ts");
+      expect(fs.existsSync(callbackPath)).toBe(true);
+
+      const callbackContent = fs.readFileSync(callbackPath, "utf-8");
+      expect(callbackContent).toContain("exchangeCodeForSession");
+      expect(callbackContent).toContain("createServerSupabaseClient");
+      expect(callbackContent).toContain("/auth/login?oauth_error=true");
+      expect(callbackContent).toContain('new URL("/", requestUrl.origin)');
+      expect(callbackContent).toContain("force-dynamic");
+      expect(callbackContent).toContain("no-store");
+      expect(callbackContent).not.toContain("searchParams.get('next')");
+      expect(callbackContent).not.toContain('searchParams.get("next")');
+      expect(callbackContent).not.toContain("searchParams.get('redirect')");
+    });
+
+    it("O, P, Q, R, S: ensures zero provider token storage, zero Google secrets, zero DB/RBAC/Data API queries", () => {
+      const authFiles = [
+        "src/app/auth/callback/route.ts",
+        "src/lib/auth/google-oauth.ts",
+        "src/components/auth/login-form.tsx",
+        "src/components/auth/register-form.tsx",
+      ];
+
+      for (const relPath of authFiles) {
+        const fullPath = path.join(rootDir, relPath);
+        if (fs.existsSync(fullPath)) {
+          const content = fs.readFileSync(fullPath, "utf-8");
+          expect(content).not.toContain("provider_token");
+          expect(content).not.toContain("provider_refresh_token");
+          expect(content).not.toContain("GOOGLE_CLIENT_SECRET");
+          expect(content).not.toContain("customer_profiles");
+          expect(content).not.toContain("user_roles");
+          expect(content).not.toContain(".from(");
+          expect(content).not.toContain(".rpc(");
+        }
+      }
+    });
+
+    it("T: verifies /auth/callback is excluded from AUTH4 proxy matcher", () => {
+      const proxyContent = fs.readFileSync(path.join(rootDir, "src/proxy.ts"), "utf-8");
+      expect(proxyContent).not.toContain("/auth/callback");
+    });
+  });
 });

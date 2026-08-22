@@ -50,5 +50,14 @@ export function mapAuthError(
     return "La contraseña debe tener al menos 8 caracteres.";
   }
 
+  if (
+    msg.includes("oauth") ||
+    msg.includes("provider is not enabled") ||
+    msg.includes("unsupported provider") ||
+    msg.includes("external provider")
+  ) {
+    return "No pudimos iniciar sesión con este proveedor. Inténtalo nuevamente.";
+  }
+
   return "No fue posible procesar tu solicitud. Inténtalo de nuevo en unos minutos.";
 }
