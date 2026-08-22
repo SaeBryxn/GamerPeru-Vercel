@@ -646,16 +646,15 @@ describe("GP-016 ACCT5 — Customer Address Book Suite", () => {
       expect(direccionesMetadata.robots).toEqual({ index: false, follow: false });
     });
 
-    it("31/32. account navigation activates Direcciones link while Pedidos and Favoritos remain non-interactive", () => {
+    it("31/32. account navigation activates Direcciones, Pedidos, Favoritos, and Referidos links", () => {
       const navSource = readFileSync(
         resolve(process.cwd(), "src/components/account/account-navigation.tsx"),
         "utf8"
       );
-      expect(navSource).toContain(
-        'label: "Direcciones", href: "/cuenta/direcciones", isAvailable: true'
-      );
-      expect(navSource).toContain('label: "Pedidos", isAvailable: false');
-      expect(navSource).toContain('label: "Favoritos", isAvailable: false');
+      expect(navSource).toContain('{ label: "Direcciones", href: "/cuenta/direcciones" }');
+      expect(navSource).toContain('{ label: "Pedidos", href: "/cuenta/pedidos" }');
+      expect(navSource).toContain('{ label: "Favoritos", href: "/cuenta/favoritos" }');
+      expect(navSource).toContain('{ label: "Referidos", href: "/cuenta/referidos" }');
     });
 
     it("40. /cuenta overview has an active link to /cuenta/direcciones", () => {

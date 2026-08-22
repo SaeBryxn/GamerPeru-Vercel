@@ -8,16 +8,16 @@ import styles from "./account.module.css";
 
 interface NavDestination {
   label: string;
-  href?: string;
-  isAvailable: boolean;
+  href: string;
 }
 
 const NAV_DESTINATIONS: NavDestination[] = [
-  { label: "Resumen", href: "/cuenta", isAvailable: true },
-  { label: "Perfil", href: "/cuenta/perfil", isAvailable: true },
-  { label: "Direcciones", href: "/cuenta/direcciones", isAvailable: true },
-  { label: "Pedidos", isAvailable: false },
-  { label: "Favoritos", isAvailable: false },
+  { label: "Resumen", href: "/cuenta" },
+  { label: "Perfil", href: "/cuenta/perfil" },
+  { label: "Direcciones", href: "/cuenta/direcciones" },
+  { label: "Pedidos", href: "/cuenta/pedidos" },
+  { label: "Favoritos", href: "/cuenta/favoritos" },
+  { label: "Referidos", href: "/cuenta/referidos" },
 ];
 
 export function AccountNavigation() {
@@ -27,17 +27,6 @@ export function AccountNavigation() {
     <nav className={styles.navContainer} aria-label="Navegación de mi cuenta">
       <ul className={styles.navList}>
         {NAV_DESTINATIONS.map((item) => {
-          if (!item.isAvailable || !item.href) {
-            return (
-              <li key={item.label} className={styles.navItem}>
-                <div className={styles.navDisabled} aria-disabled="true">
-                  <span>{item.label}</span>
-                  <span className={styles.badgeComingSoon}>Próximamente</span>
-                </div>
-              </li>
-            );
-          }
-
           const isActive =
             item.href === "/cuenta"
               ? pathname === "/cuenta"

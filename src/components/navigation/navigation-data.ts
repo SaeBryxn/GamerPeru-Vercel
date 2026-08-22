@@ -286,7 +286,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
   utilityLinks: {
     search: { label: "Buscar productos", href: "/buscar" },
     account: { label: "Mi cuenta", href: "/cuenta" },
-    wishlist: { label: "Lista de favoritos", href: "/favoritos" },
+    wishlist: { label: "Lista de favoritos", href: "/cuenta/favoritos" },
     cart: { label: "Carrito de compras", href: "/carrito" },
   },
   footerColumns: [

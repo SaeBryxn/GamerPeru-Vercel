@@ -20,7 +20,7 @@ export function HeaderUtilities({
   searchLabel = "Buscar productos",
   accountHref = "/cuenta",
   accountLabel = "Mi cuenta",
-  wishlistHref = "/favoritos",
+  wishlistHref = "/cuenta/favoritos",
   wishlistLabel = "Lista de favoritos",
   cartHref = "/carrito",
   cartLabel = "Carrito de compras",

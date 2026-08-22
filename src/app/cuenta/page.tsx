@@ -79,22 +79,47 @@ export default async function CuentaPage() {
           </p>
         </div>
 
-        <div className={styles.teaserCard}>
-          <h2 className={styles.teaserTitle}>
-            <span>Mis pedidos</span>
-            <span className={styles.badgeComingSoon}>Próximamente</span>
-          </h2>
+        <div className={styles.contentCard}>
+          <div className={styles.sectionHeader}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <h2 className={styles.sectionTitle}>Mis pedidos</h2>
+              <span className={styles.badgeComingSoon}>Próximamente</span>
+            </div>
+            <Link href="/cuenta/pedidos" className={styles.editLink}>
+              Ver
+            </Link>
+          </div>
           <p className={styles.teaserDesc}>
             Consulta el estado y seguimiento de tus pedidos realizados.
           </p>
         </div>
 
-        <div className={styles.teaserCard}>
-          <h2 className={styles.teaserTitle}>
-            <span>Lista de favoritos</span>
-            <span className={styles.badgeComingSoon}>Próximamente</span>
-          </h2>
+        <div className={styles.contentCard}>
+          <div className={styles.sectionHeader}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <h2 className={styles.sectionTitle}>Lista de favoritos</h2>
+              <span className={styles.badgeComingSoon}>Próximamente</span>
+            </div>
+            <Link href="/cuenta/favoritos" className={styles.editLink}>
+              Ver
+            </Link>
+          </div>
           <p className={styles.teaserDesc}>Guarda los productos que deseas comprar más adelante.</p>
+        </div>
+
+        <div className={styles.contentCard}>
+          <div className={styles.sectionHeader}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <h2 className={styles.sectionTitle}>Programa de referidos</h2>
+              <span className={styles.badgeComingSoon}>Próximamente</span>
+            </div>
+            <Link href="/cuenta/referidos" className={styles.editLink}>
+              Ver
+            </Link>
+          </div>
+          <p className={styles.teaserDesc}>
+            Accede al programa de recomendaciones y recompensas de Gamer Perú.
+          </p>
         </div>
       </div>
     </div>
