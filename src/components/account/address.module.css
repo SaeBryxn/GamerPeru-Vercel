@@ -144,6 +144,22 @@
   flex-shrink: 0;
 }
 
+.defaultNotice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-brand-subtle-light, #fff1f2);
+  border: 1px solid rgba(225, 29, 72, 0.2);
+  border-radius: var(--radius-md, 0.5rem);
+}
+
+.defaultNoticeText {
+  font-size: 0.875rem;
+  color: var(--color-brand-active, #be123c);
+  font-weight: 500;
+}
+
 .cardBody {
   display: flex;
   flex-direction: column;

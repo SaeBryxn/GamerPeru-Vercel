@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
+  baseAddressSchema,
+  createAddressSchema,
+  updateAddressSchema,
   validateCreateAddressInput,
   validateUpdateAddressInput,
   validateAddressIdOnly,
@@ -18,6 +23,7 @@ import DireccionesPage, {
   dynamic as direccionesDynamic,
 } from "@/app/cuenta/direcciones/page";
 import { AddressErrorState } from "@/components/account/address-error-state";
+import { AddressForm } from "@/components/account/address-form";
 import * as addressesModule from "@/lib/account/addresses";
 import * as claimsModule from "@/lib/auth/claims";
 import * as dbModule from "@/db";
@@ -715,6 +721,151 @@ describe("GP-016 ACCT5 — Customer Address Book Suite", () => {
       expect(serialized).not.toContain("Agregar mi primera dirección");
       expect(serialized).not.toContain("SQL");
       expect(serialized).not.toContain("SELECT");
+    });
+  });
+
+  // ============================================================
+  // Default-Address Edit Contract Suite (ACCT5-BR2)
+  // ============================================================
+  describe("Default-Address Edit Contract Suite (ACCT5-BR2)", () => {
+    it("A. create schema accepts setAsDefault and update schema excludes it", () => {
+      expect(baseAddressSchema.shape.recipientName).toBeDefined();
+      expect(createAddressSchema.shape.setAsDefault).toBeDefined();
+      expect("setAsDefault" in updateAddressSchema.shape).toBe(false);
+
+      const res = validateCreateAddressInput({
+        recipientName: "Test Recipient",
+        phone: "987654321",
+        streetAddress: "Av. Principal 123",
+        department: "Lima",
+        province: "Lima",
+        district: "Miraflores",
+        setAsDefault: true,
+      });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.data.setAsDefault).toBe(true);
+      }
+    });
+
+    it("B. update schema strips and excludes setAsDefault", () => {
+      const res = validateUpdateAddressInput({
+        addressId: "01900000-0000-7000-8000-000000000001",
+        recipientName: "Test Recipient",
+        phone: "987654321",
+        streetAddress: "Av. Principal 123",
+        department: "Lima",
+        province: "Lima",
+        district: "Miraflores",
+        setAsDefault: true,
+      });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect("setAsDefault" in res.data).toBe(false);
+      }
+    });
+
+    it("D. edit form renders no set-default checkbox and shows static notice when default", () => {
+      // Create mode: initialAddress is null -> renders checkbox
+      const createHtml = renderToStaticMarkup(
+        React.createElement(AddressForm, {
+          initialAddress: null,
+          onSave: vi.fn(),
+          onCancel: vi.fn(),
+          isPending: false,
+        })
+      );
+      expect(createHtml).toContain("Establecer como dirección de entrega predeterminada");
+
+      // Edit non-default mode: renders NO checkbox and NO default notice
+      const editNonDefaultHtml = renderToStaticMarkup(
+        React.createElement(AddressForm, {
+          initialAddress: {
+            id: "01900000-0000-7000-8000-000000000001",
+            recipientName: "Non Default User",
+            phone: "987654321",
+            streetAddress: "Calle Secundaria 456",
+            apartmentSuite: null,
+            department: "Lima",
+            province: "Lima",
+            district: "San Isidro",
+            postalCode: null,
+            referenceNotes: null,
+            isDefault: false,
+          },
+          onSave: vi.fn(),
+          onCancel: vi.fn(),
+          isPending: false,
+        })
+      );
+      expect(editNonDefaultHtml).not.toContain(
+        "Establecer como dirección de entrega predeterminada"
+      );
+      expect(editNonDefaultHtml).not.toContain("Esta es tu dirección de entrega predeterminada.");
+
+      // Edit default mode: renders NO interactive checkbox, renders static notice
+      const editDefaultHtml = renderToStaticMarkup(
+        React.createElement(AddressForm, {
+          initialAddress: {
+            id: "01900000-0000-7000-8000-000000000002",
+            recipientName: "Default User",
+            phone: "987654321",
+            streetAddress: "Av. Principal 123",
+            apartmentSuite: null,
+            department: "Lima",
+            province: "Lima",
+            district: "Miraflores",
+            postalCode: null,
+            referenceNotes: null,
+            isDefault: true,
+          },
+          onSave: vi.fn(),
+          onCancel: vi.fn(),
+          isPending: false,
+        })
+      );
+      expect(editDefaultHtml).not.toContain("Establecer como dirección de entrega predeterminada");
+      expect(editDefaultHtml).toContain("Esta es tu dirección de entrega predeterminada.");
+    });
+
+    it("G. malicious update with setAsDefault=true only updates content and NEVER mutates profile default", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-update-malicious", "mal@gp.com")
+      );
+
+      const mockProfileLimit = vi.fn().mockResolvedValueOnce([{ id: "prof-mal-id" }]);
+      const mockProfileWhere = vi.fn().mockReturnValue({ limit: mockProfileLimit });
+      const mockProfileFrom = vi.fn().mockReturnValue({ where: mockProfileWhere });
+      vi.mocked(dbModule.db.select).mockReturnValueOnce({
+        from: mockProfileFrom,
+      } as unknown as ReturnType<typeof dbModule.db.select>);
+
+      const mockReturning = vi
+        .fn()
+        .mockResolvedValueOnce([{ id: "01900000-0000-7000-8000-000000000001" }]);
+      const mockWhere = vi.fn().mockReturnValue({ returning: mockReturning });
+      const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
+      vi.mocked(dbModule.db.update).mockReturnValueOnce({ set: mockSet } as unknown as ReturnType<
+        typeof dbModule.db.update
+      >);
+
+      const res = await updateCustomerAddressAction(null, {
+        addressId: "01900000-0000-7000-8000-000000000001",
+        recipientName: "Updated Content Only",
+        phone: "987654321",
+        streetAddress: "Av. Benavides 123",
+        department: "Lima",
+        province: "Lima",
+        district: "Miraflores",
+        // @ts-expect-error malicious payload injection
+        setAsDefault: true,
+      });
+
+      expect(res.success).toBe(true);
+      // Verify db.transaction was NOT called (content update only)
+      expect(dbModule.db.transaction).not.toHaveBeenCalled();
+      // Verify db.update was called exactly once (for customer_addresses, not customer_profiles)
+      expect(dbModule.db.update).toHaveBeenCalledTimes(1);
     });
   });
 });

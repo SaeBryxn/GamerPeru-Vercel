@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { AddressActionValidationErrors } from "./types";
 
-export const createAddressSchema = z.object({
+export const baseAddressSchema = z.object({
   recipientName: z
     .string({ required_error: "El nombre del destinatario es obligatorio." })
     .trim()
@@ -61,14 +61,17 @@ export const createAddressSchema = z.object({
       if (!val || val.trim().length === 0) return null;
       return val.trim();
     }),
+});
+
+export const createAddressSchema = baseAddressSchema.extend({
   setAsDefault: z
     .union([z.boolean(), z.string().transform((v) => v === "true" || v === "on"), z.null()])
     .optional()
     .nullable()
-    .transform((v) => Boolean(v)),
+    .transform((val) => Boolean(val)),
 });
 
-export const updateAddressSchema = createAddressSchema.extend({
+export const updateAddressSchema = baseAddressSchema.extend({
   addressId: z.string().uuid("Identificador de dirección inválido."),
 });
 
@@ -76,6 +79,7 @@ export const addressIdOnlySchema = z.object({
   addressId: z.string().uuid("Identificador de dirección inválido."),
 });
 
+export type ValidatedBaseAddressData = z.infer<typeof baseAddressSchema>;
 export type ValidatedCreateAddressData = z.infer<typeof createAddressSchema>;
 export type ValidatedUpdateAddressData = z.infer<typeof updateAddressSchema>;
 

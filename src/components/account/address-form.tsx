@@ -297,21 +297,36 @@ export function AddressForm({
                 )}
               </div>
 
-              {/* Set as default checkbox */}
-              <div className={`${styles.formGroup} ${styles.fullWidth}`}>
-                <label className={styles.checkboxContainer}>
-                  <input
-                    type="checkbox"
-                    name="setAsDefault"
-                    value="true"
-                    defaultChecked={initialAddress?.isDefault ?? false}
-                    className={styles.checkbox}
-                  />
-                  <span className={styles.checkboxLabel}>
-                    Establecer como dirección de entrega predeterminada
-                  </span>
-                </label>
-              </div>
+              {/* Set as default: CREATE renders interactive checkbox; EDIT default renders static notice */}
+              {!isEditing && (
+                <div className={`${styles.formGroup} ${styles.fullWidth}`}>
+                  <label className={styles.checkboxContainer}>
+                    <input
+                      type="checkbox"
+                      name="setAsDefault"
+                      value="true"
+                      defaultChecked={false}
+                      className={styles.checkbox}
+                    />
+                    <span className={styles.checkboxLabel}>
+                      Establecer como dirección de entrega predeterminada
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {isEditing && initialAddress?.isDefault && (
+                <div className={`${styles.formGroup} ${styles.fullWidth}`}>
+                  <div className={styles.defaultNotice} role="note">
+                    <span className={styles.defaultBadge} aria-hidden="true">
+                      Predeterminada
+                    </span>
+                    <span className={styles.defaultNoticeText}>
+                      Esta es tu dirección de entrega predeterminada.
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

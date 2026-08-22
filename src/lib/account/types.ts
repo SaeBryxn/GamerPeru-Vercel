@@ -66,7 +66,7 @@ export type AccountAddressesState =
   | { status: "UNAUTHENTICATED" }
   | { status: "ERROR"; error: string };
 
-export interface CreateAddressInput {
+export interface BaseAddressInput {
   recipientName: string;
   phone: string;
   streetAddress: string;
@@ -76,10 +76,13 @@ export interface CreateAddressInput {
   district: string;
   postalCode?: string | null;
   referenceNotes?: string | null;
+}
+
+export interface CreateAddressInput extends BaseAddressInput {
   setAsDefault?: boolean;
 }
 
-export interface UpdateAddressInput extends CreateAddressInput {
+export interface UpdateAddressInput extends BaseAddressInput {
   addressId: string;
 }
 

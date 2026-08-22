@@ -195,71 +195,33 @@ export async function updateCustomerAddressAction(
       };
     }
 
-    if (validation.data.setAsDefault) {
-      await db.transaction(async (tx) => {
-        const [updated] = await tx
-          .update(customerAddresses)
-          .set({
-            recipientName: validation.data.recipientName,
-            phone: validation.data.phone,
-            streetAddress: validation.data.streetAddress,
-            apartmentSuite: validation.data.apartmentSuite,
-            department: validation.data.department,
-            province: validation.data.province,
-            district: validation.data.district,
-            postalCode: validation.data.postalCode,
-            referenceNotes: validation.data.referenceNotes,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(customerAddresses.id, validation.data.addressId),
-              eq(customerAddresses.customerId, profile.id)
-            )
-          )
-          .returning({ id: customerAddresses.id });
-
-        if (!updated) {
-          throw new Error("ADDRESS_NOT_FOUND_OR_UNAUTHORIZED");
-        }
-
-        await tx
-          .update(customerProfiles)
-          .set({
-            defaultShippingAddressId: updated.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(customerProfiles.id, profile.id));
-      });
-    } else {
-      const [updated] = await db
-        .update(customerAddresses)
-        .set({
-          recipientName: validation.data.recipientName,
-          phone: validation.data.phone,
-          streetAddress: validation.data.streetAddress,
-          apartmentSuite: validation.data.apartmentSuite,
-          department: validation.data.department,
-          province: validation.data.province,
-          district: validation.data.district,
-          postalCode: validation.data.postalCode,
-          referenceNotes: validation.data.referenceNotes,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(customerAddresses.id, validation.data.addressId),
-            eq(customerAddresses.customerId, profile.id)
-          )
+    const [updated] = await db
+      .update(customerAddresses)
+      .set({
+        recipientName: validation.data.recipientName,
+        phone: validation.data.phone,
+        streetAddress: validation.data.streetAddress,
+        apartmentSuite: validation.data.apartmentSuite,
+        department: validation.data.department,
+        province: validation.data.province,
+        district: validation.data.district,
+        postalCode: validation.data.postalCode,
+        referenceNotes: validation.data.referenceNotes,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(customerAddresses.id, validation.data.addressId),
+          eq(customerAddresses.customerId, profile.id)
         )
-        .returning({ id: customerAddresses.id });
+      )
+      .returning({ id: customerAddresses.id });
 
-      if (!updated) {
-        return {
-          success: false,
-          errors: { form: "Dirección no encontrada o no autorizada." },
-        };
-      }
+    if (!updated) {
+      return {
+        success: false,
+        errors: { form: "Dirección no encontrada o no autorizada." },
+      };
     }
 
     revalidatePath("/cuenta");
