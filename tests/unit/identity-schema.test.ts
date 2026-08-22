@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import * as schema from "@/db/schema";
 import { getTableColumns } from "drizzle-orm";
 
-describe("Identity & RBAC Schema — Physical Bootstrap Integrity (GP-015)", () => {
-  it("exports exactly the 5 approved canonical identity & RBAC tables", () => {
+describe("Identity & RBAC Schema — Physical Bootstrap Integrity", () => {
+  it("exports canonical identity & RBAC tables", () => {
     expect(schema.customerProfiles).toBeDefined();
+    expect(schema.customerAddresses).toBeDefined();
     expect(schema.roles).toBeDefined();
     expect(schema.permissions).toBeDefined();
     expect(schema.rolePermissions).toBeDefined();
     expect(schema.userRoles).toBeDefined();
 
     // Verify deferred tables are NOT present in this gate
-    expect((schema as Record<string, unknown>).customerAddresses).toBeUndefined();
     expect((schema as Record<string, unknown>).wishlistItems).toBeUndefined();
     expect((schema as Record<string, unknown>).reviews).toBeUndefined();
     expect((schema as Record<string, unknown>).orders).toBeUndefined();
@@ -33,11 +33,9 @@ describe("Identity & RBAC Schema — Physical Bootstrap Integrity (GP-015)", () 
       expect(cols.phone).toBeDefined();
       expect(cols.documentType).toBeDefined();
       expect(cols.documentNumber).toBeDefined();
+      expect(cols.defaultShippingAddressId).toBeDefined();
       expect(cols.createdAt).toBeDefined();
       expect(cols.updatedAt).toBeDefined();
-
-      // Ensure default_shipping_address_id is NOT in customer_profiles during GP-015
-      expect((cols as Record<string, unknown>).defaultShippingAddressId).toBeUndefined();
     });
   });
 

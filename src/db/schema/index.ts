@@ -17,6 +17,7 @@ export * from "./catalog/product-media";
 export * from "./catalog/product-stories";
 export * from "./identity/enums";
 export * from "./identity/customer-profiles";
+export * from "./identity/customer-addresses";
 export * from "./identity/roles";
 export * from "./identity/permissions";
 export * from "./identity/role-permissions";

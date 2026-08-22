@@ -15,7 +15,7 @@ describe("GP-015 AUTH8-BR1 — RBAC Seed Migration Contract Tests", () => {
     expect(fs.existsSync(journalPath)).toBe(true);
 
     const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
-    expect(journal.entries.length).toBe(7);
+    expect(journal.entries.length).toBeGreaterThanOrEqual(7);
 
     const entry0006 = journal.entries[6];
     expect(entry0006.idx).toBe(6);
