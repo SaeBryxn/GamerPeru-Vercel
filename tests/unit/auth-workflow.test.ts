@@ -337,7 +337,7 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
     });
   });
 
-  describe("GP-015 AUTH6-A: Google OAuth PKCE Architecture & Security Invariants", () => {
+  describe("GP-015 AUTH6-A / AUTH6-AR1: Google OAuth PKCE Architecture & Hardened Redirect Authority", () => {
     const rootDir = path.resolve(__dirname, "../../");
 
     it("A & B: exposes 'Continuar con Google' on both login and registration forms", () => {
@@ -355,7 +355,7 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
       expect(registerContent).toContain("Continuar con Google");
     });
 
-    it("C, D, E: initiates Google OAuth from browser client with first-party callback URL", () => {
+    it("C, D, E: initiates Google OAuth from browser client with normalized first-party callback URL", () => {
       const helperContent = fs.readFileSync(
         path.join(rootDir, "src/lib/auth/google-oauth.ts"),
         "utf-8"
@@ -363,8 +363,9 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
 
       expect(helperContent).toContain("createBrowserSupabaseClient");
       expect(helperContent).toContain('provider: "google"');
-      expect(helperContent).toContain("/auth/callback");
+      expect(helperContent).toContain('new URL("/auth/callback", publicEnv.NEXT_PUBLIC_SITE_URL)');
       expect(helperContent).toContain("NEXT_PUBLIC_SITE_URL");
+      expect(helperContent).not.toContain("window.location");
     });
 
     it("F, G, H: enforces no arbitrary redirect, no elevated scopes, and no offline access params", () => {
@@ -380,20 +381,56 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
       expect(helperContent).not.toContain("next");
     });
 
-    it("I, J, K, L, M, N: callback route exchanges code for session and uses fixed safe redirects", async () => {
+    it("I, J, K, L, M, N: callback route exchanges code for session and uses fixed safe redirects from publicEnv.NEXT_PUBLIC_SITE_URL", async () => {
       const callbackPath = path.join(rootDir, "src/app/auth/callback/route.ts");
       expect(fs.existsSync(callbackPath)).toBe(true);
 
       const callbackContent = fs.readFileSync(callbackPath, "utf-8");
       expect(callbackContent).toContain("exchangeCodeForSession");
       expect(callbackContent).toContain("createServerSupabaseClient");
-      expect(callbackContent).toContain("/auth/login?oauth_error=true");
-      expect(callbackContent).toContain('new URL("/", requestUrl.origin)');
+      expect(callbackContent).toContain(
+        'new URL("/auth/login?oauth_error=true", publicEnv.NEXT_PUBLIC_SITE_URL)'
+      );
+      expect(callbackContent).toContain('new URL("/", publicEnv.NEXT_PUBLIC_SITE_URL)');
       expect(callbackContent).toContain("force-dynamic");
       expect(callbackContent).toContain("no-store");
+      expect(callbackContent).not.toContain("requestUrl.origin");
       expect(callbackContent).not.toContain("searchParams.get('next')");
       expect(callbackContent).not.toContain('searchParams.get("next")');
       expect(callbackContent).not.toContain("searchParams.get('redirect')");
+      expect(callbackContent).not.toContain('headers.get("host")');
+      expect(callbackContent).not.toContain('headers.get("x-forwarded-host")');
+    });
+
+    it("D (Behavioral): proves hostile incoming request origin does NOT influence callback redirect destinations", async () => {
+      const { GET } = await import("@/app/auth/callback/route");
+      const { NextRequest } = await import("next/server");
+      const { publicEnv } = await import("@/config/public-env");
+
+      // Test missing code scenario from malicious origin
+      const hostileReq = new NextRequest(
+        "https://attacker.invalid/auth/callback?malicious_param=1",
+        {
+          headers: {
+            host: "attacker.invalid",
+            "x-forwarded-host": "evil.attacker.invalid",
+            referer: "https://attacker.invalid/login",
+            origin: "https://attacker.invalid",
+          },
+        }
+      );
+
+      const res = await GET(hostileReq);
+      expect(res.status).toBe(307); // NextResponse.redirect default status
+      const location = res.headers.get("location");
+      expect(location).toBeDefined();
+
+      const expectedErrorUrl = new URL(
+        "/auth/login?oauth_error=true",
+        publicEnv.NEXT_PUBLIC_SITE_URL
+      ).toString();
+      expect(location).toBe(expectedErrorUrl);
+      expect(location).not.toContain("attacker.invalid");
     });
 
     it("O, P, Q, R, S: ensures zero provider token storage, zero Google secrets, zero DB/RBAC/Data API queries", () => {

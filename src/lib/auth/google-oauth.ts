@@ -9,7 +9,7 @@ import { mapAuthError } from "./errors";
 export async function initiateGoogleOAuth(): Promise<{ error: string | null }> {
   try {
     const supabase = createBrowserSupabaseClient();
-    const redirectTo = `${publicEnv.NEXT_PUBLIC_SITE_URL}/auth/callback`;
+    const redirectTo = new URL("/auth/callback", publicEnv.NEXT_PUBLIC_SITE_URL).toString();
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",

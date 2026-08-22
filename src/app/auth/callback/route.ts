@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { publicEnv } from "@/config/public-env";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Handles Supabase PKCE OAuth code exchange for first-party authentication.
- * Redirects strictly to fixed first-party destinations to eliminate open-redirect risks.
+ * Redirects strictly to fixed first-party destinations based on configured NEXT_PUBLIC_SITE_URL
+ * to eliminate open-redirect and Host header poisoning risks.
  */
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -15,7 +17,7 @@ export async function GET(request: NextRequest) {
     "Cache-Control": "private, no-cache, no-store, max-age=0, must-revalidate",
   };
 
-  const loginErrorUrl = new URL("/auth/login?oauth_error=true", requestUrl.origin);
+  const loginErrorUrl = new URL("/auth/login?oauth_error=true", publicEnv.NEXT_PUBLIC_SITE_URL);
 
   if (!code) {
     return NextResponse.redirect(loginErrorUrl, {
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const successUrl = new URL("/", requestUrl.origin);
+    const successUrl = new URL("/", publicEnv.NEXT_PUBLIC_SITE_URL);
     return NextResponse.redirect(successUrl, {
       headers: noCacheHeaders,
     });
