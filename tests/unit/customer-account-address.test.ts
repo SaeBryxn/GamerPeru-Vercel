@@ -13,10 +13,12 @@ import {
   setDefaultCustomerAddressAction,
   deleteCustomerAddressAction,
 } from "@/lib/account/address-actions";
-import {
+import DireccionesPage, {
   metadata as direccionesMetadata,
   dynamic as direccionesDynamic,
 } from "@/app/cuenta/direcciones/page";
+import { AddressErrorState } from "@/components/account/address-error-state";
+import * as addressesModule from "@/lib/account/addresses";
 import * as claimsModule from "@/lib/auth/claims";
 import * as dbModule from "@/db";
 import { logger } from "@/lib/logger";
@@ -45,6 +47,11 @@ vi.mock("@/lib/logger", () => ({
 
 vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  redirect: vi.fn(),
 }));
 
 function mockIdentity(authUserId: string, email: string) {
@@ -654,6 +661,60 @@ describe("GP-016 ACCT5 — Customer Address Book Suite", () => {
       expect(overviewSource).not.toContain(
         "Direcciones</span>\n            <span className={styles.badgeComingSoon}>Próximamente"
       );
+    });
+  });
+
+  // ============================================================
+  // Error-State Truthfulness & Fail-Closed Behavior Suite (ACCT5-BR1)
+  // ============================================================
+  describe("Error-State Truthfulness & Fail-Closed Behavior", () => {
+    it("proves reader ERROR is distinct from READY empty", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-err-test", "err@gp.com")
+      );
+      const mockFrom = vi.fn().mockImplementation(() => {
+        throw new Error("DB connection failure");
+      });
+      vi.mocked(dbModule.db.select).mockReturnValueOnce({
+        from: mockFrom,
+      } as unknown as ReturnType<typeof dbModule.db.select>);
+
+      const res = await getCurrentCustomerAddresses();
+      expect(res.status).toBe("ERROR");
+      expect(res.status).not.toBe("READY");
+    });
+
+    it("DireccionesPage renders AddressErrorState and does NOT render legitimate empty state when reader fails", async () => {
+      vi.spyOn(addressesModule, "getCurrentCustomerAddresses").mockResolvedValueOnce({
+        status: "ERROR",
+        error: "No se pudieron cargar las direcciones de entrega.",
+      });
+
+      const pageElement = await DireccionesPage();
+      expect(pageElement.type).toBe(AddressErrorState);
+    });
+
+    it("DireccionesPage renders AddressList when reader succeeds with empty address book", async () => {
+      vi.spyOn(addressesModule, "getCurrentCustomerAddresses").mockResolvedValueOnce({
+        status: "READY",
+        addresses: [],
+        defaultShippingAddressId: null,
+      });
+
+      const pageElement = await DireccionesPage();
+      expect(pageElement.props.addresses).toEqual([]);
+      expect(pageElement.props.defaultShippingAddressId).toBeNull();
+    });
+
+    it("AddressErrorState renders safe generic message and retry button without raw error strings or PII", () => {
+      const errorComponent = AddressErrorState();
+      const serialized = JSON.stringify(errorComponent);
+      expect(serialized).toContain("No pudimos cargar tus direcciones");
+      expect(serialized).toContain("Intentar nuevamente");
+      expect(serialized).not.toContain("No tienes direcciones guardadas");
+      expect(serialized).not.toContain("Agregar mi primera dirección");
+      expect(serialized).not.toContain("SQL");
+      expect(serialized).not.toContain("SELECT");
     });
   });
 });

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useRef, type RefObject } from "react";
 import type { CustomerAddressDTO } from "@/lib/account/types";
+import { useModalFocus } from "./use-modal-focus";
 import styles from "./address.module.css";
 
 interface AddressDeleteDialogProps {
@@ -9,6 +10,8 @@ interface AddressDeleteDialogProps {
   onConfirm: () => Promise<void>;
   onCancel: () => void;
   isPending: boolean;
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 }
 
 export function AddressDeleteDialog({
@@ -16,22 +19,19 @@ export function AddressDeleteDialog({
   onConfirm,
   onCancel,
   isPending,
+  returnFocusRef,
+  fallbackFocusRef,
 }: AddressDeleteDialogProps) {
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    cancelButtonRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isPending) {
-        onCancel();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel, isPending]);
+  const { modalRef } = useModalFocus<HTMLDivElement>({
+    isOpen: true,
+    onClose: onCancel,
+    isPending,
+    initialFocusRef: cancelButtonRef,
+    returnFocusRef,
+    fallbackFocusRef,
+  });
 
   return (
     <div
@@ -44,11 +44,13 @@ export function AddressDeleteDialog({
       }}
     >
       <div
+        ref={modalRef}
         className={styles.modalContent}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="delete-dialog-title"
         aria-describedby="delete-dialog-desc"
+        tabIndex={-1}
       >
         <div className={styles.modalHeader}>
           <h2 id="delete-dialog-title" className={styles.modalTitle}>

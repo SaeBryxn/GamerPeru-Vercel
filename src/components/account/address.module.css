@@ -548,3 +548,68 @@
   color: #991b1b;
   border: 1px solid #fecaca;
 }
+
+/* Dedicated Account Error State */
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3.5rem 1.5rem;
+  background: var(--color-surface-primary, #ffffff);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-lg, 0.75rem);
+  gap: 1rem;
+}
+
+.errorIcon {
+  width: 48px;
+  height: 48px;
+  color: #dc2626;
+}
+
+.errorTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #09090b);
+}
+
+.errorDesc {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #52525b);
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.retryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.625rem 1.25rem;
+  background: var(--color-brand-primary, #e11d48);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-md, 0.5rem);
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.retryButton:hover {
+  background: var(--color-brand-hover, #f43f5e);
+}
+
+.retryButton:active {
+  background: var(--color-brand-active, #be123c);
+  transform: scale(0.98);
+}
+
+.retryButton:focus-visible {
+  outline: 2px solid var(--color-brand-primary, #e11d48);
+  outline-offset: 2px;
+}

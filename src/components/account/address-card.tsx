@@ -6,8 +6,8 @@ import styles from "./address.module.css";
 
 interface AddressCardProps {
   address: CustomerAddressDTO;
-  onEdit: (address: CustomerAddressDTO) => void;
-  onDelete: (address: CustomerAddressDTO) => void;
+  onEdit: (address: CustomerAddressDTO, invoker?: HTMLElement) => void;
+  onDelete: (address: CustomerAddressDTO, invoker?: HTMLElement) => void;
   onSetDefault: (addressId: string) => void;
   isPending?: boolean;
 }
@@ -72,7 +72,7 @@ export function AddressCard({
           <button
             type="button"
             className={styles.actionButton}
-            onClick={() => onEdit(address)}
+            onClick={(e) => onEdit(address, e.currentTarget)}
             disabled={isPending}
             aria-label={`Editar dirección de ${address.recipientName}`}
           >
@@ -81,7 +81,7 @@ export function AddressCard({
           <button
             type="button"
             className={styles.deleteButton}
-            onClick={() => onDelete(address)}
+            onClick={(e) => onDelete(address, e.currentTarget)}
             disabled={isPending}
             aria-label={`Eliminar dirección de ${address.recipientName}`}
           >

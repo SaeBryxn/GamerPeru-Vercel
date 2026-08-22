@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useRef, useTransition } from "react";
 import type { CustomerAddressDTO, AddressActionValidationErrors } from "@/lib/account/types";
 import {
   createCustomerAddressAction,
@@ -28,15 +28,28 @@ export function AddressList({ addresses }: AddressListProps) {
   } | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const handleOpenCreate = () => {
+  const pageHeadingRef = useRef<HTMLHeadingElement>(null);
+  const addAddressButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  const handleOpenCreate = (invoker?: HTMLElement) => {
+    returnFocusRef.current =
+      invoker ?? (document.activeElement as HTMLElement | null) ?? addAddressButtonRef.current;
     setEditingAddress(null);
     setIsFormOpen(true);
     setStatusMessage(null);
   };
 
-  const handleOpenEdit = (address: CustomerAddressDTO) => {
+  const handleOpenEdit = (address: CustomerAddressDTO, invoker?: HTMLElement) => {
+    returnFocusRef.current = invoker ?? (document.activeElement as HTMLElement | null);
     setEditingAddress(address);
     setIsFormOpen(true);
+    setStatusMessage(null);
+  };
+
+  const handleOpenDelete = (address: CustomerAddressDTO, invoker?: HTMLElement) => {
+    returnFocusRef.current = invoker ?? (document.activeElement as HTMLElement | null);
+    setDeletingAddress(address);
     setStatusMessage(null);
   };
 
@@ -127,11 +140,14 @@ export function AddressList({ addresses }: AddressListProps) {
   return (
     <div>
       <div className={styles.headerRow}>
-        <h1 className={styles.title}>Direcciones de entrega</h1>
+        <h1 ref={pageHeadingRef} className={styles.title} tabIndex={-1}>
+          Direcciones de entrega
+        </h1>
         <button
+          ref={addAddressButtonRef}
           type="button"
           className={styles.addButton}
-          onClick={handleOpenCreate}
+          onClick={(e) => handleOpenCreate(e.currentTarget)}
           disabled={isPending}
         >
           <span aria-hidden="true">＋</span>
@@ -174,7 +190,7 @@ export function AddressList({ addresses }: AddressListProps) {
           <button
             type="button"
             className={styles.addButton}
-            onClick={handleOpenCreate}
+            onClick={(e) => handleOpenCreate(e.currentTarget)}
             disabled={isPending}
           >
             <span aria-hidden="true">＋</span>
@@ -188,7 +204,7 @@ export function AddressList({ addresses }: AddressListProps) {
               <AddressCard
                 address={address}
                 onEdit={handleOpenEdit}
-                onDelete={(addr) => setDeletingAddress(addr)}
+                onDelete={handleOpenDelete}
                 onSetDefault={handleSetDefault}
                 isPending={isPending}
               />
@@ -203,6 +219,8 @@ export function AddressList({ addresses }: AddressListProps) {
           onSave={handleSaveAddress}
           onCancel={handleCloseForm}
           isPending={isPending}
+          returnFocusRef={returnFocusRef}
+          fallbackFocusRef={addAddressButtonRef}
         />
       )}
 
@@ -212,6 +230,8 @@ export function AddressList({ addresses }: AddressListProps) {
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeletingAddress(null)}
           isPending={isPending}
+          returnFocusRef={returnFocusRef}
+          fallbackFocusRef={pageHeadingRef}
         />
       )}
     </div>

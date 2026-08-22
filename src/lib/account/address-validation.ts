@@ -62,8 +62,9 @@ export const createAddressSchema = z.object({
       return val.trim();
     }),
   setAsDefault: z
-    .union([z.boolean(), z.string().transform((v) => v === "true" || v === "on")])
+    .union([z.boolean(), z.string().transform((v) => v === "true" || v === "on"), z.null()])
     .optional()
+    .nullable()
     .transform((v) => Boolean(v)),
 });
 

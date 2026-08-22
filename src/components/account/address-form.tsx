@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef, type RefObject } from "react";
 import type { CustomerAddressDTO, AddressActionValidationErrors } from "@/lib/account/types";
+import { useModalFocus } from "./use-modal-focus";
 import styles from "./address.module.css";
 
 interface AddressFormProps {
@@ -11,28 +12,30 @@ interface AddressFormProps {
   ) => Promise<{ success: boolean; errors?: AddressActionValidationErrors }>;
   onCancel: () => void;
   isPending: boolean;
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 }
 
-export function AddressForm({ initialAddress, onSave, onCancel, isPending }: AddressFormProps) {
+export function AddressForm({
+  initialAddress,
+  onSave,
+  onCancel,
+  isPending,
+  returnFocusRef,
+  fallbackFocusRef,
+}: AddressFormProps) {
   const isEditing = Boolean(initialAddress);
   const firstInputRef = useRef<HTMLInputElement>(null);
   const [errors, setErrors] = useState<AddressActionValidationErrors>({});
 
-  // Focus the first input on mount
-  useEffect(() => {
-    firstInputRef.current?.focus();
-  }, []);
-
-  // Handle escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isPending) {
-        onCancel();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel, isPending]);
+  const { modalRef } = useModalFocus<HTMLDivElement>({
+    isOpen: true,
+    onClose: onCancel,
+    isPending,
+    initialFocusRef: firstInputRef,
+    returnFocusRef,
+    fallbackFocusRef,
+  });
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -55,10 +58,12 @@ export function AddressForm({ initialAddress, onSave, onCancel, isPending }: Add
       }}
     >
       <div
+        ref={modalRef}
         className={styles.modalContent}
         role="dialog"
         aria-modal="true"
         aria-labelledby="address-modal-title"
+        tabIndex={-1}
       >
         <div className={styles.modalHeader}>
           <h2 id="address-modal-title" className={styles.modalTitle}>

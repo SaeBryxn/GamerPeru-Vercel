@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentCustomerAddresses } from "@/lib/account/addresses";
 import { AddressList } from "@/components/account/address-list";
+import { AddressErrorState } from "@/components/account/address-error-state";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +25,14 @@ export default async function DireccionesPage() {
     redirect("/auth/completar-perfil");
   }
 
-  const addresses = addressesState.status === "READY" ? addressesState.addresses : [];
-  const defaultShippingAddressId =
-    addressesState.status === "READY" ? addressesState.defaultShippingAddressId : null;
+  if (addressesState.status === "ERROR") {
+    return <AddressErrorState />;
+  }
 
-  return <AddressList addresses={addresses} defaultShippingAddressId={defaultShippingAddressId} />;
+  return (
+    <AddressList
+      addresses={addressesState.addresses}
+      defaultShippingAddressId={addressesState.defaultShippingAddressId}
+    />
+  );
 }
