@@ -11,7 +11,7 @@ COMPLETE
 - **Prerequisite GP-015 Accepted Checkpoint**: `ca658f334ce42553b4ace6ba1c11448b95e702c0`
 - **Canonical GP-016 Starting Repository Checkpoint**: `ca658f334ce42553b4ace6ba1c11448b95e702c0`
 - **First GP-016 Schema Checkpoint**: `40c5d0e31605bb7b8440797634d849a68a11c5a4`
-- **Key GP-016 Milestones**:
+- **Key GP-016 Milestones & Gate Lineage**:
   - `ACCT0`: Architecture & Scope Reconciliation `[APPROVED WITH BINDING AMENDMENTS / CLOSED]`
   - `ACCT1`: Customer-Address Schema Candidate `[APPROVED / CLOSED]` (`40c5d0e31605bb7b8440797634d849a68a11c5a4`)
   - `ACCT2`: Pristine Local PostgreSQL Schema Verification `[APPROVED / CLOSED]`
@@ -24,22 +24,23 @@ COMPLETE
   - `ACCT6-A`: Remaining Account Scope Reconciliation `[APPROVED WITH BINDING AMENDMENTS / CLOSED]`
   - `ACCT6-B`: Future-Domain Account Entry Surfaces `[APPROVED / CLOSED]` (`897f7a36ee1541bb7b5f9d7e4cb31dabc2a01c2d`)
   - `ACCT6-BE1`: Remote CI Evidence Recovery `[APPROVED / CLOSED]`
-  - `ACCT7`: Final Acceptance & Closure Documentation `[CURRENT]`
+  - `ACCT7`: Final Acceptance & Closure Documentation `[REVIEWED / REMEDIATED]` (`43925e547ded2530671c7531be3aab630b43f385`)
+  - `ACCT7-BR1`: Closure Documentation Integrity Remediation `[CURRENT]`
 - **Accepted Implementation Checkpoint**: `897f7a36ee1541bb7b5f9d7e4cb31dabc2a01c2d`
 
 ---
 
 ## Executive Summary
 
-GP-016 (Customer Account) establishes the core customer account hub, profile management, shipping address book, and future-domain account entry surfaces for Gamer Perú. Building upon the authentication and RBAC foundation established in GP-015, the implementation adheres strictly to Peru-first commerce requirements, server-side authorization authority, owner-scoped data isolation, and accessibility standards:
+GP-016 (Customer Account) establishes the core customer account hub, profile management, shipping address book, and future-domain account entry surfaces for Gamer Perú. Building upon the authentication and RBAC foundation established in GP-015, the implementation adheres strictly to server-side cryptographic authority, owner-scoped data isolation, and accessibility standards:
 
 1. **Customer Account Hub (`/cuenta`)**: Implemented a responsive, authenticated account hub with 5 accessible domain cards, integrated account navigation across desktop and mobile, and server-side profile resolution.
-2. **Profile Runtime (`/cuenta/perfil`)**: Delivered full profile editing with server-side validation for Peruvian identification documents (`DNI`, `CE`), phone formatting, name validation, and single-error summary UX with strict owner isolation and read-only email binding.
-3. **Address Book Runtime (`/cuenta/direcciones`)**: Developed a complete customer shipping address book supporting read, create, edit, delete, and default selection with atomic transaction semantics, modal focus containment, accessible error feedback, and a 10-address per customer capacity limit.
-4. **Composite Foreign Key Same-Owner Invariant**: Deployed migration `0007_customer_account_addresses.sql` establishing table `customer_addresses` and column `customer_profiles.default_shipping_address_id` with a database-level composite foreign key (`customer_id, id`) guaranteeing that default address pointers can never reference an address belonging to a different customer.
-5. **Future-Domain Entry Surfaces**: Implemented authentic, zero-fake-data future-domain entry pages for Orders (`/cuenta/pedidos`), Wishlist (`/cuenta/favoritos`), and Referral/Growth (`/cuenta/referidos`), each featuring truthful "Próximamente" badges and accurate explanatory copy without fabricating domain queries or records.
+2. **Profile Runtime (`/cuenta/perfil`)**: Delivered full profile editing with server-side validation for canonical document types (`DNI`, `CE`, `RUC`, `PASSPORT`) and document-pair invariants, telephone length limits, and single-error summary UX with strict owner-scoped mutation via verified `auth_user_id` and read-only email binding.
+3. **Address Book Runtime (`/cuenta/direcciones`)**: Developed a complete customer shipping address book supporting read, create, edit, delete, and default selection with atomic transaction semantics, modal focus containment and restoration, accessible error feedback, and structured geography fields.
+4. **Composite Foreign Key Same-Owner Invariant**: Deployed migration `0007_customer_account_addresses.sql` establishing table `customer_addresses` with `UNIQUE(customer_id, id)` and column `customer_profiles.default_shipping_address_id` with a database-level composite foreign key (`id, default_shipping_address_id`) referencing `customer_addresses(customer_id, id)` with `ON DELETE NO ACTION ON UPDATE NO ACTION`, guaranteeing that default address pointers can never reference an address belonging to a different customer.
+5. **Future-Domain Entry Surfaces**: Implemented authentic, zero-fake-data future-domain entry pages for Orders (`/cuenta/pedidos`), Wishlist (`/cuenta/favoritos`), and Referral (`/cuenta/referidos`), each featuring truthful "Próximamente" badges and accurate explanatory copy without fabricating domain queries or records.
 6. **Global Wishlist Link Canonicalization**: Updated global navigation data and header utilities to resolve to `/cuenta/favoritos`, canonicalizing customer wishlist access within the authenticated account area.
-7. **Security, Privacy & Caching Isolation**: Enforced `force-dynamic` and `robots: { index: false, follow: false }` across all account routes, sanitized application error logs to prevent raw SQL or PII leaks, and maintained PostgREST Data API exposure in disabled state (`OFF`).
+7. **Security, Privacy & Caching Isolation**: Enforced `force-dynamic` and `robots: { index: false, follow: false }` across all account routes, configured fixed event-only structured logging so exception-derived sensitive data is not emitted, and maintained PostgREST Data API exposure in disabled state (`OFF`).
 
 ---
 
@@ -55,21 +56,21 @@ GP-016 (Customer Account) establishes the core customer account hub, profile man
 
 - **Data Resolution**: Server-side profile data loading via `getCurrentCustomerProfile()` returning verified identity claims and database profile state.
 - **Profile Form (`profile-form.tsx`)**: Client component providing accessible input controls with client and server Zod schema validation:
-  - First name (`first_name`) and Last name (`last_name`)
-  - Peruvian document type (`dni` 8 digits, `ce` 9-12 alphanumeric characters) and document number (`document_number`)
-  - Phone number (`phone`) with Peruvian formatting and digit validation
+  - First name (`firstName`) and Last name (`lastName`)
+  - Canonical document type (`documentType`: `DNI`, `CE`, `RUC`, `PASSPORT`) and document number (`documentNumber`) with pair invariant validation
+  - Phone number (`phone`) with string length limits
   - Read-only email address bound to authenticated Supabase identity
-- **Profile Mutation (`updateCustomerProfileAction`)**: Owner-scoped Server Action executing safe updates against `customer_profiles` table, preventing privilege escalation, arbitrary customer updates, or cross-account data leakage.
+- **Profile Mutation (`updateCustomerProfileAction`)**: Owner-scoped Server Action executing safe updates against `customer_profiles` via `WHERE auth_user_id = verified.identity.authUserId`, preventing privilege escalation, arbitrary customer updates, or cross-account data leakage.
 
 ### 3. Customer Address Book Runtime (`/cuenta/direcciones`)
 
-- **Address List View (`address-list.tsx`)**: Renders shipping address cards displaying recipient name, phone, structured street address, reference, department, province, district, postal code, and default shipping address badge.
-- **Address Modal & Form (`address-modal.tsx`, `address-form.tsx`)**: Accessible modal dialog with focus trapping, `Escape` dismissal, focus restoration, and accessible form controls for creating and editing shipping addresses.
-- **Server Actions (`address-actions.ts`)**:
-  - `createCustomerAddressAction`: Creates a new shipping address within the 10-address limit; atomically assigns as default if selected.
+- **Address List View (`address-list.tsx`, `address-card.tsx`)**: Renders shipping address cards displaying recipient name, phone, structured street address, optional interior/suite, reference notes, department, province, district, postal code, and default shipping address badge.
+- **Address Dialogs & Forms (`address-form.tsx`, `address-delete-dialog.tsx`, `use-modal-focus.ts`)**: Accessible modal dialogs with focus trapping, `Escape` dismissal, focus restoration, and accessible form controls for creating, editing, and deleting shipping addresses.
+- **Server Actions (`src/lib/account/address-actions.ts`)**:
+  - `createCustomerAddressAction`: Creates a new shipping address for the authenticated customer; atomically assigns as default if selected.
   - `updateCustomerAddressAction`: Updates address content exclusively with strict owner isolation, leaving default pointer untouched.
-  - `deleteCustomerAddressAction`: Deletes an address; atomically clears `default_shipping_address_id` if the deleted address was default.
-  - `setDefaultShippingAddressAction`: Dedicated owner-scoped action updating `default_shipping_address_id` via composite foreign key validation.
+  - `deleteCustomerAddressAction`: Deletes an address; atomically clears `default_shipping_address_id` before deleting if the deleted address was default.
+  - `setDefaultCustomerAddressAction`: Dedicated owner-scoped action updating `default_shipping_address_id` via composite foreign key validation.
 
 ### 4. Future-Domain Entry Surfaces
 
@@ -87,22 +88,23 @@ Customer account operations derive authority strictly from verified session clai
 ```
 [Browser Session] -> [cookies()] -> [Supabase SSR createServerSupabaseClient()]
                                           |
-                                    [getClaims()] -> verified claims.sub (auth_user_id)
+                                    [getClaims()] -> verified claims.sub (authUserId)
                                           |
-                        [customer_profiles WHERE auth_user_id = sub]
-                                          |
-                           [CustomerProfile.id (UUID)]
-                                          |
-               +--------------------------+--------------------------+
-               |                                                     |
-    [customer_profiles update]                             [customer_addresses CRUD]
-    (WHERE id = profile.id)                                (WHERE customer_id = profile.id)
+                        +-----------------+-----------------+
+                        |                                   |
+         [UPDATE customer_profiles]             [customer_profiles lookup]
+       (WHERE auth_user_id = authUserId)         (WHERE auth_user_id = authUserId)
+                                                            |
+                                                 [CustomerProfile.id (UUID)]
+                                                            |
+                                                [customer_addresses CRUD]
+                                            (WHERE customer_id = profile.id)
 ```
 
 Key Architectural Tenets:
 
-1. **No CUSTOMER Role Dependency**: Customer account features operate on verified JWT ownership (`claims.sub` $\to$ `CustomerProfile.id`), requiring zero staff role assignments.
-2. **Fail-Closed Isolation**: All address and profile queries strictly filter by `customer_id = customerProfile.id`. Address IDs serve solely as resource locators, never as authorization tokens.
+1. **No CUSTOMER Role Dependency**: Customer account features operate on verified JWT ownership (`claims.sub` $\to$ `authUserId` $\to$ `CustomerProfile.id`), requiring zero staff role assignments.
+2. **Fail-Closed Isolation**: All address mutations strictly filter by `customer_id = customerProfile.id`. Address IDs serve solely as resource locators, never as authorization tokens.
 3. **Staff Access Boundary**: `SUPER_ADMIN` and staff roles provide zero bypass into customer account pages or mutations; staff operations remain strictly isolated in `/admin/*`.
 
 ---
@@ -110,30 +112,37 @@ Key Architectural Tenets:
 ## Profile Runtime
 
 - **Validation Schema (`src/lib/account/validation.ts`)**:
-  - `first_name`: 2–100 characters, trimmed, required
-  - `last_name`: 2–100 characters, trimmed, required
-  - `document_type`: enum (`dni`, `ce`), optional / required when document number present
-  - `document_number`: exact 8 digits for DNI, 9–12 alphanumeric for CE
-  - `phone`: 9 digits (starting with 9) or valid international format with country code
-- **Privacy Hardening (ACCT4-BR1)**: Minimized client profile DTO prevents leaking internal infrastructure IDs. Logger sanitization redacts PII and suppresses raw PostgreSQL/Drizzle error messages.
+  - `firstName`: string, trimmed, non-empty, maximum 100 characters, required
+  - `lastName`: string, trimmed, non-empty, maximum 100 characters, required
+  - `phone`: optional / nullable, trimmed, blank transforms to null, maximum 20 characters
+  - `documentType`: optional / nullable, trimmed, blank transforms to null, canonical enum (`DNI`, `CE`, `RUC`, `PASSPORT`)
+  - `documentNumber`: optional / nullable, trimmed, blank transforms to null, maximum 20 characters
+  - **Canonical Document-Type & Pair Validation**: Enforces invariant that `documentType` and `documentNumber` must both be null or both be provided with a canonical type.
+- **Authority & Privacy Hardening**: Profile mutation derives target record strictly from verified JWT `claims.sub` via `UPDATE customer_profiles WHERE auth_user_id = authUserId`. Minimized client profile DTO prevents leaking internal infrastructure IDs.
 
 ---
 
 ## Address Book Runtime
 
 - **Validation Schema (`src/lib/account/address-validation.ts`)**:
-  - `full_name`: 2–150 characters, required
-  - `phone`: 9 digits or valid Peru format, required
-  - `address_line1`: Street and number, 5–255 characters, required
-  - `address_line2`: Interior / suite / apartment, optional
-  - `reference`: Landmark or delivery instructions, optional
-  - `department`, `province`, `district`: Peruvian UBIGEO territory fields, required
-  - `postal_code`: Optional postal code
-- **Capacity Constraint**: Enforces maximum of 10 shipping addresses per customer profile.
+  - `recipientName`: string, trimmed, non-empty, maximum 150 characters, required
+  - `phone`: string, trimmed, non-empty, maximum 20 characters, required
+  - `streetAddress`: string, trimmed, non-empty, maximum 255 characters, required
+  - `apartmentSuite`: optional / nullable, trimmed, blank transforms to null, maximum 100 characters
+  - `department`: string, trimmed, non-empty, maximum 100 characters, required (structured geography string)
+  - `province`: string, trimmed, non-empty, maximum 100 characters, required (structured geography string)
+  - `district`: string, trimmed, non-empty, maximum 100 characters, required (structured geography string)
+  - `postalCode`: optional / nullable, trimmed, blank transforms to null, maximum 20 characters
+  - `referenceNotes`: optional / nullable, trimmed, blank transforms to null
 - **Default Address Mechanics**:
   - `customer_profiles.default_shipping_address_id` is the single source of truth for the default address.
   - `customer_addresses` contains no `is_default` boolean column, preventing multi-default desynchronization.
-  - Deleting the current default address atomically clears the pointer (`NULL`) in `customer_profiles` within the same database transaction.
+  - Foreign key constraint uses `ON DELETE NO ACTION ON UPDATE NO ACTION`.
+  - When deleting the current default address, `deleteCustomerAddressAction` executes an explicit transaction:
+    1. Updates `customer_profiles.default_shipping_address_id` to `NULL`.
+    2. Deletes the owned `customer_addresses` row.
+    3. Commits the transaction.
+  - After default deletion, `defaultShippingAddressId` remains `null` with no automatic promotion of other addresses.
 
 ---
 
@@ -177,55 +186,55 @@ Zero real customer PII, tokens, or private credentials are included in repositor
 
 ## Security & Privacy Acceptance
 
-1. **Owner-Scoped Mutation Authorization**: Every Server Action validates verified JWT claims, resolves the internal `CustomerProfile.id`, and scopes queries by `customer_id`. Cross-owner updates, deletions, or default assignments fail closed with unauthorized errors.
+1. **Owner-Scoped Mutation Authorization**: Every Server Action validates verified JWT claims, resolves the internal `CustomerProfile.id` or `authUserId`, and scopes queries by owner identity. Cross-owner updates, deletions, or default assignments fail closed with unauthorized errors.
 2. **Composite Foreign Key Database Invariant**:
    ```sql
    CONSTRAINT customer_profiles_default_shipping_address_fk
      FOREIGN KEY (id, default_shipping_address_id)
      REFERENCES customer_addresses (customer_id, id)
-     ON DELETE SET NULL;
+     ON DELETE NO ACTION
+     ON UPDATE NO ACTION;
    ```
    Ensures that PostgreSQL itself rejects any attempt to link a default address owned by another customer.
 3. **Data API Lockdown**: PostgREST Data API remains disabled (`OFF`), guaranteeing that direct client-side table access is completely revoked.
-4. **Log Sanitization**: Error logging functions redact sensitive PII (document numbers, phone numbers, addresses) and suppress raw database SQL messages from operational logs.
+4. **Log Sanitization**: Employs fixed event-only structured logging (`account_profile_read_failed`, `account_profile_update_failed`, `account_addresses_read_failed`, `account_address_create_failed`, `account_address_update_failed`, `account_address_set_default_failed`, `account_address_delete_failed`) so that exception-derived sensitive data (SQL, stack traces, parameters, customer PII) is not emitted.
 
 ---
 
 ## Accessibility & Responsive Acceptance
 
-1. **Axe WCAG 2.1 AA Compliance**: All account routes (`/cuenta`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/favoritos`, `/cuenta/referidos`) pass automated Axe accessibility audits with 0 violations.
-2. **Keyboard Navigation & Focus Management**:
-   - Address modal implements focus trapping, `Escape` key close handling, and focus restoration to the triggering button.
-   - All interactive controls provide visible focus rings compliant with design tokens (`--color-border-focus`).
-   - Tap targets exceed the minimum 44x44px bounding box.
-3. **Responsive Matrix**: Verified across mobile (360px, 390px), tablet (768px), and desktop (1440px) viewports with zero horizontal overflow.
+1. **Gate-Specific Accessibility Audits**:
+   - **ACCT4-BR1**: `/cuenta` and `/cuenta/perfil` passed Axe accessibility audits with 0 violations.
+   - **ACCT5 / ACCT5-BR1**: `/cuenta/direcciones` create/edit dialog and delete alertdialog verified with real modal focus containment and focus restoration via `use-modal-focus.ts`.
+   - **ACCT6-B**: Future-domain entry surfaces verified with semantic heading structures (`<h1>`), visible focus indicators, and tap targets exceeding 44x44px bounding boxes.
+2. **Responsive UX**: Accepted GP-016 browser evidence covered mobile, tablet, and desktop viewports with zero reported horizontal overflow across account surfaces.
 
 ---
 
 ## GP-016 Acceptance Criteria Matrix
 
-| Item  | Criterion                                     | Status   | Evidence Source                                                            |
-| :---- | :-------------------------------------------- | :------- | :------------------------------------------------------------------------- |
-| **A** | Account Hub (`/cuenta`)                       | **PASS** | `tests/unit/customer-account-profile.test.ts`, Playwright suite            |
-| **B** | Profile Read / Edit (`/cuenta/perfil`)        | **PASS** | `tests/unit/customer-account-profile.test.ts`, unit & E2E tests            |
-| **C** | Profile Ownership Isolation                   | **PASS** | `tests/unit/customer-account-profile.test.ts` (test 14/15)                 |
-| **D** | Address Book Read (`/cuenta/direcciones`)     | **PASS** | `tests/unit/customer-account-address.test.ts` (tests 1–6)                  |
-| **E** | Address Create                                | **PASS** | `tests/unit/customer-account-address.test.ts` (tests 7–10)                 |
-| **F** | Address Edit                                  | **PASS** | `tests/unit/customer-account-address.test.ts` (tests 11–13)                |
-| **G** | Address Delete                                | **PASS** | `tests/unit/customer-account-address.test.ts` (tests 14–16)                |
-| **H** | Default Address Selection                     | **PASS** | `tests/unit/customer-account-address.test.ts` (tests 17–19)                |
-| **I** | Cross-Owner Address Rejection                 | **PASS** | `tests/unit/customer-account-address.test.ts` (tests 20–22)                |
-| **J** | Atomic Create + Default                       | **PASS** | `tests/unit/customer-account-address.test.ts` (test 23)                    |
-| **K** | Atomic Default Delete                         | **PASS** | `tests/unit/customer-account-address.test.ts` (test 24)                    |
-| **L** | Authenticated / Private Caching Boundary      | **PASS** | `src/app/cuenta/layout.tsx`, `tests/unit/customer-account-entries.test.ts` |
-| **M** | Responsive Account UX                         | **PASS** | Browser subagent validation, zero overflow across 360px–1440px             |
-| **N** | Accessibility / Keyboard Focus                | **PASS** | Axe audit 0 violations, modal trap/restore focus tests                     |
-| **O** | PII-Safe Logging                              | **PASS** | `tests/unit/customer-account-profile.test.ts`, sanitized logger            |
-| **P** | Orders Entry (`/cuenta/pedidos`)              | **PASS** | `tests/unit/customer-account-entries.test.ts` (tests 4–5)                  |
-| **Q** | Wishlist Entry (`/cuenta/favoritos`)          | **PASS** | `tests/unit/customer-account-entries.test.ts` (tests 6–7)                  |
-| **R** | Growth / Referral Entry (`/cuenta/referidos`) | **PASS** | `tests/unit/customer-account-entries.test.ts` (tests 8–9)                  |
-| **S** | Data API Isolation                            | **PASS** | PostgREST state OFF, direct PostgreSQL Drizzle queries                     |
-| **T** | Hosted Schema Continuity                      | **PASS** | Migration `0007_customer_account_addresses.sql` applied cleanly            |
+| Item  | Criterion                                     | Status             | Evidence Source                                                            |
+| :---- | :-------------------------------------------- | :----------------- | :------------------------------------------------------------------------- |
+| **A** | Account Hub (`/cuenta`)                       | **PASS**           | `tests/unit/customer-account-profile.test.ts`, ACCT4 accepted evidence     |
+| **B** | Profile Read / Edit (`/cuenta/perfil`)        | **PASS**           | `tests/unit/customer-account-profile.test.ts`, ACCT4 accepted evidence     |
+| **C** | Profile Ownership Isolation                   | **PASS**           | `tests/unit/customer-account-profile.test.ts`, ACCT4 accepted evidence     |
+| **D** | Address Book Read (`/cuenta/direcciones`)     | **PASS**           | `tests/unit/customer-account-address.test.ts`, ACCT5 accepted evidence     |
+| **E** | Address Create                                | **PASS**           | `tests/unit/customer-account-address.test.ts`, ACCT5 accepted evidence     |
+| **F** | Address Edit                                  | **PASS**           | `tests/unit/customer-account-address.test.ts`, ACCT5 accepted evidence     |
+| **G** | Address Delete                                | **PASS**           | `tests/unit/customer-account-address.test.ts`, ACCT5 accepted evidence     |
+| **H** | Default Address Selection                     | **PASS**           | `tests/unit/customer-account-address.test.ts`, ACCT5 accepted evidence     |
+| **I** | Cross-Owner Address Rejection                 | **PASS**           | `tests/unit/customer-account-address.test.ts`, ACCT5 accepted evidence     |
+| **J** | Atomic Create + Default                       | **PASS**           | `tests/unit/customer-account-address.test.ts`, ACCT5 accepted evidence     |
+| **K** | Atomic Default Delete                         | **PASS**           | `tests/unit/customer-account-address.test.ts`, ACCT5 accepted evidence     |
+| **L** | Authenticated / Private Caching Boundary      | **PASS**           | `src/app/cuenta/layout.tsx`, `tests/unit/customer-account-entries.test.ts` |
+| **M** | Responsive Account UX                         | **PASS**           | ACCT4/5/6 browser evidence, zero overflow across viewports                 |
+| **N** | Accessibility / Keyboard Focus                | **PASS**           | ACCT4-BR1 & ACCT5-BR1 Axe audits, `use-modal-focus.ts` focus management    |
+| **O** | PII-Safe Logging                              | **PASS**           | `tests/unit/customer-account-profile.test.ts`, event-only logger           |
+| **P** | Orders Entry (`/cuenta/pedidos`)              | **PASS**           | `tests/unit/customer-account-entries.test.ts`, ACCT6-B accepted evidence   |
+| **Q** | Wishlist Entry (`/cuenta/favoritos`)          | **PASS WITH NOTE** | `tests/unit/customer-account-entries.test.ts`, ACCT6-B accepted evidence   |
+| **R** | Growth / Referral Entry (`/cuenta/referidos`) | **PASS**           | `tests/unit/customer-account-entries.test.ts`, ACCT6-B accepted evidence   |
+| **S** | Data API Isolation                            | **PASS**           | PostgREST state OFF, direct PostgreSQL Drizzle queries                     |
+| **T** | Hosted Schema Continuity                      | **PASS**           | Migration `0007_customer_account_addresses.sql` applied cleanly            |
 
 ---
 
@@ -242,25 +251,39 @@ Zero real customer PII, tokens, or private credentials are included in repositor
 - **Status**: `completed`
 - **Conclusion**: `success`
 - **Vitest Evidence**: 51 test files passed, 679 passed, 1 skipped, 680 total tests.
-- **Playwright Evidence**: 141 passed, 1 flaky (pre-existing GP-014 video timing test, passed on retry #1), 0 failed, 1 retry, 142 total tests.
+- **Playwright Evidence**: 141 passed + 1 flaky (pre-existing GP-014 video timing test, passed on retry #1) = 142 total tests (0 failed, 1 retry).
 - **Next.js Build**: Compiled successfully in Turbopack across all 22 application routes.
+
+### Accepted Closure Documentation CI Evidence (ACCT7)
+
+- **GitHub Actions Run ID**: `32603907337`
+- **Workflow**: `CI`
+- **Event**: `push`
+- **Branch**: `main`
+- **Exact Commit SHA**: `43925e547ded2530671c7531be3aab630b43f385`
+- **Attempt**: `1`
+- **Status**: `completed`
+- **Conclusion**: `success`
+- **Vitest Evidence**: 51 test files passed, 679 passed, 1 skipped, 680 total tests (duration: 26.66s).
+- **Playwright Evidence**: 142 passed, 0 failed, 0 flaky, 0 retries (duration: 4.0m).
 
 ---
 
 ## Deviations & Remediations
 
-1. **ACCT4-BR1 (Privacy & Logging Sanitization)**: Removed raw Drizzle/PostgreSQL error messages from operational logger to prevent internal database schema or PII leakage. Cleaned profile DTO returned to client.
-2. **ACCT5-BR1 (Address Error Truthfulness & Modal Focus)**: Replaced misleading empty state rendering during reader errors with a truthful error alert card. Added focus trap and restore mechanism to `address-modal.tsx`.
-3. **ACCT5-BR2 (Default-Address Edit Contract)**: Removed misleading set-default checkbox from address edit modal, establishing strict contract separation where address editing updates content only, while default status is managed through dedicated default-selection actions.
-4. **ACCT6-BE1 (Remote CI Evidence Recovery)**: Recovered and audited the canonical push-triggered GitHub Actions run evidence (`32603084318`), rectifying initial local validation substitute reporting.
+1. **ACCT4-BR1 (Privacy & Logging Sanitization)**: Fixed event-only logging ensures exception-derived sensitive data is not emitted. Cleaned profile DTO returned to client.
+2. **ACCT5-BR1 (Address Error Truthfulness & Modal Focus)**: Replaced misleading empty state rendering during reader errors with a truthful error alert card. Implemented accessible focus containment and restoration via `use-modal-focus.ts`.
+3. **ACCT5-BR2 (Default-Address Edit Contract)**: Removed misleading set-default checkbox from address edit form, establishing strict contract separation where address editing updates content only, while default status is managed through dedicated default-selection action `setDefaultCustomerAddressAction`.
+4. **ACCT6-BE1 (Remote CI Evidence Recovery)**: Recovered and audited canonical push-triggered GitHub Actions run evidence (`32603084318`), rectifying initial local validation substitute reporting.
+5. **ACCT7-BR1 (Closure Documentation Integrity Remediation)**: Aligned closure documentation with exact runtime validation contracts, PostgreSQL composite FK constraints (`ON DELETE NO ACTION ON UPDATE NO ACTION`), explicit runtime deletion mechanics, correct Server Action names, and repository-relative architectural links.
 
 ---
 
 ## Residual Risks & Follow-Ups
 
-1. **Commerce Checkout Address Integration**: GP-018 (Checkout) will consume the customer address book delivered in GP-016. Ensure checkout respects the same UBIGEO validation rules and capacity limits.
-2. **Order History Runtime**: GP-020 (Order Management) will implement order persistence, status transitions, and history querying, replacing the `/cuenta/pedidos` entry state with full order tracking.
-3. **Referral Engine**: GP-031 (Growth & Referral Engine) will deliver referral code generation, attribution, and balance tracking, activating the `/cuenta/referidos` surface.
+1. **Commerce Checkout Address Integration**: GP-018 (Checkout & Order Creation) will consume the customer shipping address book delivered in GP-016.
+2. **Order Lifecycle & Management**: GP-018 will handle initial order creation, GP-019 will handle manual payment submission (Yape/Plin), and GP-020 (Order Management) will implement full order lifecycle foundations, tracking, and management.
+3. **Referral Engine**: GP-031 (Referral Engine) will deliver referral code generation, attribution, and balance tracking, activating the `/cuenta/referidos` surface.
 
 ---
 
@@ -269,8 +292,8 @@ Zero real customer PII, tokens, or private credentials are included in repositor
 > [!IMPORTANT]
 > **Mandatory Roadmap Coverage Gap Record**
 >
-> 1. Wishlist is required by Gamer Perú v1 specifications ([MASTER_SPEC.md](file:///D:/Documentos/GamerPeru/docs/specs/MASTER_SPEC.md) and [STOREFRONT_SPEC.md](file:///D:/Documentos/GamerPeru/docs/specs/STOREFRONT_SPEC.md)).
-> 2. `WishlistItem` is defined by the canonical commerce domain model ([COMMERCE_DOMAIN_MODEL.md](file:///D:/Documentos/GamerPeru/docs/architecture/COMMERCE_DOMAIN_MODEL.md) § 39).
+> 1. Wishlist is required by Gamer Perú v1 specifications ([MASTER_SPEC.md](../specs/MASTER_SPEC.md) and [STOREFRONT_SPEC.md](../specs/STOREFRONT_SPEC.md)).
+> 2. `WishlistItem` is defined by the canonical commerce domain model ([COMMERCE_DOMAIN_MODEL.md](../architecture/COMMERCE_DOMAIN_MODEL.md) § 39).
 > 3. GP-016's executed authorization was limited to "wishlist entry surface".
 > 4. Therefore GP-016 delivered `/cuenta/favoritos` entry surface and intentionally did NOT create `wishlist_items` schema, Server Actions, PDP wishlist toggles, or persistence.
 > 5. No explicit later GP in the current GP-000..GP-052 roadmap presently owns Wishlist runtime implementation.
