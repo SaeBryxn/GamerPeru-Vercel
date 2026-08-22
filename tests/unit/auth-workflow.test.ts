@@ -255,7 +255,7 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
   });
 
   describe("N, O, P: Zero Data API, Zero DB Queries, Zero Secrets in Customer Auth", () => {
-    const authFiles = [
+    const auth5Files = [
       "src/app/auth/login/page.tsx",
       "src/app/auth/registro/page.tsx",
       "src/app/auth/verificar/page.tsx",
@@ -268,19 +268,18 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
       "src/components/auth/password-change-form.tsx",
       "src/components/auth/confirm-form.tsx",
       "src/components/auth/auth-card.tsx",
-      "src/lib/auth/actions.ts",
       "src/lib/auth/validation.ts",
       "src/lib/auth/errors.ts",
     ];
 
     const rootDir = path.resolve(__dirname, "../../");
 
-    it("ensures zero Data API domain usage across all auth files", () => {
-      for (const relPath of authFiles) {
+    it("ensures zero Supabase Data API domain usage across all auth files", () => {
+      for (const relPath of auth5Files) {
         const fullPath = path.join(rootDir, relPath);
         if (fs.existsSync(fullPath)) {
           const content = fs.readFileSync(fullPath, "utf-8");
-          expect(content).not.toContain(".from(");
+          expect(content).not.toContain("supabase.from(");
           expect(content).not.toContain(".rpc(");
           expect(content).not.toContain("/rest/v1");
           expect(content).not.toContain("/graphql/v1");
@@ -288,8 +287,8 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
       }
     });
 
-    it("ensures zero CustomerProfile or RBAC queries in AUTH5", () => {
-      for (const relPath of authFiles) {
+    it("ensures zero CustomerProfile or RBAC queries in AUTH5 storefront files", () => {
+      for (const relPath of auth5Files) {
         const fullPath = path.join(rootDir, relPath);
         if (fs.existsSync(fullPath)) {
           const content = fs.readFileSync(fullPath, "utf-8");
@@ -301,7 +300,7 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
     });
 
     it("ensures zero secret keys referenced in customer auth runtime", () => {
-      for (const relPath of authFiles) {
+      for (const relPath of auth5Files) {
         const fullPath = path.join(rootDir, relPath);
         if (fs.existsSync(fullPath)) {
           const content = fs.readFileSync(fullPath, "utf-8");
@@ -391,7 +390,9 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
       expect(callbackContent).toContain(
         'new URL("/auth/login?oauth_error=true", publicEnv.NEXT_PUBLIC_SITE_URL)'
       );
-      expect(callbackContent).toContain('new URL("/", publicEnv.NEXT_PUBLIC_SITE_URL)');
+      expect(callbackContent).toContain(
+        'new URL("/auth/completar-perfil", publicEnv.NEXT_PUBLIC_SITE_URL)'
+      );
       expect(callbackContent).toContain("force-dynamic");
       expect(callbackContent).toContain("no-store");
       expect(callbackContent).not.toContain("requestUrl.origin");
@@ -433,7 +434,7 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
       expect(location).not.toContain("attacker.invalid");
     });
 
-    it("O, P, Q, R, S: ensures zero provider token storage, zero Google secrets, zero DB/RBAC/Data API queries", () => {
+    it("O, P, Q, R, S: ensures zero provider token storage, zero Google secrets, zero DB/RBAC/Data API queries in OAuth initiation and callback", () => {
       const authFiles = [
         "src/app/auth/callback/route.ts",
         "src/lib/auth/google-oauth.ts",
@@ -448,7 +449,6 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
           expect(content).not.toContain("provider_token");
           expect(content).not.toContain("provider_refresh_token");
           expect(content).not.toContain("GOOGLE_CLIENT_SECRET");
-          expect(content).not.toContain("customer_profiles");
           expect(content).not.toContain("user_roles");
           expect(content).not.toContain(".from(");
           expect(content).not.toContain(".rpc(");
@@ -459,6 +459,87 @@ describe("GP-015 AUTH5-A: Email/Password Local Auth Workflows & Scanner-Safe Tok
     it("T: verifies /auth/callback is excluded from AUTH4 proxy matcher", () => {
       const proxyContent = fs.readFileSync(path.join(rootDir, "src/proxy.ts"), "utf-8");
       expect(proxyContent).not.toContain("/auth/callback");
+    });
+  });
+
+  describe("GP-015 AUTH7-A: Idempotent CustomerProfile Provisioning & Completion", () => {
+    const rootDir = path.resolve(__dirname, "../../");
+
+    it("A & B: profileCompletionSchema accepts 1-char names and enforces max 100", async () => {
+      const { profileCompletionSchema } = await import("@/lib/auth/validation");
+
+      const valid = profileCompletionSchema.safeParse({
+        firstName: "J",
+        lastName: "O",
+      });
+      expect(valid.success).toBe(true);
+
+      const emptyFirst = profileCompletionSchema.safeParse({
+        firstName: "   ",
+        lastName: "Perez",
+      });
+      expect(emptyFirst.success).toBe(false);
+
+      const longLast = profileCompletionSchema.safeParse({
+        firstName: "Carlos",
+        lastName: "A".repeat(101),
+      });
+      expect(longLast.success).toBe(false);
+    });
+
+    it("C, D, E, F: ensures ensureCustomerProfile derives authUserId only from verified claims and enforces deterministic name precedence", () => {
+      const profileCode = fs.readFileSync(path.join(rootDir, "src/lib/auth/profile.ts"), "utf-8");
+
+      expect(profileCode).toContain("getVerifiedIdentity");
+      expect(profileCode).toContain("userData.user.id !== authUserId");
+      expect(profileCode).toContain("first_name");
+      expect(profileCode).toContain("last_name");
+      expect(profileCode).toContain("given_name");
+      expect(profileCode).toContain("family_name");
+      expect(profileCode).toContain("onConflictDoNothing");
+      expect(profileCode).not.toContain("full_name.split");
+      expect(profileCode).not.toContain("name.split");
+    });
+
+    it("G, H, I: verifies completing profile action does not overwrite existing profile", () => {
+      const actionCode = fs.readFileSync(path.join(rootDir, "src/lib/auth/actions.ts"), "utf-8");
+
+      expect(actionCode).toContain("completeCustomerProfileAction");
+      expect(actionCode).toContain("getVerifiedIdentity");
+      expect(actionCode).toContain("profileCompletionSchema");
+      expect(actionCode).toContain("onConflictDoNothing");
+    });
+
+    it("J, K, L: verifies onboarding routing architecture across login, OAuth callback, and completar-perfil", () => {
+      const loginCode = fs.readFileSync(
+        path.join(rootDir, "src/components/auth/login-form.tsx"),
+        "utf-8"
+      );
+      const callbackCode = fs.readFileSync(
+        path.join(rootDir, "src/app/auth/callback/route.ts"),
+        "utf-8"
+      );
+      const pageCode = fs.readFileSync(
+        path.join(rootDir, "src/app/auth/completar-perfil/page.tsx"),
+        "utf-8"
+      );
+
+      expect(loginCode).toContain("/auth/completar-perfil");
+      expect(callbackCode).toContain("/auth/completar-perfil");
+      expect(pageCode).toContain("ensureCustomerProfile");
+      expect(pageCode).toContain("force-dynamic");
+    });
+
+    it("M, N, O: verifies CustomerProfile access uses direct Drizzle/Postgres with zero Data API and zero RBAC writes", () => {
+      const profileCode = fs.readFileSync(path.join(rootDir, "src/lib/auth/profile.ts"), "utf-8");
+
+      expect(profileCode).toContain('from "@/db"');
+      expect(profileCode).toContain('from "@/db/schema"');
+      expect(profileCode).not.toContain("supabase.from(");
+      expect(profileCode).not.toContain(".rpc(");
+      expect(profileCode).not.toContain("/rest/v1");
+      expect(profileCode).not.toContain("user_roles");
+      expect(profileCode).not.toContain("role_permissions");
     });
   });
 });

@@ -90,10 +90,10 @@ export function LoginForm() {
       }
 
       if (data.session) {
-        router.push("/");
+        router.push("/auth/completar-perfil");
         router.refresh();
       } else {
-        router.push("/");
+        router.push("/auth/completar-perfil");
       }
     } catch (err) {
       setServerError(mapAuthError(err));

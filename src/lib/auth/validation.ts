@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+export const firstNameSchema = z
+  .string()
+  .trim()
+  .min(1, "El nombre es obligatorio")
+  .max(100, "El nombre no puede exceder 100 caracteres");
+
+export const lastNameSchema = z
+  .string()
+  .trim()
+  .min(1, "El apellido es obligatorio")
+  .max(100, "El apellido no puede exceder 100 caracteres");
+
 /**
  * Validation schema for customer registration.
  *
@@ -12,16 +24,8 @@ import { z } from "zod";
  */
 export const signupSchema = z
   .object({
-    firstName: z
-      .string()
-      .trim()
-      .min(1, "El nombre es obligatorio")
-      .max(100, "El nombre no puede exceder 100 caracteres"),
-    lastName: z
-      .string()
-      .trim()
-      .min(1, "El apellido es obligatorio")
-      .max(100, "El apellido no puede exceder 100 caracteres"),
+    firstName: firstNameSchema,
+    lastName: lastNameSchema,
     email: z
       .string()
       .trim()
@@ -40,6 +44,16 @@ export const signupSchema = z
   });
 
 export type SignupInput = z.infer<typeof signupSchema>;
+
+/**
+ * Validation schema for first-time profile completion onboarding.
+ */
+export const profileCompletionSchema = z.object({
+  firstName: firstNameSchema,
+  lastName: lastNameSchema,
+});
+
+export type ProfileCompletionInput = z.infer<typeof profileCompletionSchema>;
 
 /**
  * Validation schema for email/password login.

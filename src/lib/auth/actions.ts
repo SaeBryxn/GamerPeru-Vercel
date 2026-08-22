@@ -64,3 +64,86 @@ export async function verifyConfirmationOtpAction(
     redirect("/auth/login?confirmed=true");
   }
 }
+
+export interface CompleteProfileState {
+  success: boolean;
+  error: string | null;
+}
+
+/**
+ * Server action to complete initial customer profile onboarding.
+ *
+ * Invariants:
+ * 1. Authority: auth_user_id is derived strictly from verified session claims.sub.
+ * 2. Idempotency: If a profile already exists, it is never overwritten.
+ * 3. Concurrency-safe: Database insertion uses ON CONFLICT DO NOTHING.
+ * 4. Redirects to / on successful completion.
+ */
+export async function completeCustomerProfileAction(
+  _prevState: CompleteProfileState | null,
+  formData: FormData
+): Promise<CompleteProfileState> {
+  const { getVerifiedIdentity } = await import("@/lib/auth/claims");
+  const { db } = await import("@/db");
+  const { customerProfiles } = await import("@/db/schema");
+  const { profileCompletionSchema } = await import("./validation");
+  const { eq } = await import("drizzle-orm");
+
+  const verified = await getVerifiedIdentity();
+  if (!verified.success) {
+    return {
+      success: false,
+      error: "Debes iniciar sesión para completar tu perfil.",
+    };
+  }
+
+  const authUserId = verified.identity.authUserId;
+
+  const rawFirst = formData.get("firstName");
+  const rawLast = formData.get("lastName");
+
+  const parsed = profileCompletionSchema.safeParse({
+    firstName: typeof rawFirst === "string" ? rawFirst : "",
+    lastName: typeof rawLast === "string" ? rawLast : "",
+  });
+
+  if (!parsed.success) {
+    const formatted = parsed.error.format();
+    const firstErr =
+      formatted.firstName?._errors[0] ??
+      formatted.lastName?._errors[0] ??
+      "Datos de perfil inválidos.";
+    return {
+      success: false,
+      error: firstErr,
+    };
+  }
+
+  const { firstName, lastName } = parsed.data;
+
+  try {
+    const [existing] = await db
+      .select()
+      .from(customerProfiles)
+      .where(eq(customerProfiles.authUserId, authUserId))
+      .limit(1);
+
+    if (!existing) {
+      await db
+        .insert(customerProfiles)
+        .values({
+          authUserId,
+          firstName,
+          lastName,
+        })
+        .onConflictDoNothing({ target: customerProfiles.authUserId });
+    }
+  } catch {
+    return {
+      success: false,
+      error: "Ocurrió un error al guardar tu perfil. Inténtalo nuevamente.",
+    };
+  }
+
+  redirect("/");
+}

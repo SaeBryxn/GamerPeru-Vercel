@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const successUrl = new URL("/", publicEnv.NEXT_PUBLIC_SITE_URL);
+    const successUrl = new URL("/auth/completar-perfil", publicEnv.NEXT_PUBLIC_SITE_URL);
     return NextResponse.redirect(successUrl, {
       headers: noCacheHeaders,
     });
