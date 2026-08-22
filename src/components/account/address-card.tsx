@@ -1,0 +1,94 @@
+"use client";
+
+import React from "react";
+import type { CustomerAddressDTO } from "@/lib/account/types";
+import styles from "./address.module.css";
+
+interface AddressCardProps {
+  address: CustomerAddressDTO;
+  onEdit: (address: CustomerAddressDTO) => void;
+  onDelete: (address: CustomerAddressDTO) => void;
+  onSetDefault: (addressId: string) => void;
+  isPending?: boolean;
+}
+
+export function AddressCard({
+  address,
+  onEdit,
+  onDelete,
+  onSetDefault,
+  isPending = false,
+}: AddressCardProps) {
+  const fullAddressLine = address.apartmentSuite
+    ? `${address.streetAddress}, ${address.apartmentSuite}`
+    : address.streetAddress;
+
+  const locationLine = `${address.district}, ${address.province}, ${address.department}${
+    address.postalCode ? ` (${address.postalCode})` : ""
+  }`;
+
+  return (
+    <article
+      className={`${styles.addressCard} ${address.isDefault ? styles.addressCardDefault : ""}`}
+      aria-label={`Dirección para ${address.recipientName}`}
+    >
+      <div className={styles.cardHeader}>
+        <h3 className={styles.recipientName}>{address.recipientName}</h3>
+        {address.isDefault && (
+          <span className={styles.defaultBadge} aria-label="Dirección predeterminada">
+            Predeterminada
+          </span>
+        )}
+      </div>
+
+      <div className={styles.cardBody}>
+        <div className={styles.addressLine}>{fullAddressLine}</div>
+        <div className={styles.locationLine}>{locationLine}</div>
+        <div className={styles.phoneLine}>
+          <span aria-hidden="true">📞</span>
+          <span>{address.phone}</span>
+        </div>
+        {address.referenceNotes && (
+          <div className={styles.referenceNotes}>{address.referenceNotes}</div>
+        )}
+      </div>
+
+      <div className={styles.cardActions}>
+        <div>
+          {!address.isDefault && (
+            <button
+              type="button"
+              className={styles.setDefaultButton}
+              onClick={() => onSetDefault(address.id)}
+              disabled={isPending}
+              aria-label={`Establecer dirección de ${address.recipientName} como predeterminada`}
+            >
+              Establecer como predeterminada
+            </button>
+          )}
+        </div>
+
+        <div className={styles.actionGroup}>
+          <button
+            type="button"
+            className={styles.actionButton}
+            onClick={() => onEdit(address)}
+            disabled={isPending}
+            aria-label={`Editar dirección de ${address.recipientName}`}
+          >
+            Editar
+          </button>
+          <button
+            type="button"
+            className={styles.deleteButton}
+            onClick={() => onDelete(address)}
+            disabled={isPending}
+            aria-label={`Eliminar dirección de ${address.recipientName}`}
+          >
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}

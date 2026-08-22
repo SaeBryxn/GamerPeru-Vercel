@@ -15,7 +15,7 @@ interface NavDestination {
 const NAV_DESTINATIONS: NavDestination[] = [
   { label: "Resumen", href: "/cuenta", isAvailable: true },
   { label: "Perfil", href: "/cuenta/perfil", isAvailable: true },
-  { label: "Direcciones", isAvailable: false },
+  { label: "Direcciones", href: "/cuenta/direcciones", isAvailable: true },
   { label: "Pedidos", isAvailable: false },
   { label: "Favoritos", isAvailable: false },
 ];

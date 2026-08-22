@@ -37,6 +37,79 @@ export type AccountProfileState =
   | { status: "UNAUTHENTICATED" }
   | { status: "ERROR"; error: string };
 
+/**
+ * Minimized client DTO for customer addresses.
+ * isDefault is derived at read-time against profile.defaultShippingAddressId.
+ * Zero internal IDs (customerId, authUserId) exposed.
+ */
+export interface CustomerAddressDTO {
+  id: string;
+  recipientName: string;
+  phone: string;
+  streetAddress: string;
+  apartmentSuite: string | null;
+  department: string;
+  province: string;
+  district: string;
+  postalCode: string | null;
+  referenceNotes: string | null;
+  isDefault: boolean;
+}
+
+export type AccountAddressesState =
+  | {
+      status: "READY";
+      addresses: CustomerAddressDTO[];
+      defaultShippingAddressId: string | null;
+    }
+  | { status: "NEEDS_PROFILE_COMPLETION"; authUserId: string; email: string | null }
+  | { status: "UNAUTHENTICATED" }
+  | { status: "ERROR"; error: string };
+
+export interface CreateAddressInput {
+  recipientName: string;
+  phone: string;
+  streetAddress: string;
+  apartmentSuite?: string | null;
+  department: string;
+  province: string;
+  district: string;
+  postalCode?: string | null;
+  referenceNotes?: string | null;
+  setAsDefault?: boolean;
+}
+
+export interface UpdateAddressInput extends CreateAddressInput {
+  addressId: string;
+}
+
+export interface AddressActionValidationErrors {
+  recipientName?: string;
+  phone?: string;
+  streetAddress?: string;
+  apartmentSuite?: string;
+  department?: string;
+  province?: string;
+  district?: string;
+  postalCode?: string;
+  referenceNotes?: string;
+  addressId?: string;
+  form?: string;
+}
+
+export interface AddressActionSuccess {
+  success: true;
+  message: string;
+  addressId?: string;
+}
+
+export interface AddressActionFailure {
+  success: false;
+  errors: AddressActionValidationErrors;
+}
+
+export type AddressActionResult = AddressActionSuccess | AddressActionFailure;
+
 export interface UpdateProfileInput {
   firstName: string;
   lastName: string;

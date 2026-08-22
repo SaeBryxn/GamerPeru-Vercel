@@ -67,11 +67,13 @@ export default async function CuentaPage() {
           </div>
         </div>
 
-        <div className={styles.teaserCard}>
-          <h2 className={styles.teaserTitle}>
-            <span>Direcciones</span>
-            <span className={styles.badgeComingSoon}>Próximamente</span>
-          </h2>
+        <div className={styles.contentCard}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>Direcciones de entrega</h2>
+            <Link href="/cuenta/direcciones" className={styles.editLink}>
+              Gestionar
+            </Link>
+          </div>
           <p className={styles.teaserDesc}>
             Administra tus direcciones de entrega para compras rápidas y seguras.
           </p>
