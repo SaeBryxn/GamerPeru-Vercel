@@ -73,16 +73,20 @@ export async function ensureCustomerProfile(): Promise<EnsureProfileResult> {
   } else {
     // Source B: Valid Google identity metadata pair
     const googleIdentity = user.identities?.find((id) => id.provider === "google");
-    const googleFirst = normalizeName(
-      googleIdentity?.identity_data?.given_name ?? user.user_metadata?.given_name
-    );
-    const googleLast = normalizeName(
-      googleIdentity?.identity_data?.family_name ?? user.user_metadata?.family_name
-    );
+    const googleIdFirst = normalizeName(googleIdentity?.identity_data?.given_name);
+    const googleIdLast = normalizeName(googleIdentity?.identity_data?.family_name);
 
-    if (googleFirst && googleLast) {
-      resolvedFirstName = googleFirst;
-      resolvedLastName = googleLast;
+    if (googleIdFirst && googleIdLast) {
+      resolvedFirstName = googleIdFirst;
+      resolvedLastName = googleIdLast;
+    } else {
+      const metaGoogleFirst = normalizeName(user.user_metadata?.given_name);
+      const metaGoogleLast = normalizeName(user.user_metadata?.family_name);
+
+      if (metaGoogleFirst && metaGoogleLast) {
+        resolvedFirstName = metaGoogleFirst;
+        resolvedLastName = metaGoogleLast;
+      }
     }
   }
 

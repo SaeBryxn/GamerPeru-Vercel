@@ -122,21 +122,28 @@ export async function completeCustomerProfileAction(
   const { firstName, lastName } = parsed.data;
 
   try {
-    const [existing] = await db
+    // Atomic insert with onConflictDoNothing
+    await db
+      .insert(customerProfiles)
+      .values({
+        authUserId,
+        firstName,
+        lastName,
+      })
+      .onConflictDoNothing({ target: customerProfiles.authUserId });
+
+    // Canonical postcondition: verify the profile row exists
+    const [canonical] = await db
       .select()
       .from(customerProfiles)
       .where(eq(customerProfiles.authUserId, authUserId))
       .limit(1);
 
-    if (!existing) {
-      await db
-        .insert(customerProfiles)
-        .values({
-          authUserId,
-          firstName,
-          lastName,
-        })
-        .onConflictDoNothing({ target: customerProfiles.authUserId });
+    if (!canonical) {
+      return {
+        success: false,
+        error: "Ocurrió un error al guardar tu perfil. Inténtalo nuevamente.",
+      };
     }
   } catch {
     return {
