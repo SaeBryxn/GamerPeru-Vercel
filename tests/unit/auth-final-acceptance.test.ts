@@ -5,14 +5,14 @@ import { readFileSync } from "node:fs";
 // Mock server-only
 vi.mock("server-only", () => ({}));
 
-describe("GP-015 AUTH9-B — Final Security Acceptance & Integration Suite", () => {
+describe("GP-015 AUTH9-BR1 — Unit Fail-Closed & Structural Acceptance Suite", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
   });
 
-  describe("1. Token Signature Verification & Tamper Resistance", () => {
-    it("proves getVerifiedIdentity fails closed when token signature is invalid or tampered", async () => {
+  describe("1. Token Verification Fail-Closed Unit Semantics", () => {
+    it("proves getVerifiedIdentity fails closed when token verification returns an error", async () => {
       const mockGetClaims = vi.fn().mockResolvedValue({
         data: null,
         error: new Error("AuthApiError: invalid JWT signature: verification failed"),
@@ -35,7 +35,7 @@ describe("GP-015 AUTH9-B — Final Security Acceptance & Integration Suite", () 
       }
     });
 
-    it("proves getVerifiedIdentity fails closed when claims payload lacks valid sub UUID", async () => {
+    it("proves getVerifiedIdentity fails closed when claims payload lacks non-empty sub string", async () => {
       const mockGetClaims = vi.fn().mockResolvedValue({
         data: {
           claims: {
