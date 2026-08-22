@@ -8,8 +8,17 @@ COMPLETE
 
 ## Checkpoints
 
-- **Prerequisite GP-014 Accepted Checkpoint**: `f3e0210967389a071ef28bc80bfebe70ee87ca7e`
-- **Canonical GP-015 Starting Checkpoint**: `034f8b4a2eb914fb0f4da7e72efcb346d03cf95a`
+- **Prerequisite GP-014 Accepted Checkpoint**: `f3e0210b800d822c06764224279343f335f8b8c2`
+- **Canonical GP-015 Starting Repository Checkpoint**: `f3e0210b800d822c06764224279343f335f8b8c2`
+- **First GP-015 Implementation Commit**: `034f8b44a5739073d6b3084cc4b27f688a30ac01`
+- **Key GP-015 Milestones**:
+  - `AUTH1` Accepted RBAC / Schema Checkpoint: `9bee5008227af1b5c99f6acb2ea5cd69039a5bbf`
+  - `AUTH6` Accepted OAuth Checkpoint: `f0f45dfeb426e956bad377da0ee699b11a0e1733`
+  - `AUTH7` Accepted Profile Checkpoint: `6ded4a36b4f0fcdeb97077a51eb7f249beb133da`
+  - `AUTH8` Final Runtime Implementation Checkpoint: `e0c0081dcc8eaa0981a38bf5c7471bf009285c49`
+  - `AUTH9-A` Accepted Implementation Checkpoint: `02cd10d1c63dbab0019a5871413f3df12695ef93`
+  - Initial GP-015 Closure Candidate Checkpoint: `8560fe42ed66d00bbc0af71bfe9a08853c75c1ce`
+  - `AUTH9-BR1` Real Local Security Evidence Checkpoint: `e8ff04f5abc0922132f8501c26f15bdce24a3c38`
 - **AUTH Gate Execution Lineage**:
   - `AUTH0`: Pre-flight & Remote Architecture Gate `[APPROVED / CLOSED]`
   - `AUTH1`: Identity & RBAC DDL Migration 0004 `[APPROVED / CLOSED]`
@@ -27,8 +36,9 @@ COMPLETE
   - `AUTH8-D`: Operator SUPER_ADMIN Bootstrap & Hosted Allow/Deny Smoke `[APPROVED / CLOSED]`
   - `AUTH8-DR1`: Identity Label Continuity & Target Forensic Verification `[APPROVED / CLOSED]`
   - `AUTH9-A`: Minimal Account Root, Current-Session Logout & Lifecycle `[APPROVED / CLOSED]`
-  - `AUTH9-B`: Final Security Acceptance Audit & Closure Candidate `[REVIEWED]`
-  - `AUTH9-BR1`: Real Local Security Integration & Closure Remediation `[CURRENT]`
+  - `AUTH9-B`: Final Security Acceptance Audit & Closure Candidate `[REVIEWED / REMEDIATED]`
+  - `AUTH9-BR1`: Real Local Security Integration & Closure Remediation `[APPROVED / CLOSED]`
+  - `AUTH9-BR2`: Final Closure Documentation Integrity Remediation `[CURRENT]`
 - **Accepted Implementation Checkpoint**: `02cd10d1c63dbab0019a5871413f3df12695ef93`
 
 ---
@@ -88,7 +98,7 @@ GP-015 (Authentication) establishes the comprehensive authentication, session ma
 
 ## Real Local Security Integration Evidence (AUTH9-BR1)
 
-The following security properties were executed and verified against a running local Supabase stack (`http://127.0.0.1:54321`) and local PostgreSQL database (`postgresql://postgres:postgres@127.0.0.1:54322/postgres`):
+The following security properties were executed and verified against a running local Supabase stack and local PostgreSQL instance on localhost:54322:
 
 1. **Real Token Cryptographic Verification & Tamper Rejection**:
    - `getClaims(validJwt)`: Successfully verified against local JWKS; `claims.sub` returned and matched user ID.
@@ -123,12 +133,12 @@ The following security properties were executed and verified against a running l
 | **C**     | Email/password login                            | **PASS** | `src/components/auth/login-form.tsx`, hosted gate `AUTH7`                                        |
 | **D**     | Current-session logout                          | **PASS** | `src/lib/auth/actions.ts`, `tests/unit/auth-session-logout.test.ts`, hosted gate `AUTH9-A`       |
 | **E**     | Password recovery and reset                     | **PASS** | `src/components/auth/password-change-form.tsx`, `tests/unit/auth-workflow.test.ts`               |
-| **F**     | Google OAuth with PKCE flow                     | **PASS** | `src/lib/auth/google-oauth.ts`, `src/app/auth/callback/route.ts`, hosted gate `AUTH7`            |
+| **F**     | Google OAuth with PKCE flow                     | **PASS** | `src/lib/auth/google-oauth.ts`, `src/app/auth/callback/route.ts`, hosted gate `AUTH6`            |
 | **G**     | Next.js SSR session cookies (`@supabase/ssr`)   | **PASS** | `src/lib/supabase/server.ts`, `src/lib/supabase/proxy.ts`, `tests/unit/auth-ssr-core.test.ts`    |
 | **H**     | `getClaims()` verified identity authority       | **PASS** | `src/lib/auth/claims.ts`, `tests/unit/auth-ssr-core.test.ts`, local integration `AUTH9-BR1`      |
-| **I**     | Idempotent `CustomerProfile` provisioning       | **PASS** | `src/lib/auth/profile.ts`, `tests/unit/auth-profile-behavioral.test.ts`, hosted gate `AUTH6`     |
-| **J**     | Same-email identity linking                     | **PASS** | `tests/unit/auth-workflow.test.ts`, hosted gate `AUTH7`                                          |
-| **K**     | `CustomerProfile` concurrency safety            | **PASS** | `tests/unit/auth-profile-behavioral.test.ts`, hosted gate `AUTH6`                                |
+| **I**     | Idempotent `CustomerProfile` provisioning       | **PASS** | `src/lib/auth/profile.ts`, `tests/unit/auth-profile-behavioral.test.ts`, hosted gate `AUTH7`     |
+| **J**     | Same-email identity linking                     | **PASS** | `tests/unit/auth-workflow.test.ts`, hosted gate `AUTH6` (and `AUTH7` profile preservation)       |
+| **K**     | `CustomerProfile` concurrency safety            | **PASS** | `tests/unit/auth-profile-behavioral.test.ts`, hosted gate `AUTH7`                                |
 | **L**     | RBAC isolation (Model A explicit mapping)       | **PASS** | `src/lib/auth/rbac.ts`, `tests/unit/auth-rbac-runtime.test.ts`, hosted gate `AUTH8-B`            |
 | **M**     | Authenticated cache boundary (no-store headers) | **PASS** | `src/lib/supabase/proxy.ts`, `src/app/cuenta/page.tsx`, build output `ƒ /cuenta`                 |
 | **N**     | Public storefront auth-overhead isolation       | **PASS** | `tests/unit/auth-session-logout.test.ts`, zero auth calls in `src/app/(storefront)`              |
@@ -145,11 +155,11 @@ The following security properties were executed and verified against a running l
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | :----------------: | --------------------------------------------------------------------------------------------- |
 | **1. Email/Password Signup & Verification** | Valid/invalid registration payloads, password strength Zod schema, TokenHash OTP verification.                  |      **PASS**      | Vitest unit suite + hosted email confirmation                                                 |
 | **2. Password Recovery Flow**               | Recovery request, single-use token verification, password update action, redirect handling.                     |      **PASS**      | Vitest unit suite + hosted recovery verification                                              |
-| **3. Google OAuth Callback**                | PKCE authorization flow, state parameter validation, cookie exchange, profile completion redirect.              |      **PASS**      | Vitest unit suite + hosted OAuth flow                                                         |
+| **3. Google OAuth Callback**                | PKCE authorization flow, state parameter validation, cookie exchange, profile completion redirect.              |      **PASS**      | Vitest unit suite + hosted OAuth flow (`AUTH6`)                                               |
 | **4. Token Signature Verification**         | Tampered JWT payloads, invalid signatures, missing `sub` claims rejected by real local `getClaims()`.           |      **PASS**      | Real local Supabase cryptographic integration test (`AUTH9-BR1`)                              |
 | **5. Session Expiry & Refresh**             | Token rotation through proxy adapter `updateSession()`, expired access token refresh, revoked token fail-close. | **PASS WITH NOTE** | Real local Supabase refresh integration (`AUTH9-BR1`); literal wall-clock expiry unconfigured |
 | **6. Cache Boundary**                       | Authenticated pages dynamic (`no-store`), zero session cookies cached on public routes.                         |      **PASS**      | Next.js build classification + proxy header assertions                                        |
-| **7. Identity Linking**                     | Same-email linking between email/password and Google OAuth resolving to 1 `CustomerProfile`.                    |      **PASS**      | Hosted gate `AUTH7` multi-identity proof                                                      |
+| **7. Identity Linking**                     | Same-email linking between email/password and Google OAuth resolving to 1 `CustomerProfile`.                    |      **PASS**      | Hosted gate `AUTH6` multi-identity proof                                                      |
 | **8. Concurrency**                          | Race condition resistance on `ensureCustomerProfile()` under unique `auth_user_id` constraint.                  |      **PASS**      | Vitest concurrency suite (`Promise.all` parallel insertions)                                  |
 | **9. RBAC Isolation**                       | Google OAuth users hold 0 roles/permissions; Model A explicit joins; fail-closed unknown role rejection.        |      **PASS**      | `tests/unit/auth-rbac-runtime.test.ts`, hosted gate `AUTH8-D`                                 |
 | **10. Identity Detachment**                 | Real local `auth.users` deletion executes `ON DELETE SET NULL` on profile and `CASCADE` on roles.               |      **PASS**      | Real local PostgreSQL database test (`AUTH9-BR1`)                                             |
