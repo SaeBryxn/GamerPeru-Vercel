@@ -14,7 +14,7 @@ import type { AccountProfileState } from "./types";
  * 1. Authority: auth_user_id is derived strictly from verified JWT claims.sub.
  * 2. Scope: Request-scoped memoization via React cache prevents duplicate DB queries.
  * 3. Security: Direct PostgreSQL query; zero PostgREST or client-supplied IDs.
- * 4. PII Protection: Sanitized logging on failure without customer metadata.
+ * 4. PII Protection: Zero exception-derived strings logged on failure.
  */
 export const getCurrentCustomerProfile = cache(async (): Promise<AccountProfileState> => {
   const verified = await getVerifiedIdentity();
@@ -56,11 +56,8 @@ export const getCurrentCustomerProfile = cache(async (): Promise<AccountProfileS
         email,
       },
     };
-  } catch (error) {
-    logger.error({
-      event: "account_profile_read_failed",
-      reason: error instanceof Error ? error.message : "unknown_database_error",
-    });
+  } catch {
+    logger.error({ event: "account_profile_read_failed" });
     return {
       status: "ERROR",
       error: "No se pudo cargar el perfil de usuario.",

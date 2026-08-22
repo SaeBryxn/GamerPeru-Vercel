@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentCustomerProfile } from "@/lib/account/profile";
-import { Button } from "@/components/ui/button";
 import styles from "@/components/account/account.module.css";
 
 export const dynamic = "force-dynamic";
@@ -40,8 +39,8 @@ export default async function CuentaPage() {
         <div className={styles.contentCard}>
           <div className={styles.sectionHeader}>
             <h2 className={styles.sectionTitle}>Datos personales</h2>
-            <Link href="/cuenta/perfil">
-              <Button variant="secondary">Editar</Button>
+            <Link href="/cuenta/perfil" className={styles.editLink}>
+              Editar
             </Link>
           </div>
 

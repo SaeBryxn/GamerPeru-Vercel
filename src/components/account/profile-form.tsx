@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useTransition } from "react";
-import type { CustomerProfileView, UpdateProfileValidationErrors } from "@/lib/account/types";
+import type { ProfileFormDTO, UpdateProfileValidationErrors } from "@/lib/account/types";
 import { updateCustomerProfileAction } from "@/lib/account/actions";
 import { CANONICAL_DOCUMENT_TYPES } from "@/lib/account/validation";
 import { TextField } from "@/components/ui/input/text-field";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import styles from "./profile-form.module.css";
 
 interface ProfileFormProps {
-  initialProfile: CustomerProfileView;
+  initialProfile: ProfileFormDTO;
 }
 
 export function ProfileForm({ initialProfile }: ProfileFormProps) {
@@ -41,13 +41,11 @@ export function ProfileForm({ initialProfile }: ProfileFormProps) {
       const result = await updateCustomerProfileAction(null, formData);
       if (result.success) {
         setStatusMessage(result.message);
-        if (result.profile) {
-          setFirstName(result.profile.firstName);
-          setLastName(result.profile.lastName);
-          setPhone(result.profile.phone ?? "");
-          setDocumentType(result.profile.documentType ?? "");
-          setDocumentNumber(result.profile.documentNumber ?? "");
-        }
+        setFirstName(result.fields.firstName);
+        setLastName(result.fields.lastName);
+        setPhone(result.fields.phone ?? "");
+        setDocumentType(result.fields.documentType ?? "");
+        setDocumentNumber(result.fields.documentNumber ?? "");
       } else {
         if (result.errors.form) {
           setFormError(result.errors.form);

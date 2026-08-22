@@ -1,23 +1,21 @@
 import React from "react";
-import type { CustomerProfileView } from "@/lib/account/types";
 import { AccountNavigation } from "./account-navigation";
 import styles from "./account.module.css";
 
 interface AccountShellProps {
-  profile: CustomerProfileView;
+  displayName: string;
+  displayEmail: string | null;
   children: React.ReactNode;
 }
 
-export function AccountShell({ profile, children }: AccountShellProps) {
-  const fullName = `${profile.firstName} ${profile.lastName}`.trim();
-
+export function AccountShell({ displayName, displayEmail, children }: AccountShellProps) {
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
         <div className={styles.userMeta}>
           <span>Hola,</span>
-          <span className={styles.userName}>{fullName || "Cliente"}</span>
-          <span className={styles.userEmail}>({profile.email})</span>
+          <span className={styles.userName}>{displayName || "Cliente"}</span>
+          {displayEmail ? <span className={styles.userEmail}>({displayEmail})</span> : null}
         </div>
       </header>
 

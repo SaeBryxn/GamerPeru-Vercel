@@ -33,5 +33,12 @@ export default async function CuentaLayout({ children }: { children: React.React
     );
   }
 
-  return <AccountShell profile={profileState.profile}>{children}</AccountShell>;
+  const profile = profileState.profile;
+  const displayName = `${profile.firstName} ${profile.lastName}`.trim();
+
+  return (
+    <AccountShell displayName={displayName} displayEmail={profile.email}>
+      {children}
+    </AccountShell>
+  );
 }

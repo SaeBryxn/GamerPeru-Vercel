@@ -17,7 +17,8 @@ import type { UpdateProfileInput, UpdateProfileResult } from "./types";
  * 2. IDOR Prevention: No caller customer_id or profile_id is accepted or trusted.
  * 3. Scope: Only updates approved editable profile fields (first_name, last_name, phone, document_type, document_number).
  * 4. Preservation: id, auth_user_id, default_shipping_address_id, and created_at remain untouched.
- * 5. PII Protection: Zero customer PII or query values logged.
+ * 5. PII Protection: Zero exception-derived strings logged on failure.
+ * 6. Client Minimization: Success response contains only editable field values, no internal IDs.
  */
 export async function updateCustomerProfileAction(
   _prevState: unknown,
@@ -81,13 +82,16 @@ export async function updateCustomerProfileAction(
     return {
       success: true,
       message: "Perfil actualizado correctamente.",
-      profile: updated,
+      fields: {
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        phone: updated.phone,
+        documentType: updated.documentType,
+        documentNumber: updated.documentNumber,
+      },
     };
-  } catch (error) {
-    logger.error({
-      event: "account_profile_update_failed",
-      reason: error instanceof Error ? error.message : "unknown_database_error",
-    });
+  } catch {
+    logger.error({ event: "account_profile_update_failed" });
     return {
       success: false,
       errors: { form: "Ocurrió un error inesperado al actualizar el perfil. Intenta nuevamente." },

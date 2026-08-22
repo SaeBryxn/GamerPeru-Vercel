@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentCustomerProfile } from "@/lib/account/profile";
+import { toProfileFormDTO } from "@/lib/account/types";
 import { ProfileForm } from "@/components/account/profile-form";
 import styles from "@/components/account/account.module.css";
 
@@ -29,13 +30,15 @@ export default async function PerfilPage() {
     return null;
   }
 
+  const formDTO = toProfileFormDTO(profileState.profile);
+
   return (
     <div>
       <div className={styles.sectionHeader}>
         <h1 className={styles.title}>Mi perfil</h1>
       </div>
 
-      <ProfileForm initialProfile={profileState.profile} />
+      <ProfileForm initialProfile={formDTO} />
     </div>
   );
 }

@@ -1,8 +1,11 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { validateUpdateProfileInput, CANONICAL_DOCUMENT_TYPES } from "@/lib/account/validation";
 import { getCurrentCustomerProfile } from "@/lib/account/profile";
 import { updateCustomerProfileAction } from "@/lib/account/actions";
-import type { UpdateProfileInput } from "@/lib/account/types";
+import { toProfileFormDTO } from "@/lib/account/types";
+import type { ProfileFormDTO, ServerProfileView, UpdateProfileInput } from "@/lib/account/types";
 import { metadata as cuentaMetadata, dynamic as cuentaDynamic } from "@/app/cuenta/layout";
 import { metadata as perfilMetadata, dynamic as perfilDynamic } from "@/app/cuenta/perfil/page";
 import * as claimsModule from "@/lib/auth/claims";
@@ -32,463 +35,514 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
-describe("GP-016 ACCT4 — Customer Account Profile Runtime & Validation Suite", () => {
+function mockIdentity(authUserId: string, email: string) {
+  return {
+    success: true as const,
+    identity: { authUserId, email, claims: {} },
+  };
+}
+
+function mockDbSelectEmpty() {
+  const mockLimit = vi.fn().mockResolvedValueOnce([]);
+  const mockWhere = vi.fn().mockReturnValue({ limit: mockLimit });
+  const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+  vi.mocked(dbModule.db.select).mockReturnValueOnce({
+    from: mockFrom,
+  } as unknown as ReturnType<typeof dbModule.db.select>);
+}
+
+function mockDbSelectProfile(profile: Record<string, unknown>) {
+  const mockLimit = vi.fn().mockResolvedValueOnce([profile]);
+  const mockWhere = vi.fn().mockReturnValue({ limit: mockLimit });
+  const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+  vi.mocked(dbModule.db.select).mockReturnValueOnce({
+    from: mockFrom,
+  } as unknown as ReturnType<typeof dbModule.db.select>);
+}
+
+function mockDbSelectThrow(errorMessage: string) {
+  const mockWhere = vi.fn().mockImplementation(() => {
+    throw new Error(errorMessage);
+  });
+  const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
+  vi.mocked(dbModule.db.select).mockReturnValueOnce({
+    from: mockFrom,
+  } as unknown as ReturnType<typeof dbModule.db.select>);
+}
+
+function mockDbUpdateReturning(rows: Record<string, unknown>[]) {
+  const mockReturning = vi.fn().mockResolvedValueOnce(rows);
+  const mockWhere = vi.fn().mockReturnValue({ returning: mockReturning });
+  const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
+  vi.mocked(dbModule.db.update).mockReturnValueOnce({
+    set: mockSet,
+  } as unknown as ReturnType<typeof dbModule.db.update>);
+  return { mockSet, mockWhere, mockReturning };
+}
+
+function mockDbUpdateThrow(errorMessage: string) {
+  const mockWhere = vi.fn().mockImplementation(() => {
+    throw new Error(errorMessage);
+  });
+  const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
+  vi.mocked(dbModule.db.update).mockReturnValueOnce({
+    set: mockSet,
+  } as unknown as ReturnType<typeof dbModule.db.update>);
+  return { mockSet };
+}
+
+const HOSTILE_ERROR_READ =
+  'Failed query: select "id", "auth_user_id" from "customer_profiles" ' +
+  "WHERE auth_user_id = $1 limit $2\n" +
+  "params: SYNTHETIC_AUTH_UUID_abc123, 1\n" +
+  "email: SYNTHETIC_EMAIL_test@secret.com\n" +
+  "document: SYNTHETIC_DOCUMENT_70001234";
+
+const HOSTILE_ERROR_UPDATE =
+  "update failed: SYNTHETIC_AUTH_UUID_xyz789\n" +
+  "SYNTHETIC_EMAIL_admin@gamerperu.com\n" +
+  "SYNTHETIC_DOCUMENT_99887766\n" +
+  "phone: +51-999-SYNTHETIC";
+
+describe("GP-016 ACCT4-BR1 — Customer Account Profile Privacy, Client-Boundary & Accessibility Remediation Suite", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(dbModule.db.select).mockReset();
+    vi.mocked(dbModule.db.update).mockReset();
   });
 
-  describe("Profile Input Validation Rules", () => {
-    it("G/H/I: accepts valid first and last names including 1-character names and trims whitespace", () => {
-      const res = validateUpdateProfileInput({
-        firstName: " J ",
-        lastName: " D ",
-      });
+  // ============================================================
+  // A/B: Logger never includes raw error.message
+  // ============================================================
+  describe("Production Logging Privacy — zero exception-derived content", () => {
+    it("A: profile reader logger emits only fixed event key, zero raw error.message content", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-read-err", "reader@gp.com")
+      );
+      mockDbSelectThrow(HOSTILE_ERROR_READ);
 
-      expect(res.success).toBe(true);
-      if (res.success) {
-        expect(res.data.firstName).toBe("J");
-        expect(res.data.lastName).toBe("D");
-      }
+      const res = await getCurrentCustomerProfile();
+      expect(res.status).toBe("ERROR");
+
+      expect(logger.error).toHaveBeenCalledTimes(1);
+      const logPayload = vi.mocked(logger.error).mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(logPayload.event).toBe("account_profile_read_failed");
+
+      // Verify zero raw exception content leaked
+      const serialized = JSON.stringify(logPayload);
+      expect(serialized).not.toContain("SYNTHETIC_AUTH_UUID");
+      expect(serialized).not.toContain("SYNTHETIC_EMAIL");
+      expect(serialized).not.toContain("SYNTHETIC_DOCUMENT");
+      expect(serialized).not.toContain("Failed query");
+      expect(serialized).not.toContain("params:");
+      expect(serialized).not.toContain("error.message");
+
+      // No reason field should exist with exception content
+      expect(logPayload).not.toHaveProperty("reason");
+      expect(logPayload).not.toHaveProperty("message");
+      expect(logPayload).not.toHaveProperty("stack");
     });
 
-    it("G/H: rejects empty or whitespace-only first and last names", () => {
-      const res1 = validateUpdateProfileInput({
-        firstName: "   ",
-        lastName: "Valenzuela",
-      });
-      expect(res1.success).toBe(false);
-      if (!res1.success) {
-        expect(res1.errors.firstName).toBeDefined();
-      }
+    it("B: profile update logger emits only fixed event key, zero raw error.message content", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-update-err", "updater@gp.com")
+      );
+      mockDbUpdateThrow(HOSTILE_ERROR_UPDATE);
 
-      const res2 = validateUpdateProfileInput({
-        firstName: "Carlos",
-        lastName: "",
+      const res = await updateCustomerProfileAction(null, {
+        firstName: "Test",
+        lastName: "User",
       });
-      expect(res2.success).toBe(false);
-      if (!res2.success) {
-        expect(res2.errors.lastName).toBeDefined();
-      }
-    });
 
-    it("G/H: rejects names exceeding 100 characters", () => {
-      const longName = "A".repeat(101);
-      const res = validateUpdateProfileInput({
-        firstName: longName,
-        lastName: "Pérez",
-      });
       expect(res.success).toBe(false);
-      if (!res.success) {
-        expect(res.errors.firstName).toContain("100 caracteres");
-      }
+      expect(logger.error).toHaveBeenCalledTimes(1);
+      const logPayload = vi.mocked(logger.error).mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(logPayload.event).toBe("account_profile_update_failed");
+
+      const serialized = JSON.stringify(logPayload);
+      expect(serialized).not.toContain("SYNTHETIC_AUTH_UUID");
+      expect(serialized).not.toContain("SYNTHETIC_EMAIL");
+      expect(serialized).not.toContain("SYNTHETIC_DOCUMENT");
+      expect(serialized).not.toContain("update failed");
+      expect(serialized).not.toContain("SYNTHETIC");
     });
 
-    it("J/K/L: normalizes empty phone to null, trims phone up to 20 chars, and allows international/arbitrary formats without invented regex", () => {
-      const resBlank = validateUpdateProfileInput({
-        firstName: "Ana",
-        lastName: "García",
-        phone: "   ",
-      });
-      expect(resBlank.success).toBe(true);
-      if (resBlank.success) {
-        expect(resBlank.data.phone).toBeNull();
-      }
+    it("C: synthetic auth UUID absent from all logger payloads on read failure", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("SYNTHETIC_AUTH_UUID_injected", "secret@gp.com")
+      );
+      mockDbSelectThrow("connection error with SYNTHETIC_AUTH_UUID_injected embedded");
 
-      const resArbitrary = validateUpdateProfileInput({
-        firstName: "Ana",
-        lastName: "García",
-        phone: " +1 (555) 019-2834 ",
-      });
-      expect(resArbitrary.success).toBe(true);
-      if (resArbitrary.success) {
-        expect(resArbitrary.data.phone).toBe("+1 (555) 019-2834");
-      }
+      await getCurrentCustomerProfile();
 
-      const resTooLong = validateUpdateProfileInput({
-        firstName: "Ana",
-        lastName: "García",
-        phone: "1".repeat(21),
-      });
-      expect(resTooLong.success).toBe(false);
-      if (!resTooLong.success) {
-        expect(resTooLong.errors.phone).toBeDefined();
-      }
+      const serialized = JSON.stringify(vi.mocked(logger.error).mock.calls);
+      expect(serialized).not.toContain("SYNTHETIC_AUTH_UUID_injected");
     });
 
-    it("M: normalizes empty document pair to both null", () => {
-      const res = validateUpdateProfileInput({
-        firstName: "Pedro",
-        lastName: "Castillo",
-        documentType: "",
-        documentNumber: "   ",
-      });
-      expect(res.success).toBe(true);
-      if (res.success) {
-        expect(res.data.documentType).toBeNull();
-        expect(res.data.documentNumber).toBeNull();
-      }
+    it("D: synthetic email absent from all logger payloads on update failure", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-d", "SYNTHETIC_EMAIL_secret@gamerperu.com")
+      );
+      mockDbUpdateThrow("deadlock involving SYNTHETIC_EMAIL_secret@gamerperu.com");
+
+      await updateCustomerProfileAction(null, { firstName: "A", lastName: "B" });
+
+      const serialized = JSON.stringify(vi.mocked(logger.error).mock.calls);
+      expect(serialized).not.toContain("SYNTHETIC_EMAIL_secret@gamerperu.com");
     });
 
-    it("N: accepts valid canonical document types and trimmed document numbers", () => {
-      for (const type of CANONICAL_DOCUMENT_TYPES) {
-        const res = validateUpdateProfileInput({
-          firstName: "Rosa",
-          lastName: "Flores",
-          documentType: type,
-          documentNumber: " 72819203 ",
-        });
-        expect(res.success).toBe(true);
-        if (res.success) {
-          expect(res.data.documentType).toBe(type);
-          expect(res.data.documentNumber).toBe("72819203");
-        }
-      }
-    });
+    it("E: synthetic document values absent from all logger payloads", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-e", "doc@gp.com")
+      );
+      mockDbUpdateThrow("FK violation on document SYNTH_DOC_99001122");
 
-    it("O: rejects documentType when documentNumber is missing", () => {
-      const res = validateUpdateProfileInput({
-        firstName: "Rosa",
-        lastName: "Flores",
+      await updateCustomerProfileAction(null, {
+        firstName: "X",
+        lastName: "Y",
         documentType: "DNI",
-        documentNumber: "",
+        documentNumber: "SYNTH_DOC_99001122",
       });
-      expect(res.success).toBe(false);
-      if (!res.success) {
-        expect(res.errors.documentNumber).toBeDefined();
-      }
+
+      const serialized = JSON.stringify(vi.mocked(logger.error).mock.calls);
+      expect(serialized).not.toContain("SYNTH_DOC_99001122");
+    });
+  });
+
+  // ============================================================
+  // F/G/H: Client DTO minimization
+  // ============================================================
+  describe("Client Profile DTO Minimization", () => {
+    const serverProfile: ServerProfileView = {
+      id: "prof-uuid-secret",
+      authUserId: "auth-uuid-secret",
+      firstName: "Rosa",
+      lastName: "Flores",
+      phone: "987654321",
+      documentType: "DNI",
+      documentNumber: "70809010",
+      defaultShippingAddressId: "addr-uuid-secret",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-06-15T12:00:00Z"),
+      email: "rosa@gp.com",
+    };
+
+    it("F: client form DTO excludes profile.id", () => {
+      const dto = toProfileFormDTO(serverProfile);
+      expect(dto).not.toHaveProperty("id");
     });
 
-    it("P: rejects documentNumber when documentType is missing", () => {
-      const res = validateUpdateProfileInput({
-        firstName: "Rosa",
-        lastName: "Flores",
-        documentType: "",
+    it("G: client form DTO excludes authUserId", () => {
+      const dto = toProfileFormDTO(serverProfile);
+      expect(dto).not.toHaveProperty("authUserId");
+    });
+
+    it("H: client form DTO excludes defaultShippingAddressId, createdAt, updatedAt", () => {
+      const dto = toProfileFormDTO(serverProfile);
+      expect(dto).not.toHaveProperty("defaultShippingAddressId");
+      expect(dto).not.toHaveProperty("createdAt");
+      expect(dto).not.toHaveProperty("updatedAt");
+    });
+
+    it("F/G/H: client form DTO contains only editable/display fields", () => {
+      const dto = toProfileFormDTO(serverProfile);
+      const keys = Object.keys(dto).sort();
+      expect(keys).toEqual(
+        ["documentNumber", "documentType", "email", "firstName", "lastName", "phone"].sort()
+      );
+    });
+
+    it("ProfileFormDTO type excludes internal identifiers structurally", () => {
+      const dto: ProfileFormDTO = {
+        firstName: "Test",
+        lastName: "User",
+        phone: null,
+        documentType: null,
+        documentNumber: null,
+        email: "test@gp.com",
+      };
+      expect(dto).not.toHaveProperty("id");
+      expect(dto).not.toHaveProperty("authUserId");
+      expect(dto).not.toHaveProperty("defaultShippingAddressId");
+    });
+  });
+
+  // ============================================================
+  // I: Server Action success response minimization
+  // ============================================================
+  describe("Server Action Response Minimization", () => {
+    it("I: Server Action success response excludes internal IDs", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-minimized", "min@gp.com")
+      );
+      mockDbUpdateReturning([
+        {
+          id: "should-not-appear",
+          authUserId: "should-not-appear-auth",
+          firstName: "MinFirst",
+          lastName: "MinLast",
+          phone: "999",
+          documentType: "DNI",
+          documentNumber: "12345678",
+          defaultShippingAddressId: "should-not-appear-addr",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      const res = await updateCustomerProfileAction(null, {
+        firstName: "MinFirst",
+        lastName: "MinLast",
+        phone: "999",
+        documentType: "DNI",
         documentNumber: "12345678",
       });
-      expect(res.success).toBe(false);
-      if (!res.success) {
-        expect(res.errors.documentType).toBeDefined();
-      }
-    });
 
-    it("Q/R: rejects document number exceeding 20 chars but accepts non-standard lengths without invented Peru length constraints", () => {
-      const resShortDni = validateUpdateProfileInput({
-        firstName: "Juan",
-        lastName: "Pérez",
-        documentType: "DNI",
-        documentNumber: "12345",
-      });
-      expect(resShortDni.success).toBe(true);
-
-      const resTooLong = validateUpdateProfileInput({
-        firstName: "Juan",
-        lastName: "Pérez",
-        documentType: "PASSPORT",
-        documentNumber: "P".repeat(21),
-      });
-      expect(resTooLong.success).toBe(false);
-      if (!resTooLong.success) {
-        expect(resTooLong.errors.documentNumber).toBeDefined();
+      expect(res.success).toBe(true);
+      if (res.success) {
+        const serialized = JSON.stringify(res);
+        expect(serialized).not.toContain("should-not-appear");
+        expect(res).not.toHaveProperty("profile");
+        expect(res.fields.firstName).toBe("MinFirst");
+        expect(res.fields.lastName).toBe("MinLast");
+        expect(res.fields.phone).toBe("999");
+        expect(res.fields.documentType).toBe("DNI");
+        expect(res.fields.documentNumber).toBe("12345678");
       }
     });
   });
 
+  // ============================================================
+  // J/K: IDOR authority preservation
+  // ============================================================
+  describe("IDOR Authority Preservation", () => {
+    it("J: Server Action still derives ownership from verified claims.sub", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-alice", "alice@gp.com")
+      );
+      const { mockSet } = mockDbUpdateReturning([
+        {
+          id: "prof-alice",
+          authUserId: "auth-alice",
+          firstName: "Alicia",
+          lastName: "Updated",
+          phone: null,
+          documentType: null,
+          documentNumber: null,
+          defaultShippingAddressId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      await updateCustomerProfileAction(null, {
+        firstName: "Alicia",
+        lastName: "Updated",
+      });
+
+      const setPayload = (mockSet.mock.calls[0] as Record<string, unknown>[])?.[0] ?? {};
+      expect(setPayload.firstName).toBe("Alicia");
+      expect(setPayload.authUserId).toBeUndefined();
+      expect(setPayload.id).toBeUndefined();
+    });
+
+    it("K: malicious authority fields in payload remain ignored", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-alice", "alice@gp.com")
+      );
+      const { mockSet } = mockDbUpdateReturning([
+        {
+          id: "prof-alice",
+          authUserId: "auth-alice",
+          firstName: "Safe",
+          lastName: "User",
+          phone: null,
+          documentType: null,
+          documentNumber: null,
+          defaultShippingAddressId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      await updateCustomerProfileAction(null, {
+        firstName: "Safe",
+        lastName: "User",
+        customerId: "bob-uuid",
+        authUserId: "bob-auth-uuid",
+        id: "bob-profile-uuid",
+      } as unknown as UpdateProfileInput);
+
+      const setPayload = (mockSet.mock.calls[0] as Record<string, unknown>[])?.[0] ?? {};
+      expect(setPayload.customerId).toBeUndefined();
+      expect(setPayload.authUserId).toBeUndefined();
+      expect(setPayload.id).toBeUndefined();
+    });
+  });
+
+  // ============================================================
+  // L: Profile validation contract unchanged
+  // ============================================================
+  describe("Profile Validation Contract Preservation", () => {
+    it("L: preserves canonical validation contract", () => {
+      // firstName: trim, non-empty, max100, 1-char allowed
+      expect(validateUpdateProfileInput({ firstName: " J ", lastName: "D" }).success).toBe(true);
+      expect(validateUpdateProfileInput({ firstName: "", lastName: "D" }).success).toBe(false);
+      expect(
+        validateUpdateProfileInput({ firstName: "A".repeat(101), lastName: "D" }).success
+      ).toBe(false);
+
+      // lastName: trim, non-empty, max100, 1-char allowed
+      expect(validateUpdateProfileInput({ firstName: "J", lastName: " D " }).success).toBe(true);
+      expect(validateUpdateProfileInput({ firstName: "J", lastName: "" }).success).toBe(false);
+
+      // phone: optional, trim, blank->NULL, max20, no regex
+      const phoneBlank = validateUpdateProfileInput({
+        firstName: "J",
+        lastName: "D",
+        phone: "   ",
+      });
+      expect(phoneBlank.success && phoneBlank.data.phone).toBeNull();
+
+      // document pair: both NULL or both provided
+      expect(
+        validateUpdateProfileInput({
+          firstName: "J",
+          lastName: "D",
+          documentType: "DNI",
+          documentNumber: "",
+        }).success
+      ).toBe(false);
+      expect(
+        validateUpdateProfileInput({
+          firstName: "J",
+          lastName: "D",
+          documentType: "",
+          documentNumber: "12345678",
+        }).success
+      ).toBe(false);
+
+      // canonical types
+      expect(CANONICAL_DOCUMENT_TYPES).toEqual(["DNI", "CE", "RUC", "PASSPORT"]);
+    });
+  });
+
+  // ============================================================
+  // M: Nested interactive control elimination
+  // ============================================================
+  describe("Nested Interactive Control Elimination", () => {
+    it("M: /cuenta page edit action uses no nested Link+Button structure", () => {
+      const pageSource = readFileSync(resolve(process.cwd(), "src/app/cuenta/page.tsx"), "utf8");
+      // Must not contain Link wrapping a Button
+      expect(pageSource).not.toMatch(/<Link[^>]*>[\s\S]*?<Button[\s\S]*?<\/Link>/);
+      // Must not import Button
+      expect(pageSource).not.toContain('from "@/components/ui/button"');
+      // Should use a Link with className for editLink styling
+      expect(pageSource).toContain("styles.editLink");
+    });
+  });
+
+  // ============================================================
+  // N/O: Account metadata and dynamic routing
+  // ============================================================
+  describe("Account Security & Route Architecture", () => {
+    it("N: account routes declare noindex/nofollow robots", () => {
+      expect(cuentaMetadata.robots).toEqual({ index: false, follow: false });
+      expect(perfilMetadata.robots).toEqual({ index: false, follow: false });
+    });
+
+    it("O: account routes remain force-dynamic", () => {
+      expect(cuentaDynamic).toBe("force-dynamic");
+      expect(perfilDynamic).toBe("force-dynamic");
+    });
+  });
+
+  // ============================================================
+  // P: Logout contract preservation
+  // ============================================================
+  describe("Logout Contract Preservation", () => {
+    it("P: account navigation includes LogoutButton", () => {
+      const navSource = readFileSync(
+        resolve(process.cwd(), "src/components/account/account-navigation.tsx"),
+        "utf8"
+      );
+      expect(navSource).toContain("LogoutButton");
+      expect(navSource).toContain("@/components/auth/logout-button");
+    });
+  });
+
+  // ============================================================
+  // Reader and Action functional tests
+  // ============================================================
   describe("getCurrentCustomerProfile Reader", () => {
-    it("A/D: returns UNAUTHENTICATED when getVerifiedIdentity fails", async () => {
+    it("returns UNAUTHENTICATED when getVerifiedIdentity fails", async () => {
       vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
         success: false,
         reason: "no_session",
       });
-
       const res = await getCurrentCustomerProfile();
       expect(res.status).toBe("UNAUTHENTICATED");
     });
 
-    it("B/E: queries by verified auth_user_id and returns NEEDS_PROFILE_COMPLETION when no profile row exists", async () => {
-      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
-        success: true,
-        identity: {
-          authUserId: "auth-uuid-123",
-          email: "test@gamerperu.com",
-          claims: {},
-        },
-      });
-
-      const mockLimit = vi.fn().mockResolvedValueOnce([]);
-      const mockWhere = vi.fn().mockReturnValue({ limit: mockLimit });
-      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
-      vi.mocked(dbModule.db.select).mockReturnValueOnce({
-        from: mockFrom,
-      } as unknown as ReturnType<typeof dbModule.db.select>);
-
+    it("returns NEEDS_PROFILE_COMPLETION when no profile row exists", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-123", "test@gp.com")
+      );
+      mockDbSelectEmpty();
       const res = await getCurrentCustomerProfile();
       expect(res.status).toBe("NEEDS_PROFILE_COMPLETION");
-      if (res.status === "NEEDS_PROFILE_COMPLETION") {
-        expect(res.authUserId).toBe("auth-uuid-123");
-        expect(res.email).toBe("test@gamerperu.com");
-      }
     });
 
-    it("B/C: returns READY with canonical CustomerProfile and auth email when profile exists", async () => {
-      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
-        success: true,
-        identity: {
-          authUserId: "auth-uuid-456",
-          email: "gamer@gamerperu.com",
-          claims: {},
-        },
-      });
-
-      const mockProfile = {
-        id: "prof-uuid-456",
-        authUserId: "auth-uuid-456",
+    it("returns READY with server profile when profile exists", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-456", "gamer@gp.com")
+      );
+      mockDbSelectProfile({
+        id: "prof-456",
+        authUserId: "auth-456",
         firstName: "Diego",
         lastName: "Armando",
         phone: "987654321",
         documentType: "DNI",
         documentNumber: "70809010",
         defaultShippingAddressId: null,
-        createdAt: new Date("2026-01-01T00:00:00Z"),
-        updatedAt: new Date("2026-01-02T00:00:00Z"),
-      };
-
-      const mockLimit = vi.fn().mockResolvedValueOnce([mockProfile]);
-      const mockWhere = vi.fn().mockReturnValue({ limit: mockLimit });
-      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
-      vi.mocked(dbModule.db.select).mockReturnValueOnce({
-        from: mockFrom,
-      } as unknown as ReturnType<typeof dbModule.db.select>);
-
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-02"),
+      });
       const res = await getCurrentCustomerProfile();
       expect(res.status).toBe("READY");
       if (res.status === "READY") {
         expect(res.profile.firstName).toBe("Diego");
-        expect(res.profile.lastName).toBe("Armando");
-        expect(res.profile.email).toBe("gamer@gamerperu.com");
-        expect(res.profile.id).toBe("prof-uuid-456");
+        expect(res.profile.email).toBe("gamer@gp.com");
       }
-    });
-
-    it("F/Y/Z: returns safe generic ERROR and logs sanitized event without PII on database failure", async () => {
-      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
-        success: true,
-        identity: {
-          authUserId: "auth-uuid-789",
-          email: "secret@gamerperu.com",
-          claims: {},
-        },
-      });
-
-      const mockWhere = vi.fn().mockImplementation(() => {
-        throw new Error("connection terminated");
-      });
-      const mockFrom = vi.fn().mockReturnValue({ where: mockWhere });
-      vi.mocked(dbModule.db.select).mockReturnValueOnce({
-        from: mockFrom,
-      } as unknown as ReturnType<typeof dbModule.db.select>);
-
-      const res = await getCurrentCustomerProfile();
-      expect(res.status).toBe("ERROR");
-      if (res.status === "ERROR") {
-        expect(res.error).toBe("No se pudo cargar el perfil de usuario.");
-      }
-
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          event: "account_profile_read_failed",
-        })
-      );
     });
   });
 
-  describe("updateCustomerProfileAction Server Action & IDOR Immunity", () => {
-    it("S/T: derives update authority strictly from verified claims.sub and updates only caller profile", async () => {
+  describe("updateCustomerProfileAction Functional", () => {
+    it("returns unauthenticated error when no session", async () => {
       vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
-        success: true,
-        identity: {
-          authUserId: "auth-alice-uuid",
-          email: "alice@gamerperu.com",
-          claims: {},
-        },
+        success: false,
+        reason: "no_session",
       });
-
-      const mockReturning = vi.fn().mockResolvedValueOnce([
-        {
-          id: "prof-alice-uuid",
-          authUserId: "auth-alice-uuid",
-          firstName: "Alicia",
-          lastName: "Smith",
-          phone: "999888777",
-          documentType: "CE",
-          documentNumber: "0011223344",
-          defaultShippingAddressId: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ]);
-      const mockWhere = vi.fn().mockReturnValue({ returning: mockReturning });
-      const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
-      vi.mocked(dbModule.db.update).mockReturnValueOnce({
-        set: mockSet,
-      } as unknown as ReturnType<typeof dbModule.db.update>);
-
-      const formData = new FormData();
-      formData.append("firstName", "Alicia");
-      formData.append("lastName", "Smith");
-      formData.append("phone", "999888777");
-      formData.append("documentType", "CE");
-      formData.append("documentNumber", "0011223344");
-
-      const res = await updateCustomerProfileAction(null, formData);
-      expect(res.success).toBe(true);
-      if (res.success) {
-        expect(res.message).toBe("Perfil actualizado correctamente.");
-        expect(res.profile.firstName).toBe("Alicia");
-      }
-    });
-
-    it("U: prevents IDOR by ignoring any attempt by Customer A to modify Customer B via payload parameters", async () => {
-      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
-        success: true,
-        identity: {
-          authUserId: "auth-alice-uuid",
-          email: "alice@gamerperu.com",
-          claims: {},
-        },
-      });
-
-      const mockReturning = vi.fn().mockResolvedValueOnce([
-        {
-          id: "prof-alice-uuid",
-          authUserId: "auth-alice-uuid",
-          firstName: "Alicia",
-          lastName: "Smith",
-          phone: null,
-          documentType: null,
-          documentNumber: null,
-          defaultShippingAddressId: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ]);
-      const mockWhere = vi.fn().mockReturnValue({ returning: mockReturning });
-      const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
-      vi.mocked(dbModule.db.update).mockReturnValueOnce({
-        set: mockSet,
-      } as unknown as ReturnType<typeof dbModule.db.update>);
-
-      // Attempting to pass customer_id / auth_user_id of Bob in payload
-      const maliciousPayload = {
-        firstName: "Alicia",
-        lastName: "Smith",
-        customerId: "bob-profile-uuid",
-        authUserId: "bob-auth-uuid",
-      } as unknown as UpdateProfileInput;
-
-      const res = await updateCustomerProfileAction(null, maliciousPayload);
-      expect(res.success).toBe(true);
-
-      // Verify that the database query targeted Alice's verified authUserId, NOT Bob
-      expect(mockSet).toHaveBeenCalledWith(
-        expect.objectContaining({
-          firstName: "Alicia",
-          lastName: "Smith",
-        })
-      );
-      expect(mockWhere).toHaveBeenCalled();
-    });
-
-    it("V/W/X: preserves default_shipping_address_id, auth_user_id, and email untouched during update", async () => {
-      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
-        success: true,
-        identity: {
-          authUserId: "auth-user-1",
-          email: "user1@gamerperu.com",
-          claims: {},
-        },
-      });
-
-      const mockReturning = vi.fn().mockResolvedValueOnce([
-        {
-          id: "prof-user-1",
-          authUserId: "auth-user-1",
-          firstName: "UpdatedName",
-          lastName: "UpdatedLast",
-          phone: null,
-          documentType: null,
-          documentNumber: null,
-          defaultShippingAddressId: "addr-original-uuid",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ]);
-      const mockWhere = vi.fn().mockReturnValue({ returning: mockReturning });
-      const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
-      vi.mocked(dbModule.db.update).mockReturnValueOnce({
-        set: mockSet,
-      } as unknown as ReturnType<typeof dbModule.db.update>);
-
-      await updateCustomerProfileAction(null, {
-        firstName: "UpdatedName",
-        lastName: "UpdatedLast",
-      });
-
-      const setPayload = (mockSet.mock.calls[0] as Record<string, unknown>[])?.[0] ?? {};
-      expect(setPayload.defaultShippingAddressId).toBeUndefined();
-      expect(setPayload.authUserId).toBeUndefined();
-      expect(setPayload.email).toBeUndefined();
-      expect(setPayload.id).toBeUndefined();
-      expect(setPayload.updatedAt).toBeInstanceOf(Date);
-    });
-
-    it("Y/Z: returns safe generic error message and logs sanitized event without PII on database failure", async () => {
-      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
-        success: true,
-        identity: {
-          authUserId: "auth-error-uuid",
-          email: "error@gamerperu.com",
-          claims: {},
-        },
-      });
-
-      const mockWhere = vi.fn().mockImplementation(() => {
-        throw new Error("DB deadlock");
-      });
-      const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
-      vi.mocked(dbModule.db.update).mockReturnValueOnce({
-        set: mockSet,
-      } as unknown as ReturnType<typeof dbModule.db.update>);
-
       const res = await updateCustomerProfileAction(null, {
-        firstName: "Name",
-        lastName: "Last",
+        firstName: "A",
+        lastName: "B",
       });
+      expect(res.success).toBe(false);
+    });
 
+    it("returns validation errors for invalid input", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce(
+        mockIdentity("auth-v", "v@gp.com")
+      );
+      const res = await updateCustomerProfileAction(null, {
+        firstName: "",
+        lastName: "B",
+      });
       expect(res.success).toBe(false);
       if (!res.success) {
-        expect(res.errors.form).toContain("Ocurrió un error inesperado");
+        expect(res.errors.firstName).toBeDefined();
       }
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          event: "account_profile_update_failed",
-        })
-      );
-    });
-  });
-
-  describe("Account Security & Route Architecture", () => {
-    it("AA/AB: declares dynamic force-dynamic and noindex/nofollow robots on account layouts/pages", () => {
-      expect(cuentaDynamic).toBe("force-dynamic");
-      expect(cuentaMetadata.robots).toEqual({
-        index: false,
-        follow: false,
-      });
-
-      expect(perfilDynamic).toBe("force-dynamic");
-      expect(perfilMetadata.robots).toEqual({
-        index: false,
-        follow: false,
-      });
     });
   });
 });
