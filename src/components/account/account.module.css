@@ -1,0 +1,239 @@
+.shell {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--color-border-subtle, #e4e4e7);
+}
+
+.title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #09090b);
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5rem;
+}
+
+.userMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-text-secondary, #52525b);
+  font-size: 0.9375rem;
+}
+
+.userName {
+  font-weight: 600;
+  color: var(--color-text-primary, #09090b);
+}
+
+.userEmail {
+  color: var(--color-text-muted, #71717a);
+}
+
+.layoutGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 768px) {
+  .layoutGrid {
+    grid-template-columns: 260px 1fr;
+    align-items: start;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Navigation
+ * -------------------------------------------------------------------------- */
+.navContainer {
+  background: var(--color-surface-card, #ffffff);
+  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  border-radius: var(--radius-lg, 0.75rem);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.navList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.navItem {
+  margin: 0;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md, 0.5rem);
+  color: var(--color-text-secondary, #52525b);
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  min-height: 44px;
+  transition: all 0.15s ease-in-out;
+}
+
+.navLink:hover {
+  background: var(--color-surface-secondary, #f4f4f5);
+  color: var(--color-text-primary, #09090b);
+}
+
+.navLinkActive {
+  background: var(--color-brand-subtle-light, #fff1f2);
+  color: var(--color-brand-primary, #e11d48);
+  font-weight: 600;
+}
+
+.navDisabled {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md, 0.5rem);
+  color: var(--color-text-disabled, #a1a1aa);
+  font-size: 0.9375rem;
+  min-height: 44px;
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.badgeComingSoon {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.125rem 0.5rem;
+  background: var(--color-surface-secondary, #f4f4f5);
+  color: var(--color-text-muted, #71717a);
+  border-radius: var(--radius-full, 9999px);
+  border: 1px solid var(--color-border-subtle, #e4e4e7);
+}
+
+.navDivider {
+  height: 1px;
+  background: var(--color-border-subtle, #e4e4e7);
+  margin: 0.5rem 0;
+}
+
+.logoutSection {
+  padding-top: 0.5rem;
+}
+
+/* --------------------------------------------------------------------------
+ * Main Content Area
+ * -------------------------------------------------------------------------- */
+.mainContent {
+  min-width: 0;
+}
+
+.contentCard {
+  background: var(--color-surface-card, #ffffff);
+  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  border-radius: var(--radius-lg, 0.75rem);
+  padding: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .contentCard {
+    padding: 2rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Overview Page Specifics
+ * -------------------------------------------------------------------------- */
+.overviewGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .overviewGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.sectionTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #09090b);
+  margin: 0;
+}
+
+.profileSummaryList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.summaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.summaryLabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-muted, #71717a);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summaryValue {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-text-primary, #09090b);
+}
+
+.teaserCard {
+  background: var(--color-surface-secondary, #f4f4f5);
+  border: 1px dashed var(--color-border-default, #d4d4d8);
+  border-radius: var(--radius-md, 0.5rem);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.teaserTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #09090b);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.teaserDesc {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #52525b);
+  margin: 0;
+}
