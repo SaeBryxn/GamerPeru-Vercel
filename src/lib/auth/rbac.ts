@@ -118,9 +118,12 @@ async function resolveRbacForVerifiedAuthUserId(authUserId: string): Promise<{
   const resolvedPermissions = new Set<PermissionName>();
 
   for (const row of rows) {
-    if (CANONICAL_ROLES.includes(row.roleName as RoleName)) {
-      resolvedRoles.add(row.roleName as RoleName);
+    if (!CANONICAL_ROLES.includes(row.roleName as RoleName)) {
+      continue;
     }
+
+    resolvedRoles.add(row.roleName as RoleName);
+
     if (
       row.permissionName &&
       CANONICAL_PERMISSIONS.includes(row.permissionName as PermissionName)

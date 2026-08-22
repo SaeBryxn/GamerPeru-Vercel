@@ -474,4 +474,103 @@ describe("GP-015 AUTH8-BR1 — RBAC Server Authorization Runtime Tests", () => {
       expect(context.permissions.has("unknown_injected_perm" as PermissionName)).toBe(false);
     }
   });
+
+  it("U: proves unknown role + canonical permission row is completely ignored (fail-closed)", async () => {
+    const { getVerifiedAuthContext, hasPermission, requirePermission } =
+      await import("@/lib/auth/rbac");
+
+    mockState.dbRows = [{ roleName: "LEGACY_ADMIN", permissionName: "orders:verify" }];
+
+    const context = await getVerifiedAuthContext();
+    expect(context.status).toBe("READY");
+    if (context.status === "READY") {
+      expect(context.roles).toEqual([]);
+      expect(context.permissions.size).toBe(0);
+    }
+
+    expect(await hasPermission("orders:verify")).toBe(false);
+    await expect(requirePermission("orders:verify")).rejects.toThrow(ForbiddenError);
+  });
+
+  it("V: proves unknown role + staff:manage permission row is denied", async () => {
+    const { getVerifiedAuthContext, hasPermission, requirePermission } =
+      await import("@/lib/auth/rbac");
+
+    mockState.dbRows = [{ roleName: "UNKNOWN_SUPERVISOR", permissionName: "staff:manage" }];
+
+    const context = await getVerifiedAuthContext();
+    expect(context.status).toBe("READY");
+    if (context.status === "READY") {
+      expect(context.roles).toEqual([]);
+      expect(context.permissions.size).toBe(0);
+    }
+
+    expect(await hasPermission("staff:manage")).toBe(false);
+    await expect(requirePermission("staff:manage")).rejects.toThrow(ForbiddenError);
+  });
+
+  it("W: proves unknown role with several canonical permissions grants zero capabilities", async () => {
+    const { getVerifiedAuthContext, getUserPermissions } = await import("@/lib/auth/rbac");
+
+    mockState.dbRows = [
+      { roleName: "LEGACY_ADMIN", permissionName: "orders:verify" },
+      { roleName: "LEGACY_ADMIN", permissionName: "staff:manage" },
+      { roleName: "LEGACY_ADMIN", permissionName: "catalog:publish" },
+    ];
+
+    const context = await getVerifiedAuthContext();
+    expect(context.status).toBe("READY");
+    if (context.status === "READY") {
+      expect(context.roles).toEqual([]);
+      expect(context.permissions.size).toBe(0);
+    }
+
+    const perms = await getUserPermissions();
+    expect(perms.size).toBe(0);
+  });
+
+  it("X: proves mixed canonical and unknown role rows preserve valid permissions without leakage", async () => {
+    const { getVerifiedAuthContext, hasPermission, requirePermission } =
+      await import("@/lib/auth/rbac");
+
+    mockState.dbRows = [
+      { roleName: "ADMIN_CATALOG", permissionName: "catalog:manage" },
+      { roleName: "LEGACY_ADMIN", permissionName: "orders:verify" },
+      { roleName: "ADMIN_CATALOG", permissionName: "unknown_arbitrary_perm" },
+    ];
+
+    const context = await getVerifiedAuthContext();
+    expect(context.status).toBe("READY");
+    if (context.status === "READY") {
+      expect(context.roles).toEqual(["ADMIN_CATALOG"]);
+      expect(context.permissions.size).toBe(1);
+      expect(context.permissions.has("catalog:manage")).toBe(true);
+      expect(context.permissions.has("orders:verify")).toBe(false);
+    }
+
+    expect(await hasPermission("catalog:manage")).toBe(true);
+    expect(await hasPermission("orders:verify")).toBe(false);
+    await expect(requirePermission("orders:verify")).rejects.toThrow(ForbiddenError);
+    expect(await hasPermission("unknown_arbitrary_perm")).toBe(false);
+  });
+
+  it("Y: proves CUSTOMER role assigned alongside unknown privileged role cannot be elevated", async () => {
+    const { getVerifiedAuthContext, hasPermission, requirePermission } =
+      await import("@/lib/auth/rbac");
+
+    mockState.dbRows = [
+      { roleName: "CUSTOMER", permissionName: null },
+      { roleName: "LEGACY_ADMIN", permissionName: "staff:manage" },
+    ];
+
+    const context = await getVerifiedAuthContext();
+    expect(context.status).toBe("READY");
+    if (context.status === "READY") {
+      expect(context.roles).toEqual(["CUSTOMER"]);
+      expect(context.permissions.size).toBe(0);
+    }
+
+    expect(await hasPermission("staff:manage")).toBe(false);
+    await expect(requirePermission("staff:manage")).rejects.toThrow(ForbiddenError);
+  });
 });
