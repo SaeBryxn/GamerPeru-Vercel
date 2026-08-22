@@ -472,19 +472,20 @@ Models transient shopping intent for both guest sessions and authenticated custo
   - `session_token`: `VARCHAR(255)` (Unique for anonymous guest carts, Nullable when authenticated)
   - `status`: `ENUM('ACTIVE', 'CONVERTED', 'ABANDONED')` (Default `ACTIVE`)
   - `currency`: `VARCHAR(3)` (Default `'PEN'`)
-  - `expires_at`: `TIMESTAMPTZ` (Configured by `CART_EXPIRY_DURATION`, `[TBD BUSINESS DECISION]`)
+  - `expires_at`: `TIMESTAMPTZ` (NOT NULL; 30 days for anonymous guests, 60 days for authenticated customers; sliding TTL refreshed after every successful mutation)
   - `created_at`, `updated_at`: `TIMESTAMPTZ`
-- **Cart Ownership Invariants**:
-  - An active anonymous Cart is owned exclusively by `session_token` (`customer_id IS NULL`).
-  - An active authenticated Cart is owned exclusively by `customer_id` (`session_token IS NULL`).
+- **Cart Ownership & Expiry Invariants**:
+  - An active anonymous Cart is owned exclusively by `session_token` (`customer_id IS NULL AND session_token IS NOT NULL`).
+  - An active authenticated Cart is owned exclusively by `customer_id` (`customer_id IS NOT NULL AND session_token IS NULL`).
   - At most one `ACTIVE` Cart per authenticated customer (`customer_id`).
   - At most one `ACTIVE` anonymous Cart per session token (`session_token`).
-  - Merge on login resolves to one authoritative `ACTIVE` customer Cart.
+  - **Login Merge Invariant**: Merge on login resolves to one authoritative `ACTIVE` customer Cart. For duplicate variants present in both anonymous and authenticated carts, the merged quantity is `SUM(anonymous_quantity, authenticated_quantity)` capped at `MAX_CART_LINE_QUANTITY = 10`. Following a successful merge, the source anonymous cart transitions to `ABANDONED` and its session cookie is cleared.
+  - **Partial Unique Index & Expiry Correctness Invariant (CART4)**: An expired cart whose row still has status `ACTIVE` remains visible to the partial unique index on `customer_id`/`session_token` even when application reads filter it by `expires_at`. Therefore CART4 must, inside the same transaction used to resolve/create the authoritative cart, detect an expired `ACTIVE` cart, transition it to `ABANDONED`, and only then create or select the replacement `ACTIVE` cart. Do not attempt to place `NOW()` / current-time logic in a PostgreSQL partial-index predicate.
 - **CartItem Entity**:
   - `id`: `UUIDv7` (PK)
   - `cart_id`: `UUIDv7` (FK $\to$ `Cart.id`)
   - `variant_id`: `UUIDv7` (FK $\to$ `ProductVariant.id`)
-  - `quantity`: `INTEGER` ($> 0$, bounded by configurable `MAX_CART_LINE_QUANTITY`, `[TBD BUSINESS DECISION]`)
+  - `quantity`: `INTEGER` ($1 \le \text{quantity} \le 10$, bounded by `MAX_CART_LINE_QUANTITY = 10`)
   - `created_at`, `updated_at`: `TIMESTAMPTZ`
   - _Unique Constraint_: `(cart_id, variant_id)`
 
@@ -1739,8 +1740,8 @@ The following commercial decisions remain explicitly **`[TBD BUSINESS DECISION]`
 3. **Warranty Duration & Return Window**: Return eligibility periods (e.g. 7, 15, or 30 days).
 4. **Reservation Hold TTL**: Numeric unpaid checkout duration (`RESERVATION_TTL_MINUTES`, e.g. 15, 30, or 60 minutes).
 5. **Resubmission Grace Duration**: Time window to resubmit voucher upon non-terminal rejection (`PAYMENT_RESUBMISSION_GRACE_DURATION`).
-6. **Cart Expiry Duration**: Transient cart lifetime (`CART_EXPIRY_DURATION`).
-7. **Max Cart Line Quantity**: Per-item ceiling (`MAX_CART_LINE_QUANTITY`).
+6. **Cart Expiry Duration**: Transient cart lifetime (`CART_EXPIRY_DURATION`: 30 days anonymous, 60 days authenticated with sliding TTL, resolved in GP-017).
+7. **Max Cart Line Quantity**: Per-item ceiling (`MAX_CART_LINE_QUANTITY = 10`, resolved in GP-017).
 8. **Max Coupons Per Order**: Maximum coupon count per checkout (`MAX_COUPONS_PER_ORDER`).
 9. **Growth Attribution Precedence**: Priority between referral and affiliate tracking (`GROWTH_ATTRIBUTION_PRECEDENCE`).
 10. **Affiliate Attribution Window**: Maturation period for referral cookies (`AFFILIATE_ATTRIBUTION_WINDOW_DAYS`).

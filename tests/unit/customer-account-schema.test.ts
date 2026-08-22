@@ -143,7 +143,7 @@ describe("GP-016 ACCT1 — Customer Account Schema & Migration Candidate", () =>
 
     it("contains journal entry at index 7 with tag 0007_customer_account_addresses", () => {
       const journalContent = JSON.parse(readFileSync(journalPath, "utf-8"));
-      expect(journalContent.entries).toHaveLength(8);
+      expect(journalContent.entries.length).toBeGreaterThanOrEqual(8);
 
       const entry7 = journalContent.entries[7];
       expect(entry7.idx).toBe(7);

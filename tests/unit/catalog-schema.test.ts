@@ -21,7 +21,6 @@ describe("Catalog Schema — Physical Bootstrap Integrity", () => {
     expect((schema as Record<string, unknown>).orders).toBeUndefined();
     expect((schema as Record<string, unknown>).payments).toBeUndefined();
     expect((schema as Record<string, unknown>).inventory).toBeUndefined();
-    expect((schema as Record<string, unknown>).carts).toBeUndefined();
   });
 
   it("exports the 4 canonical catalog PostgreSQL enums", () => {
