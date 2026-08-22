@@ -39,6 +39,7 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const isConfirmed = searchParams.get("confirmed") === "true";
   const isReset = searchParams.get("reset") === "true";
+  const isSignedOut = searchParams.get("signed_out") === "true";
   const hasOAuthError = searchParams.get("oauth_error") === "true";
 
   const [email, setEmail] = useState("");
@@ -112,6 +113,12 @@ export function LoginForm() {
       {isReset ? (
         <div role="status" className={`${styles.alert} ${styles.alertSuccess}`}>
           Tu contraseña ha sido actualizada exitosamente. Inicia sesión con tu nueva contraseña.
+        </div>
+      ) : null}
+
+      {isSignedOut ? (
+        <div role="status" className={`${styles.alert} ${styles.alertSuccess}`}>
+          Sesión cerrada correctamente.
         </div>
       ) : null}
 

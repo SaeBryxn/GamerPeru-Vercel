@@ -154,3 +154,41 @@ export async function completeCustomerProfileAction(
 
   redirect("/");
 }
+
+export interface SignOutState {
+  success: boolean;
+  error: string | null;
+}
+
+/**
+ * Server Action to sign out the current browser session.
+ *
+ * Requirements:
+ * 1. Scope: strictly "local" to terminate only the current browser session.
+ * 2. Idempotent: safe against network retries.
+ * 3. Security: no caller-controlled redirect / open redirect; deterministically redirects to /auth/login?signed_out=true.
+ * 4. Error safety: generic safe error without leaking internals, redirect placed outside try/catch.
+ * 5. Domain DB writes: 0 (does not touch CustomerProfile or RBAC).
+ */
+export async function signOutAction(_prevState?: SignOutState | null): Promise<SignOutState> {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { error } = await supabase.auth.signOut({
+      scope: "local",
+    });
+
+    if (error) {
+      return {
+        success: false,
+        error: "No pudimos cerrar la sesión. Inténtalo nuevamente.",
+      };
+    }
+  } catch {
+    return {
+      success: false,
+      error: "No pudimos cerrar la sesión. Inténtalo nuevamente.",
+    };
+  }
+
+  redirect("/auth/login?signed_out=true");
+}
