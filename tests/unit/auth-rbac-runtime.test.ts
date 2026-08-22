@@ -7,6 +7,7 @@ import {
   AuthorizationUnavailableError,
 } from "@/lib/auth/rbac";
 import type { PermissionName } from "@/lib/auth/rbac";
+import { logger } from "@/lib/logger";
 
 // Hoisted mock state
 const mockState = {
@@ -26,6 +27,7 @@ const mockState = {
     | { success: false; error?: { code: string; message: string } },
   dbRows: [] as Array<{ roleName: string; permissionName: string | null }>,
   shouldDbThrow: false,
+  thrownDbError: new Error("PostgreSQL connection timeout"),
 };
 
 vi.mock("@/lib/auth/claims", () => ({
@@ -41,7 +43,7 @@ vi.mock("@/db", () => ({
             leftJoin: vi.fn(() => ({
               where: vi.fn(async () => {
                 if (mockState.shouldDbThrow) {
-                  throw new Error("PostgreSQL connection timeout");
+                  throw mockState.thrownDbError;
                 }
                 return mockState.dbRows;
               }),
@@ -53,7 +55,7 @@ vi.mock("@/db", () => ({
   },
 }));
 
-describe("GP-015 AUTH8-B — RBAC Server Authorization Runtime Tests", () => {
+describe("GP-015 AUTH8-BR1 — RBAC Server Authorization Runtime Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockState.verifiedIdentity = {
@@ -70,6 +72,7 @@ describe("GP-015 AUTH8-B — RBAC Server Authorization Runtime Tests", () => {
     };
     mockState.dbRows = [];
     mockState.shouldDbThrow = false;
+    mockState.thrownDbError = new Error("PostgreSQL connection timeout");
   });
 
   it("proves CANONICAL_ROLES and CANONICAL_PERMISSIONS constants are complete", () => {
@@ -210,13 +213,9 @@ describe("GP-015 AUTH8-B — RBAC Server Authorization Runtime Tests", () => {
 
     // Negative security check
     expect(await hasPermission("catalog:manage")).toBe(false);
-    expect(await queryOrdersVerify()).toBe(false);
+    expect(await hasPermission("orders:verify")).toBe(false);
     expect(await hasPermission("staff:manage")).toBe(false);
     expect(await hasPermission("ai:manage_credentials")).toBe(false);
-
-    async function queryOrdersVerify() {
-      return hasPermission("orders:verify");
-    }
   });
 
   it("F: grants all 10 permissions explicitly for SUPER_ADMIN via database rows", async () => {
@@ -314,11 +313,15 @@ describe("GP-015 AUTH8-B — RBAC Server Authorization Runtime Tests", () => {
     await expect(requirePermission("catalog:manage")).rejects.toThrow(AuthenticationRequiredError);
   });
 
-  it("N: handles RBAC database failure safely and never defaults to allow", async () => {
-    const { getVerifiedAuthContext, hasPermission, requirePermission } =
+  it("N: handles RBAC database failure safely and sanitizes error logs completely", async () => {
+    const loggerSpy = vi.spyOn(logger, "error");
+    const { getVerifiedAuthContext, hasPermission, requirePermission, getUserPermissions } =
       await import("@/lib/auth/rbac");
 
     mockState.shouldDbThrow = true;
+    mockState.thrownDbError = new Error(
+      'relation "secret_internal_table" does not exist in DATABASE_URL=postgres://user:pass@127.0.0.1:5432/db'
+    );
 
     const context = await getVerifiedAuthContext();
     expect(context.status).toBe("ERROR");
@@ -326,10 +329,25 @@ describe("GP-015 AUTH8-B — RBAC Server Authorization Runtime Tests", () => {
       expect(context.error).toBe("rbac_resolution_failed");
     }
 
+    // Verify error logging is completely sanitized
+    expect(loggerSpy).toHaveBeenCalledTimes(1);
+    const loggedPayload = loggerSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(loggedPayload).toEqual({
+      event: "rbac_resolution_failed",
+    });
+    // Ensure no driver details, table names, credentials, or auth user IDs were logged
+    const loggedString = JSON.stringify(loggedPayload);
+    expect(loggedString).not.toContain("secret_internal_table");
+    expect(loggedString).not.toContain("DATABASE_URL");
+    expect(loggedString).not.toContain("postgres://");
+    expect(loggedString).not.toContain("018f0000-0000-7000-8000-000000000001");
+    expect(loggedString).not.toContain("staff@gamerperu.com");
+
     expect(await hasPermission("catalog:manage")).toBe(false);
     await expect(requirePermission("catalog:manage")).rejects.toThrow(
       AuthorizationUnavailableError
     );
+    await expect(getUserPermissions()).rejects.toThrow(AuthorizationUnavailableError);
   });
 
   it("O: denies unknown arbitrary permission strings", async () => {
@@ -371,9 +389,31 @@ describe("GP-015 AUTH8-B — RBAC Server Authorization Runtime Tests", () => {
     expect(await hasPermission("catalog:manage")).toBe(false);
   });
 
-  it("Q: proves public getUserPermissions takes 0 arguments and derives identity internally", async () => {
+  it("Q: proves public getUserPermissions takes 0 arguments and handles all auth states correctly", async () => {
     const { getUserPermissions } = await import("@/lib/auth/rbac");
     expect(getUserPermissions.length).toBe(0);
+
+    // 1. READY state
+    mockState.dbRows = [{ roleName: "ADMIN_CATALOG", permissionName: "catalog:manage" }];
+    const readyPerms = await getUserPermissions();
+    expect(readyPerms.size).toBe(1);
+    expect(readyPerms.has("catalog:manage")).toBe(true);
+
+    // 2. UNAUTHENTICATED state -> returns empty Set
+    mockState.verifiedIdentity = { success: false };
+    const unauthPerms = await getUserPermissions();
+    expect(unauthPerms.size).toBe(0);
+
+    // 3. ERROR state -> throws AuthorizationUnavailableError
+    mockState.verifiedIdentity = {
+      success: true,
+      identity: {
+        authUserId: "018f0000-0000-7000-8000-000000000001",
+        email: "staff@gamerperu.com",
+      },
+    };
+    mockState.shouldDbThrow = true;
+    await expect(getUserPermissions()).rejects.toThrow(AuthorizationUnavailableError);
   });
 
   it("R: proves CustomerProfile existence alone grants zero administrative permissions", async () => {
@@ -389,25 +429,36 @@ describe("GP-015 AUTH8-B — RBAC Server Authorization Runtime Tests", () => {
     expect(await hasPermission("catalog:manage")).toBe(false);
   });
 
-  it("S: proves absence of SUPER_ADMIN code-level bypass (Model A confirmation)", async () => {
-    const { getVerifiedAuthContext, hasPermission } = await import("@/lib/auth/rbac");
+  it("S: proves Model A missing-permission regression: only explicit DB rows grant capabilities to SUPER_ADMIN", async () => {
+    const { getVerifiedAuthContext, hasPermission, requirePermission } =
+      await import("@/lib/auth/rbac");
 
-    // If a user has SUPER_ADMIN role in user_roles, but database role_permissions has no rows
-    mockState.dbRows = [{ roleName: "SUPER_ADMIN", permissionName: null }];
+    // User has SUPER_ADMIN, but DB role_permissions has only 9 out of 10 permissions (missing 'audit:export')
+    const ninePermissions = CANONICAL_PERMISSIONS.filter((p) => p !== "audit:export");
+    mockState.dbRows = ninePermissions.map((perm) => ({
+      roleName: "SUPER_ADMIN",
+      permissionName: perm,
+    }));
 
     const context = await getVerifiedAuthContext();
     expect(context.status).toBe("READY");
     if (context.status === "READY") {
       expect(context.roles).toEqual(["SUPER_ADMIN"]);
-      // Because there is no code-level bypass, permissions is empty!
-      expect(context.permissions.size).toBe(0);
+      expect(context.permissions.size).toBe(9);
+      expect(context.permissions.has("audit:export")).toBe(false);
     }
 
-    // Must be denied because permission was not explicitly in DB
-    expect(await hasPermission("catalog:manage")).toBe(false);
+    // 9 are allowed
+    for (const perm of ninePermissions) {
+      expect(await hasPermission(perm)).toBe(true);
+    }
+
+    // Missing 10th is strictly DENIED
+    expect(await hasPermission("audit:export")).toBe(false);
+    await expect(requirePermission("audit:export")).rejects.toThrow(ForbiddenError);
   });
 
-  it("T: proves database role_permissions explicit rows are the sole capability source", async () => {
+  it("T: proves database role_permissions explicit rows are the sole capability source and filters unknown strings", async () => {
     const { getVerifiedAuthContext } = await import("@/lib/auth/rbac");
 
     mockState.dbRows = [

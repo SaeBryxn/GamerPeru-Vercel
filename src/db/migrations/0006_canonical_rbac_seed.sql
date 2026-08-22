@@ -33,7 +33,18 @@ INSERT INTO "role_permissions" ("role_id", "permission_id")
 SELECT r.id, p.id
 FROM "roles" r, "permissions" p
 WHERE (
-  (r.name = 'SUPER_ADMIN')
+  (r.name = 'SUPER_ADMIN' AND p.name IN (
+    'staff:manage',
+    'ai:manage_credentials',
+    'audit:export',
+    'catalog:manage',
+    'catalog:publish',
+    'catalog:ai_research',
+    'orders:manage',
+    'orders:verify',
+    'support:manage',
+    'support:review_rma'
+  ))
   OR (r.name = 'ADMIN_CATALOG' AND p.name IN ('catalog:manage', 'catalog:publish', 'catalog:ai_research'))
   OR (r.name = 'ADMIN_ORDERS' AND p.name IN ('orders:manage', 'orders:verify'))
   OR (r.name = 'ADMIN_SUPPORT' AND p.name IN ('support:manage', 'support:review_rma'))

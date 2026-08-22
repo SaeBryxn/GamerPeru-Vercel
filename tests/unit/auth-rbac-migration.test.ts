@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { CANONICAL_ROLES, CANONICAL_PERMISSIONS } from "@/lib/auth/rbac";
 
-describe("GP-015 AUTH8-B — RBAC Seed Migration Contract Tests", () => {
+describe("GP-015 AUTH8-BR1 — RBAC Seed Migration Contract Tests", () => {
   const migrationsDir = path.resolve(process.cwd(), "src/db/migrations");
   const migration0006Path = path.join(migrationsDir, "0006_canonical_rbac_seed.sql");
   const journalPath = path.join(migrationsDir, "meta/_journal.json");
@@ -62,11 +62,22 @@ describe("GP-015 AUTH8-B — RBAC Seed Migration Contract Tests", () => {
     expect(sql).not.toContain("'ai:manage'");
   });
 
-  it("proves migration 0006 contains exactly 17 explicit role-permission mappings", () => {
+  it("proves SUPER_ADMIN seed mapping is explicitly bounded to the exact 10 canonical permissions", () => {
     const sql = fs.readFileSync(migration0006Path, "utf8");
 
-    // SUPER_ADMIN receives all 10
-    expect(sql).toContain("r.name = 'SUPER_ADMIN'");
+    // Proves SUPER_ADMIN mapping includes explicit p.name IN (...) clause and not unrestricted r.name = 'SUPER_ADMIN'
+    expect(sql).toMatch(/r\.name\s*=\s*'SUPER_ADMIN'\s+AND\s+p\.name\s+IN\s*\(\s*'staff:manage'/);
+    expect(sql).not.toMatch(/r\.name\s*=\s*'SUPER_ADMIN'\s*\)\s*OR/);
+    expect(sql).not.toMatch(/\(\s*r\.name\s*=\s*'SUPER_ADMIN'\s*\)/);
+  });
+
+  it("proves migration 0006 creates exactly 17 explicit role-permission mappings", () => {
+    const sql = fs.readFileSync(migration0006Path, "utf8");
+
+    // SUPER_ADMIN receives exactly 10
+    CANONICAL_PERMISSIONS.forEach((perm) => {
+      expect(sql).toContain(`'${perm}'`);
+    });
 
     // ADMIN_CATALOG receives 3
     expect(sql).toContain(
@@ -83,7 +94,7 @@ describe("GP-015 AUTH8-B — RBAC Seed Migration Contract Tests", () => {
       "r.name = 'ADMIN_SUPPORT' AND p.name IN ('support:manage', 'support:review_rma')"
     );
 
-    // CUSTOMER receives 0 (not in WHERE clause)
+    // CUSTOMER receives 0 (not mapped in WHERE clause)
     expect(sql).not.toContain("r.name = 'CUSTOMER'");
   });
 

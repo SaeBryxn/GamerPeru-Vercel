@@ -162,11 +162,9 @@ export async function getVerifiedAuthContext(): Promise<VerifiedAuthContext> {
       roles: userRoleList,
       permissions: userPermSet,
     };
-  } catch (err) {
+  } catch {
     logger.error({
       event: "rbac_resolution_failed",
-      authUserId: verified.identity.authUserId,
-      reason: err instanceof Error ? err.message : "unknown_error",
     });
     return {
       status: "ERROR",
@@ -182,13 +180,17 @@ export async function getVerifiedAuthContext(): Promise<VerifiedAuthContext> {
 /**
  * Returns the resolved set of canonical permissions for the current authenticated user.
  * Takes NO caller-provided authUserId.
+ * Throws AuthorizationUnavailableError if RBAC backend is unavailable.
  */
 export async function getUserPermissions(): Promise<Set<PermissionName>> {
   const context = await getVerifiedAuthContext();
   if (context.status === "READY") {
     return context.permissions;
   }
-  return new Set();
+  if (context.status === "UNAUTHENTICATED") {
+    return new Set();
+  }
+  throw new AuthorizationUnavailableError();
 }
 
 /**
