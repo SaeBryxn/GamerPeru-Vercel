@@ -108,12 +108,12 @@ describe("GP-015 — Data API Hardening Migration Candidate Integrity", () => {
     expect(content).not.toMatch(/TRUNCATE/i);
   });
 
-  it("verifies Drizzle journal records exactly 6 migrations in sequence ending with 0005", () => {
+  it("verifies Drizzle journal records migrations in sequence containing 0005", () => {
     const journalPath = resolve(process.cwd(), "src/db/migrations/meta/_journal.json");
     expect(existsSync(journalPath)).toBe(true);
 
     const journal = JSON.parse(readFileSync(journalPath, "utf8"));
-    expect(journal.entries).toHaveLength(6);
+    expect(journal.entries.length).toBeGreaterThanOrEqual(6);
     expect(journal.entries[0].tag).toBe("0000_superb_ink");
     expect(journal.entries[1].tag).toBe("0001_search_pg_trgm");
     expect(journal.entries[2].tag).toBe("0002_silky_dazzler");

@@ -78,16 +78,25 @@ Adopt **Supabase Auth** as the canonical authentication provider combined with *
 2. **Authoritative Gamer Perú RBAC**:
    - Authentication (identifying the user) and Authorization (determining capabilities) remain strictly partitioned.
    - User roles and permissions are stored in Gamer Perú PostgreSQL tables (`roles`, `permissions`, `role_permissions`, `user_roles`).
-   - Granular RBAC Roles:
+   - Granular RBAC Roles (5 Canonical Roles):
      - `SUPER_ADMIN`: Full system access, staff provisioning, encrypted AI credential configuration, audit export.
      - `ADMIN_CATALOG`: Product creation, spec management, pricing, category taxonomy, AI product research drafts.
      - `ADMIN_ORDERS`: Order status updates, Yape/Plin payment verification, shipping tracking assignment.
      - `ADMIN_SUPPORT`: Customer inquiry management, return/RMA review.
-     - `CUSTOMER`: Standard customer account access restricted exclusively to owned records.
+     - `CUSTOMER`: Standard customer account access restricted strictly to owned records (receives 0 `role_permissions` rows; `DO_NOT_AUTO_ASSIGN_CUSTOMER` policy ensures onboarding creates zero `user_roles` writes).
+   - Canonical Permissions (10 Canonical Permissions):
+     - `staff:manage`, `ai:manage_credentials`, `audit:export`, `catalog:manage`, `catalog:publish`, `catalog:ai_research`, `orders:manage`, `orders:verify`, `support:manage`, `support:review_rma`.
+   - Explicit Role-Permission Mapping (Model A — 17 Database Mappings):
+     - `SUPER_ADMIN`: All 10 permissions explicitly mapped via database `role_permissions` rows (no code-level bypass or wildcard).
+     - `ADMIN_CATALOG`: `catalog:manage`, `catalog:publish`, `catalog:ai_research` (3).
+     - `ADMIN_ORDERS`: `orders:manage`, `orders:verify` (2).
+     - `ADMIN_SUPPORT`: `support:manage`, `support:review_rma` (2).
+     - `CUSTOMER`: 0 mappings.
    - Authorization Enforcement:
      - Every administrative server action, layout, and route handler invokes `requirePermission('permission:name')`.
-     - Customer data queries verify identity via `getClaims()`, resolve `auth_user_id` to `CustomerProfile.id`, and enforce customer ownership.
+     - Customer data queries verify identity via `getClaims()`, resolve `auth_user_id` to `CustomerProfile.id`, and enforce customer resource ownership predicates.
      - Social OAuth login (Google) never automatically grants administrative privileges.
+     - Initial `SUPER_ADMIN` bootstrap is an explicit, server-side operator procedure referencing a confirmed `auth_user_id`, never hardcoded or inferred from email domains.
 
 ## Consequences
 

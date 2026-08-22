@@ -170,7 +170,7 @@ graph LR
     AuthClaims -->|Staff Identity| RBACGuard
 
     RBACGuard -->|Requires 'orders:verify'| PrivateProofs
-    RBACGuard -->|Requires 'ai:manage'| Vault
+    RBACGuard -->|Requires 'ai:manage_credentials'| Vault
     ZodValidator --> AppServer
     RBACGuard --> AppServer
     AppServer --> SupabaseDB
