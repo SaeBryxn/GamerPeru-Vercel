@@ -35,6 +35,20 @@ export async function retireCartById(cartId: string, executor: DatabaseExecutor)
 }
 
 /**
+ * Acquires a PostgreSQL transaction-scoped advisory lock for an anonymous session token.
+ * This guarantees deterministic serialization of concurrent mutations for the same session token,
+ * eliminating the READ COMMITTED statement-snapshot race during expired ACTIVE cart replacement.
+ */
+export async function lockAnonymousSessionTokenForMutation(
+  sessionToken: string,
+  executor: DatabaseExecutor
+): Promise<void> {
+  await executor.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${sessionToken}, 42424242))`
+  );
+}
+
+/**
  * Safely resolves or creates an ACTIVE Cart for the given owner within a transaction.
  *
  * Invariants:
@@ -148,13 +162,14 @@ export async function getOrCreateActiveCart(
 /**
  * Resolves or creates an authoritative Cart for an anonymous mutation.
  *
- * Token Policy (Binding CART4-R3 Contract):
+ * Token Policy (Binding CART4-R4 Contract):
  * 1. NO TOKEN / MALFORMED: Generates a fresh 256-bit server token and creates a new ACTIVE cart.
- * 2. KNOWN ACTIVE UNEXPIRED: Locks row and reuses the active cart and session token.
- * 3. KNOWN ACTIVE EXPIRED (Immediate Replacement Continuity):
+ * 2. VALID FORMAT TOKEN: Acquires a transaction-scoped advisory lock to serialize concurrent mutations on this token.
+ * 3. KNOWN ACTIVE UNEXPIRED: Locks row and reuses the active cart and session token.
+ * 4. KNOWN ACTIVE EXPIRED (Immediate Replacement Continuity):
  *    Locks old active cart, marks it ABANDONED, and creates replacement ACTIVE cart using the
  *    SAME proven server-issued session token. (Zero line revival: old items stay historical).
- * 4. NO ACTIVE CART (Unknown or Stale Historical ABANDONED/CONVERTED Token):
+ * 5. NO ACTIVE CART (Unknown or Stale Historical ABANDONED/CONVERTED Token):
  *    Non-authoritative -> Rotates strictly to a fresh 256-bit server token.
  */
 export async function resolveAnonymousMutationCart(
@@ -174,7 +189,10 @@ export async function resolveAnonymousMutationCart(
     return { cart, authoritativeToken: newToken, isNewCart: true };
   }
 
-  // 2. Valid format token: Query active cart with FOR UPDATE lock
+  // 2. Valid format token: Acquire transaction-scoped advisory lock to serialize concurrent mutations on this token
+  await lockAnonymousSessionTokenForMutation(guestToken, executor);
+
+  // 3. Query active cart with FOR UPDATE lock
   const [existingActive] = await executor
     .select()
     .from(carts)
@@ -199,7 +217,7 @@ export async function resolveAnonymousMutationCart(
     return { cart: existingActive, authoritativeToken: guestToken, isNewCart: false };
   }
 
-  // 3. NO ACTIVE CART (Token is unknown, or only exists on historical ABANDONED / CONVERTED rows):
+  // 4. NO ACTIVE CART (Token is unknown, or only exists on historical ABANDONED / CONVERTED rows):
   // Non-authoritative credential -> Rotate strictly to fresh 256-bit server token
   const freshToken = generateAnonymousSessionToken();
   const freshCart = await getOrCreateActiveCart(
@@ -213,14 +231,15 @@ export async function resolveAnonymousMutationCart(
  * Resolves an existing active Cart for non-creating mutations (update, remove).
  *
  * Invariants:
- * 1. Locks existing ACTIVE cart row with FOR UPDATE.
- * 2. If no ACTIVE row exists: returns ITEM_NOT_FOUND.
- * 3. If ACTIVE row exists but is expired (expiresAt < NOW()):
+ * 1. Serializes token via transaction-scoped advisory lock.
+ * 2. Locks existing ACTIVE cart row with FOR UPDATE.
+ * 3. If no ACTIVE row exists: returns ITEM_NOT_FOUND.
+ * 4. If ACTIVE row exists but is expired (expiresAt < NOW()):
  *    - Transitions old cart ACTIVE -> ABANDONED.
  *    - Does NOT create a replacement cart.
  *    - Does NOT refresh TTL.
  *    - Returns ITEM_NOT_FOUND.
- * 4. If ACTIVE row is unexpired: returns { success: true, cart }.
+ * 5. If ACTIVE row is unexpired: returns { success: true, cart }.
  */
 export async function resolveExistingAnonymousMutationCart(
   guestToken: string | null,
@@ -234,6 +253,9 @@ export async function resolveExistingAnonymousMutationCart(
       error: "El carrito no fue encontrado o ha expirado.",
     };
   }
+
+  // Acquire transaction-scoped advisory lock to serialize concurrent mutations on this token
+  await lockAnonymousSessionTokenForMutation(guestToken, executor);
 
   const [anonCart] = await executor
     .select()

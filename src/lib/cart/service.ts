@@ -22,12 +22,7 @@ import {
   resolveExistingAnonymousMutationCart,
   retireCartById,
 } from "./persistence";
-import {
-  clearAnonymousCartCookie,
-  generateAnonymousSessionToken,
-  resolveCartAuthority,
-  setAnonymousCartCookie,
-} from "./session";
+import { clearAnonymousCartCookie, resolveCartAuthority, setAnonymousCartCookie } from "./session";
 import type {
   AddCartItemInput,
   CartActionResult,

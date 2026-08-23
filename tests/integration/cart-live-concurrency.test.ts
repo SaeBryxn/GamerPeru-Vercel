@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
-import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "@/db/schema";
 import { generateUuidV7 } from "@/db/utils/uuid";
@@ -17,7 +16,6 @@ import {
   refreshCartTtl,
   resolveAnonymousMutationCart,
   resolveExistingAnonymousMutationCart,
-  retireCartById,
 } from "@/lib/cart/persistence";
 
 /**
@@ -55,7 +53,7 @@ export function assertAuthorizedLocalPostgresTarget(rawUrl: string | undefined):
   return urlString;
 }
 
-describe("GP-017 CART4-R3 — Real Local PostgreSQL Concurrency & Persistence Suite", () => {
+describe("GP-017 CART4-R4 — Real Local PostgreSQL Concurrency & Persistence Suite", () => {
   const connectionString = assertAuthorizedLocalPostgresTarget(process.env.DATABASE_URL);
 
   let sqlClient: postgres.Sql;
@@ -326,21 +324,26 @@ describe("GP-017 CART4-R3 — Real Local PostgreSQL Concurrency & Persistence Su
         VALUES (${generateUuidV7()}, ${oldCart!.id}, ${variantId1}, 5, NOW(), NOW());
       `;
 
-      // Concurrent execution: Two simultaneous anonymous add mutations with the same known token adding variant 2 (+1 each)
+      // Concurrent execution: 8 simultaneous anonymous add mutations with the same known token adding variant 2 (+1 each)
       const addMutationFn = async () => {
         return testDb.transaction(async (tx) => {
           const resolution = await resolveAnonymousMutationCart(sessionToken, false, tx);
           await atomicAddCartLine(resolution.cart.id, variantId2, 1, tx);
           await refreshCartTtl(resolution.cart.id, ANONYMOUS_CART_TTL_MS, tx);
-          return resolution.cart.id;
+          return { cartId: resolution.cart.id, token: resolution.authoritativeToken };
         });
       };
 
-      const results = await Promise.all([addMutationFn(), addMutationFn()]);
-      const uniqueIds = new Set(results);
+      const concurrency = 8;
+      const promises = Array.from({ length: concurrency }, () => addMutationFn());
+      const results = await Promise.all(promises);
+      const uniqueIds = new Set(results.map((r) => r.cartId));
+      const uniqueTokens = new Set(results.map((r) => r.token));
 
-      // Both concurrent resolvers converged to the EXACT SAME replacement cart ID
+      // All 8 concurrent resolvers converged to the EXACT SAME replacement cart ID and token
       expect(uniqueIds.size).toBe(1);
+      expect(uniqueTokens.size).toBe(1);
+      expect(results[0]!.token).toBe(sessionToken);
 
       // Old cart is ABANDONED
       const [oldCartCheck] = await sqlClient`SELECT status FROM carts WHERE id = ${oldCart!.id}`;
@@ -352,15 +355,15 @@ describe("GP-017 CART4-R3 — Real Local PostgreSQL Concurrency & Persistence Su
         await sqlClient`SELECT id FROM carts WHERE session_token = ${sessionToken} AND status = 'ACTIVE'`;
       expect(activeRows).toHaveLength(1);
       expect(activeRows[0]!.id).not.toBe(oldCart!.id);
-      expect(activeRows[0]!.id).toBe(results[0]);
+      expect(activeRows[0]!.id).toBe(results[0]!.cartId);
 
-      // Verify replacement cart contents: variant 2 has quantity 2
+      // Verify replacement cart contents: variant 2 has quantity 8
       const replacementLines = await sqlClient`
-        SELECT variant_id, quantity FROM cart_items WHERE cart_id = ${results[0]}
+        SELECT variant_id, quantity FROM cart_items WHERE cart_id = ${results[0]!.cartId}
       `;
       expect(replacementLines).toHaveLength(1);
       expect(replacementLines[0]!.variant_id).toBe(variantId2);
-      expect(replacementLines[0]!.quantity).toBe(2);
+      expect(replacementLines[0]!.quantity).toBe(concurrency);
 
       // Verify ZERO revival: variant 1 from old expired cart is NOT in replacement cart
       const oldItemInNewCart = replacementLines.find((l) => l.variant_id === variantId1);
@@ -455,44 +458,49 @@ describe("GP-017 CART4-R3 — Real Local PostgreSQL Concurrency & Persistence Su
     });
 
     it("I. Remove missing line does not refresh Cart TTL", async () => {
-      const sessionToken = `synth_token_rem_missing_${Date.now()}_${"H".repeat(15)}`;
+      const sessionToken = `synth_token_rem_miss_${Date.now()}_${"H".repeat(15)}`;
+      const originalExpires = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000); // 10 days in future
 
-      // Setup: unexpired active cart with fixed future expiresAt
-      const initialExpiresAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+      // Setup: Active cart with variant 1
       const [cart] = await sqlClient`
         INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
-        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', ${initialExpiresAt}, NOW(), NOW())
-        RETURNING id, expires_at;
+        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', ${originalExpires}, NOW(), NOW())
+        RETURNING id;
       `;
       expect(cart).toBeDefined();
 
-      const wasRemoved = await testDb.transaction(async (tx) => {
-        return atomicRemoveCartLine(cart!.id, variantId1, tx);
+      await sqlClient`
+        INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${cart!.id}, ${variantId1}, 1, NOW(), NOW());
+      `;
+
+      // Attempt to remove variant 2 (which does not exist in cart)
+      const didRemove = await testDb.transaction(async (tx) => {
+        return atomicRemoveCartLine(cart!.id, variantId2, tx);
       });
+      expect(didRemove).toBe(false);
 
-      expect(wasRemoved).toBe(false);
-
-      // Cart expires_at in DB remains exactly initialExpiresAt (no TTL slide)
+      // Verify cart expires_at was NOT modified
       const [cartCheck] = await sqlClient`SELECT expires_at FROM carts WHERE id = ${cart!.id}`;
-      expect(cartCheck!.expires_at.getTime()).toBe(initialExpiresAt.getTime());
+      expect(cartCheck!.expires_at.getTime()).toBe(originalExpires.getTime());
     });
 
     it("J. Successful anonymous mutation refreshes database sliding TTL to ~30 days", async () => {
-      const sessionToken = `synth_token_ttl_slide_${Date.now()}_${"I".repeat(15)}`;
+      const sessionToken = `synth_token_ttl_slide_${Date.now()}_${"J".repeat(15)}`;
+      const oldExpires = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // 2 days in future
 
-      // Setup: active cart with expiresAt set to 2 days from now
-      const initialExpiresAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+      // Setup: Active cart with short TTL
       const [cart] = await sqlClient`
         INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
-        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', ${initialExpiresAt}, NOW(), NOW())
+        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', ${oldExpires}, NOW(), NOW())
         RETURNING id;
       `;
       expect(cart).toBeDefined();
 
       const nowBefore = Date.now();
 
+      // Mutation: refresh sliding TTL
       await testDb.transaction(async (tx) => {
-        await atomicAddCartLine(cart!.id, variantId1, 1, tx);
         await refreshCartTtl(cart!.id, ANONYMOUS_CART_TTL_MS, tx);
       });
 
@@ -612,6 +620,75 @@ describe("GP-017 CART4-R3 — Real Local PostgreSQL Concurrency & Persistence Su
         SELECT * FROM cart_items WHERE cart_id = ${resolution.cart.id}
       `;
       expect(newLines).toHaveLength(0);
+    });
+
+    it("M. repeated/stress expired ACTIVE replacement race across 20 iterations", async () => {
+      const iterations = 20;
+      const contendersPerIteration = 5;
+
+      for (let i = 0; i < iterations; i++) {
+        const stressToken = `synth_token_stress_${Date.now()}_${i}_${"M".repeat(10)}`;
+
+        // Setup expired active cart with variant 1 (qty 3)
+        const [oldCart] = await sqlClient`
+          INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
+          VALUES (${generateUuidV7()}, ${stressToken}, 'ACTIVE', 'PEN', NOW() - INTERVAL '5 minutes', NOW() - INTERVAL '1 day', NOW())
+          RETURNING id;
+        `;
+
+        await sqlClient`
+          INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+          VALUES (${generateUuidV7()}, ${oldCart!.id}, ${variantId1}, 3, NOW(), NOW());
+        `;
+
+        // Launch 5 concurrent resolvers
+        const mutationFn = async () => {
+          return testDb.transaction(async (tx) => {
+            const resolution = await resolveAnonymousMutationCart(stressToken, false, tx);
+            await atomicAddCartLine(resolution.cart.id, variantId2, 1, tx);
+            return {
+              cartId: resolution.cart.id,
+              token: resolution.authoritativeToken,
+            };
+          });
+        };
+
+        const results = await Promise.all(
+          Array.from({ length: contendersPerIteration }, () => mutationFn())
+        );
+
+        const uniqueCartIds = new Set(results.map((r) => r.cartId));
+        const uniqueTokens = new Set(results.map((r) => r.token));
+
+        // Exactly 1 replacement Cart ID and token matches original sessionToken
+        expect(uniqueCartIds.size).toBe(1);
+        expect(uniqueTokens.size).toBe(1);
+        expect(results[0]!.token).toBe(stressToken);
+
+        // Exactly 1 ACTIVE cart in DB for stressToken
+        const activeRows = await sqlClient`
+          SELECT id FROM carts WHERE session_token = ${stressToken} AND status = 'ACTIVE'
+        `;
+        expect(activeRows).toHaveLength(1);
+        expect(activeRows[0]!.id).toBe(results[0]!.cartId);
+
+        // Old cart is ABANDONED
+        const [oldCheck] = await sqlClient`
+          SELECT status FROM carts WHERE id = ${oldCart!.id}
+        `;
+        expect(oldCheck!.status).toBe("ABANDONED");
+
+        // Old lines not revived
+        const replacementLines = await sqlClient`
+          SELECT variant_id, quantity FROM cart_items WHERE cart_id = ${results[0]!.cartId}
+        `;
+        const oldLine = replacementLines.find((l) => l.variant_id === variantId1);
+        expect(oldLine).toBeUndefined();
+
+        const newLine = replacementLines.find((l) => l.variant_id === variantId2);
+        expect(newLine).toBeDefined();
+        expect(newLine!.quantity).toBe(contendersPerIteration);
+      }
     });
   });
 });

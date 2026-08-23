@@ -668,6 +668,7 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
               where: vi.fn().mockResolvedValue({}),
             }),
           }),
+          execute: vi.fn().mockResolvedValue([]),
         };
         return callback(
           txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
@@ -742,6 +743,7 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
               }),
             }),
           }),
+          execute: vi.fn().mockResolvedValue([]),
         };
         return callback(
           txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
@@ -805,6 +807,7 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
               where: vi.fn().mockResolvedValue({}),
             }),
           }),
+          execute: vi.fn().mockResolvedValue([]),
         };
         return callback(
           txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
@@ -881,6 +884,7 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
               where: vi.fn().mockResolvedValue({}),
             }),
           }),
+          execute: vi.fn().mockResolvedValue([]),
         };
         return callback(
           txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
@@ -961,6 +965,10 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
               where: vi.fn().mockResolvedValue({}),
             }),
           }),
+          execute: vi.fn().mockImplementation(async () => {
+            executionOrder.push("ADVISORY_LOCK_ACQUIRED");
+            return [];
+          }),
         };
         const result = await callback(
           txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
@@ -975,7 +983,11 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
 
       await addCartItemAction(null, { variantId: validUuid, quantity: 1 });
 
-      expect(executionOrder).toEqual(["DB_TRANSACTION_COMMITTED", "COOKIE_WRITTEN"]);
+      expect(executionOrder).toEqual([
+        "ADVISORY_LOCK_ACQUIRED",
+        "DB_TRANSACTION_COMMITTED",
+        "COOKIE_WRITTEN",
+      ]);
     });
 
     it("G. does NOT set/slide cookie on validation failure", async () => {
@@ -1014,6 +1026,7 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
             }),
           }),
           update: vi.fn(),
+          execute: vi.fn().mockResolvedValue([]),
         };
         return callback(
           txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
