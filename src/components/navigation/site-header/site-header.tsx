@@ -39,11 +39,7 @@ export function SiteHeader({ config, cartCount, className }: SiteHeaderProps) {
           </div>
 
           {/* Mobile Layout (< 1024px) */}
-          <MobileHeader
-            items={config.primaryNav}
-            cartHref={config.utilityLinks.cart.href}
-            cartCount={cartCount}
-          />
+          <MobileHeader items={config.primaryNav} />
         </div>
       </Container>
     </header>

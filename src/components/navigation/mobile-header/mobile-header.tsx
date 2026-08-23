@@ -1,28 +1,21 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { Menu, ShoppingCart } from "lucide-react";
+import { Menu } from "lucide-react";
+import { CartLauncher } from "@/components/cart";
 import { IconButton } from "@/components/ui";
 import { SearchLauncherButton } from "@/components/search";
 import { BrandMark } from "../brand-mark";
-import { HeaderUtilityLink } from "../header-utilities";
 import { MobileDrawer } from "../mobile-drawer";
 import type { MegaMenuCategory } from "../types";
 import styles from "./mobile-header.module.css";
 
 export interface MobileHeaderProps {
   items: MegaMenuCategory[];
-  cartHref?: string;
-  cartCount?: number;
   className?: string;
 }
 
-export function MobileHeader({
-  items,
-  cartHref = "/carrito",
-  cartCount,
-  className,
-}: MobileHeaderProps) {
+export function MobileHeader({ items, className }: MobileHeaderProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -48,12 +41,7 @@ export function MobileHeader({
 
         <div className={styles.rightGroup}>
           <SearchLauncherButton label="Buscar productos" />
-          <HeaderUtilityLink
-            href={cartHref}
-            label="Carrito de compras"
-            icon={ShoppingCart}
-            badgeCount={cartCount}
-          />
+          <CartLauncher label="Carrito de compras" data-testid="mobile-cart-launcher" />
         </div>
       </div>
 

@@ -1,0 +1,50 @@
+{
+  "brand": {
+    "id": "018f0000-0000-7000-8000-00000000c501",
+    "name": "Gamer Perú Cart QA",
+    "slug": "gamer-peru-cart-qa",
+    "status": "PUBLISHED"
+  },
+  "category": {
+    "id": "018f0000-0000-7000-8000-00000000c502",
+    "name": "Cart QA",
+    "slug": "cart-qa",
+    "status": "PUBLISHED"
+  },
+  "product": {
+    "id": "018f0000-0000-7000-8000-00000000c503",
+    "name": "Mouse Cart E2E",
+    "slug": "mouse-cart-e2e",
+    "status": "PUBLISHED"
+  },
+  "variants": [
+    {
+      "id": "018f0000-0000-7000-8000-00000000c504",
+      "productId": "018f0000-0000-7000-8000-00000000c503",
+      "sku": "GP-CART-E2E-BLK",
+      "title": "Negro / 8K",
+      "priceCents": 12990,
+      "compareAtPriceCents": 15990,
+      "weightGrams": 49,
+      "displayOrder": 1,
+      "status": "ACTIVE",
+      "attributes": {
+        "color": "Negro"
+      }
+    },
+    {
+      "id": "018f0000-0000-7000-8000-00000000c505",
+      "productId": "018f0000-0000-7000-8000-00000000c503",
+      "sku": "GP-CART-E2E-WHT",
+      "title": "Blanco / 8K",
+      "priceCents": 13990,
+      "compareAtPriceCents": 16990,
+      "weightGrams": 49,
+      "displayOrder": 2,
+      "status": "ACTIVE",
+      "attributes": {
+        "color": "Blanco"
+      }
+    }
+  ]
+}

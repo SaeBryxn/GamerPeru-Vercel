@@ -1,5 +1,6 @@
 import React from "react";
-import { Heart, ShoppingCart, User } from "lucide-react";
+import { Heart, User } from "lucide-react";
+import { CartLauncher } from "@/components/cart";
 import { SearchLauncherButton } from "@/components/search";
 import { HeaderUtilityLink } from "./header-utility-link";
 import styles from "./header-utilities.module.css";
@@ -22,9 +23,7 @@ export function HeaderUtilities({
   accountLabel = "Mi cuenta",
   wishlistHref = "/cuenta/favoritos",
   wishlistLabel = "Lista de favoritos",
-  cartHref = "/carrito",
   cartLabel = "Carrito de compras",
-  cartCount,
   className,
 }: HeaderUtilitiesProps) {
   const classNames = [styles.utilitiesContainer, className].filter(Boolean).join(" ");
@@ -34,12 +33,7 @@ export function HeaderUtilities({
       <SearchLauncherButton label={searchLabel} />
       <HeaderUtilityLink href={wishlistHref} label={wishlistLabel} icon={Heart} />
       <HeaderUtilityLink href={accountHref} label={accountLabel} icon={User} />
-      <HeaderUtilityLink
-        href={cartHref}
-        label={cartLabel}
-        icon={ShoppingCart}
-        badgeCount={cartCount}
-      />
+      <CartLauncher label={cartLabel} data-testid="desktop-cart-launcher" />
     </div>
   );
 }

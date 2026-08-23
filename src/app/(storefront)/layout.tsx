@@ -1,4 +1,5 @@
 import React from "react";
+import { CartDrawer, CartProvider } from "@/components/cart";
 import {
   AnnouncementBar,
   NAVIGATION_CONFIG,
@@ -13,7 +14,7 @@ export default function StorefrontLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <>
+    <CartProvider>
       <SkipLink />
       <AnnouncementBar
         message={NAVIGATION_CONFIG.announcement?.message}
@@ -22,6 +23,7 @@ export default function StorefrontLayout({
       <SiteHeader config={NAVIGATION_CONFIG} />
       {children}
       <SiteFooter columns={NAVIGATION_CONFIG.footerColumns} />
-    </>
+      <CartDrawer />
+    </CartProvider>
   );
 }

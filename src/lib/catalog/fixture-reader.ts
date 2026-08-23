@@ -127,6 +127,64 @@ function deriveSyntheticTechnicalFacets(
 
 export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader, ProductDetailReader {
   async getPublishedProductBySlug(slug: string): Promise<ProductDetailEntity | null> {
+    if (process.env.CART_E2E_FIXTURES === "1" && slug === "mouse-cart-e2e") {
+      const cartCatalog = (await import("../../../tests/fixtures/cart-e2e-catalog.json")).default;
+      const media = [
+        {
+          id: "018f0000-0000-7000-8000-00000000c5m1",
+          productId: cartCatalog.product.id,
+          mediaAssetId: "018f0000-0000-7000-8000-00000000c5a1",
+          variantId: null,
+          displayOrder: 1,
+          asset: {
+            objectKey: "products/mouse-cart-e2e/hero.png",
+            mimeType: "image/png",
+            fileSizeBytes: 204800,
+            width: 1200,
+            height: 1200,
+            altText: "Mouse Cart E2E",
+          },
+        },
+      ];
+      return {
+        id: cartCatalog.product.id,
+        name: cartCatalog.product.name,
+        slug: cartCatalog.product.slug,
+        subtitle: "Mouse de Prueba E2E Cart",
+        description: "Mouse de alta precisión para pruebas de carrito E2E.",
+        createdAt: new Date(1700000000000).toISOString(),
+        updatedAt: new Date(1700000000000).toISOString(),
+        brand: {
+          id: cartCatalog.brand.id,
+          name: cartCatalog.brand.name,
+          slug: cartCatalog.brand.slug,
+          description: "Marca para pruebas de carrito E2E.",
+          logo: null,
+        },
+        category: {
+          id: cartCatalog.category.id,
+          name: cartCatalog.category.name,
+          slug: cartCatalog.category.slug,
+          description: "Categoría para pruebas de carrito E2E.",
+        },
+        primaryMedia: media[0] ?? null,
+        variants: cartCatalog.variants.map((v) => ({
+          id: v.id,
+          productId: v.productId,
+          sku: v.sku,
+          title: v.title,
+          priceCents: v.priceCents,
+          compareAtPriceCents: v.compareAtPriceCents ?? null,
+          weightGrams: v.weightGrams ?? null,
+          displayOrder: v.displayOrder,
+          status: "ACTIVE" as const,
+          attributes: v.attributes,
+        })),
+        media,
+        specifications: null,
+        story: null,
+      };
+    }
     return buildSyntheticProductDetail(slug, FIXTURE_PRODUCTS);
   }
 

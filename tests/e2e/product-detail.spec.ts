@@ -94,7 +94,9 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
       if (
         url.includes("/api/") ||
         url.includes("/_next/data") ||
-        (req.resourceType() === "fetch" && !url.includes("/media/"))
+        (req.resourceType() === "fetch" &&
+          !url.includes("/media/") &&
+          !req.headers()["next-action"])
       ) {
         apiRequests.push(url);
       }
