@@ -141,11 +141,13 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await drawer.getByTestId("cart-drawer-close").click();
     await expect(drawer).not.toBeVisible();
 
-    // 2. Select White variant
-    const whiteOption = page.getByRole("button", { name: /Blanco/i });
-    if ((await whiteOption.count()) > 0) {
-      await whiteOption.click();
-    }
+    // 2. Select White variant (role="radio")
+    const whiteOption = page
+      .getByTestId("swatch-option-Blanco")
+      .or(page.getByRole("radio", { name: /Blanco/i }));
+    await expect(whiteOption).toBeVisible();
+    await whiteOption.click();
+    await expect(page.getByTestId("selling-price")).toHaveText("S/ 139.90");
 
     // Add White variant
     await addFixtureProductAndRequireSuccess(page);
