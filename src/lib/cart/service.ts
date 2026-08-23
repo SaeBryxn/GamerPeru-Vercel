@@ -18,6 +18,7 @@ import {
   mergeGuestCartIntoAuthenticated,
   queryCartHydrationLines,
   refreshCartTtl,
+  resolveAnonymousMutationCart,
   retireCartById,
 } from "./persistence";
 import {
@@ -324,41 +325,18 @@ export async function addCartItemAction(
 
     let authoritativeToken = "";
     const snapshot = await db.transaction(async (tx) => {
-      let targetToken: string;
-
-      if (authority.guestToken && !authority.isMalformedGuest) {
-        const [existingActive] = await tx
-          .select()
-          .from(carts)
-          .where(and(eq(carts.sessionToken, authority.guestToken), eq(carts.status, "ACTIVE")))
-          .for("update")
-          .limit(1);
-
-        if (existingActive) {
-          if (existingActive.expiresAt < new Date()) {
-            await retireCartById(existingActive.id, tx);
-            targetToken = generateAnonymousSessionToken();
-          } else {
-            targetToken = authority.guestToken;
-          }
-        } else {
-          // Unknown token: session fixation defense -> generate fresh server token
-          targetToken = generateAnonymousSessionToken();
-        }
-      } else {
-        targetToken = generateAnonymousSessionToken();
-      }
-
-      authoritativeToken = targetToken;
-      const anonCart = await getOrCreateActiveCart(
-        { type: "ANONYMOUS", sessionToken: targetToken },
+      const resolution = await resolveAnonymousMutationCart(
+        authority.guestToken,
+        authority.isMalformedGuest,
         tx
       );
 
-      await atomicAddCartLine(anonCart.id, variantId, quantityToAdd, tx);
-      await refreshCartTtl(anonCart.id, ANONYMOUS_CART_TTL_MS, tx);
+      authoritativeToken = resolution.authoritativeToken;
 
-      const lines = await queryCartHydrationLines(anonCart.id, tx);
+      await atomicAddCartLine(resolution.cart.id, variantId, quantityToAdd, tx);
+      await refreshCartTtl(resolution.cart.id, ANONYMOUS_CART_TTL_MS, tx);
+
+      const lines = await queryCartHydrationLines(resolution.cart.id, tx);
       return buildCartSnapshot(lines);
     });
 

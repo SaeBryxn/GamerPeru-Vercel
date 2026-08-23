@@ -10,8 +10,15 @@ import {
   MAX_CART_LINE_QUANTITY,
 } from "./constants";
 import type { CartHydrationLine, CartOwner } from "./internal-types";
+import { generateAnonymousSessionToken } from "./session";
 
 export type DatabaseExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export interface AnonymousMutationCartResolution {
+  cart: Cart;
+  authoritativeToken: string;
+  isNewCart: boolean;
+}
 
 /**
  * Retires a cart by setting status to ABANDONED.
@@ -133,6 +140,83 @@ export async function getOrCreateActiveCart(
   }
 
   return reselected[0];
+}
+
+/**
+ * Resolves or creates an authoritative Cart for an anonymous mutation.
+ *
+ * Token Policy (Binding CART4-R2 Contract):
+ * 1. NO TOKEN / MALFORMED: Generates a fresh 256-bit server token and creates a new ACTIVE cart.
+ * 2. UNKNOWN TOKEN (never server-issued): Session-fixation defense -> generates a fresh 256-bit server token.
+ * 3. KNOWN ACTIVE UNEXPIRED: Locks row and reuses the active cart and session token.
+ * 4. KNOWN ACTIVE EXPIRED: Locks old active cart, marks it ABANDONED, and creates/selects
+ *    a replacement ACTIVE cart using the SAME proven server-issued session token.
+ *    (Zero line revival: old cart items remain historical in the abandoned cart).
+ */
+export async function resolveAnonymousMutationCart(
+  guestToken: string | null,
+  isMalformedGuest: boolean,
+  executor: DatabaseExecutor
+): Promise<AnonymousMutationCartResolution> {
+  const now = new Date();
+
+  // 1. No token or malformed token: Generate fresh 256-bit server token
+  if (!guestToken || isMalformedGuest) {
+    const newToken = generateAnonymousSessionToken();
+    const cart = await getOrCreateActiveCart(
+      { type: "ANONYMOUS", sessionToken: newToken },
+      executor
+    );
+    return { cart, authoritativeToken: newToken, isNewCart: true };
+  }
+
+  // 2. Valid format token: Query active cart with FOR UPDATE lock
+  const [existingActive] = await executor
+    .select()
+    .from(carts)
+    .where(and(eq(carts.sessionToken, guestToken), eq(carts.status, "ACTIVE")))
+    .for("update")
+    .limit(1);
+
+  if (existingActive) {
+    if (existingActive.expiresAt < now) {
+      // Retires old expired cart to ABANDONED
+      await retireCartById(existingActive.id, executor);
+
+      // Creates/selects replacement ACTIVE cart with the SAME known server-issued token
+      const replacementCart = await getOrCreateActiveCart(
+        { type: "ANONYMOUS", sessionToken: guestToken },
+        executor
+      );
+      return { cart: replacementCart, authoritativeToken: guestToken, isNewCart: true };
+    }
+
+    return { cart: existingActive, authoritativeToken: guestToken, isNewCart: false };
+  }
+
+  // 3. Check if this token exists historically in carts table (e.g. ABANDONED or CONVERTED)
+  const [historicalCart] = await executor
+    .select({ id: carts.id })
+    .from(carts)
+    .where(eq(carts.sessionToken, guestToken))
+    .limit(1);
+
+  if (historicalCart) {
+    // Known historical server-issued token: create replacement active cart with same token
+    const replacementCart = await getOrCreateActiveCart(
+      { type: "ANONYMOUS", sessionToken: guestToken },
+      executor
+    );
+    return { cart: replacementCart, authoritativeToken: guestToken, isNewCart: true };
+  }
+
+  // 4. Truly unknown token: Session-fixation defense -> generate fresh server token
+  const freshToken = generateAnonymousSessionToken();
+  const freshCart = await getOrCreateActiveCart(
+    { type: "ANONYMOUS", sessionToken: freshToken },
+    executor
+  );
+  return { cart: freshCart, authoritativeToken: freshToken, isNewCart: true };
 }
 
 /**

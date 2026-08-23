@@ -606,20 +606,391 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
   describe("9. Cookie Sliding & Failed Mutation Guarantees", () => {
     const validUuid = "019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f";
 
-    it("does NOT set/slide cookie on validation failure", async () => {
+    it("A. successful existing anonymous ADD calls setAnonymousCartCookie after DB transaction with 30-day maxAge", async () => {
+      const existingToken = "A".repeat(43);
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
+        success: false,
+        reason: "no_session",
+      });
+      mockCookieStore.get.mockReturnValue({ value: existingToken });
+
+      // Catalog query mock
+      vi.mocked(dbModule.db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          innerJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([
+                {
+                  variantId: validUuid,
+                  variantStatus: "ACTIVE",
+                  productStatus: "PUBLISHED",
+                },
+              ]),
+            }),
+          }),
+        }),
+      } as unknown as ReturnType<typeof dbModule.db.select>);
+
+      // Transaction mock
+      vi.mocked(dbModule.db.transaction).mockImplementation(async (callback) => {
+        const txMock = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValueOnce([
+                    {
+                      id: "cart-1",
+                      sessionToken: existingToken,
+                      expiresAt: new Date(Date.now() + 100000),
+                    },
+                  ]),
+                }),
+              }),
+              innerJoin: vi.fn().mockReturnValue({
+                innerJoin: vi.fn().mockReturnValue({
+                  leftJoin: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                      orderBy: vi.fn().mockResolvedValue([]),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockReturnValue({
+              onConflictDoUpdate: vi.fn().mockResolvedValue({}),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue({}),
+            }),
+          }),
+        };
+        return callback(
+          txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
+        );
+      });
+
+      const result = await addCartItemAction(null, { variantId: validUuid, quantity: 1 });
+      expect(result.success).toBe(true);
+
+      // Verify cookie was set with 30-day maxAge
+      expect(mockCookieStore.set).toHaveBeenCalledTimes(1);
+      expect(mockCookieStore.set).toHaveBeenCalledWith(
+        expect.any(String),
+        existingToken,
+        expect.objectContaining({
+          maxAge: CART_COOKIE_MAX_AGE_SECONDS,
+          httpOnly: true,
+          sameSite: "lax",
+        })
+      );
+    });
+
+    it("B. successful existing anonymous UPDATE calls setAnonymousCartCookie after DB transaction", async () => {
+      const existingToken = "B".repeat(43);
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
+        success: false,
+        reason: "no_session",
+      });
+      mockCookieStore.get.mockReturnValue({ value: existingToken });
+
+      vi.mocked(dbModule.db.transaction).mockImplementation(async (callback) => {
+        const txMock = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValueOnce([
+                    {
+                      id: "cart-1",
+                      sessionToken: existingToken,
+                      expiresAt: new Date(Date.now() + 100000),
+                    },
+                  ]),
+                }),
+              }),
+              innerJoin: vi.fn().mockReturnValue({
+                innerJoin: vi.fn().mockReturnValue({
+                  where: vi.fn().mockReturnValue({
+                    for: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockResolvedValueOnce([
+                        {
+                          id: "item-1",
+                          variantStatus: "ACTIVE",
+                          productStatus: "PUBLISHED",
+                        },
+                      ]),
+                    }),
+                  }),
+                  leftJoin: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                      orderBy: vi.fn().mockResolvedValue([]),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                returning: vi.fn().mockResolvedValue([{ id: "item-1" }]),
+              }),
+            }),
+          }),
+        };
+        return callback(
+          txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
+        );
+      });
+
+      const result = await updateCartItemQuantityAction(null, {
+        variantId: validUuid,
+        quantity: 3,
+      });
+      expect(result.success).toBe(true);
+      expect(mockCookieStore.set).toHaveBeenCalledTimes(1);
+      expect(mockCookieStore.set).toHaveBeenCalledWith(
+        expect.any(String),
+        existingToken,
+        expect.objectContaining({ maxAge: CART_COOKIE_MAX_AGE_SECONDS })
+      );
+    });
+
+    it("C. successful existing anonymous REMOVE calls setAnonymousCartCookie after DB transaction", async () => {
+      const existingToken = "C".repeat(43);
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
+        success: false,
+        reason: "no_session",
+      });
+      mockCookieStore.get.mockReturnValue({ value: existingToken });
+
+      vi.mocked(dbModule.db.transaction).mockImplementation(async (callback) => {
+        const txMock = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValueOnce([
+                    {
+                      id: "cart-1",
+                      sessionToken: existingToken,
+                      expiresAt: new Date(Date.now() + 100000),
+                    },
+                  ]),
+                }),
+              }),
+              innerJoin: vi.fn().mockReturnValue({
+                innerJoin: vi.fn().mockReturnValue({
+                  leftJoin: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                      orderBy: vi.fn().mockResolvedValue([]),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          delete: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: "item-1" }]), // Deleted!
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue({}),
+            }),
+          }),
+        };
+        return callback(
+          txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
+        );
+      });
+
+      const result = await removeCartItemAction(null, { variantId: validUuid });
+      expect(result.success).toBe(true);
+      expect(mockCookieStore.set).toHaveBeenCalledTimes(1);
+      expect(mockCookieStore.set).toHaveBeenCalledWith(
+        expect.any(String),
+        existingToken,
+        expect.objectContaining({ maxAge: CART_COOKIE_MAX_AGE_SECONDS })
+      );
+    });
+
+    it("D. failed DB transaction does NOT set or slide cookie", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
+        success: false,
+        reason: "no_session",
+      });
+      mockCookieStore.get.mockReturnValue({ value: "D".repeat(43) });
+
+      vi.mocked(dbModule.db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          innerJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([
+                {
+                  variantId: validUuid,
+                  variantStatus: "ACTIVE",
+                  productStatus: "PUBLISHED",
+                },
+              ]),
+            }),
+          }),
+        }),
+      } as unknown as ReturnType<typeof dbModule.db.select>);
+
+      vi.mocked(dbModule.db.transaction).mockRejectedValueOnce(new Error("DB_CONN_TIMEOUT"));
+
+      const result = await addCartItemAction(null, { variantId: validUuid, quantity: 1 });
+      expect(result.success).toBe(false);
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
+    });
+
+    it("E. expired update and remove do NOT set or slide cookie", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValue({
+        success: false,
+        reason: "no_session",
+      });
+      mockCookieStore.get.mockReturnValue({ value: "E".repeat(43) });
+
+      // Mock expired cart
+      vi.mocked(dbModule.db.transaction).mockImplementation(async (callback) => {
+        const txMock = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValueOnce([
+                    {
+                      id: "cart-1",
+                      sessionToken: "E".repeat(43),
+                      expiresAt: new Date(Date.now() - 100000), // Expired!
+                    },
+                  ]),
+                }),
+              }),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue({}),
+            }),
+          }),
+        };
+        return callback(
+          txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
+        );
+      });
+
+      const updRes = await updateCartItemQuantityAction(null, {
+        variantId: validUuid,
+        quantity: 2,
+      });
+      expect(updRes.success).toBe(false);
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
+
+      const remRes = await removeCartItemAction(null, { variantId: validUuid });
+      expect(remRes.success).toBe(false);
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
+    });
+
+    it("F. commit-timing proof: DB transaction resolves/commits before cookie write occurs", async () => {
+      const existingToken = "T".repeat(43);
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
+        success: false,
+        reason: "no_session",
+      });
+      mockCookieStore.get.mockReturnValue({ value: existingToken });
+
+      const executionOrder: string[] = [];
+
+      vi.mocked(dbModule.db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          innerJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([
+                {
+                  variantId: validUuid,
+                  variantStatus: "ACTIVE",
+                  productStatus: "PUBLISHED",
+                },
+              ]),
+            }),
+          }),
+        }),
+      } as unknown as ReturnType<typeof dbModule.db.select>);
+
+      vi.mocked(dbModule.db.transaction).mockImplementation(async (callback) => {
+        const txMock = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValueOnce([
+                    {
+                      id: "cart-1",
+                      sessionToken: existingToken,
+                      expiresAt: new Date(Date.now() + 100000),
+                    },
+                  ]),
+                }),
+              }),
+              innerJoin: vi.fn().mockReturnValue({
+                innerJoin: vi.fn().mockReturnValue({
+                  leftJoin: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                      orderBy: vi.fn().mockResolvedValue([]),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          insert: vi.fn().mockReturnValue({
+            values: vi.fn().mockReturnValue({
+              onConflictDoUpdate: vi.fn().mockResolvedValue({}),
+            }),
+          }),
+          update: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockResolvedValue({}),
+            }),
+          }),
+        };
+        const result = await callback(
+          txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
+        );
+        executionOrder.push("DB_TRANSACTION_COMMITTED");
+        return result;
+      });
+
+      mockCookieStore.set.mockImplementation(() => {
+        executionOrder.push("COOKIE_WRITTEN");
+      });
+
+      await addCartItemAction(null, { variantId: validUuid, quantity: 1 });
+
+      expect(executionOrder).toEqual(["DB_TRANSACTION_COMMITTED", "COOKIE_WRITTEN"]);
+    });
+
+    it("G. does NOT set/slide cookie on validation failure", async () => {
       const result = await addCartItemAction(null, { variantId: "invalid-uuid", quantity: 1 });
       expect(result.success).toBe(false);
       expect(mockCookieStore.set).not.toHaveBeenCalled();
     });
 
-    it("does NOT set/slide cookie on remove when line does not exist in cart", async () => {
+    it("H. does NOT set/slide cookie on remove when line does not exist in cart", async () => {
       vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
         success: false,
         reason: "no_session",
       });
       mockCookieStore.get.mockReturnValueOnce({ value: "A".repeat(43) });
 
-      // Mock transaction for remove where deletedRows = []
       vi.mocked(dbModule.db.transaction).mockImplementation(async (callback) => {
         const txMock = {
           select: vi.fn().mockReturnValue({
@@ -654,7 +1025,6 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
       if (!result.success) {
         expect(result.code).toBe("ITEM_NOT_FOUND");
       }
-      // Critical invariant: no cookie sliding on failed/no-op remove
       expect(mockCookieStore.set).not.toHaveBeenCalled();
     });
   });

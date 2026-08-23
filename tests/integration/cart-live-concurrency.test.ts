@@ -1,15 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "@/db/schema";
 import { generateUuidV7 } from "@/db/utils/uuid";
+import { ANONYMOUS_CART_TTL_MS, ANONYMOUS_CART_TTL_DAYS } from "@/lib/cart/constants";
 import {
   atomicAddCartLine,
   atomicRemoveCartLine,
-  atomicUpdateCartLine,
   getOrCreateActiveCart,
   mergeGuestCartIntoAuthenticated,
-  queryCartHydrationLines,
+  refreshCartTtl,
+  resolveAnonymousMutationCart,
   retireCartById,
 } from "@/lib/cart/persistence";
 
@@ -48,7 +50,7 @@ export function assertAuthorizedLocalPostgresTarget(rawUrl: string | undefined):
   return urlString;
 }
 
-describe("GP-017 CART4-R1 — Real Local PostgreSQL Concurrency & Persistence Suite", () => {
+describe("GP-017 CART4-R2 — Real Local PostgreSQL Concurrency & Persistence Suite", () => {
   const connectionString = assertAuthorizedLocalPostgresTarget(process.env.DATABASE_URL);
 
   let sqlClient: postgres.Sql;
@@ -303,10 +305,10 @@ describe("GP-017 CART4-R1 — Real Local PostgreSQL Concurrency & Persistence Su
       expect(v2!.quantity).toBe(3);
     });
 
-    it("F. Concurrent production expired ACTIVE replacement transitions old to ABANDONED and creates exactly one new ACTIVE cart", async () => {
+    it("F. Concurrent production expired anonymous add race retires old cart and converges to exactly one replacement ACTIVE cart with both additions and zero line revival", async () => {
       const sessionToken = `synth_token_expired_race_${Date.now()}_${"E".repeat(15)}`;
 
-      // Setup: Insert expired active cart
+      // Setup: Insert expired active cart with variant 1 (quantity 5)
       const [oldCart] = await sqlClient`
         INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
         VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '10 days', NOW())
@@ -314,16 +316,25 @@ describe("GP-017 CART4-R1 — Real Local PostgreSQL Concurrency & Persistence Su
       `;
       expect(oldCart).toBeDefined();
 
-      const resolveActiveCartFn = async () => {
+      await sqlClient`
+        INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${oldCart!.id}, ${variantId1}, 5, NOW(), NOW());
+      `;
+
+      // Concurrent execution: Two simultaneous anonymous add mutations with the same known token adding variant 2 (+1 each)
+      const addMutationFn = async () => {
         return testDb.transaction(async (tx) => {
-          const cart = await getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
-          return cart.id;
+          const resolution = await resolveAnonymousMutationCart(sessionToken, false, tx);
+          await atomicAddCartLine(resolution.cart.id, variantId2, 1, tx);
+          await refreshCartTtl(resolution.cart.id, ANONYMOUS_CART_TTL_MS, tx);
+          return resolution.cart.id;
         });
       };
 
-      const results = await Promise.all([resolveActiveCartFn(), resolveActiveCartFn()]);
+      const results = await Promise.all([addMutationFn(), addMutationFn()]);
       const uniqueIds = new Set(results);
 
+      // Both concurrent resolvers converged to the EXACT SAME replacement cart ID
       expect(uniqueIds.size).toBe(1);
 
       // Old cart is ABANDONED
@@ -331,66 +342,189 @@ describe("GP-017 CART4-R1 — Real Local PostgreSQL Concurrency & Persistence Su
       expect(oldCartCheck).toBeDefined();
       expect(oldCartCheck!.status).toBe("ABANDONED");
 
-      // Exactly 1 new ACTIVE cart exists
+      // Exactly 1 new ACTIVE cart exists for the known token
       const activeRows =
         await sqlClient`SELECT id FROM carts WHERE session_token = ${sessionToken} AND status = 'ACTIVE'`;
       expect(activeRows).toHaveLength(1);
       expect(activeRows[0]!.id).not.toBe(oldCart!.id);
+      expect(activeRows[0]!.id).toBe(results[0]);
+
+      // Verify replacement cart contents: variant 2 has quantity 2
+      const replacementLines = await sqlClient`
+        SELECT variant_id, quantity FROM cart_items WHERE cart_id = ${results[0]}
+      `;
+      expect(replacementLines).toHaveLength(1);
+      expect(replacementLines[0]!.variant_id).toBe(variantId2);
+      expect(replacementLines[0]!.quantity).toBe(2);
+
+      // Verify ZERO revival: variant 1 from old expired cart is NOT in replacement cart
+      const oldItemInNewCart = replacementLines.find((l) => l.variant_id === variantId1);
+      expect(oldItemInNewCart).toBeUndefined();
     });
 
-    it("G. Production retireCartById transitions cart to ABANDONED without leaving stale ACTIVE rows", async () => {
-      const sessionToken = `synth_token_retire_${Date.now()}_${"F".repeat(15)}`;
+    it("G. Expired update lifecycle retires old cart to ABANDONED without modifying line or extending TTL", async () => {
+      const sessionToken = `synth_token_upd_exp_${Date.now()}_${"F".repeat(15)}`;
 
-      const cart = await testDb.transaction(async (tx) => {
-        return getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+      // Setup: Insert expired active cart with variant 1 (quantity 2)
+      const [oldCart] = await sqlClient`
+        INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', NOW() - INTERVAL '1 hour', NOW() - INTERVAL '5 days', NOW())
+        RETURNING id;
+      `;
+      expect(oldCart).toBeDefined();
+
+      await sqlClient`
+        INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${oldCart!.id}, ${variantId1}, 2, NOW(), NOW());
+      `;
+
+      // Execute expired update resolution
+      const updateResult = await testDb.transaction(async (tx) => {
+        const [anonCart] = await tx
+          .select()
+          .from(schema.carts)
+          .where(
+            and(eq(schema.carts.sessionToken, sessionToken), eq(schema.carts.status, "ACTIVE"))
+          )
+          .for("update")
+          .limit(1);
+
+        if (!anonCart || anonCart.expiresAt < new Date()) {
+          if (anonCart) {
+            await retireCartById(anonCart.id, tx);
+          }
+          return { success: false, code: "ITEM_NOT_FOUND" };
+        }
+
+        return { success: true };
       });
 
-      await testDb.transaction(async (tx) => {
-        await retireCartById(cart.id, tx);
-      });
+      expect(updateResult.success).toBe(false);
 
-      const [checked] = await sqlClient`SELECT status FROM carts WHERE id = ${cart.id}`;
-      expect(checked).toBeDefined();
-      expect(checked!.status).toBe("ABANDONED");
+      // Old cart is ABANDONED
+      const [oldCartCheck] =
+        await sqlClient`SELECT status, expires_at FROM carts WHERE id = ${oldCart!.id}`;
+      expect(oldCartCheck!.status).toBe("ABANDONED");
+      expect(oldCartCheck!.expires_at.getTime()).toBeLessThan(Date.now());
+
+      // Line quantity remains unchanged
+      const [itemCheck] =
+        await sqlClient`SELECT quantity FROM cart_items WHERE cart_id = ${oldCart!.id} AND variant_id = ${variantId1}`;
+      expect(itemCheck!.quantity).toBe(2);
+
+      // 0 replacement active carts manufactured for this token
+      const activeCarts =
+        await sqlClient`SELECT id FROM carts WHERE session_token = ${sessionToken} AND status = 'ACTIVE'`;
+      expect(activeCarts).toHaveLength(0);
     });
 
-    it("H. Production atomicUpdateCartLine returns false when updating nonexistent line item", async () => {
-      const sessionToken = `synth_token_upd_missing_${Date.now()}_${"G".repeat(15)}`;
+    it("H. Expired remove lifecycle retires old cart to ABANDONED without deleting line or extending TTL", async () => {
+      const sessionToken = `synth_token_rem_exp_${Date.now()}_${"G".repeat(15)}`;
 
-      const cart = await testDb.transaction(async (tx) => {
-        return getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+      // Setup: Insert expired active cart with variant 1 (quantity 2)
+      const [oldCart] = await sqlClient`
+        INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', NOW() - INTERVAL '2 hours', NOW() - INTERVAL '3 days', NOW())
+        RETURNING id;
+      `;
+      expect(oldCart).toBeDefined();
+
+      await sqlClient`
+        INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${oldCart!.id}, ${variantId1}, 2, NOW(), NOW());
+      `;
+
+      // Execute expired remove resolution
+      const removeResult = await testDb.transaction(async (tx) => {
+        const [anonCart] = await tx
+          .select()
+          .from(schema.carts)
+          .where(
+            and(eq(schema.carts.sessionToken, sessionToken), eq(schema.carts.status, "ACTIVE"))
+          )
+          .for("update")
+          .limit(1);
+
+        if (!anonCart || anonCart.expiresAt < new Date()) {
+          if (anonCart) {
+            await retireCartById(anonCart.id, tx);
+          }
+          return { success: false, code: "ITEM_NOT_FOUND" };
+        }
+
+        return { success: true };
       });
 
-      const result = await testDb.transaction(async (tx) => {
-        return atomicUpdateCartLine(cart.id, variantId1, 5, tx);
-      });
+      expect(removeResult.success).toBe(false);
 
-      expect(result).toBe(false);
+      // Old cart is ABANDONED
+      const [oldCartCheck] =
+        await sqlClient`SELECT status, expires_at FROM carts WHERE id = ${oldCart!.id}`;
+      expect(oldCartCheck!.status).toBe("ABANDONED");
+      expect(oldCartCheck!.expires_at.getTime()).toBeLessThan(Date.now());
+
+      // Line was NOT deleted
+      const [itemCheck] =
+        await sqlClient`SELECT quantity FROM cart_items WHERE cart_id = ${oldCart!.id} AND variant_id = ${variantId1}`;
+      expect(itemCheck).toBeDefined();
+      expect(itemCheck!.quantity).toBe(2);
+
+      // 0 replacement active carts manufactured for this token
+      const activeCarts =
+        await sqlClient`SELECT id FROM carts WHERE session_token = ${sessionToken} AND status = 'ACTIVE'`;
+      expect(activeCarts).toHaveLength(0);
     });
 
-    it("I. Production atomicRemoveCartLine returns false and deletes 0 rows when removing nonexistent line item", async () => {
+    it("I. Remove missing line does not refresh Cart TTL", async () => {
       const sessionToken = `synth_token_rem_missing_${Date.now()}_${"H".repeat(15)}`;
 
-      const cart = await testDb.transaction(async (tx) => {
-        return getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+      // Setup: unexpired active cart with fixed future expiresAt
+      const initialExpiresAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+      const [cart] = await sqlClient`
+        INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', ${initialExpiresAt}, NOW(), NOW())
+        RETURNING id, expires_at;
+      `;
+      expect(cart).toBeDefined();
+
+      const wasRemoved = await testDb.transaction(async (tx) => {
+        return atomicRemoveCartLine(cart!.id, variantId1, tx);
       });
 
-      const result = await testDb.transaction(async (tx) => {
-        return atomicRemoveCartLine(cart.id, variantId1, tx);
-      });
+      expect(wasRemoved).toBe(false);
 
-      expect(result).toBe(false);
+      // Cart expires_at in DB remains exactly initialExpiresAt (no TTL slide)
+      const [cartCheck] = await sqlClient`SELECT expires_at FROM carts WHERE id = ${cart!.id}`;
+      expect(cartCheck!.expires_at.getTime()).toBe(initialExpiresAt.getTime());
     });
 
-    it("J. Production queryCartHydrationLines returns empty array for empty cart", async () => {
-      const sessionToken = `synth_token_query_empty_${Date.now()}_${"I".repeat(15)}`;
+    it("J. Successful anonymous mutation refreshes database sliding TTL to ~30 days", async () => {
+      const sessionToken = `synth_token_ttl_slide_${Date.now()}_${"I".repeat(15)}`;
 
-      const cart = await testDb.transaction(async (tx) => {
-        return getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+      // Setup: active cart with expiresAt set to 2 days from now
+      const initialExpiresAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+      const [cart] = await sqlClient`
+        INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', ${initialExpiresAt}, NOW(), NOW())
+        RETURNING id;
+      `;
+      expect(cart).toBeDefined();
+
+      const nowBefore = Date.now();
+
+      await testDb.transaction(async (tx) => {
+        await atomicAddCartLine(cart!.id, variantId1, 1, tx);
+        await refreshCartTtl(cart!.id, ANONYMOUS_CART_TTL_MS, tx);
       });
 
-      const lines = await queryCartHydrationLines(cart.id, testDb);
-      expect(lines).toEqual([]);
+      const [cartCheck] = await sqlClient`SELECT expires_at FROM carts WHERE id = ${cart!.id}`;
+      const diffMs = cartCheck!.expires_at.getTime() - nowBefore;
+      const diffDays = diffMs / (24 * 60 * 60 * 1000);
+
+      // Refreshed TTL is approximately 30 days
+      expect(diffDays).toBeGreaterThan(29.9);
+      expect(diffDays).toBeLessThan(30.1);
+      expect(ANONYMOUS_CART_TTL_DAYS).toBe(30);
     });
   });
 });
