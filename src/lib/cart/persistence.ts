@@ -20,6 +20,9 @@ export interface AnonymousMutationCartResolution {
   isNewCart: boolean;
 }
 
+export type ExistingCartResolutionResult =
+  { success: true; cart: Cart } | { success: false; code: "ITEM_NOT_FOUND"; error: string };
+
 /**
  * Retires a cart by setting status to ABANDONED.
  */
@@ -145,13 +148,14 @@ export async function getOrCreateActiveCart(
 /**
  * Resolves or creates an authoritative Cart for an anonymous mutation.
  *
- * Token Policy (Binding CART4-R2 Contract):
+ * Token Policy (Binding CART4-R3 Contract):
  * 1. NO TOKEN / MALFORMED: Generates a fresh 256-bit server token and creates a new ACTIVE cart.
- * 2. UNKNOWN TOKEN (never server-issued): Session-fixation defense -> generates a fresh 256-bit server token.
- * 3. KNOWN ACTIVE UNEXPIRED: Locks row and reuses the active cart and session token.
- * 4. KNOWN ACTIVE EXPIRED: Locks old active cart, marks it ABANDONED, and creates/selects
- *    a replacement ACTIVE cart using the SAME proven server-issued session token.
- *    (Zero line revival: old cart items remain historical in the abandoned cart).
+ * 2. KNOWN ACTIVE UNEXPIRED: Locks row and reuses the active cart and session token.
+ * 3. KNOWN ACTIVE EXPIRED (Immediate Replacement Continuity):
+ *    Locks old active cart, marks it ABANDONED, and creates replacement ACTIVE cart using the
+ *    SAME proven server-issued session token. (Zero line revival: old items stay historical).
+ * 4. NO ACTIVE CART (Unknown or Stale Historical ABANDONED/CONVERTED Token):
+ *    Non-authoritative -> Rotates strictly to a fresh 256-bit server token.
  */
 export async function resolveAnonymousMutationCart(
   guestToken: string | null,
@@ -180,10 +184,10 @@ export async function resolveAnonymousMutationCart(
 
   if (existingActive) {
     if (existingActive.expiresAt < now) {
-      // Retires old expired cart to ABANDONED
+      // KNOWN ACTIVE EXPIRED: Retire old active cart to ABANDONED
       await retireCartById(existingActive.id, executor);
 
-      // Creates/selects replacement ACTIVE cart with the SAME known server-issued token
+      // Create/select replacement ACTIVE cart with the SAME known server-issued token
       const replacementCart = await getOrCreateActiveCart(
         { type: "ANONYMOUS", sessionToken: guestToken },
         executor
@@ -191,32 +195,74 @@ export async function resolveAnonymousMutationCart(
       return { cart: replacementCart, authoritativeToken: guestToken, isNewCart: true };
     }
 
+    // KNOWN ACTIVE UNEXPIRED: Reuse current active cart and token
     return { cart: existingActive, authoritativeToken: guestToken, isNewCart: false };
   }
 
-  // 3. Check if this token exists historically in carts table (e.g. ABANDONED or CONVERTED)
-  const [historicalCart] = await executor
-    .select({ id: carts.id })
-    .from(carts)
-    .where(eq(carts.sessionToken, guestToken))
-    .limit(1);
-
-  if (historicalCart) {
-    // Known historical server-issued token: create replacement active cart with same token
-    const replacementCart = await getOrCreateActiveCart(
-      { type: "ANONYMOUS", sessionToken: guestToken },
-      executor
-    );
-    return { cart: replacementCart, authoritativeToken: guestToken, isNewCart: true };
-  }
-
-  // 4. Truly unknown token: Session-fixation defense -> generate fresh server token
+  // 3. NO ACTIVE CART (Token is unknown, or only exists on historical ABANDONED / CONVERTED rows):
+  // Non-authoritative credential -> Rotate strictly to fresh 256-bit server token
   const freshToken = generateAnonymousSessionToken();
   const freshCart = await getOrCreateActiveCart(
     { type: "ANONYMOUS", sessionToken: freshToken },
     executor
   );
   return { cart: freshCart, authoritativeToken: freshToken, isNewCart: true };
+}
+
+/**
+ * Resolves an existing active Cart for non-creating mutations (update, remove).
+ *
+ * Invariants:
+ * 1. Locks existing ACTIVE cart row with FOR UPDATE.
+ * 2. If no ACTIVE row exists: returns ITEM_NOT_FOUND.
+ * 3. If ACTIVE row exists but is expired (expiresAt < NOW()):
+ *    - Transitions old cart ACTIVE -> ABANDONED.
+ *    - Does NOT create a replacement cart.
+ *    - Does NOT refresh TTL.
+ *    - Returns ITEM_NOT_FOUND.
+ * 4. If ACTIVE row is unexpired: returns { success: true, cart }.
+ */
+export async function resolveExistingAnonymousMutationCart(
+  guestToken: string | null,
+  isMalformedGuest: boolean,
+  executor: DatabaseExecutor
+): Promise<ExistingCartResolutionResult> {
+  if (!guestToken || isMalformedGuest) {
+    return {
+      success: false,
+      code: "ITEM_NOT_FOUND",
+      error: "El carrito no fue encontrado o ha expirado.",
+    };
+  }
+
+  const [anonCart] = await executor
+    .select()
+    .from(carts)
+    .where(and(eq(carts.sessionToken, guestToken), eq(carts.status, "ACTIVE")))
+    .for("update")
+    .limit(1);
+
+  if (!anonCart) {
+    return {
+      success: false,
+      code: "ITEM_NOT_FOUND",
+      error: "El carrito no fue encontrado o ha expirado.",
+    };
+  }
+
+  if (anonCart.expiresAt < new Date()) {
+    await retireCartById(anonCart.id, executor);
+    return {
+      success: false,
+      code: "ITEM_NOT_FOUND",
+      error: "El carrito no fue encontrado o ha expirado.",
+    };
+  }
+
+  return {
+    success: true,
+    cart: anonCart,
+  };
 }
 
 /**

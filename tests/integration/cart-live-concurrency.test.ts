@@ -4,7 +4,11 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "@/db/schema";
 import { generateUuidV7 } from "@/db/utils/uuid";
-import { ANONYMOUS_CART_TTL_MS, ANONYMOUS_CART_TTL_DAYS } from "@/lib/cart/constants";
+import {
+  ANONYMOUS_CART_TTL_MS,
+  ANONYMOUS_CART_TTL_DAYS,
+  ANONYMOUS_TOKEN_REGEX,
+} from "@/lib/cart/constants";
 import {
   atomicAddCartLine,
   atomicRemoveCartLine,
@@ -12,6 +16,7 @@ import {
   mergeGuestCartIntoAuthenticated,
   refreshCartTtl,
   resolveAnonymousMutationCart,
+  resolveExistingAnonymousMutationCart,
   retireCartById,
 } from "@/lib/cart/persistence";
 
@@ -50,7 +55,7 @@ export function assertAuthorizedLocalPostgresTarget(rawUrl: string | undefined):
   return urlString;
 }
 
-describe("GP-017 CART4-R2 — Real Local PostgreSQL Concurrency & Persistence Suite", () => {
+describe("GP-017 CART4-R3 — Real Local PostgreSQL Concurrency & Persistence Suite", () => {
   const connectionString = assertAuthorizedLocalPostgresTarget(process.env.DATABASE_URL);
 
   let sqlClient: postgres.Sql;
@@ -165,7 +170,7 @@ describe("GP-017 CART4-R2 — Real Local PostgreSQL Concurrency & Persistence Su
     });
   });
 
-  describe("Canonical Concurrency & Persistence Tests Using Production Primitives", () => {
+  describe("Canonical Concurrency & Persistence Tests Using Shared Production Primitives", () => {
     it("A. Concurrent anonymous canonical Cart creation yields exactly one ACTIVE Cart", async () => {
       const sessionToken = `synth_token_anon_create_${Date.now()}_${"A".repeat(15)}`;
       const concurrency = 5;
@@ -362,7 +367,7 @@ describe("GP-017 CART4-R2 — Real Local PostgreSQL Concurrency & Persistence Su
       expect(oldItemInNewCart).toBeUndefined();
     });
 
-    it("G. Expired update lifecycle retires old cart to ABANDONED without modifying line or extending TTL", async () => {
+    it("G. Expired update lifecycle using shared production resolver retires old cart to ABANDONED without modifying line or extending TTL", async () => {
       const sessionToken = `synth_token_upd_exp_${Date.now()}_${"F".repeat(15)}`;
 
       // Setup: Insert expired active cart with variant 1 (quantity 2)
@@ -378,28 +383,15 @@ describe("GP-017 CART4-R2 — Real Local PostgreSQL Concurrency & Persistence Su
         VALUES (${generateUuidV7()}, ${oldCart!.id}, ${variantId1}, 2, NOW(), NOW());
       `;
 
-      // Execute expired update resolution
+      // Execute expired update resolution using shared production primitive
       const updateResult = await testDb.transaction(async (tx) => {
-        const [anonCart] = await tx
-          .select()
-          .from(schema.carts)
-          .where(
-            and(eq(schema.carts.sessionToken, sessionToken), eq(schema.carts.status, "ACTIVE"))
-          )
-          .for("update")
-          .limit(1);
-
-        if (!anonCart || anonCart.expiresAt < new Date()) {
-          if (anonCart) {
-            await retireCartById(anonCart.id, tx);
-          }
-          return { success: false, code: "ITEM_NOT_FOUND" };
-        }
-
-        return { success: true };
+        return resolveExistingAnonymousMutationCart(sessionToken, false, tx);
       });
 
       expect(updateResult.success).toBe(false);
+      if (!updateResult.success) {
+        expect(updateResult.code).toBe("ITEM_NOT_FOUND");
+      }
 
       // Old cart is ABANDONED
       const [oldCartCheck] =
@@ -418,7 +410,7 @@ describe("GP-017 CART4-R2 — Real Local PostgreSQL Concurrency & Persistence Su
       expect(activeCarts).toHaveLength(0);
     });
 
-    it("H. Expired remove lifecycle retires old cart to ABANDONED without deleting line or extending TTL", async () => {
+    it("H. Expired remove lifecycle using shared production resolver retires old cart to ABANDONED without deleting line or extending TTL", async () => {
       const sessionToken = `synth_token_rem_exp_${Date.now()}_${"G".repeat(15)}`;
 
       // Setup: Insert expired active cart with variant 1 (quantity 2)
@@ -434,28 +426,15 @@ describe("GP-017 CART4-R2 — Real Local PostgreSQL Concurrency & Persistence Su
         VALUES (${generateUuidV7()}, ${oldCart!.id}, ${variantId1}, 2, NOW(), NOW());
       `;
 
-      // Execute expired remove resolution
+      // Execute expired remove resolution using shared production primitive
       const removeResult = await testDb.transaction(async (tx) => {
-        const [anonCart] = await tx
-          .select()
-          .from(schema.carts)
-          .where(
-            and(eq(schema.carts.sessionToken, sessionToken), eq(schema.carts.status, "ACTIVE"))
-          )
-          .for("update")
-          .limit(1);
-
-        if (!anonCart || anonCart.expiresAt < new Date()) {
-          if (anonCart) {
-            await retireCartById(anonCart.id, tx);
-          }
-          return { success: false, code: "ITEM_NOT_FOUND" };
-        }
-
-        return { success: true };
+        return resolveExistingAnonymousMutationCart(sessionToken, false, tx);
       });
 
       expect(removeResult.success).toBe(false);
+      if (!removeResult.success) {
+        expect(removeResult.code).toBe("ITEM_NOT_FOUND");
+      }
 
       // Old cart is ABANDONED
       const [oldCartCheck] =
@@ -525,6 +504,114 @@ describe("GP-017 CART4-R2 — Real Local PostgreSQL Concurrency & Persistence Su
       expect(diffDays).toBeGreaterThan(29.9);
       expect(diffDays).toBeLessThan(30.1);
       expect(ANONYMOUS_CART_TTL_DAYS).toBe(30);
+    });
+
+    it("K. ABANDONED token replay rotates strictly to fresh token", async () => {
+      const staleToken = `synth_token_abandoned_${Date.now()}_${"K".repeat(15)}`;
+
+      // Setup: historical ABANDONED cart row with variant 1
+      const [abandonedCart] = await sqlClient`
+        INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${staleToken}, 'ABANDONED', 'PEN', NOW() - INTERVAL '1 day', NOW() - INTERVAL '2 days', NOW())
+        RETURNING id;
+      `;
+      expect(abandonedCart).toBeDefined();
+
+      await sqlClient`
+        INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${abandonedCart!.id}, ${variantId1}, 4, NOW(), NOW());
+      `;
+
+      // Call production anonymous mutation resolver with stale abandoned token
+      const resolution = await testDb.transaction(async (tx) => {
+        return resolveAnonymousMutationCart(staleToken, false, tx);
+      });
+
+      // Token MUST rotate to a fresh server token
+      expect(resolution.authoritativeToken).not.toBe(staleToken);
+      expect(resolution.authoritativeToken).toHaveLength(43);
+      expect(ANONYMOUS_TOKEN_REGEX.test(resolution.authoritativeToken)).toBe(true);
+      expect(resolution.isNewCart).toBe(true);
+
+      // New ACTIVE cart uses fresh token
+      const [activeCart] = await sqlClient`
+        SELECT * FROM carts WHERE id = ${resolution.cart.id}
+      `;
+      expect(activeCart).toBeDefined();
+      expect(activeCart!.status).toBe("ACTIVE");
+      expect(activeCart!.session_token).toBe(resolution.authoritativeToken);
+
+      // 0 ACTIVE carts for staleToken
+      const staleActiveRows = await sqlClient`
+        SELECT * FROM carts WHERE session_token = ${staleToken} AND status = 'ACTIVE'
+      `;
+      expect(staleActiveRows).toHaveLength(0);
+
+      // Historical ABANDONED cart remains unchanged
+      const [histCheck] = await sqlClient`
+        SELECT status FROM carts WHERE id = ${abandonedCart!.id}
+      `;
+      expect(histCheck!.status).toBe("ABANDONED");
+
+      // No old lines revived in new cart
+      const newLines = await sqlClient`
+        SELECT * FROM cart_items WHERE cart_id = ${resolution.cart.id}
+      `;
+      expect(newLines).toHaveLength(0);
+    });
+
+    it("L. CONVERTED token replay rotates strictly to fresh token", async () => {
+      const staleToken = `synth_token_converted_${Date.now()}_${"L".repeat(15)}`;
+
+      // Setup: historical CONVERTED cart row with variant 2
+      const [convertedCart] = await sqlClient`
+        INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${staleToken}, 'CONVERTED', 'PEN', NOW() - INTERVAL '5 days', NOW() - INTERVAL '6 days', NOW())
+        RETURNING id;
+      `;
+      expect(convertedCart).toBeDefined();
+
+      await sqlClient`
+        INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${convertedCart!.id}, ${variantId2}, 3, NOW(), NOW());
+      `;
+
+      // Call production anonymous mutation resolver with stale converted token
+      const resolution = await testDb.transaction(async (tx) => {
+        return resolveAnonymousMutationCart(staleToken, false, tx);
+      });
+
+      // Token MUST rotate to a fresh server token
+      expect(resolution.authoritativeToken).not.toBe(staleToken);
+      expect(resolution.authoritativeToken).toHaveLength(43);
+      expect(ANONYMOUS_TOKEN_REGEX.test(resolution.authoritativeToken)).toBe(true);
+      expect(resolution.isNewCart).toBe(true);
+
+      // New ACTIVE cart uses fresh token
+      const [activeCart] = await sqlClient`
+        SELECT * FROM carts WHERE id = ${resolution.cart.id}
+      `;
+      expect(activeCart).toBeDefined();
+      expect(activeCart!.status).toBe("ACTIVE");
+      expect(activeCart!.session_token).toBe(resolution.authoritativeToken);
+
+      // 0 ACTIVE carts for staleToken
+      const staleActiveRows = await sqlClient`
+        SELECT * FROM carts WHERE session_token = ${staleToken} AND status = 'ACTIVE'
+      `;
+      expect(staleActiveRows).toHaveLength(0);
+
+      // Historical CONVERTED cart remains unchanged
+      const [histCheck] = await sqlClient`
+        SELECT status FROM carts WHERE id = ${convertedCart!.id}
+      `;
+      expect(histCheck!.status).toBe("CONVERTED");
+
+      // No old lines revived in new cart
+      const newLines = await sqlClient`
+        SELECT * FROM cart_items WHERE cart_id = ${resolution.cart.id}
+      `;
+      expect(newLines).toHaveLength(0);
     });
   });
 });

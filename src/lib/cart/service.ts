@@ -19,6 +19,7 @@ import {
   queryCartHydrationLines,
   refreshCartTtl,
   resolveAnonymousMutationCart,
+  resolveExistingAnonymousMutationCart,
   retireCartById,
 } from "./persistence";
 import {
@@ -500,29 +501,17 @@ export async function updateCartItemQuantityAction(
     }
 
     const result = await db.transaction(async (tx) => {
-      const [anonCart] = await tx
-        .select()
-        .from(carts)
-        .where(and(eq(carts.sessionToken, authority.guestToken!), eq(carts.status, "ACTIVE")))
-        .for("update")
-        .limit(1);
+      const cartRes = await resolveExistingAnonymousMutationCart(
+        authority.guestToken,
+        authority.isMalformedGuest,
+        tx
+      );
 
-      if (!anonCart) {
-        return {
-          success: false as const,
-          code: "ITEM_NOT_FOUND" as const,
-          error: "El carrito no fue encontrado o ha expirado.",
-        };
+      if (!cartRes.success) {
+        return cartRes;
       }
 
-      if (anonCart.expiresAt < new Date()) {
-        await retireCartById(anonCart.id, tx);
-        return {
-          success: false as const,
-          code: "ITEM_NOT_FOUND" as const,
-          error: "El carrito no fue encontrado o ha expirado.",
-        };
-      }
+      const anonCart = cartRes.cart;
 
       const [item] = await tx
         .select({
@@ -700,29 +689,17 @@ export async function removeCartItemAction(
     }
 
     const result = await db.transaction(async (tx) => {
-      const [anonCart] = await tx
-        .select()
-        .from(carts)
-        .where(and(eq(carts.sessionToken, authority.guestToken!), eq(carts.status, "ACTIVE")))
-        .for("update")
-        .limit(1);
+      const cartRes = await resolveExistingAnonymousMutationCart(
+        authority.guestToken,
+        authority.isMalformedGuest,
+        tx
+      );
 
-      if (!anonCart) {
-        return {
-          success: false as const,
-          code: "ITEM_NOT_FOUND" as const,
-          error: "El carrito no fue encontrado o ha expirado.",
-        };
+      if (!cartRes.success) {
+        return cartRes;
       }
 
-      if (anonCart.expiresAt < new Date()) {
-        await retireCartById(anonCart.id, tx);
-        return {
-          success: false as const,
-          code: "ITEM_NOT_FOUND" as const,
-          error: "El carrito no fue encontrado o ha expirado.",
-        };
-      }
+      const anonCart = cartRes.cart;
 
       const wasRemoved = await atomicRemoveCartLine(anonCart.id, variantId, tx);
       if (!wasRemoved) {
