@@ -156,7 +156,7 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
     vi.clearAllMocks();
   });
 
-  describe("1. CartProvider State Machine & Stale Response Safety", () => {
+  describe("1. CartProvider State Machine & Synchronous Mutation Lock", () => {
     it("transitions from UNINITIALIZED -> LOADING -> READY on mount", async () => {
       mockLoadCurrentCartAction.mockResolvedValueOnce({
         success: true,
@@ -185,6 +185,23 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
 
       expect(screen.getByTestId("count").textContent).toBe("3");
       expect(mockLoadCurrentCartAction).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws developer error when useCart is used outside CartProvider", () => {
+      function NakedConsumer() {
+        useCart();
+        return <div>naked</div>;
+      }
+
+      // Suppress console.error expected from Error boundary during throw test
+      const originalError = console.error;
+      console.error = vi.fn();
+
+      expect(() => render(<NakedConsumer />)).toThrowError(
+        "useCart must be used within CartProvider"
+      );
+
+      console.error = originalError;
     });
 
     it("transitions to PROFILE_REQUIRED when bootstrap returns PROFILE_REQUIRED", async () => {
@@ -223,7 +240,7 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         return (
           <div>
             <span data-testid="status">{status}</span>
-            <button onClick={() => retryBootstrap()} data-testid="retry-btn">
+            <button onClick={() => void retryBootstrap()} data-testid="retry-btn">
               Retry
             </button>
           </div>
@@ -241,7 +258,7 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
       });
 
       // Trigger manual retry
-      act(() => {
+      await act(async () => {
         screen.getByTestId("retry-btn").click();
       });
 
@@ -252,15 +269,142 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
       expect(mockLoadCurrentCartAction).toHaveBeenCalledTimes(2);
     });
 
+    it("synchronously locks concurrent mutations in the same tick", async () => {
+      mockLoadCurrentCartAction.mockResolvedValueOnce({
+        success: true,
+        cart: sampleCart,
+      });
+      mockAddCartItemAction.mockResolvedValueOnce({
+        success: true,
+        cart: sampleCart,
+      });
+
+      let mutationResult1: boolean | undefined;
+      let mutationResult2: boolean | undefined;
+
+      function ConcurrencyConsumer() {
+        const { addItem } = useCart();
+        return (
+          <button
+            data-testid="dual-mutation-btn"
+            onClick={() => {
+              void addItem("018f0000-0000-7000-8000-00000000c504", 1).then((res) => {
+                mutationResult1 = res;
+              });
+              void addItem("018f0000-0000-7000-8000-00000000c505", 1).then((res) => {
+                mutationResult2 = res;
+              });
+            }}
+          >
+            Trigger Concurrent
+          </button>
+        );
+      }
+
+      render(
+        <CartProvider>
+          <ConcurrencyConsumer />
+        </CartProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("dual-mutation-btn")).toBeDefined();
+      });
+
+      await act(async () => {
+        screen.getByTestId("dual-mutation-btn").click();
+      });
+
+      await waitFor(() => {
+        expect(mutationResult1).toBe(true);
+        expect(mutationResult2).toBe(false);
+      });
+
+      // Only exactly one server action invocation was started
+      expect(mockAddCartItemAction).toHaveBeenCalledTimes(1);
+    });
+
+    it("releases mutation lock after failure so subsequent mutations succeed", async () => {
+      mockLoadCurrentCartAction.mockResolvedValueOnce({
+        success: true,
+        cart: sampleCart,
+      });
+      mockAddCartItemAction
+        .mockRejectedValueOnce(new Error("Network disconnect"))
+        .mockResolvedValueOnce({
+          success: true,
+          cart: sampleCart,
+        });
+
+      let result1: boolean | undefined;
+      let result2: boolean | undefined;
+
+      function RetryConsumer() {
+        const { addItem } = useCart();
+        return (
+          <div>
+            <button
+              data-testid="first-add-btn"
+              onClick={() => {
+                void addItem("018f0000-0000-7000-8000-00000000c504", 1).then((r) => {
+                  result1 = r;
+                });
+              }}
+            >
+              First Add
+            </button>
+            <button
+              data-testid="second-add-btn"
+              onClick={() => {
+                void addItem("018f0000-0000-7000-8000-00000000c504", 1).then((r) => {
+                  result2 = r;
+                });
+              }}
+            >
+              Second Add
+            </button>
+          </div>
+        );
+      }
+
+      render(
+        <CartProvider>
+          <RetryConsumer />
+        </CartProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("first-add-btn")).toBeDefined();
+      });
+
+      // First add fails
+      await act(async () => {
+        screen.getByTestId("first-add-btn").click();
+      });
+
+      await waitFor(() => {
+        expect(result1).toBe(false);
+      });
+
+      // Second add succeeds because lock was released in finally
+      await act(async () => {
+        screen.getByTestId("second-add-btn").click();
+      });
+
+      await waitFor(() => {
+        expect(result2).toBe(true);
+      });
+
+      expect(mockAddCartItemAction).toHaveBeenCalledTimes(2);
+    });
+
     it("prevents stale bootstrap from overwriting newer mutation snapshot", async () => {
-      // 1. Slow bootstrap promise
       let resolveBootstrap!: (val: CartReadResult) => void;
       const slowBootstrapPromise = new Promise<CartReadResult>((resolve) => {
         resolveBootstrap = resolve;
       });
       mockLoadCurrentCartAction.mockReturnValueOnce(slowBootstrapPromise);
 
-      // 2. Fast Add mutation result
       mockAddCartItemAction.mockResolvedValueOnce({
         success: true,
         cart: sampleCart,
@@ -273,7 +417,7 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
             <span data-testid="status">{status}</span>
             <span data-testid="count">{itemCount}</span>
             <button
-              onClick={() => addItem("018f0000-0000-7000-8000-00000000c504", 1)}
+              onClick={() => void addItem("018f0000-0000-7000-8000-00000000c504", 1)}
               data-testid="add-btn"
             >
               Add
@@ -288,8 +432,8 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         </CartProvider>
       );
 
-      // While bootstrap is LOADING, trigger Add mutation
-      act(() => {
+      // Trigger mutation while bootstrap is still pending
+      await act(async () => {
         screen.getByTestId("add-btn").click();
       });
 
@@ -298,12 +442,12 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         expect(screen.getByTestId("status").textContent).toBe("READY");
       });
 
-      // Now resolve the older bootstrap with an empty cart
-      act(() => {
+      // Resolve older bootstrap with empty cart
+      await act(async () => {
         resolveBootstrap({ success: true, cart: emptyCart });
       });
 
-      // Assert that newer mutation snapshot was NOT overwritten by older bootstrap
+      // Assert newer mutation snapshot was NOT overwritten
       expect(screen.getByTestId("count").textContent).toBe("3");
     });
   });
@@ -381,12 +525,19 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
 
       const launcher = screen.getByTestId("cart-launcher-button");
 
-      // Modifier click (Ctrl + Click) should not open drawer
+      // Modifier click (Ctrl + Click): CartLauncher allows browser navigation.
+      // We capture and prevent default navigation on the window to silence jsdom log.
+      const stopNav = (e: MouseEvent) => e.preventDefault();
+      window.addEventListener("click", stopNav, { capture: true });
       fireEvent.click(launcher, { ctrlKey: true });
+      window.removeEventListener("click", stopNav, { capture: true });
       expect(getDialog().open).toBe(false);
 
       // Normal click opens drawer
-      fireEvent.click(launcher);
+      await act(async () => {
+        fireEvent.click(launcher);
+      });
+
       await waitFor(() => {
         expect(getDialog().open).toBe(true);
       });
@@ -452,15 +603,20 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
       expect(screen.getByTestId("cart-trust-box").textContent).toContain("Plin");
     });
 
-    it("renders empty state with catalog link", () => {
+    it("renders empty state with semantic Link and no nested button", () => {
       render(<CartEmptyState actionHref="/categorias/mouses" actionText="Explorar catálogo" />);
 
       expect(screen.getByTestId("cart-empty-state")).toBeDefined();
       expect(screen.getByRole("heading", { name: "Tu carrito está vacío" })).toBeDefined();
+
+      const actionLink = screen.getByTestId("cart-empty-action-link");
+      expect(actionLink.tagName.toLowerCase()).toBe("a");
+      expect(actionLink.getAttribute("href")).toBe("/categorias/mouses");
+      expect(actionLink.querySelector("button")).toBeNull();
     });
   });
 
-  describe("5. ProductCommercePanel Add-to-Cart Integration", () => {
+  describe("5. ProductCommercePanel Add-to-Cart Integration & PROFILE_REQUIRED UX", () => {
     it("submits variant ID and opens drawer on success", async () => {
       mockLoadCurrentCartAction.mockResolvedValueOnce({
         success: true,
@@ -492,7 +648,9 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         expect(getButton("pdp-add-to-cart-button").disabled).toBe(false);
       });
 
-      fireEvent.click(screen.getByTestId("pdp-add-to-cart-button"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("pdp-add-to-cart-button"));
+      });
 
       await waitFor(() => {
         expect(mockAddCartItemAction).toHaveBeenCalledWith(null, {
@@ -505,6 +663,43 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
       await waitFor(() => {
         expect(getDialog().open).toBe(true);
       });
+    });
+
+    it("renders PROFILE_REQUIRED notice and completion link on PDP without opening drawer", async () => {
+      mockLoadCurrentCartAction.mockResolvedValueOnce({
+        success: false,
+        code: "PROFILE_REQUIRED",
+        error: "Profile required",
+      });
+
+      render(
+        <CartProvider>
+          <ProductCommercePanel
+            product={{
+              id: "018f0000-0000-7000-8000-00000000c503",
+              name: "Mouse Cart E2E",
+              subtitle: null,
+            }}
+            brand={{ name: "Gamer Perú", slug: "gamer-peru" }}
+            variants={[sampleVariant]}
+            selectedVariant={sampleVariant}
+            onSelectVariant={vi.fn()}
+          />
+          <CartDrawer />
+        </CartProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("pdp-profile-required-box")).toBeDefined();
+      });
+
+      const profileLink = screen.getByTestId("pdp-complete-profile-link");
+      expect(profileLink.tagName.toLowerCase()).toBe("a");
+      expect(profileLink.getAttribute("href")).toBe("/auth/completar-perfil");
+      expect(profileLink.querySelector("button")).toBeNull();
+
+      // Drawer must remain closed
+      expect(getDialog().open).toBe(false);
     });
 
     it("shows inline alert and does NOT open drawer when product is unavailable", async () => {
@@ -539,7 +734,9 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         expect(getButton("pdp-add-to-cart-button").disabled).toBe(false);
       });
 
-      fireEvent.click(screen.getByTestId("pdp-add-to-cart-button"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("pdp-add-to-cart-button"));
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("pdp-add-to-cart-error")).toBeDefined();
@@ -552,7 +749,12 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
       expect(getDialog().open).toBe(false);
     });
 
-    it("disables Add button with 'No disponible' when variant is inactive", () => {
+    it("disables Add button with 'No disponible' when variant is inactive", async () => {
+      mockLoadCurrentCartAction.mockResolvedValueOnce({
+        success: true,
+        cart: emptyCart,
+      });
+
       const inactiveVariant: ProductVariantDetail = {
         ...sampleVariant,
         status: "DRAFT" as unknown as "ACTIVE",
@@ -574,9 +776,11 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         </CartProvider>
       );
 
-      const btn = getButton("pdp-add-to-cart-button");
-      expect(btn.disabled).toBe(true);
-      expect(btn.textContent).toContain("No disponible");
+      await waitFor(() => {
+        const btn = getButton("pdp-add-to-cart-button");
+        expect(btn.disabled).toBe(true);
+        expect(btn.textContent).toContain("No disponible");
+      });
     });
   });
 
@@ -598,6 +802,10 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         expect(screen.getAllByTestId("cart-line-item")).toHaveLength(2);
         expect(screen.getByTestId("cart-subtotal-value").textContent).toBe("S/ 399.70");
       });
+
+      const continueShoppingLink = screen.getByTestId("cart-page-continue-shopping");
+      expect(continueShoppingLink.tagName.toLowerCase()).toBe("a");
+      expect(continueShoppingLink.querySelector("button")).toBeNull();
     });
 
     it("renders empty state when cart is empty", async () => {
@@ -617,7 +825,7 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
       });
     });
 
-    it("renders profile required on full cart page when status is PROFILE_REQUIRED", async () => {
+    it("renders profile required on full cart page with semantic link and no nested button", async () => {
       mockLoadCurrentCartAction.mockResolvedValueOnce({
         success: false,
         code: "PROFILE_REQUIRED",
@@ -633,6 +841,11 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
       await waitFor(() => {
         expect(screen.getByTestId("cart-page-profile-required")).toBeDefined();
       });
+
+      const profileLink = screen.getByTestId("cart-page-complete-profile");
+      expect(profileLink.tagName.toLowerCase()).toBe("a");
+      expect(profileLink.getAttribute("href")).toBe("/auth/completar-perfil");
+      expect(profileLink.querySelector("button")).toBeNull();
     });
 
     it("renders error state on full cart page when status is ERROR", async () => {
@@ -668,10 +881,14 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         expect(screen.getByTestId("cart-launcher-button")).toBeDefined();
       });
 
-      fireEvent.click(screen.getByTestId("cart-launcher-button"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("cart-launcher-button"));
+      });
       expect(getDialog().open).toBe(true);
 
-      fireEvent.click(screen.getByTestId("cart-drawer-close"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("cart-drawer-close"));
+      });
       expect(getDialog().open).toBe(false);
     });
 
@@ -704,13 +921,17 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         expect(screen.getByTestId("cart-launcher-button")).toBeDefined();
       });
 
-      fireEvent.click(screen.getByTestId("cart-launcher-button"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("cart-launcher-button"));
+      });
 
       const incrementButtons = screen.getAllByTestId("cart-qty-increment");
       const firstIncBtn = incrementButtons[0];
       if (!firstIncBtn) throw new Error("Missing increment button");
 
-      fireEvent.click(firstIncBtn);
+      await act(async () => {
+        fireEvent.click(firstIncBtn);
+      });
 
       await waitFor(() => {
         expect(mockUpdateCartItemQuantityAction).toHaveBeenCalledWith(null, {
@@ -749,13 +970,17 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         expect(screen.getByTestId("cart-launcher-button")).toBeDefined();
       });
 
-      fireEvent.click(screen.getByTestId("cart-launcher-button"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("cart-launcher-button"));
+      });
 
       const removeButtons = screen.getAllByTestId("cart-line-remove");
       const firstRemoveBtn = removeButtons[0];
       if (!firstRemoveBtn) throw new Error("Missing remove button");
 
-      fireEvent.click(firstRemoveBtn);
+      await act(async () => {
+        fireEvent.click(firstRemoveBtn);
+      });
 
       await waitFor(() => {
         expect(mockRemoveCartItemAction).toHaveBeenCalledWith(null, {
@@ -789,7 +1014,9 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
         expect(screen.getByTestId("cart-launcher-button")).toBeDefined();
       });
 
-      fireEvent.click(screen.getByTestId("cart-launcher-button"));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("cart-launcher-button"));
+      });
 
       expect(screen.getByTestId("cart-unavailable-warning")).toBeDefined();
       expect(screen.getByTestId("cart-unavailable-warning").textContent).toContain(
@@ -809,6 +1036,33 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
       render(<CartLine line={lineWithoutMedia} onUpdateQuantity={vi.fn()} onRemove={vi.fn()} />);
 
       expect(screen.getByText("GP")).toBeDefined();
+    });
+
+    it("renders semantic CTA links in CartDrawer without nested button elements", async () => {
+      mockLoadCurrentCartAction.mockResolvedValueOnce({
+        success: true,
+        cart: sampleCart,
+      });
+
+      render(
+        <CartProvider>
+          <CartLauncher />
+          <CartDrawer />
+        </CartProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("cart-launcher-button")).toBeDefined();
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("cart-launcher-button"));
+      });
+
+      const viewFullPageLink = screen.getByTestId("cart-view-full-page");
+      expect(viewFullPageLink.tagName.toLowerCase()).toBe("a");
+      expect(viewFullPageLink.getAttribute("href")).toBe("/carrito");
+      expect(viewFullPageLink.querySelector("button")).toBeNull();
     });
   });
 });

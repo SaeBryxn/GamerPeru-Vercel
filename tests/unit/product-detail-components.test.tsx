@@ -28,6 +28,7 @@ import {
   SWATCH_ALLOWLIST,
   type CommerceHeroProjection,
 } from "@/components/product-detail";
+import { CartProvider } from "@/components/cart";
 
 const MOCK_VARIANT_1: ProductVariantDetail = {
   id: "var-1",
@@ -422,13 +423,15 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
   describe("ProductCommercePanel & Public Safety", () => {
     it("renders selling price in Soles and compare-at discount when valid", () => {
       const html = renderToStaticMarkup(
-        <ProductCommercePanel
-          product={{ id: "prod-1", name: "Beast X Pro", subtitle: "Mouse de Magnesio" }}
-          brand={{ name: "WLMOUSE", slug: "wlmouse" }}
-          variants={[MOCK_VARIANT_1, MOCK_VARIANT_2]}
-          selectedVariant={MOCK_VARIANT_1}
-          onSelectVariant={() => {}}
-        />
+        <CartProvider>
+          <ProductCommercePanel
+            product={{ id: "prod-1", name: "Beast X Pro", subtitle: "Mouse de Magnesio" }}
+            brand={{ name: "WLMOUSE", slug: "wlmouse" }}
+            variants={[MOCK_VARIANT_1, MOCK_VARIANT_2]}
+            selectedVariant={MOCK_VARIANT_1}
+            onSelectVariant={() => {}}
+          />
+        </CartProvider>
       );
 
       expect(html).toContain("Beast X Pro");
@@ -444,13 +447,15 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
 
     it("omits compare-at price when compareAtPriceCents is null or <= priceCents", () => {
       const html = renderToStaticMarkup(
-        <ProductCommercePanel
-          product={{ id: "prod-1", name: "Beast X Pro", subtitle: null }}
-          brand={{ name: "WLMOUSE", slug: "wlmouse" }}
-          variants={[MOCK_VARIANT_2]}
-          selectedVariant={MOCK_VARIANT_2} // compareAtPriceCents is null
-          onSelectVariant={() => {}}
-        />
+        <CartProvider>
+          <ProductCommercePanel
+            product={{ id: "prod-1", name: "Beast X Pro", subtitle: null }}
+            brand={{ name: "WLMOUSE", slug: "wlmouse" }}
+            variants={[MOCK_VARIANT_2]}
+            selectedVariant={MOCK_VARIANT_2} // compareAtPriceCents is null
+            onSelectVariant={() => {}}
+          />
+        </CartProvider>
       );
 
       expect(html).toContain("S/ 589.00");
@@ -459,13 +464,15 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
 
     it("NEVER renders costCents or internal cost data", () => {
       const html = renderToStaticMarkup(
-        <ProductCommercePanel
-          product={{ id: "prod-1", name: "Beast X Pro", subtitle: null }}
-          brand={{ name: "WLMOUSE", slug: "wlmouse" }}
-          variants={[MOCK_VARIANT_1]}
-          selectedVariant={MOCK_VARIANT_1}
-          onSelectVariant={() => {}}
-        />
+        <CartProvider>
+          <ProductCommercePanel
+            product={{ id: "prod-1", name: "Beast X Pro", subtitle: null }}
+            brand={{ name: "WLMOUSE", slug: "wlmouse" }}
+            variants={[MOCK_VARIANT_1]}
+            selectedVariant={MOCK_VARIANT_1}
+            onSelectVariant={() => {}}
+          />
+        </CartProvider>
       );
 
       expect(html).not.toContain("cost");
@@ -475,13 +482,15 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
 
     it("NEVER renders stock claims or delivery estimates", () => {
       const html = renderToStaticMarkup(
-        <ProductCommercePanel
-          product={{ id: "prod-1", name: "Beast X Pro", subtitle: null }}
-          brand={{ name: "WLMOUSE", slug: "wlmouse" }}
-          variants={[MOCK_VARIANT_1]}
-          selectedVariant={MOCK_VARIANT_1}
-          onSelectVariant={() => {}}
-        />
+        <CartProvider>
+          <ProductCommercePanel
+            product={{ id: "prod-1", name: "Beast X Pro", subtitle: null }}
+            brand={{ name: "WLMOUSE", slug: "wlmouse" }}
+            variants={[MOCK_VARIANT_1]}
+            selectedVariant={MOCK_VARIANT_1}
+            onSelectVariant={() => {}}
+          />
+        </CartProvider>
       );
 
       expect(html).not.toContain("En stock");
@@ -518,7 +527,11 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
         media: [MOCK_GLOBAL_MEDIA, MOCK_VARIANT_1_MEDIA, MOCK_VARIANT_2_MEDIA],
       };
 
-      const heroHtml = renderToStaticMarkup(<ProductDetailHero projection={projection} />);
+      const heroHtml = renderToStaticMarkup(
+        <CartProvider>
+          <ProductDetailHero projection={projection} />
+        </CartProvider>
+      );
       expect(heroHtml).toContain("Beast X Pro");
       expect(heroHtml).toContain("WLMOUSE");
       expect(heroHtml).toContain("S/ 589.00");
@@ -534,7 +547,11 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
       );
       expect(galleryHtml).toContain("product-media-gallery");
 
-      const containerHtml = renderToStaticMarkup(<CommerceHeroContainer projection={projection} />);
+      const containerHtml = renderToStaticMarkup(
+        <CartProvider>
+          <CommerceHeroContainer projection={projection} />
+        </CartProvider>
+      );
       expect(containerHtml).toContain("Beast X Pro");
     });
 

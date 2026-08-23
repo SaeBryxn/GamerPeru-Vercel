@@ -42,6 +42,29 @@
 }
 
 .actionLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 var(--space-6);
+  background-color: var(--color-brand-primary, #ff003b);
+  color: #ffffff;
+  font-family: var(--font-heading, "Inter", sans-serif);
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-md, 6px);
   text-decoration: none;
   margin-top: var(--space-3);
+  transition: background-color var(--motion-duration-fast, 150ms) ease;
+  cursor: pointer;
+}
+
+.actionLink:hover {
+  background-color: var(--color-brand-hover, #e60035);
+  color: #ffffff;
+}
+
+.actionLink:focus-visible {
+  outline: 2px solid var(--color-brand-primary, #ff003b);
+  outline-offset: 2px;
 }

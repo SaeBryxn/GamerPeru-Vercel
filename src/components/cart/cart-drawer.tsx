@@ -142,8 +142,9 @@ export function CartDrawer(): React.JSX.Element | null {
                 href="/auth/completar-perfil"
                 onClick={closeDrawer}
                 className={styles.profileActionLink}
+                data-testid="cart-complete-profile-link"
               >
-                <Button variant="primary">Completar Perfil</Button>
+                Completar Perfil
               </Link>
             </div>
           )}
@@ -205,10 +206,13 @@ export function CartDrawer(): React.JSX.Element | null {
             <CartSummary subtotalCents={snapshot.subtotalCents} />
 
             <div className={styles.ctaGroup}>
-              <Link href="/carrito" onClick={closeDrawer} className={styles.ctaLink}>
-                <Button variant="primary" fullWidth data-testid="cart-view-full-page">
-                  Ver carrito
-                </Button>
+              <Link
+                href="/carrito"
+                onClick={closeDrawer}
+                className={styles.viewCartButton}
+                data-testid="cart-view-full-page"
+              >
+                Ver carrito
               </Link>
 
               <Button

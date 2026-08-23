@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, ShoppingCart } from "lucide-react";
 import { useCart } from "@/components/cart";
@@ -32,13 +32,21 @@ export function ProductCommercePanel({
   selectedVariant,
   onSelectVariant,
 }: ProductCommercePanelProps): React.JSX.Element {
-  const { isMutating, pendingVariantIds, addItem, openDrawer, lastError } = useCart();
+  const { status, isMutating, pendingVariantIds, addItem, openDrawer, lastError } = useCart();
   const addButtonRef = useRef<HTMLButtonElement>(null);
+  const [hasAttemptedAdd, setHasAttemptedAdd] = useState(false);
 
   const isPending = isMutating || pendingVariantIds.has(selectedVariant.id);
   const isAvailable = selectedVariant.status === "ACTIVE";
+  const isProfileRequired = status === "PROFILE_REQUIRED";
+
+  const handleSelectVariant = (variant: ProductVariantDetail) => {
+    setHasAttemptedAdd(false);
+    onSelectVariant(variant);
+  };
 
   const handleAddToCart = async () => {
+    setHasAttemptedAdd(true);
     const success = await addItem(selectedVariant.id, 1);
     if (success) {
       openDrawer({ returnFocusTo: addButtonRef.current });
@@ -56,6 +64,8 @@ export function ProductCommercePanel({
           100
       )
     : null;
+
+  const showPdpError = hasAttemptedAdd && Boolean(lastError) && !isPending && !isProfileRequired;
 
   return (
     <div className={styles.panelContainer} data-testid="product-commerce-panel">
@@ -103,24 +113,40 @@ export function ProductCommercePanel({
       <VariantSelector
         variants={variants}
         selectedVariant={selectedVariant}
-        onSelectVariant={onSelectVariant}
+        onSelectVariant={handleSelectVariant}
       />
 
       {/* Primary Add-to-Cart Action */}
       <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
-        <Button
-          ref={addButtonRef}
-          variant="primary"
-          fullWidth
-          onClick={handleAddToCart}
-          disabled={!isAvailable || isPending}
-          data-testid="pdp-add-to-cart-button"
-        >
-          <Icon icon={ShoppingCart} size="md" aria-hidden="true" style={{ marginRight: "8px" }} />
-          {!isAvailable ? "No disponible" : isPending ? "Añadiendo..." : "Añadir al carrito"}
-        </Button>
+        {isProfileRequired ? (
+          <div className={styles.profileRequiredBox} data-testid="pdp-profile-required-box">
+            <div className={styles.profileRequiredMessage}>
+              <Icon icon={AlertCircle} size="sm" aria-hidden="true" style={{ flexShrink: 0 }} />
+              <span>Debes completar tu perfil para utilizar el carrito de compras.</span>
+            </div>
+            <Link
+              href="/auth/completar-perfil"
+              className={styles.profileRequiredLink}
+              data-testid="pdp-complete-profile-link"
+            >
+              Completar perfil
+            </Link>
+          </div>
+        ) : (
+          <Button
+            ref={addButtonRef}
+            variant="primary"
+            fullWidth
+            onClick={handleAddToCart}
+            disabled={!isAvailable || isPending}
+            data-testid="pdp-add-to-cart-button"
+          >
+            <Icon icon={ShoppingCart} size="md" aria-hidden="true" style={{ marginRight: "8px" }} />
+            {!isAvailable ? "No disponible" : isPending ? "Añadiendo..." : "Añadir al carrito"}
+          </Button>
+        )}
 
-        {lastError && !isPending && (
+        {showPdpError && (
           <div
             role="alert"
             style={{

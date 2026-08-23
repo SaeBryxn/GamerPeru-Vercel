@@ -55,8 +55,12 @@ export function CartPageClient(): React.JSX.Element {
             <p className={styles.statusText}>
               Debes completar tu perfil de cliente para poder gestionar tu carrito de compras.
             </p>
-            <Link href="/auth/completar-perfil" className={styles.statusLink}>
-              <Button variant="primary">Completar Perfil</Button>
+            <Link
+              href="/auth/completar-perfil"
+              className={styles.statusLink}
+              data-testid="cart-page-complete-profile"
+            >
+              Completar Perfil
             </Link>
           </div>
         )}
@@ -67,7 +71,11 @@ export function CartPageClient(): React.JSX.Element {
             <Icon icon={AlertCircle} size="xl" className={styles.statusIcon} aria-hidden="true" />
             <h2 className={styles.statusTitle}>Error al cargar el carrito</h2>
             <p className={styles.statusText}>No pudimos recuperar tu carrito en este momento.</p>
-            <Button variant="secondary" onClick={() => retryBootstrap()}>
+            <Button
+              variant="secondary"
+              onClick={() => retryBootstrap()}
+              data-testid="cart-page-retry"
+            >
               <Icon icon={RefreshCw} size="sm" aria-hidden="true" style={{ marginRight: "6px" }} />
               Reintentar
             </Button>
@@ -106,8 +114,12 @@ export function CartPageClient(): React.JSX.Element {
               </div>
 
               <div className={styles.continueShoppingRow}>
-                <Link href="/categorias/mouses" className={styles.continueShoppingLink}>
-                  <Button variant="ghost">← Seguir explorando catálogo</Button>
+                <Link
+                  href="/categorias/mouses"
+                  className={styles.continueShoppingLink}
+                  data-testid="cart-page-continue-shopping"
+                >
+                  ← Seguir explorando catálogo
                 </Link>
               </div>
             </div>

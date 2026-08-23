@@ -63,3 +63,60 @@ jobs:
 
       - name: Run E2E & Accessibility Tests
         run: pnpm test:e2e
+
+  cart-e2e:
+    name: Real Local Supabase Cart E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Local Supabase
+        run: pnpm supabase:start
+
+      - name: Verify Supabase Status & Extract Real Local Anon Key
+        run: |
+          pnpm supabase:status
+          STATUS_ENV=$(pnpm exec supabase status -o env)
+          ANON_KEY=$(echo "$STATUS_ENV" | grep 'ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          API_URL=$(echo "$STATUS_ENV" | grep 'API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL:-http://127.0.0.1:54321}" >> $GITHUB_ENV
+          echo "DATABASE_MIGRATION_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+          echo "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+
+      - name: Run Database Migrations
+        run: pnpm db:migrate
+
+      - name: Seed Deterministic Cart E2E Fixtures
+        run: node scripts/test/seed-cart-e2e.mjs
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Real Cart E2E Tests
+        run: pnpm test:cart:e2e
+
+      - name: Clean Up Cart E2E Fixtures
+        if: always()
+        run: node scripts/test/cleanup-cart-e2e.mjs
+
+      - name: Stop Local Supabase
+        if: always()
+        run: pnpm supabase:stop

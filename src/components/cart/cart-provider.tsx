@@ -49,6 +49,7 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
   const [announcement, setAnnouncement] = useState<string | null>(null);
 
   const requestGenerationRef = useRef<number>(0);
+  const mutationLockRef = useRef<boolean>(false);
   const openerElementRef = useRef<HTMLElement | null>(null);
 
   // Announce to screen readers
@@ -114,7 +115,8 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
   // 3. Add Item Mutation
   const addItem = useCallback(
     async (variantId: string, quantity = 1): Promise<boolean> => {
-      if (isMutating) return false;
+      if (mutationLockRef.current) return false;
+      mutationLockRef.current = true;
 
       const generation = ++requestGenerationRef.current;
       setIsMutating(true);
@@ -153,6 +155,7 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
         }
         return false;
       } finally {
+        mutationLockRef.current = false;
         setIsMutating(false);
         setPendingVariantIds((prev) => {
           const next = new Set(prev);
@@ -161,13 +164,14 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
         });
       }
     },
-    [isMutating, announce]
+    [announce]
   );
 
   // 4. Update Quantity Mutation
   const updateQuantity = useCallback(
     async (variantId: string, quantity: number): Promise<boolean> => {
-      if (isMutating) return false;
+      if (mutationLockRef.current) return false;
+      mutationLockRef.current = true;
 
       const generation = ++requestGenerationRef.current;
       setIsMutating(true);
@@ -200,6 +204,7 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
         }
         return false;
       } finally {
+        mutationLockRef.current = false;
         setIsMutating(false);
         setPendingVariantIds((prev) => {
           const next = new Set(prev);
@@ -208,13 +213,14 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
         });
       }
     },
-    [isMutating, announce]
+    [announce]
   );
 
   // 5. Remove Item Mutation
   const removeItem = useCallback(
     async (variantId: string): Promise<boolean> => {
-      if (isMutating) return false;
+      if (mutationLockRef.current) return false;
+      mutationLockRef.current = true;
 
       const generation = ++requestGenerationRef.current;
       setIsMutating(true);
@@ -247,6 +253,7 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
         }
         return false;
       } finally {
+        mutationLockRef.current = false;
         setIsMutating(false);
         setPendingVariantIds((prev) => {
           const next = new Set(prev);
@@ -255,7 +262,7 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
         });
       }
     },
-    [isMutating, announce]
+    [announce]
   );
 
   const itemCount = snapshot?.itemCount ?? 0;
@@ -290,25 +297,10 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
   );
 }
 
-const defaultCartContextValue: CartContextValue = {
-  status: "UNINITIALIZED",
-  snapshot: null,
-  itemCount: 0,
-  isDrawerOpen: false,
-  isMutating: false,
-  pendingVariantIds: new Set(),
-  lastError: null,
-  announcement: null,
-  openDrawer: () => {},
-  closeDrawer: () => {},
-  addItem: async () => false,
-  updateQuantity: async () => false,
-  removeItem: async () => false,
-  retryBootstrap: async () => {},
-  openerElementRef: { current: null },
-};
-
 export function useCart(): CartContextValue {
   const context = useContext(CartContext);
-  return context ?? defaultCartContextValue;
+  if (!context) {
+    throw new Error("useCart must be used within CartProvider");
+  }
+  return context;
 }

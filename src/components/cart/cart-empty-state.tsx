@@ -36,8 +36,13 @@ export function CartEmptyState({
       </p>
 
       {actionHref.startsWith("/") ? (
-        <Link href={actionHref} onClick={onActionClick} className={styles.actionLink}>
-          <Button variant="primary">{actionText}</Button>
+        <Link
+          href={actionHref}
+          onClick={onActionClick}
+          className={styles.actionLink}
+          data-testid="cart-empty-action-link"
+        >
+          {actionText}
         </Link>
       ) : (
         <Button variant="primary" onClick={onActionClick}>
