@@ -129,23 +129,6 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader, Pr
   async getPublishedProductBySlug(slug: string): Promise<ProductDetailEntity | null> {
     if (process.env.CART_E2E_FIXTURES === "1" && slug === "mouse-cart-e2e") {
       const cartCatalog = (await import("../../../tests/fixtures/cart-e2e-catalog.json")).default;
-      const media = [
-        {
-          id: "018f0000-0000-7000-8000-00000000c5m1",
-          productId: cartCatalog.product.id,
-          mediaAssetId: "018f0000-0000-7000-8000-00000000c5a1",
-          variantId: null,
-          displayOrder: 1,
-          asset: {
-            objectKey: "products/mouse-cart-e2e/hero.png",
-            mimeType: "image/png",
-            fileSizeBytes: 204800,
-            width: 1200,
-            height: 1200,
-            altText: "Mouse Cart E2E",
-          },
-        },
-      ];
       return {
         id: cartCatalog.product.id,
         name: cartCatalog.product.name,
@@ -167,7 +150,7 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader, Pr
           slug: cartCatalog.category.slug,
           description: "Categoría para pruebas de carrito E2E.",
         },
-        primaryMedia: media[0] ?? null,
+        primaryMedia: null,
         variants: cartCatalog.variants.map((v) => ({
           id: v.id,
           productId: v.productId,
@@ -180,7 +163,7 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader, Pr
           status: "ACTIVE" as const,
           attributes: v.attributes,
         })),
-        media,
+        media: [],
         specifications: null,
         story: null,
       };

@@ -1,5 +1,43 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+
+/**
+ * Reusable deterministic PDP Add-to-Cart helper with rich diagnostic feedback.
+ */
+async function addFixtureProductAndRequireSuccess(page: Page) {
+  const addBtn = page.getByTestId("pdp-add-to-cart-button");
+  await expect(addBtn).toBeVisible();
+  await expect(addBtn).toBeEnabled();
+
+  // Click Add to Cart
+  await addBtn.click();
+
+  // Terminal UI outcomes: Drawer open (success), PDP error alert (mutation failure), or Profile Required
+  const drawer = page.getByTestId("cart-drawer");
+  const errorAlert = page.getByTestId("pdp-add-to-cart-error");
+  const profileRequiredBox = page.getByTestId("pdp-profile-required-box");
+
+  await expect(async () => {
+    const isErrorVisible = await errorAlert.isVisible().catch(() => false);
+    if (isErrorVisible) {
+      const errorText = (await errorAlert.textContent()) ?? "Unknown error";
+      throw new Error(`PDP Add-to-Cart failed with error alert: "${errorText.trim()}"`);
+    }
+
+    const isProfileRequiredVisible = await profileRequiredBox.isVisible().catch(() => false);
+    if (isProfileRequiredVisible) {
+      throw new Error(
+        "PDP Add-to-Cart resulted in unexpected PROFILE_REQUIRED in anonymous test session."
+      );
+    }
+
+    const isDrawerOpen = await drawer.isVisible().catch(() => false);
+    expect(isDrawerOpen).toBe(true);
+  }).toPass({ timeout: 15000, intervals: [200, 500, 1000] });
+
+  await expect(drawer).toBeVisible();
+  return drawer;
+}
 
 test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
   test.beforeEach(async ({ page }) => {
@@ -45,23 +83,15 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     const commercePanel = page.getByTestId("product-commerce-panel");
     await expect(commercePanel).toBeVisible();
 
-    const addBtn = page.getByTestId("pdp-add-to-cart-button");
-    await expect(addBtn).toBeVisible();
-    await expect(addBtn).toBeEnabled();
+    // 2. Add product via diagnostic helper
+    await addFixtureProductAndRequireSuccess(page);
 
-    // 2. Click Add to Cart
-    await addBtn.click();
-
-    // 3. Drawer opens automatically
-    const drawer = page.getByTestId("cart-drawer");
-    await expect(drawer).toBeVisible();
-
-    // 4. Verify item in drawer
+    // 3. Verify item in drawer
     const lineItem = page.getByTestId("cart-line-item");
     await expect(lineItem).toHaveCount(1);
     await expect(page.getByTestId("cart-subtotal-value")).toHaveText("S/ 129.90");
 
-    // 5. Header launcher badge is updated to 1
+    // 4. Header launcher badge is updated to 1
     const badge = page.getByTestId("cart-badge-count");
     await expect(badge).toHaveText("1");
   });
@@ -70,11 +100,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await page.goto("/productos/mouse-cart-e2e");
 
     // 1. Add item
-    const addBtn = page.getByTestId("pdp-add-to-cart-button");
-    await addBtn.click();
-
-    const drawer = page.getByTestId("cart-drawer");
-    await expect(drawer).toBeVisible();
+    await addFixtureProductAndRequireSuccess(page);
 
     // 2. Quantity stepper: Increment to 2
     const incBtn = page.getByTestId("cart-qty-increment");
@@ -106,11 +132,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await page.goto("/productos/mouse-cart-e2e");
 
     // 1. Add Black variant (default)
-    const addBtn = page.getByTestId("pdp-add-to-cart-button");
-    await addBtn.click();
-
-    const drawer = page.getByTestId("cart-drawer");
-    await expect(drawer).toBeVisible();
+    const drawer = await addFixtureProductAndRequireSuccess(page);
 
     // Close drawer
     await page.getByTestId("cart-drawer-close").click();
@@ -123,10 +145,9 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     }
 
     // Add White variant
-    await addBtn.click();
-    await expect(drawer).toBeVisible();
+    await addFixtureProductAndRequireSuccess(page);
 
-    // 3. Verify 2 lines in drawer
+    // 3. Verify 2 items in badge
     await expect(page.getByTestId("cart-badge-count")).toHaveText("2");
 
     // 4. Navigate to full /carrito page via drawer primary CTA
@@ -150,18 +171,15 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await page.goto("/productos/mouse-cart-e2e");
 
     // Add item
-    await page.getByTestId("pdp-add-to-cart-button").click();
-    await expect(page.getByTestId("cart-drawer")).toBeVisible();
+    await addFixtureProductAndRequireSuccess(page);
 
-    // Verify HttpOnly cookie exists
+    // Verify HttpOnly cookie exists with canonical security attributes
     const cookies = await context.cookies();
     const sessionCookie = cookies.find((c) => c.name === "gp_cart_session");
     expect(sessionCookie).toBeDefined();
     expect(sessionCookie?.httpOnly).toBe(true);
     expect(sessionCookie?.path).toBe("/");
-    expect(["Lax", "None", "Strict", "lax", "none", "strict"]).toContain(
-      sessionCookie?.sameSite ?? "Lax"
-    );
+    expect(sessionCookie?.sameSite?.toLowerCase()).toBe("lax");
 
     // Reload page
     await page.reload();
@@ -211,9 +229,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     expect(scrollWidth).toBeLessThanOrEqual(innerWidth);
 
     // Add item
-    await page.getByTestId("pdp-add-to-cart-button").click();
-    const drawer = page.getByTestId("cart-drawer");
-    await expect(drawer).toBeVisible();
+    const drawer = await addFixtureProductAndRequireSuccess(page);
 
     // Close control reachable
     const closeBtn = page.getByTestId("cart-drawer-close");
@@ -234,9 +250,9 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await page.goto("/productos/mouse-cart-e2e");
 
     // Add item
-    await page.getByTestId("pdp-add-to-cart-button").click();
-    await expect(page.getByTestId("cart-drawer")).toBeVisible();
+    const drawer = await addFixtureProductAndRequireSuccess(page);
     await page.getByTestId("cart-drawer-close").click();
+    await expect(drawer).not.toBeVisible();
 
     // Navigate to /carrito
     await page.goto("/carrito");
@@ -254,7 +270,6 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
 
     // Open drawer and verify it reflects the same updated state
     await page.getByTestId("desktop-cart-launcher").click();
-    const drawer = page.getByTestId("cart-drawer");
     await expect(drawer).toBeVisible();
     await expect(drawer.getByTestId("cart-qty-value")).toHaveText("2");
   });
@@ -263,9 +278,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await page.goto("/productos/mouse-cart-e2e");
 
     // Add item and open drawer
-    await page.getByTestId("pdp-add-to-cart-button").click();
-    const drawer = page.getByTestId("cart-drawer");
-    await expect(drawer).toBeVisible();
+    await addFixtureProductAndRequireSuccess(page);
 
     // Run Axe audit
     const axeResults = await new AxeBuilder({ page }).analyze();
@@ -280,9 +293,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/productos/mouse-cart-e2e");
 
-    await page.getByTestId("pdp-add-to-cart-button").click();
-    const drawer = page.getByTestId("cart-drawer");
-    await expect(drawer).toBeVisible();
+    const drawer = await addFixtureProductAndRequireSuccess(page);
 
     await page.getByTestId("cart-drawer-close").click();
     await expect(drawer).not.toBeVisible();
@@ -302,8 +313,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     });
 
     await page.goto("/productos/mouse-cart-e2e");
-    await page.getByTestId("pdp-add-to-cart-button").click();
-    await expect(page.getByTestId("cart-drawer")).toBeVisible();
+    await addFixtureProductAndRequireSuccess(page);
 
     expect(unapprovedHosts).toEqual([]);
   });
