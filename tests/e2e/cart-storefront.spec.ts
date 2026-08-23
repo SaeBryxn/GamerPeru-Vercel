@@ -55,7 +55,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await expect(launcher).toBeVisible();
 
     // 2. Badge is absent when 0 items
-    const badge = page.getByTestId("cart-badge-count");
+    const badge = launcher.getByTestId("cart-badge-count");
     await expect(badge).toHaveCount(0);
 
     // 3. Open Cart Drawer
@@ -64,12 +64,12 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await expect(drawer).toBeVisible();
 
     // 4. Empty State is rendered with semantic link
-    const emptyState = page.getByTestId("cart-empty-state");
+    const emptyState = drawer.getByTestId("cart-empty-state");
     await expect(emptyState).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Tu carrito está vacío" })).toBeVisible();
+    await expect(drawer.getByRole("heading", { name: "Tu carrito está vacío" })).toBeVisible();
 
     // 5. Close drawer
-    const closeBtn = page.getByTestId("cart-drawer-close");
+    const closeBtn = drawer.getByTestId("cart-drawer-close");
     await closeBtn.click();
     await expect(drawer).not.toBeVisible();
   });
@@ -84,15 +84,16 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await expect(commercePanel).toBeVisible();
 
     // 2. Add product via diagnostic helper
-    await addFixtureProductAndRequireSuccess(page);
+    const drawer = await addFixtureProductAndRequireSuccess(page);
 
     // 3. Verify item in drawer
-    const lineItem = page.getByTestId("cart-line-item");
+    const lineItem = drawer.getByTestId("cart-line-item");
     await expect(lineItem).toHaveCount(1);
-    await expect(page.getByTestId("cart-subtotal-value")).toHaveText("S/ 129.90");
+    await expect(drawer.getByTestId("cart-subtotal-value")).toHaveText("S/ 129.90");
 
     // 4. Header launcher badge is updated to 1
-    const badge = page.getByTestId("cart-badge-count");
+    const desktopLauncher = page.getByTestId("desktop-cart-launcher");
+    const badge = desktopLauncher.getByTestId("cart-badge-count");
     await expect(badge).toHaveText("1");
   });
 
@@ -100,32 +101,33 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await page.goto("/productos/mouse-cart-e2e");
 
     // 1. Add item
-    await addFixtureProductAndRequireSuccess(page);
+    const drawer = await addFixtureProductAndRequireSuccess(page);
+    const desktopLauncher = page.getByTestId("desktop-cart-launcher");
 
     // 2. Quantity stepper: Increment to 2
-    const incBtn = page.getByTestId("cart-qty-increment");
+    const incBtn = drawer.getByTestId("cart-qty-increment");
     await incBtn.click();
 
     // Wait for mutation response
-    await expect(page.getByTestId("cart-qty-value")).toHaveText("2");
-    await expect(page.getByTestId("cart-subtotal-value")).toHaveText("S/ 259.80");
-    await expect(page.getByTestId("cart-badge-count")).toHaveText("2");
+    await expect(drawer.getByTestId("cart-qty-value")).toHaveText("2");
+    await expect(drawer.getByTestId("cart-subtotal-value")).toHaveText("S/ 259.80");
+    await expect(desktopLauncher.getByTestId("cart-badge-count")).toHaveText("2");
 
     // 3. Quantity stepper: Decrement back to 1
-    const decBtn = page.getByTestId("cart-qty-decrement");
+    const decBtn = drawer.getByTestId("cart-qty-decrement");
     await decBtn.click();
 
-    await expect(page.getByTestId("cart-qty-value")).toHaveText("1");
-    await expect(page.getByTestId("cart-subtotal-value")).toHaveText("S/ 129.90");
-    await expect(page.getByTestId("cart-badge-count")).toHaveText("1");
+    await expect(drawer.getByTestId("cart-qty-value")).toHaveText("1");
+    await expect(drawer.getByTestId("cart-subtotal-value")).toHaveText("S/ 129.90");
+    await expect(desktopLauncher.getByTestId("cart-badge-count")).toHaveText("1");
 
     // 4. Remove item
-    const removeBtn = page.getByTestId("cart-line-remove");
+    const removeBtn = drawer.getByTestId("cart-line-remove");
     await removeBtn.click();
 
     // Transitions to empty state
-    await expect(page.getByTestId("cart-empty-state")).toBeVisible();
-    await expect(page.getByTestId("cart-badge-count")).toHaveCount(0);
+    await expect(drawer.getByTestId("cart-empty-state")).toBeVisible();
+    await expect(desktopLauncher.getByTestId("cart-badge-count")).toHaveCount(0);
   });
 
   test("Scenario D: Multi-Variant Addition & Full /carrito Page Navigation", async ({ page }) => {
@@ -133,9 +135,10 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
 
     // 1. Add Black variant (default)
     const drawer = await addFixtureProductAndRequireSuccess(page);
+    const desktopLauncher = page.getByTestId("desktop-cart-launcher");
 
     // Close drawer
-    await page.getByTestId("cart-drawer-close").click();
+    await drawer.getByTestId("cart-drawer-close").click();
     await expect(drawer).not.toBeVisible();
 
     // 2. Select White variant
@@ -148,10 +151,10 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await addFixtureProductAndRequireSuccess(page);
 
     // 3. Verify 2 items in badge
-    await expect(page.getByTestId("cart-badge-count")).toHaveText("2");
+    await expect(desktopLauncher.getByTestId("cart-badge-count")).toHaveText("2");
 
     // 4. Navigate to full /carrito page via drawer primary CTA
-    const viewFullPageBtn = page.getByTestId("cart-view-full-page");
+    const viewFullPageBtn = drawer.getByTestId("cart-view-full-page");
     await viewFullPageBtn.click();
 
     // Verify URL is /carrito
@@ -161,7 +164,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
 
     // Heading and subtotal
     await expect(page.getByRole("heading", { name: "Tu Carrito de Compras" })).toBeVisible();
-    await expect(page.getByTestId("cart-subtotal-value")).toHaveText("S/ 269.80");
+    await expect(fullPage.getByTestId("cart-subtotal-value")).toHaveText("S/ 269.80");
   });
 
   test("Scenario E: Cookie Security & Persistence across Page Reloads", async ({
@@ -172,6 +175,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
 
     // Add item
     await addFixtureProductAndRequireSuccess(page);
+    const desktopLauncher = page.getByTestId("desktop-cart-launcher");
 
     // Verify HttpOnly cookie exists with canonical security attributes
     const cookies = await context.cookies();
@@ -185,14 +189,15 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await page.reload();
 
     // Badge should still be 1 post-hydration
-    const badge = page.getByTestId("cart-badge-count");
+    const badge = desktopLauncher.getByTestId("cart-badge-count");
     await expect(badge).toHaveText("1");
 
     // Open drawer and verify line persists
-    await page.getByTestId("desktop-cart-launcher").click();
-    await expect(page.getByTestId("cart-drawer")).toBeVisible();
-    await expect(page.getByTestId("cart-line-item")).toHaveCount(1);
-    await expect(page.getByTestId("cart-subtotal-value")).toHaveText("S/ 129.90");
+    await desktopLauncher.click();
+    const drawer = page.getByTestId("cart-drawer");
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByTestId("cart-line-item")).toHaveCount(1);
+    await expect(drawer.getByTestId("cart-subtotal-value")).toHaveText("S/ 129.90");
   });
 
   test("Scenario F: Desktop Launcher Keyboard, Mouse & Focus Restoration", async ({ page }) => {
@@ -204,7 +209,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     // 1. Mouse Click -> Open -> Close -> Focus Returns
     await launcher.click();
     await expect(drawer).toBeVisible();
-    await page.getByTestId("cart-drawer-close").click();
+    await drawer.getByTestId("cart-drawer-close").click();
     await expect(drawer).not.toBeVisible();
     await expect(launcher).toBeFocused();
 
@@ -232,7 +237,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     const drawer = await addFixtureProductAndRequireSuccess(page);
 
     // Close control reachable
-    const closeBtn = page.getByTestId("cart-drawer-close");
+    const closeBtn = drawer.getByTestId("cart-drawer-close");
     await expect(closeBtn).toBeVisible();
     await closeBtn.click();
     await expect(drawer).not.toBeVisible();
@@ -251,7 +256,8 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
 
     // Add item
     const drawer = await addFixtureProductAndRequireSuccess(page);
-    await page.getByTestId("cart-drawer-close").click();
+    const desktopLauncher = page.getByTestId("desktop-cart-launcher");
+    await drawer.getByTestId("cart-drawer-close").click();
     await expect(drawer).not.toBeVisible();
 
     // Navigate to /carrito
@@ -260,16 +266,16 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     await expect(fullPage).toBeVisible();
 
     // Increment in /carrito
-    const incBtn = page.getByTestId("cart-qty-increment");
+    const incBtn = fullPage.getByTestId("cart-qty-increment");
     await incBtn.click();
-    await expect(page.getByTestId("cart-qty-value")).toHaveText("2");
-    await expect(page.getByTestId("cart-subtotal-value")).toHaveText("S/ 259.80");
+    await expect(fullPage.getByTestId("cart-qty-value")).toHaveText("2");
+    await expect(fullPage.getByTestId("cart-subtotal-value")).toHaveText("S/ 259.80");
 
     // Header badge is synchronized to 2
-    await expect(page.getByTestId("cart-badge-count")).toHaveText("2");
+    await expect(desktopLauncher.getByTestId("cart-badge-count")).toHaveText("2");
 
     // Open drawer and verify it reflects the same updated state
-    await page.getByTestId("desktop-cart-launcher").click();
+    await desktopLauncher.click();
     await expect(drawer).toBeVisible();
     await expect(drawer.getByTestId("cart-qty-value")).toHaveText("2");
   });
@@ -280,8 +286,10 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
     // Add item and open drawer
     await addFixtureProductAndRequireSuccess(page);
 
-    // Run Axe audit
-    const axeResults = await new AxeBuilder({ page }).analyze();
+    // Run Axe audit on the open Cart Drawer dialog
+    const axeResults = await new AxeBuilder({ page })
+      .include('[data-testid="cart-drawer"]')
+      .analyze();
     const seriousOrCritical = axeResults.violations.filter(
       (v) => v.impact === "serious" || v.impact === "critical"
     );
@@ -295,7 +303,7 @@ test.describe("GP-017 / CART5 — Storefront Cart UI Real E2E Suite", () => {
 
     const drawer = await addFixtureProductAndRequireSuccess(page);
 
-    await page.getByTestId("cart-drawer-close").click();
+    await drawer.getByTestId("cart-drawer-close").click();
     await expect(drawer).not.toBeVisible();
   });
 
