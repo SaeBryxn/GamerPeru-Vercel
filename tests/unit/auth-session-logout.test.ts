@@ -36,6 +36,12 @@ vi.mock("@/lib/auth/claims", () => ({
   getVerifiedIdentity: () => mockGetVerifiedIdentity(),
 }));
 
+// Mock getCurrentCustomerProfile
+const mockGetCurrentCustomerProfile = vi.fn();
+vi.mock("@/lib/account/profile", () => ({
+  getCurrentCustomerProfile: () => mockGetCurrentCustomerProfile(),
+}));
+
 describe("GP-015 AUTH9-A — Account Logout & Session Lifecycle Suite", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -130,9 +136,8 @@ describe("GP-015 AUTH9-A — Account Logout & Session Lifecycle Suite", () => {
   });
 
   it("I. proves /cuenta page redirects unauthenticated users to /auth/login", async () => {
-    mockGetVerifiedIdentity.mockResolvedValueOnce({
-      success: false,
-      error: "No authenticated session found",
+    mockGetCurrentCustomerProfile.mockResolvedValueOnce({
+      status: "UNAUTHENTICATED",
     });
 
     const { default: CuentaPage } = await import("@/app/cuenta/page");
@@ -146,20 +151,28 @@ describe("GP-015 AUTH9-A — Account Logout & Session Lifecycle Suite", () => {
     expect(mockRedirect).toHaveBeenCalledWith("/auth/login");
   });
 
-  it("J & K. proves /cuenta page renders for verified user and uses getVerifiedIdentity", async () => {
-    mockGetVerifiedIdentity.mockResolvedValueOnce({
-      success: true,
-      identity: {
+  it("J & K. proves /cuenta page renders for verified user and uses getCurrentCustomerProfile", async () => {
+    mockGetCurrentCustomerProfile.mockResolvedValueOnce({
+      status: "READY",
+      profile: {
+        id: "018f0000-0000-7000-8000-000000000001",
         authUserId: "018f0000-0000-7000-8000-000000000001",
+        firstName: "Test",
+        lastName: "User",
+        phone: "+51999999999",
+        documentType: "DNI",
+        documentNumber: "12345678",
+        defaultShippingAddressId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         email: "test@gamerperu.pe",
-        claims: { sub: "018f0000-0000-7000-8000-000000000001", email: "test@gamerperu.pe" },
       },
     });
 
     const { default: CuentaPage } = await import("@/app/cuenta/page");
     const jsx = await CuentaPage();
 
-    expect(mockGetVerifiedIdentity).toHaveBeenCalledTimes(1);
+    expect(mockGetCurrentCustomerProfile).toHaveBeenCalledTimes(1);
     expect(jsx).toBeDefined();
   });
 

@@ -14,6 +14,7 @@ export default [
       "playwright-report/**",
       "test-results/**",
       "next-env.d.ts",
+      "supabase/.temp/**",
     ],
   },
   {

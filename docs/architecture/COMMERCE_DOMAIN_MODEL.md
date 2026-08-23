@@ -1733,15 +1733,15 @@ _Forbidden Transitions_: `PAID` $\to$ `VOIDED` (post-payout refunds insert `Comm
 
 ## 64. Business Policy TBD Boundary
 
-The following commercial decisions remain explicitly **`[TBD BUSINESS DECISION]`** and are configured via parameters without hardcoded domain logic:
+The following commercial decisions are configured via domain parameters without hardcoded logic. Items 6 and 7 were authoritatively resolved in GP-017, while remaining items remain explicitly **`[TBD BUSINESS DECISION]`**:
 
 1. **Courier Provider & API Integrations**: Shalom, Olva, domestic couriers.
 2. **Delivery SLA & Shipping Rates**: Fixed/dynamic rates per Peruvian department.
 3. **Warranty Duration & Return Window**: Return eligibility periods (e.g. 7, 15, or 30 days).
 4. **Reservation Hold TTL**: Numeric unpaid checkout duration (`RESERVATION_TTL_MINUTES`, e.g. 15, 30, or 60 minutes).
 5. **Resubmission Grace Duration**: Time window to resubmit voucher upon non-terminal rejection (`PAYMENT_RESUBMISSION_GRACE_DURATION`).
-6. **Cart Expiry Duration**: Transient cart lifetime (`CART_EXPIRY_DURATION`: 30 days anonymous, 60 days authenticated with sliding TTL, resolved in GP-017).
-7. **Max Cart Line Quantity**: Per-item ceiling (`MAX_CART_LINE_QUANTITY = 10`, resolved in GP-017).
+6. **Cart Expiry Duration** _(Resolved in GP-017)_: Transient cart lifetime (`CART_EXPIRY_DURATION`: 30 days anonymous, 60 days authenticated with sliding TTL refreshed on mutation).
+7. **Max Cart Line Quantity** _(Resolved in GP-017)_: Per-item ceiling (`MAX_CART_LINE_QUANTITY = 10`).
 8. **Max Coupons Per Order**: Maximum coupon count per checkout (`MAX_COUPONS_PER_ORDER`).
 9. **Growth Attribution Precedence**: Priority between referral and affiliate tracking (`GROWTH_ATTRIBUTION_PRECEDENCE`).
 10. **Affiliate Attribution Window**: Maturation period for referral cookies (`AFFILIATE_ATTRIBUTION_WINDOW_DAYS`).
