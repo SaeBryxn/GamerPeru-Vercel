@@ -64,6 +64,8 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: false,
     timeout: 120000,
+    stdout: "pipe",
+    stderr: "pipe",
     env: {
       ...process.env,
       CART_E2E_FIXTURES: "1",

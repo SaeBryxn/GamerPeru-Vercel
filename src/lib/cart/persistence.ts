@@ -90,7 +90,10 @@ export async function getOrCreateActiveCart(
         currency: CANONICAL_CART_CURRENCY,
         expiresAt,
       })
-      .onConflictDoNothing({ target: carts.customerId, where: sql`${carts.status} = 'ACTIVE'` })
+      .onConflictDoNothing({
+        target: carts.customerId,
+        where: sql`${carts.status} = 'ACTIVE' AND ${carts.customerId} IS NOT NULL`,
+      })
       .returning();
 
     if (inserted) {
@@ -138,7 +141,10 @@ export async function getOrCreateActiveCart(
       currency: CANONICAL_CART_CURRENCY,
       expiresAt,
     })
-    .onConflictDoNothing({ target: carts.sessionToken, where: sql`${carts.status} = 'ACTIVE'` })
+    .onConflictDoNothing({
+      target: carts.sessionToken,
+      where: sql`${carts.status} = 'ACTIVE' AND ${carts.sessionToken} IS NOT NULL`,
+    })
     .returning();
 
   if (inserted) {
