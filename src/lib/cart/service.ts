@@ -1,17 +1,25 @@
 import "server-only";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { cartItems, carts, mediaAssets, productVariants, products, type Cart } from "@/db/schema";
-import { generateUuidV7 } from "@/db/utils/uuid";
+import { cartItems, carts, productVariants, products } from "@/db/schema";
 import { logger } from "@/lib/logger";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import {
   ANONYMOUS_CART_TTL_MS,
   AUTHENTICATED_CART_TTL_MS,
   CANONICAL_CART_CURRENCY,
-  MAX_CART_LINE_QUANTITY,
 } from "./constants";
-import type { CartHydrationLine, CartOwner } from "./internal-types";
+import type { CartHydrationLine } from "./internal-types";
+import {
+  atomicAddCartLine,
+  atomicRemoveCartLine,
+  atomicUpdateCartLine,
+  getOrCreateActiveCart,
+  mergeGuestCartIntoAuthenticated,
+  queryCartHydrationLines,
+  refreshCartTtl,
+  retireCartById,
+} from "./persistence";
 import {
   clearAnonymousCartCookie,
   generateAnonymousSessionToken,
@@ -22,6 +30,7 @@ import type {
   AddCartItemInput,
   CartActionResult,
   CartLineSnapshot,
+  CartReadResult,
   CartSnapshot,
   RemoveCartItemInput,
   UpdateCartItemQuantityInput,
@@ -34,8 +43,6 @@ import {
   validateUpdateQuantity,
   validateVariantId,
 } from "./validation";
-
-type DatabaseExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Creates an empty canonical CartSnapshot.
@@ -103,277 +110,23 @@ export function buildCartSnapshot(lines: CartHydrationLine[]): CartSnapshot {
 }
 
 /**
- * Queries and joins line items for a given cart ID with catalog status and primary media.
- */
-async function queryCartHydrationLines(
-  cartId: string,
-  executor: DatabaseExecutor = db
-): Promise<CartHydrationLine[]> {
-  const rows = await executor
-    .select({
-      variantId: cartItems.variantId,
-      sku: productVariants.sku,
-      priceCents: productVariants.priceCents,
-      variantStatus: productVariants.status,
-      attributes: productVariants.attributes,
-      productId: products.id,
-      productSlug: products.slug,
-      productName: products.name,
-      productStatus: products.status,
-      quantity: cartItems.quantity,
-      mediaObjectKey: mediaAssets.objectKey,
-      mediaAltText: mediaAssets.altText,
-      mediaWidth: mediaAssets.width,
-      mediaHeight: mediaAssets.height,
-    })
-    .from(cartItems)
-    .innerJoin(productVariants, eq(cartItems.variantId, productVariants.id))
-    .innerJoin(products, eq(productVariants.productId, products.id))
-    .leftJoin(mediaAssets, eq(products.primaryMediaId, mediaAssets.id))
-    .where(eq(cartItems.cartId, cartId))
-    .orderBy(cartItems.createdAt);
-
-  return rows.map((r) => ({
-    variantId: r.variantId,
-    sku: r.sku,
-    priceCents: r.priceCents,
-    variantStatus: r.variantStatus,
-    attributes: r.attributes,
-    productId: r.productId,
-    productSlug: r.productSlug,
-    productName: r.productName,
-    productStatus: r.productStatus,
-    quantity: r.quantity,
-    mediaObjectKey: r.mediaObjectKey,
-    mediaAltText: r.mediaAltText,
-    mediaWidth: r.mediaWidth,
-    mediaHeight: r.mediaHeight,
-  }));
-}
-
-/**
- * Safely resolves or creates an ACTIVE Cart for the given owner within a transaction.
- *
- * Concurrency & Expiry Handling:
- * 1. Locks existing ACTIVE row (if present).
- * 2. If row is expired (expires_at < NOW()), transitions ACTIVE -> ABANDONED.
- * 3. Attempts conflict-safe INSERT with ON CONFLICT DO NOTHING.
- * 4. If INSERT loses a race, re-queries and locks the authoritative winning ACTIVE cart.
- */
-async function getOrCreateActiveCart(owner: CartOwner, executor: DatabaseExecutor): Promise<Cart> {
-  const now = new Date();
-
-  if (owner.type === "AUTHENTICATED") {
-    const existing = await executor
-      .select()
-      .from(carts)
-      .where(and(eq(carts.customerId, owner.customerProfileId), eq(carts.status, "ACTIVE")))
-      .for("update")
-      .limit(1);
-
-    if (existing.length > 0 && existing[0]) {
-      const activeCart = existing[0];
-      if (activeCart.expiresAt < now) {
-        await executor
-          .update(carts)
-          .set({ status: "ABANDONED", updatedAt: now })
-          .where(eq(carts.id, activeCart.id));
-      } else {
-        return activeCart;
-      }
-    }
-
-    const expiresAt = new Date(now.getTime() + AUTHENTICATED_CART_TTL_MS);
-    const [inserted] = await executor
-      .insert(carts)
-      .values({
-        customerId: owner.customerProfileId,
-        sessionToken: null,
-        status: "ACTIVE",
-        currency: CANONICAL_CART_CURRENCY,
-        expiresAt,
-      })
-      .onConflictDoNothing({ target: carts.customerId, where: sql`${carts.status} = 'ACTIVE'` })
-      .returning();
-
-    if (inserted) {
-      return inserted;
-    }
-
-    const reselected = await executor
-      .select()
-      .from(carts)
-      .where(and(eq(carts.customerId, owner.customerProfileId), eq(carts.status, "ACTIVE")))
-      .for("update")
-      .limit(1);
-
-    if (!reselected[0]) {
-      throw new Error("FAILED_TO_RESOLVE_AUTHENTICATED_CART");
-    }
-
-    return reselected[0];
-  }
-
-  // Anonymous Owner
-  const existing = await executor
-    .select()
-    .from(carts)
-    .where(and(eq(carts.sessionToken, owner.sessionToken), eq(carts.status, "ACTIVE")))
-    .for("update")
-    .limit(1);
-
-  if (existing.length > 0 && existing[0]) {
-    const activeCart = existing[0];
-    if (activeCart.expiresAt < now) {
-      await executor
-        .update(carts)
-        .set({ status: "ABANDONED", updatedAt: now })
-        .where(eq(carts.id, activeCart.id));
-    } else {
-      return activeCart;
-    }
-  }
-
-  const expiresAt = new Date(now.getTime() + ANONYMOUS_CART_TTL_MS);
-  const [inserted] = await executor
-    .insert(carts)
-    .values({
-      customerId: null,
-      sessionToken: owner.sessionToken,
-      status: "ACTIVE",
-      currency: CANONICAL_CART_CURRENCY,
-      expiresAt,
-    })
-    .onConflictDoNothing({ target: carts.sessionToken, where: sql`${carts.status} = 'ACTIVE'` })
-    .returning();
-
-  if (inserted) {
-    return inserted;
-  }
-
-  const reselected = await executor
-    .select()
-    .from(carts)
-    .where(and(eq(carts.sessionToken, owner.sessionToken), eq(carts.status, "ACTIVE")))
-    .for("update")
-    .limit(1);
-
-  if (!reselected[0]) {
-    throw new Error("FAILED_TO_RESOLVE_ANONYMOUS_CART");
-  }
-
-  return reselected[0];
-}
-
-/**
- * Merges a guest cart into an authenticated customer profile within an active transaction.
- *
- * Invariants:
- * 1. Lock Guest: FOR UPDATE lock on guest ACTIVE cart row.
- * 2. Expired Guest: If expired, guest -> ABANDONED, 0 items merged.
- * 3. Empty Guest: If empty, guest -> ABANDONED, 0 items merged.
- * 4. Duplicate Formula: MIN(authQty + guestQty, 10) via PostgreSQL atomic UPSERT.
- * 5. Destination TTL: Authenticated destination cart refreshed to +60 days.
- * 6. Exactly-Once: Guest transitioned to ABANDONED (never CONVERTED).
- */
-export async function mergeGuestCartIntoAuthenticated(
-  customerProfileId: string,
-  guestToken: string,
-  executor: DatabaseExecutor
-): Promise<{ merged: boolean; shouldClearCookie: boolean }> {
-  const now = new Date();
-
-  const [guestCart] = await executor
-    .select()
-    .from(carts)
-    .where(and(eq(carts.sessionToken, guestToken), eq(carts.status, "ACTIVE")))
-    .for("update")
-    .limit(1);
-
-  if (!guestCart) {
-    return { merged: false, shouldClearCookie: true };
-  }
-
-  if (guestCart.expiresAt < now) {
-    await executor
-      .update(carts)
-      .set({ status: "ABANDONED", updatedAt: now })
-      .where(eq(carts.id, guestCart.id));
-
-    return { merged: false, shouldClearCookie: true };
-  }
-
-  const guestLines = await executor
-    .select()
-    .from(cartItems)
-    .where(eq(cartItems.cartId, guestCart.id))
-    .for("update");
-
-  if (guestLines.length === 0) {
-    await executor
-      .update(carts)
-      .set({ status: "ABANDONED", updatedAt: now })
-      .where(eq(carts.id, guestCart.id));
-
-    return { merged: false, shouldClearCookie: true };
-  }
-
-  const authCart = await getOrCreateActiveCart(
-    { type: "AUTHENTICATED", customerProfileId, authUserId: "" },
-    executor
-  );
-
-  for (const line of guestLines) {
-    await executor
-      .insert(cartItems)
-      .values({
-        id: generateUuidV7(),
-        cartId: authCart.id,
-        variantId: line.variantId,
-        quantity: line.quantity,
-      })
-      .onConflictDoUpdate({
-        target: [cartItems.cartId, cartItems.variantId],
-        set: {
-          quantity: sql`LEAST(${cartItems.quantity} + ${line.quantity}, ${MAX_CART_LINE_QUANTITY})`,
-          updatedAt: now,
-        },
-      });
-  }
-
-  const newAuthExpiresAt = new Date(now.getTime() + AUTHENTICATED_CART_TTL_MS);
-  await executor
-    .update(carts)
-    .set({
-      expiresAt: newAuthExpiresAt,
-      updatedAt: now,
-    })
-    .where(eq(carts.id, authCart.id));
-
-  await executor
-    .update(carts)
-    .set({
-      status: "ABANDONED",
-      updatedAt: now,
-    })
-    .where(eq(carts.id, guestCart.id));
-
-  return { merged: true, shouldClearCookie: true };
-}
-
-/**
  * Passive read for the current Cart.
  *
  * Invariants:
- * 1. Passive Read Zero State: Unauthenticated read without cookie/cart creates 0 rows, 0 cookies.
+ * 1. Passive Read Zero State: Unauthenticated read without cookie/cart creates 0 rows, 0 cookies, 0 TTL refreshes.
  * 2. Lazy Merge Trigger: If authenticated user carries guest cookie, merges within transaction.
- * 3. Fresh Prices: Queries live product_variants.price_cents.
+ * 3. Typed Fail-Closed: Returns typed PROFILE_REQUIRED for AUTHENTICATED_PROFILE_REQUIRED state.
+ * 4. Fresh Prices: Queries live product_variants.price_cents.
  */
-export async function getCurrentCart(): Promise<CartSnapshot> {
+export async function getCurrentCart(): Promise<CartReadResult> {
   const authority = await resolveCartAuthority();
 
   if (authority.status === "AUTHENTICATED_PROFILE_REQUIRED") {
-    return createEmptyCartSnapshot();
+    return {
+      success: false,
+      code: "PROFILE_REQUIRED",
+      error: "Debes completar tu perfil para usar el carrito de compras.",
+    };
   }
 
   if (authority.status === "AUTHENTICATED_WITH_PROFILE") {
@@ -404,16 +157,16 @@ export async function getCurrentCart(): Promise<CartSnapshot> {
       .limit(1);
 
     if (!authCart || authCart.expiresAt < new Date()) {
-      return createEmptyCartSnapshot();
+      return { success: true, cart: createEmptyCartSnapshot() };
     }
 
     const lines = await queryCartHydrationLines(authCart.id);
-    return buildCartSnapshot(lines);
+    return { success: true, cart: buildCartSnapshot(lines) };
   }
 
   // UNAUTHENTICATED Passive Read
   if (!authority.guestToken || authority.isMalformedGuest) {
-    return createEmptyCartSnapshot();
+    return { success: true, cart: createEmptyCartSnapshot() };
   }
 
   const [guestCart] = await db
@@ -423,11 +176,11 @@ export async function getCurrentCart(): Promise<CartSnapshot> {
     .limit(1);
 
   if (!guestCart || guestCart.expiresAt < new Date()) {
-    return createEmptyCartSnapshot();
+    return { success: true, cart: createEmptyCartSnapshot() };
   }
 
   const lines = await queryCartHydrationLines(guestCart.id);
-  return buildCartSnapshot(lines);
+  return { success: true, cart: buildCartSnapshot(lines) };
 }
 
 /**
@@ -437,7 +190,7 @@ export async function getCurrentCart(): Promise<CartSnapshot> {
  * 1. Eligibility Check: products.status = PUBLISHED AND product_variants.status = ACTIVE.
  * 2. Zero Inventory Queries: Stock is decoupled from cart runtime (GP-021).
  * 3. Atomic UPSERT: LEAST(quantity + EXCLUDED.quantity, 10).
- * 4. Sliding TTL: +30 days for anonymous, +60 days for authenticated.
+ * 4. Sliding TTL: +30 days for anonymous (DB + cookie), +60 days for authenticated.
  * 5. Session Fixation Defense: Unauthenticated mutations generate fresh server tokens.
  */
 export async function addCartItemAction(
@@ -467,50 +220,57 @@ export async function addCartItemAction(
     };
   }
 
-  // Catalog Eligibility Verification (Direct PostgreSQL query; zero inventory query)
-  const [variantRow] = await db
-    .select({
-      variantId: productVariants.id,
-      variantStatus: productVariants.status,
-      productStatus: products.status,
-    })
-    .from(productVariants)
-    .innerJoin(products, eq(productVariants.productId, products.id))
-    .where(eq(productVariants.id, variantId))
-    .limit(1);
-
-  if (!variantRow) {
-    return {
-      success: false,
-      code: "ITEM_NOT_FOUND",
-      error: "El producto seleccionado no existe o fue retirado.",
-    };
-  }
-
-  if (variantRow.productStatus !== "PUBLISHED" || variantRow.variantStatus !== "ACTIVE") {
-    return {
-      success: false,
-      code: "PRODUCT_UNAVAILABLE",
-      error: "El producto seleccionado no está disponible para compra.",
-    };
-  }
-
   try {
     if (authority.status === "AUTHENTICATED_WITH_PROFILE") {
-      let shouldClearGuest = false;
+      // First authenticated access guest merge handling
+      if (authority.guestToken) {
+        try {
+          const mergeResult = await db.transaction(async (tx) => {
+            return mergeGuestCartIntoAuthenticated(
+              authority.customerProfileId,
+              authority.guestToken!,
+              tx
+            );
+          });
+          if (mergeResult.shouldClearCookie) {
+            await clearAnonymousCartCookie();
+          }
+        } catch {
+          logger.error({ event: "cart_guest_merge_failed" });
+        }
+      } else if (authority.isMalformedGuest) {
+        await clearAnonymousCartCookie();
+      }
+
+      // Catalog Eligibility Verification
+      const [variantRow] = await db
+        .select({
+          variantId: productVariants.id,
+          variantStatus: productVariants.status,
+          productStatus: products.status,
+        })
+        .from(productVariants)
+        .innerJoin(products, eq(productVariants.productId, products.id))
+        .where(eq(productVariants.id, variantId))
+        .limit(1);
+
+      if (!variantRow) {
+        return {
+          success: false,
+          code: "ITEM_NOT_FOUND",
+          error: "El producto seleccionado no existe o fue retirado.",
+        };
+      }
+
+      if (variantRow.productStatus !== "PUBLISHED" || variantRow.variantStatus !== "ACTIVE") {
+        return {
+          success: false,
+          code: "PRODUCT_UNAVAILABLE",
+          error: "El producto seleccionado no está disponible para compra.",
+        };
+      }
 
       const snapshot = await db.transaction(async (tx) => {
-        if (authority.guestToken) {
-          const mergeResult = await mergeGuestCartIntoAuthenticated(
-            authority.customerProfileId,
-            authority.guestToken,
-            tx
-          );
-          if (mergeResult.shouldClearCookie) {
-            shouldClearGuest = true;
-          }
-        }
-
         const authCart = await getOrCreateActiveCart(
           {
             type: "AUTHENTICATED",
@@ -520,36 +280,12 @@ export async function addCartItemAction(
           tx
         );
 
-        const now = new Date();
-        await tx
-          .insert(cartItems)
-          .values({
-            id: generateUuidV7(),
-            cartId: authCart.id,
-            variantId,
-            quantity: quantityToAdd,
-          })
-          .onConflictDoUpdate({
-            target: [cartItems.cartId, cartItems.variantId],
-            set: {
-              quantity: sql`LEAST(${cartItems.quantity} + ${quantityToAdd}, ${MAX_CART_LINE_QUANTITY})`,
-              updatedAt: now,
-            },
-          });
-
-        const newExpiresAt = new Date(now.getTime() + AUTHENTICATED_CART_TTL_MS);
-        await tx
-          .update(carts)
-          .set({ expiresAt: newExpiresAt, updatedAt: now })
-          .where(eq(carts.id, authCart.id));
+        await atomicAddCartLine(authCart.id, variantId, quantityToAdd, tx);
+        await refreshCartTtl(authCart.id, AUTHENTICATED_CART_TTL_MS, tx);
 
         const lines = await queryCartHydrationLines(authCart.id, tx);
         return buildCartSnapshot(lines);
       });
-
-      if (shouldClearGuest || authority.isMalformedGuest) {
-        await clearAnonymousCartCookie();
-      }
 
       return {
         success: true,
@@ -558,64 +294,76 @@ export async function addCartItemAction(
       };
     }
 
-    // UNAUTHENTICATED Flow
-    let tokenToUse: string;
-    let isNewToken = false;
+    // UNAUTHENTICATED Flow: Catalog Eligibility Verification First
+    const [variantRow] = await db
+      .select({
+        variantId: productVariants.id,
+        variantStatus: productVariants.status,
+        productStatus: products.status,
+      })
+      .from(productVariants)
+      .innerJoin(products, eq(productVariants.productId, products.id))
+      .where(eq(productVariants.id, variantId))
+      .limit(1);
 
-    if (!authority.guestToken || authority.isMalformedGuest) {
-      tokenToUse = generateAnonymousSessionToken();
-      isNewToken = true;
-    } else {
-      const [existingActive] = await db
-        .select({ id: carts.id, expiresAt: carts.expiresAt })
-        .from(carts)
-        .where(and(eq(carts.sessionToken, authority.guestToken), eq(carts.status, "ACTIVE")))
-        .limit(1);
-
-      if (!existingActive || existingActive.expiresAt < new Date()) {
-        tokenToUse = generateAnonymousSessionToken();
-        isNewToken = true;
-      } else {
-        tokenToUse = authority.guestToken;
-      }
+    if (!variantRow) {
+      return {
+        success: false,
+        code: "ITEM_NOT_FOUND",
+        error: "El producto seleccionado no existe o fue retirado.",
+      };
     }
 
+    if (variantRow.productStatus !== "PUBLISHED" || variantRow.variantStatus !== "ACTIVE") {
+      return {
+        success: false,
+        code: "PRODUCT_UNAVAILABLE",
+        error: "El producto seleccionado no está disponible para compra.",
+      };
+    }
+
+    let authoritativeToken = "";
     const snapshot = await db.transaction(async (tx) => {
+      let targetToken: string;
+
+      if (authority.guestToken && !authority.isMalformedGuest) {
+        const [existingActive] = await tx
+          .select()
+          .from(carts)
+          .where(and(eq(carts.sessionToken, authority.guestToken), eq(carts.status, "ACTIVE")))
+          .for("update")
+          .limit(1);
+
+        if (existingActive) {
+          if (existingActive.expiresAt < new Date()) {
+            await retireCartById(existingActive.id, tx);
+            targetToken = generateAnonymousSessionToken();
+          } else {
+            targetToken = authority.guestToken;
+          }
+        } else {
+          // Unknown token: session fixation defense -> generate fresh server token
+          targetToken = generateAnonymousSessionToken();
+        }
+      } else {
+        targetToken = generateAnonymousSessionToken();
+      }
+
+      authoritativeToken = targetToken;
       const anonCart = await getOrCreateActiveCart(
-        { type: "ANONYMOUS", sessionToken: tokenToUse },
+        { type: "ANONYMOUS", sessionToken: targetToken },
         tx
       );
 
-      const now = new Date();
-      await tx
-        .insert(cartItems)
-        .values({
-          id: generateUuidV7(),
-          cartId: anonCart.id,
-          variantId,
-          quantity: quantityToAdd,
-        })
-        .onConflictDoUpdate({
-          target: [cartItems.cartId, cartItems.variantId],
-          set: {
-            quantity: sql`LEAST(${cartItems.quantity} + ${quantityToAdd}, ${MAX_CART_LINE_QUANTITY})`,
-            updatedAt: now,
-          },
-        });
-
-      const newExpiresAt = new Date(now.getTime() + ANONYMOUS_CART_TTL_MS);
-      await tx
-        .update(carts)
-        .set({ expiresAt: newExpiresAt, updatedAt: now })
-        .where(eq(carts.id, anonCart.id));
+      await atomicAddCartLine(anonCart.id, variantId, quantityToAdd, tx);
+      await refreshCartTtl(anonCart.id, ANONYMOUS_CART_TTL_MS, tx);
 
       const lines = await queryCartHydrationLines(anonCart.id, tx);
       return buildCartSnapshot(lines);
     });
 
-    if (isNewToken || authority.guestToken !== tokenToUse) {
-      await setAnonymousCartCookie(tokenToUse);
-    }
+    // Re-set or set cookie after successful commit to slide cookie maxAge
+    await setAnonymousCartCookie(authoritativeToken);
 
     return {
       success: true,
@@ -638,7 +386,8 @@ export async function addCartItemAction(
  * Invariants:
  * 1. Target bounds: Strict integer 1..10 (0 rejected).
  * 2. Eligibility: Unavailable items (DRAFT/ARCHIVED product or INACTIVE variant) reject quantity updates.
- * 3. Sliding TTL: Refreshes TTL upon successful update.
+ * 3. Sliding TTL: Refreshes DB TTL and cookie maxAge upon successful update.
+ * 4. Expired Cart: Retires expired Cart to ABANDONED transactionally without modifying lines.
  */
 export async function updateCartItemQuantityAction(
   _prevState: unknown,
@@ -669,20 +418,26 @@ export async function updateCartItemQuantityAction(
 
   try {
     if (authority.status === "AUTHENTICATED_WITH_PROFILE") {
-      let shouldClearGuest = false;
+      if (authority.guestToken) {
+        try {
+          const mergeResult = await db.transaction(async (tx) => {
+            return mergeGuestCartIntoAuthenticated(
+              authority.customerProfileId,
+              authority.guestToken!,
+              tx
+            );
+          });
+          if (mergeResult.shouldClearCookie) {
+            await clearAnonymousCartCookie();
+          }
+        } catch {
+          logger.error({ event: "cart_guest_merge_failed" });
+        }
+      } else if (authority.isMalformedGuest) {
+        await clearAnonymousCartCookie();
+      }
 
       const result = await db.transaction(async (tx) => {
-        if (authority.guestToken) {
-          const mergeResult = await mergeGuestCartIntoAuthenticated(
-            authority.customerProfileId,
-            authority.guestToken,
-            tx
-          );
-          if (mergeResult.shouldClearCookie) {
-            shouldClearGuest = true;
-          }
-        }
-
         const [authCart] = await tx
           .select()
           .from(carts)
@@ -690,7 +445,16 @@ export async function updateCartItemQuantityAction(
           .for("update")
           .limit(1);
 
-        if (!authCart || authCart.expiresAt < new Date()) {
+        if (!authCart) {
+          return {
+            success: false as const,
+            code: "ITEM_NOT_FOUND" as const,
+            error: "El carrito no fue encontrado o ha expirado.",
+          };
+        }
+
+        if (authCart.expiresAt < new Date()) {
+          await retireCartById(authCart.id, tx);
           return {
             success: false as const,
             code: "ITEM_NOT_FOUND" as const,
@@ -727,17 +491,8 @@ export async function updateCartItemQuantityAction(
           };
         }
 
-        const now = new Date();
-        await tx
-          .update(cartItems)
-          .set({ quantity: targetQuantity, updatedAt: now })
-          .where(and(eq(cartItems.cartId, authCart.id), eq(cartItems.variantId, variantId)));
-
-        const newExpiresAt = new Date(now.getTime() + AUTHENTICATED_CART_TTL_MS);
-        await tx
-          .update(carts)
-          .set({ expiresAt: newExpiresAt, updatedAt: now })
-          .where(eq(carts.id, authCart.id));
+        await atomicUpdateCartLine(authCart.id, variantId, targetQuantity, tx);
+        await refreshCartTtl(authCart.id, AUTHENTICATED_CART_TTL_MS, tx);
 
         const lines = await queryCartHydrationLines(authCart.id, tx);
         return {
@@ -745,10 +500,6 @@ export async function updateCartItemQuantityAction(
           cart: buildCartSnapshot(lines),
         };
       });
-
-      if (shouldClearGuest || authority.isMalformedGuest) {
-        await clearAnonymousCartCookie();
-      }
 
       if (!result.success) {
         return result;
@@ -778,7 +529,16 @@ export async function updateCartItemQuantityAction(
         .for("update")
         .limit(1);
 
-      if (!anonCart || anonCart.expiresAt < new Date()) {
+      if (!anonCart) {
+        return {
+          success: false as const,
+          code: "ITEM_NOT_FOUND" as const,
+          error: "El carrito no fue encontrado o ha expirado.",
+        };
+      }
+
+      if (anonCart.expiresAt < new Date()) {
+        await retireCartById(anonCart.id, tx);
         return {
           success: false as const,
           code: "ITEM_NOT_FOUND" as const,
@@ -815,17 +575,8 @@ export async function updateCartItemQuantityAction(
         };
       }
 
-      const now = new Date();
-      await tx
-        .update(cartItems)
-        .set({ quantity: targetQuantity, updatedAt: now })
-        .where(and(eq(cartItems.cartId, anonCart.id), eq(cartItems.variantId, variantId)));
-
-      const newExpiresAt = new Date(now.getTime() + ANONYMOUS_CART_TTL_MS);
-      await tx
-        .update(carts)
-        .set({ expiresAt: newExpiresAt, updatedAt: now })
-        .where(eq(carts.id, anonCart.id));
+      await atomicUpdateCartLine(anonCart.id, variantId, targetQuantity, tx);
+      await refreshCartTtl(anonCart.id, ANONYMOUS_CART_TTL_MS, tx);
 
       const lines = await queryCartHydrationLines(anonCart.id, tx);
       return {
@@ -837,6 +588,9 @@ export async function updateCartItemQuantityAction(
     if (!result.success) {
       return result;
     }
+
+    // Refresh anonymous cookie maxAge after successful commit
+    await setAnonymousCartCookie(authority.guestToken);
 
     return {
       success: true,
@@ -859,7 +613,9 @@ export async function updateCartItemQuantityAction(
  * Invariants:
  * 1. Available & Unavailable Removal: Both available and unavailable lines may be removed.
  * 2. Cart Retention: Removing the final line does not delete the Cart entity.
- * 3. Sliding TTL: Refreshes TTL upon successful removal.
+ * 3. Sliding TTL: Refreshes TTL only when a line item was actually deleted.
+ * 4. Missing Line No-Op: Does not refresh DB TTL or cookie maxAge.
+ * 5. Expired Cart: Retires expired Cart to ABANDONED transactionally without modifying lines.
  */
 export async function removeCartItemAction(
   _prevState: unknown,
@@ -884,20 +640,26 @@ export async function removeCartItemAction(
 
   try {
     if (authority.status === "AUTHENTICATED_WITH_PROFILE") {
-      let shouldClearGuest = false;
-
-      const snapshot = await db.transaction(async (tx) => {
-        if (authority.guestToken) {
-          const mergeResult = await mergeGuestCartIntoAuthenticated(
-            authority.customerProfileId,
-            authority.guestToken,
-            tx
-          );
+      if (authority.guestToken) {
+        try {
+          const mergeResult = await db.transaction(async (tx) => {
+            return mergeGuestCartIntoAuthenticated(
+              authority.customerProfileId,
+              authority.guestToken!,
+              tx
+            );
+          });
           if (mergeResult.shouldClearCookie) {
-            shouldClearGuest = true;
+            await clearAnonymousCartCookie();
           }
+        } catch {
+          logger.error({ event: "cart_guest_merge_failed" });
         }
+      } else if (authority.isMalformedGuest) {
+        await clearAnonymousCartCookie();
+      }
 
+      const result = await db.transaction(async (tx) => {
         const [authCart] = await tx
           .select()
           .from(carts)
@@ -905,32 +667,47 @@ export async function removeCartItemAction(
           .for("update")
           .limit(1);
 
-        if (!authCart || authCart.expiresAt < new Date()) {
-          return createEmptyCartSnapshot();
+        if (!authCart) {
+          return {
+            success: false as const,
+            code: "ITEM_NOT_FOUND" as const,
+            error: "El carrito no fue encontrado o ha expirado.",
+          };
         }
 
-        await tx
-          .delete(cartItems)
-          .where(and(eq(cartItems.cartId, authCart.id), eq(cartItems.variantId, variantId)));
+        if (authCart.expiresAt < new Date()) {
+          await retireCartById(authCart.id, tx);
+          return {
+            success: false as const,
+            code: "ITEM_NOT_FOUND" as const,
+            error: "El carrito no fue encontrado o ha expirado.",
+          };
+        }
 
-        const now = new Date();
-        const newExpiresAt = new Date(now.getTime() + AUTHENTICATED_CART_TTL_MS);
-        await tx
-          .update(carts)
-          .set({ expiresAt: newExpiresAt, updatedAt: now })
-          .where(eq(carts.id, authCart.id));
+        const wasRemoved = await atomicRemoveCartLine(authCart.id, variantId, tx);
+        if (!wasRemoved) {
+          return {
+            success: false as const,
+            code: "ITEM_NOT_FOUND" as const,
+            error: "El producto no se encuentra en el carrito.",
+          };
+        }
 
+        await refreshCartTtl(authCart.id, AUTHENTICATED_CART_TTL_MS, tx);
         const lines = await queryCartHydrationLines(authCart.id, tx);
-        return buildCartSnapshot(lines);
+        return {
+          success: true as const,
+          cart: buildCartSnapshot(lines),
+        };
       });
 
-      if (shouldClearGuest || authority.isMalformedGuest) {
-        await clearAnonymousCartCookie();
+      if (!result.success) {
+        return result;
       }
 
       return {
         success: true,
-        cart: snapshot,
+        cart: result.cart,
         message: "Producto eliminado del carrito.",
       };
     }
@@ -938,13 +715,13 @@ export async function removeCartItemAction(
     // UNAUTHENTICATED Flow
     if (!authority.guestToken || authority.isMalformedGuest) {
       return {
-        success: true,
-        cart: createEmptyCartSnapshot(),
-        message: "Producto eliminado del carrito.",
+        success: false,
+        code: "ITEM_NOT_FOUND",
+        error: "El carrito no fue encontrado o ha expirado.",
       };
     }
 
-    const snapshot = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [anonCart] = await tx
         .select()
         .from(carts)
@@ -952,28 +729,50 @@ export async function removeCartItemAction(
         .for("update")
         .limit(1);
 
-      if (!anonCart || anonCart.expiresAt < new Date()) {
-        return createEmptyCartSnapshot();
+      if (!anonCart) {
+        return {
+          success: false as const,
+          code: "ITEM_NOT_FOUND" as const,
+          error: "El carrito no fue encontrado o ha expirado.",
+        };
       }
 
-      await tx
-        .delete(cartItems)
-        .where(and(eq(cartItems.cartId, anonCart.id), eq(cartItems.variantId, variantId)));
+      if (anonCart.expiresAt < new Date()) {
+        await retireCartById(anonCart.id, tx);
+        return {
+          success: false as const,
+          code: "ITEM_NOT_FOUND" as const,
+          error: "El carrito no fue encontrado o ha expirado.",
+        };
+      }
 
-      const now = new Date();
-      const newExpiresAt = new Date(now.getTime() + ANONYMOUS_CART_TTL_MS);
-      await tx
-        .update(carts)
-        .set({ expiresAt: newExpiresAt, updatedAt: now })
-        .where(eq(carts.id, anonCart.id));
+      const wasRemoved = await atomicRemoveCartLine(anonCart.id, variantId, tx);
+      if (!wasRemoved) {
+        return {
+          success: false as const,
+          code: "ITEM_NOT_FOUND" as const,
+          error: "El producto no se encuentra en el carrito.",
+        };
+      }
 
+      await refreshCartTtl(anonCart.id, ANONYMOUS_CART_TTL_MS, tx);
       const lines = await queryCartHydrationLines(anonCart.id, tx);
-      return buildCartSnapshot(lines);
+      return {
+        success: true as const,
+        cart: buildCartSnapshot(lines),
+      };
     });
+
+    if (!result.success) {
+      return result;
+    }
+
+    // Refresh anonymous cookie maxAge after successful deletion commit
+    await setAnonymousCartCookie(authority.guestToken);
 
     return {
       success: true,
-      cart: snapshot,
+      cart: result.cart,
       message: "Producto eliminado del carrito.",
     };
   } catch {

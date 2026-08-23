@@ -2,14 +2,12 @@
 
 import {
   addCartItemAction as addCartItemServiceAction,
-  getCurrentCart as getCurrentCartService,
   removeCartItemAction as removeCartItemServiceAction,
   updateCartItemQuantityAction as updateCartItemQuantityServiceAction,
 } from "./service";
 import type {
   AddCartItemInput,
   CartActionResult,
-  CartSnapshot,
   RemoveCartItemInput,
   UpdateCartItemQuantityInput,
 } from "./types";
@@ -42,11 +40,4 @@ export async function removeCartItemAction(
   formData: FormData | RemoveCartItemInput
 ): Promise<CartActionResult> {
   return removeCartItemServiceAction(prevState, formData);
-}
-
-/**
- * Server-side read function for retrieving current authoritative CartSnapshot.
- */
-export async function getCurrentCart(): Promise<CartSnapshot> {
-  return getCurrentCartService();
 }

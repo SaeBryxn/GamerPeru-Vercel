@@ -21,6 +21,8 @@ import {
   updateCartItemQuantityAction,
   removeCartItemAction,
 } from "@/lib/cart/service";
+import * as actionsModule from "@/lib/cart/actions";
+import * as readModule from "@/lib/cart/read";
 import {
   validateAddQuantity,
   validateSessionToken,
@@ -63,7 +65,7 @@ vi.mock("@/lib/logger", () => ({
   },
 }));
 
-describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
+describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -162,7 +164,22 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
     });
   });
 
-  describe("2. Validation Rules", () => {
+  describe("2. Module Architecture & Surface Isolation", () => {
+    it("exports ONLY the three authorized mutations from actions.ts", () => {
+      expect(Object.keys(actionsModule).sort()).toEqual([
+        "addCartItemAction",
+        "removeCartItemAction",
+        "updateCartItemQuantityAction",
+      ]);
+      expect("getCurrentCart" in actionsModule).toBe(false);
+    });
+
+    it("exports getCurrentCart from server-only read.ts", () => {
+      expect(typeof readModule.getCurrentCart).toBe("function");
+    });
+  });
+
+  describe("3. Validation Rules", () => {
     it("validates RFC 9562 UUID for variantId", () => {
       const validUuid = "019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f";
       const validV4 = "123e4567-e89b-12d3-a456-426614174000";
@@ -209,7 +226,7 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
     });
   });
 
-  describe("3. Identity Authority Resolution", () => {
+  describe("4. Identity Authority Resolution", () => {
     it("resolves UNAUTHENTICATED when getVerifiedIdentity returns false", async () => {
       vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
         success: false,
@@ -282,13 +299,13 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
     });
   });
 
-  describe("4. DTO Privacy & Snapshot Calculation", () => {
+  describe("5. DTO Privacy & Snapshot Calculation", () => {
     it("calculates integer minor unit totals and guarantees DTO privacy", () => {
       const hydrationLines = [
         {
           variantId: "variant-1",
           sku: "WLM-BX-BLK",
-          priceCents: 59900, // S/ 599.00
+          priceCents: 59900,
           variantStatus: "ACTIVE",
           attributes: { Color: "Black" },
           productId: "prod-1",
@@ -304,7 +321,7 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
         {
           variantId: "variant-2",
           sku: "WLM-BX-WHT",
-          priceCents: 62900, // S/ 629.00
+          priceCents: 62900,
           variantStatus: "ACTIVE",
           attributes: { Color: "White" },
           productId: "prod-1",
@@ -323,8 +340,8 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
 
       expect(snapshot.currency).toBe("PEN");
       expect(snapshot.lineCount).toBe(2);
-      expect(snapshot.itemCount).toBe(3); // 2 + 1
-      expect(snapshot.subtotalCents).toBe(59900 * 2 + 62900 * 1); // 119800 + 62900 = 182700
+      expect(snapshot.itemCount).toBe(3);
+      expect(snapshot.subtotalCents).toBe(59900 * 2 + 62900 * 1);
       expect(snapshot.hasUnavailableItems).toBe(false);
       expect(snapshot.lines).toHaveLength(2);
 
@@ -367,7 +384,7 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
           productId: "prod-1",
           productSlug: "wlmouse-beast-x",
           productName: "WLMouse Beast X",
-          productStatus: "DRAFT", // Product is DRAFT!
+          productStatus: "DRAFT",
           quantity: 1,
           mediaObjectKey: null,
           mediaAltText: null,
@@ -394,33 +411,48 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
     });
   });
 
-  describe("5. Passive Read Zero-State Invariant", () => {
-    it("returns empty snapshot and performs 0 mutations for unauthenticated user without cookie", async () => {
+  describe("6. Passive Read & Typed Read Results", () => {
+    it("returns typed PROFILE_REQUIRED when profile is missing", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
+        success: true,
+        identity: {
+          authUserId: "auth-user-no-profile",
+          email: "user@test.com",
+          claims: { sub: "auth-user-no-profile" },
+        },
+      });
+
+      const selectMock = vi.fn().mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+      vi.mocked(dbModule.db.select).mockImplementation(selectMock);
+
+      const result = await getCurrentCart();
+      expect(result).toEqual({
+        success: false,
+        code: "PROFILE_REQUIRED",
+        error: "Debes completar tu perfil para usar el carrito de compras.",
+      });
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
+    });
+
+    it("returns success true + empty snapshot and performs 0 mutations for unauthenticated visitor without cookie", async () => {
       vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
         success: false,
         reason: "no_session",
       });
       mockCookieStore.get.mockReturnValueOnce(undefined);
 
-      const cart = await getCurrentCart();
+      const result = await getCurrentCart();
 
-      expect(cart).toEqual(createEmptyCartSnapshot());
-      expect(dbModule.db.insert).not.toHaveBeenCalled();
-      expect(dbModule.db.update).not.toHaveBeenCalled();
-      expect(dbModule.db.delete).not.toHaveBeenCalled();
-      expect(mockCookieStore.set).not.toHaveBeenCalled();
-    });
-
-    it("returns empty snapshot and performs 0 mutations for malformed cookie", async () => {
-      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
-        success: false,
-        reason: "no_session",
+      expect(result).toEqual({
+        success: true,
+        cart: createEmptyCartSnapshot(),
       });
-      mockCookieStore.get.mockReturnValueOnce({ value: "invalid-token-format!" });
-
-      const cart = await getCurrentCart();
-
-      expect(cart).toEqual(createEmptyCartSnapshot());
       expect(dbModule.db.insert).not.toHaveBeenCalled();
       expect(dbModule.db.update).not.toHaveBeenCalled();
       expect(dbModule.db.delete).not.toHaveBeenCalled();
@@ -428,7 +460,7 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
     });
   });
 
-  describe("6. Cart Actions Fail Closed on PROFILE_REQUIRED", () => {
+  describe("7. Cart Actions Fail Closed on PROFILE_REQUIRED", () => {
     const validUuid = "019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f";
 
     beforeEach(() => {
@@ -444,7 +476,7 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
       const selectMock = vi.fn().mockReturnValue({
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([]), // No profile
+            limit: vi.fn().mockResolvedValue([]),
           }),
         }),
       });
@@ -479,37 +511,6 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
     });
   });
 
-  describe("7. Input Validation & Error Handling", () => {
-    it("rejects invalid variantId format on add", async () => {
-      const result = await addCartItemAction(null, { variantId: "not-a-uuid", quantity: 1 });
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.code).toBe("INVALID_INPUT");
-      }
-    });
-
-    it("rejects quantity > 10 on add", async () => {
-      const validUuid = "019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f";
-      const result = await addCartItemAction(null, { variantId: validUuid, quantity: 11 });
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.code).toBe("INVALID_INPUT");
-      }
-    });
-
-    it("rejects quantity 0 on update", async () => {
-      const validUuid = "019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f";
-      const result = await updateCartItemQuantityAction(null, {
-        variantId: validUuid,
-        quantity: 0,
-      });
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.code).toBe("INVALID_INPUT");
-      }
-    });
-  });
-
   describe("8. Product & Variant Eligibility Enforcement", () => {
     const validUuid = "019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f";
 
@@ -526,7 +527,7 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([]), // Empty query
+              limit: vi.fn().mockResolvedValue([]),
             }),
           }),
         }),
@@ -538,31 +539,7 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
       if (!result.success) {
         expect(result.code).toBe("ITEM_NOT_FOUND");
       }
-    });
-
-    it("rejects addCartItemAction when product is DRAFT", async () => {
-      const selectMock = vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          innerJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([
-                {
-                  variantId: validUuid,
-                  variantStatus: "ACTIVE",
-                  productStatus: "DRAFT",
-                },
-              ]),
-            }),
-          }),
-        }),
-      });
-      vi.mocked(dbModule.db.select).mockImplementation(selectMock);
-
-      const result = await addCartItemAction(null, { variantId: validUuid, quantity: 1 });
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.code).toBe("PRODUCT_UNAVAILABLE");
-      }
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
     });
 
     it("rejects addCartItemAction when variant is INACTIVE", async () => {
@@ -588,10 +565,101 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
       if (!result.success) {
         expect(result.code).toBe("PRODUCT_UNAVAILABLE");
       }
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
     });
   });
 
-  describe("9. Session-Fixation & Lazy Merge Cookie Contracts", () => {
+  describe("8b. Input Validation & Error Handling", () => {
+    it("rejects invalid variantId format on add", async () => {
+      const result = await addCartItemAction(null, { variantId: "not-a-uuid", quantity: 1 });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.code).toBe("INVALID_INPUT");
+      }
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
+    });
+
+    it("rejects quantity > 10 on add", async () => {
+      const validUuid = "019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f";
+      const result = await addCartItemAction(null, { variantId: validUuid, quantity: 11 });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.code).toBe("INVALID_INPUT");
+      }
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
+    });
+
+    it("rejects quantity 0 on update", async () => {
+      const validUuid = "019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f";
+      const result = await updateCartItemQuantityAction(null, {
+        variantId: validUuid,
+        quantity: 0,
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.code).toBe("INVALID_INPUT");
+      }
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("9. Cookie Sliding & Failed Mutation Guarantees", () => {
+    const validUuid = "019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f";
+
+    it("does NOT set/slide cookie on validation failure", async () => {
+      const result = await addCartItemAction(null, { variantId: "invalid-uuid", quantity: 1 });
+      expect(result.success).toBe(false);
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
+    });
+
+    it("does NOT set/slide cookie on remove when line does not exist in cart", async () => {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
+        success: false,
+        reason: "no_session",
+      });
+      mockCookieStore.get.mockReturnValueOnce({ value: "A".repeat(43) });
+
+      // Mock transaction for remove where deletedRows = []
+      vi.mocked(dbModule.db.transaction).mockImplementation(async (callback) => {
+        const txMock = {
+          select: vi.fn().mockReturnValue({
+            from: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                for: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockResolvedValueOnce([
+                    {
+                      id: "cart-1",
+                      sessionToken: "A".repeat(43),
+                      expiresAt: new Date(Date.now() + 100000),
+                    },
+                  ]),
+                }),
+              }),
+            }),
+          }),
+          delete: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValueOnce([]), // Zero deleted rows!
+            }),
+          }),
+          update: vi.fn(),
+        };
+        return callback(
+          txMock as unknown as Parameters<Parameters<typeof dbModule.db.transaction>[0]>[0]
+        );
+      });
+
+      const result = await removeCartItemAction(null, { variantId: validUuid });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.code).toBe("ITEM_NOT_FOUND");
+      }
+      // Critical invariant: no cookie sliding on failed/no-op remove
+      expect(mockCookieStore.set).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("10. First Authenticated Access Guest Handling Invariants", () => {
     it("preserves guest cookie if merge transaction throws an error", async () => {
       vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValueOnce({
         success: true,
@@ -608,19 +676,17 @@ describe("GP-017 CART4 — Server-Side Cart Runtime Unit Suite", () => {
             limit: vi
               .fn()
               .mockResolvedValueOnce([{ id: "customer-profile-uuid-1" }])
-              .mockResolvedValueOnce([]), // Empty for authCart
+              .mockResolvedValueOnce([]),
           }),
         }),
       });
       vi.mocked(dbModule.db.select).mockImplementation(selectMock);
       mockCookieStore.get.mockReturnValueOnce({ value: "G".repeat(43) });
 
-      // Transaction fails with unexpected DB error
       vi.mocked(dbModule.db.transaction).mockRejectedValueOnce(new Error("DB_LOCK_TIMEOUT"));
 
-      const cart = await getCurrentCart();
-      expect(cart).toEqual(createEmptyCartSnapshot());
-      // Crucial: Cookie MUST NOT be cleared if transaction fails!
+      const result = await getCurrentCart();
+      expect(result.success).toBe(true);
       expect(mockCookieStore.delete).not.toHaveBeenCalled();
     });
   });

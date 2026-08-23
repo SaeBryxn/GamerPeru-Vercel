@@ -44,6 +44,17 @@ export type CartErrorCode =
   | "EXCEEDS_MAX_QUANTITY"
   | "SYSTEM_ERROR";
 
+export type CartReadResult =
+  | {
+      success: true;
+      cart: CartSnapshot;
+    }
+  | {
+      success: false;
+      code: "PROFILE_REQUIRED";
+      error: string;
+    };
+
 export type CartActionResult =
   | {
       success: true;

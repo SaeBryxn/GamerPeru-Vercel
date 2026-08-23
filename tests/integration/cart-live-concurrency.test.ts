@@ -1,14 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { and, eq, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { generateUuidV7 } from "@/db/utils/uuid";
 import {
-  ANONYMOUS_CART_TTL_MS,
-  AUTHENTICATED_CART_TTL_MS,
-  MAX_CART_LINE_QUANTITY,
-} from "@/lib/cart/constants";
+  atomicAddCartLine,
+  atomicRemoveCartLine,
+  atomicUpdateCartLine,
+  getOrCreateActiveCart,
+  mergeGuestCartIntoAuthenticated,
+  queryCartHydrationLines,
+  retireCartById,
+} from "@/lib/cart/persistence";
 
 /**
  * Strict database URL validator for real local PostgreSQL testing.
@@ -45,12 +48,11 @@ export function assertAuthorizedLocalPostgresTarget(rawUrl: string | undefined):
   return urlString;
 }
 
-describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
+describe("GP-017 CART4-R1 — Real Local PostgreSQL Concurrency & Persistence Suite", () => {
   const connectionString = assertAuthorizedLocalPostgresTarget(process.env.DATABASE_URL);
 
-  let sqlClient: postgres.Sql | null = null;
-  let testDb: ReturnType<typeof drizzle<typeof schema>> | null = null;
-  let isDbConnected = false;
+  let sqlClient: postgres.Sql;
+  let testDb: ReturnType<typeof drizzle<typeof schema>>;
 
   // Synthetic fixture IDs
   const fixturePrefix = "0191c400-0000-7000-8000-";
@@ -63,30 +65,24 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
   const customerProfileId = `${fixturePrefix}000000000007`;
 
   beforeAll(async () => {
-    try {
-      sqlClient = postgres(connectionString, {
-        prepare: false,
-        max: 10,
-        connect_timeout: 3,
-      });
+    // Fail-closed initialization: connection, schema, and seed MUST succeed or test run terminates with failure
+    sqlClient = postgres(connectionString, {
+      prepare: false,
+      max: 10,
+      connect_timeout: 5,
+    });
 
-      // Probe connection
-      await sqlClient`SELECT 1`;
-      testDb = drizzle(sqlClient, { schema });
-      isDbConnected = true;
+    // Probe connection: throws on connection failure
+    await sqlClient`SELECT 1`;
+    testDb = drizzle(sqlClient, { schema });
 
-      // Clean any potential pre-existing synthetic fixtures
-      await cleanupSyntheticFixtures();
-
-      // Seed minimal synthetic catalog & customer fixtures
-      await seedSyntheticFixtures();
-    } catch {
-      isDbConnected = false;
-    }
+    // Clean prior fixtures and seed fresh synthetic records
+    await cleanupSyntheticFixtures();
+    await seedSyntheticFixtures();
   });
 
   afterAll(async () => {
-    if (isDbConnected && sqlClient) {
+    if (sqlClient) {
       try {
         await cleanupSyntheticFixtures();
       } finally {
@@ -96,13 +92,8 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
   });
 
   async function cleanupSyntheticFixtures() {
-    if (!sqlClient) return;
-
-    // Delete cart lines & carts associated with test customer
     await sqlClient`DELETE FROM cart_items WHERE cart_id IN (SELECT id FROM carts WHERE customer_id = ${customerProfileId} OR session_token LIKE 'synth_token_%')`;
     await sqlClient`DELETE FROM carts WHERE customer_id = ${customerProfileId} OR session_token LIKE 'synth_token_%'`;
-
-    // Delete catalog & profile fixtures
     await sqlClient`DELETE FROM product_variants WHERE id IN (${variantId1}, ${variantId2})`;
     await sqlClient`DELETE FROM products WHERE id = ${productId}`;
     await sqlClient`DELETE FROM categories WHERE id = ${categoryId}`;
@@ -112,8 +103,6 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
   }
 
   async function seedSyntheticFixtures() {
-    if (!sqlClient) return;
-
     // 1. Brand
     await sqlClient`
       INSERT INTO brands (id, name, slug, status, created_at, updated_at)
@@ -144,7 +133,7 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
       ON CONFLICT (id) DO NOTHING;
     `;
 
-    // 5. Customer Profile (auth_user_id nullable or unlinked for synthetic test)
+    // 5. Customer Profile
     await sqlClient`
       INSERT INTO customer_profiles (id, first_name, last_name, created_at, updated_at)
       VALUES (${customerProfileId}, 'Test', 'Customer', NOW(), NOW())
@@ -153,7 +142,7 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
   }
 
   describe("Safety Assertions", () => {
-    it("strictly asserts local PostgreSQL target 127.0.0.1:54322/postgres", () => {
+    it("strictly asserts local PostgreSQL target 127.0.0.1:54322/postgres and rejects remote/proxy targets", () => {
       expect(() =>
         assertAuthorizedLocalPostgresTarget("postgres://postgres:postgres@127.0.0.1:54322/postgres")
       ).not.toThrow();
@@ -174,61 +163,15 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
     });
   });
 
-  describe("Six Canonical Concurrency Tests", () => {
-    it("1. Concurrent anonymous Cart creation yields exactly one ACTIVE Cart", async () => {
-      if (!isDbConnected || !testDb) {
-        return;
-      }
-
+  describe("Canonical Concurrency & Persistence Tests Using Production Primitives", () => {
+    it("A. Concurrent anonymous canonical Cart creation yields exactly one ACTIVE Cart", async () => {
       const sessionToken = `synth_token_anon_create_${Date.now()}_${"A".repeat(15)}`;
       const concurrency = 5;
 
       const creationFn = async () => {
-        return testDb!.transaction(async (tx) => {
-          const now = new Date();
-          const existing = await tx
-            .select()
-            .from(schema.carts)
-            .where(
-              and(eq(schema.carts.sessionToken, sessionToken), eq(schema.carts.status, "ACTIVE"))
-            )
-            .for("update")
-            .limit(1);
-
-          if (existing.length > 0 && existing[0]) {
-            return existing[0].id;
-          }
-
-          const expiresAt = new Date(now.getTime() + ANONYMOUS_CART_TTL_MS);
-          const [inserted] = await tx
-            .insert(schema.carts)
-            .values({
-              customerId: null,
-              sessionToken,
-              status: "ACTIVE",
-              currency: "PEN",
-              expiresAt,
-            })
-            .onConflictDoNothing({
-              target: schema.carts.sessionToken,
-              where: sql`${schema.carts.status} = 'ACTIVE'`,
-            })
-            .returning();
-
-          if (inserted) {
-            return inserted.id;
-          }
-
-          const [reselected] = await tx
-            .select()
-            .from(schema.carts)
-            .where(
-              and(eq(schema.carts.sessionToken, sessionToken), eq(schema.carts.status, "ACTIVE"))
-            )
-            .for("update")
-            .limit(1);
-
-          return reselected!.id;
+        return testDb.transaction(async (tx) => {
+          const cart = await getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+          return cart.id;
         });
       };
 
@@ -238,63 +181,20 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
       expect(uniqueIds.size).toBe(1);
 
       const activeRows =
-        await sqlClient!`SELECT * FROM carts WHERE session_token = ${sessionToken} AND status = 'ACTIVE'`;
+        await sqlClient`SELECT * FROM carts WHERE session_token = ${sessionToken} AND status = 'ACTIVE'`;
       expect(activeRows).toHaveLength(1);
     });
 
-    it("2. Concurrent authenticated Cart creation yields exactly one ACTIVE Cart", async () => {
-      if (!isDbConnected || !testDb) {
-        return;
-      }
-
+    it("B. Concurrent authenticated canonical Cart creation yields exactly one ACTIVE Cart", async () => {
       const concurrency = 5;
 
       const creationFn = async () => {
-        return testDb!.transaction(async (tx) => {
-          const now = new Date();
-          const existing = await tx
-            .select()
-            .from(schema.carts)
-            .where(
-              and(eq(schema.carts.customerId, customerProfileId), eq(schema.carts.status, "ACTIVE"))
-            )
-            .for("update")
-            .limit(1);
-
-          if (existing.length > 0 && existing[0]) {
-            return existing[0].id;
-          }
-
-          const expiresAt = new Date(now.getTime() + AUTHENTICATED_CART_TTL_MS);
-          const [inserted] = await tx
-            .insert(schema.carts)
-            .values({
-              customerId: customerProfileId,
-              sessionToken: null,
-              status: "ACTIVE",
-              currency: "PEN",
-              expiresAt,
-            })
-            .onConflictDoNothing({
-              target: schema.carts.customerId,
-              where: sql`${schema.carts.status} = 'ACTIVE'`,
-            })
-            .returning();
-
-          if (inserted) {
-            return inserted.id;
-          }
-
-          const [reselected] = await tx
-            .select()
-            .from(schema.carts)
-            .where(
-              and(eq(schema.carts.customerId, customerProfileId), eq(schema.carts.status, "ACTIVE"))
-            )
-            .for("update")
-            .limit(1);
-
-          return reselected!.id;
+        return testDb.transaction(async (tx) => {
+          const cart = await getOrCreateActiveCart(
+            { type: "AUTHENTICATED", customerProfileId, authUserId: "" },
+            tx
+          );
+          return cart.id;
         });
       };
 
@@ -304,251 +204,93 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
       expect(uniqueIds.size).toBe(1);
 
       const activeRows =
-        await sqlClient!`SELECT * FROM carts WHERE customer_id = ${customerProfileId} AND status = 'ACTIVE'`;
+        await sqlClient`SELECT * FROM carts WHERE customer_id = ${customerProfileId} AND status = 'ACTIVE'`;
       expect(activeRows).toHaveLength(1);
     });
 
-    it("3. Concurrent duplicate increment (initial 1, two simultaneous +1) results in exactly 3 without lost updates", async () => {
-      if (!isDbConnected || !testDb) {
-        return;
-      }
-
+    it("C. Concurrent production line increment results in exactly 3 without lost updates", async () => {
       const sessionToken = `synth_token_inc_${Date.now()}_${"B".repeat(15)}`;
 
-      // Setup: Create cart with initial quantity 1
-      const [cart] = await sqlClient!`
-        INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
-        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', NOW() + INTERVAL '30 days', NOW(), NOW())
-        RETURNING id;
-      `;
-      expect(cart).toBeDefined();
+      // Setup: Create cart and add initial quantity 1 using production primitives
+      const cart = await testDb.transaction(async (tx) => {
+        const c = await getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+        await atomicAddCartLine(c.id, variantId1, 1, tx);
+        return c;
+      });
 
-      await sqlClient!`
-        INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
-        VALUES (${generateUuidV7()}, ${cart!.id}, ${variantId1}, 1, NOW(), NOW());
-      `;
-
-      // Concurrent execution of two +1 additions
+      // Concurrent execution of two +1 additions using atomicAddCartLine
       const incrementFn = async () => {
-        return testDb!.transaction(async (tx) => {
-          const now = new Date();
-          await tx
-            .insert(schema.cartItems)
-            .values({
-              id: generateUuidV7(),
-              cartId: cart!.id,
-              variantId: variantId1,
-              quantity: 1,
-            })
-            .onConflictDoUpdate({
-              target: [schema.cartItems.cartId, schema.cartItems.variantId],
-              set: {
-                quantity: sql`LEAST(${schema.cartItems.quantity} + 1, ${MAX_CART_LINE_QUANTITY})`,
-                updatedAt: now,
-              },
-            });
+        return testDb.transaction(async (tx) => {
+          await atomicAddCartLine(cart.id, variantId1, 1, tx);
         });
       };
 
       await Promise.all([incrementFn(), incrementFn()]);
 
       const [itemRow] =
-        await sqlClient!`SELECT quantity FROM cart_items WHERE cart_id = ${cart!.id} AND variant_id = ${variantId1}`;
+        await sqlClient`SELECT quantity FROM cart_items WHERE cart_id = ${cart.id} AND variant_id = ${variantId1}`;
       expect(itemRow).toBeDefined();
       expect(itemRow!.quantity).toBe(3);
     });
 
-    it("4. Concurrent cap crossing (initial 8, additions of +3 and +4) caps cleanly at 10 with 0 unhandled constraint errors", async () => {
-      if (!isDbConnected || !testDb) {
-        return;
-      }
-
+    it("D. Concurrent production cap crossing (initial 8, +3 and +4) caps cleanly at 10 without errors", async () => {
       const sessionToken = `synth_token_cap_${Date.now()}_${"C".repeat(15)}`;
 
-      // Setup: Create cart with initial quantity 8
-      const [cart] = await sqlClient!`
-        INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
-        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', NOW() + INTERVAL '30 days', NOW(), NOW())
-        RETURNING id;
-      `;
-      expect(cart).toBeDefined();
-
-      await sqlClient!`
-        INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
-        VALUES (${generateUuidV7()}, ${cart!.id}, ${variantId1}, 8, NOW(), NOW());
-      `;
+      const cart = await testDb.transaction(async (tx) => {
+        const c = await getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+        await atomicAddCartLine(c.id, variantId1, 8, tx);
+        return c;
+      });
 
       const addFn = async (qty: number) => {
-        return testDb!.transaction(async (tx) => {
-          const now = new Date();
-          await tx
-            .insert(schema.cartItems)
-            .values({
-              id: generateUuidV7(),
-              cartId: cart!.id,
-              variantId: variantId1,
-              quantity: qty,
-            })
-            .onConflictDoUpdate({
-              target: [schema.cartItems.cartId, schema.cartItems.variantId],
-              set: {
-                quantity: sql`LEAST(${schema.cartItems.quantity} + ${qty}, ${MAX_CART_LINE_QUANTITY})`,
-                updatedAt: now,
-              },
-            });
+        return testDb.transaction(async (tx) => {
+          await atomicAddCartLine(cart.id, variantId1, qty, tx);
         });
       };
 
       await expect(Promise.all([addFn(3), addFn(4)])).resolves.toBeDefined();
 
       const [itemRow] =
-        await sqlClient!`SELECT quantity FROM cart_items WHERE cart_id = ${cart!.id} AND variant_id = ${variantId1}`;
+        await sqlClient`SELECT quantity FROM cart_items WHERE cart_id = ${cart.id} AND variant_id = ${variantId1}`;
       expect(itemRow).toBeDefined();
       expect(itemRow!.quantity).toBe(10);
     });
 
-    it("5. Concurrent guest -> authenticated merge incorporates items exactly once and final guest is ABANDONED (never CONVERTED)", async () => {
-      if (!isDbConnected || !testDb) {
-        return;
-      }
-
+    it("E. Concurrent production guest merge incorporates items exactly once and final guest is ABANDONED", async () => {
       const guestToken = `synth_token_merge_${Date.now()}_${"D".repeat(15)}`;
 
       // Setup: guest cart with 2 of variant1 and 3 of variant2
-      const [guestCart] = await sqlClient!`
-        INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
-        VALUES (${generateUuidV7()}, ${guestToken}, 'ACTIVE', 'PEN', NOW() + INTERVAL '30 days', NOW(), NOW())
-        RETURNING id;
-      `;
-      expect(guestCart).toBeDefined();
+      const guestCart = await testDb.transaction(async (tx) => {
+        const gc = await getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken: guestToken }, tx);
+        await atomicAddCartLine(gc.id, variantId1, 2, tx);
+        await atomicAddCartLine(gc.id, variantId2, 3, tx);
+        return gc;
+      });
 
-      await sqlClient!`
-        INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
-        VALUES 
-          (${generateUuidV7()}, ${guestCart!.id}, ${variantId1}, 2, NOW(), NOW()),
-          (${generateUuidV7()}, ${guestCart!.id}, ${variantId2}, 3, NOW(), NOW());
-      `;
+      // Clear any prior auth cart
+      await sqlClient`DELETE FROM cart_items WHERE cart_id IN (SELECT id FROM carts WHERE customer_id = ${customerProfileId})`;
+      await sqlClient`DELETE FROM carts WHERE customer_id = ${customerProfileId}`;
 
-      // Clear any prior auth cart for customer
-      await sqlClient!`DELETE FROM cart_items WHERE cart_id IN (SELECT id FROM carts WHERE customer_id = ${customerProfileId})`;
-      await sqlClient!`DELETE FROM carts WHERE customer_id = ${customerProfileId}`;
-
-      // Simulate two concurrent merge requests with the same guest token
+      // Concurrent merge calls
       const mergeFn = async () => {
-        return testDb!.transaction(async (tx) => {
-          const now = new Date();
-          const [lockedGuest] = await tx
-            .select()
-            .from(schema.carts)
-            .where(
-              and(eq(schema.carts.sessionToken, guestToken), eq(schema.carts.status, "ACTIVE"))
-            )
-            .for("update")
-            .limit(1);
-
-          if (!lockedGuest || lockedGuest.expiresAt < now) {
-            return { merged: false };
-          }
-
-          const guestLines = await tx
-            .select()
-            .from(schema.cartItems)
-            .where(eq(schema.cartItems.cartId, lockedGuest.id))
-            .for("update");
-
-          if (guestLines.length === 0) {
-            await tx
-              .update(schema.carts)
-              .set({ status: "ABANDONED", updatedAt: now })
-              .where(eq(schema.carts.id, lockedGuest.id));
-            return { merged: false };
-          }
-
-          // Resolve/create auth cart
-          let [authCart] = await tx
-            .select()
-            .from(schema.carts)
-            .where(
-              and(eq(schema.carts.customerId, customerProfileId), eq(schema.carts.status, "ACTIVE"))
-            )
-            .for("update")
-            .limit(1);
-
-          if (!authCart) {
-            const expiresAt = new Date(now.getTime() + AUTHENTICATED_CART_TTL_MS);
-            const [inserted] = await tx
-              .insert(schema.carts)
-              .values({
-                customerId: customerProfileId,
-                sessionToken: null,
-                status: "ACTIVE",
-                currency: "PEN",
-                expiresAt,
-              })
-              .onConflictDoNothing({
-                target: schema.carts.customerId,
-                where: sql`${schema.carts.status} = 'ACTIVE'`,
-              })
-              .returning();
-
-            if (inserted) {
-              authCart = inserted;
-            } else {
-              const [reselected] = await tx
-                .select()
-                .from(schema.carts)
-                .where(
-                  and(
-                    eq(schema.carts.customerId, customerProfileId),
-                    eq(schema.carts.status, "ACTIVE")
-                  )
-                )
-                .for("update")
-                .limit(1);
-              authCart = reselected!;
-            }
-          }
-
-          for (const line of guestLines) {
-            await tx
-              .insert(schema.cartItems)
-              .values({
-                id: generateUuidV7(),
-                cartId: authCart.id,
-                variantId: line.variantId,
-                quantity: line.quantity,
-              })
-              .onConflictDoUpdate({
-                target: [schema.cartItems.cartId, schema.cartItems.variantId],
-                set: {
-                  quantity: sql`LEAST(${schema.cartItems.quantity} + ${line.quantity}, ${MAX_CART_LINE_QUANTITY})`,
-                  updatedAt: now,
-                },
-              });
-          }
-
-          await tx
-            .update(schema.carts)
-            .set({ status: "ABANDONED", updatedAt: now })
-            .where(eq(schema.carts.id, lockedGuest.id));
-
-          return { merged: true };
+        return testDb.transaction(async (tx) => {
+          return mergeGuestCartIntoAuthenticated(customerProfileId, guestToken, tx);
         });
       };
 
       const [resA, resB] = await Promise.all([mergeFn(), mergeFn()]);
 
-      // Exactly one transaction performs the merge, the other sees guest as ABANDONED
+      // Exactly one transaction performs the merge
       expect([resA.merged, resB.merged].filter(Boolean)).toHaveLength(1);
 
       // Verify guest cart final state is ABANDONED (never CONVERTED)
-      const [finalGuest] = await sqlClient!`SELECT status FROM carts WHERE id = ${guestCart!.id}`;
+      const [finalGuest] = await sqlClient`SELECT status FROM carts WHERE id = ${guestCart.id}`;
       expect(finalGuest).toBeDefined();
       expect(finalGuest!.status).toBe("ABANDONED");
       expect(finalGuest!.status).not.toBe("CONVERTED");
 
       // Verify auth cart line quantities
-      const authLines = await sqlClient!`
+      const authLines = await sqlClient`
         SELECT variant_id, quantity FROM cart_items 
         WHERE cart_id = (SELECT id FROM carts WHERE customer_id = ${customerProfileId} AND status = 'ACTIVE')
       `;
@@ -561,15 +303,11 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
       expect(v2!.quantity).toBe(3);
     });
 
-    it("6. Expired ACTIVE replacement race transitions old to ABANDONED, creates exactly one new ACTIVE cart with 0 unique violations", async () => {
-      if (!isDbConnected || !testDb) {
-        return;
-      }
-
+    it("F. Concurrent production expired ACTIVE replacement transitions old to ABANDONED and creates exactly one new ACTIVE cart", async () => {
       const sessionToken = `synth_token_expired_race_${Date.now()}_${"E".repeat(15)}`;
 
       // Setup: Insert expired active cart
-      const [oldCart] = await sqlClient!`
+      const [oldCart] = await sqlClient`
         INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
         VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '10 days', NOW())
         RETURNING id;
@@ -577,59 +315,9 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
       expect(oldCart).toBeDefined();
 
       const resolveActiveCartFn = async () => {
-        return testDb!.transaction(async (tx) => {
-          const now = new Date();
-          const existing = await tx
-            .select()
-            .from(schema.carts)
-            .where(
-              and(eq(schema.carts.sessionToken, sessionToken), eq(schema.carts.status, "ACTIVE"))
-            )
-            .for("update")
-            .limit(1);
-
-          if (existing.length > 0 && existing[0]) {
-            const activeCart = existing[0];
-            if (activeCart.expiresAt < now) {
-              await tx
-                .update(schema.carts)
-                .set({ status: "ABANDONED", updatedAt: now })
-                .where(eq(schema.carts.id, activeCart.id));
-            } else {
-              return activeCart.id;
-            }
-          }
-
-          const expiresAt = new Date(now.getTime() + ANONYMOUS_CART_TTL_MS);
-          const [inserted] = await tx
-            .insert(schema.carts)
-            .values({
-              customerId: null,
-              sessionToken,
-              status: "ACTIVE",
-              currency: "PEN",
-              expiresAt,
-            })
-            .onConflictDoNothing({
-              target: schema.carts.sessionToken,
-              where: sql`${schema.carts.status} = 'ACTIVE'`,
-            })
-            .returning();
-
-          if (inserted) {
-            return inserted.id;
-          }
-
-          const [reselected] = await tx
-            .select()
-            .from(schema.carts)
-            .where(
-              and(eq(schema.carts.sessionToken, sessionToken), eq(schema.carts.status, "ACTIVE"))
-            )
-            .for("update")
-            .limit(1);
-
-          return reselected!.id;
+        return testDb.transaction(async (tx) => {
+          const cart = await getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+          return cart.id;
         });
       };
 
@@ -639,15 +327,70 @@ describe("GP-017 CART4 — Real Local PostgreSQL Concurrency Suite", () => {
       expect(uniqueIds.size).toBe(1);
 
       // Old cart is ABANDONED
-      const [oldCartCheck] = await sqlClient!`SELECT status FROM carts WHERE id = ${oldCart!.id}`;
+      const [oldCartCheck] = await sqlClient`SELECT status FROM carts WHERE id = ${oldCart!.id}`;
       expect(oldCartCheck).toBeDefined();
       expect(oldCartCheck!.status).toBe("ABANDONED");
 
       // Exactly 1 new ACTIVE cart exists
       const activeRows =
-        await sqlClient!`SELECT id FROM carts WHERE session_token = ${sessionToken} AND status = 'ACTIVE'`;
+        await sqlClient`SELECT id FROM carts WHERE session_token = ${sessionToken} AND status = 'ACTIVE'`;
       expect(activeRows).toHaveLength(1);
       expect(activeRows[0]!.id).not.toBe(oldCart!.id);
+    });
+
+    it("G. Production retireCartById transitions cart to ABANDONED without leaving stale ACTIVE rows", async () => {
+      const sessionToken = `synth_token_retire_${Date.now()}_${"F".repeat(15)}`;
+
+      const cart = await testDb.transaction(async (tx) => {
+        return getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+      });
+
+      await testDb.transaction(async (tx) => {
+        await retireCartById(cart.id, tx);
+      });
+
+      const [checked] = await sqlClient`SELECT status FROM carts WHERE id = ${cart.id}`;
+      expect(checked).toBeDefined();
+      expect(checked!.status).toBe("ABANDONED");
+    });
+
+    it("H. Production atomicUpdateCartLine returns false when updating nonexistent line item", async () => {
+      const sessionToken = `synth_token_upd_missing_${Date.now()}_${"G".repeat(15)}`;
+
+      const cart = await testDb.transaction(async (tx) => {
+        return getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+      });
+
+      const result = await testDb.transaction(async (tx) => {
+        return atomicUpdateCartLine(cart.id, variantId1, 5, tx);
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it("I. Production atomicRemoveCartLine returns false and deletes 0 rows when removing nonexistent line item", async () => {
+      const sessionToken = `synth_token_rem_missing_${Date.now()}_${"H".repeat(15)}`;
+
+      const cart = await testDb.transaction(async (tx) => {
+        return getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+      });
+
+      const result = await testDb.transaction(async (tx) => {
+        return atomicRemoveCartLine(cart.id, variantId1, tx);
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it("J. Production queryCartHydrationLines returns empty array for empty cart", async () => {
+      const sessionToken = `synth_token_query_empty_${Date.now()}_${"I".repeat(15)}`;
+
+      const cart = await testDb.transaction(async (tx) => {
+        return getOrCreateActiveCart({ type: "ANONYMOUS", sessionToken }, tx);
+      });
+
+      const lines = await queryCartHydrationLines(cart.id, testDb);
+      expect(lines).toEqual([]);
     });
   });
 });

@@ -4,12 +4,9 @@
  * Public entry point for server-side Cart aggregate operations, types, and validation.
  */
 
-export {
-  addCartItemAction,
-  updateCartItemQuantityAction,
-  removeCartItemAction,
-  getCurrentCart,
-} from "./actions";
+export { addCartItemAction, updateCartItemQuantityAction, removeCartItemAction } from "./actions";
+
+export { getCurrentCart } from "./read";
 
 export {
   ANONYMOUS_CART_COOKIE_NAME_DEV,
@@ -27,6 +24,7 @@ export type {
   CartLineSnapshot,
   CartMediaSnapshot,
   CartActionResult,
+  CartReadResult,
   CartErrorCode,
   AddCartItemInput,
   UpdateCartItemQuantityInput,
