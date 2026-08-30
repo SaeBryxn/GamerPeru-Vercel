@@ -40,12 +40,12 @@ COMPLETE
 GP-017 delivers the complete, authoritative persistent Cart domain and storefront experience for Gamer Perú. The implementation enforces strict server-side cryptographic authority, real PostgreSQL relational persistence with race-free concurrency semantics, zero-personalization public Server Component boundaries, accessible Drawer and full-page `/carrito` UI surfaces, and complete real Supabase E2E verification:
 
 1. **Relational Database Schema & Partial Unique Indexes**: Deployed migration `0008_small_logan.sql` creating tables `carts` and `cart_items` with strict XOR ownership (`customer_id` XOR `session_token`), PostgreSQL partial unique indexes enforcing at most one `ACTIVE` cart per owner, cascading line item deletions, and integer quantity bounds (1..10).
-2. **Cryptographic Authority & Session Lifecycle**: Anonymous cart state is secured by a server-generated 256-bit entropy token (43-character base64url) stored in an `HttpOnly`, `SameSite=Lax`, `Path=/` cookie (`gp_cart_session` in development, `__Secure-gp_cart_session` in production). Authenticated cart access derives identity strictly from verified Supabase JWT claims (`authUserId` -> `CustomerProfile`), failing closed (`PROFILE_REQUIRED`) without anonymous fallback.
+2. **Cryptographic Authority & Session Lifecycle**: Anonymous cart state is secured by a server-generated 256-bit entropy token (43-character base64url) stored in an `HttpOnly`, `SameSite=Lax`, `Path=/` cookie (`gp_cart_session` in development, `__Secure-gp_cart_session` in production). Authenticated cart access derives identity strictly from verified Supabase JWT claims (`authUserId` -> `CustomerProfile`), failing closed (`PROFILE_REQUIRED`) without anonymous fallback when a profile is missing.
 3. **Robust Concurrency & Advisory Lock Serialization**: Implemented transactional row-level locking (`SELECT ... FOR UPDATE`), atomic quantity updates (`LEAST(quantity + delta, 10)`), and PostgreSQL transaction-scoped advisory locks (`pg_advisory_xact_lock`) keyed on token hashes to serialize same-token authority transitions and eliminate split-cart replacement races during concurrent expired-session requests.
-4. **Lazy Guest-to-Authenticated Merge**: On first authenticated Cart access, any active guest cart is atomically merged into the customer's active Cart (summing duplicate variant quantities up to 10), retiring the source guest cart to `ABANDONED` (never `CONVERTED`).
+4. **Lazy Guest-to-Authenticated Merge**: On first authenticated Cart access, any active guest cart with items is atomically merged into the customer's active Cart (summing duplicate variant quantities up to 10), retiring the source guest cart to `ABANDONED` (never `CONVERTED`).
 5. **Catalog Hydration & Price Integrity**: Real-time pricing and line availability are hydrated directly from the PostgreSQL catalog at query time. The client never submits authoritative prices, totals, or availability flags. Items with unrepresented status (`DRAFT`/`ARCHIVED` product or `INACTIVE` variant) are marked `available: false` with disabled quantity steppers while preserving user visibility and removal controls.
 6. **Storefront Cart UI & Client State (`CartProvider`)**: Delivered a responsive, accessible Cart experience featuring desktop and mobile Header launchers with authoritative item count badges, a native `<dialog>` slide-out Cart Drawer with focus trapping/restoration, seamless PDP Add-to-Cart island integration, and a dedicated `/carrito` page. All client UI state synchronizes through a single global `CartProvider` using an isolated post-hydration Server Function (`loadCurrentCartAction`), preserving static caching across public storefront routes (`/`, `/carrito` shell).
-7. **Comprehensive Local & CI Validation**: Verified against canonical local Supabase PostgreSQL (`127.0.0.1:54322/postgres`) with 14/14 passing live concurrency integration tests (`pnpm test:cart:live`), 11/11 passing browser Playwright scenarios (`pnpm test:cart:e2e`), 763 passed unit tests (54 test files), clean production Next.js builds, and zero accessibility violations (Axe WCAG 2.1 AA).
+7. **Comprehensive Local & CI Validation**: Verified against canonical local Supabase PostgreSQL (`127.0.0.1:54322/postgres`) with 14/14 passing live concurrency integration tests (`pnpm test:cart:live`), 11/11 passing browser Playwright scenarios (`pnpm test:cart:e2e`), 54 test files passed; 763 tests passed and 1 skipped (764 total), clean production Next.js builds, and 0 serious and 0 critical violations in the open Cart Drawer Axe accessibility audit.
 
 ---
 
@@ -56,7 +56,7 @@ GP-017 delivers the complete, authoritative persistent Cart domain and storefron
 - **Relational Cart Persistence**: Complete PostgreSQL data model (`carts`, `cart_items`) with partial unique indexes, foreign key constraints, and 9 canonical migration files total.
 - **Server-Side Cart Runtime**: Server-only read module (`getCurrentCart`), mutation actions (`addCartItemAction`, `updateCartItemQuantityAction`, `removeCartItemAction`), and zero-input UI bridge (`loadCurrentCartAction`).
 - **Cryptographic Anonymous Session Authority**: 256-bit entropy base64url tokens, secure cookie lifecycle, 30-day sliding TTL on successful mutations.
-- **Authenticated Authority & Claim Verification**: Supabase SSR JWT verification, profile resolution, fail-closed `PROFILE_REQUIRED` handling.
+- **Authenticated Authority & Claim Verification**: Supabase SSR JWT verification, profile resolution, fail-closed `PROFILE_REQUIRED` handling when profile is missing.
 - **Guest-to-Authenticated Merge**: Lazy transactional merge on authenticated read/mutation, duplicate summing up to 10, guest retirement to `ABANDONED`.
 - **Concurrency & Advisory Lock Hardening**: Row locks, advisory locks for expired-session replacement serialization, conflict-safe inserts.
 - **Storefront Cart UI Components**: Header launchers (desktop/mobile), badge counters, global native `<dialog>` Cart Drawer, PDP Add-to-Cart island, `/carrito` page, empty states, error states, and `PROFILE_REQUIRED` callouts.
@@ -116,45 +116,63 @@ Cart data is stored in PostgreSQL and managed via Drizzle ORM through migration 
 
 ---
 
-## Authority & Session Model
+## Authority, Session Model & Request Flow
+
+The Cart system distinguishes between **passive read operations** and **stateful mutation operations**:
 
 ```
-                    +------------------------------------------+
-                    |           Incoming HTTP Request          |
-                    +------------------------------------------+
-                                         |
-                       [Evaluate Authenticated Identity]
-                                         |
-                +------------------------+------------------------+
-                | Verified JWT                                    | No Session / Invalid JWT
-                v                                                 v
-   [Get CustomerProfile by authUserId]              [Read Cookie: gp_cart_session / __Secure-]
-                |                                                 |
-       +--------+--------+                               +--------+--------+
-       | Found           | Missing Profile               | Valid Token     | Missing/Malformed
-       v                 v                               v                 v
-[Authenticated]  [PROFILE_REQUIRED]              [Anonymous Authority]   [Generate 256-bit Token]
- (60-Day TTL)     (Fail-Closed, 0 Downgrade)      (30-Day Sliding TTL)    (Set HttpOnly Cookie)
+                              +------------------------------------------+
+                              |          Incoming HTTP Request           |
+                              +------------------------------------------+
+                                                   |
+                                 [Evaluate Authenticated Identity]
+                                                   |
+                  +--------------------------------+--------------------------------+
+                  | Verified JWT                                                    | No Session / Invalid JWT
+                  v                                                                 v
+     [Get CustomerProfile by authUserId]                               [Read Anonymous Session Cookie]
+                  |                                                                 |
+         +--------+--------+                                               +--------+--------+
+         | Found           | Missing Profile                               | Valid Active    | No Active Cart /
+         v                 v                                               | Cart Token      | Missing / Stale
+  [Authenticated]   [PROFILE_REQUIRED]                                     v                 v
+   (60-Day TTL)      (Fail-Closed, 0 Downgrade)                    [Active Anon Cart]  [PASSIVE READ] -> Empty Zero-State
+                                                                           |           (0 DB writes, 0 Cookies set)
+                                                                           |
+                                                                           +---------> [MUTATION] -> Generate Token,
+                                                                                       Create Cart, Set Cookie on commit
 ```
 
-- **Anonymous Token**: Cryptographically secure 256-bit random bytes formatted as base64url (`randomBytes(32).toString("base64url")`), producing an exact 43-character token conforming to regex `^[A-Za-z0-9_-]{43}$`.
-- **Cookie Security**: `HttpOnly`, `SameSite=Lax`, `Path=/`, `maxAge=2592000` (30 days), and `Secure` in production environments.
-- **Authenticated Authority**: Resolves `auth_user_id` from Supabase SSR verified JWT claims to `customer_profiles.id`. Client-provided owner IDs (`customerId`, `profileId`, `authUserId`, `cartId`) are strictly rejected.
-- **Fail-Closed Profile Requirement**: When a valid JWT is present but no customer profile exists, the runtime returns `{ success: false, code: "PROFILE_REQUIRED" }`. It never downgrades the user to an anonymous cart.
+### Operational Rules:
+
+1. **Passive Anonymous Read (`getCurrentCart`)**:
+   - When no valid authoritative active anonymous Cart exists, `getCurrentCart()` returns the empty Cart zero-state (`createEmptyCartSnapshot()`).
+   - It performs **zero database writes**, creates **no session token**, sets **no cookies**, and does **not slide TTL**.
+2. **Anonymous Mutation Resolution**:
+   - When an anonymous user performs an Add-to-Cart mutation without an existing active Cart, the server generates a fresh 256-bit cryptographically secure token (`randomBytes(32).toString("base64url")`), creates the canonical `ACTIVE` Cart in PostgreSQL, and sets the `HttpOnly` cookie upon transaction commit.
+3. **Cookie Security Attributes**:
+   - Name: `gp_cart_session` (development) / `__Secure-gp_cart_session` (production).
+   - Attributes: `HttpOnly`, `SameSite=Lax`, `Path=/`, `maxAge=2592000` (30 days), `Secure` in production.
+4. **Authenticated Identity**:
+   - Resolves `auth_user_id` from Supabase SSR verified JWT claims to `customer_profiles.id`. Client-supplied owner IDs (`customerId`, `profileId`, `authUserId`, `cartId`) are strictly rejected.
+5. **Profile Requirement (`PROFILE_REQUIRED`)**:
+   - Applies strictly when a valid authenticated identity exists but its `CustomerProfile` cannot be resolved. In this state, Cart operations fail closed (`{ success: false, code: "PROFILE_REQUIRED" }`) rather than downgrading to anonymous authority.
+   - Anonymous shoppers without an authenticated session are legitimate Cart users and operate normally under the anonymous authority contract.
 
 ---
 
-## TTL, Expiry & Concurrency Management
+## TTL, Expiry & Token Lifecycle Semantics
 
-| Cart State                               | Lifespan             | Sliding Trigger                                 | Expiry Behavior                                                                                                                         |
-| :--------------------------------------- | :------------------- | :---------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------- |
-| **Anonymous `ACTIVE`**                   | 30 days (`2592000s`) | Successful mutation (`add`, `update`, `remove`) | Retired to `ABANDONED`. Known-expired mutation atomically creates fresh Cart under serialized advisory lock without reviving old lines. |
-| **Authenticated `ACTIVE`**               | 60 days (`5184000s`) | Successful mutation                             | Retired to `ABANDONED`. Next mutation creates fresh active Cart.                                                                        |
-| **Historical `ABANDONED` / `CONVERTED`** | Static               | Never slides                                    | Token replay rotates authority to a fresh cryptographic session token.                                                                  |
+| Cart Authority State                              | Lifespan             | Sliding Trigger                                 | Expiry & Token Lifecycle Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| :------------------------------------------------ | :------------------- | :---------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Case A: Known Expired `ACTIVE` Anonymous Cart** | 30 days (`2592000s`) | Successful mutation (`add`, `update`, `remove`) | When a valid 43-character token belongs to an existing `ACTIVE` Cart that has expired: (1) acquire transaction-scoped advisory lock on token hash, (2) lock expired row, (3) mark old Cart `ABANDONED`, (4) do not revive old lines, (5) for mutations requiring replacement, create a fresh empty `ACTIVE` Cart using the **SAME already-server-issued token**, (6) continue mutation, (7) refresh cookie `maxAge` on commit. **This is intentionally not token rotation.** |
+| **Case B: Historical Inactive Token Replay**      | Static               | Never slides                                    | If a valid-format token maps only to historical `ABANDONED` or `CONVERTED` Cart state, it is not authoritative for a new Cart. A subsequent anonymous mutation **rotates to a fresh cryptographically random token**.                                                                                                                                                                                                                                                        |
+| **Case C: Unknown / Malformed / Missing Token**   | N/A                  | N/A                                             | Unknown or malformed tokens are never reused. A fresh anonymous mutation generates a new 256-bit cryptographic token.                                                                                                                                                                                                                                                                                                                                                        |
+| **Authenticated `ACTIVE` Cart**                   | 60 days (`5184000s`) | Successful mutation                             | Retired to `ABANDONED`. Subsequent mutation creates fresh active Cart for that customer.                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ### Concurrency Primitives:
 
-- **Row-Level Locking**: Mutations lock the target cart row (`SELECT id, status, expires_at FROM carts WHERE ... FOR UPDATE`) inside the database transaction.
+- **Row-Level Locking**: Mutations lock target cart rows (`SELECT id, status, expires_at FROM carts WHERE ... FOR UPDATE`) within database transactions.
 - **Advisory Locks for Expired Replacement**:
   ```ts
   const lockKey = hashTokenToInt64(sessionToken);
@@ -162,31 +180,33 @@ Cart data is stored in PostgreSQL and managed via Drizzle ORM through migration 
   ```
   Serializes simultaneous requests using the same expired token, preventing split-brain replacement carts.
 - **PostgreSQL Partial Unique ON CONFLICT Inference**:
-  Aligned the `INSERT ... ON CONFLICT (session_token) WHERE status = 'ACTIVE' AND session_token IS NOT NULL DO NOTHING` and `(customer_id) WHERE status = 'ACTIVE' AND customer_id IS NOT NULL DO NOTHING` clauses with database partial indexes to ensure proper index inference by the PostgreSQL query planner.
+  Aligned runtime conflict inference predicates with canonical partial unique indexes (`WHERE status = 'ACTIVE' AND session_token IS NOT NULL` / `WHERE status = 'ACTIVE' AND customer_id IS NOT NULL`) to allow PostgreSQL to infer the intended compatible index.
 
 ---
 
 ## Lazy Guest-to-Authenticated Merge Semantics
 
 ```
-[Authenticated User Accesses Cart] -> [Evaluate Guest Cookie: gp_cart_session]
-                                                      |
-                   +----------------------------------+----------------------------------+
-                   | Valid Active Guest Cart                                             | No Guest / Expired / Empty
-                   v                                                                     v
-  [Lock Auth Cart & Guest Cart (FOR UPDATE)]                             [Return / Create Auth Cart]
-                   |
-  [Transfer Distinct Lines -> Auth Cart]
-  [Sum Duplicate Lines: LEAST(auth.qty + guest.qty, 10)]
-                   |
-  [Update Guest Cart: status = 'ABANDONED'] (Never CONVERTED)
-  [Clear Guest Cookie]
+[Authenticated User Interacts with Cart] -> [Inspect Guest Cookie: gp_cart_session]
+                                                         |
+                      +----------------------------------+----------------------------------+
+                      | Valid ACTIVE Guest with Lines                                       | No Guest / Empty / Expired / Stale
+                      v                                                                     v
+     [Lock Auth Cart & Guest Cart (FOR UPDATE)]                             [Evaluate Authenticated Cart State]
+                      |                                                                     |
+     [Transfer Distinct Lines -> Auth Cart]                                 - Empty/Expired Guest: Mark ABANDONED, Clear Cookie
+     [Sum Duplicate Lines: LEAST(auth.qty + guest.qty, 10)]                 - Stale/Malformed Guest: Clear Cookie
+                      |                                                     - Passive Read: Return Auth State (0 Empty Cart writes)
+     [Update Guest Cart: status = 'ABANDONED'] (Never CONVERTED)            - Mutation: Resolve/Create Auth Cart Destination
+     [Clear Guest Cookie]
 ```
 
 - **Trigger**: First authenticated cart interaction (read or mutation), not auth callback.
-- **Quantity Cap**: Merged duplicate items cap cleanly at 10 units.
-- **Guest Source Retirement**: Set to `ABANDONED`. `CONVERTED` is strictly reserved for checkout order completion.
-- **Empty / Expired Guest**: Retired to `ABANDONED` without manufacturing unnecessary authenticated cart records.
+- **Valid ACTIVE Guest with Lines**: Merged transactionally into the authenticated Cart; duplicate variants summed up to 10 units; guest cart retired to `ABANDONED`.
+- **Valid ACTIVE but EMPTY Guest**: Guest authority is retired/cleared. Does **not** manufacture an empty authenticated Cart solely because an empty guest existed.
+- **Expired Guest**: Marked `ABANDONED` and cleared. Does **not** merge and does **not** manufacture an authenticated Cart.
+- **Stale / Malformed Guest Token**: Cleared safely; authenticated flow continues without manufacturing destination cart state solely due to stale guest presence.
+- **Destination Creation**: An authenticated Cart is created during a _mutation_ (because the mutation requires a destination), not as an automatic side-effect of observing an empty/expired guest during passive read.
 
 ---
 
@@ -257,9 +277,9 @@ export interface CartSnapshotLine {
 ## Security & Observability
 
 - **Zero Token Leakage**: Anonymous tokens exist solely in `HttpOnly` cookies and are never serialized into HTML, JSON-LD, React props, or client state.
-- **Session Fixation Resistance**: Expired or historical token replay triggers automatic rotation to a new cryptographic token.
-- **Fail-Closed Authorization**: `PROFILE_REQUIRED` prevents unauthenticated or incomplete profiles from performing unauthorized state mutations.
-- **Fixed-Event Logging**: Restored and validated strict structured logging emitting only fixed event names with zero exception stacks, message strings, SQL queries, or PII:
+- **Session Fixation Defense**: Replay of historical `ABANDONED` or `CONVERTED` tokens rotates authority to a fresh cryptographic token. Known-expired `ACTIVE` tokens are serialized via advisory lock to replace the cart using the same proven token.
+- **Fail-Closed Authorization**: When an authenticated identity is missing its `CustomerProfile`, operations fail closed (`PROFILE_REQUIRED`) rather than downgrading to anonymous authority. Legitimate anonymous shoppers continue using anonymous authority.
+- **Fixed-Event Logging**: Strict structured logging emitting only fixed event names with zero exception stacks, message strings, SQL queries, or PII:
   - `{ event: "cart_add_item_failed" }`
   - `{ event: "cart_update_quantity_failed" }`
   - `{ event: "cart_remove_item_failed" }`
@@ -275,10 +295,10 @@ export interface CartSnapshotLine {
 - **Workflow Run ID**: [`33289660933`](https://github.com/latamcreativa/GamerPeru/actions/runs/33289660933)
 - **Overall Status**: `completed` / `success`
 
-| Job Name                                       | Job ID        | Result    | Key Metrics                                                                                                                                                                                            |
-| :--------------------------------------------- | :------------ | :-------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Format, Typecheck, Lint, Test, Build & E2E** | `99198945228` | `success` | Prettier clean, `tsc` clean, ESLint clean (0 warnings), Vitest: **54 test files passed / 763 passed / 1 skipped (764 total)**, Next.js build clean, Storefront E2E: **142 passed (0 failed, 0 flaky)** |
-| **Real Local Supabase Cart E2E**               | `99198945107` | `success` | Local Supabase migrated & seeded, Playwright Cart E2E: **11 passed (0 failed, 0 skipped, 0 flaky)**                                                                                                    |
+| Job Name                                       | Job ID        | Result    | Key Metrics                                                                                                                                                                                                   |
+| :--------------------------------------------- | :------------ | :-------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Format, Typecheck, Lint, Test, Build & E2E** | `99198945228` | `success` | Prettier clean, `tsc` clean, ESLint clean (0 warnings), Vitest: **54 test files passed; 763 tests passed and 1 skipped (764 total)**, Next.js build clean, Storefront E2E: **142 passed (0 failed, 0 flaky)** |
+| **Real Local Supabase Cart E2E**               | `99198945107` | `success` | Local Supabase migrated & seeded, Playwright Cart E2E: **11 passed (0 failed, 0 skipped, 0 flaky)**                                                                                                           |
 
 ### 2. Local Live PostgreSQL Concurrency Suite (`pnpm test:cart:live`)
 
@@ -328,29 +348,29 @@ export interface CartSnapshotLine {
 
 ## Acceptance Criteria Matrix
 
-| Criterion                       | Requirement                                           | Result   | Evidence / Checkpoint                                                      |
-| :------------------------------ | :---------------------------------------------------- | :------- | :------------------------------------------------------------------------- |
-| **Persistent Cart**             | Multi-session Cart persistence across browser reloads | **PASS** | Migration `0008`, E2E Scenario E                                           |
-| **Anonymous Authority**         | Cryptographic 256-bit token in HttpOnly cookie        | **PASS** | `src/lib/cart/session.ts`, E2E Scenario E                                  |
-| **Authenticated Authority**     | Verified Supabase JWT claims to CustomerProfile       | **PASS** | `src/lib/auth/claims.ts`, Unit suite 7                                     |
-| **Guest/Auth Merge**            | Lazy merge on authenticated access, max cap 10        | **PASS** | Integration test E, Unit suite 9                                           |
-| **Line Add / Update / Remove**  | Atomic database line mutations with 1..10 bounds      | **PASS** | `src/lib/cart/persistence.ts`, E2E Scenarios B, C, D                       |
-| **Expired Replacement**         | Serialized replacement under advisory lock            | **PASS** | Integration tests F, M (`4d7ace8`)                                         |
-| **PROFILE_REQUIRED**            | Fail-closed handling when profile missing             | **PASS** | `src/lib/cart/service.ts`, Unit suite 7                                    |
-| **Catalog Price Authority**     | Real-time pricing hydrated from catalog               | **PASS** | `src/lib/cart/read.ts`, E2E Scenario D                                     |
-| **Unavailable Lines**           | Retained with `available: false`, stepper disabled    | **PASS** | `src/components/cart/cart-item.tsx`, Unit suite 6                          |
-| **Cart Drawer**                 | Native `<dialog>` modal with focus trapping/return    | **PASS** | `src/components/cart/cart-drawer.tsx`, E2E Scenarios A, F                  |
-| **Full `/carrito` Page**        | Responsive full cart page with shared state sync      | **PASS** | `src/app/carrito/page.tsx`, E2E Scenario H                                 |
-| **PDP Add-to-Cart**             | Client island integrated with variant selector        | **PASS** | `src/components/product-detail/product-commerce-panel.tsx`, E2E Scenario B |
-| **Accessibility (WCAG AA)**     | Axe audit 0 serious/critical violations               | **PASS** | E2E Scenario I, Unit tests                                                 |
-| **Responsive Design**           | Clean rendering 360px..1920px, 0 overflow             | **PASS** | E2E Scenario G, Visual QA                                                  |
-| **SEO Integrity**               | `/carrito` robots noindex, follow; 0 sitemap leak     | **PASS** | `src/app/carrito/page.tsx`                                                 |
-| **Zero Public Personalization** | Public SSR routes avoid cart cookies                  | **PASS** | Static shell build verification                                            |
-| **Live PostgreSQL Suite**       | Real concurrency tests against port 54322             | **PASS** | `pnpm test:cart:live` (14/14 passed)                                       |
-| **Real Supabase Cart E2E**      | Live Playwright suite on local Supabase               | **PASS** | `pnpm test:cart:e2e` (11/11 passed)                                        |
-| **Checkout Exclusion**          | Zero checkout / order creation logic                  | **PASS** | Verified; reserved for GP-018                                              |
-| **Inventory Exclusion**         | Zero stock ledger / reservation logic                 | **PASS** | Verified; reserved for GP-021                                              |
-| **Closure Documentation**       | Truthful and complete record                          | **PASS** | `GP-017-CLOSURE.md`                                                        |
+| Criterion                       | Requirement                                                     | Result   | Evidence / Checkpoint                                                      |
+| :------------------------------ | :-------------------------------------------------------------- | :------- | :------------------------------------------------------------------------- |
+| **Persistent Cart**             | Multi-session Cart persistence across browser reloads           | **PASS** | Migration `0008`, E2E Scenario E                                           |
+| **Anonymous Authority**         | Cryptographic 256-bit token in HttpOnly cookie                  | **PASS** | `src/lib/cart/session.ts`, E2E Scenario E                                  |
+| **Authenticated Authority**     | Verified Supabase JWT claims to CustomerProfile                 | **PASS** | `src/lib/auth/claims.ts`, Unit suite 7                                     |
+| **Guest/Auth Merge**            | Lazy merge on authenticated access, max cap 10                  | **PASS** | Integration test E, Unit suite 9                                           |
+| **Line Add / Update / Remove**  | Atomic database line mutations with 1..10 bounds                | **PASS** | `src/lib/cart/persistence.ts`, E2E Scenarios B, C, D                       |
+| **Expired Replacement**         | Serialized replacement under advisory lock                      | **PASS** | Integration tests F, M (`4d7ace8`)                                         |
+| **PROFILE_REQUIRED**            | Fail-closed handling when profile missing                       | **PASS** | `src/lib/cart/service.ts`, Unit suite 7                                    |
+| **Catalog Price Authority**     | Real-time pricing hydrated from catalog                         | **PASS** | `src/lib/cart/read.ts`, E2E Scenario D                                     |
+| **Unavailable Lines**           | Retained with `available: false`, stepper disabled              | **PASS** | `src/components/cart/cart-item.tsx`, Unit suite 6                          |
+| **Cart Drawer**                 | Native `<dialog>` modal with focus trapping/return              | **PASS** | `src/components/cart/cart-drawer.tsx`, E2E Scenarios A, F                  |
+| **Full `/carrito` Page**        | Responsive full cart page with shared state sync                | **PASS** | `src/app/carrito/page.tsx`, E2E Scenario H                                 |
+| **PDP Add-to-Cart**             | Client island integrated with variant selector                  | **PASS** | `src/components/product-detail/product-commerce-panel.tsx`, E2E Scenario B |
+| **Accessibility (WCAG AA)**     | Open Cart Drawer Axe audit: 0 serious and 0 critical violations | **PASS** | E2E Scenario I, Unit tests                                                 |
+| **Responsive Design**           | Clean rendering 360px..1920px, 0 overflow                       | **PASS** | E2E Scenario G, Visual QA                                                  |
+| **SEO Integrity**               | `/carrito` robots noindex, follow; 0 sitemap leak               | **PASS** | `src/app/carrito/page.tsx`                                                 |
+| **Zero Public Personalization** | Public SSR routes avoid cart cookies                            | **PASS** | Static shell build verification                                            |
+| **Live PostgreSQL Suite**       | Real concurrency tests against port 54322                       | **PASS** | `pnpm test:cart:live` (14/14 passed)                                       |
+| **Real Supabase Cart E2E**      | Live Playwright suite on local Supabase                         | **PASS** | `pnpm test:cart:e2e` (11/11 passed)                                        |
+| **Checkout Exclusion**          | Zero checkout / order creation logic                            | **PASS** | Verified; reserved for GP-018                                              |
+| **Inventory Exclusion**         | Zero stock ledger / reservation logic                           | **PASS** | Verified; reserved for GP-021                                              |
+| **Closure Documentation**       | Truthful and complete record                                    | **PASS** | `GP-017-CLOSURE.md`                                                        |
 
 ---
 
@@ -383,5 +403,5 @@ The live integration test suite failed initially because synthetic `brands` and 
 
 - **Final Status**: `COMPLETE`
 - **Closure Assessment**: `PASS WITH NOTES`
-- **Justification**: All functional, visual, accessibility, security, and persistence deliverables are complete, verified by 54 passing unit test files (764 tests), 142 storefront E2E tests, 11 real PostgreSQL Cart E2E scenarios, and 14 live concurrency tests with 0 unresolved blockers. Notes document the successfully remediated PostgreSQL conflict predicate, structured logging, and test fixture corrections.
+- **Justification**: All functional, visual, accessibility, security, and persistence deliverables are complete, verified by 54 test files passed; 763 tests passed and 1 skipped (764 total), 142 storefront E2E tests, 11 real PostgreSQL Cart E2E scenarios, and 14 live concurrency tests with 0 unresolved blockers. Notes document the successfully remediated PostgreSQL conflict predicate, structured logging, and test fixture corrections.
 - **Prerequisite for GP-018**: **GP-018 remains BLOCKED** until external review approves this GP-017 closure report.
