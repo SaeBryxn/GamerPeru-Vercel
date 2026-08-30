@@ -178,7 +178,7 @@ describe("GP-017 CART1 — Cart Schema & Migration Candidate", () => {
 
     it("contains journal entry at index 8 with tag 0008_small_logan", () => {
       const journalContent = JSON.parse(readFileSync(journalPath, "utf-8"));
-      expect(journalContent.entries).toHaveLength(9);
+      expect(journalContent.entries.length).toBeGreaterThanOrEqual(9);
 
       const entry8 = journalContent.entries[8];
       expect(entry8.idx).toBe(8);

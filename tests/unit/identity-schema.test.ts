@@ -14,8 +14,8 @@ describe("Identity & RBAC Schema — Physical Bootstrap Integrity", () => {
     // Verify deferred tables are NOT present in this gate
     expect((schema as Record<string, unknown>).wishlistItems).toBeUndefined();
     expect((schema as Record<string, unknown>).reviews).toBeUndefined();
-    expect((schema as Record<string, unknown>).orders).toBeUndefined();
-    expect((schema as Record<string, unknown>).payments).toBeUndefined();
+    expect((schema as Record<string, unknown>).promotions).toBeUndefined();
+    expect((schema as Record<string, unknown>).coupons).toBeUndefined();
   });
 
   it("exports the canonical document_type PostgreSQL enum", () => {

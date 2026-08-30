@@ -18,9 +18,8 @@ describe("Catalog Schema — Physical Bootstrap Integrity", () => {
     // Verify deferred tables are NOT present in this gate
     expect((schema as Record<string, unknown>).collections).toBeUndefined();
     expect((schema as Record<string, unknown>).productCollections).toBeUndefined();
-    expect((schema as Record<string, unknown>).orders).toBeUndefined();
-    expect((schema as Record<string, unknown>).payments).toBeUndefined();
-    expect((schema as Record<string, unknown>).inventory).toBeUndefined();
+    expect((schema as Record<string, unknown>).promotions).toBeUndefined();
+    expect((schema as Record<string, unknown>).coupons).toBeUndefined();
   });
 
   it("exports the 4 canonical catalog PostgreSQL enums", () => {
