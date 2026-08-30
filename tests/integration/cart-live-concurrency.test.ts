@@ -111,14 +111,14 @@ describe("GP-017 CART4-R4 — Real Local PostgreSQL Concurrency & Persistence Su
     // 1. Brand
     await sqlClient`
       INSERT INTO brands (id, name, slug, status, created_at, updated_at)
-      VALUES (${brandId}, 'Synthetic Brand', 'synth-brand', 'ACTIVE', NOW(), NOW())
+      VALUES (${brandId}, 'Synthetic Brand', 'synth-brand', 'PUBLISHED', NOW(), NOW())
       ON CONFLICT (id) DO NOTHING;
     `;
 
     // 2. Category
     await sqlClient`
       INSERT INTO categories (id, name, slug, status, created_at, updated_at)
-      VALUES (${categoryId}, 'Synthetic Category', 'synth-cat', 'ACTIVE', NOW(), NOW())
+      VALUES (${categoryId}, 'Synthetic Category', 'synth-cat', 'PUBLISHED', NOW(), NOW())
       ON CONFLICT (id) DO NOTHING;
     `;
 
@@ -400,7 +400,7 @@ describe("GP-017 CART4-R4 — Real Local PostgreSQL Concurrency & Persistence Su
       const [oldCartCheck] =
         await sqlClient`SELECT status, expires_at FROM carts WHERE id = ${oldCart!.id}`;
       expect(oldCartCheck!.status).toBe("ABANDONED");
-      expect(oldCartCheck!.expires_at.getTime()).toBeLessThan(Date.now());
+      expect(new Date(oldCartCheck!.expires_at).getTime()).toBeLessThan(Date.now());
 
       // Line quantity remains unchanged
       const [itemCheck] =
@@ -443,7 +443,7 @@ describe("GP-017 CART4-R4 — Real Local PostgreSQL Concurrency & Persistence Su
       const [oldCartCheck] =
         await sqlClient`SELECT status, expires_at FROM carts WHERE id = ${oldCart!.id}`;
       expect(oldCartCheck!.status).toBe("ABANDONED");
-      expect(oldCartCheck!.expires_at.getTime()).toBeLessThan(Date.now());
+      expect(new Date(oldCartCheck!.expires_at).getTime()).toBeLessThan(Date.now());
 
       // Line was NOT deleted
       const [itemCheck] =
@@ -459,15 +459,15 @@ describe("GP-017 CART4-R4 — Real Local PostgreSQL Concurrency & Persistence Su
 
     it("I. Remove missing line does not refresh Cart TTL", async () => {
       const sessionToken = `synth_token_rem_miss_${Date.now()}_${"H".repeat(15)}`;
-      const originalExpires = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000); // 10 days in future
 
       // Setup: Active cart with variant 1
       const [cart] = await sqlClient`
         INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
-        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', ${originalExpires}, NOW(), NOW())
-        RETURNING id;
+        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', NOW() + INTERVAL '10 days', NOW(), NOW())
+        RETURNING id, expires_at;
       `;
       expect(cart).toBeDefined();
+      const originalExpiresAt = new Date(cart!.expires_at).getTime();
 
       await sqlClient`
         INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
@@ -482,17 +482,16 @@ describe("GP-017 CART4-R4 — Real Local PostgreSQL Concurrency & Persistence Su
 
       // Verify cart expires_at was NOT modified
       const [cartCheck] = await sqlClient`SELECT expires_at FROM carts WHERE id = ${cart!.id}`;
-      expect(cartCheck!.expires_at.getTime()).toBe(originalExpires.getTime());
+      expect(new Date(cartCheck!.expires_at).getTime()).toBe(originalExpiresAt);
     });
 
     it("J. Successful anonymous mutation refreshes database sliding TTL to ~30 days", async () => {
       const sessionToken = `synth_token_ttl_slide_${Date.now()}_${"J".repeat(15)}`;
-      const oldExpires = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // 2 days in future
 
       // Setup: Active cart with short TTL
       const [cart] = await sqlClient`
         INSERT INTO carts (id, session_token, status, currency, expires_at, created_at, updated_at)
-        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', ${oldExpires}, NOW(), NOW())
+        VALUES (${generateUuidV7()}, ${sessionToken}, 'ACTIVE', 'PEN', NOW() + INTERVAL '2 days', NOW(), NOW())
         RETURNING id;
       `;
       expect(cart).toBeDefined();
@@ -505,7 +504,7 @@ describe("GP-017 CART4-R4 — Real Local PostgreSQL Concurrency & Persistence Su
       });
 
       const [cartCheck] = await sqlClient`SELECT expires_at FROM carts WHERE id = ${cart!.id}`;
-      const diffMs = cartCheck!.expires_at.getTime() - nowBefore;
+      const diffMs = new Date(cartCheck!.expires_at).getTime() - nowBefore;
       const diffDays = diffMs / (24 * 60 * 60 * 1000);
 
       // Refreshed TTL is approximately 30 days
