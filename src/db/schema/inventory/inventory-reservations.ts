@@ -22,8 +22,8 @@ import { inventoryItems } from "./inventory-items";
  *
  * Canonical Invariants:
  * 1. Inventory Item Restrict: inventory_item_id FK has ON DELETE RESTRICT.
- * 2. Order Cascade: order_id FK has ON DELETE CASCADE.
- * 3. Order Item Cascade: order_item_id FK has ON DELETE CASCADE.
+ * 2. Order Restrict: order_id FK has ON DELETE RESTRICT (reservation audit records cannot be cascade-deleted).
+ * 3. Order Item Restrict: order_item_id FK has ON DELETE RESTRICT.
  * 4. Quantity: quantity > 0.
  * 5. Non-Terminal Uniqueness: At most one non-terminal reservation (ACTIVE, VERIFICATION_HOLD, ALLOCATED) per order_item_id.
  */
@@ -38,10 +38,10 @@ export const inventoryReservations = pgTable(
       .references((): AnyPgColumn => inventoryItems.id, { onDelete: "restrict" }),
     orderId: uuid("order_id")
       .notNull()
-      .references((): AnyPgColumn => orders.id, { onDelete: "cascade" }),
+      .references((): AnyPgColumn => orders.id, { onDelete: "restrict" }),
     orderItemId: uuid("order_item_id")
       .notNull()
-      .references((): AnyPgColumn => orderItems.id, { onDelete: "cascade" }),
+      .references((): AnyPgColumn => orderItems.id, { onDelete: "restrict" }),
     quantity: integer("quantity").notNull(),
     status: inventoryReservationStatusEnum("status").notNull().default("ACTIVE"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

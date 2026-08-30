@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-describe("GP-018 CHK2 — Migration Candidate 0009 Static Audit", () => {
+describe("GP-018 CHK2-BR1 — Migration Candidate 0009 Static Audit", () => {
   const migrationsDir = resolve(process.cwd(), "src/db/migrations");
   const migrationFiles = readdirSync(migrationsDir).filter(
     (f) => f.endsWith(".sql") && !f.startsWith("meta")
@@ -57,6 +57,46 @@ describe("GP-018 CHK2 — Migration Candidate 0009 Static Audit", () => {
     expect(sql).toContain('CREATE TABLE "inventory_reservations"');
     expect(sql).toContain('CREATE TABLE "inventory_ledger_entries"');
     expect(sql).toContain('CREATE TABLE "outbox_events"');
+
+    // Idempotency Columns (Blocker A)
+    expect(sql).toContain('"authority_binding_digest" varchar(64) NOT NULL');
+    expect(sql).toContain('"source_cart_id" uuid NOT NULL');
+    expect(sql).toContain('"request_fingerprint" varchar(64) NOT NULL');
+
+    // Method & Payment Composite Foreign Keys (Blocker B)
+    expect(sql).toContain('"payment_method_configurations_current_instruction_fk"');
+    expect(sql).toContain(
+      'FOREIGN KEY ("current_instruction_version_id","code") REFERENCES "public"."payment_instruction_versions"("id","payment_method_code")'
+    );
+    expect(sql).toContain('"payments_instruction_method_fk"');
+    expect(sql).toContain(
+      'FOREIGN KEY ("instruction_version_id","payment_method_code") REFERENCES "public"."payment_instruction_versions"("id","payment_method_code")'
+    );
+
+    // Order Children Non-Destructive ON DELETE RESTRICT (Blocker C)
+    expect(sql).toContain(
+      'ALTER TABLE "order_items" ADD CONSTRAINT "order_items_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict'
+    );
+    expect(sql).toContain(
+      'ALTER TABLE "order_address_snapshots" ADD CONSTRAINT "order_address_snapshots_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict'
+    );
+    expect(sql).toContain(
+      'ALTER TABLE "order_pricing_snapshots" ADD CONSTRAINT "order_pricing_snapshots_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict'
+    );
+    expect(sql).toContain(
+      'ALTER TABLE "shipments" ADD CONSTRAINT "shipments_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict'
+    );
+    expect(sql).toContain(
+      'ALTER TABLE "payments" ADD CONSTRAINT "payments_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict'
+    );
+    expect(sql).toContain(
+      'ALTER TABLE "inventory_reservations" ADD CONSTRAINT "inventory_reservations_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict'
+    );
+
+    // Customer Profile Detachment Preservation
+    expect(sql).toContain(
+      'ALTER TABLE "orders" ADD CONSTRAINT "orders_customer_id_customer_profiles_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customer_profiles"("id") ON DELETE set null'
+    );
 
     // Check Constraints
     expect(sql).toContain('"orders_pricing_arithmetic_check"');

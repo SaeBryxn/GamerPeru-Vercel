@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getTableColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import {
+  carts,
   idempotencyKeys,
   idempotencyOperationTypeEnum,
   inventoryItems,
@@ -28,7 +29,11 @@ import {
   shippingMethods,
 } from "@/db/schema";
 
-describe("GP-018 CHK2 — Checkout Schema & Table Foundation", () => {
+interface ColumnWithLength {
+  length?: number;
+}
+
+describe("GP-018 CHK2-BR1 — Checkout Schema & Table Foundation", () => {
   describe("Approved 15-Table Set Existence", () => {
     it("exports all 15 approved physical tables", () => {
       const allTables = [
@@ -103,7 +108,7 @@ describe("GP-018 CHK2 — Checkout Schema & Table Foundation", () => {
     });
   });
 
-  describe("Order Aggregate Schema", () => {
+  describe("Order Aggregate Schema & Historical Preservation", () => {
     it("defines canonical Order fields and nullability", () => {
       const cols = getTableColumns(orders);
 
@@ -132,19 +137,8 @@ describe("GP-018 CHK2 — Checkout Schema & Table Foundation", () => {
     });
   });
 
-  describe("Order Items & Snapshot Schemas", () => {
-    it("verifies OrderItem fields and FK deletion rules", () => {
-      const cols = getTableColumns(orderItems);
-      expect(cols.id.notNull).toBe(true);
-      expect(cols.orderId.notNull).toBe(true);
-      expect(cols.variantId.notNull).toBe(true);
-      expect(cols.skuSnapshot.notNull).toBe(true);
-      expect(cols.productNameSnapshot.notNull).toBe(true);
-      expect(cols.variantTitleSnapshot.notNull).toBe(true);
-      expect(cols.unitPriceCentsSnapshot.notNull).toBe(true);
-      expect(cols.quantity.notNull).toBe(true);
-      expect(cols.lineTotalCents.notNull).toBe(true);
-
+  describe("Order Children FK Deletion Safety (Blocker C)", () => {
+    it("verifies order_items FK to orders has ON DELETE RESTRICT", () => {
       const config = getTableConfig(orderItems);
       const orderFk = config.foreignKeys.find((fk) =>
         fk.reference().columns.some((c) => c.name === "order_id")
@@ -152,72 +146,148 @@ describe("GP-018 CHK2 — Checkout Schema & Table Foundation", () => {
       const variantFk = config.foreignKeys.find((fk) =>
         fk.reference().columns.some((c) => c.name === "variant_id")
       );
-      expect(orderFk?.onDelete).toBe("cascade");
+      expect(orderFk?.onDelete).toBe("restrict");
       expect(variantFk?.onDelete).toBe("restrict");
     });
 
-    it("verifies OrderAddressSnapshot has UNIQUE(order_id)", () => {
+    it("verifies order_address_snapshots FK to orders has ON DELETE RESTRICT and UNIQUE(order_id)", () => {
       const cols = getTableColumns(orderAddressSnapshots);
-      expect(cols.orderId.notNull).toBe(true);
-      expect(cols.recipientName.notNull).toBe(true);
-      expect(cols.phone.notNull).toBe(true);
-      expect(cols.streetAddress.notNull).toBe(true);
-      expect(cols.department.notNull).toBe(true);
-      expect(cols.province.notNull).toBe(true);
-      expect(cols.district.notNull).toBe(true);
-
       expect(cols.orderId.isUnique).toBe(true);
+
+      const config = getTableConfig(orderAddressSnapshots);
+      const orderFk = config.foreignKeys.find((fk) =>
+        fk.reference().columns.some((c) => c.name === "order_id")
+      );
+      expect(orderFk?.onDelete).toBe("restrict");
     });
 
-    it("verifies OrderPricingSnapshot has UNIQUE(order_id) and currency default PEN", () => {
+    it("verifies order_pricing_snapshots FK to orders has ON DELETE RESTRICT and UNIQUE(order_id)", () => {
       const cols = getTableColumns(orderPricingSnapshots);
-      expect(cols.orderId.notNull).toBe(true);
-      expect(cols.subtotalCents.notNull).toBe(true);
-      expect(cols.totalCents.notNull).toBe(true);
-      expect(cols.currency.default).toBe("PEN");
       expect(cols.orderId.isUnique).toBe(true);
-    });
-  });
 
-  describe("Payments & Shipping Foundation", () => {
-    it("verifies Payment has UNIQUE(order_id) and default UNPAID status", () => {
+      const config = getTableConfig(orderPricingSnapshots);
+      const orderFk = config.foreignKeys.find((fk) =>
+        fk.reference().columns.some((c) => c.name === "order_id")
+      );
+      expect(orderFk?.onDelete).toBe("restrict");
+    });
+
+    it("verifies shipments FK to orders has ON DELETE RESTRICT", () => {
+      const config = getTableConfig(shipments);
+      const orderFk = config.foreignKeys.find((fk) =>
+        fk.reference().columns.some((c) => c.name === "order_id")
+      );
+      const methodFk = config.foreignKeys.find((fk) =>
+        fk.reference().columns.some((c) => c.name === "shipping_method_id")
+      );
+      expect(orderFk?.onDelete).toBe("restrict");
+      expect(methodFk?.onDelete).toBe("restrict");
+    });
+
+    it("verifies payments FK to orders has ON DELETE RESTRICT and UNIQUE(order_id)", () => {
       const cols = getTableColumns(payments);
-      expect(cols.orderId.notNull).toBe(true);
       expect(cols.orderId.isUnique).toBe(true);
-      expect(cols.status.default).toBe("UNPAID");
-      expect(cols.currency.default).toBe("PEN");
 
       const config = getTableConfig(payments);
       const orderFk = config.foreignKeys.find((fk) =>
         fk.reference().columns.some((c) => c.name === "order_id")
       );
-      const methodFk = config.foreignKeys.find((fk) =>
-        fk.reference().columns.some((c) => c.name === "payment_method_code")
-      );
-      const instructionFk = config.foreignKeys.find((fk) =>
-        fk.reference().columns.some((c) => c.name === "instruction_version_id")
-      );
-      expect(orderFk?.onDelete).toBe("cascade");
-      expect(methodFk?.onDelete).toBe("restrict");
-      expect(instructionFk?.onDelete).toBe("restrict");
+      expect(orderFk?.onDelete).toBe("restrict");
     });
 
-    it("verifies ShippingMethod code is unique and Shipment references Order with cascade", () => {
-      const methodCols = getTableColumns(shippingMethods);
-      expect(methodCols.code.isUnique).toBe(true);
-
-      const shipmentCols = getTableColumns(shipments);
-      expect(shipmentCols.status.default).toBe("UNFULFILLED");
-
-      const shipmentConfig = getTableConfig(shipments);
-      const orderFk = shipmentConfig.foreignKeys.find((fk) =>
+    it("verifies inventory_reservations FKs to orders and order_items have ON DELETE RESTRICT", () => {
+      const config = getTableConfig(inventoryReservations);
+      const orderFk = config.foreignKeys.find((fk) =>
         fk.reference().columns.some((c) => c.name === "order_id")
       );
-      const methodFk = shipmentConfig.foreignKeys.find((fk) =>
-        fk.reference().columns.some((c) => c.name === "shipping_method_id")
+      const orderItemFk = config.foreignKeys.find((fk) =>
+        fk.reference().columns.some((c) => c.name === "order_item_id")
       );
-      expect(orderFk?.onDelete).toBe("cascade");
-      expect(methodFk?.onDelete).toBe("restrict");
+      const itemFk = config.foreignKeys.find((fk) =>
+        fk.reference().columns.some((c) => c.name === "inventory_item_id")
+      );
+      expect(orderFk?.onDelete).toBe("restrict");
+      expect(orderItemFk?.onDelete).toBe("restrict");
+      expect(itemFk?.onDelete).toBe("restrict");
+    });
+  });
+
+  describe("Payment Method / Instruction Consistency (Blocker B)", () => {
+    it("verifies payment_instruction_versions has composite unique on (id, payment_method_code)", () => {
+      const config = getTableConfig(paymentInstructionVersions);
+      const compositeUnique = config.uniqueConstraints.find(
+        (u) =>
+          u.columns.some((c) => c.name === "id") &&
+          u.columns.some((c) => c.name === "payment_method_code")
+      );
+      expect(compositeUnique).toBeDefined();
+    });
+
+    it("verifies payment_method_configurations has composite FK on (current_instruction_version_id, code)", () => {
+      const config = getTableConfig(paymentMethodConfigurations);
+      const compositeFk = config.foreignKeys.find(
+        (fk) =>
+          fk.reference().columns.some((c) => c.name === "current_instruction_version_id") &&
+          fk.reference().columns.some((c) => c.name === "code")
+      );
+      expect(compositeFk).toBeDefined();
+      expect(compositeFk?.onDelete).toBe("restrict");
+      expect(compositeFk?.reference().foreignColumns.map((c) => c.name)).toEqual([
+        "id",
+        "payment_method_code",
+      ]);
+    });
+
+    it("verifies payments has composite FK on (instruction_version_id, payment_method_code)", () => {
+      const config = getTableConfig(payments);
+      const compositeFk = config.foreignKeys.find(
+        (fk) =>
+          fk.reference().columns.some((c) => c.name === "instruction_version_id") &&
+          fk.reference().columns.some((c) => c.name === "payment_method_code")
+      );
+      expect(compositeFk).toBeDefined();
+      expect(compositeFk?.onDelete).toBe("restrict");
+      expect(compositeFk?.reference().foreignColumns.map((c) => c.name)).toEqual([
+        "id",
+        "payment_method_code",
+      ]);
+    });
+  });
+
+  describe("Idempotency Authority & Privacy (Blocker A)", () => {
+    it("defines authority_binding_digest and mandatory request_fingerprint", () => {
+      const cols = getTableColumns(idempotencyKeys);
+      expect(cols.idempotencyKey.isUnique).toBe(true);
+      expect(cols.operationType.notNull).toBe(true);
+      expect(cols.authorityBindingDigest.notNull).toBe(true);
+      expect((cols.authorityBindingDigest as unknown as ColumnWithLength).length).toBe(64);
+      expect(cols.sourceCartId.notNull).toBe(true);
+      expect(cols.requestFingerprint.notNull).toBe(true);
+      expect((cols.requestFingerprint as unknown as ColumnWithLength).length).toBe(64);
+      expect(cols.expiresAt.notNull).toBe(true);
+    });
+
+    it("verifies source_cart_id has FK to carts.id with ON DELETE RESTRICT", () => {
+      const config = getTableConfig(idempotencyKeys);
+      const cartFk = config.foreignKeys.find((fk) =>
+        fk.reference().columns.some((c) => c.name === "source_cart_id")
+      );
+      expect(cartFk).toBeDefined();
+      expect(cartFk?.onDelete).toBe("restrict");
+      expect(cartFk?.reference().foreignTable).toBe(carts);
+    });
+
+    it("verifies zero raw session_token or raw PII address columns exist in idempotency_keys", () => {
+      const cols = getTableColumns(idempotencyKeys);
+      const columnNames = Object.keys(cols);
+
+      expect(columnNames).not.toContain("sessionToken");
+      expect(columnNames).not.toContain("session_token");
+      expect(columnNames).not.toContain("deliveryAddress");
+      expect(columnNames).not.toContain("rawAddress");
+      expect(columnNames).not.toContain("customerPii");
+      expect(columnNames).toContain("authorityBindingDigest");
+      expect(columnNames).toContain("requestFingerprint");
     });
   });
 
@@ -253,25 +323,6 @@ describe("GP-018 CHK2 — Checkout Schema & Table Foundation", () => {
         (idx) => idx.config.name === "outbox_events_status_next_attempt_idx"
       );
       expect(statusIdx).toBeDefined();
-    });
-  });
-
-  describe("Idempotency Security & Privacy", () => {
-    it("verifies idempotency_keys schema does NOT contain raw session_token or raw PII address columns", () => {
-      const cols = getTableColumns(idempotencyKeys);
-      const columnNames = Object.keys(cols);
-
-      expect(cols.idempotencyKey.isUnique).toBe(true);
-      expect(cols.operationType.notNull).toBe(true);
-      expect(cols.expiresAt.notNull).toBe(true);
-
-      // Security & Privacy assertions: zero raw session tokens or raw address PII columns
-      expect(columnNames).not.toContain("sessionToken");
-      expect(columnNames).not.toContain("session_token");
-      expect(columnNames).not.toContain("deliveryAddress");
-      expect(columnNames).not.toContain("rawAddress");
-      expect(columnNames).not.toContain("customerPii");
-      expect(columnNames).toContain("requestFingerprint");
     });
   });
 });

@@ -19,7 +19,7 @@ import { orders } from "./orders";
  * Immutable purchase-time line facts.
  *
  * Canonical Invariants:
- * 1. Order Cascade: order_id FK has ON DELETE CASCADE (belongs to Order aggregate).
+ * 1. Order Restrict: order_id FK has ON DELETE RESTRICT (financial history cannot be cascade-deleted).
  * 2. Variant Restrict: variant_id FK has ON DELETE RESTRICT (preserves catalog history).
  * 3. Quantity: quantity > 0.
  * 4. Line Total Arithmetic: line_total_cents = quantity * unit_price_cents_snapshot.
@@ -33,7 +33,7 @@ export const orderItems = pgTable(
       .$defaultFn(() => generateUuidV7()),
     orderId: uuid("order_id")
       .notNull()
-      .references((): AnyPgColumn => orders.id, { onDelete: "cascade" }),
+      .references((): AnyPgColumn => orders.id, { onDelete: "restrict" }),
     variantId: uuid("variant_id")
       .notNull()
       .references((): AnyPgColumn => productVariants.id, { onDelete: "restrict" }),

@@ -21,9 +21,11 @@ import { paymentMethodConfigurations } from "./payment-methods";
  *
  * Canonical Invariants:
  * 1. Method Code FK: References payment_method_configurations.code with ON DELETE RESTRICT.
- * 2. Uniqueness: UNIQUE(payment_method_code, version_number).
- * 3. Media FK: qr_media_id references media_assets.id with ON DELETE SET NULL.
- * 4. Structure Only: Zero invented bank account/phone numbers seeded by migration.
+ * 2. Version Uniqueness: UNIQUE(payment_method_code, version_number).
+ * 3. Composite Identity Uniqueness: UNIQUE(id, payment_method_code) to support relational
+ *    composite foreign keys ensuring method consistency across configuration and payments.
+ * 4. Media FK: qr_media_id references media_assets.id with ON DELETE SET NULL.
+ * 5. Historical Preservation: Referenced instruction versions cannot be deleted (ON DELETE RESTRICT).
  */
 export const paymentInstructionVersions = pgTable(
   "payment_instruction_versions",
@@ -48,6 +50,10 @@ export const paymentInstructionVersions = pgTable(
     unique("payment_instruction_versions_method_version_unique").on(
       table.paymentMethodCode,
       table.versionNumber
+    ),
+    unique("payment_instruction_versions_id_method_code_unique").on(
+      table.id,
+      table.paymentMethodCode
     ),
     index("payment_instruction_versions_method_code_idx").on(table.paymentMethodCode),
   ]

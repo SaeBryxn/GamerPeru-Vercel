@@ -132,7 +132,8 @@ CREATE TABLE "payment_instruction_versions" (
 	"instruction_text" text NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "payment_instruction_versions_method_version_unique" UNIQUE("payment_method_code","version_number")
+	CONSTRAINT "payment_instruction_versions_method_version_unique" UNIQUE("payment_method_code","version_number"),
+	CONSTRAINT "payment_instruction_versions_id_method_code_unique" UNIQUE("id","payment_method_code")
 );
 --> statement-breakpoint
 CREATE TABLE "payments" (
@@ -157,8 +158,10 @@ CREATE TABLE "idempotency_keys" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"idempotency_key" varchar(255) NOT NULL,
 	"operation_type" "idempotency_operation_type" NOT NULL,
+	"authority_binding_digest" varchar(64) NOT NULL,
+	"source_cart_id" uuid NOT NULL,
+	"request_fingerprint" varchar(64) NOT NULL,
 	"target_aggregate_id" varchar(255),
-	"request_fingerprint" varchar(64),
 	"response_payload" jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
@@ -235,23 +238,24 @@ CREATE TABLE "outbox_events" (
 );
 --> statement-breakpoint
 ALTER TABLE "orders" ADD CONSTRAINT "orders_customer_id_customer_profiles_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customer_profiles"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "order_items" ADD CONSTRAINT "order_items_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "order_items" ADD CONSTRAINT "order_items_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_variant_id_product_variants_id_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "order_address_snapshots" ADD CONSTRAINT "order_address_snapshots_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "order_pricing_snapshots" ADD CONSTRAINT "order_pricing_snapshots_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "shipments" ADD CONSTRAINT "shipments_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "order_address_snapshots" ADD CONSTRAINT "order_address_snapshots_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "order_pricing_snapshots" ADD CONSTRAINT "order_pricing_snapshots_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "shipments" ADD CONSTRAINT "shipments_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shipments" ADD CONSTRAINT "shipments_shipping_method_id_shipping_methods_id_fk" FOREIGN KEY ("shipping_method_id") REFERENCES "public"."shipping_methods"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payment_method_configurations" ADD CONSTRAINT "payment_method_configurations_current_instruction_version_id_payment_instruction_versions_id_fk" FOREIGN KEY ("current_instruction_version_id") REFERENCES "public"."payment_instruction_versions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payment_method_configurations" ADD CONSTRAINT "payment_method_configurations_current_instruction_fk" FOREIGN KEY ("current_instruction_version_id","code") REFERENCES "public"."payment_instruction_versions"("id","payment_method_code") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_instruction_versions" ADD CONSTRAINT "payment_instruction_versions_payment_method_code_payment_method_configurations_code_fk" FOREIGN KEY ("payment_method_code") REFERENCES "public"."payment_method_configurations"("code") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_instruction_versions" ADD CONSTRAINT "payment_instruction_versions_qr_media_id_media_assets_id_fk" FOREIGN KEY ("qr_media_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payments" ADD CONSTRAINT "payments_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payments" ADD CONSTRAINT "payments_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payments" ADD CONSTRAINT "payments_payment_method_code_payment_method_configurations_code_fk" FOREIGN KEY ("payment_method_code") REFERENCES "public"."payment_method_configurations"("code") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payments" ADD CONSTRAINT "payments_instruction_version_id_payment_instruction_versions_id_fk" FOREIGN KEY ("instruction_version_id") REFERENCES "public"."payment_instruction_versions"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payments" ADD CONSTRAINT "payments_instruction_method_fk" FOREIGN KEY ("instruction_version_id","payment_method_code") REFERENCES "public"."payment_instruction_versions"("id","payment_method_code") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "idempotency_keys" ADD CONSTRAINT "idempotency_keys_source_cart_id_carts_id_fk" FOREIGN KEY ("source_cart_id") REFERENCES "public"."carts"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inventory_items" ADD CONSTRAINT "inventory_items_variant_id_product_variants_id_fk" FOREIGN KEY ("variant_id") REFERENCES "public"."product_variants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inventory_items" ADD CONSTRAINT "inventory_items_location_id_inventory_locations_id_fk" FOREIGN KEY ("location_id") REFERENCES "public"."inventory_locations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inventory_reservations" ADD CONSTRAINT "inventory_reservations_inventory_item_id_inventory_items_id_fk" FOREIGN KEY ("inventory_item_id") REFERENCES "public"."inventory_items"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "inventory_reservations" ADD CONSTRAINT "inventory_reservations_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "inventory_reservations" ADD CONSTRAINT "inventory_reservations_order_item_id_order_items_id_fk" FOREIGN KEY ("order_item_id") REFERENCES "public"."order_items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "inventory_reservations" ADD CONSTRAINT "inventory_reservations_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "inventory_reservations" ADD CONSTRAINT "inventory_reservations_order_item_id_order_items_id_fk" FOREIGN KEY ("order_item_id") REFERENCES "public"."order_items"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inventory_ledger_entries" ADD CONSTRAINT "inventory_ledger_entries_inventory_item_id_inventory_items_id_fk" FOREIGN KEY ("inventory_item_id") REFERENCES "public"."inventory_items"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "orders_customer_id_idx" ON "orders" USING btree ("customer_id");--> statement-breakpoint
 CREATE INDEX "orders_status_created_at_idx" ON "orders" USING btree ("status","created_at");--> statement-breakpoint
@@ -262,6 +266,7 @@ CREATE INDEX "shipments_status_idx" ON "shipments" USING btree ("status");--> st
 CREATE INDEX "payment_instruction_versions_method_code_idx" ON "payment_instruction_versions" USING btree ("payment_method_code");--> statement-breakpoint
 CREATE INDEX "payments_status_created_at_idx" ON "payments" USING btree ("status","created_at");--> statement-breakpoint
 CREATE INDEX "idempotency_keys_expires_at_idx" ON "idempotency_keys" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "idempotency_keys_source_cart_id_idx" ON "idempotency_keys" USING btree ("source_cart_id");--> statement-breakpoint
 CREATE INDEX "inventory_items_variant_id_idx" ON "inventory_items" USING btree ("variant_id");--> statement-breakpoint
 CREATE INDEX "inventory_items_location_id_idx" ON "inventory_items" USING btree ("location_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "inventory_reservations_order_item_non_terminal_unique" ON "inventory_reservations" USING btree ("order_item_id") WHERE "inventory_reservations"."status" IN ('ACTIVE', 'VERIFICATION_HOLD', 'ALLOCATED');--> statement-breakpoint

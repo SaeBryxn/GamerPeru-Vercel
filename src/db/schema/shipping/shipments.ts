@@ -18,7 +18,7 @@ import { shippingMethods } from "./shipping-methods";
  * Outbound delivery packages associated with Orders.
  *
  * Canonical Invariants:
- * 1. Order Cascade: order_id FK has ON DELETE CASCADE.
+ * 1. Order Restrict: order_id FK has ON DELETE RESTRICT (shipment history cannot be cascade-deleted).
  * 2. Shipping Method Restrict: shipping_method_id FK has ON DELETE RESTRICT.
  * 3. Initial Status: Default 'UNFULFILLED'.
  * 4. Extensibility: Schema supports Order 1 -> * Shipment for future split fulfillment.
@@ -31,7 +31,7 @@ export const shipments = pgTable(
       .$defaultFn(() => generateUuidV7()),
     orderId: uuid("order_id")
       .notNull()
-      .references((): AnyPgColumn => orders.id, { onDelete: "cascade" }),
+      .references((): AnyPgColumn => orders.id, { onDelete: "restrict" }),
     shippingMethodId: uuid("shipping_method_id")
       .notNull()
       .references((): AnyPgColumn => shippingMethods.id, { onDelete: "restrict" }),

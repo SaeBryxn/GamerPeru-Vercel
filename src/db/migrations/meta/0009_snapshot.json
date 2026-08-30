@@ -1,5 +1,5 @@
 {
-  "id": "a2d388af-0074-491b-8b97-9dee986af3dc",
+  "id": "0f402030-63de-4c10-8580-c3e99c93dca0",
   "prevId": "9fa16685-4af8-4e3f-ad2a-2e8b79e4706e",
   "version": "7",
   "dialect": "postgresql",
@@ -2446,7 +2446,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "order_items_variant_id_product_variants_id_fk": {
@@ -2572,7 +2572,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -2659,7 +2659,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -2898,7 +2898,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "shipments_shipping_method_id_shipping_methods_id_fk": {
@@ -2988,17 +2988,19 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "payment_method_configurations_current_instruction_version_id_payment_instruction_versions_id_fk": {
-          "name": "payment_method_configurations_current_instruction_version_id_payment_instruction_versions_id_fk",
+        "payment_method_configurations_current_instruction_fk": {
+          "name": "payment_method_configurations_current_instruction_fk",
           "tableFrom": "payment_method_configurations",
           "tableTo": "payment_instruction_versions",
           "columnsFrom": [
-            "current_instruction_version_id"
+            "current_instruction_version_id",
+            "code"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "payment_method_code"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -3131,6 +3133,14 @@
             "payment_method_code",
             "version_number"
           ]
+        },
+        "payment_instruction_versions_id_method_code_unique": {
+          "name": "payment_instruction_versions_id_method_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "payment_method_code"
+          ]
         }
       },
       "policies": {},
@@ -3248,7 +3258,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "payments_payment_method_code_payment_method_configurations_code_fk": {
@@ -3264,15 +3274,17 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "payments_instruction_version_id_payment_instruction_versions_id_fk": {
-          "name": "payments_instruction_version_id_payment_instruction_versions_id_fk",
+        "payments_instruction_method_fk": {
+          "name": "payments_instruction_method_fk",
           "tableFrom": "payments",
           "tableTo": "payment_instruction_versions",
           "columnsFrom": [
-            "instruction_version_id"
+            "instruction_version_id",
+            "payment_method_code"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "payment_method_code"
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
@@ -3328,15 +3340,27 @@
           "primaryKey": false,
           "notNull": true
         },
-        "target_aggregate_id": {
-          "name": "target_aggregate_id",
-          "type": "varchar(255)",
+        "authority_binding_digest": {
+          "name": "authority_binding_digest",
+          "type": "varchar(64)",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
+        },
+        "source_cart_id": {
+          "name": "source_cart_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
         },
         "request_fingerprint": {
           "name": "request_fingerprint",
           "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_aggregate_id": {
+          "name": "target_aggregate_id",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
@@ -3375,9 +3399,38 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "idempotency_keys_source_cart_id_idx": {
+          "name": "idempotency_keys_source_cart_id_idx",
+          "columns": [
+            {
+              "expression": "source_cart_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "idempotency_keys_source_cart_id_carts_id_fk": {
+          "name": "idempotency_keys_source_cart_id_carts_id_fk",
+          "tableFrom": "idempotency_keys",
+          "tableTo": "carts",
+          "columnsFrom": [
+            "source_cart_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "idempotency_keys_idempotency_key_unique": {
@@ -3747,7 +3800,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "inventory_reservations_order_item_id_order_items_id_fk": {
@@ -3760,7 +3813,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },

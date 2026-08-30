@@ -17,7 +17,7 @@ import { orders } from "./orders";
  * Immutable financial breakdown frozen at checkout time.
  *
  * Canonical Invariants:
- * 1. Order Cascade: order_id FK has ON DELETE CASCADE.
+ * 1. Order Restrict: order_id FK has ON DELETE RESTRICT (pricing snapshots cannot be cascade-deleted).
  * 2. Uniqueness: UNIQUE(order_id) — exactly one pricing snapshot per Order.
  * 3. Money: Integer minor units in PEN cents, non-negative.
  * 4. Arithmetic Check: total_cents = subtotal_cents - discount_cents + shipping_cents.
@@ -31,7 +31,7 @@ export const orderPricingSnapshots = pgTable(
     orderId: uuid("order_id")
       .notNull()
       .unique()
-      .references((): AnyPgColumn => orders.id, { onDelete: "cascade" }),
+      .references((): AnyPgColumn => orders.id, { onDelete: "restrict" }),
     subtotalCents: integer("subtotal_cents").notNull(),
     discountCents: integer("discount_cents").notNull().default(0),
     shippingCents: integer("shipping_cents").notNull().default(0),
