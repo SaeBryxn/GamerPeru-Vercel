@@ -344,11 +344,8 @@ export async function addCartItemAction(
       cart: snapshot,
       message: "Producto agregado al carrito.",
     };
-  } catch (err) {
-    logger.error({
-      event: "cart_add_item_failed",
-      err: err instanceof Error ? (err.stack ?? err.message) : String(err),
-    });
+  } catch {
+    logger.error({ event: "cart_add_item_failed" });
     return {
       success: false,
       code: "SYSTEM_ERROR",
@@ -562,11 +559,8 @@ export async function updateCartItemQuantityAction(
       cart: result.cart,
       message: "Cantidad actualizada correctamente.",
     };
-  } catch (err) {
-    logger.error({
-      event: "cart_update_quantity_failed",
-      error: err instanceof Error ? (err.stack ?? err.message) : String(err),
-    });
+  } catch {
+    logger.error({ event: "cart_update_quantity_failed" });
     return {
       success: false,
       code: "SYSTEM_ERROR",
@@ -731,11 +725,8 @@ export async function removeCartItemAction(
       cart: result.cart,
       message: "Producto eliminado del carrito.",
     };
-  } catch (err) {
-    logger.error({
-      event: "cart_remove_item_failed",
-      error: err instanceof Error ? (err.stack ?? err.message) : String(err),
-    });
+  } catch {
+    logger.error({ event: "cart_remove_item_failed" });
     return {
       success: false,
       code: "SYSTEM_ERROR",

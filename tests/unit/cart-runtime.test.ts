@@ -31,6 +31,7 @@ import {
 } from "@/lib/cart/validation";
 import * as claimsModule from "@/lib/auth/claims";
 import * as dbModule from "@/db";
+import { logger } from "@/lib/logger";
 
 // Mock next/headers
 const mockCookieStore = {
@@ -1071,6 +1072,94 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
       const result = await getCurrentCart();
       expect(result.success).toBe(true);
       expect(mockCookieStore.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("12. Cart Runtime Logging Contract", () => {
+    const validUuid = "019156a2-9b2f-7c1a-8e2b-4e1b2c3d4e5f";
+    const FORBIDDEN_KEYS = ["err", "error", "stack", "message", "sessionToken", "customerId"];
+
+    function setupAnonymousFailureMocks(): void {
+      vi.mocked(claimsModule.getVerifiedIdentity).mockResolvedValue({
+        success: false,
+        reason: "no_session",
+      });
+      mockCookieStore.get.mockReturnValue({ value: "L".repeat(43) });
+
+      vi.mocked(dbModule.db.select).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          innerJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([
+                {
+                  variantId: validUuid,
+                  variantStatus: "ACTIVE",
+                  productStatus: "PUBLISHED",
+                },
+              ]),
+            }),
+          }),
+        }),
+      } as unknown as ReturnType<typeof dbModule.db.select>);
+
+      vi.mocked(dbModule.db.transaction).mockRejectedValue(
+        new Error("simulated DB failure with session=secret123 customerId=cust-456")
+      );
+    }
+
+    it("A. addCartItemAction failure emits only { event: 'cart_add_item_failed' }", async () => {
+      setupAnonymousFailureMocks();
+
+      const result = await addCartItemAction(null, { variantId: validUuid, quantity: 1 });
+      expect(result.success).toBe(false);
+
+      expect(logger.error).toHaveBeenCalledTimes(1);
+      const payload = vi.mocked(logger.error).mock.calls[0]![0] as Record<string, unknown>;
+      expect(payload).toEqual({ event: "cart_add_item_failed" });
+      for (const key of FORBIDDEN_KEYS) {
+        expect(payload).not.toHaveProperty(key);
+      }
+    });
+
+    it("B. updateCartItemQuantityAction failure emits only { event: 'cart_update_quantity_failed' }", async () => {
+      setupAnonymousFailureMocks();
+
+      const result = await updateCartItemQuantityAction(null, {
+        variantId: validUuid,
+        quantity: 2,
+      });
+      expect(result.success).toBe(false);
+
+      const errorCalls = vi
+        .mocked(logger.error)
+        .mock.calls.filter(
+          (call) => (call[0] as Record<string, unknown>).event === "cart_update_quantity_failed"
+        );
+      expect(errorCalls).toHaveLength(1);
+      const payload = errorCalls[0]![0] as Record<string, unknown>;
+      expect(payload).toEqual({ event: "cart_update_quantity_failed" });
+      for (const key of FORBIDDEN_KEYS) {
+        expect(payload).not.toHaveProperty(key);
+      }
+    });
+
+    it("C. removeCartItemAction failure emits only { event: 'cart_remove_item_failed' }", async () => {
+      setupAnonymousFailureMocks();
+
+      const result = await removeCartItemAction(null, { variantId: validUuid });
+      expect(result.success).toBe(false);
+
+      const errorCalls = vi
+        .mocked(logger.error)
+        .mock.calls.filter(
+          (call) => (call[0] as Record<string, unknown>).event === "cart_remove_item_failed"
+        );
+      expect(errorCalls).toHaveLength(1);
+      const payload = errorCalls[0]![0] as Record<string, unknown>;
+      expect(payload).toEqual({ event: "cart_remove_item_failed" });
+      for (const key of FORBIDDEN_KEYS) {
+        expect(payload).not.toHaveProperty(key);
+      }
     });
   });
 });
