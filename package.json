@@ -20,6 +20,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cart:live": "vitest run --config vitest.integration.config.ts",
+    "test:checkout:live": "vitest run --config vitest.checkout.integration.config.ts",
     "test:cart:e2e": "playwright test --config=playwright.cart.config.ts",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
