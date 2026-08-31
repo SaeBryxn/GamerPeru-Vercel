@@ -4,16 +4,20 @@ import React from "react";
 import Link from "next/link";
 import { CheckCircle2, Clock, MapPin, Package } from "lucide-react";
 import { Icon } from "@/components/ui";
-import { formatCurrency } from "@/lib/utils/currency";
 import type { CheckoutConfirmationDTO } from "@/lib/checkout/types";
+import type { PaymentInstructionDTO } from "@/lib/payments/reader";
+import { formatCurrency } from "@/lib/utils/currency";
+import { ManualPaymentCard } from "./manual-payment-card";
 import styles from "./checkout-confirmation-view.module.css";
 
 export interface CheckoutConfirmationViewProps {
   confirmation: CheckoutConfirmationDTO;
+  paymentInstructions?: PaymentInstructionDTO | null;
 }
 
 export function CheckoutConfirmationView({
   confirmation,
+  paymentInstructions,
 }: CheckoutConfirmationViewProps): React.JSX.Element {
   const {
     orderNumber,
@@ -44,19 +48,23 @@ export function CheckoutConfirmationView({
       </div>
 
       <div className={styles.grid}>
-        {/* Next Steps / Payment State Card (Strict GP-019 Boundary Safe) */}
-        <div className={styles.nextStepsCard} data-testid="confirmation-payment-status-card">
-          <div className={styles.paymentBadge} data-testid="confirmation-payment-status">
-            <Icon icon={Clock} size="sm" aria-hidden="true" />
-            <span>Estado de Pago: Pendiente de Pago</span>
-          </div>
+        {/* Dynamic Manual Payment Card (GP-019) or Fallback Next Steps Card */}
+        {paymentInstructions ? (
+          <ManualPaymentCard instructions={paymentInstructions} />
+        ) : (
+          <div className={styles.nextStepsCard} data-testid="confirmation-payment-status-card">
+            <div className={styles.paymentBadge} data-testid="confirmation-payment-status">
+              <Icon icon={Clock} size="sm" aria-hidden="true" />
+              <span>Estado de Pago: Pendiente de Pago</span>
+            </div>
 
-          <p className={styles.nextStepsText}>
-            Tu pedido se encuentra registrado correctamente. El método seleccionado es{" "}
-            <strong>{paymentMethodName}</strong>. En breve recibirás la coordinación y validación de
-            tu comprobante a través de nuestros canales oficiales de Gamer Perú.
-          </p>
-        </div>
+            <p className={styles.nextStepsText}>
+              Tu pedido se encuentra registrado correctamente. El método seleccionado es{" "}
+              <strong>{paymentMethodName}</strong>. En breve recibirás la coordinación y validación
+              de tu comprobante a través de nuestros canales oficiales de Gamer Perú.
+            </p>
+          </div>
+        )}
 
         {/* 2-Column Details Grid */}
         <div className={styles.gridTwoCol}>

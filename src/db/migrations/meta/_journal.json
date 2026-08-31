@@ -71,6 +71,13 @@
       "when": 1788076372168,
       "tag": "0009_majestic_madame_web",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788169849760,
+      "tag": "0010_chief_hemingway",
+      "breakpoints": true
     }
   ]
 }

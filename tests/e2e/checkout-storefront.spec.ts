@@ -15,6 +15,9 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     // Clean test data after suite completes
     await sql.begin(async (tx) => {
       await tx`DELETE FROM outbox_events WHERE aggregate_type = 'Order' AND payload->>'customerEmail' LIKE '%@testchk6.pe'`;
+      await tx`DELETE FROM payment_submissions WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@testchk6.pe'))`;
+      await tx`DELETE FROM payment_proof_upload_intents WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@testchk6.pe'))`;
+      await tx`DELETE FROM guest_payment_access_grants WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@testchk6.pe'))`;
       await tx`DELETE FROM inventory_ledger_entries WHERE reference_id IN (SELECT id::text FROM orders WHERE customer_email LIKE '%@testchk6.pe') OR reference_id IN (SELECT id::text FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@testchk6.pe'))`;
       await tx`DELETE FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@testchk6.pe')`;
       await tx`DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@testchk6.pe')`;
@@ -118,7 +121,9 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     const createdOrderNumber = orderNumberMatch![0];
 
     // Payment state is UNPAID / Pendiente de Pago
-    const paymentStatusBadge = page.getByTestId("confirmation-payment-status");
+    const paymentStatusBadge = page
+      .getByTestId("confirmation-payment-status")
+      .or(page.getByTestId("manual-payment-status-badge"));
     await expect(paymentStatusBadge).toContainText("Pendiente de Pago");
 
     // Delivery address rendered accurately
@@ -127,12 +132,9 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     await expect(deliveryCard).toContainText("Av. Larco 742");
     await expect(deliveryCard).toContainText("Miraflores");
 
-    // 14. Strict GP-019 Privacy Boundary: No sensitive payment instruction data rendered
-    const pageText = (await page.textContent("body")) ?? "";
-    expect(pageText).not.toContain("999000111"); // account_identifier
-    expect(pageText).not.toContain("Test Storeholder"); // recipient_name
-    expect(pageText).not.toContain("Instrucciones sintéticas de prueba"); // instruction_text
-    await expect(page.locator('input[type="file"]')).toHaveCount(0); // No voucher upload
+    // 14. GP-019 Manual Payment Card Verification
+    const manualPaymentCard = page.getByTestId("manual-payment-card");
+    await expect(manualPaymentCard).toBeVisible();
 
     // 15. Physical PostgreSQL Invariants Verification
     const [order] = await sql`SELECT * FROM orders WHERE order_number = ${createdOrderNumber}`;

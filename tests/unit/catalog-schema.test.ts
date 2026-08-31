@@ -28,6 +28,7 @@ describe("Catalog Schema — Physical Bootstrap Integrity", () => {
     expect(schema.securityClassEnum.enumValues).toEqual([
       "PUBLIC_MEDIA",
       "PRIVATE_PAYMENT_PROOF",
+      "PRIVATE_PAYMENT_INSTRUCTION",
       "PRIVATE_BACKUP",
     ]);
     expect(schema.mediaTypeEnum.enumValues).toEqual(["IMAGE", "VIDEO", "DOCUMENT"]);

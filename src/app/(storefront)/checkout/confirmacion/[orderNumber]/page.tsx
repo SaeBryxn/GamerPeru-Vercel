@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { Container, Icon } from "@/components/ui";
 import { loadCheckoutConfirmation } from "@/lib/checkout/service";
+import { loadAuthorizedPaymentInstructions } from "@/lib/payments/reader";
 import { CheckoutConfirmationView } from "@/components/checkout";
 
 export const dynamic = "force-dynamic";
@@ -27,11 +28,9 @@ export default async function CheckoutConfirmationPage({
   const { orderNumber } = await params;
   const result = await loadCheckoutConfirmation(orderNumber);
 
-  return (
-    <Container size="default">
-      {result.success ? (
-        <CheckoutConfirmationView confirmation={result.confirmation} />
-      ) : (
+  if (!result.success) {
+    return (
+      <Container size="default">
         <div
           style={{
             textAlign: "center",
@@ -90,7 +89,18 @@ export default async function CheckoutConfirmationPage({
             Ir al catálogo
           </Link>
         </div>
-      )}
+      </Container>
+    );
+  }
+
+  const instructionsResult = await loadAuthorizedPaymentInstructions(orderNumber);
+
+  return (
+    <Container size="default">
+      <CheckoutConfirmationView
+        confirmation={result.confirmation}
+        paymentInstructions={instructionsResult.success ? instructionsResult.instructions : null}
+      />
     </Container>
   );
 }

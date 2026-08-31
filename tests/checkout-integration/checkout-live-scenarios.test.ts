@@ -163,6 +163,9 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
     await sqlClient`DELETE FROM outbox_events WHERE aggregate_type = 'Order' AND aggregate_id IN (SELECT id::text FROM orders WHERE customer_email LIKE '%@testchk5.pe' OR customer_phone = '998877665')`;
     await sqlClient`DELETE FROM inventory_ledger_entries WHERE inventory_item_id IN (${inventoryItemId1}, ${inventoryItemId2}, ${inventoryItemIdSingleStock}, ${inventoryItemIdOutOfStock})`;
     await sqlClient`DELETE FROM inventory_reservations WHERE inventory_item_id IN (${inventoryItemId1}, ${inventoryItemId2}, ${inventoryItemIdSingleStock}, ${inventoryItemIdOutOfStock})`;
+    await sqlClient`DELETE FROM payment_submissions WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code IN (${paymentMethodCode1}, ${paymentMethodCodeInactive}))`;
+    await sqlClient`DELETE FROM payment_proof_upload_intents WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code IN (${paymentMethodCode1}, ${paymentMethodCodeInactive}))`;
+    await sqlClient`DELETE FROM guest_payment_access_grants WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code IN (${paymentMethodCode1}, ${paymentMethodCodeInactive}))`;
     await sqlClient`DELETE FROM payments WHERE payment_method_code IN (${paymentMethodCode1}, ${paymentMethodCodeInactive})`;
     await sqlClient`DELETE FROM shipments WHERE shipping_method_id IN (${shippingMethodId1}, ${shippingMethodId2})`;
     await sqlClient`DELETE FROM order_pricing_snapshots WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@testchk5.pe' OR customer_phone = '998877665')`;

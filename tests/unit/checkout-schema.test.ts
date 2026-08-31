@@ -261,7 +261,7 @@ describe("GP-018 CHK2-BR1 — Checkout Schema & Table Foundation", () => {
       expect(cols.operationType.notNull).toBe(true);
       expect(cols.authorityBindingDigest.notNull).toBe(true);
       expect((cols.authorityBindingDigest as unknown as ColumnWithLength).length).toBe(64);
-      expect(cols.sourceCartId.notNull).toBe(true);
+      expect(cols.sourceCartId.notNull).toBe(false);
       expect(cols.requestFingerprint.notNull).toBe(true);
       expect((cols.requestFingerprint as unknown as ColumnWithLength).length).toBe(64);
       expect(cols.expiresAt.notNull).toBe(true);

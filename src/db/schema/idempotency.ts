@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   jsonb,
   pgEnum,
@@ -41,9 +43,11 @@ export const idempotencyOperationTypeEnum = pgEnum("idempotency_operation_type",
  *    - Same key + same authority + same request => Replay committed result
  *    - Same key + same authority + changed request => 409 IDEMPOTENCY_CONFLICT
  *    - Same key + wrong authority / cross-session => 403 UNAUTHORIZED
- * 4. Source Cart: source_cart_id is NOT NULL with ON DELETE RESTRICT to carts.id.
+ * 4. Source Cart Nullability & Conditional Check:
+ *    - source_cart_id is nullable in general to support post-checkout operations (PAYMENT_SUBMISSION, etc.).
+ *    - Operation-specific check ensures ORDER_CREATION must have source_cart_id IS NOT NULL.
  * 5. Request Fingerprint: request_fingerprint is NOT NULL, storing a 64-character SHA-256 hex digest
- *    of normalized checkout intent.
+ *    of normalized mutation intent.
  * 6. Expiration: expires_at is NOT NULL and configurable per operation class.
  */
 export const idempotencyKeys = pgTable(
@@ -55,9 +59,9 @@ export const idempotencyKeys = pgTable(
     idempotencyKey: varchar("idempotency_key", { length: 255 }).notNull().unique(),
     operationType: idempotencyOperationTypeEnum("operation_type").notNull(),
     authorityBindingDigest: varchar("authority_binding_digest", { length: 64 }).notNull(),
-    sourceCartId: uuid("source_cart_id")
-      .notNull()
-      .references((): AnyPgColumn => carts.id, { onDelete: "restrict" }),
+    sourceCartId: uuid("source_cart_id").references((): AnyPgColumn => carts.id, {
+      onDelete: "restrict",
+    }),
     requestFingerprint: varchar("request_fingerprint", { length: 64 }).notNull(),
     targetAggregateId: varchar("target_aggregate_id", { length: 255 }),
     responsePayload: jsonb("response_payload"),
@@ -65,6 +69,10 @@ export const idempotencyKeys = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },
   (table) => [
+    check(
+      "idempotency_keys_order_creation_source_cart_check",
+      sql`${table.operationType} != 'ORDER_CREATION' OR ${table.sourceCartId} IS NOT NULL`
+    ),
     index("idempotency_keys_expires_at_idx").on(table.expiresAt),
     index("idempotency_keys_source_cart_id_idx").on(table.sourceCartId),
   ]

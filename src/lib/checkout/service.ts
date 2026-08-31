@@ -1,10 +1,12 @@
 import "server-only";
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   cartItems,
   carts,
   customerAddresses,
+  guestPaymentAccessGrants,
+  guestPaymentSessions,
   idempotencyKeys,
   inventoryItems,
   inventoryLedgerEntries,
@@ -24,6 +26,16 @@ import {
   shippingMethods,
 } from "@/db/schema";
 import { generateUuidV7 } from "@/db/utils/uuid";
+import { PAYMENT_SESSION_TTL_SECONDS } from "@/lib/payments/constants";
+import {
+  computePaymentSessionTokenDigest,
+  generateSecurePaymentSessionToken,
+} from "@/lib/payments/crypto";
+import {
+  getOrCreateGuestPaymentSession,
+  resolveExistingGuestPaymentSession,
+  setGuestPaymentSessionCookie,
+} from "@/lib/payments/guest-session";
 import { getCurrentCustomerAddresses } from "@/lib/account/addresses";
 import type { ValidatedBaseAddressData } from "@/lib/account/address-validation";
 import { getVerifiedIdentity } from "@/lib/auth/claims";
@@ -268,6 +280,9 @@ export async function submitCheckout(
 
   const authorityBindingDigest = computeAuthorityBindingDigest(auth.digestInput, config.hmacSecret);
 
+  const guestSession =
+    auth.status === "GUEST" ? await getOrCreateGuestPaymentSession(config.hmacSecret) : null;
+
   let mergedGuestTokenToClear: string | null = null;
 
   try {
@@ -310,7 +325,7 @@ export async function submitCheckout(
         // 3. Request Fingerprint Check
         const computedFingerprint = computeRequestFingerprint(
           {
-            sourceCartId: existingIdempotency.sourceCartId,
+            sourceCartId: existingIdempotency.sourceCartId ?? "",
             shippingMethodCode: input.shippingMethodCode,
             paymentMethodCode: input.paymentMethodCode,
             customerEmail: input.customerEmail,
@@ -331,6 +346,58 @@ export async function submitCheckout(
         // 4. Committed Replay
         const payload = existingIdempotency.responsePayload as CheckoutIdempotencyPayload | null;
         if (payload && payload.orderNumber) {
+          if (auth.status === "GUEST" && existingIdempotency.targetAggregateId) {
+            const existingSession = await resolveExistingGuestPaymentSession(config.hmacSecret);
+            const targetOrderId = existingIdempotency.targetAggregateId;
+
+            const [paymentRow] = await tx
+              .select({ id: payments.id })
+              .from(payments)
+              .where(eq(payments.orderId, targetOrderId))
+              .limit(1);
+
+            if (paymentRow) {
+              let isGrantLinked = false;
+              if (existingSession.status === "VALID") {
+                const [existingGrant] = await tx
+                  .select({ id: guestPaymentAccessGrants.id })
+                  .from(guestPaymentAccessGrants)
+                  .where(
+                    and(
+                      eq(guestPaymentAccessGrants.sessionId, existingSession.sessionId),
+                      eq(guestPaymentAccessGrants.paymentId, paymentRow.id)
+                    )
+                  )
+                  .limit(1);
+                if (existingGrant) isGrantLinked = true;
+              }
+
+              if (!isGrantLinked) {
+                const [grant] = await tx
+                  .select({ sessionId: guestPaymentAccessGrants.sessionId })
+                  .from(guestPaymentAccessGrants)
+                  .where(eq(guestPaymentAccessGrants.paymentId, paymentRow.id))
+                  .limit(1);
+
+                if (grant) {
+                  const freshToken = generateSecurePaymentSessionToken();
+                  const freshDigest = computePaymentSessionTokenDigest(
+                    freshToken,
+                    config.hmacSecret
+                  );
+                  await tx
+                    .update(guestPaymentSessions)
+                    .set({
+                      tokenDigest: freshDigest,
+                      updatedAt: now,
+                    })
+                    .where(eq(guestPaymentSessions.id, grant.sessionId));
+                  await setGuestPaymentSessionCookie(freshToken);
+                }
+              }
+            }
+          }
+
           return {
             success: true as const,
             orderNumber: payload.orderNumber,
@@ -842,8 +909,9 @@ export async function submitCheckout(
       }
 
       // Step P: Payment Creation (Status: UNPAID)
+      const paymentId = generateUuidV7();
       await tx.insert(payments).values({
-        id: generateUuidV7(),
+        id: paymentId,
         orderId,
         paymentMethodCode: input.paymentMethodCode,
         instructionVersionId,
@@ -852,6 +920,25 @@ export async function submitCheckout(
         currency: "PEN",
         status: "UNPAID",
       });
+
+      // Insert guest payment session and access grant if guest checkout
+      if (auth.status === "GUEST" && guestSession) {
+        await tx
+          .insert(guestPaymentSessions)
+          .values({
+            id: guestSession.sessionId,
+            tokenDigest: computePaymentSessionTokenDigest(guestSession.rawToken, config.hmacSecret),
+            expiresAt: new Date(Date.now() + PAYMENT_SESSION_TTL_SECONDS * 1000),
+          })
+          .onConflictDoNothing();
+
+        await tx.insert(guestPaymentAccessGrants).values({
+          id: generateUuidV7(),
+          paymentId,
+          sessionId: guestSession.sessionId,
+          expiresAt: new Date(Date.now() + PAYMENT_SESSION_TTL_SECONDS * 1000),
+        });
+      }
 
       // Step Q: Cart Status Transition (ACTIVE -> CONVERTED)
       await tx
@@ -906,6 +993,10 @@ export async function submitCheckout(
 
     if (result.success && mergedGuestTokenToClear) {
       await clearAnonymousCartCookie();
+    }
+
+    if (result.success && !result.replayed && auth.status === "GUEST" && guestSession) {
+      await setGuestPaymentSessionCookie(guestSession.rawToken);
     }
 
     return result;
@@ -976,6 +1067,31 @@ export async function loadCheckoutConfirmation(
 
     if (idempotency) {
       isAuthorized = true;
+    }
+  }
+
+  if (!isAuthorized) {
+    const guestSession = await resolveExistingGuestPaymentSession(configResult.config.hmacSecret);
+    if (guestSession.status === "VALID") {
+      const now = new Date();
+      const [grant] = await db
+        .select({ id: guestPaymentAccessGrants.id })
+        .from(guestPaymentAccessGrants)
+        .where(
+          and(
+            eq(guestPaymentAccessGrants.sessionId, guestSession.sessionId),
+            gt(guestPaymentAccessGrants.expiresAt, now),
+            inArray(
+              guestPaymentAccessGrants.paymentId,
+              db.select({ id: payments.id }).from(payments).where(eq(payments.orderId, order.id))
+            )
+          )
+        )
+        .limit(1);
+
+      if (grant) {
+        isAuthorized = true;
+      }
     }
   }
 
