@@ -3,10 +3,18 @@
 import React, { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, AlertTriangle, Lock, Package, ShieldCheck, ArrowRight } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  Lock,
+  Package,
+  ShieldCheck,
+  ArrowRight,
+  RefreshCw,
+} from "lucide-react";
 import { Button, Icon } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils/currency";
-import { submitCheckoutAction } from "@/lib/checkout/actions";
+import { loadCheckoutContextAction, submitCheckoutAction } from "@/lib/checkout/actions";
 import { generateSecureCheckoutAttemptId } from "@/lib/checkout/attempt-id";
 import type {
   CheckoutContextDTO,
@@ -32,18 +40,23 @@ interface InlineAddressFormState {
   referenceNotes: string;
 }
 
-export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.JSX.Element {
+export function CheckoutPageClient({
+  context: initialContext,
+}: CheckoutPageClientProps): React.JSX.Element {
   const router = useRouter();
 
-  const cart = context.cart;
-  const isAuthenticated = context.auth.status === "AUTHENTICATED";
-  const savedAddresses = context.auth.status === "AUTHENTICATED" ? context.auth.addresses : [];
+  // 1. Authoritative Dynamic Context State
+  const [currentContext, setCurrentContext] = useState<CheckoutContextDTO>(initialContext);
+  const cart = currentContext.cart;
+  const isAuthenticated = currentContext.auth.status === "AUTHENTICATED";
+  const savedAddresses =
+    currentContext.auth.status === "AUTHENTICATED" ? currentContext.auth.addresses : [];
 
   // Default address resolution
   const defaultSavedAddress = savedAddresses.find((a) => a.isDefault) ?? savedAddresses[0];
 
-  // 1. Form States
-  const [email, setEmail] = useState(context.auth.email ?? "");
+  // 2. Form States
+  const [email, setEmail] = useState(currentContext.auth.email ?? "");
   const [deliveryMode, setDeliveryMode] = useState<"SAVED_ADDRESS" | "INLINE">(
     isAuthenticated && savedAddresses.length > 0 ? "SAVED_ADDRESS" : "INLINE"
   );
@@ -64,33 +77,61 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
   });
 
   const [selectedShippingCode, setSelectedShippingCode] = useState<string>(
-    context.shippingMethods.length > 0 ? context.shippingMethods[0]!.code : ""
+    currentContext.shippingMethods.length > 0 ? currentContext.shippingMethods[0]!.code : ""
   );
 
   const [selectedPaymentCode, setSelectedPaymentCode] = useState<string>(
-    context.paymentMethods.length > 0 ? context.paymentMethods[0]!.code : ""
+    currentContext.paymentMethods.length > 0 ? currentContext.paymentMethods[0]!.code : ""
   );
 
-  // 2. Submission & Error States
+  // 3. Fail-Closed & Terminal Execution States
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshingContext, setIsRefreshingContext] = useState(false);
+  const [isCryptoUnavailable, setIsCryptoUnavailable] = useState(false);
+  const [isConfigurationUnavailable, setIsConfigurationUnavailable] = useState(false);
+  const [isCartConverted, setIsCartConverted] = useState(false);
+
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [reviewChangedWarning, setReviewChangedWarning] = useState<string | null>(null);
 
-  // 3. Attempt ID Lifecycle (Cryptographically secure UUIDv4 per intent)
+  // 4. Attempt ID Lifecycle with Safe Crypto Boundary (Zero Math.random fallback)
   const attemptIdRef = useRef<string>("");
-  if (!attemptIdRef.current) {
-    attemptIdRef.current = generateSecureCheckoutAttemptId();
+
+  const safelyGenerateAttemptId = (): string | null => {
+    try {
+      return generateSecureCheckoutAttemptId();
+    } catch (_err) {
+      setIsCryptoUnavailable(true);
+      setGeneralError(
+        "Tu navegador no cuenta con un generador criptográfico seguro necesario para procesar compras. Por favor, actualiza tu navegador o intenta desde otro dispositivo."
+      );
+      return null;
+    }
+  };
+
+  if (!attemptIdRef.current && !isCryptoUnavailable) {
+    const id = safelyGenerateAttemptId();
+    if (id) {
+      attemptIdRef.current = id;
+    }
   }
 
   const resetAttemptId = () => {
-    attemptIdRef.current = generateSecureCheckoutAttemptId();
+    const id = safelyGenerateAttemptId();
+    if (id) {
+      attemptIdRef.current = id;
+    } else {
+      attemptIdRef.current = "";
+    }
   };
 
-  // 4. Reviewed Pricing States (Authoritative Server Synchronization)
+  // 5. Reviewed Pricing States (Authoritative Server Synchronization)
   const initialSubtotal = cart?.subtotalCents ?? 0;
-  const selectedShipping = context.shippingMethods.find((s) => s.code === selectedShippingCode);
-  const initialShipping = selectedShipping?.basePriceCents ?? 0;
+  const initialSelectedShipping = currentContext.shippingMethods.find(
+    (s) => s.code === selectedShippingCode
+  );
+  const initialShipping = initialSelectedShipping?.basePriceCents ?? 0;
 
   const [reviewedSubtotalCents, setReviewedSubtotalCents] = useState<number>(initialSubtotal);
   const [reviewedShippingCents, setReviewedShippingCents] = useState<number>(initialShipping);
@@ -98,9 +139,58 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
     initialSubtotal + initialShipping
   );
 
+  // 6. Authoritative Context Refresh Helper
+  const refreshAuthoritativeContext = async (): Promise<CheckoutContextDTO | null> => {
+    setIsRefreshingContext(true);
+    try {
+      const refreshed = await loadCheckoutContextAction();
+      setCurrentContext(refreshed);
+
+      // Reconcile shipping selection
+      if (!refreshed.shippingMethods.some((m) => m.code === selectedShippingCode)) {
+        const nextShipping =
+          refreshed.shippingMethods.length > 0 ? refreshed.shippingMethods[0]! : null;
+        setSelectedShippingCode(nextShipping ? nextShipping.code : "");
+        const nextShipCents = nextShipping ? nextShipping.basePriceCents : 0;
+        setReviewedShippingCents(nextShipCents);
+        if (refreshed.cart) {
+          setReviewedTotalCents(refreshed.cart.subtotalCents + nextShipCents);
+        }
+      }
+
+      // Reconcile payment selection
+      if (!refreshed.paymentMethods.some((m) => m.code === selectedPaymentCode)) {
+        setSelectedPaymentCode(
+          refreshed.paymentMethods.length > 0 ? refreshed.paymentMethods[0]!.code : ""
+        );
+      }
+
+      // Reconcile subtotal if cart was refreshed
+      if (refreshed.cart) {
+        setReviewedSubtotalCents(refreshed.cart.subtotalCents);
+        const matchingShipping = refreshed.shippingMethods.find(
+          (s) => s.code === selectedShippingCode
+        );
+        const shipCents = matchingShipping?.basePriceCents ?? 0;
+        setReviewedShippingCents(shipCents);
+        setReviewedTotalCents(refreshed.cart.subtotalCents + shipCents);
+      }
+
+      return refreshed;
+    } catch (_err) {
+      setIsConfigurationUnavailable(true);
+      setGeneralError(
+        "No se pudo sincronizar la configuración del proceso de compra. Por favor intenta más tarde."
+      );
+      return null;
+    } finally {
+      setIsRefreshingContext(false);
+    }
+  };
+
   const handleShippingChange = (code: string) => {
     setSelectedShippingCode(code);
-    const method = context.shippingMethods.find((m) => m.code === code);
+    const method = currentContext.shippingMethods.find((m) => m.code === code);
     const newShippingCents = method?.basePriceCents ?? 0;
     setReviewedShippingCents(newShippingCents);
     setReviewedTotalCents(reviewedSubtotalCents + newShippingCents);
@@ -161,6 +251,15 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
     e.preventDefault();
     setGeneralError(null);
 
+    if (
+      isCryptoUnavailable ||
+      isConfigurationUnavailable ||
+      isCartConverted ||
+      !attemptIdRef.current
+    ) {
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -208,7 +307,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
         return;
       }
 
-      // Handle typed errors
+      // Handle typed errors with authoritative recovery
       if (res.code === "CHECKOUT_REVIEW_CHANGED") {
         if (res.details) {
           setReviewedSubtotalCents(res.details.authoritativeSubtotalCents);
@@ -219,6 +318,8 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
           res.error ||
             "Los precios o costos de envío han cambiado. Hemos actualizado los totales a continuación. Por favor revisa y haz clic en 'Realizar Pedido' para confirmar con los nuevos montos."
         );
+        // Reconcile line items and options from authoritative context reader
+        await refreshAuthoritativeContext();
         resetAttemptId();
       } else if (res.code === "PROFILE_REQUIRED") {
         router.push("/auth/completar-perfil");
@@ -240,22 +341,34 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
         resetAttemptId();
       } else if (res.code === "SHIPPING_METHOD_UNAVAILABLE") {
         setGeneralError(
-          "El método de envío seleccionado ya no está disponible. Por favor selecciona otro método de entrega."
+          "El método de envío seleccionado ya no está disponible. Hemos actualizado las opciones de entrega disponibles."
         );
         setSelectedShippingCode("");
+        const refreshed = await refreshAuthoritativeContext();
+        if (!refreshed || refreshed.shippingMethods.length === 0) {
+          setIsConfigurationUnavailable(true);
+        }
         resetAttemptId();
       } else if (res.code === "PAYMENT_METHOD_UNAVAILABLE") {
         setGeneralError(
-          "El método de pago seleccionado ya no está disponible. Por favor selecciona otro método de pago."
+          "El método de pago seleccionado ya no está disponible. Hemos actualizado los métodos de pago disponibles."
         );
         setSelectedPaymentCode("");
+        const refreshed = await refreshAuthoritativeContext();
+        if (!refreshed || refreshed.paymentMethods.length === 0) {
+          setIsConfigurationUnavailable(true);
+        }
         resetAttemptId();
       } else if (res.code === "CHECKOUT_CONFIGURATION_UNAVAILABLE") {
+        setIsConfigurationUnavailable(true);
         setGeneralError(
-          "El servicio de compra no se encuentra disponible temporalmente. Por favor intenta más tarde."
+          "El servicio de compra no se encuentra disponible temporalmente. Por favor intenta más tarde o reintenta la carga."
         );
       } else if (res.code === "CART_ALREADY_CONVERTED") {
-        setGeneralError("Este carrito ya fue procesado en un pedido anterior.");
+        setIsCartConverted(true);
+        setGeneralError(
+          "Este carrito ya fue procesado en un pedido anterior. No es posible generar pedidos duplicados para el mismo carrito."
+        );
       } else if (res.code === "INSUFFICIENT_STOCK" || res.code === "PRODUCT_UNAVAILABLE") {
         setGeneralError(
           `${res.error} Te recomendamos revisar tu carrito para actualizar los productos.`
@@ -300,6 +413,17 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
     );
   }
 
+  const isSubmitDisabled =
+    isSubmitting ||
+    isRefreshingContext ||
+    isCryptoUnavailable ||
+    isConfigurationUnavailable ||
+    isCartConverted ||
+    currentContext.shippingMethods.length === 0 ||
+    currentContext.paymentMethods.length === 0 ||
+    !selectedShippingCode ||
+    !selectedPaymentCode;
+
   return (
     <div className={styles.pageWrapper} data-testid="checkout-page">
       <div className={styles.pageHeader}>
@@ -312,7 +436,60 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
       {generalError && (
         <div className={styles.errorAlert} role="alert" data-testid="checkout-general-error">
           <Icon icon={AlertCircle} size="md" aria-hidden="true" />
-          <span>{generalError}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
+            <span>{generalError}</span>
+            {isConfigurationUnavailable && (
+              <div style={{ marginTop: "4px" }}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  leadingIcon={RefreshCw}
+                  disabled={isRefreshingContext}
+                  onClick={async () => {
+                    setIsConfigurationUnavailable(false);
+                    setGeneralError(null);
+                    await refreshAuthoritativeContext();
+                  }}
+                  data-testid="checkout-retry-config-button"
+                >
+                  {isRefreshingContext ? "Actualizando..." : "Reintentar carga de configuración"}
+                </Button>
+              </div>
+            )}
+            {isCartConverted && (
+              <div
+                style={{ marginTop: "8px", display: "flex", gap: "12px" }}
+                data-testid="checkout-cart-converted-actions"
+              >
+                {isAuthenticated ? (
+                  <Link href="/cuenta/pedidos" className={styles.continueShoppingButton}>
+                    Ver mis pedidos
+                  </Link>
+                ) : (
+                  <Link href="/categorias/mouses" className={styles.continueShoppingButton}>
+                    Explorar catálogo
+                  </Link>
+                )}
+                <Link
+                  href="/carrito"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "8px 16px",
+                    backgroundColor: "transparent",
+                    color: "var(--color-text-primary)",
+                    border: "1px solid var(--color-border-primary)",
+                    borderRadius: "var(--radius-md)",
+                    textDecoration: "none",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                  }}
+                >
+                  Ver carrito
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -352,7 +529,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                   setReviewChangedWarning(null);
                   resetAttemptId();
                 }}
-                disabled={isAuthenticated && Boolean(context.auth.email)}
+                disabled={isAuthenticated && Boolean(currentContext.auth.email)}
                 className={[styles.input, formErrors.email ? styles.inputError : ""]
                   .filter(Boolean)
                   .join(" ")}
@@ -664,14 +841,18 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
               </h2>
             </div>
 
-            {context.shippingMethods.length === 0 ? (
-              <div className={styles.warningAlert} role="alert">
+            {currentContext.shippingMethods.length === 0 ? (
+              <div
+                className={styles.warningAlert}
+                role="alert"
+                data-testid="checkout-no-shipping-alert"
+              >
                 <Icon icon={AlertTriangle} size="sm" aria-hidden="true" />
                 <span>No hay métodos de envío disponibles temporalmente para tu ubicación.</span>
               </div>
             ) : (
               <div className={styles.optionsList} data-testid="checkout-shipping-methods-list">
-                {context.shippingMethods.map((method) => {
+                {currentContext.shippingMethods.map((method) => {
                   const isSelected = selectedShippingCode === method.code;
                   return (
                     <label
@@ -719,14 +900,18 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
               </h2>
             </div>
 
-            {context.paymentMethods.length === 0 ? (
-              <div className={styles.warningAlert} role="alert">
+            {currentContext.paymentMethods.length === 0 ? (
+              <div
+                className={styles.warningAlert}
+                role="alert"
+                data-testid="checkout-no-payment-alert"
+              >
                 <Icon icon={AlertTriangle} size="sm" aria-hidden="true" />
                 <span>No hay métodos de pago disponibles en este momento.</span>
               </div>
             ) : (
               <div className={styles.optionsList} data-testid="checkout-payment-methods-list">
-                {context.paymentMethods.map((method) => {
+                {currentContext.paymentMethods.map((method) => {
                   const isSelected = selectedPaymentCode === method.code;
                   return (
                     <label
@@ -815,7 +1000,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
               <div className={styles.priceRow}>
                 <span>Envío</span>
                 <span data-testid="checkout-shipping-value">
-                  {selectedShipping ? formatCurrency(reviewedShippingCents) : "—"}
+                  {selectedShippingCode ? formatCurrency(reviewedShippingCents) : "—"}
                 </span>
               </div>
 
@@ -832,16 +1017,16 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
               type="submit"
               variant="primary"
               fullWidth
-              disabled={
-                isSubmitting ||
-                context.shippingMethods.length === 0 ||
-                context.paymentMethods.length === 0
-              }
+              disabled={isSubmitDisabled}
               className={styles.submitButton}
               data-testid="checkout-submit-button"
             >
-              {isSubmitting ? "Procesando pedido..." : "Realizar Pedido"}
-              {!isSubmitting && (
+              {isSubmitting
+                ? "Procesando pedido..."
+                : isRefreshingContext
+                  ? "Actualizando..."
+                  : "Realizar Pedido"}
+              {!isSubmitting && !isRefreshingContext && (
                 <Icon
                   icon={ArrowRight}
                   size="sm"

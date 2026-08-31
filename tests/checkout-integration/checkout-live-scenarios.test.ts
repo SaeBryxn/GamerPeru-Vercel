@@ -1415,12 +1415,15 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
           }
         );
 
-        // Record database table counts before read operations
+        // Record database table counts and specific cart row state before read operations
         const [ordersCountBefore] = await sqlClient`SELECT count(*)::int as c FROM orders`;
         const [paymentsCountBefore] = await sqlClient`SELECT count(*)::int as c FROM payments`;
         const [reservationsCountBefore] =
           await sqlClient`SELECT count(*)::int as c FROM inventory_reservations`;
         const [outboxCountBefore] = await sqlClient`SELECT count(*)::int as c FROM outbox_events`;
+        const [cartsCountBefore] = await sqlClient`SELECT count(*)::int as c FROM carts`;
+        const [cartSnapshotBefore] =
+          await sqlClient`SELECT status, updated_at FROM carts WHERE customer_id = ${customerProfileId1} LIMIT 1`;
 
         // C. Owner customer reads confirmation
         await testContextStorage.run(
@@ -1491,17 +1494,27 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
         // F. Prove foreign authenticated result and nonexistent result are strictly identical
         expect(foreignAuthResult).toEqual(nonexistentResult);
 
-        // H. Confirmation reads remain strictly read-only: zero mutations across all tables
+        // H. Confirmation reads remain strictly read-only: zero mutations across all tables (including carts)
         const [ordersCountAfter] = await sqlClient`SELECT count(*)::int as c FROM orders`;
         const [paymentsCountAfter] = await sqlClient`SELECT count(*)::int as c FROM payments`;
         const [reservationsCountAfter] =
           await sqlClient`SELECT count(*)::int as c FROM inventory_reservations`;
         const [outboxCountAfter] = await sqlClient`SELECT count(*)::int as c FROM outbox_events`;
+        const [cartsCountAfter] = await sqlClient`SELECT count(*)::int as c FROM carts`;
+        const [cartSnapshotAfter] =
+          await sqlClient`SELECT status, updated_at FROM carts WHERE customer_id = ${customerProfileId1} LIMIT 1`;
 
         expect(ordersCountAfter!.c).toBe(ordersCountBefore!.c);
         expect(paymentsCountAfter!.c).toBe(paymentsCountBefore!.c);
         expect(reservationsCountAfter!.c).toBe(reservationsCountBefore!.c);
         expect(outboxCountAfter!.c).toBe(outboxCountBefore!.c);
+        expect(cartsCountAfter!.c).toBe(cartsCountBefore!.c);
+        if (cartSnapshotBefore && cartSnapshotAfter) {
+          expect(cartSnapshotAfter.status).toBe(cartSnapshotBefore.status);
+          expect(new Date(cartSnapshotAfter.updated_at).getTime()).toBe(
+            new Date(cartSnapshotBefore.updated_at).getTime()
+          );
+        }
       });
     });
   });
