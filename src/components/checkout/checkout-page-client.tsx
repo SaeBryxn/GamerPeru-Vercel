@@ -40,6 +40,12 @@ interface InlineAddressFormState {
   referenceNotes: string;
 }
 
+type ReconciliationPolicy =
+  | { type: "PRESERVE_VALID_SELECTIONS" }
+  | { type: "INVALIDATE_SHIPPING" }
+  | { type: "INVALIDATE_PAYMENT" }
+  | { type: "INVALIDATE_BOTH" };
+
 export function CheckoutPageClient({
   context: initialContext,
 }: CheckoutPageClientProps): React.JSX.Element {
@@ -139,41 +145,47 @@ export function CheckoutPageClient({
     initialSubtotal + initialShipping
   );
 
-  // 6. Authoritative Context Refresh Helper
-  const refreshAuthoritativeContext = async (): Promise<CheckoutContextDTO | null> => {
+  // 6. Authoritative Context Refresh Helper with Explicit Selection Policies
+  const refreshAuthoritativeContext = async (
+    policy: ReconciliationPolicy = { type: "PRESERVE_VALID_SELECTIONS" }
+  ): Promise<CheckoutContextDTO | null> => {
     setIsRefreshingContext(true);
     try {
       const refreshed = await loadCheckoutContextAction();
       setCurrentContext(refreshed);
 
-      // Reconcile shipping selection
-      if (!refreshed.shippingMethods.some((m) => m.code === selectedShippingCode)) {
-        const nextShipping =
-          refreshed.shippingMethods.length > 0 ? refreshed.shippingMethods[0]! : null;
-        setSelectedShippingCode(nextShipping ? nextShipping.code : "");
-        const nextShipCents = nextShipping ? nextShipping.basePriceCents : 0;
-        setReviewedShippingCents(nextShipCents);
-        if (refreshed.cart) {
-          setReviewedTotalCents(refreshed.cart.subtotalCents + nextShipCents);
+      // Reconcile shipping selection explicitly based on policy and active server options (Zero auto-selection)
+      let nextShippingCode = "";
+      if (policy.type !== "INVALIDATE_SHIPPING" && policy.type !== "INVALIDATE_BOTH") {
+        if (refreshed.shippingMethods.some((m) => m.code === selectedShippingCode)) {
+          nextShippingCode = selectedShippingCode;
         }
       }
+      setSelectedShippingCode(nextShippingCode);
 
-      // Reconcile payment selection
-      if (!refreshed.paymentMethods.some((m) => m.code === selectedPaymentCode)) {
-        setSelectedPaymentCode(
-          refreshed.paymentMethods.length > 0 ? refreshed.paymentMethods[0]!.code : ""
-        );
+      // Reconcile payment selection explicitly based on policy and active server options (Zero auto-selection)
+      let nextPaymentCode = "";
+      if (policy.type !== "INVALIDATE_PAYMENT" && policy.type !== "INVALIDATE_BOTH") {
+        if (refreshed.paymentMethods.some((m) => m.code === selectedPaymentCode)) {
+          nextPaymentCode = selectedPaymentCode;
+        }
       }
+      setSelectedPaymentCode(nextPaymentCode);
 
-      // Reconcile subtotal if cart was refreshed
-      if (refreshed.cart) {
-        setReviewedSubtotalCents(refreshed.cart.subtotalCents);
-        const matchingShipping = refreshed.shippingMethods.find(
-          (s) => s.code === selectedShippingCode
-        );
-        const shipCents = matchingShipping?.basePriceCents ?? 0;
-        setReviewedShippingCents(shipCents);
-        setReviewedTotalCents(refreshed.cart.subtotalCents + shipCents);
+      // Reconcile pricing accurately without stale-closure leakage
+      const nextSubtotal = refreshed.cart ? refreshed.cart.subtotalCents : reviewedSubtotalCents;
+      setReviewedSubtotalCents(nextSubtotal);
+
+      const activeShipping = refreshed.shippingMethods.find((s) => s.code === nextShippingCode);
+      const nextShippingCents = activeShipping ? activeShipping.basePriceCents : 0;
+      setReviewedShippingCents(nextShippingCents);
+      setReviewedTotalCents(nextSubtotal + nextShippingCents);
+
+      // Fail-closed if either required method set is empty
+      if (refreshed.shippingMethods.length === 0 || refreshed.paymentMethods.length === 0) {
+        setIsConfigurationUnavailable(true);
+      } else {
+        setIsConfigurationUnavailable(false);
       }
 
       return refreshed;
@@ -194,6 +206,13 @@ export function CheckoutPageClient({
     const newShippingCents = method?.basePriceCents ?? 0;
     setReviewedShippingCents(newShippingCents);
     setReviewedTotalCents(reviewedSubtotalCents + newShippingCents);
+    setReviewChangedWarning(null);
+    setGeneralError(null);
+    resetAttemptId();
+  };
+
+  const handlePaymentChange = (code: string) => {
+    setSelectedPaymentCode(code);
     setReviewChangedWarning(null);
     setGeneralError(null);
     resetAttemptId();
@@ -319,7 +338,12 @@ export function CheckoutPageClient({
             "Los precios o costos de envío han cambiado. Hemos actualizado los totales a continuación. Por favor revisa y haz clic en 'Realizar Pedido' para confirmar con los nuevos montos."
         );
         // Reconcile line items and options from authoritative context reader
-        await refreshAuthoritativeContext();
+        await refreshAuthoritativeContext({ type: "PRESERVE_VALID_SELECTIONS" });
+        if (res.details) {
+          setReviewedSubtotalCents(res.details.authoritativeSubtotalCents);
+          setReviewedShippingCents(res.details.authoritativeShippingCents);
+          setReviewedTotalCents(res.details.authoritativeTotalCents);
+        }
         resetAttemptId();
       } else if (res.code === "PROFILE_REQUIRED") {
         router.push("/auth/completar-perfil");
@@ -341,23 +365,15 @@ export function CheckoutPageClient({
         resetAttemptId();
       } else if (res.code === "SHIPPING_METHOD_UNAVAILABLE") {
         setGeneralError(
-          "El método de envío seleccionado ya no está disponible. Hemos actualizado las opciones de entrega disponibles."
+          "El método de envío seleccionado ya no está disponible. Por favor selecciona otro método de entrega."
         );
-        setSelectedShippingCode("");
-        const refreshed = await refreshAuthoritativeContext();
-        if (!refreshed || refreshed.shippingMethods.length === 0) {
-          setIsConfigurationUnavailable(true);
-        }
+        await refreshAuthoritativeContext({ type: "INVALIDATE_SHIPPING" });
         resetAttemptId();
       } else if (res.code === "PAYMENT_METHOD_UNAVAILABLE") {
         setGeneralError(
-          "El método de pago seleccionado ya no está disponible. Hemos actualizado los métodos de pago disponibles."
+          "El método de pago seleccionado ya no está disponible. Por favor selecciona otro método de pago."
         );
-        setSelectedPaymentCode("");
-        const refreshed = await refreshAuthoritativeContext();
-        if (!refreshed || refreshed.paymentMethods.length === 0) {
-          setIsConfigurationUnavailable(true);
-        }
+        await refreshAuthoritativeContext({ type: "INVALIDATE_PAYMENT" });
         resetAttemptId();
       } else if (res.code === "CHECKOUT_CONFIGURATION_UNAVAILABLE") {
         setIsConfigurationUnavailable(true);
@@ -446,9 +462,20 @@ export function CheckoutPageClient({
                   leadingIcon={RefreshCw}
                   disabled={isRefreshingContext}
                   onClick={async () => {
-                    setIsConfigurationUnavailable(false);
                     setGeneralError(null);
-                    await refreshAuthoritativeContext();
+                    const refreshed = await refreshAuthoritativeContext({
+                      type: "PRESERVE_VALID_SELECTIONS",
+                    });
+                    if (
+                      !refreshed ||
+                      refreshed.shippingMethods.length === 0 ||
+                      refreshed.paymentMethods.length === 0
+                    ) {
+                      setIsConfigurationUnavailable(true);
+                      setGeneralError(
+                        "El servicio de compra no se encuentra disponible temporalmente. Por favor intenta más tarde o reintenta la carga."
+                      );
+                    }
                   }}
                   data-testid="checkout-retry-config-button"
                 >
@@ -926,11 +953,7 @@ export function CheckoutPageClient({
                         name="paymentMethod"
                         value={method.code}
                         checked={isSelected}
-                        onChange={() => {
-                          setSelectedPaymentCode(method.code);
-                          setReviewChangedWarning(null);
-                          resetAttemptId();
-                        }}
+                        onChange={() => handlePaymentChange(method.code)}
                         className={styles.radioInput}
                       />
                       <div className={styles.optionContent}>
