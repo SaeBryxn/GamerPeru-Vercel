@@ -4,6 +4,7 @@ import { generateUuidV7 } from "@/db/utils/uuid";
 import { generateAnonymousSessionToken } from "@/lib/cart/session";
 import { submitCheckout } from "@/lib/checkout";
 import { loadAuthorizedPaymentInstructions } from "@/lib/payments/reader";
+import { resolveAuthorizedPayment } from "@/lib/payments/authority";
 import { createPaymentProofUploadIntent, submitPaymentProof } from "@/lib/payments/service";
 import {
   computePaymentSessionTokenDigest,
@@ -1107,24 +1108,13 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
       const order = await createGuestOrder();
       currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
 
+      const auth = await resolveAuthorizedPayment(order.orderNumber);
+      if (!auth.authorized) throw new Error("Order not authorized");
+
       const attemptId = generateUuidV7();
-
-      // Submit initial
-      await submitPaymentProof({
-        orderNumber: order.orderNumber,
-        submissionAttemptId: attemptId,
-        operationCode: "OP-FAST-EXPIRY-PROOF",
-      });
-
-      // Expire key
       const namespacedKey = `PAYMENT_SUBMISSION:${attemptId}`;
-      await sqlClient`
-        UPDATE idempotency_keys
-        SET expires_at = NOW() - INTERVAL '10 minutes'
-        WHERE idempotency_key = ${namespacedKey}
-      `;
 
-      // Request upload intent for order
+      // 1. Request upload intent while order is UNPAID
       const intentRes = await createPaymentProofUploadIntent({
         orderNumber: order.orderNumber,
         declaredMimeType: "image/png",
@@ -1133,11 +1123,26 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
       expect(intentRes.success).toBe(true);
       if (!intentRes.success) throw new Error("Upload intent creation failed");
 
+      // 2. Pre-seed an expired idempotency key for this attemptId
+      await sqlClient`
+        INSERT INTO idempotency_keys (
+          id, idempotency_key, action_type, authority_binding_digest, request_fingerprint, response_payload, expires_at
+        ) VALUES (
+          ${generateUuidV7()},
+          ${namespacedKey},
+          'PAYMENT_SUBMISSION',
+          ${auth.authorityBindingDigest},
+          'pre-seeded-fingerprint',
+          NULL,
+          NOW() - INTERVAL '10 minutes'
+        )
+      `;
+
       const countBefore = await sqlClient`
         SELECT COUNT(*)::int as count FROM payment_submissions
       `;
 
-      // Replay with expired key + upload intent
+      // 3. Replay with expired key + upload intent -> should exit fast path before R2
       const expiredRes = await submitPaymentProof({
         orderNumber: order.orderNumber,
         submissionAttemptId: attemptId,
@@ -1160,17 +1165,13 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
       const order = await createGuestOrder();
       currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
 
+      const auth = await resolveAuthorizedPayment(order.orderNumber);
+      if (!auth.authorized) throw new Error("Order not authorized");
+
       const attemptId = generateUuidV7();
       const namespacedKey = `PAYMENT_SUBMISSION:${attemptId}`;
 
       // Insert pre-expired idempotency row directly into DB (simulating race where fast-path missed but locked recheck finds it)
-      const [pay] = await sqlClient`
-        SELECT p.id, p.authority_binding_digest
-        FROM payments p
-        JOIN orders o ON o.id = p.order_id
-        WHERE o.order_number = ${order.orderNumber}
-      `;
-
       await sqlClient`
         INSERT INTO idempotency_keys (
           id, idempotency_key, action_type, authority_binding_digest, request_fingerprint, response_payload, expires_at
@@ -1178,7 +1179,7 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
           ${generateUuidV7()},
           ${namespacedKey},
           'PAYMENT_SUBMISSION',
-          ${pay!.authority_binding_digest},
+          ${auth.authorityBindingDigest},
           'placeholder-fingerprint',
           NULL,
           NOW() - INTERVAL '5 minutes'
@@ -1199,7 +1200,7 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
       // Verify zero PaymentSubmitted outbox events
       const outbox = await sqlClient`
         SELECT id FROM outbox_events
-        WHERE event_name = 'PaymentSubmitted' AND aggregate_id = ${pay!.id}
+        WHERE event_name = 'PaymentSubmitted' AND aggregate_id = ${auth.payment.id}
       `;
       expect(outbox.length).toBe(0);
     });
