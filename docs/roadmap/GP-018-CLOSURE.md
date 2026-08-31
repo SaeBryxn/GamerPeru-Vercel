@@ -1,8 +1,8 @@
-# GP-018 — Closure Report Candidate
+# GP-018 — Canonical Closure Report Candidate
 
 ## Status
 
-**CLOSURE CANDIDATE (PENDING EXTERNAL REVIEW)**
+**CANONICAL CLOSURE CANDIDATE (PENDING FINAL EXTERNAL APPROVAL)**
 
 ---
 
@@ -21,68 +21,119 @@
   - `CHK6`: Checkout UI, Confirmation & End-to-End Acceptance `[REVIEWED / REJECTED REQUIRES BR1]` (`95fa787`)
   - `CHK6-BR1`: Checkout Confirmation Privacy & Review-Recovery Remediation `[REVIEWED / REJECTED REQUIRES BR2]` (`7bf4aa5`)
   - `CHK6-BR2`: Fail-Closed Checkout Recovery & Evidence Truthfulness `[REVIEWED / REJECTED REQUIRES BR3]` (`7e05fc9`)
-  - `CHK6-BR3`: Explicit Method Reselection & Authoritative Pricing Reconciliation `[CANDIDATE PENDING EXTERNAL REVIEW]`
+  - `CHK6-BR3`: Explicit Method Reselection & Authoritative Pricing Reconciliation `[APPROVED / CLOSED]` (Implementation SHA: `1666cfdd7bafe9e99c13e9190a7e357114212047`)
+  - `CHK6-BR3-R1`: CI Evidence Truthfulness Correction `[APPROVED / CLOSED]` (Evidence-only, zero code delta, zero commit delta)
+- **Canonical Implementation SHA**: `1666cfdd7bafe9e99c13e9190a7e357114212047`
 - **Candidate Head Branch**: `main`
 
 ---
 
-## Executive Summary
+## Canonical Implementation CI Verification (Run 33371325572)
+
+- **Workflow Run ID**: `33371325572` (Event: `push` on `main`, Head: `1666cfdd7bafe9e99c13e9190a7e357114212047`)
+- **Overall Workflow Conclusion**: **SUCCESS** (All 4 jobs concluded SUCCESS)
+- **General Unit / Vitest** (`Format, Typecheck, Lint, Test, Build & E2E` / `99422895219`):
+  - 59 test files passed (59 total)
+  - 834 tests passed, 1 skipped, 0 failed (835 total tests)
+- **Standard Playwright E2E** (`Format, Typecheck, Lint, Test, Build & E2E` / `99422895219`):
+  - 142 logical scenarios total
+  - 141 clean passed, 1 flaky (`tests/e2e/homepage.spec.ts` Scenario K: MegaMenu geometry / preview-zone width at 1920px; retry #1 passed), 1 retry, 0 terminal failed, 0 skipped
+- **Real Local Supabase Cart E2E** (`Real Local Supabase Cart E2E` / `99422895392`):
+  - 11 logical scenarios total
+  - 9 clean passed, 2 flaky (`Scenario E: Cookie Security & Persistence` and `Scenario H: Full-Page /carrito Mutation Synchronization`; each passed on retry #1), 2 retries, 0 terminal failed, 0 skipped
+- **Real Local Supabase Checkout E2E** (`Real Local Supabase Checkout E2E` / `99422895420`):
+  - 5 logical scenarios total
+  - 5 clean passed, 0 flaky, 0 retries, 0 failed, 0 skipped
+- **Real Local PostgreSQL / Supabase Checkout Live** (`Real Local PostgreSQL / Supabase Checkout Runtime` / `99422895357`):
+  - 24 tests total
+  - 24 passed, 0 failed, 0 skipped
+
+---
+
+## Executive Summary & Final Delivered Scope
 
 GP-018 delivers the complete, authoritative customer checkout domain, payment-neutral confirmation handoff, and storefront application surfaces for Gamer Perú. The implementation satisfies strict multi-table relational persistence, race-free concurrency semantics with transaction-scoped PostgreSQL advisory locks, server-authoritative pricing and inventory reservations, accessible responsive UI forms, cryptographically secure attempt IDs with fail-closed UI boundaries, authoritative context refresh upon unavailable methods requiring explicit user reselection, terminal state handling for converted carts and unavailable configuration, and real local Supabase browser E2E acceptance:
 
 1. **Relational Commerce Database Architecture**: Physical migration `0009_majestic_madame_web.sql` defines 15 normalized tables across orders, payments, shipments, shipping methods, payment methods, payment instructions, inventory locations, inventory items, inventory reservations, inventory ledger entries, order address snapshots, order pricing snapshots, and database-backed idempotency keys.
-2. **Deterministic Cryptographic Authority & Idempotency**: Checkout requests bind to authoritative server-computed HMAC-SHA256 digests and SHA-256 request fingerprints. Concurrency races with identical attempt IDs serialize via `pg_advisory_xact_lock` on the attempt ID hash, guaranteeing that parallel submissions converge to exactly one physical order with idempotent replays (`replayed: true`).
-3. **Cryptographically Secure Attempt Identifiers & Safe UI Boundary**: Client attempt ID generation (`src/lib/checkout/attempt-id.ts`) strictly uses cryptographically secure browser entropy (`crypto.randomUUID()` or RFC4122 v4 compliant `crypto.getRandomValues()`), fails closed if secure entropy is unavailable, and contains zero `Math.random()` or pseudo-entropy fallbacks. The UI catches crypto unavailability safely, renders technical explanation, disables submit, and never crashes.
-4. **Fail-Closed Atomic Transaction Safety**: All checkout mutations (cart transition `ACTIVE -> CONVERTED`, catalog price snapshotting, address snapshotting, inventory reservations, inventory ledger logging, initial payment `UNPAID` creation, and `OrderPlaced` outbox event creation) execute within a single PostgreSQL transaction. Order number generation recovers conflict-safely from collisions without transaction block aborts (`ON CONFLICT DO NOTHING`).
-5. **Customer-Facing Checkout Application Surfaces**:
-   - `/checkout`: Responsive 2-column desktop and linear mobile form with contact capture, Peruvian delivery address entry (or saved address selection for authenticated customers), shipping method radio selection with dynamic fee calculation, payment method selection, and real-time order review.
-   - `/checkout/confirmacion/[orderNumber]`: Dynamic order confirmation surface showing order status `PENDING`, payment status `UNPAID` ("Pendiente de pago"), delivery details, items breakdown, and totals.
-6. **Strict GP-019 Privacy & Data Boundary**: Neither `/checkout` nor `/checkout/confirmacion/[orderNumber]` receives or renders sensitive payment instruction fields (`instruction_text`, `account_identifier`, `recipient_name`, `qr_media_id`), operation-code forms, or voucher upload inputs.
-7. **Confirmation Privacy & Order-Existence Non-Disclosure**: Confirmation lookup enforces strict ownership verification (authenticated `customer_id` match or guest HMAC authority binding match). Nonexistent orders and unauthorized/foreign requests return the exact same unified failure contract (`{ success: false, code: "NOT_AVAILABLE", error: "Pedido no disponible." }`), completely eliminating order-existence oracles with zero information disclosure. Confirmation reads are strictly read-only and cause zero database mutations (asserted across orders, payments, reservations, outbox, and carts).
-8. **Server-Authoritative Review Change Synchronization & Line-Item Consistency**: When prices or shipping fees change concurrently during checkout submission (`CHECKOUT_REVIEW_CHANGED`), the checkout client consumes authoritative server totals (`authoritativeSubtotalCents`, `authoritativeShippingCents`, `authoritativeTotalCents`), reconciles cart line items from the authoritative context reader, dynamically updates visible UI review cards, presents an accessible warning, and requires an explicit, intentional second user click sending newly reviewed amounts under a fresh secure attempt ID (with zero automatic resubmissions).
-9. **Comprehensive Authoritative Typed Recovery with Explicit Reselection**: Explicit typed error handlers with server-authoritative context reconciliation for `IDEMPOTENCY_EXPIRED`, `IDEMPOTENCY_CONFLICT`, `ADDRESS_UNAVAILABLE`, `SHIPPING_METHOD_UNAVAILABLE` (authoritative context refresh requiring explicit user shipping reselection with zero auto-selection), `PAYMENT_METHOD_UNAVAILABLE` (authoritative context refresh requiring explicit user payment reselection with zero auto-selection), `CHECKOUT_CONFIGURATION_UNAVAILABLE` (terminal fail-closed with retry recovery), `CART_ALREADY_CONVERTED` (terminal state with navigation recovery), `UNAUTHORIZED`, `INSUFFICIENT_STOCK`, `PRODUCT_UNAVAILABLE`, and `SYSTEM_ERROR`.
+2. **Orders & Immutable Snapshots**: Complete `orders`, `order_items`, `order_address_snapshots`, and `order_pricing_snapshots` persistence capturing frozen customer, address, catalog, and pricing data at time of purchase.
+3. **Shipping Method & Initial Shipment State**: Normalized `shipping_methods` configuration and `shipments` initial association linked directly to created orders.
+4. **Payment Method Configuration**: Normalized `payment_methods` configuration supporting multi-brand Peru payment channels.
+5. **Payment Instruction Version Structure**: Database structural support for versioned payment instructions (`payment_instruction_versions`).
+6. **Initial UNPAID Payment Creation**: Exactly one `payments` record created atomically with `payment_status = 'UNPAID'` upon order submission.
+7. **Checkout Inventory Reservation Kernel**: Atomically creates `inventory_reservations` records linked to items with status `ACTIVE` and reservation TTL timestamps.
+8. **Inventory Reservation Ledger Entry**: Transaction-scoped `inventory_ledger_entries` audit logging with entry type `RESERVATION_CREATED`.
+9. **Atomic Outbox Event Persistence**: Inserts `outbox_events` with topic `OrderPlaced` in the same physical database transaction.
+10. **Database-Backed Idempotency Support**: `checkout_idempotency_keys` storing SHA-256 request fingerprints, authoritative HMAC-SHA256 digests, and cached order responses.
+11. **Deterministic Cryptographic Authority & Idempotency**: Concurrency races serialize via `pg_advisory_xact_lock` on attempt ID hash, guaranteeing idempotent replay convergence (`replayed: true`).
+12. **Server-Side Atomic Checkout Runtime Engine**: All mutations (cart `ACTIVE -> CONVERTED`, price snapshotting, address snapshotting, inventory reservations, ledger logging, initial payment, outbox event) execute in a single PostgreSQL transaction with conflict-safe order number generation (`ON CONFLICT DO NOTHING`).
+13. **Same-Cart & Same-Attempt Concurrency Serialization**: Concurrent double-clicks or parallel submissions for the same cart or attempt ID safely serialize without duplicate orders or phantom stock allocation.
+14. **Guest & Authenticated Authority Resolution**: Guest authority verified via HMAC cookie binding; authenticated customer authority verified via Supabase auth session binding.
+15. **Server-Authoritative Price & Stock Validation**: Price hydration reads active catalog prices from PostgreSQL, rejecting stale client amounts via `CHECKOUT_REVIEW_CHANGED`. Stock availability checked atomically with row-level locks.
+16. **Customer-Facing Checkout Application Surfaces**: Accessible, responsive `/checkout` form with Peruvian contact and address entry (inline or saved address selection).
+17. **Peruvian Delivery Address Flow**: Capture of recipient name, phone, street address, department, province, district, postal code, and delivery references.
+18. **Shipping Method Selection & Calculation**: Radio selection with real-time dynamic shipping fee calculation.
+19. **Payment Method Selection without Secret Disclosure**: Neutral payment method selection with zero customer-facing leakage of account identifiers, phone numbers, recipient names, or QR media IDs.
+20. **Real-Time Order Review**: Visible breakdown of cart items, subtotal, shipping fee, and total amount.
+21. **Explicit Confirmation on Review Changes**: Dynamic totals synchronization with mandatory explicit second user click under a fresh cryptographically secure attempt ID.
+22. **Explicit Reselection on Unavailable Methods**: Invalidation of stale shipping or payment methods with authoritative context refresh requiring explicit user reselection (zero auto-selection).
+23. **Zero Replacement Auto-Selection**: Replacement shipping and payment options are never automatically selected upon error recovery.
+24. **Customer Order Confirmation Surface**: `/checkout/confirmacion/[orderNumber]` showing order status `PENDING`, payment status `UNPAID` ("Pendiente de pago"), delivery summary, and itemized breakdown.
+25. **Confirmation Authority Protection**: Strict ownership validation requiring matching authenticated customer ID or valid guest HMAC digest.
+26. **Order-Existence Non-Disclosure Contract**: Nonexistent orders and unauthorized/foreign requests return identical unified failure `{ success: false, code: "NOT_AVAILABLE", error: "Pedido no disponible." }`, eliminating oracle disclosure.
+27. **Read-Only Confirmation Behavior**: Order confirmation readers perform zero database mutations (asserted across orders, payments, reservations, outbox, and carts tables).
+28. **Cryptographically Secure Attempt IDs**: Client attempt ID generation (`src/lib/checkout/attempt-id.ts`) strictly requires secure browser entropy (`crypto.randomUUID()` or RFC4122 v4 `crypto.getRandomValues()`) with zero `Math.random()` fallbacks.
+29. **Controlled Fail-Closed Crypto Boundary**: Safe error presentation without uncaught exceptions, submit button disabled, and zero submit actions when secure browser entropy is unavailable.
+30. **Comprehensive Acceptance Coverage**: Validated through local PostgreSQL integration suites, Vitest component unit suites, and full Playwright browser E2E suites.
 
 ---
 
-## Scope Delivered vs Explicitly Out of Scope
+## Roadmap & Milestone Ownership Boundaries
 
-### Scope Delivered
+### GP-019 — Payment Proof Capture & Manual Customer Payment Workflow (Not Begun)
 
-- **Database Schema (Migration 0009)**: 15 tables supporting orders, payments, inventory reservations, inventory ledger, idempotency keys, and snapshots.
-- **Server Runtime Engine (`src/lib/checkout/`)**:
-  - `loadCheckoutContext`: Authority resolution, price hydration, fail-closed configuration verification, safe DTO projection.
-  - `submitCheckout`: Advisory locking, conflict-safe idempotency verification, stock reservation, ledger logging, outbox event generation.
-  - `loadCheckoutConfirmation`: Authority-guarded read-only order confirmation reader with unified `NOT_AVAILABLE` non-disclosure.
-  - `attempt-id`: Cryptographically secure attempt-id generation with fail-closed crypto requirements.
-- **Storefront Checkout UI (`src/components/checkout/`, `src/app/(storefront)/checkout/`)**:
-  - `/checkout` and `/checkout/confirmacion/[orderNumber]` pages (`force-dynamic`, `noindex, nofollow`).
-  - Interactive progressive checkout form with contact, delivery address, shipping method, and payment method selection.
-  - Authoritative order review totals, review-changed dynamic synchronization, and in-flight submit protection.
-  - Neutral confirmation presentation with pending payment status.
-  - Cart CTA integration ("Finalizar compra" button in `/carrito` and Drawer).
-- **Security & Privacy Enforcement**: Opaque cryptographic attempt IDs, server-derived authority digests, zero leak of payment instruction secrets, and non-disclosure confirmation contract.
-- **Automated Testing Suite**: Local PostgreSQL live integration suite (`tests/checkout-integration/checkout-live-scenarios.test.ts`), unit/component suite (`tests/unit/checkout-ui.test.tsx`, `tests/unit/checkout-attempt-id.test.ts`), and Playwright E2E suite (`tests/e2e/checkout-storefront.spec.ts`).
+The following remain explicitly outside GP-018 and are owned exclusively by **GP-019**:
 
-### Explicitly Out of Scope (Deferred to GP-019 / Later Gates)
+- Production Yape/Plin phone numbers, recipient holder names, and bank account identifiers.
+- Customer-visible payment instructions rendering.
+- Official Yape/Plin QR code presentation.
+- Operation-code (`operation_code`) capture form.
+- Payment voucher (`voucher_file`) image upload and validation.
+- Customer `PaymentSubmission` entity and submission runtime.
+- Customer payment workflow transition (`UNPAID -> SUBMITTED / VERIFYING`).
+- Customer payment rejection recovery and re-submission workflows.
 
-- **Manual Payment Workflow & Customer Proof Capture**: Deferred exclusively to **GP-019** (`docs/roadmap/GP-019.md`), which receives the created Order + exactly one Payment UNPAID from GP-018 and owns payment instructions, QR presentation, operation-code capture, voucher upload, payment submission, and customer `SUBMITTED` / `VERIFYING` progression.
-- **Privileged Admin Payment Verification**: Deferred to **GP-028** (Admin Payment & Verification Operations) according to canonical roadmap and ADR specifications.
-- **Reservation Expiry Worker & Background Reconciliation**: Deferred to **GP-021** (Inventory Engine).
-- **Courier Logistics & Geocoding API Integrations**: Country is Peru-first; external courier APIs deferred to future shipping integrations.
-- **Order Cancellation & Refund Lifecycles**: Deferred to post-checkout order management milestones.
+### GP-028 — Admin Payment Verification Operations
+
+Privileged admin review, payment voucher audit, and manual payment verification/approval operations belong exclusively to **GP-028** (Admin Payment & Verification Operations).
+
+### Post-GP-018 Roadmap Milestones
+
+- **GP-020**: Post-checkout order state transitions, cancellations, and customer refund workflows.
+- **GP-021**: Broader Inventory Engine lifecycle, background reservation expiration/release worker, manual stock adjustments, and multi-location fulfillment movements.
+- **GP-042**: EC OS background synchronization and outbox event dispatch workers.
 
 ---
 
 ## Remaining Business Configuration TBDs (Operational Dependencies)
 
-1. **Production Shipping Rates & SLAs**: Exact base rates for Lima Metropolitana, Lima Provincias, and Departamentos to be configured operationally.
-2. **Production Manual Payment Accounts**: Official Yape/Plin phone numbers, recipient holder names, and QR assets to be configured operationally.
-3. **Production Inventory Locations**: Fulfillment center location codes to be configured operationally.
-4. **Reservation TTL Policy**: Production reservation expiry duration (`CHECKOUT_RESERVATION_TTL_MINUTES`) remains `[TBD BUSINESS DECISION]` (numeric values such as 30 in tests are local/CI fixture values only).
+1. **Production Shipping Rates & Coverage**: Official base shipping rates and delivery SLAs for Lima Metropolitana, Lima Provincias, and Departamentos to be configured operationally.
+2. **Production Manual Payment Accounts**: Official Yape/Plin phone numbers, recipient holder names, and QR image assets to be configured operationally.
+3. **Production Primary Inventory Location**: Fulfillment center location codes to be configured operationally.
+4. **Reservation TTL Policy**: Production reservation duration (`CHECKOUT_RESERVATION_TTL_MINUTES`) remains `[TBD BUSINESS DECISION]` (numeric test values are local fixture values only).
+5. **Idempotency TTL Policy**: Production idempotency key expiry duration (`CHECKOUT_IDEMPOTENCY_TTL_MINUTES`) remains `[TBD BUSINESS DECISION]`.
+
+---
+
+## Hosted Database Status & Evidence Basis
+
+- **Schema Delta**: 0 (`src/db/schema/**` unchanged since CHK4).
+- **Migration Delta**: 0 (`src/db/migrations/**` unchanged since CHK4; migration `0009_majestic_madame_web.sql` frozen).
+- **No Migration 0010**: Confirmed, zero new migrations created.
+- **Evidence Basis**: Git repository audit proves zero schema or migration additions since approved deployment gate CHK4; execution audit verifies zero `drizzle-kit push` or hosted mutation commands were executed during CHK5 through CHK6-BR3-R1.
 
 ---
 
 ## Dependency Next Step
 
-Upon external audit and approval of this closure candidate, the next authorized milestone is:
+Upon final external approval of this canonical closure documentation, GP-018 is formally closed, authorizing the commencement of:
 **GP-019 — Payment Proof Capture & Manual Customer Payment Workflow**
