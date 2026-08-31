@@ -70,6 +70,7 @@ export async function loadCheckoutContext(): Promise<CheckoutContextDTO> {
 
   if (auth.status === "AUTHENTICATED") {
     if (auth.guestToken) {
+      let shouldClear = false;
       await db.transaction(async (tx) => {
         const mergeResult = await mergeGuestCartIntoAuthenticated(
           auth.customerProfileId,
@@ -77,9 +78,12 @@ export async function loadCheckoutContext(): Promise<CheckoutContextDTO> {
           tx
         );
         if (mergeResult.shouldClearCookie) {
-          await clearAnonymousCartCookie();
+          shouldClear = true;
         }
       });
+      if (shouldClear) {
+        await clearAnonymousCartCookie();
+      }
     }
     customerSavedAddresses = await getCurrentCustomerAddresses();
   }
@@ -214,7 +218,14 @@ export async function loadCheckoutContext(): Promise<CheckoutContextDTO> {
  * 5. Review-Change Protection: Advisory reviewed money comparison prevents silent total changes.
  * 6. Privacy: Zero PII or credentials persisted in idempotency keys, outbox payloads, or error logs.
  */
-export async function submitCheckout(rawInput: unknown): Promise<CheckoutSubmitResult> {
+export interface SubmitCheckoutOptions {
+  orderNumberGenerator?: () => string;
+}
+
+export async function submitCheckout(
+  rawInput: unknown,
+  options?: SubmitCheckoutOptions
+): Promise<CheckoutSubmitResult> {
   // 1. Input Validation
   const inputValidation = validateCheckoutSubmitInput(rawInput);
   if (!inputValidation.success) {
@@ -260,6 +271,12 @@ export async function submitCheckout(rawInput: unknown): Promise<CheckoutSubmitR
 
   try {
     const result = await db.transaction(async (tx) => {
+      // Step 0: Transaction-Scoped Advisory Lock on checkoutAttemptId
+      // Uses hashtextextended with domain seed 0x4750434845434b ("GPCHECK" = 20074218320497740)
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.checkoutAttemptId}, 20074218320497740::bigint))`
+      );
+
       const now = new Date();
 
       // Step A: Pre-Cart Idempotency Lookup (Fast Replay Path)
@@ -596,7 +613,7 @@ export async function submitCheckout(rawInput: unknown): Promise<CheckoutSubmitR
         }
       }
 
-      // Step I: Insert Idempotency Key
+      // Step I: Insert Idempotency Key (Conflict-Safe)
       const computedFingerprint = computeRequestFingerprint(
         {
           sourceCartId: activeCart.id,
@@ -616,7 +633,7 @@ export async function submitCheckout(rawInput: unknown): Promise<CheckoutSubmitR
       if (existingIdempotency) {
         idempotencyRowId = existingIdempotency.id;
       } else {
-        const [insertedIdempotency] = await tx
+        const insertedIdempotency = await tx
           .insert(idempotencyKeys)
           .values({
             id: generateUuidV7(),
@@ -627,18 +644,64 @@ export async function submitCheckout(rawInput: unknown): Promise<CheckoutSubmitR
             requestFingerprint: computedFingerprint,
             expiresAt: idempotencyExpiresAt,
           })
+          .onConflictDoNothing({ target: idempotencyKeys.idempotencyKey })
           .returning({ id: idempotencyKeys.id });
-        idempotencyRowId = insertedIdempotency!.id;
+
+        if (insertedIdempotency.length > 0 && insertedIdempotency[0]) {
+          idempotencyRowId = insertedIdempotency[0].id;
+        } else {
+          // Re-fetch existing row if an insert race occurred
+          const [winnerIdempotency] = await tx
+            .select()
+            .from(idempotencyKeys)
+            .where(eq(idempotencyKeys.idempotencyKey, input.checkoutAttemptId))
+            .for("update")
+            .limit(1);
+
+          if (!winnerIdempotency) {
+            return {
+              success: false as const,
+              code: "SYSTEM_ERROR" as const,
+              error: "Error de concurrencia al registrar la clave de idempotencia.",
+            };
+          }
+
+          if (winnerIdempotency.authorityBindingDigest !== authorityBindingDigest) {
+            return {
+              success: false as const,
+              code: "UNAUTHORIZED" as const,
+              error: "No autorizado para consultar o reintentar esta orden.",
+            };
+          }
+
+          const payload = winnerIdempotency.responsePayload as CheckoutIdempotencyPayload | null;
+          if (payload && payload.orderNumber) {
+            return {
+              success: true as const,
+              orderNumber: payload.orderNumber,
+              totalCents: payload.totalCents,
+              currency: payload.currency,
+              paymentStatus: "UNPAID" as const,
+              replayed: true,
+            };
+          }
+
+          idempotencyRowId = winnerIdempotency.id;
+        }
       }
 
-      // Step J: Order Creation with Collision Safety
-      let orderNumber = generateOrderNumber();
+      // Step J: Order Creation with Conflict-Safe Collision Recovery
+      let orderNumber = "";
       const orderId = generateUuidV7();
-
       let orderInserted = false;
+
+      const orderNumberGen = options?.orderNumberGenerator ?? generateOrderNumber;
+
       for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          await tx.insert(orders).values({
+        orderNumber = orderNumberGen();
+        const inserted = await tx
+          .insert(orders)
+          .values({
             id: orderId,
             orderNumber,
             customerId: auth.status === "AUTHENTICATED" ? auth.customerProfileId : null,
@@ -650,16 +713,14 @@ export async function submitCheckout(rawInput: unknown): Promise<CheckoutSubmitR
             shippingCents: authoritativeShippingCents,
             totalCents: authoritativeTotalCents,
             currency: "PEN",
-          });
+          })
+          .onConflictDoNothing({ target: orders.orderNumber })
+          .returning({ id: orders.id, orderNumber: orders.orderNumber });
+
+        if (inserted.length > 0 && inserted[0]) {
           orderInserted = true;
+          orderNumber = inserted[0].orderNumber;
           break;
-        } catch (err: unknown) {
-          const pgErr = err as { code?: string };
-          if (pgErr?.code === "23505") {
-            orderNumber = generateOrderNumber();
-          } else {
-            throw err;
-          }
         }
       }
 

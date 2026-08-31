@@ -632,8 +632,6 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
     it("Scenario E: Same Key Concurrent Replay — concurrent submissions converge to 1 Order and 0 double-reservations", async () => {
       await resetInventoryBalances();
       const guestToken = await createGuestCart([{ variantId: variantId1, quantity: 1 }]);
-      currentMockCookieValue = guestToken;
-      currentMockIdentity = { success: false };
 
       const attemptId = generateUuidV7();
       const submitParams = {
@@ -648,25 +646,112 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
       };
 
       const [resA, resB] = await Promise.all([
-        submitCheckout(submitParams),
-        submitCheckout(submitParams),
+        testContextStorage.run({ cookieValue: guestToken, identity: { success: false } }, () =>
+          submitCheckout(submitParams)
+        ),
+        testContextStorage.run({ cookieValue: guestToken, identity: { success: false } }, () =>
+          submitCheckout(submitParams)
+        ),
       ]);
 
-      expect(resA.success || resB.success).toBe(true);
-      const successful = [resA, resB].filter((r) => r.success);
-      expect(successful.length).toBeGreaterThanOrEqual(1);
+      // Both concurrent requests must succeed
+      expect(resA.success).toBe(true);
+      expect(resB.success).toBe(true);
+      if (!resA.success || !resB.success) return;
 
-      const orderNumbers = successful
-        .map((r) => (r.success ? r.orderNumber : null))
-        .filter(Boolean);
-      const uniqueOrderNumbers = new Set(orderNumbers);
-      expect(uniqueOrderNumbers.size).toBe(1);
+      // Both must converge to the exact same orderNumber and total
+      expect(resA.orderNumber).toBe(resB.orderNumber);
+      expect(resA.totalCents).toBe(resB.totalCents);
 
-      // Stock reserved must be exactly 1
+      // Exactly one must be fresh mutation (replayed=false) and exactly one must be replayed (replayed=true)
+      const freshCount = [resA, resB].filter((r) => !r.replayed).length;
+      const replayedCount = [resA, resB].filter((r) => r.replayed).length;
+      expect(freshCount).toBe(1);
+      expect(replayedCount).toBe(1);
+
+      // Physical database assertions: Exactly 1 Order, 1 Payment, 1 Reservation, 1 Outbox event
+      const orders = await sqlClient`SELECT * FROM orders WHERE order_number = ${resA.orderNumber}`;
+      expect(orders).toHaveLength(1);
+      const orderId = orders[0]!.id;
+
+      const paymentsRows = await sqlClient`SELECT * FROM payments WHERE order_id = ${orderId}`;
+      expect(paymentsRows).toHaveLength(1);
+
+      const reservations =
+        await sqlClient`SELECT * FROM inventory_reservations WHERE order_id = ${orderId}`;
+      expect(reservations).toHaveLength(1);
+
       const [inv] =
         await sqlClient`SELECT quantity_reserved FROM inventory_items WHERE id = ${inventoryItemId1}`;
       expect(inv).toBeDefined();
       expect(inv!.quantity_reserved).toBe(1);
+
+      const outbox = await sqlClient`SELECT * FROM outbox_events WHERE aggregate_id = ${orderId}`;
+      expect(outbox).toHaveLength(1);
+
+      const idem =
+        await sqlClient`SELECT * FROM idempotency_keys WHERE idempotency_key = ${attemptId}`;
+      expect(idem).toHaveLength(1);
+    });
+
+    it("Scenario E2: Authenticated Same Key Concurrent Replay — concurrent authenticated submissions converge to 1 Order", async () => {
+      await resetInventoryBalances();
+      await sqlClient`DELETE FROM idempotency_keys WHERE source_cart_id IN (SELECT id FROM carts WHERE customer_id = ${customerProfileId1})`;
+      await sqlClient`DELETE FROM cart_items WHERE cart_id IN (SELECT id FROM carts WHERE customer_id = ${customerProfileId1})`;
+      await sqlClient`DELETE FROM carts WHERE customer_id = ${customerProfileId1}`;
+      await createAuthCart(customerProfileId1, [{ variantId: variantId1, quantity: 1 }]);
+
+      const attemptId = generateUuidV7();
+      const submitParams = {
+        checkoutAttemptId: attemptId,
+        customerEmail: "customer1@testchk5.pe",
+        deliveryAddress: {
+          mode: "SAVED_ADDRESS" as const,
+          addressId: customerAddressId1,
+        },
+        shippingMethodCode: shippingMethodCode1,
+        paymentMethodCode: paymentMethodCode1,
+        reviewedSubtotalCents: 10000,
+        reviewedShippingCents: 1500,
+        reviewedTotalCents: 11500,
+      };
+
+      const [resA, resB] = await Promise.all([
+        testContextStorage.run(
+          {
+            cookieValue: null,
+            identity: {
+              success: true,
+              identity: { authUserId: authUserId1, email: "customer1@testchk5.pe" },
+            },
+          },
+          () => submitCheckout(submitParams)
+        ),
+        testContextStorage.run(
+          {
+            cookieValue: null,
+            identity: {
+              success: true,
+              identity: { authUserId: authUserId1, email: "customer1@testchk5.pe" },
+            },
+          },
+          () => submitCheckout(submitParams)
+        ),
+      ]);
+
+      expect(resA.success).toBe(true);
+      expect(resB.success).toBe(true);
+      if (!resA.success || !resB.success) return;
+
+      expect(resA.orderNumber).toBe(resB.orderNumber);
+
+      const freshCount = [resA, resB].filter((r) => !r.replayed).length;
+      const replayedCount = [resA, resB].filter((r) => r.replayed).length;
+      expect(freshCount).toBe(1);
+      expect(replayedCount).toBe(1);
+
+      const orders = await sqlClient`SELECT * FROM orders WHERE order_number = ${resA.orderNumber}`;
+      expect(orders).toHaveLength(1);
     });
 
     it("Scenario F: Same Key Changed Request — rejects with IDEMPOTENCY_CONFLICT", async () => {
@@ -743,6 +828,52 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
       expect(res2.success).toBe(false);
       if (res2.success) return;
       expect(res2.code).toBe("UNAUTHORIZED");
+    });
+
+    it("Scenario G2: Same Key Concurrent Wrong Authority Race — winner commits and loser receives UNAUTHORIZED without disclosure", async () => {
+      await resetInventoryBalances();
+      const guestToken1 = await createGuestCart([{ variantId: variantId1, quantity: 1 }]);
+      const guestToken2 = await createGuestCart([{ variantId: variantId1, quantity: 1 }]);
+
+      const attemptId = generateUuidV7();
+
+      const [resA, resB] = await Promise.all([
+        testContextStorage.run({ cookieValue: guestToken1, identity: { success: false } }, () =>
+          submitCheckout({
+            checkoutAttemptId: attemptId,
+            customerEmail: "user1.race@testchk5.pe",
+            deliveryAddress: { mode: "INLINE", address: validInlineAddress },
+            shippingMethodCode: shippingMethodCode1,
+            paymentMethodCode: paymentMethodCode1,
+            reviewedSubtotalCents: 10000,
+            reviewedShippingCents: 1500,
+            reviewedTotalCents: 11500,
+          })
+        ),
+        testContextStorage.run({ cookieValue: guestToken2, identity: { success: false } }, () =>
+          submitCheckout({
+            checkoutAttemptId: attemptId,
+            customerEmail: "user2.race@testchk5.pe",
+            deliveryAddress: { mode: "INLINE", address: validInlineAddress },
+            shippingMethodCode: shippingMethodCode1,
+            paymentMethodCode: paymentMethodCode1,
+            reviewedSubtotalCents: 10000,
+            reviewedShippingCents: 1500,
+            reviewedTotalCents: 11500,
+          })
+        ),
+      ]);
+
+      const successful = [resA, resB].filter((r) => r.success);
+      const unauthorized = [resA, resB].filter((r) => !r.success && r.code === "UNAUTHORIZED");
+
+      expect(successful).toHaveLength(1);
+      expect(unauthorized).toHaveLength(1);
+
+      // Exactly 1 order created in database across both users
+      const orders =
+        await sqlClient`SELECT * FROM orders WHERE customer_email IN ('user1.race@testchk5.pe', 'user2.race@testchk5.pe')`;
+      expect(orders).toHaveLength(1);
     });
 
     it("Scenario H: Different Keys / Same Cart Concurrency — yields exactly 1 Order and blocks duplicate conversion", async () => {
@@ -1078,6 +1209,54 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
       expect(res2.success).toBe(true);
     });
 
+    it("Scenario R: Order Number Collision Recovery — recovers from collision without aborting transaction", async () => {
+      await resetInventoryBalances();
+      const guestToken = await createGuestCart([{ variantId: variantId1, quantity: 1 }]);
+      currentMockCookieValue = guestToken;
+      currentMockIdentity = { success: false };
+
+      // Pre-seed an existing order with a known collision number
+      const collisionOrderNumber = "GP-COLLIS01";
+      const preseededOrderId = generateUuidV7();
+      await sqlClient`
+        INSERT INTO orders (id, order_number, customer_email, customer_phone, status, currency, subtotal_cents, shipping_cents, total_cents, created_at, updated_at)
+        VALUES (${preseededOrderId}, ${collisionOrderNumber}, 'preseed@testchk5.pe', '998877665', 'PENDING', 'PEN', 10000, 1500, 11500, NOW(), NOW())
+      `;
+
+      let generatorCalls = 0;
+      const mockOrderNumberGenerator = () => {
+        generatorCalls++;
+        if (generatorCalls === 1) {
+          return collisionOrderNumber; // Force collision on attempt 1
+        }
+        return "GP-RECOVR01"; // Unique on attempt 2
+      };
+
+      const result = await submitCheckout(
+        {
+          checkoutAttemptId: generateUuidV7(),
+          customerEmail: "collision.buyer@testchk5.pe",
+          deliveryAddress: { mode: "INLINE", address: validInlineAddress },
+          shippingMethodCode: shippingMethodCode1,
+          paymentMethodCode: paymentMethodCode1,
+          reviewedSubtotalCents: 10000,
+          reviewedShippingCents: 1500,
+          reviewedTotalCents: 11500,
+        },
+        { orderNumberGenerator: mockOrderNumberGenerator }
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.orderNumber).toBe("GP-RECOVR01");
+      expect(generatorCalls).toBe(2);
+
+      // Verify physical PostgreSQL state
+      const [order] = await sqlClient`SELECT * FROM orders WHERE order_number = 'GP-RECOVR01'`;
+      expect(order).toBeDefined();
+      expect(order!.customer_email).toBe("collision.buyer@testchk5.pe");
+    });
+
     it("Context Reader: loadCheckoutContext returns safe DTO without sensitive payment instructions", async () => {
       const guestToken = await createGuestCart([{ variantId: variantId1, quantity: 1 }]);
       currentMockCookieValue = guestToken;
@@ -1103,6 +1282,24 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
       expect(rawOption.recipientName).toBeUndefined();
       expect(rawOption.instructionText).toBeUndefined();
       expect(rawOption.qrMediaId).toBeUndefined();
+    });
+
+    it("Context Reader: clears guest cookie after successful merge", async () => {
+      const guestToken = await createGuestCart([{ variantId: variantId1, quantity: 1 }]);
+
+      await testContextStorage.run(
+        {
+          cookieValue: guestToken,
+          identity: {
+            success: true,
+            identity: { authUserId: authUserId1, email: "customer1@testchk5.pe" },
+          },
+        },
+        async () => {
+          const context = await loadCheckoutContext();
+          expect(context.cart).toBeDefined();
+        }
+      );
     });
   });
 });
