@@ -6,10 +6,18 @@ import { serverEnv } from "@/config/server-env";
  * Cloudflare R2 Logical Bucket Names
  */
 export const R2_BUCKETS = {
-  PUBLIC_MEDIA: serverEnv.R2_PUBLIC_MEDIA_BUCKET,
-  PRIVATE_PROOFS: serverEnv.R2_PRIVATE_PROOFS_BUCKET,
-  PRIVATE_PAYMENT_MEDIA: serverEnv.R2_PRIVATE_PAYMENT_MEDIA_BUCKET,
-  DB_BACKUPS: serverEnv.R2_DB_BACKUPS_BUCKET,
+  get PUBLIC_MEDIA() {
+    return serverEnv.R2_PUBLIC_MEDIA_BUCKET;
+  },
+  get PRIVATE_PROOFS() {
+    return serverEnv.R2_PRIVATE_PROOFS_BUCKET;
+  },
+  get PRIVATE_PAYMENT_MEDIA() {
+    return serverEnv.R2_PRIVATE_PAYMENT_MEDIA_BUCKET;
+  },
+  get DB_BACKUPS() {
+    return serverEnv.R2_DB_BACKUPS_BUCKET;
+  },
 } as const;
 
 /**
