@@ -284,6 +284,7 @@ export async function submitCheckout(
     auth.status === "GUEST" ? await getOrCreateGuestPaymentSession(config.hmacSecret) : null;
 
   let mergedGuestTokenToClear: string | null = null;
+  let paymentSessionTokenToSetAfterCommit: string | null = null;
 
   try {
     const result = await db.transaction(async (tx) => {
@@ -392,7 +393,7 @@ export async function submitCheckout(
                       updatedAt: now,
                     })
                     .where(eq(guestPaymentSessions.id, grant.sessionId));
-                  await setGuestPaymentSessionCookie(freshToken);
+                  paymentSessionTokenToSetAfterCommit = freshToken;
                 }
               }
             }
@@ -995,7 +996,9 @@ export async function submitCheckout(
       await clearAnonymousCartCookie();
     }
 
-    if (result.success && !result.replayed && auth.status === "GUEST" && guestSession) {
+    if (result.success && result.replayed && paymentSessionTokenToSetAfterCommit) {
+      await setGuestPaymentSessionCookie(paymentSessionTokenToSetAfterCommit);
+    } else if (result.success && !result.replayed && auth.status === "GUEST" && guestSession) {
       await setGuestPaymentSessionCookie(guestSession.rawToken);
     }
 

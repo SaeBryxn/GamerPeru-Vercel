@@ -172,6 +172,7 @@ jobs:
           echo "CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE=ALMACEN_CENTRAL_TEST" >> $GITHUB_ENV
           echo "CHECKOUT_RESERVATION_TTL_MINUTES=30" >> $GITHUB_ENV
           echo "CHECKOUT_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
+          echo "PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
 
       - name: Run Database Migrations
         run: pnpm db:migrate
@@ -237,6 +238,7 @@ jobs:
           echo "CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE=TEST-CHECKOUT-LOC" >> $GITHUB_ENV
           echo "CHECKOUT_RESERVATION_TTL_MINUTES=30" >> $GITHUB_ENV
           echo "CHECKOUT_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
+          echo "PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
 
       - name: Run Database Migrations
         run: pnpm db:migrate

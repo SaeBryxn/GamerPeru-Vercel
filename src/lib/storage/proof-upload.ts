@@ -21,21 +21,282 @@ export type ValidatedImageResult =
     }
   | { valid: false; reason: string };
 
-/**
- * Inspects binary buffer magic bytes and structure to derive authoritative image MIME and extension.
- * Rejects polyglots, SVGs, HTML, scripts, and truncated headers.
- */
-export function validateImageStructure(buffer: Buffer): ValidatedImageResult {
-  if (buffer.length < 16) {
-    return { valid: false, reason: "El archivo es demasiado pequeño o está truncado." };
+function validateJpegStructure(buffer: Buffer): { valid: true } | { valid: false; reason: string } {
+  if (buffer.length < 50) {
+    return { valid: false, reason: "Archivo JPEG truncado o incompleto." };
   }
 
-  // Check JPEG (FF D8 FF)
+  if (buffer[0] !== 0xff || buffer[1] !== 0xd8) {
+    return { valid: false, reason: "Encabezado JPEG inválido." };
+  }
+
+  let offset = 2;
+  let hasSof = false;
+  let hasSos = false;
+
+  while (offset < buffer.length) {
+    while (offset < buffer.length && buffer[offset] === 0xff) {
+      offset++;
+    }
+
+    if (offset >= buffer.length) {
+      break;
+    }
+
+    const marker = buffer[offset++];
+    if (marker === undefined) {
+      return { valid: false, reason: "Marcador JPEG truncado." };
+    }
+
+    if (marker === 0xd9) {
+      if (!hasSof || !hasSos) {
+        return { valid: false, reason: "JPEG incompleto: faltan marcos o datos de escaneo." };
+      }
+      return { valid: true };
+    }
+
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      continue;
+    }
+
+    if (offset + 2 > buffer.length) {
+      return { valid: false, reason: "Marcador JPEG truncado." };
+    }
+
+    const length = buffer.readUInt16BE(offset);
+    if (length < 2 || offset + length > buffer.length) {
+      return { valid: false, reason: "Longitud de segmento JPEG inválida o desbordada." };
+    }
+
+    if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc9 && marker <= 0xcb)) {
+      if (length < 8) {
+        return { valid: false, reason: "Encabezado de cuadro SOF JPEG inválido." };
+      }
+      const height = buffer.readUInt16BE(offset + 3);
+      const width = buffer.readUInt16BE(offset + 5);
+      const numComponents = buffer[offset + 7];
+      if (height === 0 || width === 0 || numComponents === undefined || numComponents < 1) {
+        return { valid: false, reason: "Dimensiones de imagen JPEG inválidas." };
+      }
+      hasSof = true;
+    }
+
+    if (marker === 0xda) {
+      hasSos = true;
+      offset += length;
+
+      while (offset < buffer.length) {
+        if (buffer[offset] === 0xff) {
+          if (offset + 1 >= buffer.length) {
+            return {
+              valid: false,
+              reason: "Datos de escaneo JPEG truncados al final del archivo.",
+            };
+          }
+          const nextByte = buffer[offset + 1];
+          if (nextByte === undefined) {
+            return {
+              valid: false,
+              reason: "Datos de escaneo JPEG truncados al final del archivo.",
+            };
+          }
+          if (nextByte === 0x00) {
+            offset += 2;
+          } else if (nextByte >= 0xd0 && nextByte <= 0xd7) {
+            offset += 2;
+          } else if (nextByte === 0xff) {
+            offset++;
+          } else {
+            break;
+          }
+        } else {
+          offset++;
+        }
+      }
+      continue;
+    }
+
+    offset += length;
+  }
+
+  return {
+    valid: false,
+    reason: "JPEG truncado: no se encontró el marcador de finalización EOI (FF D9).",
+  };
+}
+
+function validatePngStructure(buffer: Buffer): { valid: true } | { valid: false; reason: string } {
+  if (buffer.length < 57) {
+    return { valid: false, reason: "Archivo PNG truncado o incompleto." };
+  }
+
+  const pngSig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  for (let i = 0; i < 8; i++) {
+    if (buffer[i] !== pngSig[i]) {
+      return { valid: false, reason: "Firma PNG inválida." };
+    }
+  }
+
+  let offset = 8;
+  let hasIhdr = false;
+  let hasIdat = false;
+  let hasIend = false;
+
+  while (offset + 8 <= buffer.length) {
+    const chunkLen = buffer.readUInt32BE(offset);
+    const chunkType = buffer.toString("ascii", offset + 4, offset + 8);
+    const totalChunkBytes = 12 + chunkLen;
+
+    if (offset + totalChunkBytes > buffer.length) {
+      return { valid: false, reason: `Chunk PNG '${chunkType}' truncado o longitud inválida.` };
+    }
+
+    if (!hasIhdr) {
+      if (chunkType !== "IHDR" || chunkLen !== 13) {
+        return { valid: false, reason: "El primer chunk de un PNG debe ser IHDR con longitud 13." };
+      }
+      const width = buffer.readUInt32BE(offset + 8);
+      const height = buffer.readUInt32BE(offset + 12);
+      if (width === 0 || height === 0) {
+        return { valid: false, reason: "Dimensiones de imagen PNG inválidas." };
+      }
+      hasIhdr = true;
+    } else if (chunkType === "IDAT") {
+      hasIdat = true;
+    } else if (chunkType === "IEND") {
+      if (chunkLen !== 0) {
+        return { valid: false, reason: "Chunk IEND de PNG debe tener longitud 0." };
+      }
+      if (!hasIdat) {
+        return { valid: false, reason: "PNG no contiene datos de imagen (IDAT)." };
+      }
+      hasIend = true;
+      offset += totalChunkBytes;
+      break;
+    }
+
+    offset += totalChunkBytes;
+  }
+
+  if (!hasIhdr || !hasIdat || !hasIend) {
+    return { valid: false, reason: "Estructura PNG incompleta: falta IHDR, IDAT o IEND." };
+  }
+
+  return { valid: true };
+}
+
+function validateWebpStructure(buffer: Buffer): { valid: true } | { valid: false; reason: string } {
+  if (buffer.length < 26) {
+    return { valid: false, reason: "Archivo WebP truncado o incompleto." };
+  }
+
+  if (buffer[0] !== 0x52 || buffer[1] !== 0x49 || buffer[2] !== 0x46 || buffer[3] !== 0x46) {
+    return { valid: false, reason: "Encabezado RIFF inválido." };
+  }
+
+  const riffSize = buffer.readUInt32LE(4);
+  const expectedTotalBytes = riffSize + 8;
+
+  if (riffSize < 12 || buffer.length < expectedTotalBytes) {
+    return {
+      valid: false,
+      reason: "Longitud del contenedor RIFF inconsistente con el tamaño del archivo.",
+    };
+  }
+
+  const webpFourCc = buffer.toString("ascii", 8, 12);
+  if (webpFourCc !== "WEBP") {
+    return { valid: false, reason: "Encabezado WebP inválido." };
+  }
+
+  let offset = 12;
+  let hasImageChunk = false;
+
+  while (offset + 8 <= expectedTotalBytes) {
+    const chunkType = buffer.toString("ascii", offset, offset + 4);
+    const chunkDataSize = buffer.readUInt32LE(offset + 4);
+    const paddedChunkSize = chunkDataSize + (chunkDataSize % 2);
+
+    if (offset + 8 + chunkDataSize > expectedTotalBytes) {
+      return { valid: false, reason: `Chunk WebP '${chunkType}' excede el contenedor RIFF.` };
+    }
+
+    if (chunkType === "VP8 ") {
+      if (chunkDataSize < 10) {
+        return { valid: false, reason: "Chunk VP8 lossy WebP truncado." };
+      }
+      const b11 = buffer[offset + 11];
+      const b12 = buffer[offset + 12];
+      const b13 = buffer[offset + 13];
+      if (b11 === undefined || b12 === undefined || b13 === undefined) {
+        return { valid: false, reason: "Chunk VP8 lossy WebP truncado." };
+      }
+      const keyframeCode = (b11 << 16) | (b12 << 8) | b13;
+      if (keyframeCode !== 0x9d012a) {
+        return { valid: false, reason: "Código de inicio de cuadro VP8 inválido." };
+      }
+      const width = buffer.readUInt16LE(offset + 14) & 0x3fff;
+      const height = buffer.readUInt16LE(offset + 16) & 0x3fff;
+      if (width === 0 || height === 0) {
+        return { valid: false, reason: "Dimensiones de imagen WebP VP8 inválidas." };
+      }
+      hasImageChunk = true;
+    } else if (chunkType === "VP8L") {
+      if (chunkDataSize < 5) {
+        return { valid: false, reason: "Chunk VP8L lossless WebP truncado." };
+      }
+      const b8 = buffer[offset + 8];
+      if (b8 !== 0x2f) {
+        return { valid: false, reason: "Firma de chunk VP8L WebP inválida." };
+      }
+      hasImageChunk = true;
+    } else if (chunkType === "VP8X") {
+      if (chunkDataSize < 10) {
+        return { valid: false, reason: "Chunk VP8X extended WebP truncado." };
+      }
+      const canvasWidth = 1 + buffer.readUIntLE(offset + 12, 3);
+      const canvasHeight = 1 + buffer.readUIntLE(offset + 15, 3);
+      if (canvasWidth <= 0 || canvasHeight <= 0) {
+        return { valid: false, reason: "Dimensiones de lienzo WebP VP8X inválidas." };
+      }
+      hasImageChunk = true;
+    }
+
+    offset += 8 + paddedChunkSize;
+  }
+
+  if (!hasImageChunk) {
+    return {
+      valid: false,
+      reason: "El archivo WebP no contiene fragmentos de imagen válidos (VP8, VP8L o VP8X).",
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Inspects binary buffer structure to derive authoritative image MIME and extension.
+ * Rejects truncated buffers, malformed chunks, and non-image payloads.
+ */
+export function validateImageStructure(buffer: Buffer): ValidatedImageResult {
+  if (buffer.length < 26 || buffer.length > MAX_PROOF_FILE_SIZE_BYTES) {
+    return {
+      valid: false,
+      reason: "El archivo es demasiado pequeño, está truncado o excede los 5MB permitidos.",
+    };
+  }
+
+  // Detect JPEG (FF D8 FF)
   if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    const jpegRes = validateJpegStructure(buffer);
+    if (!jpegRes.valid) {
+      return { valid: false, reason: jpegRes.reason };
+    }
     return { valid: true, mimeType: "image/jpeg", extension: "jpg" };
   }
 
-  // Check PNG (89 50 4E 47 0D 0A 1A 0A)
+  // Detect PNG (89 50 4E 47 0D 0A 1A 0A)
   if (
     buffer[0] === 0x89 &&
     buffer[1] === 0x50 &&
@@ -46,27 +307,33 @@ export function validateImageStructure(buffer: Buffer): ValidatedImageResult {
     buffer[6] === 0x1a &&
     buffer[7] === 0x0a
   ) {
+    const pngRes = validatePngStructure(buffer);
+    if (!pngRes.valid) {
+      return { valid: false, reason: pngRes.reason };
+    }
     return { valid: true, mimeType: "image/png", extension: "png" };
   }
 
-  // Check WebP (RIFF .... WEBP)
+  // Detect WebP (RIFF .... WEBP)
   if (
-    buffer[0] === 0x52 && // R
-    buffer[1] === 0x49 && // I
-    buffer[2] === 0x46 && // F
-    buffer[3] === 0x46 && // F
-    buffer[8] === 0x57 && // W
-    buffer[9] === 0x45 && // E
-    buffer[10] === 0x42 && // B
-    buffer[11] === 0x50 // P
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer.length >= 12 &&
+    buffer.toString("ascii", 8, 12) === "WEBP"
   ) {
+    const webpRes = validateWebpStructure(buffer);
+    if (!webpRes.valid) {
+      return { valid: false, reason: webpRes.reason };
+    }
     return { valid: true, mimeType: "image/webp", extension: "webp" };
   }
 
   return {
     valid: false,
     reason:
-      "Formato de imagen no permitido. Solo se aceptan comprobantes JPG, PNG o WebP legítimos.",
+      "Formato de imagen no permitido o corrupto. Solo se aceptan comprobantes JPG, PNG o WebP legítimos.",
   };
 }
 

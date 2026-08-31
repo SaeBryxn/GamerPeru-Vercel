@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   idempotencyKeys,
@@ -12,7 +12,7 @@ import {
   paymentSubmissions,
   payments,
 } from "@/db/schema";
-import { getCheckoutConfig } from "@/lib/checkout/config";
+import { getPaymentSubmissionConfig } from "./config";
 import { generateUuidV7 } from "@/db/utils/uuid";
 import { validatePrivateStorageCapability } from "@/lib/storage/private-config";
 import {
@@ -42,6 +42,11 @@ export type CreateUploadIntentResult =
 
 /**
  * Creates an authorized upload intent and returns a pre-signed PUT URL for uploading a staging payment proof.
+ *
+ * Invariants:
+ * 1. Serialized Payment Boundary: SELECT FOR UPDATE on Payment row serializes concurrent upload intent requests.
+ * 2. Exactly One PENDING Intent: Atomically marks existing PENDING intents as ABANDONED before inserting the new intent.
+ * 3. Preserves Best-Effort Cleanup Seam: Replaced staging keys are cleaned up asynchronously post-transaction.
  */
 export async function createPaymentProofUploadIntent(
   input: CreateUploadIntentInput
@@ -56,22 +61,6 @@ export async function createPaymentProofUploadIntent(
   }
 
   const { payment, authorityBindingDigest } = authResult;
-
-  // Validate Payment Eligibility
-  const now = new Date();
-  const isInitial = payment.status === "UNPAID" && !payment.resubmissionGraceExpiresAt;
-  const isResubmission =
-    payment.status === "UNPAID" &&
-    payment.resubmissionGraceExpiresAt !== null &&
-    payment.resubmissionGraceExpiresAt > now;
-
-  if (!isInitial && !isResubmission) {
-    return {
-      success: false,
-      code: "INVALID_PAYMENT_STATE",
-      error: "El estado actual del pedido no permite adjuntar nuevos comprobantes.",
-    };
-  }
 
   // Validate Declared MIME and Size
   const mime = input.declaredMimeType.trim().toLowerCase();
@@ -105,29 +94,96 @@ export async function createPaymentProofUploadIntent(
   const stagingKey = `payment-proofs/staging/${payment.id}/${uploadIntentId}`;
   const expiresAt = new Date(Date.now() + UPLOAD_INTENT_TTL_SECONDS * 1000);
 
-  // Abandon previous PENDING intents for this payment/authority to enforce one-active bound
-  await db
-    .update(paymentProofUploadIntents)
-    .set({ status: "ABANDONED" })
-    .where(
-      and(
-        eq(paymentProofUploadIntents.paymentId, payment.id),
-        eq(paymentProofUploadIntents.authorityBindingDigest, authorityBindingDigest),
-        eq(paymentProofUploadIntents.status, "PENDING")
-      )
-    );
+  let abandonedStagingKeys: string[] = [];
 
-  // Insert upload intent row
-  await db.insert(paymentProofUploadIntents).values({
-    id: uploadIntentId,
-    paymentId: payment.id,
-    authorityBindingDigest,
-    stagingObjectKey: stagingKey,
-    declaredMimeType: mime,
-    declaredSizeBytes: input.declaredSizeBytes,
-    status: "PENDING",
-    expiresAt,
-  });
+  try {
+    const txResult = await db.transaction(async (tx) => {
+      // Step A: Lock Payment row to serialize concurrent upload intent requests for this Payment
+      const [lockedPayment] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.id, payment.id))
+        .for("update")
+        .limit(1);
+
+      if (!lockedPayment) {
+        return {
+          success: false as const,
+          code: "NOT_AVAILABLE" as const,
+          error: "Pedido no disponible.",
+        };
+      }
+
+      const txNow = new Date();
+      const isInitial =
+        lockedPayment.status === "UNPAID" && !lockedPayment.resubmissionGraceExpiresAt;
+      const isResubmission =
+        lockedPayment.status === "UNPAID" &&
+        lockedPayment.resubmissionGraceExpiresAt !== null &&
+        lockedPayment.resubmissionGraceExpiresAt > txNow;
+
+      if (!isInitial && !isResubmission) {
+        return {
+          success: false as const,
+          code: "INVALID_PAYMENT_STATE" as const,
+          error: "El estado actual del pedido no permite adjuntar nuevos comprobantes.",
+        };
+      }
+
+      // Step B: Query existing PENDING intents to collect abandoned staging keys for cleanup
+      const existingPending = await tx
+        .select({ stagingObjectKey: paymentProofUploadIntents.stagingObjectKey })
+        .from(paymentProofUploadIntents)
+        .where(
+          and(
+            eq(paymentProofUploadIntents.paymentId, lockedPayment.id),
+            eq(paymentProofUploadIntents.authorityBindingDigest, authorityBindingDigest),
+            eq(paymentProofUploadIntents.status, "PENDING")
+          )
+        )
+        .for("update");
+
+      abandonedStagingKeys = existingPending.map((i) => i.stagingObjectKey);
+
+      // Step C: Atomically mark previous PENDING intents as ABANDONED
+      if (existingPending.length > 0) {
+        await tx
+          .update(paymentProofUploadIntents)
+          .set({ status: "ABANDONED" })
+          .where(
+            and(
+              eq(paymentProofUploadIntents.paymentId, lockedPayment.id),
+              eq(paymentProofUploadIntents.authorityBindingDigest, authorityBindingDigest),
+              eq(paymentProofUploadIntents.status, "PENDING")
+            )
+          );
+      }
+
+      // Step D: Insert exactly one new PENDING intent under the Payment row lock
+      await tx.insert(paymentProofUploadIntents).values({
+        id: uploadIntentId,
+        paymentId: lockedPayment.id,
+        authorityBindingDigest,
+        stagingObjectKey: stagingKey,
+        declaredMimeType: mime,
+        declaredSizeBytes: input.declaredSizeBytes,
+        status: "PENDING",
+        expiresAt,
+      });
+
+      return { success: true as const };
+    });
+
+    if (!txResult.success) {
+      return txResult;
+    }
+  } catch (_err) {
+    return {
+      success: false,
+      code: "SYSTEM_ERROR",
+      error: "Error interno al crear sesión de carga de comprobante.",
+    };
+  }
 
   // Generate Pre-Signed PUT URL
   let presignedPutUrl: string;
@@ -137,7 +193,7 @@ export async function createPaymentProofUploadIntent(
       bucketName: storageCap.bucketName,
       stagingKey,
       contentType: mime,
-      expiresInSeconds: 60, // 60-second technical TTL for PUT
+      expiresInSeconds: 60,
     });
   } catch {
     return {
@@ -145,6 +201,17 @@ export async function createPaymentProofUploadIntent(
       code: "STORAGE_ERROR",
       error: "Error al generar enlace seguro de carga.",
     };
+  }
+
+  // Best-effort cleanup seam for replaced abandoned staging keys
+  if (abandonedStagingKeys.length > 0) {
+    for (const key of abandonedStagingKeys) {
+      bestEffortDeleteR2Object({
+        s3Client: storageCap.client,
+        bucketName: storageCap.bucketName,
+        key,
+      }).catch(() => {});
+    }
   }
 
   return {
@@ -186,6 +253,11 @@ export type SubmitPaymentProofResult =
 
 /**
  * Validates operation code string conservatively in a provider-neutral manner.
+ *
+ * Invariants:
+ * 1. Preserves leading zeros.
+ * 2. Allows ordinary visible punctuation (-, /, #, ., _, :, etc.).
+ * 3. Strictly rejects Unicode control (\p{Cc}), format/invisible/bidi (\p{Cf}), line separators (\p{Zl}), and paragraph separators (\p{Zp}).
  */
 export function validateOperationCode(
   raw: string
@@ -194,14 +266,18 @@ export function validateOperationCode(
     return { valid: false, error: "El código de operación debe ser una cadena de texto." };
   }
 
+  // Reject Unicode control (\p{Cc}), format/invisible/bidi/BOM (\p{Cf}), line separator (\p{Zl}), and paragraph separator (\p{Zp})
+  // Test raw input directly so leading/trailing BOM or invisible characters are NOT silently stripped by trim
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(raw)) {
+    return {
+      valid: false,
+      error: "El código de operación contiene caracteres invisibles o de control no permitidos.",
+    };
+  }
+
   const trimmed = raw.trim();
   if (trimmed.length < 1 || trimmed.length > 50) {
     return { valid: false, error: "El código de operación debe tener entre 1 y 50 caracteres." };
-  }
-
-  // Reject ASCII control characters and dangerous invisible Unicode separators
-  if (/[\x00-\x1F\x7F]/.test(trimmed)) {
-    return { valid: false, error: "El código de operación contiene caracteres inválidos." };
   }
 
   return { valid: true, normalized: trimmed };
@@ -209,6 +285,14 @@ export function validateOperationCode(
 
 /**
  * Submits manual payment proof (operation code + optional voucher) for an authorized Order.
+ *
+ * Invariants:
+ * 1. Fast Pre-R2 Committed-Idempotency Check: Returns existing committed submission with ZERO R2 operations.
+ * 2. Candidate Final R2 Ownership: Cleaned up if and only if this request copied candidate proof but transaction did not commit it.
+ * 3. Lock Ordering: Advisory Lock -> Payment (FOR UPDATE) -> Reservations (id ASC, FOR UPDATE) -> InventoryItems (id ASC, FOR UPDATE).
+ * 4. Deterministic Whole-Order Late Reconciliation: If any reservation expired/released, whole order is marked isLate=true. Expired reservations write RESERVATION_EXPIRED, unexpired write RESERVATION_RELEASED.
+ * 5. Fail-Closed Idempotency TTL: Explicitly configured PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES with no production default.
+ * 6. Privacy & Outbox Hygiene: Zero raw session tokens, customer PII, or operation codes leaked to Outbox events.
  */
 export async function submitPaymentProof(
   input: SubmitPaymentProofInput
@@ -244,7 +328,8 @@ export async function submitPaymentProof(
   }
   const { order, payment, authorityBindingDigest } = authResult;
 
-  const configResult = getCheckoutConfig();
+  // 4. Server Runtime Configuration
+  const configResult = getPaymentSubmissionConfig();
   if (!configResult.valid || !configResult.config) {
     return {
       success: false,
@@ -252,9 +337,9 @@ export async function submitPaymentProof(
       error: "Error de configuración de pagos.",
     };
   }
-  const hmacSecret = configResult.config.hmacSecret;
+  const paymentConfig = configResult.config;
 
-  // 4. Derive Namespaced Idempotency Key & Fingerprint
+  // 5. Derive Namespaced Idempotency Key & Fingerprint
   const namespacedKey = `PAYMENT_SUBMISSION:${input.submissionAttemptId}`;
   const requestFingerprint = computePaymentSubmissionFingerprint(
     {
@@ -263,10 +348,10 @@ export async function submitPaymentProof(
       uploadIntentId: input.uploadIntentId ?? null,
       authorityBindingDigest,
     },
-    hmacSecret
+    paymentConfig.hmacSecret
   );
 
-  // 5. Fast Pre-R2 Committed-Idempotency Check
+  // 6. Fast Pre-R2 Committed-Idempotency Check
   const [existingIdempotency] = await db
     .select()
     .from(idempotencyKeys)
@@ -304,14 +389,16 @@ export async function submitPaymentProof(
     }
   }
 
-  // 6. If Proof Provided: Server-Side Validation & Candidate Final Copy (Outside DB Transaction)
+  // 7. If Proof Provided: Server-Side Validation & Candidate Final Copy (Outside DB Transaction)
   let finalizedProof: {
     finalKey: string;
     mimeType: "image/jpeg" | "image/png" | "image/webp";
     fileSizeBytes: number;
     checksumSha256: string;
   } | null = null;
-  let candidateFinalKeyToDeleteOnError: string | null = null;
+  let candidateFinalKey: string | null = null;
+  let candidateBelongsToThisRequest = false;
+  let candidateCommitted = false;
   let stagingKeyToCleanOnSuccess: string | null = null;
 
   if (input.uploadIntentId) {
@@ -371,10 +458,12 @@ export async function submitPaymentProof(
       fileSizeBytes: validationResult.fileSizeBytes,
       checksumSha256: validationResult.checksumSha256,
     };
-    candidateFinalKeyToDeleteOnError = validationResult.finalKey;
+    candidateFinalKey = validationResult.finalKey;
+    candidateBelongsToThisRequest = true;
+    candidateCommitted = false;
   }
 
-  // 7. Execute PostgreSQL ACID Financial Transaction
+  // 8. Execute PostgreSQL ACID Financial Transaction
   try {
     const transactionResult = await db.transaction(async (tx) => {
       // Step A: Acquire advisory lock on the attempt ID
@@ -451,12 +540,13 @@ export async function submitPaymentProof(
         };
       }
 
-      // Step D: Lock all inventory reservations and items for the order
+      // Step D: Lock all inventory reservations in deterministic order (id ASC)
       const reservations = await tx
         .select()
         .from(inventoryReservations)
         .where(eq(inventoryReservations.orderId, order.id))
-        .orderBy(asc(inventoryReservations.id));
+        .orderBy(asc(inventoryReservations.id))
+        .for("update");
 
       let isLate = false;
       for (const res of reservations) {
@@ -468,47 +558,64 @@ export async function submitPaymentProof(
 
       // Step E: Inventory Reservation & Balance State Transitions
       if (isLate) {
-        // Coherent whole-order release for any still-ACTIVE reservations on touch
-        for (const res of reservations) {
-          if (res.status === "ACTIVE") {
-            // Lock inventory item row
-            const [item] = await tx
-              .select()
-              .from(inventoryItems)
-              .where(eq(inventoryItems.id, res.inventoryItemId))
-              .for("update")
-              .limit(1);
+        const activeReservations = reservations.filter((r) => r.status === "ACTIVE");
+        if (activeReservations.length > 0) {
+          // Lock ALL required inventory_items in ONE deterministic global order (id ASC)
+          const uniqueItemIds = Array.from(
+            new Set(activeReservations.map((r) => r.inventoryItemId))
+          ).sort();
 
-            if (item) {
-              if (item.quantityReserved < res.quantity) {
-                throw new Error(
-                  `[INVENTORY_SAFETY] Quantity reserved underflow on item ${item.id}`
-                );
-              }
-              const newReserved = item.quantityReserved - res.quantity;
-              await tx
-                .update(inventoryItems)
-                .set({
-                  quantityReserved: newReserved,
-                  updatedAt: txNow,
-                })
-                .where(eq(inventoryItems.id, item.id));
+          const lockedItemsList = await tx
+            .select()
+            .from(inventoryItems)
+            .where(inArray(inventoryItems.id, uniqueItemIds))
+            .orderBy(asc(inventoryItems.id))
+            .for("update");
 
-              await tx.insert(inventoryLedgerEntries).values({
-                id: generateUuidV7(),
-                inventoryItemId: item.id,
-                movementType: "RESERVATION_EXPIRED",
-                onHandDelta: 0,
-                reservedDelta: -res.quantity,
-                allocatedDelta: 0,
-                quantityOnHandAfter: item.quantityOnHand,
-                quantityReservedAfter: newReserved,
-                quantityAllocatedAfter: item.quantityAllocated,
-                referenceType: "ORDER",
-                referenceId: order.id,
-                actorId: "SYSTEM",
-              });
+          const itemsMap = new Map(lockedItemsList.map((item) => [item.id, item]));
+
+          for (const res of activeReservations) {
+            const item = itemsMap.get(res.inventoryItemId);
+            if (!item) {
+              throw new Error(`[INVENTORY_SAFETY] Item ${res.inventoryItemId} not found`);
             }
+
+            if (item.quantityReserved < res.quantity) {
+              throw new Error(
+                `[INVENTORY_SAFETY] Quantity reserved underflow on item ${item.id}: available ${item.quantityReserved} < required ${res.quantity}`
+              );
+            }
+
+            const newReserved = item.quantityReserved - res.quantity;
+            item.quantityReserved = newReserved;
+
+            await tx
+              .update(inventoryItems)
+              .set({
+                quantityReserved: newReserved,
+                updatedAt: txNow,
+              })
+              .where(eq(inventoryItems.id, item.id));
+
+            // Expired condition: reservation elapsed on its own
+            // Released condition: still unexpired reservation released solely for coherent whole-order late handling
+            const movementType =
+              res.expiresAt <= txNow ? "RESERVATION_EXPIRED" : "RESERVATION_RELEASED";
+
+            await tx.insert(inventoryLedgerEntries).values({
+              id: generateUuidV7(),
+              inventoryItemId: item.id,
+              movementType,
+              onHandDelta: 0,
+              reservedDelta: -res.quantity,
+              allocatedDelta: 0,
+              quantityOnHandAfter: item.quantityOnHand,
+              quantityReservedAfter: newReserved,
+              quantityAllocatedAfter: item.quantityAllocated,
+              referenceType: "ORDER",
+              referenceId: order.id,
+              actorId: "SYSTEM",
+            });
 
             await tx
               .update(inventoryReservations)
@@ -534,11 +641,42 @@ export async function submitPaymentProof(
             )
           );
       }
-      // Note: If isResubmissionEligible and not late, reservations already remain in VERIFICATION_HOLD
 
-      // Step F: Create MediaAsset and Finalize Upload Intent if proof used
+      // Step F: Create MediaAsset and Finalize Upload Intent if proof used (rechecked under lock)
       let proofMediaId: string | null = null;
       if (finalizedProof && input.uploadIntentId) {
+        const [txUploadIntent] = await tx
+          .select()
+          .from(paymentProofUploadIntents)
+          .where(
+            and(
+              eq(paymentProofUploadIntents.id, input.uploadIntentId),
+              eq(paymentProofUploadIntents.paymentId, lockedPayment.id),
+              eq(paymentProofUploadIntents.authorityBindingDigest, authorityBindingDigest),
+              eq(paymentProofUploadIntents.status, "PENDING"),
+              gt(paymentProofUploadIntents.expiresAt, txNow)
+            )
+          )
+          .for("update")
+          .limit(1);
+
+        if (!txUploadIntent) {
+          return {
+            success: false as const,
+            code: "PROOF_VALIDATION_FAILED" as const,
+            error: "La sesión de carga del comprobante expiró o ya no es válida.",
+          };
+        }
+
+        const expectedKeyPrefix = `payment-proofs/final/${lockedPayment.id}/${txUploadIntent.id}`;
+        if (!finalizedProof.finalKey.startsWith(expectedKeyPrefix)) {
+          return {
+            success: false as const,
+            code: "PROOF_VALIDATION_FAILED" as const,
+            error: "Identificador de comprobante inconsistente.",
+          };
+        }
+
         proofMediaId = generateUuidV7();
         await tx.insert(mediaAssets).values({
           id: proofMediaId,
@@ -556,7 +694,7 @@ export async function submitPaymentProof(
             status: "FINALIZED",
             finalizedAt: txNow,
           })
-          .where(eq(paymentProofUploadIntents.id, input.uploadIntentId));
+          .where(eq(paymentProofUploadIntents.id, txUploadIntent.id));
       }
 
       // Step G: Derive attempt number under row lock
@@ -580,7 +718,7 @@ export async function submitPaymentProof(
         customerNotes: input.customerNotes ? input.customerNotes.trim() : null,
         isLate,
         submittedAt: txNow,
-        ipAddress: input.clientIp ?? null,
+        ipAddress: null, // Preferred v1: store NULL
       });
 
       // Step I: Update Payment status to SUBMITTED
@@ -618,7 +756,9 @@ export async function submitPaymentProof(
         isLate,
       };
 
-      const idempotencyExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60m TTL
+      const idempotencyExpiresAt = new Date(
+        Date.now() + paymentConfig.idempotencyTtlMinutes * 60 * 1000
+      );
       await tx.insert(idempotencyKeys).values({
         id: generateUuidV7(),
         idempotencyKey: namespacedKey,
@@ -631,9 +771,6 @@ export async function submitPaymentProof(
         expiresAt: idempotencyExpiresAt,
       });
 
-      // Clear candidate delete key on successful commit so we don't delete committed evidence
-      candidateFinalKeyToDeleteOnError = null;
-
       return {
         success: true as const,
         paymentStatus: "SUBMITTED" as const,
@@ -643,8 +780,32 @@ export async function submitPaymentProof(
       };
     });
 
-    // Step L: Post-commit staging cleanup
-    if (transactionResult.success && stagingKeyToCleanOnSuccess) {
+    if (transactionResult.success && !transactionResult.replayed) {
+      candidateCommitted = true;
+    }
+
+    return transactionResult;
+  } catch (_error) {
+    return {
+      success: false,
+      code: "SYSTEM_ERROR",
+      error: "Error interno al procesar el comprobante de pago.",
+    };
+  } finally {
+    // If a candidate final object was copied by this request but NOT committed, best-effort delete it
+    if (candidateFinalKey && candidateBelongsToThisRequest && !candidateCommitted) {
+      const storageCap = validatePrivateStorageCapability("PROOF_UPLOAD");
+      if (storageCap.isAvailable) {
+        await bestEffortDeleteR2Object({
+          s3Client: storageCap.client,
+          bucketName: storageCap.bucketName,
+          key: candidateFinalKey,
+        });
+      }
+    }
+
+    // If committed successfully with proof, clean up the staging object
+    if (candidateCommitted && stagingKeyToCleanOnSuccess) {
       const storageCap = validatePrivateStorageCapability("PROOF_UPLOAD");
       if (storageCap.isAvailable) {
         await bestEffortDeleteR2Object({
@@ -654,26 +815,6 @@ export async function submitPaymentProof(
         });
       }
     }
-
-    return transactionResult;
-  } catch (_error) {
-    // If transaction failed and we copied a candidate final object, best-effort delete it
-    if (candidateFinalKeyToDeleteOnError) {
-      const storageCap = validatePrivateStorageCapability("PROOF_UPLOAD");
-      if (storageCap.isAvailable) {
-        await bestEffortDeleteR2Object({
-          s3Client: storageCap.client,
-          bucketName: storageCap.bucketName,
-          key: candidateFinalKeyToDeleteOnError,
-        });
-      }
-    }
-
-    return {
-      success: false,
-      code: "SYSTEM_ERROR",
-      error: "Error interno al procesar el comprobante de pago.",
-    };
   }
 }
 

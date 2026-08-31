@@ -6,8 +6,9 @@ import {
   generateSecurePaymentSessionToken,
 } from "@/lib/payments/crypto";
 import { validateOperationCode } from "@/lib/payments/service";
+import { getPaymentSubmissionConfig } from "@/lib/payments/config";
 
-describe("Payment Operation Code & Crypto Unit Tests", () => {
+describe("Payment Operation Code & Validation Unit Tests", () => {
   describe("validateOperationCode", () => {
     it("preserves leading zeroes on numeric operation codes", () => {
       const res = validateOperationCode("00012345678");
@@ -25,11 +26,22 @@ describe("Payment Operation Code & Crypto Unit Tests", () => {
       }
     });
 
-    it("accepts provider-neutral alphanumeric and punctuation strings", () => {
-      const codes = ["123456", "BCP-9876", "BBVA_OP_001", "INTERBANK:9988", "PLIN-001298#1"];
+    it("accepts provider-neutral alphanumeric and visible punctuation strings", () => {
+      const codes = [
+        "123456",
+        "BCP-9876",
+        "BBVA_OP_001",
+        "INTERBANK:9988",
+        "PLIN-001298#1",
+        "YAPE/2026/08/999",
+        "OP.7788.99",
+      ];
       for (const c of codes) {
         const res = validateOperationCode(c);
         expect(res.valid).toBe(true);
+        if (res.valid) {
+          expect(res.normalized).toBe(c);
+        }
       }
     });
 
@@ -44,10 +56,86 @@ describe("Payment Operation Code & Crypto Unit Tests", () => {
       expect(res.valid).toBe(false);
     });
 
-    it("rejects dangerous control characters and invisible separators", () => {
+    it("rejects ASCII control characters (\\x00..\\x1F, \\x7F)", () => {
       expect(validateOperationCode("OP\x00123").valid).toBe(false);
       expect(validateOperationCode("OP\x1B456").valid).toBe(false);
       expect(validateOperationCode("OP\x7F789").valid).toBe(false);
+    });
+
+    it("rejects Unicode invisible characters (ZWS, ZWJ, ZWNJ, BOM)", () => {
+      // Zero-width space (\u200B)
+      expect(validateOperationCode("OP\u200B12345").valid).toBe(false);
+      // Zero-width joiner (\u200D)
+      expect(validateOperationCode("OP\u200D12345").valid).toBe(false);
+      // Zero-width non-joiner (\u200C)
+      expect(validateOperationCode("OP\u200C12345").valid).toBe(false);
+      // Byte order mark / ZWNBSP (\uFEFF)
+      expect(validateOperationCode("\uFEFF12345").valid).toBe(false);
+    });
+
+    it("rejects Unicode bidi override and isolate controls", () => {
+      // Right-to-left override (\u202E)
+      expect(validateOperationCode("OP\u202E12345").valid).toBe(false);
+      // Left-to-right embedding (\u202A)
+      expect(validateOperationCode("OP\u202A12345").valid).toBe(false);
+      // First strong isolate (\u2066)
+      expect(validateOperationCode("OP\u206612345").valid).toBe(false);
+    });
+
+    it("rejects Unicode line separator (\\u2028) and paragraph separator (\\u2029)", () => {
+      expect(validateOperationCode("OP\u2028123").valid).toBe(false);
+      expect(validateOperationCode("OP\u2029456").valid).toBe(false);
+    });
+  });
+
+  describe("getPaymentSubmissionConfig (Fail-Closed)", () => {
+    const originalHmac = process.env.CHECKOUT_HMAC_SECRET;
+    const originalTtl = process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES;
+
+    it("fails closed when CHECKOUT_HMAC_SECRET is missing or < 32 characters", () => {
+      process.env.CHECKOUT_HMAC_SECRET = "short_secret";
+      process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES = "60";
+
+      const res = getPaymentSubmissionConfig();
+      expect(res.valid).toBe(false);
+      expect(res.error).toContain("CHECKOUT_HMAC_SECRET");
+    });
+
+    it("fails closed when PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES is missing", () => {
+      process.env.CHECKOUT_HMAC_SECRET =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+      delete process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES;
+
+      const res = getPaymentSubmissionConfig();
+      expect(res.valid).toBe(false);
+      expect(res.error).toContain("PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES is missing");
+    });
+
+    it("fails closed when PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES is non-integer, negative, zero, or > 10080", () => {
+      process.env.CHECKOUT_HMAC_SECRET =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+      for (const badVal of ["abc", "-5", "0", "1.5", "10081"]) {
+        process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES = badVal;
+        const res = getPaymentSubmissionConfig();
+        expect(res.valid).toBe(false);
+      }
+    });
+
+    it("succeeds with valid bounded positive integer", () => {
+      process.env.CHECKOUT_HMAC_SECRET =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+      process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES = "60";
+
+      const res = getPaymentSubmissionConfig();
+      expect(res.valid).toBe(true);
+      if (res.valid && res.config) {
+        expect(res.config.idempotencyTtlMinutes).toBe(60);
+      }
+
+      // Restore
+      if (originalHmac) process.env.CHECKOUT_HMAC_SECRET = originalHmac;
+      if (originalTtl) process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES = originalTtl;
     });
   });
 

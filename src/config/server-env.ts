@@ -33,6 +33,13 @@ export const serverEnvSchema = z
     SENTRY_AUTH_TOKEN: z.string().optional(),
     SENTRY_ORG: z.string().optional(),
     SENTRY_PROJECT: z.string().optional(),
+    // Payment Runtime Configuration
+    PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(10080)
+      .optional(),
     // Local-only synthetic catalog preview. Never enable in production or CI.
     DEV_CATALOG_PREVIEW: z.enum(["0", "1"]).optional(),
   })
@@ -82,6 +89,8 @@ function parseServerEnv(): ServerEnv {
     SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN,
     SENTRY_ORG: process.env.SENTRY_ORG,
     SENTRY_PROJECT: process.env.SENTRY_PROJECT,
+    PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES:
+      process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES,
     DEV_CATALOG_PREVIEW: process.env.DEV_CATALOG_PREVIEW,
   });
 }

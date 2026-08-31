@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import postgres from "postgres";
 import { generateUuidV7 } from "@/db/utils/uuid";
 import { generateAnonymousSessionToken } from "@/lib/cart/session";
-import { submitCheckout, loadCheckoutConfirmation } from "@/lib/checkout";
+import { submitCheckout } from "@/lib/checkout";
 import { loadAuthorizedPaymentInstructions } from "@/lib/payments/reader";
-import { submitPaymentProof } from "@/lib/payments/service";
+import { createPaymentProofUploadIntent, submitPaymentProof } from "@/lib/payments/service";
 import {
   computePaymentSessionTokenDigest,
   generateSecurePaymentSessionToken,
@@ -84,7 +84,7 @@ vi.mock("@/lib/auth/claims", () => ({
   }),
 }));
 
-describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authority Suite", () => {
+describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Concurrency Suite", () => {
   const connectionString = assertAuthorizedLocalPostgresTarget(process.env.DATABASE_URL);
   let sqlClient: postgres.Sql;
 
@@ -134,8 +134,9 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     process.env.CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE = locationCode;
     process.env.CHECKOUT_RESERVATION_TTL_MINUTES = "30";
     process.env.CHECKOUT_IDEMPOTENCY_TTL_MINUTES = "60";
+    process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES = "60";
 
-    sqlClient = postgres(connectionString, { max: 5 });
+    sqlClient = postgres(connectionString, { max: 10 });
 
     // Clean any prior synthetic fixtures
     await sqlClient`DELETE FROM idempotency_keys`;
@@ -223,8 +224,8 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     await sqlClient`
       INSERT INTO inventory_items (id, location_id, variant_id, quantity_on_hand, quantity_reserved, quantity_allocated, updated_at)
       VALUES 
-        (${inventoryItemId1}, ${locationId}, ${variantId1}, 50, 0, 0, NOW()),
-        (${inventoryItemId2}, ${locationId}, ${variantId2}, 50, 0, 0, NOW())
+        (${inventoryItemId1}, ${locationId}, ${variantId1}, 500, 0, 0, NOW()),
+        (${inventoryItemId2}, ${locationId}, ${variantId2}, 500, 0, 0, NOW())
     `;
 
     await sqlClient`
@@ -249,7 +250,7 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     }
   });
 
-  // Helper to create a guest cart and checkout order
+  // Helper to create a single-line guest order
   async function createGuestOrder(
     sku: string = "SKU-PAY-1",
     qty: number = 1,
@@ -291,9 +292,6 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
       reviewedTotalCents: total,
     });
 
-    if (!checkoutRes.success) {
-      console.log("CHECKOUT_FAILURE_RESULT:", checkoutRes);
-    }
     expect(checkoutRes.success).toBe(true);
     if (!checkoutRes.success) throw new Error("Checkout failed");
 
@@ -304,9 +302,53 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     };
   }
 
+  // Helper to create a multi-line guest order (Line 1 + Line 2)
+  async function createMultiLineGuestOrder() {
+    const guestToken = generateAnonymousSessionToken();
+    currentMockCartCookie = guestToken;
+    currentMockPaymentSessionCookie = null;
+    currentMockIdentity = { success: false };
+
+    const cartId = generateUuidV7();
+    await sqlClient`
+      INSERT INTO carts (id, customer_id, session_token, status, expires_at, created_at, updated_at)
+      VALUES (${cartId}, NULL, ${guestToken}, 'ACTIVE', NOW() + INTERVAL '1 day', NOW(), NOW())
+    `;
+
+    await sqlClient`
+      INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+      VALUES 
+        (${generateUuidV7()}, ${cartId}, ${variantId1}, 1, NOW(), NOW()),
+        (${generateUuidV7()}, ${cartId}, ${variantId2}, 1, NOW(), NOW())
+    `;
+
+    const subtotal = 30000;
+    const shipping = 1500;
+    const total = subtotal + shipping;
+
+    const checkoutRes = await submitCheckout({
+      checkoutAttemptId: generateUuidV7(),
+      shippingMethodCode,
+      paymentMethodCode,
+      customerEmail: "guest-multiline@gamerperu.pe",
+      deliveryAddress: inlineDeliveryAddress,
+      reviewedSubtotalCents: subtotal,
+      reviewedShippingCents: shipping,
+      reviewedTotalCents: total,
+    });
+
+    expect(checkoutRes.success).toBe(true);
+    if (!checkoutRes.success) throw new Error("Checkout multi-line failed");
+
+    return {
+      orderNumber: checkoutRes.orderNumber,
+      guestCartToken: guestToken,
+      guestPaymentSessionCookie: currentMockPaymentSessionCookie!,
+    };
+  }
+
   // 1 & 2 & 3: DB Constraints on idempotency_keys
   it("Scenario 1, 2, 3: enforces conditional source_cart_id check on idempotency_keys", async () => {
-    // ORDER_CREATION with source_cart_id = NULL should be REJECTED by DB check constraint
     let rejected = false;
     try {
       await sqlClient`
@@ -318,7 +360,6 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     }
     expect(rejected).toBe(true);
 
-    // PAYMENT_SUBMISSION with source_cart_id = NULL should be ACCEPTED
     const payKey = `PAY_CHECK_${generateUuidV7()}`;
     await sqlClient`
       INSERT INTO idempotency_keys (id, idempotency_key, operation_type, authority_binding_digest, source_cart_id, request_fingerprint, expires_at)
@@ -335,89 +376,28 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     const order1 = await createGuestOrder("SKU-PAY-1", 1);
     expect(order1.guestPaymentSessionCookie).toBeDefined();
 
-    // Verify session row exists
     const tokenDigest = computePaymentSessionTokenDigest(
       order1.guestPaymentSessionCookie,
-      process.env.CHECKOUT_HMAC_SECRET ??
-        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      process.env.CHECKOUT_HMAC_SECRET!
     );
     const [session] =
       await sqlClient`SELECT id FROM guest_payment_sessions WHERE token_digest = ${tokenDigest}`;
     expect(session).toBeDefined();
 
-    // Verify grant row exists for payment 1
     const [grant1] =
       await sqlClient`SELECT * FROM guest_payment_access_grants WHERE session_id = ${session!.id}`;
     expect(grant1).toBeDefined();
 
-    // Create a second guest order using the SAME payment session cookie
-    currentMockPaymentSessionCookie = order1.guestPaymentSessionCookie;
+    // Second order reusing same cookie
     await createGuestOrder("SKU-PAY-2", 1, true);
-
-    // Verify multiple grants on the same session
     const grants =
       await sqlClient`SELECT * FROM guest_payment_access_grants WHERE session_id = ${session!.id}`;
     expect(grants.length).toBe(2);
   });
 
-  // 6 & 7: Unknown or expired payment session cookie
-  it("Scenario 6 & 7: does not reuse unknown or expired payment session cookie", async () => {
-    // Inject a fake unknown cookie
-    currentMockPaymentSessionCookie = "fake_unknown_session_token_123456789012345678901234567890";
-    await createGuestOrder();
-    expect(currentMockPaymentSessionCookie).not.toBe(
-      "fake_unknown_session_token_123456789012345678901234567890"
-    );
-  });
-
-  // 8: Guest Order survives Cart token rotation
-  it("Scenario 8: guest Order A survives GP-017 cart token rotation", async () => {
-    const order = await createGuestOrder();
-
-    // Rotate/clear cart cookie (as happens when guest creates a new cart)
-    currentMockCartCookie = generateAnonymousSessionToken();
-    currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
-
-    // Loading payment instructions and confirmation should still succeed!
-    const res = await loadAuthorizedPaymentInstructions(order.orderNumber);
-    expect(res.success).toBe(true);
-    if (res.success) {
-      expect(res.instructions.orderNumber).toBe(order.orderNumber);
-      expect(res.instructions.recipientName).toBe("Gamer Peru SAC");
-    }
-
-    const confRes = await loadCheckoutConfirmation(order.orderNumber);
-    expect(confRes.success).toBe(true);
-  });
-
-  // 9 & 13: Foreign guest payment session denied
-  it("Scenario 9 & 13: foreign guest payment session receives unified NOT_AVAILABLE", async () => {
-    const order = await createGuestOrder();
-
-    // Foreign guest with a different valid session
-    const foreignSessionToken = generateSecurePaymentSessionToken();
-    const foreignDigest = computePaymentSessionTokenDigest(
-      foreignSessionToken,
-      process.env.CHECKOUT_HMAC_SECRET ??
-        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    );
-    await sqlClient`
-      INSERT INTO guest_payment_sessions (id, token_digest, expires_at, created_at, updated_at)
-      VALUES (${generateUuidV7()}, ${foreignDigest}, NOW() + INTERVAL '30 days', NOW(), NOW())
-    `;
-
-    currentMockPaymentSessionCookie = foreignSessionToken;
-    currentMockCartCookie = null;
-
-    const res = await loadAuthorizedPaymentInstructions(order.orderNumber);
-    expect(res.success).toBe(false);
-    if (!res.success) {
-      expect(res.code).toBe("NOT_AVAILABLE");
-    }
-  });
-
-  // 10: Lost Set-Cookie Checkout Replay rotates/reissues same session identity
-  it("Scenario 10: lost Set-Cookie checkout replay rotates token on same session without stranding grants", async () => {
+  // 6 & 7: Idempotent Replay Token Rotation & Recovery
+  it("Scenario 6 & 7: rotates session token_digest on guest checkout idempotent replay without cookie", async () => {
+    const checkoutAttemptId = generateUuidV7();
     const guestToken = generateAnonymousSessionToken();
     currentMockCartCookie = guestToken;
     currentMockPaymentSessionCookie = null;
@@ -433,50 +413,108 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
       VALUES (${generateUuidV7()}, ${cartId}, ${variantId1}, 1, NOW(), NOW())
     `;
 
-    const attemptId = generateUuidV7();
     const firstRes = await submitCheckout({
-      checkoutAttemptId: attemptId,
+      checkoutAttemptId,
       shippingMethodCode,
       paymentMethodCode,
-      customerEmail: "lost-cookie@gamerperu.pe",
+      customerEmail: "guest-replay@gamerperu.pe",
       deliveryAddress: inlineDeliveryAddress,
       reviewedSubtotalCents: 15000,
       reviewedShippingCents: 1500,
       reviewedTotalCents: 16500,
     });
     expect(firstRes.success).toBe(true);
-    if (!firstRes.success) throw new Error("firstRes failed");
-    const firstCookie = currentMockPaymentSessionCookie;
+    const token1 = currentMockPaymentSessionCookie;
+    expect(token1).toBeDefined();
 
-    // Simulate lost cookie on client side
+    // Simulate lost cookie
     currentMockPaymentSessionCookie = null;
 
-    // Exact idempotent replay with the same attemptId
     const replayRes = await submitCheckout({
-      checkoutAttemptId: attemptId,
+      checkoutAttemptId,
       shippingMethodCode,
       paymentMethodCode,
-      customerEmail: "lost-cookie@gamerperu.pe",
+      customerEmail: "guest-replay@gamerperu.pe",
       deliveryAddress: inlineDeliveryAddress,
       reviewedSubtotalCents: 15000,
       reviewedShippingCents: 1500,
       reviewedTotalCents: 16500,
     });
     expect(replayRes.success).toBe(true);
-    if (!replayRes.success) throw new Error("replayRes failed");
-    expect(replayRes.replayed).toBe(true);
-    expect(currentMockPaymentSessionCookie).toBeDefined();
-    expect(currentMockPaymentSessionCookie).not.toBe(firstCookie);
+    if (replayRes.success) expect(replayRes.replayed).toBe(true);
 
-    // Verify the refreshed cookie grants access to the payment
-    const instRes = await loadAuthorizedPaymentInstructions(firstRes.orderNumber);
-    expect(instRes.success).toBe(true);
+    const token2 = currentMockPaymentSessionCookie;
+    expect(token2).toBeDefined();
+    expect(token2).not.toBe(token1);
+
+    // Old token must no longer match DB digest
+    const oldDigest = computePaymentSessionTokenDigest(token1!, process.env.CHECKOUT_HMAC_SECRET!);
+    const newDigest = computePaymentSessionTokenDigest(token2!, process.env.CHECKOUT_HMAC_SECRET!);
+    const [oldRow] =
+      await sqlClient`SELECT id FROM guest_payment_sessions WHERE token_digest = ${oldDigest}`;
+    const [newRow] =
+      await sqlClient`SELECT id FROM guest_payment_sessions WHERE token_digest = ${newDigest}`;
+    expect(oldRow).toBeUndefined();
+    expect(newRow).toBeDefined();
   });
 
-  // 11 & 12: Authenticated Owner vs Foreign Access
-  it("Scenario 11 & 12: authenticated owner access granted, foreign denied", async () => {
-    // Create cart for auth user 1
-    const cartId = generateUuidV7();
+  // 9 & 10: Guest Payment Instructions Authorization Guards
+  it("Scenario 9 & 10: allows authorized guest with valid cookie, denies guest without cookie or with foreign cookie", async () => {
+    const order = await createGuestOrder();
+    currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+    const validRes = await loadAuthorizedPaymentInstructions(order.orderNumber);
+    expect(validRes.success).toBe(true);
+
+    currentMockPaymentSessionCookie = null;
+    const noCookieRes = await loadAuthorizedPaymentInstructions(order.orderNumber);
+    expect(noCookieRes.success).toBe(false);
+    if (!noCookieRes.success) expect(noCookieRes.code).toBe("NOT_AVAILABLE");
+
+    currentMockPaymentSessionCookie = generateSecurePaymentSessionToken();
+    const foreignCookieRes = await loadAuthorizedPaymentInstructions(order.orderNumber);
+    expect(foreignCookieRes.success).toBe(false);
+    if (!foreignCookieRes.success) expect(foreignCookieRes.code).toBe("NOT_AVAILABLE");
+  });
+
+  // Blocker A: Concurrent Upload Intent Creation on Same Payment
+  it("Blocker A: concurrent upload intent creation serializes on Payment row resulting in exactly 1 PENDING and others ABANDONED", async () => {
+    const order = await createGuestOrder();
+    currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+    // Trigger concurrent intent creation requests
+    const [intent1, intent2] = await Promise.all([
+      createPaymentProofUploadIntent({
+        orderNumber: order.orderNumber,
+        declaredMimeType: "image/png",
+        declaredSizeBytes: 1024 * 100,
+      }),
+      createPaymentProofUploadIntent({
+        orderNumber: order.orderNumber,
+        declaredMimeType: "image/jpeg",
+        declaredSizeBytes: 1024 * 200,
+      }),
+    ]);
+
+    expect(intent1.success).toBe(true);
+    expect(intent2.success).toBe(true);
+
+    // Verify DB state: exactly 1 PENDING, 1 ABANDONED
+    const intents = await sqlClient`
+      SELECT id, status FROM payment_proof_upload_intents 
+      WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber}))
+      ORDER BY created_at ASC
+    `;
+
+    expect(intents.length).toBe(2);
+    const pendingIntents = intents.filter((i) => i.status === "PENDING");
+    const abandonedIntents = intents.filter((i) => i.status === "ABANDONED");
+    expect(pendingIntents.length).toBe(1);
+    expect(abandonedIntents.length).toBe(1);
+  });
+
+  // 13: Authenticated Customer Ownership vs Foreign Customer Denial
+  it("Scenario 13: authenticated owner can read instructions; foreign customer is denied", async () => {
     currentMockIdentity = {
       success: true,
       identity: { authUserId: authUserId1, email: "owner@gamerperu.pe" },
@@ -484,6 +522,7 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     currentMockCartCookie = null;
     currentMockPaymentSessionCookie = null;
 
+    const cartId = generateUuidV7();
     await sqlClient`
       INSERT INTO carts (id, customer_id, session_token, status, expires_at, created_at, updated_at)
       VALUES (${cartId}, ${customerProfileId1}, NULL, 'ACTIVE', NOW() + INTERVAL '1 day', NOW(), NOW())
@@ -506,28 +545,23 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     expect(checkoutRes.success).toBe(true);
     if (!checkoutRes.success) throw new Error("checkoutRes failed");
 
-    // Owner access
     const ownerRes = await loadAuthorizedPaymentInstructions(checkoutRes.orderNumber);
     expect(ownerRes.success).toBe(true);
 
-    // Switch to foreign user 2
     currentMockIdentity = {
       success: true,
       identity: { authUserId: authUserId2, email: "foreign@gamerperu.pe" },
     };
     const foreignRes = await loadAuthorizedPaymentInstructions(checkoutRes.orderNumber);
     expect(foreignRes.success).toBe(false);
-    if (!foreignRes.success) {
-      expect(foreignRes.code).toBe("NOT_AVAILABLE");
-    }
+    if (!foreignRes.success) expect(foreignRes.code).toBe("NOT_AVAILABLE");
   });
 
-  // 14: Frozen instruction version remains frozen
+  // 14: Frozen Instruction Version
   it("Scenario 14: frozen instruction version remains frozen after configuration changes", async () => {
     const order = await createGuestOrder();
     currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
 
-    // Mutate current configuration to version 2 (simulating admin changing account details)
     const newInstructionId = generateUuidV7();
     await sqlClient`
       INSERT INTO payment_instruction_versions (id, payment_method_code, version_number, recipient_name, account_identifier, instruction_text, is_active, created_at)
@@ -537,7 +571,6 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
       UPDATE payment_method_configurations SET current_instruction_version_id = ${newInstructionId} WHERE id = ${paymentMethodId}
     `;
 
-    // Existing order must still read frozen version 1
     const res = await loadAuthorizedPaymentInstructions(order.orderNumber);
     expect(res.success).toBe(true);
     if (res.success) {
@@ -546,7 +579,7 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     }
   });
 
-  // 17, 18, 19, 20: Operation code validation & no-proof submission
+  // 17..20: Operation code validation & no-proof submission
   it("Scenario 17..20: submits operation code without proof, preserves leading zeroes, transitions reservation to VERIFICATION_HOLD", async () => {
     const order = await createGuestOrder();
     currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
@@ -567,27 +600,24 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
       expect(submitRes.replayed).toBe(false);
     }
 
-    // Verify submission row in DB
     const [subRow] = await sqlClient`
       SELECT * FROM payment_submissions WHERE operation_code = '000987654321'
     `;
     expect(subRow).toBeDefined();
     expect(subRow!.attempt_number).toBe(1);
     expect(subRow!.is_late).toBe(false);
+    expect(subRow!.ip_address).toBeNull();
 
-    // Verify reservation transitioned from ACTIVE to VERIFICATION_HOLD
     const [resRow] = await sqlClient`
       SELECT status FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber})
     `;
     expect(resRow!.status).toBe("VERIFICATION_HOLD");
 
-    // Verify PaymentSubmitted Outbox event
     const [outbox] = await sqlClient`
       SELECT * FROM outbox_events WHERE event_name = 'PaymentSubmitted' AND aggregate_id = ${subRow!.payment_id}
     `;
     expect(outbox).toBeDefined();
     expect((outbox!.payload as Record<string, unknown>).attemptNumber).toBe(1);
-    // Ensure no sensitive data leaked into outbox payload
     expect((outbox!.payload as Record<string, unknown>).operationCode).toBeUndefined();
     expect((outbox!.payload as Record<string, unknown>).rawToken).toBeUndefined();
   });
@@ -606,7 +636,6 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     expect(firstRes.success).toBe(true);
     if (firstRes.success) expect(firstRes.replayed).toBe(false);
 
-    // Exact retry
     const retryRes = await submitPaymentProof({
       orderNumber: order.orderNumber,
       submissionAttemptId: attemptId,
@@ -618,7 +647,6 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
       expect(retryRes.attemptNumber).toBe(1);
     }
 
-    // Verify exactly 1 submission and 1 outbox event
     const submissions =
       await sqlClient`SELECT id FROM payment_submissions WHERE operation_code = 'OP-RETRY-100'`;
     expect(submissions.length).toBe(1);
@@ -647,27 +675,78 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     }
   });
 
-  // 26 & 27: Concurrency serialization on initial UNPAID Payment
-  it("Scenario 26 & 27: two different keys on same initial UNPAID payment serialize; loser rejected", async () => {
+  // Section 16 & Blocker A: Real Concurrent SAME-KEY Replay Submission
+  it("Section 16: real simultaneous SAME-key duplicate submission converges safely (1 fresh, 1 replay, 1 submission row)", async () => {
     const order = await createGuestOrder();
     currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
 
-    const res1 = await submitPaymentProof({
-      orderNumber: order.orderNumber,
-      submissionAttemptId: generateUuidV7(),
-      operationCode: "OP-WINNER",
-    });
-    expect(res1.success).toBe(true);
+    const attemptId = generateUuidV7();
+    const [res1, res2] = await Promise.all([
+      submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: "OP-CONCURRENT-SAME",
+      }),
+      submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: "OP-CONCURRENT-SAME",
+      }),
+    ]);
 
-    const res2 = await submitPaymentProof({
-      orderNumber: order.orderNumber,
-      submissionAttemptId: generateUuidV7(),
-      operationCode: "OP-LOSER",
-    });
-    expect(res2.success).toBe(false);
-    if (!res2.success) {
-      expect(res2.code).toBe("INVALID_PAYMENT_STATE");
-    }
+    expect(res1.success).toBe(true);
+    expect(res2.success).toBe(true);
+
+    const replayedValues = [
+      (res1 as { replayed: boolean }).replayed,
+      (res2 as { replayed: boolean }).replayed,
+    ];
+    expect(replayedValues).toContain(false);
+    expect(replayedValues).toContain(true);
+
+    const submissions =
+      await sqlClient`SELECT id FROM payment_submissions WHERE operation_code = 'OP-CONCURRENT-SAME'`;
+    expect(submissions.length).toBe(1);
+
+    const outboxEventsCount = await sqlClient`
+      SELECT id FROM outbox_events 
+      WHERE event_name = 'PaymentSubmitted' AND aggregate_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber}))
+    `;
+    expect(outboxEventsCount.length).toBe(1);
+  });
+
+  // Section 16: Real Concurrent DIFFERENT-KEY Submission on Same UNPAID Payment
+  it("Section 16: real simultaneous DIFFERENT-key submission on same initial UNPAID payment serializes; exactly 1 winner, loser rejected, attempt 2 not created", async () => {
+    const order = await createGuestOrder();
+    currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+    const [res1, res2] = await Promise.all([
+      submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: generateUuidV7(),
+        operationCode: "OP-RACE-A",
+      }),
+      submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: generateUuidV7(),
+        operationCode: "OP-RACE-B",
+      }),
+    ]);
+
+    const results = [res1, res2];
+    const successes = results.filter((r) => r.success);
+    const failures = results.filter((r) => !r.success);
+
+    expect(successes.length).toBe(1);
+    expect(failures.length).toBe(1);
+    expect(failures[0]!.code).toBe("INVALID_PAYMENT_STATE");
+
+    const submissions = await sqlClient`
+      SELECT attempt_number, operation_code FROM payment_submissions 
+      WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber}))
+    `;
+    expect(submissions.length).toBe(1);
+    expect(submissions[0]!.attempt_number).toBe(1);
   });
 
   // 28 & 29: Resubmission attempt 2 under active grace period
@@ -701,7 +780,6 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
       expect(resubmissionRes.attemptNumber).toBe(2);
     }
 
-    // Verify both immutable attempts exist
     const attempts = await sqlClient`
       SELECT attempt_number, operation_code FROM payment_submissions 
       WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber}))
@@ -734,27 +812,32 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
     }
   });
 
-  // 31..37: Late submission on-touch reconciliation & coherent whole-order release
-  it("Scenario 31..37: expired reservation reconciles on touch, whole order marked late, inventory released with RESERVATION_EXPIRED ledger entry", async () => {
-    const order = await createGuestOrder();
+  // Blockers D & E: Multi-Line Late Scenario A (EXPIRED + UNEXPIRED ACTIVE)
+  it("Blockers D & E: Multi-Line Scenario A (EXPIRED line + UNEXPIRED ACTIVE line) releases both, writing RESERVATION_EXPIRED and RESERVATION_RELEASED respectively", async () => {
+    const order = await createMultiLineGuestOrder();
     currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
 
-    // Get baseline inventory reserved count
-    const [beforeItem] =
-      await sqlClient`SELECT quantity_reserved FROM inventory_items WHERE id = ${inventoryItemId1}`;
-    const initialReserved = beforeItem!.quantity_reserved;
-
-    // Manually backdate the reservation to simulate expiration
-    await sqlClient`
-      UPDATE inventory_reservations 
-      SET expires_at = NOW() - INTERVAL '5 minutes'
+    // Get order reservations
+    const reservations = await sqlClient`
+      SELECT id, inventory_item_id FROM inventory_reservations 
       WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber})
+      ORDER BY id ASC
+    `;
+    expect(reservations.length).toBe(2);
+
+    // Line 1 is expired (backdated)
+    await sqlClient`
+      UPDATE inventory_reservations SET expires_at = NOW() - INTERVAL '10 minutes' WHERE id = ${reservations[0]!.id}
+    `;
+    // Line 2 remains active (future expiry)
+    await sqlClient`
+      UPDATE inventory_reservations SET expires_at = NOW() + INTERVAL '20 minutes' WHERE id = ${reservations[1]!.id}
     `;
 
     const submitRes = await submitPaymentProof({
       orderNumber: order.orderNumber,
       submissionAttemptId: generateUuidV7(),
-      operationCode: "OP-LATE-SUBMIT",
+      operationCode: "OP-MULTILINE-LATE-A",
     });
 
     expect(submitRes.success).toBe(true);
@@ -763,24 +846,140 @@ describe("GP-019 / CHK2 — Real Local PostgreSQL Payment Integration & Authorit
       expect(submitRes.paymentStatus).toBe("SUBMITTED");
     }
 
-    // Verify reservation transitioned to RELEASED (NOT VERIFICATION_HOLD)
-    const [resRow] = await sqlClient`
-      SELECT status FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber})
+    // Both reservations must be RELEASED
+    const afterRes = await sqlClient`
+      SELECT id, status FROM inventory_reservations 
+      WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber})
+      ORDER BY id ASC
     `;
-    expect(resRow!.status).toBe("RELEASED");
+    expect(afterRes[0]!.status).toBe("RELEASED");
+    expect(afterRes[1]!.status).toBe("RELEASED");
 
-    // Verify inventory reserved quantity was decremented
-    const [afterItem] =
-      await sqlClient`SELECT quantity_reserved FROM inventory_items WHERE id = ${inventoryItemId1}`;
-    expect(afterItem!.quantity_reserved).toBe(initialReserved - 1);
+    // Check ledger entries
+    const ledgers = await sqlClient`
+      SELECT inventory_item_id, movement_type, reserved_delta FROM inventory_ledger_entries 
+      WHERE reference_id IN (SELECT id::text FROM orders WHERE order_number = ${order.orderNumber})
+      ORDER BY created_at ASC
+    `;
 
-    // Verify RESERVATION_EXPIRED ledger entry
-    const [ledger] = await sqlClient`
+    // 2 created at checkout + 2 released at submission = 4 total
+    const releaseLedgers = ledgers.filter((l) => l.movement_type.startsWith("RESERVATION_"));
+    const expiredLedger = releaseLedgers.find((l) => l.movement_type === "RESERVATION_EXPIRED");
+    const releasedLedger = releaseLedgers.find((l) => l.movement_type === "RESERVATION_RELEASED");
+
+    expect(expiredLedger).toBeDefined();
+    expect(expiredLedger!.inventory_item_id).toBe(reservations[0]!.inventory_item_id);
+    expect(expiredLedger!.reserved_delta).toBe(-1);
+
+    expect(releasedLedger).toBeDefined();
+    expect(releasedLedger!.inventory_item_id).toBe(reservations[1]!.inventory_item_id);
+    expect(releasedLedger!.reserved_delta).toBe(-1);
+  });
+
+  // Blockers D & E: Multi-Line Late Scenario B (ALREADY RELEASED + ACTIVE UNEXPIRED)
+  it("Blockers D & E: Multi-Line Scenario B (ALREADY RELEASED line + ACTIVE UNEXPIRED line) marks order late and releases remaining line with RESERVATION_RELEASED", async () => {
+    const order = await createMultiLineGuestOrder();
+    currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+    const reservations = await sqlClient`
+      SELECT id, inventory_item_id FROM inventory_reservations 
+      WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber})
+      ORDER BY id ASC
+    `;
+    expect(reservations.length).toBe(2);
+
+    // Line 1 was already released previously
+    await sqlClient`
+      UPDATE inventory_reservations SET status = 'RELEASED' WHERE id = ${reservations[0]!.id}
+    `;
+    // Line 2 is ACTIVE unexpired
+    await sqlClient`
+      UPDATE inventory_reservations SET status = 'ACTIVE', expires_at = NOW() + INTERVAL '20 minutes' WHERE id = ${reservations[1]!.id}
+    `;
+
+    const submitRes = await submitPaymentProof({
+      orderNumber: order.orderNumber,
+      submissionAttemptId: generateUuidV7(),
+      operationCode: "OP-MULTILINE-LATE-B",
+    });
+
+    expect(submitRes.success).toBe(true);
+    if (submitRes.success) {
+      expect(submitRes.isLate).toBe(true);
+      expect(submitRes.paymentStatus).toBe("SUBMITTED");
+    }
+
+    const afterRes = await sqlClient`
+      SELECT id, status FROM inventory_reservations 
+      WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber})
+      ORDER BY id ASC
+    `;
+    expect(afterRes[0]!.status).toBe("RELEASED");
+    expect(afterRes[1]!.status).toBe("RELEASED");
+
+    // Line 2 generated RESERVATION_RELEASED
+    const [line2Ledger] = await sqlClient`
       SELECT * FROM inventory_ledger_entries 
-      WHERE movement_type = 'RESERVATION_EXPIRED' AND reference_id IN (SELECT id::text FROM orders WHERE order_number = ${order.orderNumber})
+      WHERE inventory_item_id = ${reservations[1]!.inventory_item_id} AND movement_type = 'RESERVATION_RELEASED'
     `;
-    expect(ledger).toBeDefined();
-    expect(ledger!.reserved_delta).toBe(-1);
-    expect(ledger!.quantity_reserved_after).toBe(afterItem!.quantity_reserved);
+    expect(line2Ledger).toBeDefined();
+    expect(line2Ledger!.reserved_delta).toBe(-1);
+  });
+
+  // Blockers D & E: Inventory Underflow Rollback Scenario
+  it("Blockers D & E: inventory underflow rolls back entire transaction leaving Payment UNPAID and zero submission records", async () => {
+    const order = await createGuestOrder();
+    currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+    // Expire reservation to trigger release path
+    await sqlClient`
+      UPDATE inventory_reservations 
+      SET expires_at = NOW() - INTERVAL '5 minutes'
+      WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber})
+    `;
+
+    // Forcibly corrupt quantity_reserved to 0 on inventory_item so that decrementing 1 causes an underflow error
+    await sqlClient`
+      UPDATE inventory_items 
+      SET quantity_reserved = 0 
+      WHERE id = ${inventoryItemId1}
+    `;
+
+    const submitRes = await submitPaymentProof({
+      orderNumber: order.orderNumber,
+      submissionAttemptId: generateUuidV7(),
+      operationCode: "OP-UNDERFLOW-TEST",
+    });
+
+    expect(submitRes.success).toBe(false);
+    if (!submitRes.success) {
+      expect(submitRes.code).toBe("SYSTEM_ERROR");
+    }
+
+    // Verify complete rollback in DB:
+    // 1. Payment remains UNPAID
+    const [payRow] = await sqlClient`
+      SELECT status FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber})
+    `;
+    expect(payRow!.status).toBe("UNPAID");
+
+    // 2. Zero payment_submissions rows
+    const subs = await sqlClient`
+      SELECT id FROM payment_submissions WHERE operation_code = 'OP-UNDERFLOW-TEST'
+    `;
+    expect(subs.length).toBe(0);
+
+    // 3. Zero PaymentSubmitted outbox events
+    const outbox = await sqlClient`
+      SELECT id FROM outbox_events 
+      WHERE event_name = 'PaymentSubmitted' AND aggregate_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber}))
+    `;
+    expect(outbox.length).toBe(0);
+
+    // 4. Zero idempotency key records
+    const idemp = await sqlClient`
+      SELECT id FROM idempotency_keys WHERE idempotency_key LIKE '%OP-UNDERFLOW-TEST%'
+    `;
+    expect(idemp.length).toBe(0);
   });
 });

@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import { loadAuthorizedPaymentInstructions, type LoadPaymentInstructionsResult } from "./reader";
 import {
   createPaymentProofUploadIntent,
@@ -39,12 +38,8 @@ export async function submitPaymentProofAction(input: {
   uploadIntentId?: string | null;
   customerNotes?: string | null;
 }): Promise<SubmitPaymentProofResult> {
-  const headerList = await headers();
-  const forwardedFor = headerList.get("x-forwarded-for");
-  const clientIp = forwardedFor ? (forwardedFor.split(",")[0]?.trim() ?? null) : null;
-
   return submitPaymentProof({
     ...input,
-    clientIp,
+    clientIp: null,
   });
 }
