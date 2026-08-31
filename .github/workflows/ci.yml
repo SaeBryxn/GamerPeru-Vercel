@@ -185,6 +185,9 @@ jobs:
       - name: Run Real Checkout E2E Tests
         run: pnpm test:checkout:e2e
 
+      - name: Run Real Payment E2E Tests
+        run: pnpm test:payment:e2e
+
       - name: Upload Checkout E2E Artifacts on Failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -240,6 +243,9 @@ jobs:
 
       - name: Run Dedicated Checkout Live Integration Tests
         run: pnpm test:checkout:live
+
+      - name: Run Dedicated Payment Live Integration Tests
+        run: pnpm test:payment:live
 
       - name: Stop Local Supabase
         if: always()
