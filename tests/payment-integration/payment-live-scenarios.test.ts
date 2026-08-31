@@ -985,4 +985,223 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
     `;
     expect(idemp.length).toBe(0);
   });
+
+  // =========================================================================
+  // GP-019 / CHK2-BR2: Idempotency Expiry Matrix Tests (Scenarios A - E)
+  // =========================================================================
+  describe("GP-019 / CHK2-BR2 — Idempotency Expiry Matrix & Order of Evaluation", () => {
+    it("Scenario A: Same authority + expired exact request returns IDEMPOTENCY_EXPIRED (not replay success)", async () => {
+      const order = await createGuestOrder();
+      currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+      const attemptId = generateUuidV7();
+      const opCode = "OP-EXPIRY-SCENARIO-A";
+
+      // 1. Initial fresh submission -> succeeds
+      const firstRes = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: opCode,
+      });
+      expect(firstRes.success).toBe(true);
+
+      // 2. Artificially expire the committed idempotency record
+      const namespacedKey = `PAYMENT_SUBMISSION:${attemptId}`;
+      await sqlClient`
+        UPDATE idempotency_keys
+        SET expires_at = NOW() - INTERVAL '10 minutes'
+        WHERE idempotency_key = ${namespacedKey}
+      `;
+
+      // 3. Exact replay with expired key
+      const replayRes = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: opCode,
+      });
+
+      expect(replayRes.success).toBe(false);
+      if (!replayRes.success) {
+        expect(replayRes.code).toBe("IDEMPOTENCY_EXPIRED");
+        expect(replayRes.error).toContain("El intento anterior expiró");
+      }
+    });
+
+    it("Scenario B: Same authority + expired key + changed operation code returns IDEMPOTENCY_EXPIRED (not IDEMPOTENCY_CONFLICT)", async () => {
+      const order = await createGuestOrder();
+      currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+      const attemptId = generateUuidV7();
+      const opCode = "OP-EXPIRY-SCENARIO-B1";
+
+      // 1. Initial submission
+      const firstRes = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: opCode,
+      });
+      expect(firstRes.success).toBe(true);
+
+      // 2. Artificially expire the idempotency key
+      const namespacedKey = `PAYMENT_SUBMISSION:${attemptId}`;
+      await sqlClient`
+        UPDATE idempotency_keys
+        SET expires_at = NOW() - INTERVAL '10 minutes'
+        WHERE idempotency_key = ${namespacedKey}
+      `;
+
+      // 3. Submit with DIFFERENT operation code (changed fingerprint) but EXPIRED key
+      const changedRes = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: "OP-EXPIRY-SCENARIO-B2-CHANGED",
+      });
+
+      // Must return IDEMPOTENCY_EXPIRED because expiration check occurs BEFORE fingerprint check
+      expect(changedRes.success).toBe(false);
+      if (!changedRes.success) {
+        expect(changedRes.code).toBe("IDEMPOTENCY_EXPIRED");
+      }
+    });
+
+    it("Scenario C: Wrong authority + expired key returns NOT_AVAILABLE (not IDEMPOTENCY_EXPIRED)", async () => {
+      const order1 = await createGuestOrder();
+      currentMockPaymentSessionCookie = order1.guestPaymentSessionCookie;
+
+      const attemptId = generateUuidV7();
+
+      // Submit on Order 1
+      await submitPaymentProof({
+        orderNumber: order1.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: "OP-WRONG-AUTH",
+      });
+
+      // Expire the key
+      const namespacedKey = `PAYMENT_SUBMISSION:${attemptId}`;
+      await sqlClient`
+        UPDATE idempotency_keys
+        SET expires_at = NOW() - INTERVAL '10 minutes'
+        WHERE idempotency_key = ${namespacedKey}
+      `;
+
+      // Now create Order 2 and switch guest payment cookie to Order 2
+      const order2 = await createGuestOrder();
+      currentMockPaymentSessionCookie = order2.guestPaymentSessionCookie;
+
+      // Attempt to submit on Order 2 using the attemptId belonging to Order 1
+      const wrongAuthRes = await submitPaymentProof({
+        orderNumber: order2.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: "OP-WRONG-AUTH",
+      });
+
+      // Must return NOT_AVAILABLE because authority check occurs FIRST without revealing key
+      expect(wrongAuthRes.success).toBe(false);
+      if (!wrongAuthRes.success) {
+        expect(wrongAuthRes.code).toBe("NOT_AVAILABLE");
+      }
+    });
+
+    it("Scenario D: Expired key with proof intent exits immediately on fast-path (0 DB mutations)", async () => {
+      const order = await createGuestOrder();
+      currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+      const attemptId = generateUuidV7();
+
+      // Submit initial
+      await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: "OP-FAST-EXPIRY-PROOF",
+      });
+
+      // Expire key
+      const namespacedKey = `PAYMENT_SUBMISSION:${attemptId}`;
+      await sqlClient`
+        UPDATE idempotency_keys
+        SET expires_at = NOW() - INTERVAL '10 minutes'
+        WHERE idempotency_key = ${namespacedKey}
+      `;
+
+      // Request upload intent for order
+      const intentRes = await createPaymentProofUploadIntent({
+        orderNumber: order.orderNumber,
+        declaredMimeType: "image/png",
+        declaredSizeBytes: 1024,
+      });
+      expect(intentRes.success).toBe(true);
+      if (!intentRes.success) throw new Error("Upload intent creation failed");
+
+      const countBefore = await sqlClient`
+        SELECT COUNT(*)::int as count FROM payment_submissions
+      `;
+
+      // Replay with expired key + upload intent
+      const expiredRes = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: "OP-FAST-EXPIRY-PROOF",
+        uploadIntentId: intentRes.uploadIntentId,
+      });
+
+      expect(expiredRes.success).toBe(false);
+      if (!expiredRes.success) {
+        expect(expiredRes.code).toBe("IDEMPOTENCY_EXPIRED");
+      }
+
+      const countAfter = await sqlClient`
+        SELECT COUNT(*)::int as count FROM payment_submissions
+      `;
+      expect(countAfter[0]!.count).toBe(countBefore[0]!.count);
+    });
+
+    it("Scenario E: Locked transactional recheck observes expired row and returns IDEMPOTENCY_EXPIRED with 0 mutations", async () => {
+      const order = await createGuestOrder();
+      currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+      const attemptId = generateUuidV7();
+      const namespacedKey = `PAYMENT_SUBMISSION:${attemptId}`;
+
+      // Insert pre-expired idempotency row directly into DB (simulating race where fast-path missed but locked recheck finds it)
+      const [pay] = await sqlClient`
+        SELECT p.id, p.authority_binding_digest
+        FROM payments p
+        JOIN orders o ON o.id = p.order_id
+        WHERE o.order_number = ${order.orderNumber}
+      `;
+
+      await sqlClient`
+        INSERT INTO idempotency_keys (
+          id, idempotency_key, action_type, authority_binding_digest, request_fingerprint, response_payload, expires_at
+        ) VALUES (
+          ${generateUuidV7()},
+          ${namespacedKey},
+          'PAYMENT_SUBMISSION',
+          ${pay!.authority_binding_digest},
+          'placeholder-fingerprint',
+          NULL,
+          NOW() - INTERVAL '5 minutes'
+        )
+      `;
+
+      const submitRes = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: "OP-LOCKED-EXPIRED",
+      });
+
+      expect(submitRes.success).toBe(false);
+      if (!submitRes.success) {
+        expect(submitRes.code).toBe("IDEMPOTENCY_EXPIRED");
+      }
+
+      // Verify zero PaymentSubmitted outbox events
+      const outbox = await sqlClient`
+        SELECT id FROM outbox_events
+        WHERE event_name = 'PaymentSubmitted' AND aggregate_id = ${pay!.id}
+      `;
+      expect(outbox.length).toBe(0);
+    });
+  });
 });

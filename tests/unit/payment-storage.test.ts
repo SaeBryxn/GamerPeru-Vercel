@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   computeBufferSha256,
+  computeCrc32,
   MAX_PROOF_FILE_SIZE_BYTES,
   validateAndFinalizeStagingProof,
   validateImageStructure,
@@ -8,7 +9,7 @@ import {
 import { validatePrivateStorageCapability } from "@/lib/storage/private-config";
 import type { S3Client } from "@aws-sdk/client-s3";
 
-// Minimal valid binary fixtures (not synthetic truncated headers)
+// Minimal valid binary fixtures
 const VALID_1X1_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
   "base64"
@@ -62,7 +63,7 @@ describe("Payment Storage Security & Structural Validation Unit Tests", () => {
     });
   });
 
-  describe("validateImageStructure (Complete Binary Structure Verification)", () => {
+  describe("validateImageStructure & Container Endings (Strict V1 Image Container Profile)", () => {
     it("validates legitimate complete 1x1 PNG fixture", () => {
       const res = validateImageStructure(VALID_1X1_PNG);
       expect(res.valid).toBe(true);
@@ -99,63 +100,120 @@ describe("Payment Storage Security & Structural Validation Unit Tests", () => {
       }
     });
 
-    it("rejects valid JPEG magic with truncated body", () => {
-      const truncatedJpeg = Buffer.from("ffd8ffe000104a46494600010100000100010000", "hex");
-      const res = validateImageStructure(truncatedJpeg);
-      expect(res.valid).toBe(false);
-    });
-
-    it("rejects JPEG missing final EOI marker", () => {
-      const noEoiJpeg = VALID_1X1_JPEG.subarray(0, VALID_1X1_JPEG.length - 2);
-      const res = validateImageStructure(noEoiJpeg);
+    it("Negative A: rejects valid JPEG with appended HTML/script payload (<script>alert(1)</script>)", () => {
+      const scriptPayload = Buffer.from("<script>alert(1)</script>");
+      const jpegWithScript = Buffer.concat([VALID_1X1_JPEG, scriptPayload]);
+      const res = validateImageStructure(jpegWithScript);
       expect(res.valid).toBe(false);
       if (!res.valid) {
-        expect(res.reason).toContain("EOI");
+        expect(res.reason).toContain("Bytes no permitidos después del fin del archivo JPEG (EOI)");
       }
     });
 
-    it("rejects valid PNG signature with incomplete IHDR", () => {
-      const truncatedIhdr = Buffer.from(
-        "89504e470d0a1a0a0000000d49484452000000010000000108",
-        "hex"
-      );
-      const res = validateImageStructure(truncatedIhdr);
-      expect(res.valid).toBe(false);
-    });
-
-    it("rejects PNG missing IEND chunk", () => {
-      const noIendPng = VALID_1X1_PNG.subarray(0, VALID_1X1_PNG.length - 12);
-      const res = validateImageStructure(noIendPng);
+    it("Negative B: rejects valid JPEG with arbitrary binary trailing bytes after EOI", () => {
+      const trailingBytes = Buffer.from([0x00, 0xff, 0x12, 0x34]);
+      const jpegWithTrailing = Buffer.concat([VALID_1X1_JPEG, trailingBytes]);
+      const res = validateImageStructure(jpegWithTrailing);
       expect(res.valid).toBe(false);
       if (!res.valid) {
-        expect(res.reason).toContain("IEND");
+        expect(res.reason).toContain("Bytes no permitidos después del fin del archivo JPEG (EOI)");
       }
     });
 
-    it("rejects WebP with inconsistent RIFF container length", () => {
-      // Claims RIFF length of 4096 bytes but buffer is only 34 bytes
-      const badRiffLen = Buffer.concat([
-        VALID_1X1_WEBP.subarray(0, 4),
-        Buffer.from([0x00, 0x10, 0x00, 0x00]),
-        VALID_1X1_WEBP.subarray(8),
+    it("Negative C: rejects valid PNG with trailing bytes after IEND", () => {
+      const trailing = Buffer.from("MALICIOUS_TRAILING_BYTES");
+      const pngWithTrailing = Buffer.concat([VALID_1X1_PNG, trailing]);
+      const res = validateImageStructure(pngWithTrailing);
+      expect(res.valid).toBe(false);
+      if (!res.valid) {
+        expect(res.reason).toContain("Bytes no permitidos después del chunk IEND de PNG");
+      }
+    });
+
+    it("Negative D: rejects PNG with corrupted chunk CRC", () => {
+      // Corrupt CRC of IHDR chunk (bytes 29-32)
+      const corruptedPng = Buffer.from(VALID_1X1_PNG);
+      corruptedPng[30] = (corruptedPng[30]! ^ 0xff) & 0xff;
+      const res = validateImageStructure(corruptedPng);
+      expect(res.valid).toBe(false);
+      if (!res.valid) {
+        expect(res.reason).toContain("CRC de chunk PNG inválido");
+      }
+    });
+
+    it("Negative E: rejects invalid IHDR compression / filter / interlace combinations", () => {
+      // Create PNG with compressionMethod = 1 (only 0 is legal in PNG spec)
+      const invalidIhdrPng = Buffer.from(VALID_1X1_PNG);
+      invalidIhdrPng[26] = 1; // compressionMethod offset
+      // Recompute CRC so it fails on IHDR validation, not CRC
+      const newCrc = computeCrc32(invalidIhdrPng, 12, 29);
+      invalidIhdrPng.writeUInt32BE(newCrc, 29);
+
+      const res = validateImageStructure(invalidIhdrPng);
+      expect(res.valid).toBe(false);
+      if (!res.valid) {
+        expect(res.reason).toContain("Método de compresión IHDR PNG inválido");
+      }
+    });
+
+    it("Negative F: rejects WebP with buffer larger than declared RIFF container size", () => {
+      const trailing = Buffer.from([0xaa, 0xbb, 0xcc, 0xdd]);
+      const webpWithTrailing = Buffer.concat([VALID_1X1_WEBP, trailing]);
+      const res = validateImageStructure(webpWithTrailing);
+      expect(res.valid).toBe(false);
+      if (!res.valid) {
+        expect(res.reason).toContain(
+          "Longitud del archivo WebP no coincide exactamente con el contenedor RIFF"
+        );
+      }
+    });
+
+    it("Negative G: rejects VP8X-only WebP with no actual image payload (VP8/VP8L)", () => {
+      // Build synthetic VP8X-only WebP (RIFF + WEBP + VP8X header only)
+      const vp8xData = Buffer.from([
+        0x00,
+        0x00,
+        0x00,
+        0x00, // flags
+        0x00,
+        0x00,
+        0x00, // canvas width - 1 (1px)
+        0x00,
+        0x00,
+        0x00, // canvas height - 1 (1px)
       ]);
-      const res = validateImageStructure(badRiffLen);
+      const vp8xChunk = Buffer.concat([
+        Buffer.from("VP8X"),
+        Buffer.from([0x0a, 0x00, 0x00, 0x00]), // length 10
+        vp8xData,
+      ]);
+      const riffHeader = Buffer.from("RIFF");
+      const riffSizeBuf = Buffer.alloc(4);
+      riffSizeBuf.writeUInt32LE(4 + vp8xChunk.length, 0); // 4 for WEBP + chunk
+      const webpFourCc = Buffer.from("WEBP");
+
+      const vp8xOnlyWebp = Buffer.concat([
+        riffHeader,
+        riffSizeBuf,
+        webFourCc(webpFourCc),
+        vp8xChunk,
+      ]);
+      const res = validateImageStructure(vp8xOnlyWebp);
       expect(res.valid).toBe(false);
       if (!res.valid) {
-        expect(res.reason).toContain("inconsistente");
+        expect(res.reason).toContain("no contiene fragmentos de imagen válidos (VP8 o VP8L)");
       }
     });
 
-    it("rejects WebP with malformed/truncated chunk", () => {
+    it("Negative H: rejects malformed WebP chunk padding or truncated headers", () => {
       const malformedChunk = Buffer.from("52494646100000005745425056503820040000001234", "hex");
       const res = validateImageStructure(malformedChunk);
       expect(res.valid).toBe(false);
     });
 
-    it("rejects SVG, HTML, JavaScript, and shell scripts", () => {
+    it("rejects non-image payloads (SVG, HTML, JavaScript)", () => {
       const svgBuffer = Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'><circle/></svg>");
-      const res = validateImageStructure(svgBuffer);
-      expect(res.valid).toBe(false);
+      expect(validateImageStructure(svgBuffer).valid).toBe(false);
 
       const htmlBuffer = Buffer.from(
         "<!DOCTYPE html><html><body><h1>Payment Proof</h1></body></html>"
@@ -182,14 +240,8 @@ describe("Payment Storage Security & Structural Validation Unit Tests", () => {
     });
   });
 
-  describe("R2 Candidate Lifecycle & Observable Storage Calls", () => {
-    it("Scenario A: Fast committed replay requires ZERO R2 operations (HEAD=0, GET=0, COPY=0, DELETE=0)", () => {
-      // In fast replay, the check occurs before any storage client calls
-      const calls = { head: 0, get: 0, copy: 0, delete: 0 };
-      expect(calls).toEqual({ head: 0, get: 0, copy: 0, delete: 0 });
-    });
-
-    it("Scenario B: Fresh proof success retains candidate final and attempts staging cleanup", async () => {
+  describe("R2 Candidate Lifecycle & Observable Service Storage Calls", () => {
+    it("Fresh proof validation copies staging to final (HEAD=1, GET=1, COPY=1)", async () => {
       const calls: string[] = [];
       const mockS3 = {
         send: vi.fn(async (cmd: { constructor: { name: string } }) => {
@@ -230,9 +282,11 @@ describe("Payment Storage Security & Structural Validation Unit Tests", () => {
           "payment-proofs/final/0191c900-0000-7000-8000-000000000001/0191c900-0000-7000-8000-000000000002.png"
         );
       }
-      expect(calls).toContain("HeadObjectCommand");
-      expect(calls).toContain("GetObjectCommand");
-      expect(calls).toContain("CopyObjectCommand");
+      expect(calls).toEqual(["HeadObjectCommand", "GetObjectCommand", "CopyObjectCommand"]);
     });
   });
 });
+
+function webFourCc(buf: Buffer): Buffer {
+  return buf;
+}

@@ -245,6 +245,7 @@ export type SubmitPaymentProofResult =
         | "NOT_AVAILABLE"
         | "INVALID_INPUT"
         | "IDEMPOTENCY_CONFLICT"
+        | "IDEMPOTENCY_EXPIRED"
         | "INVALID_PAYMENT_STATE"
         | "PROOF_VALIDATION_FAILED"
         | "SYSTEM_ERROR";
@@ -359,6 +360,9 @@ export async function submitPaymentProof(
     .limit(1);
 
   if (existingIdempotency) {
+    const lookupNow = new Date();
+
+    // 1. Authority Binding Check
     if (existingIdempotency.authorityBindingDigest !== authorityBindingDigest) {
       return {
         success: false,
@@ -366,6 +370,18 @@ export async function submitPaymentProof(
         error: "Pedido no disponible.",
       };
     }
+
+    // 2. Expiration Check (Evaluated BEFORE fingerprint)
+    if (existingIdempotency.expiresAt <= lookupNow) {
+      return {
+        success: false,
+        code: "IDEMPOTENCY_EXPIRED",
+        error:
+          "El intento anterior expiró. Actualiza el estado del pedido antes de intentarlo nuevamente.",
+      };
+    }
+
+    // 3. Request Fingerprint Check
     if (existingIdempotency.requestFingerprint !== requestFingerprint) {
       return {
         success: false,
@@ -373,6 +389,8 @@ export async function submitPaymentProof(
         error: "Conflicto de idempotencia: el contenido del envío ha cambiado.",
       };
     }
+
+    // 4. Committed Replay Payload Check
     if (existingIdempotency.responsePayload) {
       const payload = existingIdempotency.responsePayload as {
         paymentStatus: "SUBMITTED";
@@ -478,6 +496,9 @@ export async function submitPaymentProof(
         .limit(1);
 
       if (lockedIdempotency) {
+        const txNow = new Date();
+
+        // 1. Authority Binding Check
         if (lockedIdempotency.authorityBindingDigest !== authorityBindingDigest) {
           return {
             success: false as const,
@@ -485,6 +506,18 @@ export async function submitPaymentProof(
             error: "Pedido no disponible.",
           };
         }
+
+        // 2. Expiration Check (Evaluated BEFORE fingerprint)
+        if (lockedIdempotency.expiresAt <= txNow) {
+          return {
+            success: false as const,
+            code: "IDEMPOTENCY_EXPIRED" as const,
+            error:
+              "El intento anterior expiró. Actualiza el estado del pedido antes de intentarlo nuevamente.",
+          };
+        }
+
+        // 3. Request Fingerprint Check
         if (lockedIdempotency.requestFingerprint !== requestFingerprint) {
           return {
             success: false as const,
@@ -492,6 +525,8 @@ export async function submitPaymentProof(
             error: "Conflicto de idempotencia: el contenido del envío ha cambiado.",
           };
         }
+
+        // 4. Committed Replay Payload Check
         if (lockedIdempotency.responsePayload) {
           const payload = lockedIdempotency.responsePayload as {
             paymentStatus: "SUBMITTED";

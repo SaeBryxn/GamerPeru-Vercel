@@ -9,12 +9,17 @@ import {
   Copy,
   FileImage,
   Loader2,
+  RefreshCw,
   Send,
   Trash2,
   Upload,
 } from "lucide-react";
 import { Icon } from "@/components/ui";
-import { requestProofUploadIntentAction, submitPaymentProofAction } from "@/lib/payments/actions";
+import {
+  loadPaymentInstructionsAction,
+  requestProofUploadIntentAction,
+  submitPaymentProofAction,
+} from "@/lib/payments/actions";
 import type { PaymentInstructionDTO } from "@/lib/payments/reader";
 import { formatCurrency } from "@/lib/utils/currency";
 import styles from "./manual-payment-card.module.css";
@@ -30,9 +35,18 @@ export function ManualPaymentCard({ instructions }: ManualPaymentCardProps): Rea
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedAccount, setCopiedAccount] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isExpiredError, setIsExpiredError] = useState(false);
+
+  // Stable material submission intent state
+  const [submissionAttemptId, setSubmissionAttemptId] = useState<string>(() => crypto.randomUUID());
+  const [preparedProof, setPreparedProof] = useState<{
+    uploadIntentId: string;
+    fileKey: string;
+  } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const opCodeInputId = useId();
@@ -54,8 +68,25 @@ export function ManualPaymentCard({ instructions }: ManualPaymentCardProps): Rea
     }
   };
 
+  const handleOpCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setOperationCode(e.target.value);
+    setErrorMessage(null);
+    setIsExpiredError(false);
+    // Material customer edit generates a new stable attempt ID
+    setSubmissionAttemptId(crypto.randomUUID());
+  };
+
+  const handleNotesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomerNotes(e.target.value);
+    setErrorMessage(null);
+    setIsExpiredError(false);
+    // Material customer edit generates a new stable attempt ID
+    setSubmissionAttemptId(crypto.randomUUID());
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setErrorMessage(null);
+    setIsExpiredError(false);
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -72,6 +103,9 @@ export function ManualPaymentCard({ instructions }: ManualPaymentCardProps): Rea
     setSelectedFile(file);
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
+    // Invalidate prepared proof and rotate attempt ID for new file intent
+    setPreparedProof(null);
+    setSubmissionAttemptId(crypto.randomUUID());
   };
 
   const handleRemoveFile = () => {
@@ -83,12 +117,39 @@ export function ManualPaymentCard({ instructions }: ManualPaymentCardProps): Rea
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+    setPreparedProof(null);
+    setSubmissionAttemptId(crypto.randomUUID());
+  };
+
+  const handleRefreshStatus = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await loadPaymentInstructionsAction(instructions.orderNumber);
+      if (res.success) {
+        setCurrentStatus(res.instructions.paymentStatus);
+        if (res.instructions.paymentStatus !== "UNPAID") {
+          setErrorMessage(null);
+          setIsExpiredError(false);
+        } else {
+          // Legitimately still UNPAID -> reset attempt state for fresh customer intent
+          setSubmissionAttemptId(crypto.randomUUID());
+          setPreparedProof(null);
+          setErrorMessage(null);
+          setIsExpiredError(false);
+        }
+      }
+    } catch {
+      // Retain message
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+    setIsExpiredError(false);
 
     const trimmedOpCode = operationCode.trim();
     if (trimmedOpCode.length === 0) {
@@ -106,42 +167,51 @@ export function ManualPaymentCard({ instructions }: ManualPaymentCardProps): Rea
     try {
       let uploadIntentId: string | null = null;
 
-      // 1. If file is attached, request upload intent and PUT directly to R2
+      // 1. If file is attached: reuse prepared upload intent or request intent & PUT to R2
       if (selectedFile) {
-        const intentRes = await requestProofUploadIntentAction({
-          orderNumber: instructions.orderNumber,
-          declaredMimeType: selectedFile.type,
-          declaredSizeBytes: selectedFile.size,
-        });
+        const fileKey = `${selectedFile.name}_${selectedFile.size}_${selectedFile.lastModified}`;
 
-        if (!intentRes.success) {
-          setErrorMessage(intentRes.error || "No se pudo preparar la carga del comprobante.");
-          setIsSubmitting(false);
-          return;
-        }
+        if (preparedProof && preparedProof.fileKey === fileKey) {
+          uploadIntentId = preparedProof.uploadIntentId;
+        } else {
+          const intentRes = await requestProofUploadIntentAction({
+            orderNumber: instructions.orderNumber,
+            declaredMimeType: selectedFile.type,
+            declaredSizeBytes: selectedFile.size,
+          });
 
-        uploadIntentId = intentRes.uploadIntentId;
+          if (!intentRes.success) {
+            setErrorMessage(intentRes.error || "No se pudo preparar la carga del comprobante.");
+            setIsSubmitting(false);
+            return;
+          }
 
-        // Perform PUT upload directly to pre-signed URL
-        const uploadRes = await fetch(intentRes.presignedPutUrl, {
-          method: "PUT",
-          body: selectedFile,
-          headers: {
-            "Content-Type": selectedFile.type,
-          },
-        });
+          uploadIntentId = intentRes.uploadIntentId;
 
-        if (!uploadRes.ok) {
-          setErrorMessage(
-            "Error al subir el comprobante. Por favor intente nuevamente o envíe solo el código de operación."
-          );
-          setIsSubmitting(false);
-          return;
+          const uploadRes = await fetch(intentRes.presignedPutUrl, {
+            method: "PUT",
+            body: selectedFile,
+            headers: {
+              "Content-Type": selectedFile.type,
+            },
+          });
+
+          if (!uploadRes.ok) {
+            setErrorMessage(
+              "Error al subir el comprobante. Por favor intente nuevamente o envíe solo el código de operación."
+            );
+            setIsSubmitting(false);
+            return;
+          }
+
+          setPreparedProof({
+            uploadIntentId: intentRes.uploadIntentId,
+            fileKey,
+          });
         }
       }
 
-      // 2. Submit payment proof
-      const submissionAttemptId = crypto.randomUUID();
+      // 2. Submit payment proof using stable submissionAttemptId
       const submitRes = await submitPaymentProofAction({
         orderNumber: instructions.orderNumber,
         submissionAttemptId,
@@ -151,6 +221,12 @@ export function ManualPaymentCard({ instructions }: ManualPaymentCardProps): Rea
       });
 
       if (!submitRes.success) {
+        if (submitRes.code === "IDEMPOTENCY_EXPIRED") {
+          setIsExpiredError(true);
+        } else if (submitRes.code === "IDEMPOTENCY_CONFLICT") {
+          setSubmissionAttemptId(crypto.randomUUID());
+          setPreparedProof(null);
+        }
         setErrorMessage(submitRes.error || "Ocurrió un error al registrar el pago.");
         setIsSubmitting(false);
         return;
@@ -162,7 +238,10 @@ export function ManualPaymentCard({ instructions }: ManualPaymentCardProps): Rea
       );
       handleRemoveFile();
     } catch {
-      setErrorMessage("Ocurrió un error inesperado al procesar su solicitud.");
+      // On network/transport ambiguity: preserve submissionAttemptId and preparedProof for exact retry
+      setErrorMessage(
+        "Error de conexión al procesar el pago. Por favor intente nuevamente para confirmar el envío."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -321,7 +400,36 @@ export function ManualPaymentCard({ instructions }: ManualPaymentCardProps): Rea
               data-testid="manual-payment-error-alert"
             >
               <Icon icon={AlertCircle} size="sm" aria-hidden="true" />
-              <span>{errorMessage}</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
+                <span>{errorMessage}</span>
+                {isExpiredError && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handleRefreshStatus}
+                      disabled={isRefreshing}
+                      className={styles.submitButton}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: "12px",
+                        width: "auto",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                      data-testid="manual-payment-refresh-status-button"
+                    >
+                      <Icon
+                        icon={isRefreshing ? Loader2 : RefreshCw}
+                        size="sm"
+                        className={isRefreshing ? "animate-spin" : undefined}
+                        aria-hidden="true"
+                      />
+                      <span>{isRefreshing ? "Actualizando..." : "Actualizar estado"}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -342,7 +450,7 @@ export function ManualPaymentCard({ instructions }: ManualPaymentCardProps): Rea
               type="text"
               required
               value={operationCode}
-              onChange={(e) => setOperationCode(e.target.value)}
+              onChange={handleOpCodeChange}
               placeholder="Ej: 12345678"
               className={styles.input}
               data-testid="manual-payment-operation-code-input"
@@ -435,7 +543,7 @@ export function ManualPaymentCard({ instructions }: ManualPaymentCardProps): Rea
               id={notesInputId}
               type="text"
               value={customerNotes}
-              onChange={(e) => setCustomerNotes(e.target.value)}
+              onChange={handleNotesChange}
               placeholder="Ej: Transferencia realizada desde cuenta BCP"
               className={styles.input}
               data-testid="manual-payment-customer-notes-input"

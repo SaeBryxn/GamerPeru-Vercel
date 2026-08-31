@@ -21,6 +21,30 @@ export type ValidatedImageResult =
     }
   | { valid: false; reason: string };
 
+// Standard CRC-32 Table (IEEE 802.3 / ISO 3309)
+const CRC32_TABLE = new Uint32Array(256);
+for (let i = 0; i < 256; i++) {
+  let c = i;
+  for (let k = 0; k < 8; k++) {
+    c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  }
+  CRC32_TABLE[i] = c;
+}
+
+/**
+ * Computes IEEE 802.3 CRC-32 over a slice of Buffer.
+ */
+export function computeCrc32(buffer: Buffer, start: number, end: number): number {
+  let crc = 0xffffffff;
+  for (let i = start; i < end; i++) {
+    const byte = buffer[i];
+    if (byte !== undefined) {
+      crc = (crc >>> 8) ^ CRC32_TABLE[(crc ^ byte) & 0xff]!;
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 function validateJpegStructure(buffer: Buffer): { valid: true } | { valid: false; reason: string } {
   if (buffer.length < 50) {
     return { valid: false, reason: "Archivo JPEG truncado o incompleto." };
@@ -51,6 +75,13 @@ function validateJpegStructure(buffer: Buffer): { valid: true } | { valid: false
     if (marker === 0xd9) {
       if (!hasSof || !hasSos) {
         return { valid: false, reason: "JPEG incompleto: faltan marcos o datos de escaneo." };
+      }
+      // EOI must be the exact physical end of the buffer
+      if (offset !== buffer.length) {
+        return {
+          valid: false,
+          reason: "Bytes no permitidos después del fin del archivo JPEG (EOI).",
+        };
       }
       return { valid: true };
     }
@@ -151,15 +182,56 @@ function validatePngStructure(buffer: Buffer): { valid: true } | { valid: false;
       return { valid: false, reason: `Chunk PNG '${chunkType}' truncado o longitud inválida.` };
     }
 
+    // Validate chunk CRC-32 over Type + Data
+    const chunkCrc = buffer.readUInt32BE(offset + 8 + chunkLen);
+    const expectedCrc = computeCrc32(buffer, offset + 4, offset + 8 + chunkLen);
+    if (chunkCrc !== expectedCrc) {
+      return { valid: false, reason: `CRC de chunk PNG inválido (${chunkType}).` };
+    }
+
     if (!hasIhdr) {
       if (chunkType !== "IHDR" || chunkLen !== 13) {
         return { valid: false, reason: "El primer chunk de un PNG debe ser IHDR con longitud 13." };
       }
       const width = buffer.readUInt32BE(offset + 8);
       const height = buffer.readUInt32BE(offset + 12);
+      const bitDepth = buffer[offset + 16];
+      const colorType = buffer[offset + 17];
+      const compression = buffer[offset + 18];
+      const filter = buffer[offset + 19];
+      const interlace = buffer[offset + 20];
+
       if (width === 0 || height === 0) {
         return { valid: false, reason: "Dimensiones de imagen PNG inválidas." };
       }
+      if (compression !== 0) {
+        return { valid: false, reason: "Método de compresión IHDR PNG inválido." };
+      }
+      if (filter !== 0) {
+        return { valid: false, reason: "Método de filtro IHDR PNG inválido." };
+      }
+      if (interlace !== 0 && interlace !== 1) {
+        return { valid: false, reason: "Método de entrelazado IHDR PNG inválido." };
+      }
+
+      // Check valid bitDepth for colorType per PNG specification
+      let validBitDepth = false;
+      if (colorType === 0 && bitDepth !== undefined && [1, 2, 4, 8, 16].includes(bitDepth)) {
+        validBitDepth = true;
+      } else if (colorType === 2 && bitDepth !== undefined && [8, 16].includes(bitDepth)) {
+        validBitDepth = true;
+      } else if (colorType === 3 && bitDepth !== undefined && [1, 2, 4, 8].includes(bitDepth)) {
+        validBitDepth = true;
+      } else if (colorType === 4 && bitDepth !== undefined && [8, 16].includes(bitDepth)) {
+        validBitDepth = true;
+      } else if (colorType === 6 && bitDepth !== undefined && [8, 16].includes(bitDepth)) {
+        validBitDepth = true;
+      }
+
+      if (!validBitDepth) {
+        return { valid: false, reason: "Tipo de color o profundidad de bits IHDR PNG inválida." };
+      }
+
       hasIhdr = true;
     } else if (chunkType === "IDAT") {
       hasIdat = true;
@@ -172,6 +244,13 @@ function validatePngStructure(buffer: Buffer): { valid: true } | { valid: false;
       }
       hasIend = true;
       offset += totalChunkBytes;
+      // IEND must be the exact physical end of the file
+      if (offset !== buffer.length) {
+        return {
+          valid: false,
+          reason: "Bytes no permitidos después del chunk IEND de PNG.",
+        };
+      }
       break;
     }
 
@@ -197,10 +276,11 @@ function validateWebpStructure(buffer: Buffer): { valid: true } | { valid: false
   const riffSize = buffer.readUInt32LE(4);
   const expectedTotalBytes = riffSize + 8;
 
-  if (riffSize < 12 || buffer.length < expectedTotalBytes) {
+  // Strict exact length match: no trailing bytes and no truncation
+  if (riffSize < 12 || buffer.length !== expectedTotalBytes) {
     return {
       valid: false,
-      reason: "Longitud del contenedor RIFF inconsistente con el tamaño del archivo.",
+      reason: "Longitud del archivo WebP no coincide exactamente con el contenedor RIFF.",
     };
   }
 
@@ -210,7 +290,7 @@ function validateWebpStructure(buffer: Buffer): { valid: true } | { valid: false
   }
 
   let offset = 12;
-  let hasImageChunk = false;
+  let hasImagePayload = false;
 
   while (offset + 8 <= expectedTotalBytes) {
     const chunkType = buffer.toString("ascii", offset, offset + 4);
@@ -219,6 +299,10 @@ function validateWebpStructure(buffer: Buffer): { valid: true } | { valid: false
 
     if (offset + 8 + chunkDataSize > expectedTotalBytes) {
       return { valid: false, reason: `Chunk WebP '${chunkType}' excede el contenedor RIFF.` };
+    }
+
+    if (chunkType === "ANIM" || chunkType === "ANMF") {
+      return { valid: false, reason: "WebP animado no soportado." };
     }
 
     if (chunkType === "VP8 ") {
@@ -240,7 +324,7 @@ function validateWebpStructure(buffer: Buffer): { valid: true } | { valid: false
       if (width === 0 || height === 0) {
         return { valid: false, reason: "Dimensiones de imagen WebP VP8 inválidas." };
       }
-      hasImageChunk = true;
+      hasImagePayload = true;
     } else if (chunkType === "VP8L") {
       if (chunkDataSize < 5) {
         return { valid: false, reason: "Chunk VP8L lossless WebP truncado." };
@@ -249,7 +333,7 @@ function validateWebpStructure(buffer: Buffer): { valid: true } | { valid: false
       if (b8 !== 0x2f) {
         return { valid: false, reason: "Firma de chunk VP8L WebP inválida." };
       }
-      hasImageChunk = true;
+      hasImagePayload = true;
     } else if (chunkType === "VP8X") {
       if (chunkDataSize < 10) {
         return { valid: false, reason: "Chunk VP8X extended WebP truncado." };
@@ -259,17 +343,21 @@ function validateWebpStructure(buffer: Buffer): { valid: true } | { valid: false
       if (canvasWidth <= 0 || canvasHeight <= 0) {
         return { valid: false, reason: "Dimensiones de lienzo WebP VP8X inválidas." };
       }
-      hasImageChunk = true;
+      // VP8X is an extended container header, NOT the image payload itself
     }
 
     offset += 8 + paddedChunkSize;
   }
 
-  if (!hasImageChunk) {
+  if (!hasImagePayload) {
     return {
       valid: false,
-      reason: "El archivo WebP no contiene fragmentos de imagen válidos (VP8, VP8L o VP8X).",
+      reason: "El archivo WebP no contiene fragmentos de imagen válidos (VP8 o VP8L).",
     };
+  }
+
+  if (offset !== expectedTotalBytes) {
+    return { valid: false, reason: "Estructura de chunks WebP corrupta o desalineada." };
   }
 
   return { valid: true };
