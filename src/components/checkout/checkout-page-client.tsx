@@ -7,6 +7,7 @@ import { AlertCircle, AlertTriangle, Lock, Package, ShieldCheck, ArrowRight } fr
 import { Button, Icon } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils/currency";
 import { submitCheckoutAction } from "@/lib/checkout/actions";
+import { generateSecureCheckoutAttemptId } from "@/lib/checkout/attempt-id";
 import type {
   CheckoutContextDTO,
   CheckoutDeliveryAddressInput,
@@ -76,27 +77,37 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [reviewChangedWarning, setReviewChangedWarning] = useState<string | null>(null);
 
-  // 3. Attempt ID Lifecycle (Stable UUID per intent)
+  // 3. Attempt ID Lifecycle (Cryptographically secure UUIDv4 per intent)
   const attemptIdRef = useRef<string>("");
   if (!attemptIdRef.current) {
-    attemptIdRef.current =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `0191c500-${Math.random().toString(16).slice(2, 6)}-7000-8000-${Math.random().toString(16).slice(2, 14)}`;
+    attemptIdRef.current = generateSecureCheckoutAttemptId();
   }
 
   const resetAttemptId = () => {
-    attemptIdRef.current =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `0191c500-${Math.random().toString(16).slice(2, 6)}-7000-8000-${Math.random().toString(16).slice(2, 14)}`;
+    attemptIdRef.current = generateSecureCheckoutAttemptId();
   };
 
-  // Pricing calculations
-  const subtotalCents = cart?.subtotalCents ?? 0;
+  // 4. Reviewed Pricing States (Authoritative Server Synchronization)
+  const initialSubtotal = cart?.subtotalCents ?? 0;
   const selectedShipping = context.shippingMethods.find((s) => s.code === selectedShippingCode);
-  const shippingCents = selectedShipping?.basePriceCents ?? 0;
-  const totalCents = subtotalCents + shippingCents;
+  const initialShipping = selectedShipping?.basePriceCents ?? 0;
+
+  const [reviewedSubtotalCents, setReviewedSubtotalCents] = useState<number>(initialSubtotal);
+  const [reviewedShippingCents, setReviewedShippingCents] = useState<number>(initialShipping);
+  const [reviewedTotalCents, setReviewedTotalCents] = useState<number>(
+    initialSubtotal + initialShipping
+  );
+
+  const handleShippingChange = (code: string) => {
+    setSelectedShippingCode(code);
+    const method = context.shippingMethods.find((m) => m.code === code);
+    const newShippingCents = method?.basePriceCents ?? 0;
+    setReviewedShippingCents(newShippingCents);
+    setReviewedTotalCents(reviewedSubtotalCents + newShippingCents);
+    setReviewChangedWarning(null);
+    setGeneralError(null);
+    resetAttemptId();
+  };
 
   // Validate form client-side
   const validateForm = (): boolean => {
@@ -149,7 +160,6 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError(null);
-    setReviewChangedWarning(null);
 
     if (!validateForm()) {
       return;
@@ -184,9 +194,9 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
       deliveryAddress: deliveryAddressInput,
       shippingMethodCode: selectedShippingCode,
       paymentMethodCode: selectedPaymentCode,
-      reviewedSubtotalCents: subtotalCents,
-      reviewedShippingCents: shippingCents,
-      reviewedTotalCents: totalCents,
+      reviewedSubtotalCents: reviewedSubtotalCents,
+      reviewedShippingCents: reviewedShippingCents,
+      reviewedTotalCents: reviewedTotalCents,
     };
 
     setIsSubmitting(true);
@@ -200,13 +210,52 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
 
       // Handle typed errors
       if (res.code === "CHECKOUT_REVIEW_CHANGED") {
+        if (res.details) {
+          setReviewedSubtotalCents(res.details.authoritativeSubtotalCents);
+          setReviewedShippingCents(res.details.authoritativeShippingCents);
+          setReviewedTotalCents(res.details.authoritativeTotalCents);
+        }
         setReviewChangedWarning(
           res.error ||
-            "Los precios o costos de envío han cambiado. Por favor revisa los nuevos totales actualizados antes de confirmar."
+            "Los precios o costos de envío han cambiado. Hemos actualizado los totales a continuación. Por favor revisa y haz clic en 'Realizar Pedido' para confirmar con los nuevos montos."
         );
         resetAttemptId();
       } else if (res.code === "PROFILE_REQUIRED") {
         router.push("/auth/completar-perfil");
+      } else if (res.code === "IDEMPOTENCY_EXPIRED") {
+        setGeneralError(
+          "Tu intento de compra ha expirado. Por favor, confirma nuevamente para registrar tu pedido."
+        );
+        resetAttemptId();
+      } else if (res.code === "IDEMPOTENCY_CONFLICT") {
+        setGeneralError(
+          "Los datos de la compra cambiaron respecto al intento previo. Por favor, revisa tus datos y confirma nuevamente."
+        );
+        resetAttemptId();
+      } else if (res.code === "ADDRESS_UNAVAILABLE") {
+        setGeneralError(
+          "La dirección de entrega seleccionada ya no está disponible. Por favor selecciona o ingresa otra dirección."
+        );
+        setSelectedAddressId("");
+        resetAttemptId();
+      } else if (res.code === "SHIPPING_METHOD_UNAVAILABLE") {
+        setGeneralError(
+          "El método de envío seleccionado ya no está disponible. Por favor selecciona otro método de entrega."
+        );
+        setSelectedShippingCode("");
+        resetAttemptId();
+      } else if (res.code === "PAYMENT_METHOD_UNAVAILABLE") {
+        setGeneralError(
+          "El método de pago seleccionado ya no está disponible. Por favor selecciona otro método de pago."
+        );
+        setSelectedPaymentCode("");
+        resetAttemptId();
+      } else if (res.code === "CHECKOUT_CONFIGURATION_UNAVAILABLE") {
+        setGeneralError(
+          "El servicio de compra no se encuentra disponible temporalmente. Por favor intenta más tarde."
+        );
+      } else if (res.code === "CART_ALREADY_CONVERTED") {
+        setGeneralError("Este carrito ya fue procesado en un pedido anterior.");
       } else if (res.code === "INSUFFICIENT_STOCK" || res.code === "PRODUCT_UNAVAILABLE") {
         setGeneralError(
           `${res.error} Te recomendamos revisar tu carrito para actualizar los productos.`
@@ -217,6 +266,10 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
         res.code === "CART_EXPIRED"
       ) {
         setGeneralError(res.error || "Tu carrito ha expirado o está vacío.");
+      } else if (res.code === "UNAUTHORIZED") {
+        setGeneralError(
+          "No se pudo autorizar la compra. Por favor verifica tu sesión e intenta nuevamente."
+        );
       } else {
         setGeneralError(
           res.error || "Ocurrió un error al procesar tu compra. Por favor intenta nuevamente."
@@ -270,16 +323,14 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
           data-testid="checkout-review-changed-alert"
         >
           <Icon icon={AlertTriangle} size="md" aria-hidden="true" />
-          <div>
-            <strong>Atención:</strong> {reviewChangedWarning}
-          </div>
+          <span>{reviewChangedWarning}</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className={styles.checkoutGrid} noValidate>
-        {/* Left Column: Form Sections */}
+        {/* Left Column: Checkout Sections */}
         <div className={styles.formColumn}>
-          {/* Section 1: Contact */}
+          {/* Section 1: Contact Information */}
           <section className={styles.sectionCard} aria-labelledby="section-contact-heading">
             <div className={styles.sectionHeader}>
               <span className={styles.sectionNumber}>1</span>
@@ -298,21 +349,20 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
+                  setReviewChangedWarning(null);
                   resetAttemptId();
                 }}
+                disabled={isAuthenticated && Boolean(context.auth.email)}
                 className={[styles.input, formErrors.email ? styles.inputError : ""]
                   .filter(Boolean)
                   .join(" ")}
-                placeholder="tu@email.com"
-                aria-invalid={Boolean(formErrors.email)}
-                aria-describedby={formErrors.email ? "checkout-email-error" : undefined}
+                placeholder="tu@correo.com"
                 data-testid="checkout-input-email"
               />
-              {formErrors.email && (
-                <span id="checkout-email-error" className={styles.fieldError}>
-                  {formErrors.email}
-                </span>
-              )}
+              {formErrors.email && <span className={styles.fieldError}>{formErrors.email}</span>}
+              <span className={styles.helpText}>
+                Enviaremos la confirmación del pedido y el comprobante a esta dirección.
+              </span>
             </div>
           </section>
 
@@ -321,14 +371,14 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
             <div className={styles.sectionHeader}>
               <span className={styles.sectionNumber}>2</span>
               <h2 id="section-delivery-heading" className={styles.sectionTitle}>
-                Dirección de Entrega (Perú)
+                Dirección de Entrega
               </h2>
             </div>
 
-            {/* If Authenticated with saved addresses: show selector */}
+            {/* Authenticated Mode Switcher */}
             {isAuthenticated && savedAddresses.length > 0 && (
-              <div className={styles.addressToggleRow}>
-                <label className={styles.optionCard} style={{ flex: 1 }}>
+              <div className={styles.addressModeToggle}>
+                <label className={styles.modeRadio}>
                   <input
                     type="radio"
                     name="deliveryMode"
@@ -336,17 +386,18 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                     checked={deliveryMode === "SAVED_ADDRESS"}
                     onChange={() => {
                       setDeliveryMode("SAVED_ADDRESS");
+                      setReviewChangedWarning(null);
                       resetAttemptId();
                     }}
                     className={styles.radioInput}
                     data-testid="checkout-mode-saved-address"
                   />
                   <div className={styles.optionContent}>
-                    <span className={styles.optionTitle}>Mis direcciones guardadas</span>
+                    <span className={styles.optionTitle}>Usar dirección guardada</span>
                   </div>
                 </label>
 
-                <label className={styles.optionCard} style={{ flex: 1 }}>
+                <label className={styles.modeRadio}>
                   <input
                     type="radio"
                     name="deliveryMode"
@@ -354,6 +405,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                     checked={deliveryMode === "INLINE"}
                     onChange={() => {
                       setDeliveryMode("INLINE");
+                      setReviewChangedWarning(null);
                       resetAttemptId();
                     }}
                     className={styles.radioInput}
@@ -386,6 +438,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                         checked={isSelected}
                         onChange={() => {
                           setSelectedAddressId(addr.id);
+                          setReviewChangedWarning(null);
                           resetAttemptId();
                         }}
                         className={styles.radioInput}
@@ -424,6 +477,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                       value={inlineAddress.recipientName}
                       onChange={(e) => {
                         setInlineAddress((prev) => ({ ...prev, recipientName: e.target.value }));
+                        setReviewChangedWarning(null);
                         resetAttemptId();
                       }}
                       className={[styles.input, formErrors.recipientName ? styles.inputError : ""]
@@ -447,12 +501,13 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                       value={inlineAddress.phone}
                       onChange={(e) => {
                         setInlineAddress((prev) => ({ ...prev, phone: e.target.value }));
+                        setReviewChangedWarning(null);
                         resetAttemptId();
                       }}
                       className={[styles.input, formErrors.phone ? styles.inputError : ""]
                         .filter(Boolean)
                         .join(" ")}
-                      placeholder="Ej: 999888777"
+                      placeholder="987654321"
                       data-testid="checkout-input-phone"
                     />
                     {formErrors.phone && (
@@ -463,7 +518,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
 
                 <div className={styles.formGroup}>
                   <label htmlFor="inline-streetAddress" className={styles.label}>
-                    Dirección y número <span className={styles.requiredMark}>*</span>
+                    Dirección (Calle, Avenida, Jr.) <span className={styles.requiredMark}>*</span>
                   </label>
                   <input
                     id="inline-streetAddress"
@@ -471,12 +526,13 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                     value={inlineAddress.streetAddress}
                     onChange={(e) => {
                       setInlineAddress((prev) => ({ ...prev, streetAddress: e.target.value }));
+                      setReviewChangedWarning(null);
                       resetAttemptId();
                     }}
                     className={[styles.input, formErrors.streetAddress ? styles.inputError : ""]
                       .filter(Boolean)
                       .join(" ")}
-                    placeholder="Av. / Calle / Jr. y número"
+                    placeholder="Av. Pardo y Aliaga 640"
                     data-testid="checkout-input-street-address"
                   />
                   {formErrors.streetAddress && (
@@ -486,7 +542,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
 
                 <div className={styles.formGroup}>
                   <label htmlFor="inline-apartmentSuite" className={styles.label}>
-                    Dpto / Interior / Piso (Opcional)
+                    Dpto / Interior / Suite (Opcional)
                   </label>
                   <input
                     id="inline-apartmentSuite"
@@ -494,6 +550,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                     value={inlineAddress.apartmentSuite}
                     onChange={(e) => {
                       setInlineAddress((prev) => ({ ...prev, apartmentSuite: e.target.value }));
+                      setReviewChangedWarning(null);
                       resetAttemptId();
                     }}
                     className={styles.input}
@@ -513,6 +570,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                       value={inlineAddress.department}
                       onChange={(e) => {
                         setInlineAddress((prev) => ({ ...prev, department: e.target.value }));
+                        setReviewChangedWarning(null);
                         resetAttemptId();
                       }}
                       className={[styles.input, formErrors.department ? styles.inputError : ""]
@@ -536,6 +594,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                       value={inlineAddress.province}
                       onChange={(e) => {
                         setInlineAddress((prev) => ({ ...prev, province: e.target.value }));
+                        setReviewChangedWarning(null);
                         resetAttemptId();
                       }}
                       className={[styles.input, formErrors.province ? styles.inputError : ""]
@@ -559,6 +618,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                       value={inlineAddress.district}
                       onChange={(e) => {
                         setInlineAddress((prev) => ({ ...prev, district: e.target.value }));
+                        setReviewChangedWarning(null);
                         resetAttemptId();
                       }}
                       className={[styles.input, formErrors.district ? styles.inputError : ""]
@@ -583,6 +643,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                     value={inlineAddress.referenceNotes}
                     onChange={(e) => {
                       setInlineAddress((prev) => ({ ...prev, referenceNotes: e.target.value }));
+                      setReviewChangedWarning(null);
                       resetAttemptId();
                     }}
                     className={styles.input}
@@ -625,10 +686,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                         name="shippingMethod"
                         value={method.code}
                         checked={isSelected}
-                        onChange={() => {
-                          setSelectedShippingCode(method.code);
-                          resetAttemptId();
-                        }}
+                        onChange={() => handleShippingChange(method.code)}
                         className={styles.radioInput}
                       />
                       <div className={styles.optionContent}>
@@ -685,6 +743,7 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                         checked={isSelected}
                         onChange={() => {
                           setSelectedPaymentCode(method.code);
+                          setReviewChangedWarning(null);
                           resetAttemptId();
                         }}
                         className={styles.radioInput}
@@ -748,20 +807,22 @@ export function CheckoutPageClient({ context }: CheckoutPageClientProps): React.
                 <span>
                   Subtotal ({cart.itemCount} {cart.itemCount === 1 ? "item" : "items"})
                 </span>
-                <span data-testid="checkout-subtotal-value">{formatCurrency(subtotalCents)}</span>
+                <span data-testid="checkout-subtotal-value">
+                  {formatCurrency(reviewedSubtotalCents)}
+                </span>
               </div>
 
               <div className={styles.priceRow}>
                 <span>Envío</span>
                 <span data-testid="checkout-shipping-value">
-                  {selectedShipping ? formatCurrency(shippingCents) : "—"}
+                  {selectedShipping ? formatCurrency(reviewedShippingCents) : "—"}
                 </span>
               </div>
 
               <div className={styles.totalRow}>
                 <span className={styles.totalLabel}>Total</span>
                 <span className={styles.totalValue} data-testid="checkout-total-value">
-                  {formatCurrency(totalCents)}
+                  {formatCurrency(reviewedTotalCents)}
                 </span>
               </div>
             </div>

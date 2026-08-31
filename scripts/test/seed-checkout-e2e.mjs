@@ -126,11 +126,24 @@ async function seed() {
         `;
       }
 
-      // 7. Seed Shipping Method
-      const shippingMethodId = "018f0000-0000-7000-8000-00000000e001";
+      // 7. Seed Shipping Methods
+      const shippingMethodId1 = "018f0000-0000-7000-8000-00000000e001";
       await tx`
         INSERT INTO shipping_methods (id, code, name, base_price_cents, estimated_days_min, estimated_days_max, is_active)
-        VALUES (${shippingMethodId}, 'LIMA_EXPRESS', 'Envío Express Lima', 1500, 1, 2, true)
+        VALUES (${shippingMethodId1}, 'LIMA_EXPRESS', 'Envío Express Lima', 1500, 1, 2, true)
+        ON CONFLICT (id) DO UPDATE SET
+          code = EXCLUDED.code,
+          name = EXCLUDED.name,
+          base_price_cents = EXCLUDED.base_price_cents,
+          estimated_days_min = EXCLUDED.estimated_days_min,
+          estimated_days_max = EXCLUDED.estimated_days_max,
+          is_active = EXCLUDED.is_active;
+      `;
+
+      const shippingMethodId2 = "018f0000-0000-7000-8000-00000000e005";
+      await tx`
+        INSERT INTO shipping_methods (id, code, name, base_price_cents, estimated_days_min, estimated_days_max, is_active)
+        VALUES (${shippingMethodId2}, 'PROVINCIA_REGULAR', 'Envío Regular Provincia', 2500, 3, 5, true)
         ON CONFLICT (id) DO UPDATE SET
           code = EXCLUDED.code,
           name = EXCLUDED.name,

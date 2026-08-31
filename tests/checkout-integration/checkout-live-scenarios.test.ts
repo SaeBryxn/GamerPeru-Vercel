@@ -1302,8 +1302,8 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
       );
     });
 
-    describe("Confirmation Reader Authorization & Integrity", () => {
-      it("Guest: authorized guest can read own order confirmation", async () => {
+    describe("Confirmation Reader Authorization & Privacy (Indistinguishable Denial)", () => {
+      it("Guest: authorized guest can read own confirmation; foreign guest receives NOT_AVAILABLE with zero data leak", async () => {
         await resetInventoryBalances();
         const guestToken = await createGuestCart([{ variantId: variantId1, quantity: 1 }]);
 
@@ -1326,7 +1326,7 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
           }
         );
 
-        // Same guest reads confirmation
+        // A. Same guest reads confirmation
         await testContextStorage.run(
           { cookieValue: guestToken, identity: { success: false } },
           async () => {
@@ -1342,21 +1342,45 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
           }
         );
 
-        // Foreign guest attempts to read confirmation -> UNAUTHORIZED
+        // B. Foreign guest attempts to read confirmation -> NOT_AVAILABLE (indistinguishable from nonexistent)
         const foreignGuestToken = generateAnonymousSessionToken();
+        let foreignGuestResult: unknown;
         await testContextStorage.run(
           { cookieValue: foreignGuestToken, identity: { success: false } },
           async () => {
             const conf = await loadCheckoutConfirmation(orderNumber);
+            foreignGuestResult = conf;
             expect(conf.success).toBe(false);
             if (!conf.success) {
-              expect(conf.code).toBe("UNAUTHORIZED");
+              expect(conf.code).toBe("NOT_AVAILABLE");
+              expect(conf.error).toBe("Pedido no disponible.");
+              expect("confirmation" in conf).toBe(false);
+              expect("customerEmail" in conf).toBe(false);
+              expect("totalCents" in conf).toBe(false);
             }
           }
         );
+
+        // Nonexistent order check under foreign guest
+        let nonexistentResult: unknown;
+        await testContextStorage.run(
+          { cookieValue: foreignGuestToken, identity: { success: false } },
+          async () => {
+            const conf = await loadCheckoutConfirmation("GP-NONEXIST");
+            nonexistentResult = conf;
+            expect(conf.success).toBe(false);
+            if (!conf.success) {
+              expect(conf.code).toBe("NOT_AVAILABLE");
+              expect(conf.error).toBe("Pedido no disponible.");
+            }
+          }
+        );
+
+        // E & F: Prove nonexistent and foreign guest results are completely identical
+        expect(foreignGuestResult).toEqual(nonexistentResult);
       });
 
-      it("Authenticated: customer can read own confirmation and foreign customer is rejected", async () => {
+      it("Authenticated: customer reads own confirmation; foreign customer and nonexistent are identical NOT_AVAILABLE", async () => {
         await resetInventoryBalances();
         await sqlClient`DELETE FROM idempotency_keys WHERE source_cart_id IN (SELECT id FROM carts WHERE customer_id = ${customerProfileId1})`;
         await sqlClient`DELETE FROM cart_items WHERE cart_id IN (SELECT id FROM carts WHERE customer_id = ${customerProfileId1})`;
@@ -1391,7 +1415,14 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
           }
         );
 
-        // Owner customer reads confirmation
+        // Record database table counts before read operations
+        const [ordersCountBefore] = await sqlClient`SELECT count(*)::int as c FROM orders`;
+        const [paymentsCountBefore] = await sqlClient`SELECT count(*)::int as c FROM payments`;
+        const [reservationsCountBefore] =
+          await sqlClient`SELECT count(*)::int as c FROM inventory_reservations`;
+        const [outboxCountBefore] = await sqlClient`SELECT count(*)::int as c FROM outbox_events`;
+
+        // C. Owner customer reads confirmation
         await testContextStorage.run(
           {
             cookieValue: null,
@@ -1406,11 +1437,15 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
             if (conf.success) {
               expect(conf.confirmation.orderNumber).toBe(orderNumber);
               expect(conf.confirmation.paymentStatus).toBe("UNPAID");
+              expect(conf.confirmation.subtotalCents).toBe(10000);
+              expect(conf.confirmation.shippingCents).toBe(1500);
+              expect(conf.confirmation.totalCents).toBe(11500);
             }
           }
         );
 
-        // Foreign customer attempts to read confirmation -> UNAUTHORIZED
+        // D. Foreign authenticated customer attempts to read confirmation -> NOT_AVAILABLE
+        let foreignAuthResult: unknown;
         await testContextStorage.run(
           {
             cookieValue: null,
@@ -1421,14 +1456,19 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
           },
           async () => {
             const conf = await loadCheckoutConfirmation(orderNumber);
+            foreignAuthResult = conf;
             expect(conf.success).toBe(false);
             if (!conf.success) {
-              expect(conf.code).toBe("UNAUTHORIZED");
+              expect(conf.code).toBe("NOT_AVAILABLE");
+              expect(conf.error).toBe("Pedido no disponible.");
+              expect("confirmation" in conf).toBe(false);
+              expect("customerEmail" in conf).toBe(false);
             }
           }
         );
 
-        // Non-existent order number -> NOT_FOUND
+        // E. Nonexistent order lookup
+        let nonexistentResult: unknown;
         await testContextStorage.run(
           {
             cookieValue: null,
@@ -1439,12 +1479,29 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
           },
           async () => {
             const conf = await loadCheckoutConfirmation("GP-NONEXIST");
+            nonexistentResult = conf;
             expect(conf.success).toBe(false);
             if (!conf.success) {
-              expect(conf.code).toBe("NOT_FOUND");
+              expect(conf.code).toBe("NOT_AVAILABLE");
+              expect(conf.error).toBe("Pedido no disponible.");
             }
           }
         );
+
+        // F. Prove foreign authenticated result and nonexistent result are strictly identical
+        expect(foreignAuthResult).toEqual(nonexistentResult);
+
+        // H. Confirmation reads remain strictly read-only: zero mutations across all tables
+        const [ordersCountAfter] = await sqlClient`SELECT count(*)::int as c FROM orders`;
+        const [paymentsCountAfter] = await sqlClient`SELECT count(*)::int as c FROM payments`;
+        const [reservationsCountAfter] =
+          await sqlClient`SELECT count(*)::int as c FROM inventory_reservations`;
+        const [outboxCountAfter] = await sqlClient`SELECT count(*)::int as c FROM outbox_events`;
+
+        expect(ordersCountAfter!.c).toBe(ordersCountBefore!.c);
+        expect(paymentsCountAfter!.c).toBe(paymentsCountBefore!.c);
+        expect(reservationsCountAfter!.c).toBe(reservationsCountBefore!.c);
+        expect(outboxCountAfter!.c).toBe(outboxCountBefore!.c);
       });
     });
   });

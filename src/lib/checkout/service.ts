@@ -935,8 +935,8 @@ export async function loadCheckoutConfirmation(
   if (!configResult.valid || !configResult.config) {
     return {
       success: false,
-      code: "SYSTEM_ERROR",
-      error: "Servicio no disponible.",
+      code: "NOT_AVAILABLE",
+      error: "Pedido no disponible.",
     };
   }
 
@@ -949,8 +949,8 @@ export async function loadCheckoutConfirmation(
   if (!order) {
     return {
       success: false,
-      code: "NOT_FOUND",
-      error: "Pedido no encontrado.",
+      code: "NOT_AVAILABLE",
+      error: "Pedido no disponible.",
     };
   }
 
@@ -982,8 +982,8 @@ export async function loadCheckoutConfirmation(
   if (!isAuthorized) {
     return {
       success: false,
-      code: "UNAUTHORIZED",
-      error: "No autorizado para ver este pedido.",
+      code: "NOT_AVAILABLE",
+      error: "Pedido no disponible.",
     };
   }
 
@@ -1008,7 +1008,7 @@ export async function loadCheckoutConfirmation(
     .where(eq(shipments.orderId, order.id))
     .limit(1);
 
-  let shippingMethodName = "Envío Estándar";
+  let shippingMethodName = "";
   if (shipment) {
     const [method] = await db
       .select({ name: shippingMethods.name })
@@ -1020,7 +1020,7 @@ export async function loadCheckoutConfirmation(
     }
   }
 
-  let paymentMethodName = "Pago Manual";
+  let paymentMethodName = "";
   if (payment && payment.paymentMethodCode) {
     const [paymentMethod] = await db
       .select({ name: paymentMethodConfigurations.name })

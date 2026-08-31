@@ -68,8 +68,7 @@ export default async function CheckoutConfirmationPage({
               margin: 0,
             }}
           >
-            No se encontró el pedido solicitado o no cuentas con los permisos necesarios para
-            consultarlo.
+            El pedido solicitado no se encuentra disponible para su visualización.
           </p>
           <Link
             href="/categorias/mouses"

@@ -156,4 +156,4 @@ export interface CheckoutConfirmationDTO {
 
 export type CheckoutConfirmationResult =
   | { success: true; confirmation: CheckoutConfirmationDTO }
-  | { success: false; code: "NOT_FOUND" | "UNAUTHORIZED" | "SYSTEM_ERROR"; error: string };
+  | { success: false; code: "NOT_AVAILABLE"; error: string };

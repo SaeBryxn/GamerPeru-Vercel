@@ -7,6 +7,7 @@ import { CheckoutPageClient, CheckoutConfirmationView } from "@/components/check
 import type {
   CheckoutConfirmationDTO,
   CheckoutContextDTO,
+  CheckoutSubmitInput,
   CheckoutSubmitResult,
 } from "@/lib/checkout/types";
 
@@ -29,7 +30,7 @@ vi.mock("@/lib/checkout/actions", () => ({
   loadCheckoutConfirmationAction: vi.fn(),
 }));
 
-describe("GP-018 / CHK6 — Checkout UI & Component Suite", () => {
+describe("GP-018 / CHK6-BR1 — Checkout UI & Component Suite", () => {
   const baseCartItem = {
     variantId: "018f0000-0000-7000-8000-000000000001",
     productId: "018f0000-0000-7000-8000-000000000002",
@@ -142,7 +143,7 @@ describe("GP-018 / CHK6 — Checkout UI & Component Suite", () => {
       expect(screen.getByTestId("checkout-payment-methods-list")).toBeDefined();
       expect(screen.getByTestId("checkout-order-summary")).toBeDefined();
 
-      // Check default subtotal and total
+      // Check default subtotal, shipping, and total
       expect(screen.getByTestId("checkout-subtotal-value").textContent).toContain("300.00");
       expect(screen.getByTestId("checkout-shipping-value").textContent).toContain("15.00");
       expect(screen.getByTestId("checkout-total-value").textContent).toContain("315.00");
@@ -249,12 +250,95 @@ describe("GP-018 / CHK6 — Checkout UI & Component Suite", () => {
 
       expect(mockReplace).toHaveBeenCalledWith("/checkout/confirmacion/GP-9ABCDEF1");
     });
+  });
 
-    it("handles CHECKOUT_REVIEW_CHANGED by surfacing warning and allowing retry", async () => {
+  describe("3. Blocker C & D: CHECKOUT_REVIEW_CHANGED & Typed Recovery Remediation", () => {
+    it("updates visible totals on CHECKOUT_REVIEW_CHANGED, requires explicit re-submit, and submits authoritative amounts", async () => {
+      // Step 1: First submit returns CHECKOUT_REVIEW_CHANGED with updated amounts
       mockSubmitCheckoutAction.mockResolvedValueOnce({
         success: false,
         code: "CHECKOUT_REVIEW_CHANGED",
-        error: "Los precios han cambiado. Por favor revisa los nuevos totales.",
+        error: "Los precios o costos de envío han cambiado. Por favor revisa los nuevos totales.",
+        details: {
+          authoritativeSubtotalCents: 35000,
+          authoritativeShippingCents: 2000,
+          authoritativeTotalCents: 37000,
+        },
+      });
+
+      render(<CheckoutPageClient context={sampleContext} />);
+
+      // Fill valid address
+      fireEvent.change(screen.getByTestId("checkout-input-recipient-name"), {
+        target: { value: "Maria Quispe" },
+      });
+      fireEvent.change(screen.getByTestId("checkout-input-phone"), {
+        target: { value: "998877665" },
+      });
+      fireEvent.change(screen.getByTestId("checkout-input-street-address"), {
+        target: { value: "Jr. Union 100" },
+      });
+      fireEvent.change(screen.getByTestId("checkout-input-district"), {
+        target: { value: "Cercado de Lima" },
+      });
+
+      // Initial visible values: 300.00, 15.00, 315.00
+      expect(screen.getByTestId("checkout-subtotal-value").textContent).toContain("300.00");
+      expect(screen.getByTestId("checkout-shipping-value").textContent).toContain("15.00");
+      expect(screen.getByTestId("checkout-total-value").textContent).toContain("315.00");
+
+      const submitBtn = screen.getByTestId("checkout-submit-button");
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
+      });
+
+      const firstCallArg = mockSubmitCheckoutAction.mock.calls[0]![0] as CheckoutSubmitInput;
+      expect(firstCallArg.reviewedSubtotalCents).toBe(30000);
+      expect(firstCallArg.reviewedShippingCents).toBe(1500);
+      expect(firstCallArg.reviewedTotalCents).toBe(31500);
+
+      // Verify visible totals UPDATED to authoritative values
+      expect(screen.getByTestId("checkout-review-changed-alert")).toBeDefined();
+      expect(screen.getByTestId("checkout-subtotal-value").textContent).toContain("350.00");
+      expect(screen.getByTestId("checkout-shipping-value").textContent).toContain("20.00");
+      expect(screen.getByTestId("checkout-total-value").textContent).toContain("370.00");
+
+      // Verify NO automatic resubmit happened
+      expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
+
+      // Step 2: User explicitly reviews and clicks submit again
+      mockSubmitCheckoutAction.mockResolvedValueOnce({
+        success: true,
+        orderNumber: "GP-9ABCDEF2",
+        totalCents: 37000,
+        currency: "PEN",
+        paymentStatus: "UNPAID",
+        replayed: false,
+      });
+
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(2);
+      });
+
+      const secondCallArg = mockSubmitCheckoutAction.mock.calls[1]![0] as CheckoutSubmitInput;
+      // Second submit sends newly reviewed authoritative amounts
+      expect(secondCallArg.reviewedSubtotalCents).toBe(35000);
+      expect(secondCallArg.reviewedShippingCents).toBe(2000);
+      expect(secondCallArg.reviewedTotalCents).toBe(37000);
+      // Fresh secure attempt ID was used for the new intent
+      expect(secondCallArg.checkoutAttemptId).not.toBe(firstCallArg.checkoutAttemptId);
+      expect(mockReplace).toHaveBeenCalledWith("/checkout/confirmacion/GP-9ABCDEF2");
+    });
+
+    it("recovers safely from IDEMPOTENCY_EXPIRED by resetting attempt ID without auto-submitting", async () => {
+      mockSubmitCheckoutAction.mockResolvedValueOnce({
+        success: false,
+        code: "IDEMPOTENCY_EXPIRED",
+        error: "El intento de compra expiró.",
       });
 
       render(<CheckoutPageClient context={sampleContext} />);
@@ -276,14 +360,83 @@ describe("GP-018 / CHK6 — Checkout UI & Component Suite", () => {
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
-        expect(screen.getByTestId("checkout-review-changed-alert")).toBeDefined();
+        expect(screen.getByTestId("checkout-general-error")).toBeDefined();
       });
 
-      expect(screen.getByText(/Los precios han cambiado/)).toBeDefined();
+      expect(screen.getByText(/Tu intento de compra ha expirado/)).toBeDefined();
+      expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
+    });
+
+    it("recovers safely from ADDRESS_UNAVAILABLE by clearing selected address", async () => {
+      mockSubmitCheckoutAction.mockResolvedValueOnce({
+        success: false,
+        code: "ADDRESS_UNAVAILABLE",
+        error: "Dirección no disponible.",
+      });
+
+      render(<CheckoutPageClient context={sampleContext} />);
+
+      fireEvent.change(screen.getByTestId("checkout-input-recipient-name"), {
+        target: { value: "Maria Quispe" },
+      });
+      fireEvent.change(screen.getByTestId("checkout-input-phone"), {
+        target: { value: "998877665" },
+      });
+      fireEvent.change(screen.getByTestId("checkout-input-street-address"), {
+        target: { value: "Jr. Union 100" },
+      });
+      fireEvent.change(screen.getByTestId("checkout-input-district"), {
+        target: { value: "Cercado de Lima" },
+      });
+
+      const submitBtn = screen.getByTestId("checkout-submit-button");
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("checkout-general-error")).toBeDefined();
+      });
+
+      expect(
+        screen.getByText(/La dirección de entrega seleccionada ya no está disponible/)
+      ).toBeDefined();
+    });
+
+    it("recovers safely from SHIPPING_METHOD_UNAVAILABLE and PAYMENT_METHOD_UNAVAILABLE", async () => {
+      mockSubmitCheckoutAction.mockResolvedValueOnce({
+        success: false,
+        code: "SHIPPING_METHOD_UNAVAILABLE",
+        error: "Método de envío no disponible.",
+      });
+
+      render(<CheckoutPageClient context={sampleContext} />);
+
+      fireEvent.change(screen.getByTestId("checkout-input-recipient-name"), {
+        target: { value: "Maria Quispe" },
+      });
+      fireEvent.change(screen.getByTestId("checkout-input-phone"), {
+        target: { value: "998877665" },
+      });
+      fireEvent.change(screen.getByTestId("checkout-input-street-address"), {
+        target: { value: "Jr. Union 100" },
+      });
+      fireEvent.change(screen.getByTestId("checkout-input-district"), {
+        target: { value: "Cercado de Lima" },
+      });
+
+      const submitBtn = screen.getByTestId("checkout-submit-button");
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("checkout-general-error")).toBeDefined();
+      });
+
+      expect(
+        screen.getByText(/El método de envío seleccionado ya no está disponible/)
+      ).toBeDefined();
     });
   });
 
-  describe("3. Order Confirmation View & GP-019 Privacy Boundary", () => {
+  describe("4. Order Confirmation View & GP-019 Privacy Boundary", () => {
     it("renders full confirmation details with pending payment state", () => {
       render(<CheckoutConfirmationView confirmation={sampleConfirmation} />);
 

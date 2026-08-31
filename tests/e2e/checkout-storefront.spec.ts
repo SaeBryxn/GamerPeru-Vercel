@@ -283,4 +283,64 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
       await sql`SELECT * FROM inventory_reservations WHERE order_id = ${userOrders[0]!.id}`;
     expect(userReservations).toHaveLength(1);
   });
+
+  test("Scenario E: Dynamic Shipping Selection & Authoritative Totals in Real Browser", async ({
+    page,
+  }) => {
+    await page.goto("/productos/mouse-cart-e2e");
+    const addBtn = page.getByTestId("pdp-add-to-cart-button");
+    await addBtn.click();
+
+    const checkoutBtn = page.getByTestId("cart-drawer-checkout-button");
+    await checkoutBtn.click();
+
+    await expect(page).toHaveURL(/\/checkout/);
+
+    // Verify initial values
+    await expect(page.getByTestId("checkout-subtotal-value")).toContainText("129.90");
+    await expect(page.getByTestId("checkout-shipping-value")).toContainText("15.00");
+    await expect(page.getByTestId("checkout-total-value")).toContainText("144.90");
+
+    // Change shipping method to Provincia Regular (25.00)
+    const shippingMethodProv = page.getByTestId("shipping-method-PROVINCIA_REGULAR");
+    await expect(shippingMethodProv).toBeVisible();
+    await shippingMethodProv.click();
+
+    // Verify dynamic update in real browser UI
+    await expect(page.getByTestId("checkout-shipping-value")).toContainText("25.00");
+    await expect(page.getByTestId("checkout-total-value")).toContainText("154.90");
+
+    // Complete checkout
+    await page.getByTestId("checkout-input-email").fill("shipping.update@testchk6.pe");
+    await page.getByTestId("checkout-input-recipient-name").fill("Elena Torres");
+    await page.getByTestId("checkout-input-phone").fill("944332211");
+    await page.getByTestId("checkout-input-street-address").fill("Av. Arequipa 1234");
+    await page.getByTestId("checkout-input-department").fill("Arequipa");
+    await page.getByTestId("checkout-input-province").fill("Arequipa");
+    await page.getByTestId("checkout-input-district").fill("Yanahuara");
+
+    const paymentMethod = page.getByTestId("payment-method-YAPE_MANUAL");
+    await expect(paymentMethod).toBeVisible();
+    await paymentMethod.click();
+
+    const submitBtn = page.getByTestId("checkout-submit-button");
+    await submitBtn.click();
+
+    await expect(page).toHaveURL(/\/checkout\/confirmacion\/GP-[A-Z0-9]{8}/, { timeout: 15000 });
+    const confirmationView = page.getByTestId("checkout-confirmation-view");
+    await expect(confirmationView).toBeVisible();
+
+    await expect(page.getByTestId("confirmation-total-value")).toContainText("154.90");
+    await expect(page.getByTestId("confirmation-shipping-method")).toContainText(
+      "Envío Regular Provincia"
+    );
+
+    // Verify physical database totals match exactly
+    const [dbOrder] =
+      await sql`SELECT * FROM orders WHERE customer_email = 'shipping.update@testchk6.pe'`;
+    expect(dbOrder).toBeDefined();
+    expect(dbOrder!.subtotal_cents).toBe(12990);
+    expect(dbOrder!.shipping_cents).toBe(2500);
+    expect(dbOrder!.total_cents).toBe(15490);
+  });
 });
