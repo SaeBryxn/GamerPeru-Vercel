@@ -1126,7 +1126,7 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
       // 2. Pre-seed an expired idempotency key for this attemptId
       await sqlClient`
         INSERT INTO idempotency_keys (
-          id, idempotency_key, action_type, authority_binding_digest, request_fingerprint, response_payload, expires_at
+          id, idempotency_key, operation_type, authority_binding_digest, request_fingerprint, response_payload, expires_at
         ) VALUES (
           ${generateUuidV7()},
           ${namespacedKey},
@@ -1174,7 +1174,7 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
       // Insert pre-expired idempotency row directly into DB (simulating race where fast-path missed but locked recheck finds it)
       await sqlClient`
         INSERT INTO idempotency_keys (
-          id, idempotency_key, action_type, authority_binding_digest, request_fingerprint, response_payload, expires_at
+          id, idempotency_key, operation_type, authority_binding_digest, request_fingerprint, response_payload, expires_at
         ) VALUES (
           ${generateUuidV7()},
           ${namespacedKey},
