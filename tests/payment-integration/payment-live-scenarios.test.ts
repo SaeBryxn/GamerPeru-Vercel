@@ -135,6 +135,9 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
     process.env.CHECKOUT_RESERVATION_TTL_MINUTES = "30";
     process.env.CHECKOUT_IDEMPOTENCY_TTL_MINUTES = "60";
     process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES = "60";
+    process.env.R2_ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
+    process.env.R2_ACCESS_KEY_ID = "test-r2-access-key-id-12345";
+    process.env.R2_SECRET_ACCESS_KEY = "test-r2-secret-access-key-67890";
 
     sqlClient = postgres(connectionString, { max: 10 });
 
@@ -614,7 +617,7 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
     expect(resRow!.status).toBe("VERIFICATION_HOLD");
 
     const [outbox] = await sqlClient`
-      SELECT * FROM outbox_events WHERE event_name = 'PaymentSubmitted' AND aggregate_id = ${subRow!.payment_id}
+      SELECT * FROM outbox_events WHERE event_name = 'PaymentSubmitted' AND aggregate_id = ${subRow!.payment_id}::text
     `;
     expect(outbox).toBeDefined();
     expect((outbox!.payload as Record<string, unknown>).attemptNumber).toBe(1);
@@ -710,7 +713,7 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
 
     const outboxEventsCount = await sqlClient`
       SELECT id FROM outbox_events 
-      WHERE event_name = 'PaymentSubmitted' AND aggregate_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber}))
+      WHERE event_name = 'PaymentSubmitted' AND aggregate_id IN (SELECT id::text FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber}))
     `;
     expect(outboxEventsCount.length).toBe(1);
   });
@@ -972,7 +975,7 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
     // 3. Zero PaymentSubmitted outbox events
     const outbox = await sqlClient`
       SELECT id FROM outbox_events 
-      WHERE event_name = 'PaymentSubmitted' AND aggregate_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber}))
+      WHERE event_name = 'PaymentSubmitted' AND aggregate_id IN (SELECT id::text FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number = ${order.orderNumber}))
     `;
     expect(outbox.length).toBe(0);
 

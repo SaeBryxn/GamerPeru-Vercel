@@ -86,6 +86,9 @@ export default defineConfig({
       CHECKOUT_IDEMPOTENCY_TTL_MINUTES: process.env.CHECKOUT_IDEMPOTENCY_TTL_MINUTES ?? "60",
       PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES:
         process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES ?? "60",
+      R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID ?? "0123456789abcdef0123456789abcdef",
+      R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? "test-r2-access-key-id-12345",
+      R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? "test-r2-secret-access-key-67890",
     },
   },
 });
