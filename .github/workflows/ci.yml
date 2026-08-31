@@ -131,6 +131,78 @@ jobs:
         if: always()
         run: pnpm supabase:stop
 
+  checkout-e2e:
+    name: Real Local Supabase Checkout E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Local Supabase
+        run: pnpm supabase:start
+
+      - name: Verify Supabase Status & Extract Real Local Anon Key
+        run: |
+          pnpm supabase:status
+          STATUS_ENV=$(pnpm exec supabase status -o env)
+          ANON_KEY=$(echo "$STATUS_ENV" | grep 'ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          API_URL=$(echo "$STATUS_ENV" | grep 'API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL:-http://127.0.0.1:54321}" >> $GITHUB_ENV
+          echo "DATABASE_MIGRATION_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+          echo "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+          echo "SESSION_COOKIE_SECRET=gamer-peru-session-cookie-secret-min-32-chars-long" >> $GITHUB_ENV
+          echo "CHECKOUT_HMAC_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" >> $GITHUB_ENV
+          echo "CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE=ALMACEN_CENTRAL_TEST" >> $GITHUB_ENV
+          echo "CHECKOUT_RESERVATION_TTL_MINUTES=30" >> $GITHUB_ENV
+          echo "CHECKOUT_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
+
+      - name: Run Database Migrations
+        run: pnpm db:migrate
+
+      - name: Seed Deterministic Checkout E2E Fixtures
+        run: node scripts/test/seed-checkout-e2e.mjs
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Real Checkout E2E Tests
+        run: pnpm test:checkout:e2e
+
+      - name: Upload Checkout E2E Artifacts on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-checkout-e2e-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+      - name: Clean Up Checkout E2E Fixtures
+        if: always()
+        run: node scripts/test/cleanup-checkout-e2e.mjs
+
+      - name: Stop Local Supabase
+        if: always()
+        run: pnpm supabase:stop
+
   checkout-live:
     name: Real Local PostgreSQL / Supabase Checkout Runtime
     runs-on: ubuntu-latest

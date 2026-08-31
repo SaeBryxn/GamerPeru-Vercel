@@ -58,6 +58,12 @@ async function cleanup() {
               );
           `;
         }
+
+        // 3b. Delete inventory items referencing fixture variants
+        await tx`
+          DELETE FROM inventory_items
+          WHERE variant_id = ANY(${variantIds});
+        `;
       }
 
       // 4. Delete fixture variants

@@ -207,6 +207,15 @@ export function CartDrawer(): React.JSX.Element | null {
 
             <div className={styles.ctaGroup}>
               <Link
+                href="/checkout"
+                onClick={closeDrawer}
+                className={styles.checkoutDrawerButton}
+                data-testid="cart-drawer-checkout-button"
+              >
+                Finalizar compra
+              </Link>
+
+              <Link
                 href="/carrito"
                 onClick={closeDrawer}
                 className={styles.viewCartButton}

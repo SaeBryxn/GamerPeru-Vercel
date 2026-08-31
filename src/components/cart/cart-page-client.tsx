@@ -129,6 +129,15 @@ export function CartPageClient(): React.JSX.Element {
               <div className={styles.stickySummary}>
                 <h2 className={styles.summaryHeading}>Resumen del Carrito</h2>
                 <CartSummary subtotalCents={snapshot.subtotalCents} />
+                <div className={styles.checkoutActionRow}>
+                  <Link
+                    href="/checkout"
+                    className={styles.checkoutButton}
+                    data-testid="cart-checkout-button"
+                  >
+                    Finalizar compra
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

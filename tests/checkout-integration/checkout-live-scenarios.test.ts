@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import postgres from "postgres";
 import { generateUuidV7 } from "@/db/utils/uuid";
 import { generateAnonymousSessionToken } from "@/lib/cart/session";
-import { submitCheckout, loadCheckoutContext } from "@/lib/checkout";
+import { submitCheckout, loadCheckoutContext, loadCheckoutConfirmation } from "@/lib/checkout";
 
 // Safety check for local PostgreSQL
 export function assertAuthorizedLocalPostgresTarget(rawUrl: string | undefined): string {
@@ -1300,6 +1300,152 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
           expect(context.cart).toBeDefined();
         }
       );
+    });
+
+    describe("Confirmation Reader Authorization & Integrity", () => {
+      it("Guest: authorized guest can read own order confirmation", async () => {
+        await resetInventoryBalances();
+        const guestToken = await createGuestCart([{ variantId: variantId1, quantity: 1 }]);
+
+        let orderNumber = "";
+        await testContextStorage.run(
+          { cookieValue: guestToken, identity: { success: false } },
+          async () => {
+            const res = await submitCheckout({
+              checkoutAttemptId: generateUuidV7(),
+              customerEmail: "guest.confirm@testchk5.pe",
+              deliveryAddress: { mode: "INLINE", address: validInlineAddress },
+              shippingMethodCode: shippingMethodCode1,
+              paymentMethodCode: paymentMethodCode1,
+              reviewedSubtotalCents: 10000,
+              reviewedShippingCents: 1500,
+              reviewedTotalCents: 11500,
+            });
+            expect(res.success).toBe(true);
+            if (res.success) orderNumber = res.orderNumber;
+          }
+        );
+
+        // Same guest reads confirmation
+        await testContextStorage.run(
+          { cookieValue: guestToken, identity: { success: false } },
+          async () => {
+            const conf = await loadCheckoutConfirmation(orderNumber);
+            expect(conf.success).toBe(true);
+            if (conf.success) {
+              expect(conf.confirmation.orderNumber).toBe(orderNumber);
+              expect(conf.confirmation.status).toBe("PENDING");
+              expect(conf.confirmation.paymentStatus).toBe("UNPAID");
+              expect(conf.confirmation.customerEmail).toBe("guest.confirm@testchk5.pe");
+              expect(conf.confirmation.items).toHaveLength(1);
+            }
+          }
+        );
+
+        // Foreign guest attempts to read confirmation -> UNAUTHORIZED
+        const foreignGuestToken = generateAnonymousSessionToken();
+        await testContextStorage.run(
+          { cookieValue: foreignGuestToken, identity: { success: false } },
+          async () => {
+            const conf = await loadCheckoutConfirmation(orderNumber);
+            expect(conf.success).toBe(false);
+            if (!conf.success) {
+              expect(conf.code).toBe("UNAUTHORIZED");
+            }
+          }
+        );
+      });
+
+      it("Authenticated: customer can read own confirmation and foreign customer is rejected", async () => {
+        await resetInventoryBalances();
+        await sqlClient`DELETE FROM idempotency_keys WHERE source_cart_id IN (SELECT id FROM carts WHERE customer_id = ${customerProfileId1})`;
+        await sqlClient`DELETE FROM cart_items WHERE cart_id IN (SELECT id FROM carts WHERE customer_id = ${customerProfileId1})`;
+        await sqlClient`DELETE FROM carts WHERE customer_id = ${customerProfileId1}`;
+        await createAuthCart(customerProfileId1, [{ variantId: variantId1, quantity: 1 }]);
+
+        let orderNumber = "";
+        await testContextStorage.run(
+          {
+            cookieValue: null,
+            identity: {
+              success: true,
+              identity: { authUserId: authUserId1, email: "customer1@testchk5.pe" },
+            },
+          },
+          async () => {
+            const res = await submitCheckout({
+              checkoutAttemptId: generateUuidV7(),
+              customerEmail: "customer1@testchk5.pe",
+              deliveryAddress: {
+                mode: "SAVED_ADDRESS",
+                addressId: customerAddressId1,
+              },
+              shippingMethodCode: shippingMethodCode1,
+              paymentMethodCode: paymentMethodCode1,
+              reviewedSubtotalCents: 10000,
+              reviewedShippingCents: 1500,
+              reviewedTotalCents: 11500,
+            });
+            expect(res.success).toBe(true);
+            if (res.success) orderNumber = res.orderNumber;
+          }
+        );
+
+        // Owner customer reads confirmation
+        await testContextStorage.run(
+          {
+            cookieValue: null,
+            identity: {
+              success: true,
+              identity: { authUserId: authUserId1, email: "customer1@testchk5.pe" },
+            },
+          },
+          async () => {
+            const conf = await loadCheckoutConfirmation(orderNumber);
+            expect(conf.success).toBe(true);
+            if (conf.success) {
+              expect(conf.confirmation.orderNumber).toBe(orderNumber);
+              expect(conf.confirmation.paymentStatus).toBe("UNPAID");
+            }
+          }
+        );
+
+        // Foreign customer attempts to read confirmation -> UNAUTHORIZED
+        await testContextStorage.run(
+          {
+            cookieValue: null,
+            identity: {
+              success: true,
+              identity: { authUserId: authUserId2, email: "customer2@testchk5.pe" },
+            },
+          },
+          async () => {
+            const conf = await loadCheckoutConfirmation(orderNumber);
+            expect(conf.success).toBe(false);
+            if (!conf.success) {
+              expect(conf.code).toBe("UNAUTHORIZED");
+            }
+          }
+        );
+
+        // Non-existent order number -> NOT_FOUND
+        await testContextStorage.run(
+          {
+            cookieValue: null,
+            identity: {
+              success: true,
+              identity: { authUserId: authUserId1, email: "customer1@testchk5.pe" },
+            },
+          },
+          async () => {
+            const conf = await loadCheckoutConfirmation("GP-NONEXIST");
+            expect(conf.success).toBe(false);
+            if (!conf.success) {
+              expect(conf.code).toBe("NOT_FOUND");
+            }
+          }
+        );
+      });
     });
   });
 });

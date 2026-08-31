@@ -113,3 +113,47 @@ export interface CheckoutIdempotencyPayload {
   currency: "PEN";
   paymentStatus: "UNPAID";
 }
+
+export interface CheckoutConfirmationItemDTO {
+  variantId: string;
+  productName: string;
+  sku: string;
+  variantTitle: string | null;
+  unitPriceCents: number;
+  quantity: number;
+  lineTotalCents: number;
+}
+
+export interface CheckoutConfirmationAddressDTO {
+  recipientName: string;
+  phone: string;
+  streetAddress: string;
+  apartmentSuite: string | null;
+  department: string;
+  province: string;
+  district: string;
+  postalCode: string | null;
+  referenceNotes: string | null;
+}
+
+export interface CheckoutConfirmationDTO {
+  orderNumber: string;
+  status: "PENDING" | "CONFIRMED" | "CANCELLED";
+  paymentStatus: "UNPAID" | "PENDING_VERIFICATION" | "PAID" | "REJECTED";
+  currency: "PEN";
+  subtotalCents: number;
+  shippingCents: number;
+  discountCents: number;
+  totalCents: number;
+  customerEmail: string;
+  customerPhone: string;
+  shippingMethodName: string;
+  paymentMethodName: string;
+  deliveryAddress: CheckoutConfirmationAddressDTO;
+  items: CheckoutConfirmationItemDTO[];
+  createdAt: string;
+}
+
+export type CheckoutConfirmationResult =
+  | { success: true; confirmation: CheckoutConfirmationDTO }
+  | { success: false; code: "NOT_FOUND" | "UNAUTHORIZED" | "SYSTEM_ERROR"; error: string };

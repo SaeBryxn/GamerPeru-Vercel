@@ -110,6 +110,35 @@
   margin: 0;
 }
 
+.checkoutActionRow {
+  margin-top: var(--space-2);
+}
+
+.checkoutButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: var(--space-3) var(--space-6);
+  background-color: var(--color-brand-primary, #ff003b);
+  color: #ffffff;
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: background-color var(--motion-duration-fast, 150ms) ease;
+}
+
+.checkoutButton:hover {
+  background-color: var(--color-brand-hover, #e00034);
+}
+
+.checkoutButton:focus-visible {
+  outline: 2px solid var(--color-brand-primary, #ff003b);
+  outline-offset: 2px;
+}
+
 .emptyCard {
   background-color: var(--color-surface-secondary);
   border: 1px solid var(--color-border-primary);

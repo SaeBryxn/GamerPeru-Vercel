@@ -22,6 +22,7 @@
     "test:cart:live": "vitest run --config vitest.integration.config.ts",
     "test:checkout:live": "vitest run --config vitest.checkout.integration.config.ts",
     "test:cart:e2e": "playwright test --config=playwright.cart.config.ts",
+    "test:checkout:e2e": "playwright test --config=playwright.checkout.config.ts",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

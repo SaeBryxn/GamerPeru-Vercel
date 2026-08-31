@@ -43,6 +43,7 @@ import {
   generateOrderNumber,
 } from "./crypto";
 import type {
+  CheckoutConfirmationResult,
   CheckoutContextDTO,
   CheckoutIdempotencyPayload,
   CheckoutPaymentMethodOption,
@@ -916,4 +917,170 @@ export async function submitCheckout(
       error: "Ocurrió un error inesperado al procesar su compra. Por favor intente nuevamente.",
     };
   }
+}
+
+/**
+ * Loads order confirmation for the authorized customer or guest.
+ *
+ * Invariants:
+ * 1. Authority Guard: Strictly verifies that the caller owns the order (authenticated customer_id match or guest authority_binding_digest match).
+ * 2. Privacy Guard: Never reveals order details or existence if unauthorized.
+ * 3. GP-019 Boundary: Exposes zero payment instruction text, QR codes, or bank accounts.
+ * 4. Read-Only: Performs zero mutations.
+ */
+export async function loadCheckoutConfirmation(
+  orderNumber: string
+): Promise<CheckoutConfirmationResult> {
+  const configResult = getCheckoutConfig();
+  if (!configResult.valid || !configResult.config) {
+    return {
+      success: false,
+      code: "SYSTEM_ERROR",
+      error: "Servicio no disponible.",
+    };
+  }
+
+  const [order] = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.orderNumber, orderNumber))
+    .limit(1);
+
+  if (!order) {
+    return {
+      success: false,
+      code: "NOT_FOUND",
+      error: "Pedido no encontrado.",
+    };
+  }
+
+  const auth = await resolveCheckoutAuthority();
+
+  let isAuthorized = false;
+  if (auth.status === "AUTHENTICATED") {
+    if (order.customerId && order.customerId === auth.customerProfileId) {
+      isAuthorized = true;
+    }
+  } else if (auth.status === "GUEST") {
+    const authorityBindingDigest = computeAuthorityBindingDigest(
+      auth.digestInput,
+      configResult.config.hmacSecret
+    );
+    const [idempotency] = await db
+      .select({ id: idempotencyKeys.id })
+      .from(idempotencyKeys)
+      .where(
+        sql`${idempotencyKeys.operationType} = 'ORDER_CREATION' AND ${idempotencyKeys.authorityBindingDigest} = ${authorityBindingDigest} AND (${idempotencyKeys.targetAggregateId} = ${order.id} OR (${idempotencyKeys.responsePayload}->>'orderNumber') = ${orderNumber})`
+      )
+      .limit(1);
+
+    if (idempotency) {
+      isAuthorized = true;
+    }
+  }
+
+  if (!isAuthorized) {
+    return {
+      success: false,
+      code: "UNAUTHORIZED",
+      error: "No autorizado para ver este pedido.",
+    };
+  }
+
+  // Load Order Details
+  const items = await db
+    .select()
+    .from(orderItems)
+    .where(eq(orderItems.orderId, order.id))
+    .orderBy(asc(orderItems.createdAt));
+
+  const [addressSnapshot] = await db
+    .select()
+    .from(orderAddressSnapshots)
+    .where(eq(orderAddressSnapshots.orderId, order.id))
+    .limit(1);
+
+  const [payment] = await db.select().from(payments).where(eq(payments.orderId, order.id)).limit(1);
+
+  const [shipment] = await db
+    .select()
+    .from(shipments)
+    .where(eq(shipments.orderId, order.id))
+    .limit(1);
+
+  let shippingMethodName = "Envío Estándar";
+  if (shipment) {
+    const [method] = await db
+      .select({ name: shippingMethods.name })
+      .from(shippingMethods)
+      .where(eq(shippingMethods.id, shipment.shippingMethodId))
+      .limit(1);
+    if (method) {
+      shippingMethodName = method.name;
+    }
+  }
+
+  let paymentMethodName = "Pago Manual";
+  if (payment && payment.paymentMethodCode) {
+    const [paymentMethod] = await db
+      .select({ name: paymentMethodConfigurations.name })
+      .from(paymentMethodConfigurations)
+      .where(eq(paymentMethodConfigurations.code, payment.paymentMethodCode))
+      .limit(1);
+    if (paymentMethod) {
+      paymentMethodName = paymentMethod.name;
+    }
+  }
+
+  return {
+    success: true,
+    confirmation: {
+      orderNumber: order.orderNumber,
+      status: order.status as "PENDING" | "CONFIRMED" | "CANCELLED",
+      paymentStatus: (payment?.status ?? "UNPAID") as
+        "UNPAID" | "PENDING_VERIFICATION" | "PAID" | "REJECTED",
+      currency: "PEN",
+      subtotalCents: order.subtotalCents,
+      shippingCents: order.shippingCents,
+      discountCents: order.discountCents,
+      totalCents: order.totalCents,
+      customerEmail: order.customerEmail,
+      customerPhone: order.customerPhone,
+      shippingMethodName,
+      paymentMethodName,
+      deliveryAddress: addressSnapshot
+        ? {
+            recipientName: addressSnapshot.recipientName,
+            phone: addressSnapshot.phone,
+            streetAddress: addressSnapshot.streetAddress,
+            apartmentSuite: addressSnapshot.apartmentSuite,
+            department: addressSnapshot.department,
+            province: addressSnapshot.province,
+            district: addressSnapshot.district,
+            postalCode: addressSnapshot.postalCode,
+            referenceNotes: addressSnapshot.referenceNotes,
+          }
+        : {
+            recipientName: "",
+            phone: order.customerPhone,
+            streetAddress: "",
+            apartmentSuite: null,
+            department: "",
+            province: "",
+            district: "",
+            postalCode: null,
+            referenceNotes: null,
+          },
+      items: items.map((item) => ({
+        variantId: item.variantId,
+        productName: item.productNameSnapshot,
+        sku: item.skuSnapshot,
+        variantTitle: item.variantTitleSnapshot,
+        unitPriceCents: item.unitPriceCentsSnapshot,
+        quantity: item.quantity,
+        lineTotalCents: item.lineTotalCents,
+      })),
+      createdAt: order.createdAt.toISOString(),
+    },
+  };
 }
