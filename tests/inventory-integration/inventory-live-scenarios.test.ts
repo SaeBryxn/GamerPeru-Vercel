@@ -1196,6 +1196,15 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       );
     `;
     await sqlClient`
+    INSERT INTO order_items (
+    id, order_id, variant_id, sku_snapshot, product_name_snapshot,
+    variant_title_snapshot, unit_price_cents_snapshot, quantity, line_total_cents, created_at
+    ) VALUES (
+    ${orderItemId}, ${orderId}, ${variantId3}, 'SKU-INV-003', 'Test Prod 3',
+    'Black', 3000, 5, 15000, NOW()
+    );
+    `;
+    await sqlClient`
       INSERT INTO inventory_reservations (
         id, inventory_item_id, order_id, order_item_id,
         quantity, status, expires_at, created_at, updated_at
