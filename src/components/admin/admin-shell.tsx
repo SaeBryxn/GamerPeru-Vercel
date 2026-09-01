@@ -32,7 +32,11 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
         Saltar al contenido principal
       </a>
 
-      <AdminHeader onOpenMobileNav={() => setIsMobileNavOpen(true)} />
+      <AdminHeader
+        onOpenMobileNav={() => setIsMobileNavOpen(true)}
+        isMobileNavOpen={isMobileNavOpen}
+        triggerRef={menuButtonRef}
+      />
 
       <div className={styles.layoutContainer}>
         <AdminSidebar navItems={navItems} staff={staff} />

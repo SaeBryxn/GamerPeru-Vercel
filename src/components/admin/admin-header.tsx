@@ -9,18 +9,26 @@ import styles from "./admin-shell.module.css";
 interface AdminHeaderProps {
   onOpenMobileNav: () => void;
   pageTitle?: string;
+  isMobileNavOpen?: boolean;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
-export function AdminHeader({ onOpenMobileNav, pageTitle = "Inicio" }: AdminHeaderProps) {
+export function AdminHeader({
+  onOpenMobileNav,
+  pageTitle = "Inicio",
+  isMobileNavOpen = false,
+  triggerRef,
+}: AdminHeaderProps) {
   return (
     <header className={styles.header}>
       <div className={styles.headerLeft}>
         <button
+          ref={triggerRef}
           type="button"
           onClick={onOpenMobileNav}
           className={styles.menuButton}
           aria-label="Abrir menú de navegación"
-          aria-expanded="false"
+          aria-expanded={isMobileNavOpen ? "true" : "false"}
           aria-controls="admin-mobile-nav"
         >
           <Menu className={styles.navIcon} aria-hidden="true" />

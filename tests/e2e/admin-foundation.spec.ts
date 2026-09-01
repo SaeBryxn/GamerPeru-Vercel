@@ -47,14 +47,17 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
     await loginAndNavigateToAdmin(page, ADMIN_E2E_USERS.customer.email);
 
     // Verify Forbidden view is rendered
-    const heading = page.locator("h1");
-    await expect(heading).toContainText(/Acceso no autorizado/i);
+    const heading = page.getByRole("heading", { level: 1 });
+    await expect(heading).toHaveText("Acceso no autorizado");
     await expect(page.locator("body")).toContainText(ADMIN_E2E_USERS.customer.email);
 
     // Verify zero privileged Admin navigation or content is present
     await expect(page.locator("aside")).toHaveCount(0);
-    await expect(page.locator("text=Panel de Administración")).toHaveCount(0);
+    await expect(page.locator("main#admin-main-content")).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Ruta de navegación" })).toHaveCount(0);
     await expect(page.locator("text=SUPER_ADMIN")).toHaveCount(0);
+    await expect(page.locator("text=ADMIN_CATALOG")).toHaveCount(0);
+    await expect(page.locator("text=Estado de la Plataforma")).toHaveCount(0);
 
     // Verify recovery links
     const accountLink = page.getByRole("link", { name: "Ir a mi cuenta" });
@@ -67,10 +70,15 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
   }) => {
     await loginAndNavigateToAdmin(page, ADMIN_E2E_USERS.norole.email);
 
-    const heading = page.locator("h1");
-    await expect(heading).toContainText(/Acceso no autorizado/i);
+    const heading = page.getByRole("heading", { level: 1 });
+    await expect(heading).toHaveText("Acceso no autorizado");
+
+    // Verify zero privileged Admin structure is present
     await expect(page.locator("aside")).toHaveCount(0);
-    await expect(page.locator("text=Panel de Administración")).toHaveCount(0);
+    await expect(page.locator("main#admin-main-content")).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Ruta de navegación" })).toHaveCount(0);
+    await expect(page.locator("text=SUPER_ADMIN")).toHaveCount(0);
+    await expect(page.locator("text=Estado de la Plataforma")).toHaveCount(0);
   });
 
   test("E4: authenticated SUPER_ADMIN enters real /admin protected shell with complete navigation and identity", async ({
@@ -78,13 +86,15 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
   }) => {
     await loginAndNavigateToAdmin(page, ADMIN_E2E_USERS.superadmin.email);
 
-    // Verify main admin landmarks
-    await expect(page.locator("header")).toBeVisible();
+    // Verify main admin semantic landmarks
+    await expect(page.getByRole("navigation", { name: "Ruta de navegación" })).toBeVisible();
     await expect(page.locator("aside")).toBeVisible();
     await expect(page.locator("main#admin-main-content")).toBeVisible();
 
     // Verify page heading and truthful platform status
-    await expect(page.locator("h1")).toHaveText("Panel de Administración");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Panel de Administración" })
+    ).toBeVisible();
     await expect(page.locator("text=Estado de la Plataforma")).toBeVisible();
     await expect(page.locator("text=Módulos en Preparación")).toBeVisible();
 
@@ -112,7 +122,9 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
   }) => {
     await loginAndNavigateToAdmin(page, ADMIN_E2E_USERS.catalog.email);
 
-    await expect(page.locator("h1")).toHaveText("Panel de Administración");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Panel de Administración" })
+    ).toBeVisible();
     await expect(page.locator("aside")).toContainText(ADMIN_E2E_USERS.catalog.email);
     await expect(page.locator("aside")).toContainText("ADMIN_CATALOG");
   });
@@ -122,7 +134,9 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
   }) => {
     await loginAndNavigateToAdmin(page, ADMIN_E2E_USERS.orders.email);
 
-    await expect(page.locator("h1")).toHaveText("Panel de Administración");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Panel de Administración" })
+    ).toBeVisible();
     await expect(page.locator("aside")).toContainText(ADMIN_E2E_USERS.orders.email);
     await expect(page.locator("aside")).toContainText("ADMIN_ORDERS");
   });
@@ -132,7 +146,9 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
   }) => {
     await loginAndNavigateToAdmin(page, ADMIN_E2E_USERS.support.email);
 
-    await expect(page.locator("h1")).toHaveText("Panel de Administración");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Panel de Administración" })
+    ).toBeVisible();
     await expect(page.locator("aside")).toContainText(ADMIN_E2E_USERS.support.email);
     await expect(page.locator("aside")).toContainText("ADMIN_SUPPORT");
   });
@@ -146,16 +162,18 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
     // Find mobile menu trigger button
     const menuButton = page.getByRole("button", { name: "Abrir menú de navegación" });
     await expect(menuButton).toBeVisible();
+    await expect(menuButton).toHaveAttribute("aria-expanded", "false");
 
     // Focus and click menu trigger
     await menuButton.focus();
     await menuButton.click();
 
-    // Verify mobile drawer dialog is open
+    // Verify mobile drawer dialog is open and menu trigger reflects expanded state
     const drawer = page.locator("#admin-mobile-nav");
     await expect(drawer).toBeVisible();
     await expect(drawer).toHaveAttribute("role", "dialog");
     await expect(drawer).toHaveAttribute("aria-modal", "true");
+    await expect(menuButton).toHaveAttribute("aria-expanded", "true");
 
     // Verify close button received initial focus
     const closeButton = page.getByRole("button", { name: "Cerrar menú de navegación" });
@@ -163,7 +181,6 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
 
     // Verify Tab key cycles inside drawer (focus trap)
     await page.keyboard.press("Tab");
-    // Next element is nav link
     const navLink = drawer.getByRole("link", { name: /Inicio/i });
     await expect(navLink).toBeFocused();
 
@@ -175,15 +192,18 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
     await expect(menuButton).toBeFocused();
+    await expect(menuButton).toHaveAttribute("aria-expanded", "false");
 
     // Re-open and verify backdrop click closes drawer and restores focus
     await menuButton.click();
     await expect(drawer).toBeVisible();
+    await expect(menuButton).toHaveAttribute("aria-expanded", "true");
 
-    // Click outside drawer
+    // Click outside drawer on backdrop
     await page.mouse.click(10, 10);
     await expect(drawer).toBeHidden();
     await expect(menuButton).toBeFocused();
+    await expect(menuButton).toHaveAttribute("aria-expanded", "false");
   });
 
   test("E9: Responsive matrix verification for zero horizontal overflow on real Admin Shell across 8 viewports", async ({
