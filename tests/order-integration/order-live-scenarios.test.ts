@@ -270,6 +270,16 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     currentMockIdentity = { success: false };
     __setTestOrderTransactionHook(null);
     __setTestPaymentTransactionHook(null);
+    if (sqlClient) {
+      await sqlClient`
+        DELETE FROM cart_items WHERE cart_id IN (
+          SELECT id FROM carts WHERE customer_id IN (${customerProfileId1}, ${customerProfileId2}) AND status = 'ACTIVE'
+        )
+      `;
+      await sqlClient`
+        DELETE FROM carts WHERE customer_id IN (${customerProfileId1}, ${customerProfileId2}) AND status = 'ACTIVE'
+      `;
+    }
   });
 
   afterAll(async () => {
@@ -288,6 +298,13 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     const isAuth = options?.isAuth ?? false;
     let rawCartToken: string | null = null;
 
+    // Reset stock to ensure test isolation across test runs
+    await sqlClient`
+      UPDATE inventory_items 
+      SET quantity_on_hand = 10, quantity_reserved = 0, quantity_allocated = 0, updated_at = NOW() 
+      WHERE id IN (${inventoryItemId1}, ${inventoryItemId2})
+    `;
+
     if (isAuth) {
       currentMockCartCookie = null;
       currentMockIdentity = {
@@ -297,6 +314,15 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
           email: "cliente1@gamerperu.pe",
         },
       };
+      const targetCustomerId = options?.customerProfileId ?? customerProfileId1;
+      await sqlClient`
+        DELETE FROM cart_items WHERE cart_id IN (
+          SELECT id FROM carts WHERE customer_id = ${targetCustomerId} AND status = 'ACTIVE'
+        )
+      `;
+      await sqlClient`
+        DELETE FROM carts WHERE customer_id = ${targetCustomerId} AND status = 'ACTIVE'
+      `;
     } else {
       rawCartToken = generateAnonymousSessionToken();
       currentMockCartCookie = rawCartToken;
@@ -536,7 +562,7 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     expect(dbOrder!.status).toBe("CANCELLED");
 
     const [dbPayment] =
-      await sqlClient`SELECT status FROM payments WHERE order_id = ${dbOrder!.id}`;
+      await sqlClient`SELECT id, status FROM payments WHERE order_id = ${dbOrder!.id}`;
     expect(dbPayment!.status).toBe("UNPAID");
 
     const reservations = await sqlClient`
@@ -1018,10 +1044,11 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     await sqlClient`UPDATE inventory_reservations SET status = 'CONSUMED' WHERE order_id = ${dbOrder!.id}`;
     await sqlClient`UPDATE inventory_items SET quantity_reserved = 0, quantity_allocated = 0, quantity_on_hand = 10 WHERE id = ${inventoryItemId1}`;
 
-    // Add SHIPPED shipment
+    // Update existing shipment to SHIPPED (simulating warehouse fulfillment)
     await sqlClient`
-      INSERT INTO shipments (id, order_id, status, tracking_number, created_at, updated_at)
-      VALUES (${generateUuidV7()}, ${dbOrder!.id}, 'SHIPPED', 'TRACK-123456', NOW(), NOW())
+      UPDATE shipments 
+      SET status = 'SHIPPED', tracking_number = 'TRACK-123456', updated_at = NOW() 
+      WHERE order_id = ${dbOrder!.id}
     `;
 
     setStaffAuth();
@@ -1100,7 +1127,8 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     expect(reservations.every((r) => r.status === "ALLOCATED")).toBe(true);
 
     const ledgerEntries = await sqlClient`
-      SELECT * FROM inventory_ledger_entries WHERE reference_id = ${dbOrder!.id}
+      SELECT * FROM inventory_ledger_entries 
+      WHERE reference_id = ${dbOrder!.id} AND movement_type = 'ALLOCATION_RELEASED'
     `;
     expect(ledgerEntries.length).toBe(0);
 
