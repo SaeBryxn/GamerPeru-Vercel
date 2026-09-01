@@ -58,3 +58,28 @@ GP-020 delivers the complete order lifecycle management, refund tracking, audit 
 
 - Updated `.github/workflows/ci.yml` to supply `ORDER_MANAGEMENT_IDEMPOTENCY_TTL_MINUTES=60` to `checkout-e2e` and `checkout-live` jobs.
 - Added `test:order:live` to CI `checkout-live` runner to execute the full 27-scenario live database integration suite against local Supabase container.
+
+---
+
+## Canonical CI Execution Evidence (Run 33469039544)
+
+- **Head Commit**: `ed64cc9132da208fe4048f50dc7693be3bf2bd17`
+- **Workflow Run**: [Run 33469039544](https://github.com/latamcreativa/GamerPeru/actions/runs/33469039544)
+- **Status**: `completed`
+- **Conclusion**: `success` (100% Green across all matrix jobs)
+- **Detailed Job Breakdown**:
+  1. `Format, Typecheck, Lint, Test, Build & E2E` (Job `99734959971`): **SUCCESS**
+     - Formatting: Prettier check clean
+     - TypeScript: 0 errors
+     - ESLint: 0 errors, 0 warnings
+     - Vitest Unit: 68 test files, 900 unit tests passing cleanly
+     - Next.js Production Build: Compiled and static page generation complete
+     - Playwright E2E & WCAG 2.1 AA: 142 scenarios passing
+  2. `Real Local PostgreSQL / Supabase Checkout Runtime` (Job `99734959752`): **SUCCESS**
+     - Executes `pnpm test:checkout:live` (12 live checkout scenarios)
+     - Executes `pnpm test:payment:live` (14 live payment scenarios)
+     - Executes `pnpm test:order:live` (27 live order management scenarios)
+  3. `Real Local Supabase Checkout E2E` (Job `99734959848`): **SUCCESS**
+     - Guest checkout, dynamic shipping, double-click idempotency, unauthorized view protection, and customer cancellation E2E scenarios passing with 0 WCAG AA accessibility violations.
+  4. `Real Local Supabase Cart E2E` (Job `99734959870`): **SUCCESS**
+     - Anonymous, authenticated, merge, inventory reservation, and drawer UI scenarios passing.
