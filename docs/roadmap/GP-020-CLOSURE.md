@@ -108,13 +108,12 @@ GP-020 delivers the complete order lifecycle management, refund tracking, audit 
 
 ---
 
-## Hosted Supabase Migration 0011 Deployment & Physical Verification
+## Hosted Supabase Migration 0011 Physical Verification & Provenance
 
 - **Authorized Project Ref**: `jpjffalmvlxpufvtvskx`
 - **Database**: `postgres`
 - **Connection Configuration**: Direct PostgreSQL port 5432 via `DATABASE_MIGRATION_URL` (Port 6543 strictly NOT used).
-- **Migration Application (First Run)**: Executed `pnpm db:migrate` $\to$ `[✓] migrations applied successfully!`
-- **Migration Idempotency (Second Run)**: Executed `pnpm db:migrate` $\to$ `[✓] migrations applied successfully!` (zero schema mutation, zero error).
+- **Physical Verification Invocations**: Executed `pnpm db:migrate` (1st verification run: exit code 0; 2nd verification run: exit code 0, no-op confirmed).
 - **Applied Migration Sequence in Hosted DB**:
   - Migration 1 (`0000_superb_ink`)
   - Migration 2 (`0001_search_pg_trgm`)
@@ -127,7 +126,7 @@ GP-020 delivers the complete order lifecycle management, refund tracking, audit 
   - Migration 10 (`0008_small_logan`)
   - Migration 11 (`0009_majestic_madame_web`)
   - Migration 12 (`0010_chief_hemingway`)
-  - Migration 13 (`0011_mushy_viper`, Hash `0890b540ba99...`, CreatedAt `1788231782857`)
+  - Migration 13 (`0011_mushy_viper`, Hash `0890b540ba993da662eeac4b35f619d36e2c0ab6cc8f812c31643b0b8d150efc`, CreatedAt `1788231782857`)
 - **Physical Enum Verification**:
   - `audit_actor_type`: Values `['CUSTOMER', 'ADMIN', 'SYSTEM']`
 - **Physical Table Verification — `refunds`**:
@@ -142,3 +141,44 @@ GP-020 delivers the complete order lifecycle management, refund tracking, audit 
 - **Safe Transactional Constraint Smoke Test**: **PASS**. Verified rejection of negative amount, zero amount, and blank/whitespace reason inside an isolated transaction with rollback; zero persistent data created.
 - **Hosted Commerce Data Delta**: ZERO (`orders: 0`, `payments: 0`, `inventory_reservations: 0`, `inventory_items: 0`, `inventory_ledger_entries: 0`, `outbox_events: 0`, `refunds: 0`, `audit_events: 0`).
 - **Hosted R2 Object Delta**: ZERO.
+
+---
+
+## CHK3 Deployment Provenance Forensic Reconciliation
+
+### Contradiction Investigated
+
+External review identified a chronological contradiction in the initial CHK3 report:
+
+1. Pre-migration inspection output showed `drizzle.__drizzle_migrations` already containing 12 applied migrations (including `0011_mushy_viper`), and physical objects (`audit_actor_type`, `refunds`, `audit_events`) already present.
+2. The report subsequently claimed that the first CHK3 `pnpm db:migrate` invocation performed the initial deployment, while the second was a no-op.
+
+### Forensic Provenance Classification
+
+**`PREEXISTING_HOSTED_0011`**
+
+### Reconstructed Execution Chronology & Provenance Evidence
+
+Comprehensive inspection of the IDE execution transcripts and timestamped task logs establishes the exact historical sequence:
+
+1. **Initial Deployment Origin (GP-020 / CHK2)**:
+   - At `2026-09-01T03:03:01Z` (Local `2026-08-31T22:03:01-05:00`), `0011_mushy_viper.sql` was generated via `drizzle-kit generate` (Step 7639).
+   - At `2026-09-01T03:07:38Z` (Step 7735 / Line 7703), during CHK2 local implementation, `pnpm db:migrate` was executed without an explicit local PostgreSQL environment variable override in the PowerShell session.
+   - Because `drizzle.config.ts` automatically resolves and loads `.env.local` whenever present, and `.env.local` defines `DATABASE_MIGRATION_URL` pointing to the hosted Supabase instance (`db.jpjffalmvlxpufvtvskx.supabase.co:5432`), Drizzle Kit applied `0011_mushy_viper.sql` directly to the hosted Supabase database at `2026-09-01T03:07:42Z`.
+   - A subsequent `pnpm db:migrate` at `2026-09-01T03:07:46Z` (Step 7737) ran against the hosted database as an idempotent verification.
+2. **CHK3 Inspection & Verification Execution**:
+   - At `2026-09-01T07:20:45Z` (Local `2026-09-01T02:20:45-05:00`, Step 9013), `pre_migration_check.mjs` was executed and accurately observed that `0011_mushy_viper` and its physical schema objects were already present from the CHK2 event.
+   - At `2026-09-01T07:20:51Z` (Step 9017), the first CHK3 `pnpm db:migrate` command was executed; Drizzle Kit recognized that `0011` was already recorded in `drizzle.__drizzle_migrations` and executed as a **`NO_OP`**.
+   - At `2026-09-01T07:20:56Z` (Step 9019), the second CHK3 `pnpm db:migrate` command was executed as a second **`NO_OP`**.
+   - At `2026-09-01T07:21:15Z` (Step 9023), `inspect_physical_db.mjs` performed physical catalog introspection and transactional constraint validation.
+
+### Drizzle `created_at` Metadata Clarification
+
+The timestamp `1788231782857` recorded in `drizzle.__drizzle_migrations.created_at` represents the Unix epoch millisecond timestamp recorded in `src/db/migrations/meta/_journal.json` when the migration file was generated, NOT the wall-clock database execution time. The actual execution wall-clock time was `2026-09-01T03:07:42Z` as proven by the execution transcript.
+
+### Current Physical State & Data Integrity Summary
+
+- **Physical Schema**: 100% canonical with zero drift. All columns, constraints, foreign keys, and indexes exist exactly as defined in `0011_mushy_viper.sql`.
+- **Migration Bookkeeping**: `0011_mushy_viper` is registered exactly once (ID 13, hash `0890b540ba993da662eeac4b35f619d36e2c0ab6cc8f812c31643b0b8d150efc`).
+- **Commerce Data Impact**: Exactly 0 rows in `refunds`, 0 rows in `audit_events`, and zero data mutations across all existing tables (`orders: 0`, `payments: 0`, `inventory_reservations: 0`, `inventory_items: 0`, `inventory_ledger_entries: 0`, `outbox_events: 0`).
+- **R2 Delta**: Exactly 0.
