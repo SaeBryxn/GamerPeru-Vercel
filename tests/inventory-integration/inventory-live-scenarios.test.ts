@@ -101,11 +101,21 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   const brandId = `${fixturePrefix}000000000001`;
   const categoryId = `${fixturePrefix}000000000002`;
   const productId = `${fixturePrefix}000000000003`;
+
+  // Dedicated variant IDs for each scenario ensuring 100% test isolation
   const variantId1 = `${fixturePrefix}000000000004`;
   const variantId2 = `${fixturePrefix}000000000005`;
   const variantId3 = `${fixturePrefix}000000000006`;
   const raceCVariantId = `${fixturePrefix}000000000007`;
   const reconVariantId = `${fixturePrefix}000000000008`;
+  const driftUnderVariantId = `${fixturePrefix}000000000009`;
+  const driftOverVariantId = `${fixturePrefix}00000000000a`;
+  const multiAllocVariantId = `${fixturePrefix}00000000000b`;
+  const raceDVariantId = `${fixturePrefix}00000000000c`;
+  const raceEVariantId = `${fixturePrefix}00000000000d`;
+  const raceFVariantId = `${fixturePrefix}00000000000e`;
+  const raceGVariantId = `${fixturePrefix}00000000000f`;
+  const raceHVariantId = `${fixturePrefix}000000000012`;
 
   const primaryLocId = `${fixturePrefix}000000000010`;
   const quarantineLocId = `${fixturePrefix}000000000011`;
@@ -176,7 +186,15 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
         (${variantId2}, ${productId}, 'SKU-INV-002', 'White Edition', 15000, 'ACTIVE', NOW(), NOW()),
         (${variantId3}, ${productId}, 'SKU-INV-003', 'Red Edition', 15000, 'ACTIVE', NOW(), NOW()),
         (${raceCVariantId}, ${productId}, 'SKU-INV-RACEC', 'Race C Edition', 15000, 'ACTIVE', NOW(), NOW()),
-        (${reconVariantId}, ${productId}, 'SKU-INV-RECON', 'Recon Edition', 15000, 'ACTIVE', NOW(), NOW())
+        (${reconVariantId}, ${productId}, 'SKU-INV-RECON', 'Recon Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${driftUnderVariantId}, ${productId}, 'SKU-INV-DRIFT-U', 'Drift Under Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${driftOverVariantId}, ${productId}, 'SKU-INV-DRIFT-O', 'Drift Over Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${multiAllocVariantId}, ${productId}, 'SKU-INV-MULTI', 'Multi Alloc Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${raceDVariantId}, ${productId}, 'SKU-INV-RACED', 'Race D Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${raceEVariantId}, ${productId}, 'SKU-INV-RACEE', 'Race E Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${raceFVariantId}, ${productId}, 'SKU-INV-RACEF', 'Race F Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${raceGVariantId}, ${productId}, 'SKU-INV-RACEG', 'Race G Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${raceHVariantId}, ${productId}, 'SKU-INV-RACEH', 'Race H Edition', 15000, 'ACTIVE', NOW(), NOW())
       ON CONFLICT (sku) DO NOTHING;
     `;
 
@@ -220,10 +238,28 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   });
 
   async function cleanupAllTestFixtures() {
-    // 1. Delete dependent ledger entries belonging to GP-021
-    await sqlClient`DELETE FROM inventory_ledger_entries WHERE actor_id LIKE 'test-%' OR reference_id LIKE 'TEST-%' OR reference_id LIKE 'PO-%' OR reference_id LIKE 'AUDIT-%' OR reference_id LIKE 'TR-%' OR reference_id LIKE 'REPAIR-%' OR reference_id LIKE 'PAY-%'`;
-    // 2. Delete inventory reservations for GP-021 orders
-    await sqlClient`DELETE FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
+    // 1. Delete dependent ledger entries belonging to GP-021 items (and test references)
+    await sqlClient`
+      DELETE FROM inventory_ledger_entries
+      WHERE inventory_item_id IN (
+        SELECT id FROM inventory_items WHERE variant_id IN (
+          ${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId},
+          ${driftUnderVariantId}, ${driftOverVariantId}, ${multiAllocVariantId},
+          ${raceDVariantId}, ${raceEVariantId}, ${raceFVariantId}, ${raceGVariantId}, ${raceHVariantId}
+        )
+      ) OR actor_id LIKE 'test-%' OR reference_id LIKE 'TEST-%' OR reference_id LIKE 'PO-%' OR reference_id LIKE 'AUDIT-%' OR reference_id LIKE 'TR-%' OR reference_id LIKE 'REPAIR-%' OR reference_id LIKE 'PAY-%';
+    `;
+    // 2. Delete inventory reservations for GP-021 items and orders
+    await sqlClient`
+      DELETE FROM inventory_reservations
+      WHERE inventory_item_id IN (
+        SELECT id FROM inventory_items WHERE variant_id IN (
+          ${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId},
+          ${driftUnderVariantId}, ${driftOverVariantId}, ${multiAllocVariantId},
+          ${raceDVariantId}, ${raceEVariantId}, ${raceFVariantId}, ${raceGVariantId}, ${raceHVariantId}
+        )
+      ) OR order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%');
+    `;
     // 3. Delete dependent guest payment access grants for GP-021 sessions/payments
     await sqlClient`DELETE FROM guest_payment_access_grants WHERE session_id IN (${raceDSessionId}, ${raceESessionId}) OR payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%'))`;
     // 4. Delete ONLY GP-021 owned guest payment sessions (never global delete)
@@ -240,10 +276,18 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     // 8. Delete orders
     await sqlClient`DELETE FROM orders WHERE order_number LIKE 'GP-TEST-%'`;
     // 9. Delete cart items and suite-owned cart
-    await sqlClient`DELETE FROM cart_items WHERE cart_id = ${raceCCartId} OR variant_id IN (${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId})`;
+    await sqlClient`DELETE FROM cart_items WHERE cart_id = ${raceCCartId} OR variant_id IN (
+      ${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId},
+      ${driftUnderVariantId}, ${driftOverVariantId}, ${multiAllocVariantId},
+      ${raceDVariantId}, ${raceEVariantId}, ${raceFVariantId}, ${raceGVariantId}, ${raceHVariantId}
+    )`;
     await sqlClient`DELETE FROM carts WHERE id = ${raceCCartId}`;
     // 10. Delete inventory items for GP-021 variants
-    await sqlClient`DELETE FROM inventory_items WHERE variant_id IN (${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId})`;
+    await sqlClient`DELETE FROM inventory_items WHERE variant_id IN (
+      ${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId},
+      ${driftUnderVariantId}, ${driftOverVariantId}, ${multiAllocVariantId},
+      ${raceDVariantId}, ${raceEVariantId}, ${raceFVariantId}, ${raceGVariantId}, ${raceHVariantId}
+    )`;
     // 11. Delete idempotency keys and audit events
     await sqlClient`DELETE FROM idempotency_keys WHERE idempotency_key LIKE 'INVENTORY_%' OR idempotency_key LIKE 'CHECKOUT_%' OR idempotency_key LIKE 'ORDER_%' OR idempotency_key LIKE 'PAYMENT_%'`;
     await sqlClient`DELETE FROM audit_events WHERE actor_id LIKE 'test-%'`;
@@ -752,7 +796,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   it("Scenario 18B: all-ALLOCATED replay fails if physical allocated balance is less than authoritative reservation sum", async () => {
     const { orderId, inventoryItemId } = await seedTestOrder({
       orderNumber: "GP-TEST-ALLOC-DRIFT-UNDER",
-      variantId: variantId1,
+      variantId: driftUnderVariantId,
       quantity: 2,
       reservationStatus: "ALLOCATED",
     });
@@ -779,7 +823,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   it("Scenario 18C: all-ALLOCATED replay fails if physical allocated balance is greater than authoritative reservation sum", async () => {
     const { orderId, inventoryItemId } = await seedTestOrder({
       orderNumber: "GP-TEST-ALLOC-DRIFT-OVER",
-      variantId: variantId1,
+      variantId: driftOverVariantId,
       quantity: 2,
       reservationStatus: "ALLOCATED",
     });
@@ -806,13 +850,13 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   it("Scenario 18D: legitimate InventoryItem shared by multiple allocated Orders replays correctly when total matches exactly", async () => {
     const { orderId: order1 } = await seedTestOrder({
       orderNumber: "GP-TEST-MULTI-ALLOC-1",
-      variantId: variantId1,
+      variantId: multiAllocVariantId,
       quantity: 2,
       reservationStatus: "VERIFICATION_HOLD",
     });
     const { orderId: order2 } = await seedTestOrder({
       orderNumber: "GP-TEST-MULTI-ALLOC-2",
-      variantId: variantId1,
+      variantId: multiAllocVariantId,
       quantity: 3,
       reservationStatus: "VERIFICATION_HOLD",
     });
@@ -1343,7 +1387,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     const pastDate = new Date(Date.now() - 5 * 60 * 1000);
     const { orderId, paymentId } = await seedTestOrder({
       orderNumber: "GP-TEST-RACE-D-001",
-      variantId: variantId1,
+      variantId: raceDVariantId,
       quantity: 2,
       reservationStatus: "ACTIVE",
       expiresAt: pastDate,
@@ -1412,7 +1456,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     const pastDate = new Date(Date.now() - 5 * 60 * 1000);
     const { orderId, paymentId } = await seedTestOrder({
       orderNumber: "GP-TEST-RACE-E-001",
-      variantId: variantId1,
+      variantId: raceEVariantId,
       quantity: 2,
       reservationStatus: "ACTIVE",
       expiresAt: pastDate,
@@ -1479,7 +1523,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   it("Race F: Allocation vs terminal consequence seam (applyTerminalPaymentRejectionConsequences) concurrency", async () => {
     const { orderId, paymentId } = await seedTestOrder({
       orderNumber: "GP-TEST-RACE-F-001",
-      variantId: variantId1,
+      variantId: raceFVariantId,
       quantity: 2,
       reservationStatus: "VERIFICATION_HOLD",
     });
@@ -1523,7 +1567,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       SELECT status FROM inventory_reservations WHERE order_id = ${orderId};
     `;
     const [itemFinal] = await sqlClient`
-      SELECT quantity_reserved, quantity_allocated FROM inventory_items WHERE variant_id = ${variantId1} AND location_id = ${primaryLocId};
+      SELECT quantity_reserved, quantity_allocated FROM inventory_items WHERE variant_id = ${raceFVariantId} AND location_id = ${primaryLocId};
     `;
 
     expect(orderFinal!.status).toBe("CANCELLED");
@@ -1536,7 +1580,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     const pastDate = new Date(Date.now() - 20 * 60 * 1000);
     const { orderId } = await seedTestOrder({
       orderNumber: "GP-TEST-RACE-G-001",
-      variantId: variantId1,
+      variantId: raceGVariantId,
       quantity: 2,
       reservationStatus: "ACTIVE",
       expiresAt: pastDate,
@@ -1564,8 +1608,12 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(exp2.success).toBe(true);
 
     const releasedCounts = [exp1.releasedLinesCount, exp2.releasedLinesCount];
-    expect(releasedCounts).toContain(2);
+    expect(releasedCounts).toContain(1);
     expect(releasedCounts).toContain(0);
+
+    const totalQuantities = [exp1.totalQuantityReleased, exp2.totalQuantityReleased];
+    expect(totalQuantities).toContain(2);
+    expect(totalQuantities).toContain(0);
 
     const transitionFlags = [exp1.orderStatusTransitioned, exp2.orderStatusTransitioned];
     expect(transitionFlags).toContain(true);
@@ -1582,7 +1630,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   it("Race H: Two simultaneous payment-approval allocation attempts execute idempotently", async () => {
     const { orderId } = await seedTestOrder({
       orderNumber: "GP-TEST-RACE-H-001",
-      variantId: variantId1,
+      variantId: raceHVariantId,
       quantity: 1,
       reservationStatus: "VERIFICATION_HOLD",
     });
