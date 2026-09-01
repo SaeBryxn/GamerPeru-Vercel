@@ -22,7 +22,7 @@
 }
 
 .cancelledIcon {
-  color: #ff4d4f;
+  color: #b91c1c;
 }
 
 .title {
@@ -110,7 +110,7 @@
 }
 
 .infoLabel {
-  color: var(--color-text-tertiary, #8c8c8c);
+  color: var(--color-text-secondary, #52525b);
 }
 
 .itemsTable {
@@ -142,7 +142,7 @@
 
 .itemSku {
   font-size: 11px;
-  color: var(--color-text-tertiary, #8c8c8c);
+  color: var(--color-text-secondary, #52525b);
   margin-top: 2px;
 }
 
@@ -186,7 +186,7 @@
   font-family: var(--font-heading);
   font-size: 18px;
   font-weight: 800;
-  color: var(--color-brand-primary, #ff003b);
+  color: var(--color-brand-primary, #b91c1c);
 }
 
 .nextStepsCard {
@@ -219,8 +219,8 @@
   gap: var(--space-2);
   padding: var(--space-1) var(--space-3);
   background-color: rgba(255, 77, 79, 0.15);
-  border: 1px solid #ff4d4f;
-  color: #ff4d4f;
+  border: 1px solid #b91c1c;
+  color: #b91c1c;
   border-radius: var(--radius-full, 9999px);
   font-size: 12px;
   font-weight: 700;
@@ -253,8 +253,8 @@
   justify-content: center;
   padding: var(--space-2) var(--space-4);
   background-color: transparent;
-  border: 1px solid #ff4d4f;
-  color: #ff4d4f;
+  border: 1px solid #b91c1c;
+  color: #b91c1c;
   font-family: var(--font-heading);
   font-size: 13px;
   font-weight: 600;
@@ -264,7 +264,7 @@
 }
 
 .cancelOrderButton:hover:not(:disabled) {
-  background-color: rgba(255, 77, 79, 0.1);
+  background-color: rgba(185, 28, 28, 0.1);
 }
 
 .cancelOrderButton:disabled {
@@ -380,8 +380,8 @@
 
 .modalCancelConfirmButton {
   padding: var(--space-2) var(--space-4);
-  background-color: #ff4d4f;
-  border: 1px solid #ff4d4f;
+  background-color: #b91c1c;
+  border: 1px solid #b91c1c;
   color: #ffffff;
   font-family: var(--font-heading);
   font-size: 13px;
@@ -413,7 +413,7 @@
 }
 
 .modalErrorText {
-  color: #ff4d4f;
+  color: #b91c1c;
   font-size: 12px;
   font-family: var(--font-body);
   margin: 0;

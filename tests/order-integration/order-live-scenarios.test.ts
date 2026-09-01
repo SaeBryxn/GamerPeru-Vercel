@@ -174,6 +174,7 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     await sqlClient`DELETE FROM brands WHERE id = ${brandId}`;
     await sqlClient`DELETE FROM user_roles WHERE auth_user_id IN (${authUserId1}, ${authUserId2}, ${staffAuthUserId})`;
     await sqlClient`DELETE FROM customer_profiles WHERE id IN (${customerProfileId1}, ${customerProfileId2})`;
+    await sqlClient`DELETE FROM auth.users WHERE id IN (${authUserId1}, ${authUserId2}, ${staffAuthUserId})`;
 
     // Insert Base Fixtures
     await sqlClient`
@@ -225,15 +226,25 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     `;
 
     await sqlClient`
-      INSERT INTO inventory_locations (id, code, name, address, is_active, created_at, updated_at)
-      VALUES (${locationId}, ${locationCode}, 'Almacén Central', 'Av. Central 100', true, NOW(), NOW())
+      INSERT INTO inventory_locations (id, code, name, is_active, created_at)
+      VALUES (${locationId}, ${locationCode}, 'Almacén Central', true, NOW())
     `;
 
     await sqlClient`
-      INSERT INTO inventory_items (id, location_id, variant_id, sku, quantity_on_hand, quantity_reserved, quantity_allocated, reorder_point, restock_target, is_active, created_at, updated_at)
+      INSERT INTO inventory_items (id, location_id, variant_id, quantity_on_hand, quantity_reserved, quantity_allocated, reorder_point, updated_at)
       VALUES 
-        (${inventoryItemId1}, ${locationId}, ${variantId1}, 'SKU-ORD-1', 100, 0, 0, 5, 20, true, NOW(), NOW()),
-        (${inventoryItemId2}, ${locationId}, ${variantId2}, 'SKU-ORD-2', 100, 0, 0, 5, 20, true, NOW(), NOW())
+        (${inventoryItemId1}, ${locationId}, ${variantId1}, 500, 0, 0, 5, NOW()),
+        (${inventoryItemId2}, ${locationId}, ${variantId2}, 500, 0, 0, 5, NOW())
+    `;
+
+    // Auth Users
+    await sqlClient`
+      INSERT INTO auth.users (id, email, raw_app_meta_data, raw_user_meta_data, is_super_admin, created_at, updated_at)
+      VALUES 
+        (${authUserId1}, 'owner@gamerperu.pe', '{"provider":"email","providers":["email"]}', '{}', false, NOW(), NOW()),
+        (${authUserId2}, 'foreign@gamerperu.pe', '{"provider":"email","providers":["email"]}', '{}', false, NOW(), NOW()),
+        (${staffAuthUserId}, 'staff@gamerperu.pe', '{"provider":"email","providers":["email"]}', '{}', false, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
     `;
 
     // Customer Profiles
