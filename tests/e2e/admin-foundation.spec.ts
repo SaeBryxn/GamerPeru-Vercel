@@ -38,7 +38,7 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
     expect(response).not.toBeNull();
 
     await expect(page).toHaveURL(/\/auth\/login\?redirect=%2Fadmin/);
-    await expect(page.locator("h1")).toContainText(/Iniciar sesión/i);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(/Iniciar sesión/i);
   });
 
   test("E2: authenticated CUSTOMER is denied access and sees AdminForbidden surface", async ({
@@ -105,10 +105,13 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
     // Verify brand badge with exact text matching to avoid role pill collisions
     await expect(page.locator("aside").getByText("ADMIN", { exact: true })).toBeVisible();
 
-    // Verify navigation has active state and no dead future links
-    const overviewLink = page.locator('aside a[href="/admin"]');
+    // Verify navigation landmark and active Overview/Inicio link unambiguously
+    const adminNav = page.getByRole("navigation", { name: "Secciones del panel" });
+    await expect(adminNav).toBeVisible();
+    const overviewLink = adminNav.getByRole("link", { name: "Inicio", exact: true });
     await expect(overviewLink).toBeVisible();
     await expect(overviewLink).toHaveAttribute("aria-current", "page");
+    await expect(overviewLink).toHaveAttribute("href", "/admin");
 
     // Proves zero dead links in navigation
     const allSidebarLinks = await page
@@ -181,7 +184,7 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
 
     // Verify Tab key cycles inside drawer (focus trap)
     await page.keyboard.press("Tab");
-    const navLink = drawer.getByRole("link", { name: /Inicio/i });
+    const navLink = drawer.getByRole("link", { name: "Inicio", exact: true });
     await expect(navLink).toBeFocused();
 
     // Verify Shift+Tab cycles back to close button
