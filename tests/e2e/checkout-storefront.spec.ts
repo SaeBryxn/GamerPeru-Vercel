@@ -1,9 +1,37 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import postgres from "postgres";
 
 const databaseUrl = process.env.DATABASE_URL!;
 const sql = postgres(databaseUrl, { max: 1 });
+
+/**
+ * Reusable robust PDP Add-to-Cart and navigate to checkout helper
+ */
+async function addProductAndGoToCheckout(page: Page) {
+  await page.goto("/productos/mouse-cart-e2e");
+  const addBtn = page.getByTestId("pdp-add-to-cart-button");
+  await expect(addBtn).toBeVisible();
+  await expect(addBtn).toBeEnabled();
+  await addBtn.click();
+
+  const drawer = page.getByTestId("cart-drawer");
+  await expect(async () => {
+    const isDrawerOpen = await drawer.isVisible().catch(() => false);
+    if (!isDrawerOpen) {
+      await addBtn.click().catch(() => {});
+    }
+    expect(isDrawerOpen).toBe(true);
+  }).toPass({ timeout: 15000, intervals: [200, 500, 1000] });
+
+  const checkoutBtn = page.getByTestId("cart-drawer-checkout-button");
+  await expect(checkoutBtn).toBeVisible();
+  await checkoutBtn.click();
+
+  await expect(page).toHaveURL(/\/checkout/);
+  const checkoutPage = page.getByTestId("checkout-page");
+  await expect(checkoutPage).toBeVisible();
+}
 
 test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Suite", () => {
   test.beforeEach(async ({ page }) => {
@@ -14,6 +42,8 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
   test.afterAll(async () => {
     // Clean test data after suite completes
     await sql.begin(async (tx) => {
+      await tx`DELETE FROM refunds WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@testchk6.pe')`;
+      await tx`DELETE FROM audit_events WHERE target_id IN (SELECT id::text FROM orders WHERE customer_email LIKE '%@testchk6.pe')`;
       await tx`DELETE FROM outbox_events WHERE aggregate_type = 'Order' AND payload->>'customerEmail' LIKE '%@testchk6.pe'`;
       await tx`DELETE FROM payment_submissions WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@testchk6.pe'))`;
       await tx`DELETE FROM payment_proof_upload_intents WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@testchk6.pe'))`;
@@ -34,24 +64,8 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
   test("Scenario A: Full Guest Checkout Flow (Cart -> Checkout -> Peru Address -> Shipping -> Payment -> Confirmation -> DB Invariants)", async ({
     page,
   }) => {
-    // 1. Visit PDP and Add to Cart
-    await page.goto("/productos/mouse-cart-e2e");
-    const addBtn = page.getByTestId("pdp-add-to-cart-button");
-    await expect(addBtn).toBeVisible();
-    await addBtn.click();
-
-    // 2. Drawer opens -> Click "Finalizar compra"
-    const drawer = page.getByTestId("cart-drawer");
-    await expect(drawer).toBeVisible();
-
-    const checkoutBtn = page.getByTestId("cart-drawer-checkout-button");
-    await expect(checkoutBtn).toBeVisible();
-    await checkoutBtn.click();
-
-    // 3. Arrive at /checkout
-    await expect(page).toHaveURL(/\/checkout/);
-    const checkoutPage = page.getByTestId("checkout-page");
-    await expect(checkoutPage).toBeVisible();
+    // 1. Visit PDP, Add to Cart, Arrive at /checkout
+    await addProductAndGoToCheckout(page);
 
     // 4. Verify robots meta tag (noindex, nofollow)
     const robotsMeta = page.locator('meta[name="robots"]').last();
@@ -69,29 +83,30 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     await page.getByTestId("checkout-input-department").fill("Lima");
     await page.getByTestId("checkout-input-province").fill("Lima");
     await page.getByTestId("checkout-input-district").fill("Miraflores");
-    await page.getByTestId("checkout-input-reference").fill("Entre Shell y Benavides");
+    await page
+      .getByTestId("checkout-input-reference")
+      .fill("Frente al parque Kennedy, tocar timbre 502");
 
-    // 7. Verify and Select Shipping Method
+    // 7. Select Shipping Method
     const shippingMethod = page.getByTestId("shipping-method-LIMA_EXPRESS");
     await expect(shippingMethod).toBeVisible();
     await shippingMethod.click();
 
-    // 8. Verify Payment Method (Neutral Display)
+    // 8. Select Payment Method
     const paymentMethod = page.getByTestId("payment-method-YAPE_MANUAL");
     await expect(paymentMethod).toBeVisible();
     await paymentMethod.click();
 
-    // 9. Verify Order Summary Pricing
-    const subtotalValue = page.getByTestId("checkout-subtotal-value");
-    await expect(subtotalValue).toBeVisible();
+    // 9. Verify Authoritative Financial Totals
+    const subtotalEl = page.getByTestId("checkout-subtotal-value");
+    const shippingEl = page.getByTestId("checkout-shipping-value");
+    const totalEl = page.getByTestId("checkout-total-value");
 
-    const shippingValue = page.getByTestId("checkout-shipping-value");
-    await expect(shippingValue).toContainText("15.00");
+    await expect(subtotalEl).toContainText("129.90");
+    await expect(shippingEl).toContainText("15.00");
+    await expect(totalEl).toContainText("144.90");
 
-    const totalValue = page.getByTestId("checkout-total-value");
-    await expect(totalValue).toBeVisible();
-
-    // 10. Run Accessibility Audit on Checkout page
+    // 10. Run Accessibility Audit on Checkout Surface
     const axeResultsCheckout = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();
@@ -174,14 +189,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     browser,
   }) => {
     // 1. Setup order via direct checkout or navigation
-    await page.goto("/productos/mouse-cart-e2e");
-    const addBtn = page.getByTestId("pdp-add-to-cart-button");
-    await addBtn.click();
-
-    const checkoutBtn = page.getByTestId("cart-drawer-checkout-button");
-    await checkoutBtn.click();
-
-    await expect(page).toHaveURL(/\/checkout/);
+    await addProductAndGoToCheckout(page);
 
     await page.getByTestId("checkout-input-email").fill("security.guest@testchk6.pe");
     await page.getByTestId("checkout-input-recipient-name").fill("Luis Ramos");
@@ -240,14 +248,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
   test("Scenario D: Browser Repeated / Fast Double Click preserves single order invariant", async ({
     page,
   }) => {
-    await page.goto("/productos/mouse-cart-e2e");
-    const addBtn = page.getByTestId("pdp-add-to-cart-button");
-    await addBtn.click();
-
-    const checkoutBtn = page.getByTestId("cart-drawer-checkout-button");
-    await checkoutBtn.click();
-
-    await expect(page).toHaveURL(/\/checkout/);
+    await addProductAndGoToCheckout(page);
 
     await page.getByTestId("checkout-input-email").fill("double.click@testchk6.pe");
     await page.getByTestId("checkout-input-recipient-name").fill("Mario Gomez");
@@ -289,14 +290,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
   test("Scenario E: Dynamic Shipping Selection & Authoritative Totals in Real Browser", async ({
     page,
   }) => {
-    await page.goto("/productos/mouse-cart-e2e");
-    const addBtn = page.getByTestId("pdp-add-to-cart-button");
-    await addBtn.click();
-
-    const checkoutBtn = page.getByTestId("cart-drawer-checkout-button");
-    await checkoutBtn.click();
-
-    await expect(page).toHaveURL(/\/checkout/);
+    await addProductAndGoToCheckout(page);
 
     // Verify initial values
     await expect(page.getByTestId("checkout-subtotal-value")).toContainText("129.90");
@@ -344,5 +338,66 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     expect(dbOrder!.subtotal_cents).toBe(12990);
     expect(dbOrder!.shipping_cents).toBe(2500);
     expect(dbOrder!.total_cents).toBe(15490);
+  });
+
+  test("Scenario F: Customer Order Cancellation on confirmation page", async ({ page }) => {
+    await addProductAndGoToCheckout(page);
+
+    await page.getByTestId("checkout-input-email").fill("cancel.customer@testchk6.pe");
+    await page.getByTestId("checkout-input-recipient-name").fill("Valeria Rios");
+    await page.getByTestId("checkout-input-phone").fill("977665544");
+    await page.getByTestId("checkout-input-street-address").fill("Calle Las Flores 456");
+    await page.getByTestId("checkout-input-department").fill("Lima");
+    await page.getByTestId("checkout-input-province").fill("Lima");
+    await page.getByTestId("checkout-input-district").fill("San Isidro");
+
+    const shippingMethod = page.getByTestId("shipping-method-LIMA_EXPRESS");
+    await expect(shippingMethod).toBeVisible();
+    await shippingMethod.click();
+
+    const paymentMethod = page.getByTestId("payment-method-YAPE_MANUAL");
+    await expect(paymentMethod).toBeVisible();
+    await paymentMethod.click();
+
+    const submitBtn = page.getByTestId("checkout-submit-button");
+    await submitBtn.click();
+
+    await expect(page).toHaveURL(/\/checkout\/confirmacion\/GP-[A-Z0-9]{8}/, { timeout: 15000 });
+    const confirmationView = page.getByTestId("checkout-confirmation-view");
+    await expect(confirmationView).toBeVisible();
+
+    const orderNumberEl = page.getByTestId("confirmation-order-number");
+    const orderNumberMatch = (await orderNumberEl.textContent())?.match(/GP-[A-Z0-9]{8}/);
+    expect(orderNumberMatch).not.toBeNull();
+    const orderNumber = orderNumberMatch![0];
+
+    // Verify cancellation trigger is visible and click it
+    const cancelBtn = page.getByTestId("confirmation-cancel-order-button");
+    await expect(cancelBtn).toBeVisible();
+    await cancelBtn.click();
+
+    // Modal dialog opens
+    const modal = page.getByTestId("cancel-order-modal");
+    await expect(modal).toBeVisible();
+
+    // Confirm cancellation in modal
+    const confirmCancelBtn = page.getByTestId("confirm-cancel-order-button");
+    await expect(confirmCancelBtn).toBeVisible();
+    await confirmCancelBtn.click();
+
+    // Confirmation view transitions to cancelled state
+    await expect(page.getByTestId("confirmation-cancelled-message")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByText("Pedido Cancelado")).toBeVisible();
+
+    // Verify in DB that order is cancelled and reservations released
+    const [dbOrder] = await sql`SELECT * FROM orders WHERE order_number = ${orderNumber}`;
+    expect(dbOrder).toBeDefined();
+    expect(dbOrder!.status).toBe("CANCELLED");
+
+    const reservations =
+      await sql`SELECT * FROM inventory_reservations WHERE order_id = ${dbOrder!.id}`;
+    expect(reservations[0]!.status).toBe("RELEASED");
   });
 });
