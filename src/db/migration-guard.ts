@@ -4,7 +4,7 @@
  * Prevents accidental execution of migrations against hosted Supabase
  * when local development or local testing is intended.
  *
- * Implements fail-closed environment validation and project identity checks.
+ * Implements fail-closed environment validation and strict project identity checks.
  */
 
 export interface MigrationGuardEnv {
@@ -51,7 +51,7 @@ export function resolveMigrationTarget(
   const mode = (env.GAMERPERU_MIGRATION_ENV ?? "local").toLowerCase().trim();
 
   if (mode === "local") {
-    // In local mode, determine the candidate URL
+    // In local mode, determine candidate URL
     const candidateUrl =
       env.DATABASE_MIGRATION_URL ?? env.DATABASE_URL ?? CANONICAL_LOCAL_MIGRATION_URL;
 
@@ -121,19 +121,41 @@ export function resolveMigrationTarget(
     }
 
     const hostname = parsed.hostname.toLowerCase();
+    const username = decodeURIComponent(parsed.username);
+    const expectedProjectRef = AUTHORIZED_HOSTED_PROJECT_REF;
+    const directHostname = `db.${expectedProjectRef}.supabase.co`;
 
-    // Verify project identity in hostname or username
-    const matchesProjectRef =
-      hostname.includes(AUTHORIZED_HOSTED_PROJECT_REF) ||
-      parsed.username.includes(AUTHORIZED_HOSTED_PROJECT_REF);
+    const isDirectHost = hostname === directHostname;
+    const isPoolerHost =
+      hostname.endsWith(".pooler.supabase.com") &&
+      /^[a-z0-9-]+(\.[a-z0-9-]+)*\.pooler\.supabase\.com$/.test(hostname);
 
-    if (!matchesProjectRef) {
+    if (!isDirectHost && !isPoolerHost) {
       throw new Error(
-        `MIGRATION_GUARD_VIOLATION: Hosted migration target host '${hostname}' does not match authorized Gamer Perú Supabase project ref '${AUTHORIZED_HOSTED_PROJECT_REF}'.`
+        `MIGRATION_GUARD_VIOLATION: Hosted migration target host '${hostname}' does not match authorized Gamer Perú Supabase direct endpoint ('${directHostname}') or session pooler ('*.pooler.supabase.com').`
       );
     }
 
-    // Hosted migration must strictly use port 5432 (Transaction Pooler port 6543 and any non-5432 ports are forbidden)
+    if (isDirectHost) {
+      const isAuthorizedDirectUser =
+        username === "postgres" || username === `postgres.${expectedProjectRef}`;
+      if (!isAuthorizedDirectUser) {
+        throw new Error(
+          `MIGRATION_GUARD_VIOLATION: Hosted direct migration username '${username}' does not match authorized direct username 'postgres' or 'postgres.${expectedProjectRef}'.`
+        );
+      }
+    }
+
+    if (isPoolerHost) {
+      const isAuthorizedPoolerUser = username === `postgres.${expectedProjectRef}`;
+      if (!isAuthorizedPoolerUser) {
+        throw new Error(
+          `MIGRATION_GUARD_VIOLATION: Hosted pooler migration username '${username}' does not match authorized project user 'postgres.${expectedProjectRef}'.`
+        );
+      }
+    }
+
+    // Hosted migration must strictly use port 5432 (Transaction Pooler port 6543 and arbitrary non-5432 ports are forbidden)
     const port = parsed.port;
     if (port !== "5432") {
       throw new Error(
@@ -152,7 +174,7 @@ export function resolveMigrationTarget(
     return {
       targetUrl: candidateUrl,
       environment: "hosted",
-      projectRef: AUTHORIZED_HOSTED_PROJECT_REF,
+      projectRef: expectedProjectRef,
     };
   }
 
