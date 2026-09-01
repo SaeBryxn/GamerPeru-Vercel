@@ -260,6 +260,9 @@ jobs:
       - name: Run Dedicated Order Live Integration Tests
         run: pnpm test:order:live
 
+      - name: Run Dedicated Inventory Live Integration Tests
+        run: pnpm test:inventory:live
+
       - name: Stop Local Supabase
         if: always()
         run: pnpm supabase:stop
