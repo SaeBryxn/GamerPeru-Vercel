@@ -8,6 +8,11 @@ import { publicEnv } from "@/config/public-env";
  * Propagates Supabase auth cookies and cache safety headers between incoming
  * request and outgoing response. Uses getClaims() for session initialization
  * and token refresh without issuing domain database queries.
+ *
+ * Deterministic Cache Protection:
+ * Guarantees that every matched protected route (/admin, /admin/*, /api/admin/*,
+ * /cuenta/*, /auth/cambiar-password, /auth/completar-perfil) emits explicit
+ * private/no-store headers regardless of whether Supabase refreshed a cookie.
  */
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
   let supabaseResponse = NextResponse.next({
@@ -53,6 +58,25 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   // Initialize/refresh session via getClaims() cryptographic verification
   await supabase.auth.getClaims();
+
+  // Deterministic cache protection: ensure protected routes ALWAYS receive no-store headers
+  // even if no cookie refresh/write occurred during the request.
+  const pathname = request.nextUrl.pathname;
+  if (
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
+    pathname.startsWith("/api/admin/") ||
+    pathname === "/cuenta" ||
+    pathname.startsWith("/cuenta/") ||
+    pathname === "/auth/cambiar-password" ||
+    pathname === "/auth/completar-perfil"
+  ) {
+    supabaseResponse.headers.set(
+      "Cache-Control",
+      "private, no-cache, no-store, must-revalidate, max-age=0"
+    );
+    supabaseResponse.headers.set("Pragma", "no-cache");
+  }
 
   return supabaseResponse;
 }

@@ -77,7 +77,7 @@ describe("GP-015 AUTH8-BR1 — RBAC Server Authorization Runtime Tests", () => {
 
   it("proves CANONICAL_ROLES and CANONICAL_PERMISSIONS constants are complete", () => {
     expect(CANONICAL_ROLES.length).toBe(5);
-    expect(CANONICAL_PERMISSIONS.length).toBe(10);
+    expect(CANONICAL_PERMISSIONS.length).toBe(11);
   });
 
   it("A: returns UNAUTHENTICATED context when user is not authenticated", async () => {
@@ -218,7 +218,7 @@ describe("GP-015 AUTH8-BR1 — RBAC Server Authorization Runtime Tests", () => {
     expect(await hasPermission("ai:manage_credentials")).toBe(false);
   });
 
-  it("F: grants all 10 permissions explicitly for SUPER_ADMIN via database rows", async () => {
+  it("F: grants all 11 permissions explicitly for SUPER_ADMIN via database rows", async () => {
     const { getVerifiedAuthContext, hasPermission, requirePermission } =
       await import("@/lib/auth/rbac");
 
@@ -231,7 +231,7 @@ describe("GP-015 AUTH8-BR1 — RBAC Server Authorization Runtime Tests", () => {
     expect(context.status).toBe("READY");
     if (context.status === "READY") {
       expect(context.roles).toEqual(["SUPER_ADMIN"]);
-      expect(context.permissions.size).toBe(10);
+      expect(context.permissions.size).toBe(11);
     }
 
     for (const perm of CANONICAL_PERMISSIONS) {
@@ -433,9 +433,9 @@ describe("GP-015 AUTH8-BR1 — RBAC Server Authorization Runtime Tests", () => {
     const { getVerifiedAuthContext, hasPermission, requirePermission } =
       await import("@/lib/auth/rbac");
 
-    // User has SUPER_ADMIN, but DB role_permissions has only 9 out of 10 permissions (missing 'audit:export')
-    const ninePermissions = CANONICAL_PERMISSIONS.filter((p) => p !== "audit:export");
-    mockState.dbRows = ninePermissions.map((perm) => ({
+    // User has SUPER_ADMIN, but DB role_permissions is missing 'audit:export'
+    const subsetPermissions = CANONICAL_PERMISSIONS.filter((p) => p !== "audit:export");
+    mockState.dbRows = subsetPermissions.map((perm) => ({
       roleName: "SUPER_ADMIN",
       permissionName: perm,
     }));
@@ -444,12 +444,12 @@ describe("GP-015 AUTH8-BR1 — RBAC Server Authorization Runtime Tests", () => {
     expect(context.status).toBe("READY");
     if (context.status === "READY") {
       expect(context.roles).toEqual(["SUPER_ADMIN"]);
-      expect(context.permissions.size).toBe(9);
+      expect(context.permissions.size).toBe(10);
       expect(context.permissions.has("audit:export")).toBe(false);
     }
 
-    // 9 are allowed
-    for (const perm of ninePermissions) {
+    // Granted permissions are allowed
+    for (const perm of subsetPermissions) {
       expect(await hasPermission(perm)).toBe(true);
     }
 

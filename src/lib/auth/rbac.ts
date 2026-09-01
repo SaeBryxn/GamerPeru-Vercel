@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { roles, permissions, rolePermissions, userRoles } from "@/db/schema";
@@ -20,7 +21,17 @@ export const CANONICAL_ROLES = [
 export type RoleName = (typeof CANONICAL_ROLES)[number];
 
 /**
- * Canonical Gamer Perú v1 Permissions
+ * Canonical Gamer Perú Staff Roles (Authorized for Admin Foundation)
+ */
+export const CANONICAL_STAFF_ROLES: RoleName[] = [
+  "SUPER_ADMIN",
+  "ADMIN_CATALOG",
+  "ADMIN_ORDERS",
+  "ADMIN_SUPPORT",
+];
+
+/**
+ * Canonical Gamer Perú Permissions (v1.1 — includes inventory:manage from GP-022)
  */
 export const CANONICAL_PERMISSIONS = [
   "staff:manage",
@@ -33,6 +44,7 @@ export const CANONICAL_PERMISSIONS = [
   "orders:verify",
   "support:manage",
   "support:review_rma",
+  "inventory:manage",
 ] as const;
 
 export type PermissionName = (typeof CANONICAL_PERMISSIONS)[number];
@@ -141,8 +153,9 @@ async function resolveRbacForVerifiedAuthUserId(authUserId: string): Promise<{
 /**
  * Resolves the authoritative authentication and RBAC context for the current request.
  * Derives user identity strictly via cryptographic token verification (getVerifiedIdentity).
+ * Request-scoped memoization via React cache() ensures identity and PostgreSQL queries run once per request.
  */
-export async function getVerifiedAuthContext(): Promise<VerifiedAuthContext> {
+export const getVerifiedAuthContext = cache(async (): Promise<VerifiedAuthContext> => {
   const verified = await getVerifiedIdentity();
   if (!verified.success) {
     return {
@@ -178,6 +191,37 @@ export async function getVerifiedAuthContext(): Promise<VerifiedAuthContext> {
       permissions: new Set(),
     };
   }
+});
+
+/**
+ * Authoritative server guard for Admin layout and protected routes.
+ * Takes ZERO caller-controlled identity arguments.
+ *
+ * Rules:
+ * 1. Unauthenticated -> throws AuthenticationRequiredError
+ * 2. RBAC DB resolution failure -> throws AuthorizationUnavailableError
+ * 3. Authenticated CUSTOMER or user with 0 staff roles/permissions -> throws ForbiddenError
+ * 4. Authorized staff -> returns VerifiedAuthContextReady
+ */
+export async function requireAdminAccess(): Promise<VerifiedAuthContextReady> {
+  const context = await getVerifiedAuthContext();
+
+  if (context.status === "UNAUTHENTICATED") {
+    throw new AuthenticationRequiredError();
+  }
+
+  if (context.status === "ERROR") {
+    throw new AuthorizationUnavailableError();
+  }
+
+  const hasStaffRole = context.roles.some((role) => CANONICAL_STAFF_ROLES.includes(role));
+  const hasPermissions = context.permissions.size > 0;
+
+  if (!hasStaffRole || !hasPermissions) {
+    throw new ForbiddenError("No tienes permisos de personal para acceder a la administración.");
+  }
+
+  return context;
 }
 
 /**

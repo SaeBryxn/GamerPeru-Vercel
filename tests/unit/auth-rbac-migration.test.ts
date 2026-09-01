@@ -49,10 +49,11 @@ describe("GP-015 AUTH8-BR1 — RBAC Seed Migration Contract Tests", () => {
     });
   });
 
-  it("proves migration 0006 contains all 10 canonical permissions with exact naming", () => {
+  it("proves migration 0006 contains all 10 canonical v1 permissions with exact naming", () => {
     const sql = fs.readFileSync(migration0006Path, "utf8");
+    const v1Permissions = CANONICAL_PERMISSIONS.filter((perm) => perm !== "inventory:manage");
 
-    CANONICAL_PERMISSIONS.forEach((perm) => {
+    v1Permissions.forEach((perm) => {
       expect(sql).toContain(`'${perm}'`);
     });
 
@@ -73,9 +74,10 @@ describe("GP-015 AUTH8-BR1 — RBAC Seed Migration Contract Tests", () => {
 
   it("proves migration 0006 creates exactly 17 explicit role-permission mappings", () => {
     const sql = fs.readFileSync(migration0006Path, "utf8");
+    const v1Permissions = CANONICAL_PERMISSIONS.filter((perm) => perm !== "inventory:manage");
 
-    // SUPER_ADMIN receives exactly 10
-    CANONICAL_PERMISSIONS.forEach((perm) => {
+    // SUPER_ADMIN receives exactly 10 in migration 0006
+    v1Permissions.forEach((perm) => {
       expect(sql).toContain(`'${perm}'`);
     });
 
