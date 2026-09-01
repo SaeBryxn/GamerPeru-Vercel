@@ -282,18 +282,21 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     authUserId?: string;
     customerProfileId?: string;
   }) {
-    const rawCartToken = generateAnonymousSessionToken();
-    currentMockCartCookie = rawCartToken;
+    const isAuth = options?.isAuth ?? false;
+    let rawCartToken: string | null = null;
 
-    if (options?.isAuth) {
+    if (isAuth) {
+      currentMockCartCookie = null;
       currentMockIdentity = {
         success: true,
         identity: {
-          authUserId: options.authUserId ?? authUserId1,
+          authUserId: options?.authUserId ?? authUserId1,
           email: "cliente1@gamerperu.pe",
         },
       };
     } else {
+      rawCartToken = generateAnonymousSessionToken();
+      currentMockCartCookie = rawCartToken;
       currentMockIdentity = { success: false };
     }
 
@@ -301,8 +304,8 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
       INSERT INTO carts (id, session_token, customer_id, status, expires_at, created_at, updated_at)
       VALUES (
         ${generateUuidV7()},
-        ${rawCartToken},
-        ${options?.isAuth ? (options.customerProfileId ?? customerProfileId1) : null},
+        ${isAuth ? null : rawCartToken},
+        ${isAuth ? (options?.customerProfileId ?? customerProfileId1) : null},
         'ACTIVE',
         NOW() + INTERVAL '7 days',
         NOW(),
@@ -312,14 +315,14 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     `;
 
     await sqlClient`
-      INSERT INTO cart_items (id, cart_id, variant_id, quantity, unit_price_cents, created_at, updated_at)
-      VALUES (${generateUuidV7()}, ${cart!.id}, ${variantId1}, 2, 15000, NOW(), NOW())
+      INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+      VALUES (${generateUuidV7()}, ${cart!.id}, ${variantId1}, 2, NOW(), NOW())
     `;
 
     if (options?.multiLine) {
       await sqlClient`
-        INSERT INTO cart_items (id, cart_id, variant_id, quantity, unit_price_cents, created_at, updated_at)
-        VALUES (${generateUuidV7()}, ${cart!.id}, ${variantId2}, 1, 10000, NOW(), NOW())
+        INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+        VALUES (${generateUuidV7()}, ${cart!.id}, ${variantId2}, 1, NOW(), NOW())
       `;
     }
 
