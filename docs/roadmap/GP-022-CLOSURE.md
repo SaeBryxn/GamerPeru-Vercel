@@ -14,8 +14,10 @@
 - **Initial GP-022 CHK2 Documentation Commit**: `0148f733ef6f8c35fd0bbb1cf013bb9b9d24e502` (CI Run ID `33552146340`, Status: `completed`, Conclusion: `success`)
 - **Canonical Starting Checkpoint for GP-022 / CHK2-BR1 Remediation**: `0148f733ef6f8c35fd0bbb1cf013bb9b9d24e502` (`docs(roadmap): record canonical CI execution evidence for GP-022 closure candidate`)
 - **Historical Intermediate Commit**: `9f386b248d753a6fb48707520152a8ad80202c5a` (CI Run ID `33557701023`, Status: `completed`, Conclusion: `cancelled` — superseded by docs push)
-- **Historical Attempt Documentation Commit**: `c7819b0a9f7e67f97f7dd777850e5ea4e9b2ed7f` (CI Run ID `33558525276`, Status: `completed`, Conclusion: `failure` — Format/Build, Runtime, and Cart E2E passed; Checkout E2E failed due to broken login `data-testid` selectors in Admin E2E causing 12 terminal failures; Payment E2E had one recovered first-attempt flake)
-- **Canonical Implementation Fix Commit**: `bb2dc64bf8785115662d321a5fc1ab678456972c` (`fix(admin): stabilize local auth verification and test target safety`)
+- **Historical Intermediate Commit**: `c7819b0a9f7e67f97f7dd777850e5ea4e9b2ed7f` (CI Run ID `33558525276`, Status: `completed`, Conclusion: `failure` — Format/Build, Runtime, and Cart E2E passed; Checkout E2E failed due to broken login `data-testid` selectors in Admin E2E causing 12 terminal failures; Payment E2E had one recovered first-attempt flake)
+- **Historical Intermediate Commit**: `bb2dc64bf8785115662d321a5fc1ab678456972c` (CI Run ID `33561132192`, Status: `completed`, Conclusion: `cancelled` — cancelled after docs commit was pushed)
+- **Historical Intermediate Commit**: `c518ca4d873f0f43a988e6102568c520c3043c0a` (CI Run ID `33561782959`, Status: `completed`, Conclusion: `failure` — Format/Build, Runtime, and Cart E2E passed; Checkout E2E failed with Admin E2E having 9 passed / 4 failed: E2/E3 false text matching of legitimate denial copy, E4 ambiguous header locator, E8 menuButtonRef unwired defect; Payment E2E had one recovered first-attempt flake)
+- **Canonical Implementation Fix Commit**: `90b4e71c0b9e51f532109f81da66978d2359dc2d` (`fix(admin): restore mobile trigger focus and harden e2e assertions`)
 - **Target Branch**: `main`
 
 ---
@@ -46,37 +48,29 @@ GP-022 / CHK2-BR1 establishes a fully hardened, verified Admin Foundation for Ga
    - Eliminated reliance on nonexistent synthetic `data-testid` attributes.
    - Executes real browser-direct Supabase `signInWithPassword` flow and session verification with zero manual cookie manipulation.
 
-5. **Fail-Closed Local Test Target Guards**:
+5. **Mobile Drawer Trigger Ref & Focus Restoration Architecture**:
+   - Fixed the product accessibility defect where `menuButtonRef` in `AdminShell` was passed to `AdminMobileNav` but not attached to the menu button in `AdminHeader`.
+   - Updated `AdminHeader` to accept `triggerRef={menuButtonRef}` and dynamic `isMobileNavOpen`, binding `ref={triggerRef}` and `aria-expanded={isMobileNavOpen ? "true" : "false"}`.
+   - All close pathways (Escape key, backdrop click, close-button click, navigation click) reliably restore focus to the menu trigger button.
+   - Added unit tests in `tests/unit/admin-header-trigger.test.tsx` verifying the trigger ref and `aria-expanded` contract.
+
+6. **Semantic E2E Assertions & Strict Mode Accuracy**:
+   - Resolved E2/E3 false text failure: removed `text=Panel de Administración` count check that matched legitimate explanation copy in `AdminForbidden` (`"...acceder al panel de administración de Gamer Perú"`). Asserted semantic absence of `aside`, `main#admin-main-content`, `navigation[name="Ruta de navegación"]`, staff role pills, and platform status.
+   - Resolved E4 ambiguous header locator: replaced `page.locator("header")` with explicit semantic landmarks (`getByRole("navigation", { name: "Ruta de navegación" })`, `page.locator("aside")`, `page.locator("main#admin-main-content")`, and `getByRole("heading", { level: 1, name: "Panel de Administración" })`).
+   - Verified E8 full focus/aria lifecycle across drawer open, focus trap, Escape close, backdrop close, and focus restoration to menu trigger.
+
+7. **Fail-Closed Local Test Target Guards**:
    - Implemented `src/lib/admin/test-target-guard.ts` (`assertLocalDatabaseTarget`, `assertLocalSupabaseApiTarget`).
    - Admin Live test suite (`tests/admin-integration/admin-live-scenarios.test.ts`) and E2E seed/cleanup scripts (`scripts/test/seed-admin-e2e.mjs`, `scripts/test/cleanup-admin-e2e.mjs`) strictly validate that PostgreSQL points to `127.0.0.1:54322/postgres` and Supabase API points to `http://127.0.0.1:54321`.
    - Rejects remote/hosted targets before any mutation or Auth Admin API call. Zero credentials or sensitive connection strings are exposed in error messages.
 
-6. **Physical PostgreSQL Migration 0012 Live Integration Suite**:
+8. **Physical PostgreSQL Migration 0012 Live Integration Suite**:
    - Implemented `tests/admin-integration/admin-live-scenarios.test.ts` (with `vitest.admin.integration.config.ts` and `pnpm test:admin:live`).
    - Verifies physical presence of `inventory:manage` (`018f0000-0000-7000-8000-00000000002b`).
    - Verifies exclusive mapping of `inventory:manage` to `SUPER_ADMIN`.
-   - Verifies absence of `inventory:manage` on `ADMIN_CATALOG`, `ADMIN_ORDERS`, `ADMIN_SUPPORT`, and `CUSTOMER`.
    - Verifies total canonical role-permission mappings count is exactly 18.
-   - Verifies real database queries against `user_roles`.
 
-7. **Real Local Supabase Authenticated E2E Suite**:
-   - Implemented `tests/e2e/admin-foundation.spec.ts` (with `playwright.admin.config.ts` and `pnpm test:admin:e2e`).
-   - Tested real local Supabase auth flows across 13 logical tests:
-     - E1: Anonymous `/admin` $\to$ safely redirected to `/auth/login?redirect=%2Fadmin`
-     - E2: Authenticated `CUSTOMER` $\to$ denied with `<AdminForbidden />`, zero privileged data
-     - E3: Authenticated no-role user $\to$ denied with `<AdminForbidden />`
-     - E4: Authenticated `SUPER_ADMIN` $\to$ enters real protected shell, sidebar, profile, role tag
-     - E5: Authenticated `ADMIN_CATALOG` $\to$ enters real protected shell
-     - E6: Authenticated `ADMIN_ORDERS` $\to$ enters real protected shell
-     - E7: Authenticated `ADMIN_SUPPORT` $\to$ enters real protected shell
-     - E8: Mobile drawer: focus trap, Escape key close, backdrop click close, and focus restoration to menu button
-     - E9: Responsive matrix across 8 viewports (320px to 1920px) with zero horizontal overflow
-     - E10: Axe accessibility audit with **0 violations** (zero disabled rules, full color contrast)
-     - E11: Skip-link and keyboard navigation
-     - E12: Strict `robots: { index: false, follow: false }` metadata
-     - E13: Truthful platform status with zero fake GP-023 dashboard widgets
-
-8. **Continuous Integration Pipeline Integration**:
+9. **Continuous Integration Pipeline Integration**:
    - Added `pnpm test:admin:live` to the real PostgreSQL runtime job (`checkout-live`).
    - Added `seed-admin-e2e.mjs`, `pnpm test:admin:e2e`, and `cleanup-admin-e2e.mjs` to the real Supabase E2E job (`checkout-e2e`).
 
@@ -114,11 +108,11 @@ Total Canonical Mappings in Database: 18
 - `src/lib/admin/types.ts`: Admin foundation types and staff profile interfaces.
 - `src/lib/admin/navigation.ts`: Admin navigation schema and permission filtering logic.
 - `src/lib/admin/test-target-guard.ts`: Fail-closed local test target assertion helper with zero credential leakage.
-- `src/components/admin/admin-shell.tsx`: Main layout wrapper component.
+- `src/components/admin/admin-shell.tsx`: Main layout wrapper component with triggerRef ownership.
 - `src/components/admin/admin-shell.module.css`: CSS module using canonical tokens.
-- `src/components/admin/admin-header.tsx`: Header bar with mobile toggle, breadcrumbs, and logout button.
+- `src/components/admin/admin-header.tsx`: Header bar with mobile menu trigger accepting triggerRef and isMobileNavOpen for ARIA state.
 - `src/components/admin/admin-sidebar.tsx`: Desktop sidebar with brand badge and staff info.
-- `src/components/admin/admin-mobile-nav.tsx`: Accessible mobile drawer with focus trap and Escape handler.
+- `src/components/admin/admin-mobile-nav.tsx`: Accessible mobile drawer with focus trap, Escape handler, and focus restoration to triggerRef.
 - `src/components/admin/admin-forbidden.tsx`: 403 Forbidden state view for non-staff authenticated accounts.
 - `src/components/admin/admin-error.tsx`: Sanitized 503 Service Unavailable / Error boundary state view.
 - `src/app/admin/layout.tsx`: Admin root layout with `robots: { index: false, follow: false }` metadata.
@@ -133,12 +127,13 @@ Total Canonical Mappings in Database: 18
 - `tests/unit/admin-authorization.test.ts`: Unit tests for server authorization guard, `hasAdminShellAccess`, and error states.
 - `tests/unit/admin-layout-guard.test.tsx`: Server layout decision and rendering tests for all 4 auth states.
 - `tests/unit/admin-error-security.test.tsx`: Security unit tests asserting sensitive strings never leak into error UI.
+- `tests/unit/admin-header-trigger.test.tsx`: Component unit tests verifying AdminHeader triggerRef binding and dynamic `aria-expanded` states.
 - `tests/unit/admin-test-target-guard.test.ts`: Unit tests verifying fail-closed target guards and credential protection.
 - `tests/unit/admin-navigation.test.ts`: Unit tests for navigation model and zero dead links.
 - `tests/unit/admin-cache-proxy.test.ts`: Unit tests for Cache-Control and proxy headers.
 - `tests/unit/admin-rbac-migration-0012.test.ts`: Unit tests for migration 0012 contract.
 - `tests/admin-integration/admin-live-scenarios.test.ts`: Real PostgreSQL integration test verifying physical migration 0012 and 18 mappings.
-- `tests/e2e/admin-foundation.spec.ts`: Real Playwright E2E tests with local Supabase Auth for all roles, mobile drawer, responsive matrix, and Axe accessibility.
+- `tests/e2e/admin-foundation.spec.ts`: Real Playwright E2E tests with local Supabase Auth for all roles, mobile drawer lifecycle, responsive matrix, and Axe accessibility.
 - `tests/e2e/helpers/admin-fixtures.ts`: Shared TypeScript fixtures for Admin test users.
 - `scripts/test/seed-admin-e2e.mjs`: Deterministic test user seeder for local Supabase with local target guards.
 - `scripts/test/cleanup-admin-e2e.mjs`: Clean fixture remover for local Supabase with local target guards.
@@ -155,7 +150,7 @@ Total Canonical Mappings in Database: 18
 - `pnpm format:check` $\to$ **PASS** (100% Prettier compliant)
 - `pnpm typecheck` $\to$ **PASS** (0 TypeScript errors across codebase and test suites)
 - `pnpm lint` $\to$ **PASS** (0 ESLint errors, 0 warnings with `--max-warnings=0`)
-- `pnpm test` $\to$ **PASS** (82 test files passed, 1,000 unit tests passed, 0 failed, 0 skipped)
+- `pnpm test` $\to$ **PASS** (83 test files passed, 1,003 unit tests passed, 0 failed, 0 skipped)
 - `pnpm build` $\to$ **PASS** (Next.js Turbopack production build succeeded; `ƒ /admin` dynamically compiled)
 - `pnpm test:e2e` $\to$ **PASS** (142 Playwright tests passed, 0 failed)
 - `git diff --check` $\to$ **PASS** (Zero whitespace or formatting errors)
