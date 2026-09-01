@@ -1,19 +1,29 @@
 import postgres from "postgres";
 
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  console.error("[Admin E2E Cleanup] ERROR: DATABASE_URL environment variable is required.");
+if (!databaseUrl || typeof databaseUrl !== "string" || databaseUrl.trim().length === 0) {
+  console.error(
+    "[Admin E2E Cleanup] SECURITY VIOLATION: DATABASE_URL environment variable is required."
+  );
   process.exit(1);
 }
 
-const parsedUrl = new URL(databaseUrl);
+let parsedDb;
+try {
+  parsedDb = new URL(databaseUrl.trim());
+} catch {
+  console.error("[Admin E2E Cleanup] SECURITY VIOLATION: DATABASE_URL is malformed.");
+  process.exit(1);
+}
+
 if (
-  parsedUrl.hostname !== "127.0.0.1" ||
-  parsedUrl.port !== "54322" ||
-  parsedUrl.pathname !== "/postgres"
+  (parsedDb.protocol !== "postgres:" && parsedDb.protocol !== "postgresql:") ||
+  parsedDb.hostname !== "127.0.0.1" ||
+  parsedDb.port !== "54322" ||
+  parsedDb.pathname !== "/postgres"
 ) {
   console.error(
-    `[Admin E2E Cleanup] SECURITY VIOLATION: DATABASE_URL must target 127.0.0.1:54322/postgres. Received: ${parsedUrl.hostname}:${parsedUrl.port}${parsedUrl.pathname}`
+    `[Admin E2E Cleanup] SECURITY VIOLATION: DATABASE_URL must target 127.0.0.1:54322/postgres. Refusing to run.`
   );
   process.exit(1);
 }

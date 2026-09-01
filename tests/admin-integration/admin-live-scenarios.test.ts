@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import postgres from "postgres";
+import { assertLocalDatabaseTarget } from "@/lib/admin/test-target-guard";
 
 describe("GP-022 / BR1 — Admin & RBAC Real PostgreSQL Physical Verification", () => {
-  const databaseUrl =
+  const rawDatabaseUrl =
     process.env.DATABASE_URL ??
     process.env.DATABASE_MIGRATION_URL ??
     "postgres://postgres:postgres@127.0.0.1:54322/postgres";
@@ -19,6 +20,8 @@ describe("GP-022 / BR1 — Admin & RBAC Real PostgreSQL Physical Verification", 
   };
 
   beforeAll(async () => {
+    // Fail-closed validation: refuse to interact with non-local database target
+    const databaseUrl = assertLocalDatabaseTarget(rawDatabaseUrl);
     sql = postgres(databaseUrl, { max: 1 });
 
     // Seed test auth users for live RBAC resolution verification

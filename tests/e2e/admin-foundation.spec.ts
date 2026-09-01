@@ -4,6 +4,7 @@ import { ADMIN_E2E_USERS, ADMIN_E2E_PASSWORD } from "./helpers/admin-fixtures";
 
 /**
  * Helper to log in a test user via browser-direct Supabase auth and navigate to /admin.
+ * Uses the accessible production login contract (no artificial test IDs).
  */
 async function loginAndNavigateToAdmin(page: Page, email: string) {
   // Clear any existing cookies for clean session
@@ -13,12 +14,12 @@ async function loginAndNavigateToAdmin(page: Page, email: string) {
   await page.goto("/auth/login?redirect=%2Fadmin");
   await page.waitForLoadState("domcontentloaded");
 
-  // Fill credentials and submit
-  await page.getByTestId("login-input-email").fill(email);
-  await page.getByTestId("login-input-password").fill(ADMIN_E2E_PASSWORD);
-  await page.getByTestId("login-submit-button").click();
+  // Fill credentials using accessible production form fields
+  await page.getByLabel("Correo electrónico").fill(email);
+  await page.getByLabel("Contraseña").fill(ADMIN_E2E_PASSWORD);
+  await page.getByRole("button", { name: "Iniciar sesión" }).click();
 
-  // Wait for login processing and navigation
+  // Wait for login processing and navigation away from login page
   await page.waitForURL((url) => !url.pathname.includes("/auth/login"), {
     timeout: 15000,
   });
@@ -166,6 +167,10 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
     const navLink = drawer.getByRole("link", { name: /Inicio/i });
     await expect(navLink).toBeFocused();
 
+    // Verify Shift+Tab cycles back to close button
+    await page.keyboard.press("Shift+Tab");
+    await expect(closeButton).toBeFocused();
+
     // Press Escape key -> drawer closes and restores focus to menu button
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
@@ -178,6 +183,7 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
     // Click outside drawer
     await page.mouse.click(10, 10);
     await expect(drawer).toBeHidden();
+    await expect(menuButton).toBeFocused();
   });
 
   test("E9: Responsive matrix verification for zero horizontal overflow on real Admin Shell across 8 viewports", async ({

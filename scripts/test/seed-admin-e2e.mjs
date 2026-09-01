@@ -1,20 +1,52 @@
 import postgres from "postgres";
 import { createClient } from "@supabase/supabase-js";
 
+// 1. Strict Fail-Closed Database Target Guard
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  console.error("[Admin E2E Seed] ERROR: DATABASE_URL environment variable is required.");
+if (!databaseUrl || typeof databaseUrl !== "string" || databaseUrl.trim().length === 0) {
+  console.error(
+    "[Admin E2E Seed] SECURITY VIOLATION: DATABASE_URL environment variable is required."
+  );
   process.exit(1);
 }
 
-const parsedUrl = new URL(databaseUrl);
+let parsedDb;
+try {
+  parsedDb = new URL(databaseUrl.trim());
+} catch {
+  console.error("[Admin E2E Seed] SECURITY VIOLATION: DATABASE_URL is malformed.");
+  process.exit(1);
+}
+
 if (
-  parsedUrl.hostname !== "127.0.0.1" ||
-  parsedUrl.port !== "54322" ||
-  parsedUrl.pathname !== "/postgres"
+  (parsedDb.protocol !== "postgres:" && parsedDb.protocol !== "postgresql:") ||
+  parsedDb.hostname !== "127.0.0.1" ||
+  parsedDb.port !== "54322" ||
+  parsedDb.pathname !== "/postgres"
 ) {
   console.error(
-    `[Admin E2E Seed] SECURITY VIOLATION: DATABASE_URL must target 127.0.0.1:54322/postgres. Received: ${parsedUrl.hostname}:${parsedUrl.port}${parsedUrl.pathname}`
+    `[Admin E2E Seed] SECURITY VIOLATION: DATABASE_URL must target 127.0.0.1:54322/postgres. Refusing to run.`
+  );
+  process.exit(1);
+}
+
+// 2. Strict Fail-Closed Supabase API Target Guard
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://127.0.0.1:54321";
+let parsedSb;
+try {
+  parsedSb = new URL(supabaseUrl.trim());
+} catch {
+  console.error("[Admin E2E Seed] SECURITY VIOLATION: NEXT_PUBLIC_SUPABASE_URL is malformed.");
+  process.exit(1);
+}
+
+if (
+  parsedSb.protocol !== "http:" ||
+  parsedSb.hostname !== "127.0.0.1" ||
+  parsedSb.port !== "54321"
+) {
+  console.error(
+    `[Admin E2E Seed] SECURITY VIOLATION: NEXT_PUBLIC_SUPABASE_URL must target http://127.0.0.1:54321. Refusing to run.`
   );
   process.exit(1);
 }
@@ -54,7 +86,6 @@ export const ADMIN_E2E_USERS = {
 
 export const ADMIN_E2E_PASSWORD = "AdminSecretPass2026!";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://127.0.0.1:54321";
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
 
 const sql = postgres(databaseUrl, { max: 1 });
