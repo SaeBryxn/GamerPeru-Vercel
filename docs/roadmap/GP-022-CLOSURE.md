@@ -1,4 +1,4 @@
-# GP-022 — Canonical Closure Report (CHK2-BR1 Final Fixup)
+# GP-022 — Canonical Closure Report (CHK3-BR1 Remediation)
 
 ## Status
 
@@ -12,72 +12,50 @@
 - **Starting Checkpoint for GP-022 CHK1/CHK2**: `5c78c2cd8262217269124060f8e480d34c495138`
 - **Initial GP-022 CHK2 Implementation Commit**: `18bac753e9c66832c6f4889036907b0efd4b623c` (CI Run ID `33549751212`, Status: `completed`, Conclusion: `success`)
 - **Initial GP-022 CHK2 Documentation Commit**: `0148f733ef6f8c35fd0bbb1cf013bb9b9d24e502` (CI Run ID `33552146340`, Status: `completed`, Conclusion: `success`)
-- **Canonical Starting Checkpoint for GP-022 / CHK2-BR1 Remediation**: `0148f733ef6f8c35fd0bbb1cf013bb9b9d24e502` (`docs(roadmap): record canonical CI execution evidence for GP-022 closure candidate`)
-- **Historical Intermediate Commit**: `9f386b248d753a6fb48707520152a8ad80202c5a` (CI Run ID `33557701023`, Status: `completed`, Conclusion: `cancelled` — superseded by docs push)
-- **Historical Intermediate Commit**: `c7819b0a9f7e67f97f7dd777850e5ea4e9b2ed7f` (CI Run ID `33558525276`, Status: `completed`, Conclusion: `failure` — Format/Build, Runtime, and Cart E2E passed; Checkout E2E failed due to broken login `data-testid` selectors in Admin E2E causing 12 terminal failures; Payment E2E had one recovered first-attempt flake)
-- **Historical Intermediate Commit**: `bb2dc64bf8785115662d321a5fc1ab678456972c` (CI Run ID `33561132192`, Status: `completed`, Conclusion: `cancelled` — cancelled after docs commit was pushed)
-- **Historical Intermediate Commit**: `c518ca4d873f0f43a988e6102568c520c3043c0a` (CI Run ID `33561782959`, Status: `completed`, Conclusion: `failure` — Format/Build, Runtime, and Cart E2E passed; Checkout E2E failed with Admin E2E having 9 passed / 4 failed: E2/E3 false text matching of legitimate denial copy, E4 ambiguous header locator, E8 menuButtonRef unwired defect; Payment E2E had one recovered first-attempt flake)
-- **Historical Intermediate Commit**: `90b4e71c0b9e51f532109f81da66978d2359dc2d` (CI Run ID `33563569694`, Status: `completed`, Conclusion: `cancelled` — superseded by docs push)
-- **Historical Intermediate Commit**: `8e66c60647b4dac7954228b1ec4462894ad72af3` (CI Run ID `33564165628`, Status: `completed`, Conclusion: `failure` — Format/Build, Runtime, and Cart E2E passed; Checkout E2E failed because Admin E2E failed on: E4 locator strict mode collision where `getByText("ADMIN")` matched both brand badge and `SUPER_ADMIN` role pill; E8 backdrop click using viewport coordinates `(10, 10)` inside the 280px drawer rather than targeting the backdrop element)
-- **Historical Intermediate Commit**: `dbde8eec77c3506e56599d72084ad385f74b493c` (CI Run ID `33565761019`, Status: `completed`, Conclusion: `cancelled` — Runtime and Cart E2E passed; Checkout E2E failed Admin E2E on duplicate `/admin` locator `page.locator('aside a[href="/admin"]')` matching both brand link and navigation link; Format/Build cancelled)
-- **Historical Intermediate Commit**: `0565e37d379605445005384b5c513e0745580e8d` (CI Run ID `33566364587`, Status: `completed`, Conclusion: `failure` — Format/Build, Runtime, and Cart E2E passed; Checkout E2E failed during Start Local Supabase startup, with downstream migrations, Checkout E2E, Payment E2E, and Admin E2E skipped)
-- **Canonical Implementation Fix Commit**: `9cd44caa24b64276073f54589e52e9bf739243b2` (`fix(admin): scope overview link locator to navigation landmark in e2e`)
+- **Canonical Starting Checkpoint for GP-022 / CHK2-BR1**: `0148f733ef6f8c35fd0bbb1cf013bb9b9d24e502` (`docs(roadmap): record canonical CI execution evidence for GP-022 closure candidate`)
+- **CHK2-BR1 Implementation Fix Commit**: `9cd44caa24b64276073f54589e52e9bf739243b2` (CI Run ID `33567529733`, Status: `completed`, Conclusion: `success`)
+- **CHK2-BR1 Final Documentation Commit**: `b1a00947d12f2e6a6d58b0056f281810aa3ba59b` (CI Run ID `33568095383`, Status: `completed`, Conclusion: `success`)
+- **CHK3 External Audit Verdict**: `REJECTED` (Defects: hosted target identity guard overly permissive accepting hostile hosts if username contained project ref, and Drizzle post-migration table/column verification procedure incorrect)
+- **CHK3-BR1 Canonical Remediation Implementation Commit**: `c4e9b0c4005bf57ac759cfd92f75cc534d174284` (`fix(db): harden hosted migration target guard against hostile endpoints`)
 - **Target Branch**: `main`
 
 ---
 
-## Executive Summary of BR1 Remediations & Stabilizations
+## Executive Summary of CHK3-BR1 Remediations & Stabilizations
 
-GP-022 / CHK2-BR1 establishes a fully hardened, verified Admin Foundation for Gamer Perú:
+GP-022 / CHK3-BR1 remediates the hosted migration safety guard and establishes the physical Drizzle verification baseline:
 
-1. **Next.js App Router Error Boundary Defect Resolution**:
-   - In Next.js App Router, `src/app/admin/(protected)/error.tsx` cannot catch errors thrown inside `src/app/admin/(protected)/layout.tsx` of the same segment.
-   - Refactored `src/app/admin/(protected)/layout.tsx` to handle `authContext.status === "ERROR"` directly by rendering `<AdminError />` without throwing unhandled exceptions.
-   - Retained `src/app/admin/(protected)/error.tsx` for runtime errors occurring inside child pages and nested components.
+1. **Hardened Hosted Target Identity Guard**:
+   - Refactored `resolveMigrationTarget()` in `src/db/migration-guard.ts` to strictly validate hosted endpoints.
+   - **Direct Connection Rule**: Accepts ONLY exact hostname `db.jpjffalmvlxpufvtvskx.supabase.co`, direct username `postgres` (or project-scoped `postgres.jpjffalmvlxpufvtvskx`), port strictly `5432`, database strictly `postgres`.
+   - **Session Pooler Fallback Rule**: Accepts ONLY subdomains ending in `.pooler.supabase.com` matching `/^[a-z0-9-]+(\.[a-z0-9-]+)*\.pooler\.supabase\.com$/`, username strictly `postgres.jpjffalmvlxpufvtvskx`, port strictly `5432`, database strictly `postgres`.
+   - **Hostile Target Rejections**: Formally rejects arbitrary hostnames even if username contains project ref, rejects domain spoofing attempts (`evil.example.com`, `supabase.com.evil.example`, `pooler.supabase.com.evil.example`, `db.jpjffalmvlxpufvtvskx.supabase.co.evil.example`), rejects transaction pooler port `6543`, arbitrary non-5432 ports, and non-postgres databases.
+   - Expanded unit test suite in `tests/unit/inventory/migration-target-guard.test.ts` with 15 comprehensive test cases covering the complete hostile matrix.
 
-2. **Single Source of Truth for Admin Shell Entry**:
-   - Implemented `hasAdminShellAccess(context: VerifiedAuthContext): boolean` in `src/lib/auth/rbac.ts`.
-   - Unified `requireAdminAccess()` and `AdminProtectedLayout` to evaluate identical criteria:
-     - `context.status === "READY"`
-     - User possesses at least one canonical staff role (`SUPER_ADMIN`, `ADMIN_CATALOG`, `ADMIN_ORDERS`, `ADMIN_SUPPORT`)
-     - User possesses at least one active permission (`context.permissions.size > 0`)
+2. **Drizzle Migration History Physical Baseline**:
+   - Corrected migration history verification to query schema `drizzle` table `__drizzle_migrations` (`drizzle.__drizzle_migrations`).
+   - Verified physical Drizzle schema and record schema (`id: integer`, `hash: text`, `created_at: bigint`).
+   - Recorded canonical baseline for migration 0012 (`0012_canonical_inventory_permission`):
+     - `id`: `13`
+     - `hash`: `6704bde065e562e346a55ef173b0b3c2b4d15382f1064681ea16c4d216273668`
+     - `created_at`: `1788250000000` (matching `when` in `src/db/migrations/meta/_journal.json`)
+     - Total Drizzle records after 0012: exactly `13`.
 
-3. **Sanitized User-Facing Error Surfaces**:
-   - Updated `src/components/admin/admin-error.tsx` to completely remove raw `error.message` interpolation.
-   - UI displays only generic safe text: `"No se pudo verificar tu autorización en este momento. Por seguridad, el acceso ha sido bloqueado."`
-   - Added unit tests in `tests/unit/admin-error-security.test.tsx` verifying that sensitive connection strings and credentials never leak to the browser.
+3. **Single Source of Truth for Admin Shell Entry**:
+   - `hasAdminShellAccess(context: VerifiedAuthContext): boolean` in `src/lib/auth/rbac.ts`.
+   - Unified `requireAdminAccess()` and `AdminProtectedLayout` evaluation criteria.
 
-4. **Production Accessible Login Contract in E2E**:
-   - Updated `tests/e2e/admin-foundation.spec.ts` helper `loginAndNavigateToAdmin` to use the accessible production form fields (`getByLabel("Correo electrónico")`, `getByLabel("Contraseña")`, `getByRole("button", { name: "Iniciar sesión" })`).
-   - Eliminated reliance on nonexistent synthetic `data-testid` attributes.
-   - Executes real browser-direct Supabase `signInWithPassword` flow and session verification with zero manual cookie manipulation.
+4. **Sanitized User-Facing Error Surfaces**:
+   - `src/components/admin/admin-error.tsx` displays only generic safe copy with zero raw error interpolation.
+   - Verified sensitive strings never leak into browser output.
 
 5. **Mobile Drawer Trigger Ref & Focus Restoration Architecture**:
-   - Fixed the product accessibility defect where `menuButtonRef` in `AdminShell` was passed to `AdminMobileNav` but not attached to the menu button in `AdminHeader`.
-   - Updated `AdminHeader` to accept `triggerRef={menuButtonRef}` and dynamic `isMobileNavOpen`, binding `ref={triggerRef}` and `aria-expanded={isMobileNavOpen ? "true" : "false"}`.
-   - All close pathways (Escape key, backdrop click, close-button click, navigation click) reliably restore focus to the menu trigger button.
-   - Added unit tests in `tests/unit/admin-header-trigger.test.tsx` verifying the trigger ref and `aria-expanded` contract.
+   - `AdminHeader` accepts `triggerRef={menuButtonRef}` and dynamic `isMobileNavOpen` for accessible focus restoration and dynamic `aria-expanded` state.
 
-6. **Semantic E2E Assertions & Strict Mode Accuracy**:
-   - Resolved E2/E3 false text failure: removed `text=Panel de Administración` count check that matched legitimate explanation copy in `AdminForbidden` (`"...acceder al panel de administración de Gamer Perú"`). Asserted semantic absence of `aside`, `main#admin-main-content`, `navigation[name="Ruta de navegación"]`, staff role pills, and platform status.
-   - Resolved E4 brand badge strict mode collision: used exact text matching `getByText("ADMIN", { exact: true })` on sidebar brand badge to avoid collision with `SUPER_ADMIN` role pill.
-   - Resolved E4 overview link collision: scoped overview link to navigation landmark `getByRole("navigation", { name: "Secciones del panel" }).getByRole("link", { name: "Inicio", exact: true })` to avoid collision with brand link `a[href="/admin"]`.
-   - Resolved E8 backdrop interaction defect: targeted rendered backdrop element directly via `page.locator("[class*='drawerBackdrop']")` at coordinates outside 280px drawer (`x: 320, y: 300`), verifying full focus/aria lifecycle across drawer open, focus trap, Escape close, backdrop close, and focus restoration to menu trigger.
-
-7. **Fail-Closed Local Test Target Guards**:
-   - Implemented `src/lib/admin/test-target-guard.ts` (`assertLocalDatabaseTarget`, `assertLocalSupabaseApiTarget`).
-   - Admin Live test suite (`tests/admin-integration/admin-live-scenarios.test.ts`) and E2E seed/cleanup scripts (`scripts/test/seed-admin-e2e.mjs`, `scripts/test/cleanup-admin-e2e.mjs`) strictly validate that PostgreSQL points to `127.0.0.1:54322/postgres` and Supabase API points to `http://127.0.0.1:54321`.
-   - Rejects remote/hosted targets before any mutation or Auth Admin API call. Zero credentials or sensitive connection strings are exposed in error messages.
-
-8. **Physical PostgreSQL Migration 0012 Live Integration Suite**:
-   - Implemented `tests/admin-integration/admin-live-scenarios.test.ts` (with `vitest.admin.integration.config.ts` and `pnpm test:admin:live`).
-   - Verifies physical presence of `inventory:manage` (`018f0000-0000-7000-8000-00000000002b`).
-   - Verifies exclusive mapping of `inventory:manage` to `SUPER_ADMIN`.
-   - Verifies total canonical role-permission mappings count is exactly 18.
-
-9. **Continuous Integration Pipeline Integration**:
-   - Added `pnpm test:admin:live` to the real PostgreSQL runtime job (`checkout-live`).
-   - Added `seed-admin-e2e.mjs`, `pnpm test:admin:e2e`, and `cleanup-admin-e2e.mjs` to the real Supabase E2E job (`checkout-e2e`).
+6. **Semantic Admin E2E Testing**:
+   - Overview navigation link scoped strictly to navigation landmark `getByRole("navigation", { name: "Secciones del panel" })`.
+   - Brand badge uses exact text matching `getByText("ADMIN", { exact: true })`.
+   - Backdrop click targets rendered backdrop element directly.
 
 ---
 
@@ -108,6 +86,7 @@ Total Canonical Mappings in Database: 18
 - `src/db/migrations/0012_canonical_inventory_permission.sql`: Data migration adding `inventory:manage` and mapping to `SUPER_ADMIN` (frozen, blob `e80c30ae9d0f86e14486b0fd5c782eb9ec3f7119`).
 - `src/db/migrations/meta/0012_snapshot.json`: Schema snapshot for migration 0012.
 - `src/db/migrations/meta/_journal.json`: Journal entry for migration 0012.
+- `src/db/migration-guard.ts`: Hardened target guard strictly validating direct and pooler Supabase endpoints and disallowing arbitrary hosts.
 - `src/lib/auth/rbac.ts`: Added `inventory:manage`, `CANONICAL_STAFF_ROLES`, `hasAdminShellAccess()`, `requireAdminAccess()`, and memoized `getVerifiedAuthContext()`.
 - `src/lib/supabase/proxy.ts`: Unconditional `Cache-Control: private, no-store` header injection for admin routes.
 - `src/lib/admin/types.ts`: Admin foundation types and staff profile interfaces.
@@ -129,6 +108,7 @@ Total Canonical Mappings in Database: 18
 
 ### Testing & Infrastructure
 
+- `tests/unit/inventory/migration-target-guard.test.ts`: Expanded 15-case unit test suite validating strict direct and pooler endpoint patterns and hostile target rejections.
 - `tests/unit/admin-authorization.test.ts`: Unit tests for server authorization guard, `hasAdminShellAccess`, and error states.
 - `tests/unit/admin-layout-guard.test.tsx`: Server layout decision and rendering tests for all 4 auth states.
 - `tests/unit/admin-error-security.test.tsx`: Security unit tests asserting sensitive strings never leak into error UI.
@@ -155,7 +135,7 @@ Total Canonical Mappings in Database: 18
 - `pnpm format:check` $\to$ **PASS** (100% Prettier compliant)
 - `pnpm typecheck` $\to$ **PASS** (0 TypeScript errors across codebase and test suites)
 - `pnpm lint` $\to$ **PASS** (0 ESLint errors, 0 warnings with `--max-warnings=0`)
-- `pnpm test` $\to$ **PASS** (83 test files passed, 1,003 unit tests passed, 0 failed, 0 skipped)
+- `pnpm test` $\to$ **PASS** (83 test files passed, 1,005 unit tests passed, 0 failed, 0 skipped)
 - `pnpm build` $\to$ **PASS** (Next.js Turbopack production build succeeded; `ƒ /admin` dynamically compiled)
 - `pnpm test:e2e` $\to$ **PASS** (142 Playwright tests passed, 0 failed)
 - `git diff --check` $\to$ **PASS** (Zero whitespace or formatting errors)
@@ -164,8 +144,8 @@ Total Canonical Mappings in Database: 18
 
 ## Verdict Recommendation
 
-**GP022_CHK2_BR1_READY_FOR_EXTERNAL_REVIEW**
+**GP022_CHK3_BR1_READY_FOR_EXTERNAL_REVIEW**
 
-Upon external reviewer approval of this BR1 remediation, proceed strictly to:
+Upon external reviewer approval of this CHK3-BR1 remediation, proceed strictly to:
 
-- **GP-022 / CHK3**: Controlled hosted Supabase migration 0012 deployment and verification.
+- **GP-022 / CHK3**: Controlled hosted Supabase migration 0012 preflight and deployment gate.
