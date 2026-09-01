@@ -1732,9 +1732,11 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(outcomes).toContain(true);
     expect(outcomes).toContain(false);
 
-    const [resFinal] = await sqlClient`
-      SELECT status FROM inventory_reservations WHERE order_id = ${orderIdLate};
+    const reservationsFinal = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${orderIdLate} ORDER BY created_at ASC, id ASC;
     `;
+    const statuses = reservationsFinal.map((r) => r.status);
+
     const [itemFinal] = await sqlClient`
       SELECT quantity_on_hand, quantity_reserved, quantity_allocated
       FROM inventory_items WHERE variant_id = ${variantId2} AND location_id = ${locId};
@@ -1743,13 +1745,14 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     if (reacq.success) {
       expect(reacq.reacquiredLinesCount).toBe(1);
       expect(adj.success).toBe(false);
-      expect(resFinal!.status).toBe("ALLOCATED");
+      expect(statuses).toContain("ALLOCATED");
+      expect(statuses).toContain("RELEASED");
       expect(itemFinal!.quantity_allocated).toBe(4);
     } else {
       expect(adj.success).toBe(true);
       expect(reacq.success).toBe(false);
       expect(reacq.code).toBe("INSUFFICIENT_STOCK_FOR_REACQUISITION");
-      expect(resFinal!.status).toBe("RELEASED");
+      expect(statuses).toEqual(["RELEASED"]);
     }
 
     expect(

@@ -1074,6 +1074,21 @@ export async function allocateOrderInventoryAfterPaymentApproval(
   }
   const orderId = orderIdVal.normalized;
 
+  const [payment] = await tx
+    .select()
+    .from(payments)
+    .where(eq(payments.orderId, orderId))
+    .for("update")
+    .limit(1);
+
+  if (payment && payment.status === "REJECTED") {
+    return {
+      success: false,
+      code: "PAYMENT_REJECTED",
+      error: "No se puede asignar inventario a un pedido cuyo pago ha sido rechazado.",
+    };
+  }
+
   const reservations = await tx
     .select()
     .from(inventoryReservations)
