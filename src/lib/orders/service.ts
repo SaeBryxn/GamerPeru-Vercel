@@ -591,8 +591,8 @@ export async function cancelPaidPreShipmentAndRefund(
     if (existingIdempotency.authorityBindingDigest !== authorityBindingDigest) {
       return {
         success: false,
-        code: "UNAUTHORIZED",
-        error: "No tienes permisos de administración para este intento.",
+        code: "NOT_AVAILABLE",
+        error: "Pedido no disponible.",
       };
     }
     // 2. Expiration Check (Evaluated BEFORE fingerprint)
@@ -648,8 +648,8 @@ export async function cancelPaidPreShipmentAndRefund(
         if (lockedIdempotency.authorityBindingDigest !== authorityBindingDigest) {
           return {
             success: false as const,
-            code: "UNAUTHORIZED" as const,
-            error: "No tienes permisos de administración para este intento.",
+            code: "NOT_AVAILABLE" as const,
+            error: "Pedido no disponible.",
           };
         }
         // 2. Expiration Check
@@ -792,6 +792,25 @@ export async function cancelPaidPreShipmentAndRefund(
 
       const itemMap = new Map(lockedItems.map((item) => [item.id, item]));
 
+      // Aggregate underflow validation per item before mutation
+      const requiredAllocatedPerItem = new Map<string, number>();
+      for (const res of orderReservations) {
+        if (res.status === "ALLOCATED") {
+          const current = requiredAllocatedPerItem.get(res.inventoryItemId) ?? 0;
+          requiredAllocatedPerItem.set(res.inventoryItemId, current + res.quantity);
+        }
+      }
+
+      for (const [itemId, totalRequired] of requiredAllocatedPerItem.entries()) {
+        const item = itemMap.get(itemId);
+        if (!item) {
+          throw new Error("INVENTORY_ITEM_NOT_FOUND");
+        }
+        if (item.quantityAllocated < totalRequired) {
+          throw new Error("INVENTORY_ALLOCATED_UNDERFLOW");
+        }
+      }
+
       // Step F: Mutate Inventory & Ledger
       for (const res of orderReservations) {
         const item = itemMap.get(res.inventoryItemId);
@@ -800,9 +819,6 @@ export async function cancelPaidPreShipmentAndRefund(
         }
 
         if (res.status === "ALLOCATED") {
-          if (item.quantityAllocated < res.quantity) {
-            throw new Error("INVENTORY_ALLOCATED_UNDERFLOW");
-          }
           const newAllocated = item.quantityAllocated - res.quantity;
 
           await tx
@@ -1103,8 +1119,8 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
     if (existingIdempotency.authorityBindingDigest !== authorityBindingDigest) {
       return {
         success: false,
-        code: "UNAUTHORIZED",
-        error: "No tienes permisos de administración para este intento.",
+        code: "NOT_AVAILABLE",
+        error: "Pedido no disponible.",
       };
     }
     // 2. Expiration Check (Evaluated BEFORE fingerprint)
@@ -1166,8 +1182,8 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
         if (lockedIdempotency.authorityBindingDigest !== authorityBindingDigest) {
           return {
             success: false as const,
-            code: "UNAUTHORIZED" as const,
-            error: "No tienes permisos de administración para este intento.",
+            code: "NOT_AVAILABLE" as const,
+            error: "Pedido no disponible.",
           };
         }
         // 2. Expiration Check
@@ -1288,13 +1304,49 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
           // Do NOT recreate stock, do NOT decrement allocated balance, do NOT increment on_hand.
         } else if (!lockedShipment || lockedShipment.status === "UNFULFILLED") {
           // Case A: PRE-SHIPMENT
+          // Classify ALL locked InventoryReservations BEFORE inserting Refund or mutating financial state.
+
+          // Forbidden pre-shipment states for automatic terminal refund: ACTIVE, VERIFICATION_HOLD, CONSUMED
+          const hasActive = orderReservations.some((r) => r.status === "ACTIVE");
+          const hasVerificationHold = orderReservations.some(
+            (r) => r.status === "VERIFICATION_HOLD"
+          );
+          const hasConsumed = orderReservations.some((r) => r.status === "CONSUMED");
+
+          if (hasActive || hasVerificationHold || hasConsumed) {
+            return {
+              success: false as const,
+              code: "FULFILLMENT_INCONSISTENCY" as const,
+              error:
+                "El estado de las reservas de inventario no permite el reembolso automático previo al despacho.",
+            };
+          }
+
+          // Allowed pre-shipment states: only ALLOCATED or RELEASED
+          const hasInvalidStatus = orderReservations.some(
+            (r) => r.status !== "ALLOCATED" && r.status !== "RELEASED"
+          );
+          if (hasInvalidStatus) {
+            return {
+              success: false as const,
+              code: "FULFILLMENT_INCONSISTENCY" as const,
+              error:
+                "El estado de las reservas de inventario no permite el reembolso automático previo al despacho.",
+            };
+          }
+
           const allocatedReservations = orderReservations.filter((r) => r.status === "ALLOCATED");
 
           if (allocatedReservations.length > 0) {
+            // Aggregate ALLOCATED reservations by inventoryItemId
+            const requiredPerItem = new Map<string, number>();
+            for (const res of allocatedReservations) {
+              const current = requiredPerItem.get(res.inventoryItemId) ?? 0;
+              requiredPerItem.set(res.inventoryItemId, current + res.quantity);
+            }
+
             // Step 6: Lock required inventory items in deterministic order (id ASC)
-            const itemIds = Array.from(
-              new Set(allocatedReservations.map((r) => r.inventoryItemId))
-            ).sort();
+            const itemIds = Array.from(requiredPerItem.keys()).sort();
 
             const lockedItems = await tx
               .select()
@@ -1305,13 +1357,13 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
 
             const itemMap = new Map(lockedItems.map((item) => [item.id, item]));
 
-            // Pre-validation underflow check: assert quantity_allocated >= quantity for ALL lines
-            for (const res of allocatedReservations) {
-              const item = itemMap.get(res.inventoryItemId);
+            // Pre-validation aggregate underflow check: assert quantity_allocated >= totalReleaseQuantity for EVERY affected item
+            for (const [itemId, totalReleaseQty] of requiredPerItem.entries()) {
+              const item = itemMap.get(itemId);
               if (!item) {
                 throw new Error("INVENTORY_ITEM_NOT_FOUND");
               }
-              if (item.quantityAllocated < res.quantity) {
+              if (item.quantityAllocated < totalReleaseQty) {
                 throw new Error("INVENTORY_ALLOCATED_UNDERFLOW");
               }
             }
@@ -1349,7 +1401,7 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
               });
             }
           }
-          // Case C: If no ALLOCATED reservations (e.g. EXPIRED or already RELEASED), zero stock release occurs.
+          // Case C: If all reservations are RELEASED (or no reservations), zero stock release occurs and financial refund proceeds.
         } else {
           // Case D: Inconsistent pre-shipment/shipment state - fail closed
           return {

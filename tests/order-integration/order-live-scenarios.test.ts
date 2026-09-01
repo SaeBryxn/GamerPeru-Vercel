@@ -1114,7 +1114,7 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     expect(order!.status).toBe("CONFIRMED");
 
     const [payment] =
-      await sqlClient`SELECT status, refunded_amount_cents FROM payments WHERE order_id = ${dbOrder!.id}`;
+      await sqlClient`SELECT id, status, refunded_amount_cents FROM payments WHERE order_id = ${dbOrder!.id}`;
     expect(payment!.status).toBe("PAID");
     expect(payment!.refunded_amount_cents).toBe(0);
 
@@ -1136,6 +1136,280 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
       SELECT * FROM outbox_events WHERE aggregate_id = ${payment!.id} AND event_name = 'RefundIssued'
     `;
     expect(outboxEvents.length).toBe(0);
+  });
+
+  // Scenario K5: recordRefund pre-shipment full refund fails closed with FULFILLMENT_INCONSISTENCY if reservation is ACTIVE
+  it("Scenario K5: recordRefund pre-shipment full refund fails closed with FULFILLMENT_INCONSISTENCY if reservation is ACTIVE", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+    const [dbPayment] = await sqlClient`SELECT id FROM payments WHERE order_id = ${dbOrder!.id}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_reservations SET status = 'ACTIVE' WHERE order_id = ${dbOrder!.id}`;
+
+    setStaffAuth();
+
+    const refundRes = await recordRefund({
+      orderNumber,
+      refundAttemptId: generateUuidV7(),
+      amountCents: 31500,
+      reason: "Reembolso total con reserva activa",
+    });
+
+    expect(refundRes.success).toBe(false);
+    if (!refundRes.success) {
+      expect(refundRes.code).toBe("FULFILLMENT_INCONSISTENCY");
+    }
+
+    // Assert zero mutation
+    const [order] = await sqlClient`SELECT status FROM orders WHERE id = ${dbOrder!.id}`;
+    expect(order!.status).toBe("CONFIRMED");
+
+    const [payment] =
+      await sqlClient`SELECT status, refunded_amount_cents FROM payments WHERE id = ${dbPayment!.id}`;
+    expect(payment!.status).toBe("PAID");
+    expect(payment!.refunded_amount_cents).toBe(0);
+
+    const [reservation] =
+      await sqlClient`SELECT status FROM inventory_reservations WHERE order_id = ${dbOrder!.id}`;
+    expect(reservation!.status).toBe("ACTIVE");
+
+    const refunds = await sqlClient`SELECT * FROM refunds WHERE order_id = ${dbOrder!.id}`;
+    expect(refunds.length).toBe(0);
+
+    const releaseLedgers = await sqlClient`
+      SELECT * FROM inventory_ledger_entries
+      WHERE reference_id = ${dbOrder!.id} AND movement_type = 'ALLOCATION_RELEASED'
+    `;
+    expect(releaseLedgers.length).toBe(0);
+
+    const outbox = await sqlClient`
+      SELECT * FROM outbox_events WHERE aggregate_id = ${dbPayment!.id} AND event_name = 'RefundIssued'
+    `;
+    expect(outbox.length).toBe(0);
+
+    const audit = await sqlClient`
+      SELECT * FROM audit_events WHERE target_id = ${dbOrder!.id} AND action = 'orders:refund'
+    `;
+    expect(audit.length).toBe(0);
+  });
+
+  // Scenario K6: recordRefund pre-shipment full refund fails closed with FULFILLMENT_INCONSISTENCY if reservation is VERIFICATION_HOLD
+  it("Scenario K6: recordRefund pre-shipment full refund fails closed with FULFILLMENT_INCONSISTENCY if reservation is VERIFICATION_HOLD", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+    const [dbPayment] = await sqlClient`SELECT id FROM payments WHERE order_id = ${dbOrder!.id}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_reservations SET status = 'VERIFICATION_HOLD' WHERE order_id = ${dbOrder!.id}`;
+
+    setStaffAuth();
+
+    const refundRes = await recordRefund({
+      orderNumber,
+      refundAttemptId: generateUuidV7(),
+      amountCents: 31500,
+      reason: "Reembolso total con reserva en hold",
+    });
+
+    expect(refundRes.success).toBe(false);
+    if (!refundRes.success) {
+      expect(refundRes.code).toBe("FULFILLMENT_INCONSISTENCY");
+    }
+
+    const [order] = await sqlClient`SELECT status FROM orders WHERE id = ${dbOrder!.id}`;
+    expect(order!.status).toBe("CONFIRMED");
+
+    const [payment] =
+      await sqlClient`SELECT status, refunded_amount_cents FROM payments WHERE id = ${dbPayment!.id}`;
+    expect(payment!.status).toBe("PAID");
+    expect(payment!.refunded_amount_cents).toBe(0);
+
+    const [reservation] =
+      await sqlClient`SELECT status FROM inventory_reservations WHERE order_id = ${dbOrder!.id}`;
+    expect(reservation!.status).toBe("VERIFICATION_HOLD");
+
+    const refunds = await sqlClient`SELECT * FROM refunds WHERE order_id = ${dbOrder!.id}`;
+    expect(refunds.length).toBe(0);
+  });
+
+  // Scenario K7: recordRefund mixed ALLOCATED + ACTIVE multi-line order fails closed atomically before mutation
+  it("Scenario K7: recordRefund mixed ALLOCATED + ACTIVE multi-line order fails closed atomically before mutation", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true, multiLine: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+    const [dbPayment] = await sqlClient`SELECT id FROM payments WHERE order_id = ${dbOrder!.id}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+
+    // Get both reservations
+    const reservations = await sqlClient`
+      SELECT id, inventory_item_id FROM inventory_reservations WHERE order_id = ${dbOrder!.id} ORDER BY id ASC
+    `;
+    expect(reservations.length).toBe(2);
+
+    // Set line 1 to ALLOCATED, line 2 to ACTIVE (mixed inconsistent state)
+    await sqlClient`UPDATE inventory_reservations SET status = 'ALLOCATED' WHERE id = ${reservations[0]!.id}`;
+    await sqlClient`UPDATE inventory_reservations SET status = 'ACTIVE' WHERE id = ${reservations[1]!.id}`;
+    await sqlClient`UPDATE inventory_items SET quantity_allocated = 2, quantity_reserved = 0 WHERE id = ${reservations[0]!.inventory_item_id}`;
+
+    setStaffAuth();
+
+    const refundRes = await recordRefund({
+      orderNumber,
+      refundAttemptId: generateUuidV7(),
+      amountCents: 41500,
+      reason: "Reembolso total en orden mixta inválida",
+    });
+
+    expect(refundRes.success).toBe(false);
+    if (!refundRes.success) {
+      expect(refundRes.code).toBe("FULFILLMENT_INCONSISTENCY");
+    }
+
+    // Line 1 MUST remain ALLOCATED, Line 2 MUST remain ACTIVE
+    const [res1] =
+      await sqlClient`SELECT status FROM inventory_reservations WHERE id = ${reservations[0]!.id}`;
+    const [res2] =
+      await sqlClient`SELECT status FROM inventory_reservations WHERE id = ${reservations[1]!.id}`;
+    expect(res1!.status).toBe("ALLOCATED");
+    expect(res2!.status).toBe("ACTIVE");
+
+    // Inventory allocated balance on Item 1 MUST remain unchanged at 2
+    const [item1] =
+      await sqlClient`SELECT quantity_allocated FROM inventory_items WHERE id = ${reservations[0]!.inventory_item_id}`;
+    expect(item1!.quantity_allocated).toBe(2);
+
+    // Zero refunds, zero release ledgers, zero financial mutations
+    const refunds = await sqlClient`SELECT * FROM refunds WHERE order_id = ${dbOrder!.id}`;
+    expect(refunds.length).toBe(0);
+
+    const releaseLedgers = await sqlClient`
+      SELECT * FROM inventory_ledger_entries
+      WHERE reference_id = ${dbOrder!.id} AND movement_type = 'ALLOCATION_RELEASED'
+    `;
+    expect(releaseLedgers.length).toBe(0);
+
+    const [order] = await sqlClient`SELECT status FROM orders WHERE id = ${dbOrder!.id}`;
+    expect(order!.status).toBe("CONFIRMED");
+
+    const [payment] =
+      await sqlClient`SELECT status, refunded_amount_cents FROM payments WHERE id = ${dbPayment!.id}`;
+    expect(payment!.status).toBe("PAID");
+    expect(payment!.refunded_amount_cents).toBe(0);
+  });
+
+  // Scenario K8: recordRefund all RELEASED pre-shipment case succeeds financially with zero fake stock mutations
+  it("Scenario K8: recordRefund all RELEASED pre-shipment case succeeds financially with zero fake stock mutations", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_reservations SET status = 'RELEASED' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_items SET quantity_reserved = 0, quantity_allocated = 0, quantity_on_hand = 10 WHERE id = ${inventoryItemId1}`;
+
+    setStaffAuth();
+
+    const refundRes = await recordRefund({
+      orderNumber,
+      refundAttemptId: generateUuidV7(),
+      amountCents: 31500,
+      reason: "Reembolso total con reservas ya liberadas",
+    });
+
+    expect(refundRes.success).toBe(true);
+    if (refundRes.success) {
+      expect(refundRes.paymentStatus).toBe("REFUNDED");
+      expect(refundRes.orderStatus).toBe("REFUNDED");
+    }
+
+    const [dbPayment] =
+      await sqlClient`SELECT status, refunded_amount_cents FROM payments WHERE order_id = ${dbOrder!.id}`;
+    expect(dbPayment!.status).toBe("REFUNDED");
+    expect(dbPayment!.refunded_amount_cents).toBe(31500);
+
+    const [item] =
+      await sqlClient`SELECT quantity_on_hand, quantity_allocated, quantity_reserved FROM inventory_items WHERE id = ${inventoryItemId1}`;
+    expect(item!.quantity_on_hand).toBe(10);
+    expect(item!.quantity_allocated).toBe(0);
+    expect(item!.quantity_reserved).toBe(0);
+
+    const reservations = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${dbOrder!.id}
+    `;
+    expect(reservations.every((r) => r.status === "RELEASED")).toBe(true);
+
+    const releaseLedgers = await sqlClient`
+      SELECT * FROM inventory_ledger_entries
+      WHERE reference_id = ${dbOrder!.id} AND movement_type = 'ALLOCATION_RELEASED'
+    `;
+    expect(releaseLedgers.length).toBe(0);
+  });
+
+  // Scenario K9: recordRefund aggregate same-InventoryItem underflow rolls back completely with INVENTORY_INVARIANT_VIOLATION
+  it("Scenario K9: recordRefund aggregate same-InventoryItem underflow rolls back completely with INVENTORY_INVARIANT_VIOLATION", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true, multiLine: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+    const [dbPayment] = await sqlClient`SELECT id FROM payments WHERE order_id = ${dbOrder!.id}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+
+    // Point both reservations to the SAME inventoryItemId1 with quantity = 2 each (total needed = 4)
+    await sqlClient`
+      UPDATE inventory_reservations
+      SET inventory_item_id = ${inventoryItemId1}, status = 'ALLOCATED', quantity = 2
+      WHERE order_id = ${dbOrder!.id}
+    `;
+
+    // Set item quantity_allocated = 3 (< 4 needed aggregate)
+    // Note: line 1 alone (2 <= 3) would pass individual check, but aggregate (4 > 3) must fail before mutations!
+    await sqlClient`
+      UPDATE inventory_items
+      SET quantity_allocated = 3, quantity_reserved = 0, quantity_on_hand = 10
+      WHERE id = ${inventoryItemId1}
+    `;
+
+    setStaffAuth();
+
+    const refundRes = await recordRefund({
+      orderNumber,
+      refundAttemptId: generateUuidV7(),
+      amountCents: 41500,
+      reason: "Reembolso con underflow agregado en el mismo item",
+    });
+
+    expect(refundRes.success).toBe(false);
+    if (!refundRes.success) {
+      expect(refundRes.code).toBe("INVENTORY_INVARIANT_VIOLATION");
+    }
+
+    // ACID Rollback verification
+    const [order] = await sqlClient`SELECT status FROM orders WHERE id = ${dbOrder!.id}`;
+    expect(order!.status).toBe("CONFIRMED");
+
+    const [payment] =
+      await sqlClient`SELECT status, refunded_amount_cents FROM payments WHERE id = ${dbPayment!.id}`;
+    expect(payment!.status).toBe("PAID");
+    expect(payment!.refunded_amount_cents).toBe(0);
+
+    const [item] =
+      await sqlClient`SELECT quantity_allocated FROM inventory_items WHERE id = ${inventoryItemId1}`;
+    expect(item!.quantity_allocated).toBe(3); // Untouched
+
+    const reservations = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${dbOrder!.id}
+    `;
+    expect(reservations.every((r) => r.status === "ALLOCATED")).toBe(true);
+
+    const releaseLedgers = await sqlClient`
+      SELECT * FROM inventory_ledger_entries
+      WHERE reference_id = ${dbOrder!.id} AND movement_type = 'ALLOCATION_RELEASED'
+    `;
+    expect(releaseLedgers.length).toBe(0);
   });
 
   // Scenario L: Concurrent different-key refunds never exceed Payment.amount_cents
