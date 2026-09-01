@@ -1201,6 +1201,10 @@ export async function allocateOrderInventoryAfterPaymentApproval(
     itemMap.set(it.id, it);
   }
 
+  if (testInventoryTransactionHook) {
+    await testInventoryTransactionHook("after_lock");
+  }
+
   for (const [itemId, neededQty] of itemHoldDeltas.entries()) {
     const it = itemMap.get(itemId)!;
     if (it.quantityReserved < neededQty) {
@@ -1259,6 +1263,10 @@ export async function allocateOrderInventoryAfterPaymentApproval(
       actorId: input.actorId,
       notes: input.notes ?? "Asignación confirmada tras aprobación de pago.",
     });
+  }
+
+  if (testInventoryTransactionHook) {
+    await testInventoryTransactionHook("before_commit");
   }
 
   return {
@@ -1412,6 +1420,10 @@ export async function reacquireOrderInventoryAfterLatePayment(
     itemMap.set(it.id, it);
   }
 
+  if (testInventoryTransactionHook) {
+    await testInventoryTransactionHook("after_lock");
+  }
+
   for (const [itemId, neededQty] of itemQtyMap.entries()) {
     const it = itemMap.get(itemId)!;
     const ats = it.quantityOnHand - it.quantityReserved - it.quantityAllocated;
@@ -1474,6 +1486,10 @@ export async function reacquireOrderInventoryAfterLatePayment(
     });
   }
 
+  if (testInventoryTransactionHook) {
+    await testInventoryTransactionHook("before_commit");
+  }
+
   return {
     success: true,
     alreadyAllocated: false,
@@ -1504,6 +1520,10 @@ export async function expireUnpaidOrderReservations(
   const advisoryKey = createInventoryOrderAdvisoryLockKey(orderId);
 
   return await db.transaction(async (tx) => {
+    if (testInventoryTransactionHook) {
+      await testInventoryTransactionHook("before_lock");
+    }
+
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${advisoryKey})`);
 
     const [payment] = await tx
@@ -1602,6 +1622,10 @@ export async function expireUnpaidOrderReservations(
       itemMap.set(it.id, it);
     }
 
+    if (testInventoryTransactionHook) {
+      await testInventoryTransactionHook("after_lock");
+    }
+
     const ledgerEntryIds: string[] = [];
 
     for (const r of activeReservations) {
@@ -1668,6 +1692,10 @@ export async function expireUnpaidOrderReservations(
         updatedAt: dbNow,
       })
       .where(eq(orders.id, orderId));
+
+    if (testInventoryTransactionHook) {
+      await testInventoryTransactionHook("before_commit");
+    }
 
     return {
       success: true,

@@ -51,6 +51,24 @@ export function assertAuthorizedLocalPostgresTarget(rawUrl: string | undefined):
   return urlString;
 }
 
+// Deterministic in-memory barrier for multi-transaction synchronization
+function createBarrier() {
+  let resolveA: () => void;
+  let resolveB: () => void;
+  const promiseA = new Promise<void>((r) => {
+    resolveA = r;
+  });
+  const promiseB = new Promise<void>((r) => {
+    resolveB = r;
+  });
+  return {
+    waitA: () => promiseA,
+    signalA: () => resolveA(),
+    waitB: () => promiseB,
+    signalB: () => resolveB(),
+  };
+}
+
 // Cookie & Auth context mocks for services calling next/headers
 let currentMockCartCookie: string | null = null;
 let currentMockPaymentSessionCookie: string | null = null;
@@ -100,6 +118,11 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   const shippingMethodId = `${fixturePrefix}000000000030`;
   const shippingMethodCode = "TEST-SHIP-STD";
 
+  // Dedicated suite-owned session and cart IDs to ensure exact cleanup without deleting other suites' records
+  const raceDSessionId = `${fixturePrefix}000000000050`;
+  const raceESessionId = `${fixturePrefix}000000000051`;
+  const raceCCartId = `${fixturePrefix}000000000060`;
+
   beforeAll(async () => {
     process.env.CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE = primaryLocCode;
     process.env.INVENTORY_QUARANTINE_LOCATION_CODE = quarantineLocCode;
@@ -115,7 +138,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
 
     sqlClient = postgres(connectionString, { max: 10 });
 
-    // Clean fixtures
+    // Clean only GP-021 owned fixtures
     await cleanupAllTestFixtures();
 
     // Seed base locations
@@ -197,20 +220,31 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   });
 
   async function cleanupAllTestFixtures() {
+    // 1. Delete dependent ledger entries belonging to GP-021
     await sqlClient`DELETE FROM inventory_ledger_entries WHERE actor_id LIKE 'test-%' OR reference_id LIKE 'TEST-%' OR reference_id LIKE 'PO-%' OR reference_id LIKE 'AUDIT-%' OR reference_id LIKE 'TR-%' OR reference_id LIKE 'REPAIR-%' OR reference_id LIKE 'PAY-%'`;
+    // 2. Delete inventory reservations for GP-021 orders
     await sqlClient`DELETE FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
-    await sqlClient`DELETE FROM guest_payment_access_grants WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%'))`;
-    await sqlClient`DELETE FROM guest_payment_sessions`;
+    // 3. Delete dependent guest payment access grants for GP-021 sessions/payments
+    await sqlClient`DELETE FROM guest_payment_access_grants WHERE session_id IN (${raceDSessionId}, ${raceESessionId}) OR payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%'))`;
+    // 4. Delete ONLY GP-021 owned guest payment sessions (never global delete)
+    await sqlClient`DELETE FROM guest_payment_sessions WHERE id IN (${raceDSessionId}, ${raceESessionId})`;
+    // 5. Delete payment submissions and intents
     await sqlClient`DELETE FROM payment_submissions WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%'))`;
     await sqlClient`DELETE FROM payment_proof_upload_intents WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%'))`;
+    // 6. Delete payments
     await sqlClient`DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%') OR payment_method_code = ${paymentMethodCode}`;
+    // 7. Delete order snapshots and items
     await sqlClient`DELETE FROM order_address_snapshots WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
     await sqlClient`DELETE FROM order_pricing_snapshots WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
     await sqlClient`DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
+    // 8. Delete orders
     await sqlClient`DELETE FROM orders WHERE order_number LIKE 'GP-TEST-%'`;
-    await sqlClient`DELETE FROM cart_items WHERE variant_id IN (${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId})`;
-    await sqlClient`DELETE FROM carts WHERE session_token LIKE 'test-cart-%'`;
+    // 9. Delete cart items and suite-owned cart
+    await sqlClient`DELETE FROM cart_items WHERE cart_id = ${raceCCartId} OR variant_id IN (${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId})`;
+    await sqlClient`DELETE FROM carts WHERE id = ${raceCCartId}`;
+    // 10. Delete inventory items for GP-021 variants
     await sqlClient`DELETE FROM inventory_items WHERE variant_id IN (${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId})`;
+    // 11. Delete idempotency keys and audit events
     await sqlClient`DELETE FROM idempotency_keys WHERE idempotency_key LIKE 'INVENTORY_%' OR idempotency_key LIKE 'CHECKOUT_%' OR idempotency_key LIKE 'ORDER_%' OR idempotency_key LIKE 'PAYMENT_%'`;
     await sqlClient`DELETE FROM audit_events WHERE actor_id LIKE 'test-%'`;
   }
@@ -244,13 +278,13 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
 
     if (params.reservationStatus === "ACTIVE" || params.reservationStatus === "VERIFICATION_HOLD") {
       await sqlClient`
-        UPDATE inventory_items 
+        UPDATE inventory_items
         SET quantity_reserved = quantity_reserved + ${params.quantity}
         WHERE id = ${itemId};
       `;
     } else if (params.reservationStatus === "ALLOCATED") {
       await sqlClient`
-        UPDATE inventory_items 
+        UPDATE inventory_items
         SET quantity_allocated = quantity_allocated + ${params.quantity}
         WHERE id = ${itemId};
       `;
@@ -1131,7 +1165,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   });
 
   // -------------------------------------------------------------------------
-  // 8. Genuine Concurrency Races (Matrix A through I)
+  // 8. Genuine Concurrency Races (Matrix A through I) with Deterministic Barriers
   // -------------------------------------------------------------------------
 
   it("Race A: Two concurrent receiving operations on the same item serialize cleanly", async () => {
@@ -1220,19 +1254,19 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       ON CONFLICT (variant_id, location_id) DO UPDATE SET quantity_on_hand = 2, quantity_reserved = 0, quantity_allocated = 0;
     `;
 
-    // Create an anonymous cart with 2 units of raceCVariantId
+    // Create an anonymous cart with 2 units of raceCVariantId using deterministic suite-owned cart ID
     const cartToken = generateAnonymousSessionToken();
     currentMockCartCookie = cartToken;
 
-    const [cart] = await sqlClient`
+    await sqlClient`
       INSERT INTO carts (id, session_token, status, expires_at, created_at, updated_at)
-      VALUES (${generateUuidV7()}, ${cartToken}, 'ACTIVE', NOW() + INTERVAL '7 days', NOW(), NOW())
-      RETURNING id;
+      VALUES (${raceCCartId}, ${cartToken}, 'ACTIVE', NOW() + INTERVAL '7 days', NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING;
     `;
 
     await sqlClient`
       INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
-      VALUES (${generateUuidV7()}, ${cart!.id}, ${raceCVariantId}, 2, NOW(), NOW());
+      VALUES (${generateUuidV7()}, ${raceCCartId}, ${raceCVariantId}, 2, NOW(), NOW());
     `;
 
     const deliveryAddress = {
@@ -1244,35 +1278,57 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       district: "Miraflores",
     };
 
-    // Execute real submitCheckout vs real adjustInventory concurrently
-    const [checkoutRes, adjRes] = await Promise.all([
-      submitCheckout({
-        checkoutAttemptId: generateUuidV7(),
-        customerEmail: "race.c@gamerperu.pe",
-        deliveryAddress,
-        shippingMethodCode,
-        paymentMethodCode,
-        reviewedSubtotalCents: 30000,
-        reviewedShippingCents: 1500,
-        reviewedTotalCents: 31500,
-      }),
-      adjustInventory({
-        attemptId: "att-race-c-adj",
-        variantId: raceCVariantId,
-        locationCode: primaryLocCode,
-        commandKind: "DELTA",
-        deltaQuantity: -2,
-        reason: "Venta simultánea en tienda física",
-        referenceId: "AUDIT-RACE-C-1",
-        actorId: "test-staff-1",
-      }),
-    ]);
+    // Deterministic barrier: pause adjustInventory after acquiring lock until checkout enters
+    const barrier = createBarrier();
+    __setTestInventoryTransactionHook(async (stage) => {
+      if (stage === "after_lock") {
+        barrier.signalA();
+        await barrier.waitB();
+      }
+    });
+
+    const checkoutPromise = submitCheckout({
+      checkoutAttemptId: generateUuidV7(),
+      customerEmail: "race.c@gamerperu.pe",
+      deliveryAddress,
+      shippingMethodCode,
+      paymentMethodCode,
+      reviewedSubtotalCents: 30000,
+      reviewedShippingCents: 1500,
+      reviewedTotalCents: 31500,
+    });
+
+    const adjustPromise = adjustInventory({
+      attemptId: "att-race-c-adj",
+      variantId: raceCVariantId,
+      locationCode: primaryLocCode,
+      commandKind: "DELTA",
+      deltaQuantity: -2,
+      reason: "Venta simultánea en tienda física",
+      referenceId: "AUDIT-RACE-C-1",
+      actorId: "test-staff-1",
+    });
+
+    // Release adjustInventory once both have started
+    await barrier.waitA();
+    barrier.signalB();
+
+    const [checkoutRes, adjRes] = await Promise.all([checkoutPromise, adjustPromise]);
 
     const successes = [checkoutRes.success, adjRes.success].filter(Boolean);
     const failures = [checkoutRes.success, adjRes.success].filter((s) => !s);
 
     expect(successes).toHaveLength(1);
     expect(failures).toHaveLength(1);
+
+    if (checkoutRes.success) {
+      expect(checkoutRes.orderNumber).toBeDefined();
+      expect(adjRes.success).toBe(false);
+    } else {
+      expect(adjRes.success).toBe(true);
+      expect(adjRes.appliedDelta).toBe(-2);
+      expect(checkoutRes.success).toBe(false);
+    }
 
     const [itemFinal] = await sqlClient`
       SELECT quantity_on_hand, quantity_reserved, quantity_allocated
@@ -1293,7 +1349,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       expiresAt: pastDate,
     });
 
-    const sessionId = generateUuidV7();
     const hmacSecret = process.env.CHECKOUT_HMAC_SECRET!;
     const rawToken = generateSecurePaymentSessionToken();
     const tokenDigest = computePaymentSessionTokenDigest(rawToken, hmacSecret);
@@ -1301,33 +1356,55 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
 
     await sqlClient`
       INSERT INTO guest_payment_sessions (id, token_digest, expires_at, created_at)
-      VALUES (${sessionId}, ${tokenDigest}, NOW() + INTERVAL '1 hour', NOW());
+      VALUES (${raceDSessionId}, ${tokenDigest}, NOW() + INTERVAL '1 hour', NOW())
+      ON CONFLICT (id) DO UPDATE SET token_digest = ${tokenDigest};
     `;
 
     await sqlClient`
       INSERT INTO guest_payment_access_grants (id, payment_id, session_id, expires_at, created_at)
-      VALUES (${generateUuidV7()}, ${paymentId}, ${sessionId}, NOW() + INTERVAL '1 hour', NOW());
+      VALUES (${generateUuidV7()}, ${paymentId}, ${raceDSessionId}, NOW() + INTERVAL '1 hour', NOW());
     `;
 
-    const [expRes, payRes] = await Promise.all([
-      expireUnpaidOrderReservations({ orderId, actorId: "SYSTEM-WORKER" }),
-      submitPaymentProof({
-        orderNumber: "GP-TEST-RACE-D-001",
-        operationCode: "12345678",
-        submissionAttemptId: "submission-attempt-race-d-001",
-      }),
-    ]);
+    // Deterministic barrier: expireUnpaidOrderReservations pauses after lock to allow submitPaymentProof to contend
+    const barrier = createBarrier();
+    __setTestInventoryTransactionHook(async (stage) => {
+      if (stage === "after_lock") {
+        barrier.signalA();
+        await barrier.waitB();
+      }
+    });
+
+    const expirePromise = expireUnpaidOrderReservations({ orderId, actorId: "SYSTEM-WORKER" });
+    const paymentPromise = submitPaymentProof({
+      orderNumber: "GP-TEST-RACE-D-001",
+      operationCode: "12345678",
+      submissionAttemptId: "submission-attempt-race-d-001",
+    });
+
+    await barrier.waitA();
+    barrier.signalB();
+
+    const [expRes, payRes] = await Promise.all([expirePromise, paymentPromise]);
 
     expect(expRes.success).toBe(true);
 
     const [paymentFinal] = await sqlClient`SELECT status FROM payments WHERE id = ${paymentId};`;
     const [orderFinal] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
+    const [resFinal] =
+      await sqlClient`SELECT status FROM inventory_reservations WHERE order_id = ${orderId};`;
 
     if (payRes.success) {
+      expect(payRes.paymentStatus).toBe("SUBMITTED");
       expect(paymentFinal!.status).toBe("SUBMITTED");
       expect(orderFinal!.status).toBe("PENDING");
+      expect(resFinal!.status).toBe("VERIFICATION_HOLD");
+      expect(expRes.releasedLinesCount).toBe(0);
+      expect(expRes.orderStatusTransitioned).toBe(false);
     } else {
       expect(orderFinal!.status).toBe("EXPIRED");
+      expect(resFinal!.status).toBe("RELEASED");
+      expect(expRes.orderStatusTransitioned).toBe(true);
+      expect(expRes.releasedLinesCount).toBe(1);
     }
   });
 
@@ -1341,7 +1418,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       expiresAt: pastDate,
     });
 
-    const sessionId = generateUuidV7();
     const hmacSecret = process.env.CHECKOUT_HMAC_SECRET!;
     const rawToken = generateSecurePaymentSessionToken();
     const tokenDigest = computePaymentSessionTokenDigest(rawToken, hmacSecret);
@@ -1349,31 +1425,54 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
 
     await sqlClient`
       INSERT INTO guest_payment_sessions (id, token_digest, expires_at, created_at)
-      VALUES (${sessionId}, ${tokenDigest}, NOW() + INTERVAL '1 hour', NOW());
+      VALUES (${raceESessionId}, ${tokenDigest}, NOW() + INTERVAL '1 hour', NOW())
+      ON CONFLICT (id) DO UPDATE SET token_digest = ${tokenDigest};
     `;
 
     await sqlClient`
       INSERT INTO guest_payment_access_grants (id, payment_id, session_id, expires_at, created_at)
-      VALUES (${generateUuidV7()}, ${paymentId}, ${sessionId}, NOW() + INTERVAL '1 hour', NOW());
+      VALUES (${generateUuidV7()}, ${paymentId}, ${raceESessionId}, NOW() + INTERVAL '1 hour', NOW());
     `;
 
-    const [expRes, cancelRes] = await Promise.all([
-      expireUnpaidOrderReservations({ orderId, actorId: "SYSTEM-WORKER" }),
-      cancelUnpaidOrder({
-        orderNumber: "GP-TEST-RACE-E-001",
-        cancellationAttemptId: "cancellation-attempt-race-e-001",
-        reason: "Cancelación simultánea del cliente",
-      }),
-    ]);
+    // Deterministic barrier: cancelUnpaidOrder pauses after lock
+    const barrier = createBarrier();
+    __setTestOrderTransactionHook(async (stage) => {
+      if (stage === "after_lock") {
+        barrier.signalA();
+        await barrier.waitB();
+      }
+    });
+
+    const cancelPromise = cancelUnpaidOrder({
+      orderNumber: "GP-TEST-RACE-E-001",
+      cancellationAttemptId: "cancellation-attempt-race-e-001",
+      reason: "Cancelación simultánea del cliente",
+    });
+    const expirePromise = expireUnpaidOrderReservations({ orderId, actorId: "SYSTEM-WORKER" });
+
+    await barrier.waitA();
+    barrier.signalB();
+
+    const [cancelRes, expRes] = await Promise.all([cancelPromise, expirePromise]);
 
     expect(expRes.success).toBe(true);
 
     const [orderFinal] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
-    expect(["EXPIRED", "CANCELLED"]).toContain(orderFinal!.status);
-
     const [resFinal] = await sqlClient`
       SELECT status FROM inventory_reservations WHERE order_id = ${orderId};
     `;
+
+    if (cancelRes.success) {
+      expect(cancelRes.status).toBe("CANCELLED");
+      expect(orderFinal!.status).toBe("CANCELLED");
+      expect(expRes.orderStatusTransitioned).toBe(false);
+      expect(expRes.releasedLinesCount).toBe(0);
+    } else {
+      expect(orderFinal!.status).toBe("EXPIRED");
+      expect(expRes.orderStatusTransitioned).toBe(true);
+      expect(expRes.releasedLinesCount).toBe(1);
+    }
+
     expect(resFinal!.status).toBe("RELEASED");
   });
 
@@ -1387,29 +1486,50 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
 
     await sqlClient`UPDATE payments SET status = 'REJECTED' WHERE id = ${paymentId};`;
 
-    const [allocRes, rejRes] = await Promise.allSettled([
-      db.transaction((tx) =>
-        allocateOrderInventoryAfterPaymentApproval(tx, {
-          orderId,
-          actorId: "test-verifier",
-          referenceId: "PAY-RACE-F-ALLOC",
-        })
-      ),
-      db.transaction((tx) =>
-        applyTerminalPaymentRejectionConsequences(tx, {
-          orderId,
-          paymentId,
-          rejectionReason: "Comprobante rechazado",
-        })
-      ),
-    ]);
+    const barrier = createBarrier();
+    __setTestInventoryTransactionHook(async (stage) => {
+      if (stage === "after_lock") {
+        barrier.signalA();
+        await barrier.waitB();
+      }
+    });
+
+    const allocPromise = db.transaction((tx) =>
+      allocateOrderInventoryAfterPaymentApproval(tx, {
+        orderId,
+        actorId: "test-verifier",
+        referenceId: "PAY-RACE-F-ALLOC",
+      })
+    );
+
+    const rejPromise = db.transaction((tx) =>
+      applyTerminalPaymentRejectionConsequences(tx, {
+        orderId,
+        paymentId,
+        rejectionReason: "Comprobante rechazado",
+      })
+    );
+
+    await barrier.waitA();
+    barrier.signalB();
+
+    const [allocRes, rejRes] = await Promise.allSettled([allocPromise, rejPromise]);
+
+    expect(rejRes.status).toBe("fulfilled");
+    expect(["fulfilled", "rejected"]).toContain(allocRes.status);
 
     const [orderFinal] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
     const [resFinal] = await sqlClient`
       SELECT status FROM inventory_reservations WHERE order_id = ${orderId};
     `;
+    const [itemFinal] = await sqlClient`
+      SELECT quantity_reserved, quantity_allocated FROM inventory_items WHERE variant_id = ${variantId1} AND location_id = ${primaryLocId};
+    `;
 
-    expect(["ALLOCATED", "RELEASED"]).toContain(resFinal!.status);
+    expect(orderFinal!.status).toBe("CANCELLED");
+    expect(resFinal!.status).toBe("RELEASED");
+    expect(itemFinal!.quantity_reserved).toBe(0);
+    expect(itemFinal!.quantity_allocated).toBe(0);
   });
 
   it("Race G: Two simultaneous expiration workers targeting the same expired order serialize safely", async () => {
@@ -1422,10 +1542,23 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       expiresAt: pastDate,
     });
 
-    const [exp1, exp2] = await Promise.all([
-      expireUnpaidOrderReservations({ orderId, actorId: "SYSTEM-WORKER-1" }),
-      expireUnpaidOrderReservations({ orderId, actorId: "SYSTEM-WORKER-2" }),
-    ]);
+    const barrier = createBarrier();
+    let isFirst = true;
+    __setTestInventoryTransactionHook(async (stage) => {
+      if (stage === "after_lock" && isFirst) {
+        isFirst = false;
+        barrier.signalA();
+        await barrier.waitB();
+      }
+    });
+
+    const exp1Promise = expireUnpaidOrderReservations({ orderId, actorId: "SYSTEM-WORKER-1" });
+    const exp2Promise = expireUnpaidOrderReservations({ orderId, actorId: "SYSTEM-WORKER-2" });
+
+    await barrier.waitA();
+    barrier.signalB();
+
+    const [exp1, exp2] = await Promise.all([exp1Promise, exp2Promise]);
 
     expect(exp1.success).toBe(true);
     expect(exp2.success).toBe(true);
@@ -1434,8 +1567,16 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(releasedCounts).toContain(2);
     expect(releasedCounts).toContain(0);
 
-    const [order] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
-    expect(order!.status).toBe("EXPIRED");
+    const transitionFlags = [exp1.orderStatusTransitioned, exp2.orderStatusTransitioned];
+    expect(transitionFlags).toContain(true);
+    expect(transitionFlags).toContain(false);
+
+    const [orderFinal] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
+    const [resFinal] =
+      await sqlClient`SELECT status FROM inventory_reservations WHERE order_id = ${orderId};`;
+
+    expect(orderFinal!.status).toBe("EXPIRED");
+    expect(resFinal!.status).toBe("RELEASED");
   });
 
   it("Race H: Two simultaneous payment-approval allocation attempts execute idempotently", async () => {
@@ -1446,22 +1587,35 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       reservationStatus: "VERIFICATION_HOLD",
     });
 
-    const [alloc1, alloc2] = await Promise.all([
-      db.transaction((tx) =>
-        allocateOrderInventoryAfterPaymentApproval(tx, {
-          orderId,
-          actorId: "test-verifier-1",
-          referenceId: "PAY-RACE-H-1",
-        })
-      ),
-      db.transaction((tx) =>
-        allocateOrderInventoryAfterPaymentApproval(tx, {
-          orderId,
-          actorId: "test-verifier-2",
-          referenceId: "PAY-RACE-H-2",
-        })
-      ),
-    ]);
+    const barrier = createBarrier();
+    let isFirst = true;
+    __setTestInventoryTransactionHook(async (stage) => {
+      if (stage === "after_lock" && isFirst) {
+        isFirst = false;
+        barrier.signalA();
+        await barrier.waitB();
+      }
+    });
+
+    const alloc1Promise = db.transaction((tx) =>
+      allocateOrderInventoryAfterPaymentApproval(tx, {
+        orderId,
+        actorId: "test-verifier-1",
+        referenceId: "PAY-RACE-H-1",
+      })
+    );
+    const alloc2Promise = db.transaction((tx) =>
+      allocateOrderInventoryAfterPaymentApproval(tx, {
+        orderId,
+        actorId: "test-verifier-2",
+        referenceId: "PAY-RACE-H-2",
+      })
+    );
+
+    await barrier.waitA();
+    barrier.signalB();
+
+    const [alloc1, alloc2] = await Promise.all([alloc1Promise, alloc2Promise]);
 
     expect(alloc1.success).toBe(true);
     expect(alloc2.success).toBe(true);
@@ -1470,9 +1624,9 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(alreadyAllocatedFlags).toContain(false);
     expect(alreadyAllocatedFlags).toContain(true);
 
-    const [res] =
+    const [resFinal] =
       await sqlClient`SELECT status FROM inventory_reservations WHERE order_id = ${orderId};`;
-    expect(res!.status).toBe("ALLOCATED");
+    expect(resFinal!.status).toBe("ALLOCATED");
   });
 
   it("Race I: Late reacquisition vs concurrent stock-consuming operation prevents oversell", async () => {
@@ -1494,34 +1648,64 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       initialOnHand: 4,
     });
 
-    const [reacq, adj] = await Promise.all([
-      db.transaction((tx) =>
-        reacquireOrderInventoryAfterLatePayment(tx, {
-          orderId: orderIdLate,
-          actorId: "test-admin-verifier",
-          referenceId: "PAY-RACE-I-1",
-        })
-      ),
-      adjustInventory({
-        attemptId: "att-race-i-adj",
-        variantId: variantId2,
-        locationCode: primaryLocCode,
-        commandKind: "DELTA",
-        deltaQuantity: -4,
-        reason: "Venta simultánea",
-        referenceId: "AUDIT-RACE-I-1",
-        actorId: "test-staff-1",
-      }),
-    ]);
+    const barrier = createBarrier();
+    __setTestInventoryTransactionHook(async (stage) => {
+      if (stage === "after_lock") {
+        barrier.signalA();
+        await barrier.waitB();
+      }
+    });
+
+    const reacqPromise = db.transaction((tx) =>
+      reacquireOrderInventoryAfterLatePayment(tx, {
+        orderId: orderIdLate,
+        actorId: "test-admin-verifier",
+        referenceId: "PAY-RACE-I-1",
+      })
+    );
+
+    const adjPromise = adjustInventory({
+      attemptId: "att-race-i-adj",
+      variantId: variantId2,
+      locationCode: primaryLocCode,
+      commandKind: "DELTA",
+      deltaQuantity: -4,
+      reason: "Venta simultánea",
+      referenceId: "AUDIT-RACE-I-1",
+      actorId: "test-staff-1",
+    });
+
+    await barrier.waitA();
+    barrier.signalB();
+
+    const [reacq, adj] = await Promise.all([reacqPromise, adjPromise]);
 
     const outcomes = [reacq.success, adj.success];
     expect(outcomes).toContain(true);
     expect(outcomes).toContain(false);
 
-    const [item] = await sqlClient`
+    const [resFinal] = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${orderIdLate};
+    `;
+    const [itemFinal] = await sqlClient`
       SELECT quantity_on_hand, quantity_reserved, quantity_allocated
       FROM inventory_items WHERE variant_id = ${variantId2} AND location_id = ${locId};
     `;
-    expect(item!.quantity_on_hand - item!.quantity_reserved - item!.quantity_allocated).toBe(0);
+
+    if (reacq.success) {
+      expect(reacq.reacquiredLinesCount).toBe(1);
+      expect(adj.success).toBe(false);
+      expect(resFinal!.status).toBe("ALLOCATED");
+      expect(itemFinal!.quantity_allocated).toBe(4);
+    } else {
+      expect(adj.success).toBe(true);
+      expect(reacq.success).toBe(false);
+      expect(reacq.code).toBe("INSUFFICIENT_STOCK_FOR_REACQUISITION");
+      expect(resFinal!.status).toBe("RELEASED");
+    }
+
+    expect(
+      itemFinal!.quantity_on_hand - itemFinal!.quantity_reserved - itemFinal!.quantity_allocated
+    ).toBe(0);
   });
 });
