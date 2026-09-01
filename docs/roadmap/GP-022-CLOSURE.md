@@ -17,7 +17,9 @@
 - **Historical Intermediate Commit**: `c7819b0a9f7e67f97f7dd777850e5ea4e9b2ed7f` (CI Run ID `33558525276`, Status: `completed`, Conclusion: `failure` — Format/Build, Runtime, and Cart E2E passed; Checkout E2E failed due to broken login `data-testid` selectors in Admin E2E causing 12 terminal failures; Payment E2E had one recovered first-attempt flake)
 - **Historical Intermediate Commit**: `bb2dc64bf8785115662d321a5fc1ab678456972c` (CI Run ID `33561132192`, Status: `completed`, Conclusion: `cancelled` — cancelled after docs commit was pushed)
 - **Historical Intermediate Commit**: `c518ca4d873f0f43a988e6102568c520c3043c0a` (CI Run ID `33561782959`, Status: `completed`, Conclusion: `failure` — Format/Build, Runtime, and Cart E2E passed; Checkout E2E failed with Admin E2E having 9 passed / 4 failed: E2/E3 false text matching of legitimate denial copy, E4 ambiguous header locator, E8 menuButtonRef unwired defect; Payment E2E had one recovered first-attempt flake)
-- **Canonical Implementation Fix Commit**: `90b4e71c0b9e51f532109f81da66978d2359dc2d` (`fix(admin): restore mobile trigger focus and harden e2e assertions`)
+- **Historical Intermediate Commit**: `90b4e71c0b9e51f532109f81da66978d2359dc2d` (CI Run ID `33563569694`, Status: `completed`, Conclusion: `cancelled` — superseded by docs push)
+- **Historical Intermediate Commit**: `8e66c60647b4dac7954228b1ec4462894ad72af3` (CI Run ID `33564165628`, Status: `completed`, Conclusion: `failure` — Format/Build, Runtime, and Cart E2E passed; Checkout E2E failed because Admin E2E failed on: E4 locator strict mode collision where `getByText("ADMIN")` matched both the brand badge and the `SUPER_ADMIN` role pill; E8 backdrop click using viewport coordinates `(10, 10)` inside the 280px drawer rather than targeting the backdrop element)
+- **Canonical Implementation Fix Commit**: `dbde8eec77c3506e56599d72084ad385f74b493c` (`fix(admin): use exact brand badge locator and deterministic backdrop click in e2e`)
 - **Target Branch**: `main`
 
 ---
@@ -56,8 +58,8 @@ GP-022 / CHK2-BR1 establishes a fully hardened, verified Admin Foundation for Ga
 
 6. **Semantic E2E Assertions & Strict Mode Accuracy**:
    - Resolved E2/E3 false text failure: removed `text=Panel de Administración` count check that matched legitimate explanation copy in `AdminForbidden` (`"...acceder al panel de administración de Gamer Perú"`). Asserted semantic absence of `aside`, `main#admin-main-content`, `navigation[name="Ruta de navegación"]`, staff role pills, and platform status.
-   - Resolved E4 ambiguous header locator: replaced `page.locator("header")` with explicit semantic landmarks (`getByRole("navigation", { name: "Ruta de navegación" })`, `page.locator("aside")`, `page.locator("main#admin-main-content")`, and `getByRole("heading", { level: 1, name: "Panel de Administración" })`).
-   - Verified E8 full focus/aria lifecycle across drawer open, focus trap, Escape close, backdrop close, and focus restoration to menu trigger.
+   - Resolved E4 ambiguous header locator and brand badge collision: replaced ambiguous header locator with explicit semantic landmarks (`getByRole("navigation", { name: "Ruta de navegación" })`, `page.locator("aside")`, `page.locator("main#admin-main-content")`, and `getByRole("heading", { level: 1, name: "Panel de Administración" })`) and used exact text matching `getByText("ADMIN", { exact: true })` for the brand badge.
+   - Resolved E8 backdrop interaction defect: targeted the rendered backdrop element directly via `page.locator("[class*='drawerBackdrop']")` at coordinates outside the 280px drawer (`x: 320, y: 300`), verifying full focus/aria lifecycle across drawer open, focus trap, Escape close, backdrop close, and focus restoration to menu trigger.
 
 7. **Fail-Closed Local Test Target Guards**:
    - Implemented `src/lib/admin/test-target-guard.ts` (`assertLocalDatabaseTarget`, `assertLocalSupabaseApiTarget`).
