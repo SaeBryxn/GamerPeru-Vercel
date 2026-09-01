@@ -20,14 +20,16 @@
 
 ## Historical CI Execution Correction & Forensic Audit
 
-The previous closure draft incorrectly characterized earlier CI runs as successful. In accordance with Section 2 of the BR1 contract, the canonical historical record is explicitly corrected:
+The canonical historical record of previous CI runs is explicitly documented:
 
 1. **Run 33489856547** (Head SHA: `e9446e5b3a4b6a2aca78fa260ed0fe89cee67936`): **FAILURE**
-   - Failed specifically in `Real Local PostgreSQL / Supabase Checkout Runtime` at `Run Dedicated Inventory Live Integration Tests`.
+   - Failed in `Real Local PostgreSQL / Supabase Checkout Runtime` at `Run Dedicated Inventory Live Integration Tests`.
 2. **Run 33490597816** (Head SHA: `becbdd408e683c1d2d249e249ec3583f34f0fbae`): **FAILURE**
    - Concluded with identical failure in `Real Local PostgreSQL / Supabase Checkout Runtime` at `Run Dedicated Inventory Live Integration Tests`.
+3. **Run 33493048138** (Head SHA: `823b68e37362329c8166a9bdd5bab8df2c479160`): **FAILURE**
+   - Failed in `Real Local PostgreSQL / Supabase Checkout Runtime` at `Run Dedicated Inventory Live Integration Tests` (12 passed, 16 failed) due to missing required `customer_email` and `customer_phone` fields in test `INSERT INTO orders` fixture helpers and cross-test reconciliation drift.
 
-Neither historical run is preserved or claimed as canonical green evidence.
+None of these historical runs is preserved or claimed as canonical green evidence.
 
 ---
 
@@ -52,15 +54,15 @@ The BR1 implementation strictly addresses all binding amendments and reviewer fi
    - Exact semantic ordering enforced: 1. Authority binding $\to$ 2. Expiration $\to$ 3. Operation compatibility $\to$ 4. Request fingerprint $\to$ 5. Committed replay.
    - Expired keys return typed `IDEMPOTENCY_EXPIRED` (never replayed).
    - Zero-effect adjustments (`appliedDelta === 0`) persist idempotency payload to ensure retry-stability while writing 0 ledger entries and 0 audit events. Subsequent retries replay the 0-delta payload regardless of future stock changes.
-5. **E. Normal Allocation Complete State Classification (Section 7)**:
+5. **E. Normal Allocation Complete State Classification & Authoritative Sum Verification (Section 7)**:
    - Whole-order evaluation:
      - `ALL VERIFICATION_HOLD`: proceeds with allocation (`VERIFICATION_HOLD -> ALLOCATED`, `quantity_reserved -= qty`, `quantity_allocated += qty`, `ALLOCATION_CONFIRMED` ledger entries).
-     - `ALL ALLOCATED`: verified idempotent replay after balance consistency validation (`alreadyAllocated: true`).
+     - `ALL ALLOCATED`: verified idempotent replay requiring exact equality between physical `quantity_allocated` and the authoritative sum of ALL `ALLOCATED` reservations for that item (`alreadyAllocated: true`). Drift in either direction fails closed (`INCONSISTENT_ALLOCATED_BALANCE`).
      - Any mixed or invalid state (`VERIFICATION_HOLD + ALLOCATED`, `ACTIVE`, `RELEASED`, `CONSUMED`): fails closed with typed error (`INVALID_RESERVATION_STATE_FOR_ALLOCATION`), 0 balance mutation, 0 ledger rows.
 6. **F. Late Reacquisition Complete State Classification (Section 8)**:
    - Whole-order evaluation:
      - `ALL RELEASED`: atomically rechecks ATS under lock for all items; on sufficient stock, increments `quantity_allocated`, inserts new `ALLOCATED` reservations preserving the original authoritative `expires_at` (lineage-compatible, non-invented). On insufficient stock, rolls back atomically with `INSUFFICIENT_STOCK_FOR_REACQUISITION`.
-     - `ALL ALLOCATED`: verified idempotent replay.
+     - `ALL ALLOCATED`: verified idempotent replay enforcing authoritative allocated sum equality.
      - Any mixed or invalid state fails closed.
 7. **G. Expiration In-Domain Eligibility (Section 9)**:
    - Requires payment to be `UNPAID` and order to be `PENDING`.
@@ -103,22 +105,26 @@ Suite `tests/inventory-integration/inventory-live-scenarios.test.ts` covers:
 - **Scenario 12 & 13**: Quarantine transfer decrements source and increments destination with correlated ledger entries.
 - **Scenario 15**: Normal allocation transitions `VERIFICATION_HOLD` $\to$ `ALLOCATED` atomically.
 - **Scenario 16**: Normal allocation rejects `ACTIVE` and mixed reservation states with fail-closed error.
-- **Scenario 18**: All-`ALLOCATED` replay verifies balance consistency and returns idempotent success with zero duplicate ledger rows.
+- **Scenario 18**: All-`ALLOCATED` replay verifies authoritative allocated sum consistency and returns idempotent success with zero duplicate ledger rows.
+- **Scenario 18B**: All-`ALLOCATED` replay fails closed on under-count drift (`quantityAllocated < reservation sum`).
+- **Scenario 18C**: All-`ALLOCATED` replay fails closed on over-count drift (`quantityAllocated > reservation sum`).
+- **Scenario 18D**: Legitimate `InventoryItem` shared by multiple allocated orders replays correctly when total matches.
 - **Scenario 19 & 20**: Late reacquisition creates `ALLOCATED` reservations preserving original `expires_at` when stock exists, rejects when insufficient.
 - **Scenario 21**: Direct expiration called before expiry date results in zero mutation (no-op).
 - **Scenario 22 & 23**: Legitimate expired trigger releases whole active order with exact movement classifications (`RESERVATION_EXPIRED` vs `RESERVATION_RELEASED` co-release).
 - **Scenario 24**: `VERIFICATION_HOLD` reservations are immune from expiration.
 - **Scenario 25**: Batch processor runs across qualifying expired orders safely.
-- **Scenario 26 & 30**: Reconciliation detects reserved drift and repair service restores balance with compensating ledger and `AuditEvent`.
+- **Scenario 26 & 30**: Reconciliation detects reserved drift on dedicated isolated item and repair service restores balance with compensating ledger and `AuditEvent`.
 - **Scenario 26B**: Repair rejected when expected reservations exceed physical on-hand (`CAPACITY_VIOLATION_REQUIRES_MANUAL_RESOLUTION`).
 - **Scenario 31**: `getVariantAvailability` returns derived ATS and low-stock signal.
 - **Race A**: Two concurrent receiving operations serialize cleanly; both increments commit.
 - **Race B**: Concurrent first `InventoryItem` creation for same variant and location creates exactly 1 record with combined stock.
-- **Race C**: Manual decrement vs concurrent reservation on final available stock prevents oversell.
-- **Race D**: Expiration vs real payment submission concurrency preserves hold and skips expiration.
-- **Race E**: Expiration vs customer cancellation concurrency handles terminal state safely with exactly 1 release.
-- **Race F**: Two simultaneous expiration workers targeting the same expired order serialize safely without double-release.
-- **Race G**: Two simultaneous payment-approval allocation attempts execute idempotently (one allocates, other returns `alreadyAllocated`).
+- **Race C**: Real Checkout reservation (`submitCheckout`) vs manual decrement (`adjustInventory`) on final available stock prevents oversell.
+- **Race D**: Real Payment submission (`submitPaymentProof`) vs expiration concurrency.
+- **Race E**: Real cancellation (`cancelUnpaidOrder`) vs expiration concurrency.
+- **Race F**: Allocation vs terminal consequence seam (`applyTerminalPaymentRejectionConsequences`) concurrency.
+- **Race G**: Two simultaneous expiration workers targeting the same expired order serialize safely without double-release.
+- **Race H**: Two simultaneous payment-approval allocation attempts execute idempotently (one allocates, other returns `alreadyAllocated`).
 - **Race I**: Late reacquisition vs concurrent stock-consuming operation prevents oversell.
 
 ---
