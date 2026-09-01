@@ -2,7 +2,7 @@
 
 ## Status
 
-**CANONICAL CLOSURE CANDIDATE (GP-020 / CHK2-BR1A REMEDIATED — READY FOR EXTERNAL REVIEW)**
+**GP-020 FINAL CLOSURE CANDIDATE — PENDING EXTERNAL APPROVAL**
 
 ---
 
@@ -16,8 +16,8 @@
   - `CHK1-R1`: Refund Persistence, Cross-Domain Locking & Authority Reconciliation `[APPROVED / CLOSED]`
   - `CHK2`: Order Management, Refund Persistence, Audit & Concurrency Implementation `[REJECTED REQUIRES BR1]`
   - `CHK2-BR1`: Terminal Refund Inventory Integrity, Financial Idempotency & Real Cancel-vs-Submit Concurrency `[REJECTED REQUIRES BR1A]`
-  - `CHK2-BR1A`: Pre-Shipment Refund Consistency & CI Evidence Repair `[COMPLETED / READY FOR REVIEW]`
-  - `CHK3`: Controlled Hosted Supabase Migration 0011 Deployment & Physical Verification `[NOT DEPLOYED / PENDING AUTHORIZATION]`
+  - `CHK2-BR1A`: Pre-Shipment Refund Consistency & CI Evidence Repair `[APPROVED / CLOSED]`
+  - `CHK3`: Controlled Hosted Supabase Migration 0011 Deployment & Physical Verification `[COMPLETED]` (Authorized project `jpjffalmvlxpufvtvskx`)
 - **Candidate Head Branch**: `main`
 - **BR1 / BR1A Remediation Commits**:
   - `777d0af`: `fix(orders): preserve stock and refund idempotency`
@@ -34,7 +34,7 @@ GP-020 delivers the complete order lifecycle management, refund tracking, audit 
    - Creates `audit_actor_type` enum (`'CUSTOMER'`, `'ADMIN'`, `'SYSTEM'`).
    - Creates `refunds` table with `id` (UUIDv7), `order_id` (FK `orders.id` ON DELETE RESTRICT), `payment_id` (FK `payments.id` ON DELETE RESTRICT), `amount_cents` (>0), `reason` (non-empty), `external_reference`, `actor_auth_user_id` (FK `auth.users(id)` ON DELETE SET NULL), and `created_at`.
    - Creates `audit_events` table with `id` (UUIDv7), `timestamp`, `actor_type`, `actor_id`, `action`, `target_type`, `target_id`, `metadata` (JSONB), `ip_address`, and `request_id`.
-   - Includes compound indexes on `refunds(payment_id, created_at)`, `refunds(order_id)`, `audit_events(target_type, target_id, timestamp)`, and `audit_events(action, timestamp)`. Zero modifications to legacy migrations 0000–0010. Migration 0011 remains byte-for-byte FROZEN (Hosted Supabase: `NOT DEPLOYED / PENDING CHK3`).
+   - Includes compound indexes on `refunds(payment_id, created_at)`, `refunds(order_id)`, `audit_events(target_type, target_id, timestamp)`, and `audit_events(action, timestamp)`. Zero modifications to legacy migrations 0000–0010. Migration 0011 remains byte-for-byte FROZEN (`Git blob SHA: 839b110f8d19671363c5fcd429518982c000fe9f`, `SHA-256: 0890b540ba993da662eeac4b35f619d36e2c0ab6cc8f812c31643b0b8d150efc`).
 2. **Deterministic Order Authority Resolution**: Single authoritative resolver `resolveAuthorizedOrder` handles authenticated customers, guest sessions via `guest_payment_access_grants` and `idempotency_keys`, and authorized staff (`orders:manage`). Unauthenticated or unauthorized callers receive unified, anti-oracle `NOT_AVAILABLE`.
 3. **Shared Global Lock Ordering**: Both payment submission and order management mutations follow a strictly unified hierarchical row lock order:
    $$\text{pg\_advisory\_xact\_lock} \longrightarrow \text{payments} \longrightarrow \text{orders} \longrightarrow \text{shipments} \longrightarrow \text{inventory\_reservations} \longrightarrow \text{inventory\_items}$$
@@ -67,7 +67,7 @@ GP-020 delivers the complete order lifecycle management, refund tracking, audit 
 - `pnpm format:check` $\to$ **PASS** (Zero code style issues across all files)
 - `pnpm typecheck` $\to$ **PASS** (Zero TypeScript compilation errors)
 - `pnpm lint` $\to$ **PASS** (Zero ESLint errors and warnings across full codebase)
-- `pnpm test` $\to$ **PASS** (68 unit test files, 901 unit tests passing cleanly, 0 failures)
+- `pnpm test` $\to$ **PASS** (68 unit test files, 900 passed, 1 skipped, 901 total, 0 failures)
 - `pnpm build` $\to$ **PASS** (Next.js production build compiled and optimized successfully)
 - `pnpm test:e2e` $\to$ **PASS** (142 Playwright E2E and WCAG 2.1 AA accessibility tests passing cleanly)
 
@@ -83,25 +83,62 @@ GP-020 delivers the complete order lifecycle management, refund tracking, audit 
 
 ---
 
-## Canonical CI Execution Evidence (Run 33478866574)
+## Pre-CHK3 Canonical CI Execution Evidence (Run 33479914940)
 
-- **Head Commit**: `f618627` (`fix(orders): fail closed on terminal refund inventory state`)
-- **Workflow Run**: [Run 33478866574](https://github.com/latamcreativa/GamerPeru/actions/runs/33478866574)
+- **Head Commit**: `dc7ed30c2fc7ce625d5b90e1bcd455ead8d74817` (`docs(roadmap): record canonical CI execution evidence for GP-020 closure candidate`)
+- **Workflow Run**: [Run 33479914940](https://github.com/latamcreativa/GamerPeru/actions/runs/33479914940)
 - **Status**: `completed`
 - **Conclusion**: `success` (100% Green across all 4 matrix jobs)
-- **Detailed Job Breakdown**:
-  1. `Format, Typecheck, Lint, Test, Build & E2E` (Job `99763813415`): **SUCCESS** (7m 1s)
+- **Detailed Job Breakdown & Canonical Metrics**:
+  1. `Format, Typecheck, Lint, Test, Build & E2E` (Job `99767228800`): **SUCCESS**
      - Formatting: Prettier check clean
      - TypeScript: 0 errors
      - ESLint: 0 errors, 0 warnings
-     - Vitest Unit: 68 test files, 901 unit tests passing cleanly
+     - Vitest Unit: 68 test files, 900 passed, 1 skipped, 901 total tests (0 failed)
      - Next.js Production Build: Compiled and static page generation complete
-     - Playwright E2E & WCAG 2.1 AA: 142 scenarios passing
-  2. `Real Local PostgreSQL / Supabase Checkout Runtime` (Job `99763813460`): **SUCCESS** (3m 22s)
-     - Executes `pnpm test:checkout:live` (12 live checkout scenarios)
-     - Executes `pnpm test:payment:live` (14 live payment scenarios)
-     - Executes `pnpm test:order:live` (38 live order management scenarios: Scenarios A–Z, Timeline, E/F genuine races, J1/J2 paid idempotency, and K1–K9 pre-shipment classification, aggregate underflow, and atomic rollback tests — 0 failed, 0 skipped)
-  3. `Real Local Supabase Checkout E2E` (Job `99763813353`): **SUCCESS** (5m 15s)
+     - Playwright E2E & WCAG 2.1 AA: 142 scenarios clean passed (0 failed, 0 skipped, 0 retries)
+  2. `Real Local PostgreSQL / Supabase Checkout Runtime` (Job `99767228818`): **SUCCESS**
+     - Executes `pnpm test:checkout:live` (24 / 24 checkout live scenarios passed)
+     - Executes `pnpm test:payment:live` (27 / 27 payment live scenarios passed)
+     - Executes `pnpm test:order:live` (38 / 38 order management live scenarios passed: Scenarios A–Z, Timeline, E/F genuine races, J1/J2 paid idempotency, and K1–K9 pre-shipment classification, aggregate underflow, and atomic rollback tests — 0 failed, 0 skipped)
+  3. `Real Local Supabase Checkout E2E` (Job `99767228833`): **SUCCESS**
      - Guest checkout, dynamic shipping, double-click idempotency, unauthorized view protection, and customer cancellation E2E scenarios passing with 0 WCAG AA accessibility violations.
-  4. `Real Local Supabase Cart E2E` (Job `99763813450`): **SUCCESS** (6m 2s)
+  4. `Real Local Supabase Cart E2E` (Job `99767228850`): **SUCCESS**
      - Anonymous, authenticated, merge, inventory reservation, and drawer UI scenarios passing.
+
+---
+
+## Hosted Supabase Migration 0011 Deployment & Physical Verification
+
+- **Authorized Project Ref**: `jpjffalmvlxpufvtvskx`
+- **Database**: `postgres`
+- **Connection Configuration**: Direct PostgreSQL port 5432 via `DATABASE_MIGRATION_URL` (Port 6543 strictly NOT used).
+- **Migration Application (First Run)**: Executed `pnpm db:migrate` $\to$ `[✓] migrations applied successfully!`
+- **Migration Idempotency (Second Run)**: Executed `pnpm db:migrate` $\to$ `[✓] migrations applied successfully!` (zero schema mutation, zero error).
+- **Applied Migration Sequence in Hosted DB**:
+  - Migration 1 (`0000_superb_ink`)
+  - Migration 2 (`0001_search_pg_trgm`)
+  - Migration 3 (`0002_silky_dazzler`)
+  - Migration 4 (`0003_small_slyde`)
+  - Migration 5 (`0004_famous_doomsday`)
+  - Migration 6 (`0005_data_api_hardening`)
+  - Migration 7 (`0006_canonical_rbac_seed`)
+  - Migration 9 (`0007_customer_account_addresses`)
+  - Migration 10 (`0008_small_logan`)
+  - Migration 11 (`0009_majestic_madame_web`)
+  - Migration 12 (`0010_chief_hemingway`)
+  - Migration 13 (`0011_mushy_viper`, Hash `0890b540ba99...`, CreatedAt `1788231782857`)
+- **Physical Enum Verification**:
+  - `audit_actor_type`: Values `['CUSTOMER', 'ADMIN', 'SYSTEM']`
+- **Physical Table Verification — `refunds`**:
+  - Columns: `id` (uuid, PK, NOT NULL), `order_id` (uuid, NOT NULL), `payment_id` (uuid, NOT NULL), `amount_cents` (integer, NOT NULL), `reason` (varchar(255), NOT NULL), `external_reference` (varchar(100), NULLABLE), `actor_auth_user_id` (uuid, NULLABLE), `created_at` (timestamptz, NOT NULL, default `now()`).
+  - CHECK Constraints: `refunds_amount_cents_positive` (`CHECK ((amount_cents > 0))`), `refunds_reason_not_empty` (`CHECK ((length(TRIM(BOTH FROM reason)) > 0))`).
+  - Foreign Keys: `refunds_order_id_orders_id_fk` $\to$ `orders(id)` ON DELETE RESTRICT, `refunds_payment_id_payments_id_fk` $\to$ `payments(id)` ON DELETE RESTRICT, `refunds_actor_auth_user_id_fk` $\to$ `auth.users(id)` ON DELETE SET NULL.
+  - Physical Indexes: `refunds_pkey` (UNIQUE on `id`), `refunds_order_id_idx` (on `order_id`), `refunds_payment_created_idx` (on `payment_id, created_at`).
+- **Physical Table Verification — `audit_events`**:
+  - Columns: `id` (uuid, PK, NOT NULL), `timestamp` (timestamptz, NOT NULL, default `now()`), `actor_type` (`audit_actor_type`, NOT NULL), `actor_id` (varchar(255), NOT NULL), `action` (varchar(100), NOT NULL), `target_type` (varchar(50), NOT NULL), `target_id` (varchar(255), NOT NULL), `metadata` (jsonb, NULLABLE), `ip_address` (varchar(45), NULLABLE), `request_id` (varchar(255), NULLABLE).
+  - Physical Indexes: `audit_events_pkey` (UNIQUE on `id`), `audit_events_target_idx` (on `target_type, target_id, timestamp`), `audit_events_action_timestamp_idx` (on `action, timestamp`).
+- **Physical Schema Drift**: ZERO. All hosted database objects match frozen migration source `0011_mushy_viper.sql` exactly.
+- **Safe Transactional Constraint Smoke Test**: **PASS**. Verified rejection of negative amount, zero amount, and blank/whitespace reason inside an isolated transaction with rollback; zero persistent data created.
+- **Hosted Commerce Data Delta**: ZERO (`orders: 0`, `payments: 0`, `inventory_reservations: 0`, `inventory_items: 0`, `inventory_ledger_entries: 0`, `outbox_events: 0`, `refunds: 0`, `audit_events: 0`).
+- **Hosted R2 Object Delta**: ZERO.
