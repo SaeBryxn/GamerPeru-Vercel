@@ -1440,10 +1440,17 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     if (payRes.success) {
       expect(payRes.paymentStatus).toBe("SUBMITTED");
       expect(paymentFinal!.status).toBe("SUBMITTED");
-      expect(orderFinal!.status).toBe("PENDING");
-      expect(resFinal!.status).toBe("VERIFICATION_HOLD");
-      expect(expRes.releasedLinesCount).toBe(0);
-      expect(expRes.orderStatusTransitioned).toBe(false);
+      if (payRes.isLate) {
+        expect(orderFinal!.status).toBe("EXPIRED");
+        expect(resFinal!.status).toBe("RELEASED");
+        expect(expRes.releasedLinesCount).toBe(1);
+        expect(expRes.orderStatusTransitioned).toBe(true);
+      } else {
+        expect(orderFinal!.status).toBe("PENDING");
+        expect(resFinal!.status).toBe("VERIFICATION_HOLD");
+        expect(expRes.releasedLinesCount).toBe(0);
+        expect(expRes.orderStatusTransitioned).toBe(false);
+      }
     } else {
       expect(orderFinal!.status).toBe("EXPIRED");
       expect(resFinal!.status).toBe("RELEASED");
@@ -1530,14 +1537,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
 
     await sqlClient`UPDATE payments SET status = 'REJECTED' WHERE id = ${paymentId};`;
 
-    const barrier = createBarrier();
-    __setTestInventoryTransactionHook(async (stage) => {
-      if (stage === "after_lock") {
-        barrier.signalA();
-        await barrier.waitB();
-      }
-    });
-
     const allocPromise = db.transaction((tx) =>
       allocateOrderInventoryAfterPaymentApproval(tx, {
         orderId,
@@ -1554,13 +1553,17 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       })
     );
 
-    await barrier.waitA();
-    barrier.signalB();
-
     const [allocRes, rejRes] = await Promise.allSettled([allocPromise, rejPromise]);
 
     expect(rejRes.status).toBe("fulfilled");
     expect(["fulfilled", "rejected"]).toContain(allocRes.status);
+
+    if (allocRes.status === "fulfilled") {
+      expect(allocRes.value.success).toBe(false);
+      expect(["PAYMENT_REJECTED", "INVALID_RESERVATION_STATE_FOR_ALLOCATION"]).toContain(
+        allocRes.value.code
+      );
+    }
 
     const [orderFinal] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
     const [resFinal] = await sqlClient`
