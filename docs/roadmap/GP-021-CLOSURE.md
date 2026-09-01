@@ -20,7 +20,7 @@
 
 ## Historical CI Execution Correction & Forensic Audit
 
-The canonical historical record of previous CI runs is explicitly documented:
+The complete canonical historical record of previous CI runs is explicitly documented:
 
 1. **Run 33489856547** (Head SHA: `e9446e5b3a4b6a2aca78fa260ed0fe89cee67936`): **FAILURE**
    - Failed in `Real Local PostgreSQL / Supabase Checkout Runtime` at `Run Dedicated Inventory Live Integration Tests`.
@@ -28,8 +28,21 @@ The canonical historical record of previous CI runs is explicitly documented:
    - Concluded with identical failure in `Real Local PostgreSQL / Supabase Checkout Runtime` at `Run Dedicated Inventory Live Integration Tests`.
 3. **Run 33493048138** (Head SHA: `823b68e37362329c8166a9bdd5bab8df2c479160`): **FAILURE**
    - Failed in `Real Local PostgreSQL / Supabase Checkout Runtime` at `Run Dedicated Inventory Live Integration Tests` (12 passed, 16 failed) due to missing required `customer_email` and `customer_phone` fields in test `INSERT INTO orders` fixture helpers and cross-test reconciliation drift.
+4. **Run 33494917565** (Head SHA: `1cc90fa8c8ba0ec51feaa7f1d24ecaa80738e4a9`): **CANCELLED**
+   - Cancelled due to superseded push.
+5. **Run 33495241107** (Head SHA: `fde228bb0d89db43434064a86720407a15e9a522`): **FAILURE**
+   - Failed in `Real Local PostgreSQL / Supabase Checkout Runtime` during `cleanupAllTestFixtures()` due to global guest session delete and lint failures in CI.
+6. **Run 33497460477** (Head SHA: `784c861da6929e71ec91a84f3747eb68f237894a`): **FAILURE**
+   - Failed in `Real Local PostgreSQL / Supabase Checkout Runtime` due to foreign key deletion order in fixture cleanup.
+7. **Run 33502407319** (Head SHA: `d962e6a5ea9c5a17cae9e0486c9cf8527a26f6eb`): **FAILURE**
+   - Failed in `Real Local PostgreSQL / Supabase Checkout Runtime` on Scenario 26B missing `order_items` fixture row.
+8. **Run 33503663068** (Head SHA: `3a7fcfc64eb27633bea1b6ddc9cddb5288e43f94`): **SUCCESS**
+   - `Format, Typecheck, Lint, Test, Build & E2E` $\to$ **SUCCESS**
+   - `Real Local Supabase Cart E2E` $\to$ **SUCCESS**
+   - `Real Local Supabase Checkout E2E` $\to$ **SUCCESS**
+   - `Real Local PostgreSQL / Supabase Checkout Runtime` $\to$ **SUCCESS** (32/32 live inventory tests passed, 0 skipped, 0 failed).
 
-None of these historical runs is preserved or claimed as canonical green evidence.
+None of the historical failed runs is preserved or claimed as green evidence.
 
 ---
 
