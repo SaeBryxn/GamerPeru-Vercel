@@ -36,6 +36,7 @@ async function cleanup() {
     await sql.begin(async (tx) => {
       await tx`DELETE FROM user_roles WHERE auth_user_id IN ${tx(ADMIN_E2E_USER_IDS)}`;
       await tx`DELETE FROM customer_profiles WHERE auth_user_id IN ${tx(ADMIN_E2E_USER_IDS)}`;
+      await tx`DELETE FROM auth.identities WHERE user_id IN ${tx(ADMIN_E2E_USER_IDS)}`;
       await tx`DELETE FROM auth.users WHERE id IN ${tx(ADMIN_E2E_USER_IDS)}`;
     });
 

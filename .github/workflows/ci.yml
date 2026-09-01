@@ -162,8 +162,10 @@ jobs:
           pnpm supabase:status
           STATUS_ENV=$(pnpm exec supabase status -o env)
           ANON_KEY=$(echo "$STATUS_ENV" | grep 'ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          SERVICE_KEY=$(echo "$STATUS_ENV" | grep 'SERVICE_ROLE_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
           API_URL=$(echo "$STATUS_ENV" | grep 'API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL:-http://127.0.0.1:54321}" >> $GITHUB_ENV
           echo "DATABASE_MIGRATION_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
           echo "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
