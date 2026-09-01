@@ -73,6 +73,11 @@ function createBarrier() {
 let currentMockCartCookie: string | null = null;
 let currentMockPaymentSessionCookie: string | null = null;
 
+const currentMockIdentity: { success: boolean; identity?: { authUserId: string; email: string } } =
+  {
+    success: false,
+  };
+
 vi.mock("next/headers", () => ({
   cookies: vi.fn(() => {
     return Promise.resolve({
@@ -87,9 +92,30 @@ vi.mock("next/headers", () => ({
         }
         return null;
       },
+      getAll: vi.fn(() => {
+        const list = [];
+        if (currentMockCartCookie) {
+          list.push({ name: "gp_cart_session", value: currentMockCartCookie });
+        }
+        if (currentMockPaymentSessionCookie) {
+          list.push({ name: "gp_payment_session", value: currentMockPaymentSessionCookie });
+        }
+        return list;
+      }),
       set: vi.fn(),
       delete: vi.fn(),
     });
+  }),
+  headers: vi.fn(() =>
+    Promise.resolve({
+      get: (_name: string) => "127.0.0.1",
+    })
+  ),
+}));
+
+vi.mock("@/lib/auth/claims", () => ({
+  getVerifiedIdentity: vi.fn(() => {
+    return Promise.resolve(currentMockIdentity);
   }),
 }));
 
