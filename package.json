@@ -30,8 +30,6 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:migrate:local": "drizzle-kit migrate",
-    "db:migrate:hosted": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "supabase": "supabase",
     "supabase:start": "supabase start",

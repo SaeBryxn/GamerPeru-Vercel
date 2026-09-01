@@ -75,6 +75,22 @@ export function resolveMigrationTarget(
       );
     }
 
+    // Local mode must strictly use port 54322
+    const port = parsed.port;
+    if (port !== "54322") {
+      throw new Error(
+        `MIGRATION_GUARD_VIOLATION: Local database migration target must strictly use Supabase local port 54322. Found port '${port || "default"}'. Target: ${sanitizeConnectionUrl(candidateUrl)}`
+      );
+    }
+
+    // Database name must strictly be 'postgres'
+    const dbName = parsed.pathname.replace(/^\//, "").split("?")[0];
+    if (dbName !== "postgres") {
+      throw new Error(
+        `MIGRATION_GUARD_VIOLATION: Local database migration target must strictly use database 'postgres'. Found '${dbName}'. Target: ${sanitizeConnectionUrl(candidateUrl)}`
+      );
+    }
+
     return {
       targetUrl: candidateUrl,
       environment: "local",
@@ -117,10 +133,19 @@ export function resolveMigrationTarget(
       );
     }
 
-    // Verify Direct Connection port 5432 (Transaction Pooler port 6543 is forbidden)
-    if (parsed.port === "6543") {
+    // Hosted migration must strictly use port 5432 (Transaction Pooler port 6543 and any non-5432 ports are forbidden)
+    const port = parsed.port;
+    if (port !== "5432") {
       throw new Error(
-        "MIGRATION_GUARD_VIOLATION: Hosted migration cannot run against Transaction Pooler port 6543. Direct connection or Session Pooler port 5432 is required."
+        `MIGRATION_GUARD_VIOLATION: Hosted database migration target must strictly use port 5432. Found port '${port || "default"}'. Transaction Pooler port 6543 and arbitrary non-5432 ports are forbidden.`
+      );
+    }
+
+    // Database name must strictly be 'postgres'
+    const dbName = parsed.pathname.replace(/^\//, "").split("?")[0];
+    if (dbName !== "postgres") {
+      throw new Error(
+        `MIGRATION_GUARD_VIOLATION: Hosted database migration target must strictly use database 'postgres'. Found '${dbName}'.`
       );
     }
 

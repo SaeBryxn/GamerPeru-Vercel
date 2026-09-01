@@ -85,6 +85,75 @@ function computeBalances(item: {
   };
 }
 
+/**
+ * Validates idempotency key state following the strict required evaluation order:
+ * 1. Authority binding check
+ * 2. Expiration check (expires_at <= now)
+ * 3. Operation compatibility check
+ * 4. Request fingerprint check
+ * 5. Committed replay return
+ */
+function evaluateIdempotencyRecord<T>(
+  keyRecord: typeof idempotencyKeys.$inferSelect,
+  expectedAuthorityDigest: string,
+  expectedFingerprint: string
+): { proceed: false; result: T } | { proceed: true } {
+  // 1. Authority Binding
+  if (keyRecord.authorityBindingDigest !== expectedAuthorityDigest) {
+    return {
+      proceed: false,
+      result: {
+        success: false,
+        code: "UNAUTHORIZED",
+        error: "No autorizado.",
+      } as unknown as T,
+    };
+  }
+
+  // 2. Expiration
+  if (keyRecord.expiresAt <= new Date()) {
+    return {
+      proceed: false,
+      result: {
+        success: false,
+        code: "IDEMPOTENCY_EXPIRED",
+        error: "La clave de idempotencia ha expirado. Requiere un nuevo identificador de intento.",
+      } as unknown as T,
+    };
+  }
+
+  // 3. Operation Compatibility
+  if (keyRecord.operationType !== "INVENTORY_MUTATION") {
+    return {
+      proceed: false,
+      result: {
+        success: false,
+        code: "IDEMPOTENCY_CONFLICT",
+        error: "Tipo de operación de idempotencia incompatible.",
+      } as unknown as T,
+    };
+  }
+
+  // 4. Request Fingerprint
+  if (keyRecord.requestFingerprint !== expectedFingerprint) {
+    return {
+      proceed: false,
+      result: {
+        success: false,
+        code: "IDEMPOTENCY_CONFLICT",
+        error: "Conflicto de idempotencia con parámetros distintos.",
+      } as unknown as T,
+    };
+  }
+
+  // 5. Committed Replay
+  const payload = keyRecord.responsePayload as T;
+  return {
+    proceed: false,
+    result: { ...payload, replayed: true },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 1. Receiving Service
 // ---------------------------------------------------------------------------
@@ -122,7 +191,11 @@ export async function receiveInventory(
 
   const configResult = getInventoryConfig();
   if (!configResult.valid || !configResult.config) {
-    return { success: false, code: "SYSTEM_ERROR", error: "Error de configuración de inventario." };
+    return {
+      success: false,
+      code: "SYSTEM_ERROR",
+      error: configResult.error ?? "Error de configuración de inventario.",
+    };
   }
   const { primaryLocationCode, idempotencyTtlMinutes, hmacSecret } = configResult.config;
 
@@ -151,18 +224,14 @@ export async function receiveInventory(
     .limit(1);
 
   if (existingKey) {
-    if (existingKey.authorityBindingDigest !== authorityBindingDigest) {
-      return { success: false, code: "UNAUTHORIZED", error: "No autorizado." };
+    const evalResult = evaluateIdempotencyRecord<ReceiveInventoryResult>(
+      existingKey,
+      authorityBindingDigest,
+      requestFingerprint
+    );
+    if (!evalResult.proceed) {
+      return evalResult.result;
     }
-    if (existingKey.requestFingerprint !== requestFingerprint) {
-      return {
-        success: false,
-        code: "IDEMPOTENCY_CONFLICT",
-        error: "Conflicto de idempotencia con parámetros distintos.",
-      };
-    }
-    const payload = existingKey.responsePayload as ReceiveInventoryResult;
-    return { ...payload, replayed: true };
   }
 
   const advisoryKey = createInventoryItemAdvisoryLockKey(namespacedKey);
@@ -178,18 +247,14 @@ export async function receiveInventory(
       .limit(1);
 
     if (lockedKey) {
-      if (lockedKey.authorityBindingDigest !== authorityBindingDigest) {
-        return { success: false, code: "UNAUTHORIZED", error: "No autorizado." };
+      const evalResult = evaluateIdempotencyRecord<ReceiveInventoryResult>(
+        lockedKey,
+        authorityBindingDigest,
+        requestFingerprint
+      );
+      if (!evalResult.proceed) {
+        return evalResult.result;
       }
-      if (lockedKey.requestFingerprint !== requestFingerprint) {
-        return {
-          success: false,
-          code: "IDEMPOTENCY_CONFLICT",
-          error: "Conflicto de idempotencia.",
-        };
-      }
-      const payload = lockedKey.responsePayload as ReceiveInventoryResult;
-      return { ...payload, replayed: true };
     }
 
     if (testInventoryTransactionHook) {
@@ -411,16 +476,22 @@ export async function adjustInventory(input: AdjustInventoryInput): Promise<Adju
 
   const configResult = getInventoryConfig();
   if (!configResult.valid || !configResult.config) {
-    return { success: false, code: "SYSTEM_ERROR", error: "Error de configuración de inventario." };
+    return {
+      success: false,
+      code: "SYSTEM_ERROR",
+      error: configResult.error ?? "Error de configuración de inventario.",
+    };
   }
-  const { idempotencyTtlMinutes, hmacSecret } = configResult.config;
+  const { primaryLocationCode, idempotencyTtlMinutes, hmacSecret } = configResult.config;
+
+  const resolvedLocationCode = (input.locationCode ?? primaryLocationCode).trim().toUpperCase();
 
   const namespacedKey = `INVENTORY_ADJUSTMENT:${input.attemptId}`;
   const authorityBindingDigest = computeInventoryAuthorityBindingDigest(actorId, hmacSecret);
   const requestFingerprint = computeInventoryAdjustmentFingerprint({
     inventoryItemId: input.inventoryItemId,
     variantId: input.variantId,
-    locationCode: input.locationCode,
+    locationCode: resolvedLocationCode,
     commandKind: input.commandKind,
     deltaQuantity,
     countedQuantity,
@@ -437,18 +508,14 @@ export async function adjustInventory(input: AdjustInventoryInput): Promise<Adju
     .limit(1);
 
   if (existingKey) {
-    if (existingKey.authorityBindingDigest !== authorityBindingDigest) {
-      return { success: false, code: "UNAUTHORIZED", error: "No autorizado." };
+    const evalResult = evaluateIdempotencyRecord<AdjustInventoryResult>(
+      existingKey,
+      authorityBindingDigest,
+      requestFingerprint
+    );
+    if (!evalResult.proceed) {
+      return evalResult.result;
     }
-    if (existingKey.requestFingerprint !== requestFingerprint) {
-      return {
-        success: false,
-        code: "IDEMPOTENCY_CONFLICT",
-        error: "Conflicto de idempotencia con parámetros distintos.",
-      };
-    }
-    const payload = existingKey.responsePayload as AdjustInventoryResult;
-    return { ...payload, replayed: true };
   }
 
   const advisoryKey = createInventoryItemAdvisoryLockKey(namespacedKey);
@@ -464,18 +531,14 @@ export async function adjustInventory(input: AdjustInventoryInput): Promise<Adju
       .limit(1);
 
     if (lockedKey) {
-      if (lockedKey.authorityBindingDigest !== authorityBindingDigest) {
-        return { success: false, code: "UNAUTHORIZED", error: "No autorizado." };
+      const evalResult = evaluateIdempotencyRecord<AdjustInventoryResult>(
+        lockedKey,
+        authorityBindingDigest,
+        requestFingerprint
+      );
+      if (!evalResult.proceed) {
+        return evalResult.result;
       }
-      if (lockedKey.requestFingerprint !== requestFingerprint) {
-        return {
-          success: false,
-          code: "IDEMPOTENCY_CONFLICT",
-          error: "Conflicto de idempotencia.",
-        };
-      }
-      const payload = lockedKey.responsePayload as AdjustInventoryResult;
-      return { ...payload, replayed: true };
     }
 
     if (testInventoryTransactionHook) {
@@ -499,18 +562,17 @@ export async function adjustInventory(input: AdjustInventoryInput): Promise<Adju
       if (!varVal.valid || !varVal.normalized) {
         return { success: false, code: "INVALID_INPUT", error: varVal.error };
       }
-      const locCode = (input.locationCode ?? "LOC-LIM-01").trim().toUpperCase();
       const [location] = await tx
         .select()
         .from(inventoryLocations)
-        .where(eq(inventoryLocations.code, locCode))
+        .where(eq(inventoryLocations.code, resolvedLocationCode))
         .limit(1);
 
       if (!location) {
         return {
           success: false,
           code: "LOCATION_NOT_FOUND",
-          error: `Ubicación '${locCode}' no encontrada.`,
+          error: `Ubicación '${resolvedLocationCode}' no encontrada.`,
         };
       }
 
@@ -546,14 +608,30 @@ export async function adjustInventory(input: AdjustInventoryInput): Promise<Adju
       appliedDelta = countedQuantity! - item.quantityOnHand;
     }
 
+    const expiresAt = new Date(Date.now() + idempotencyTtlMinutes * 60 * 1000);
+
+    // Stable zero-effect idempotency outcome:
+    // If appliedDelta === 0, persist idempotency record with 0 ledger rows and 0 audit events
     if (appliedDelta === 0) {
-      return {
+      const zeroResultPayload: AdjustInventoryResult = {
         success: true,
         replayed: false,
         inventoryItemId: item.id,
         appliedDelta: 0,
         resultingBalances: computeBalances(item),
       };
+
+      await tx.insert(idempotencyKeys).values({
+        id: generateUuidV7(),
+        idempotencyKey: namespacedKey,
+        operationType: "INVENTORY_MUTATION",
+        authorityBindingDigest,
+        requestFingerprint,
+        responsePayload: zeroResultPayload,
+        expiresAt,
+      });
+
+      return zeroResultPayload;
     }
 
     const newOnHand = item.quantityOnHand + appliedDelta;
@@ -631,7 +709,6 @@ export async function adjustInventory(input: AdjustInventoryInput): Promise<Adju
       ledgerEntryId,
     };
 
-    const expiresAt = new Date(Date.now() + idempotencyTtlMinutes * 60 * 1000);
     await tx.insert(idempotencyKeys).values({
       id: generateUuidV7(),
       idempotencyKey: namespacedKey,
@@ -693,12 +770,27 @@ export async function transferInventoryQuarantine(
 
   const configResult = getInventoryConfig();
   if (!configResult.valid || !configResult.config) {
-    return { success: false, code: "SYSTEM_ERROR", error: "Error de configuración de inventario." };
+    return {
+      success: false,
+      code: "SYSTEM_ERROR",
+      error: configResult.error ?? "Error de configuración de inventario.",
+    };
   }
-  const { primaryLocationCode, idempotencyTtlMinutes, hmacSecret } = configResult.config;
+  const { primaryLocationCode, quarantineLocationCode, idempotencyTtlMinutes, hmacSecret } =
+    configResult.config;
 
   const sourceLocationCode = (input.sourceLocationCode ?? primaryLocationCode).trim().toUpperCase();
-  const destLocationCode = input.destinationLocationCode.trim().toUpperCase();
+  const destLocationCode = (input.destinationLocationCode ?? quarantineLocationCode ?? "")
+    .trim()
+    .toUpperCase();
+
+  if (!destLocationCode) {
+    return {
+      success: false,
+      code: "INVALID_INPUT",
+      error: "destinationLocationCode es requerido.",
+    };
+  }
 
   if (sourceLocationCode === destLocationCode) {
     return {
@@ -728,18 +820,14 @@ export async function transferInventoryQuarantine(
     .limit(1);
 
   if (existingKey) {
-    if (existingKey.authorityBindingDigest !== authorityBindingDigest) {
-      return { success: false, code: "UNAUTHORIZED", error: "No autorizado." };
+    const evalResult = evaluateIdempotencyRecord<TransferInventoryQuarantineResult>(
+      existingKey,
+      authorityBindingDigest,
+      requestFingerprint
+    );
+    if (!evalResult.proceed) {
+      return evalResult.result;
     }
-    if (existingKey.requestFingerprint !== requestFingerprint) {
-      return {
-        success: false,
-        code: "IDEMPOTENCY_CONFLICT",
-        error: "Conflicto de idempotencia con parámetros distintos.",
-      };
-    }
-    const payload = existingKey.responsePayload as TransferInventoryQuarantineResult;
-    return { ...payload, replayed: true };
   }
 
   const advisoryKey = createInventoryItemAdvisoryLockKey(namespacedKey);
@@ -755,18 +843,14 @@ export async function transferInventoryQuarantine(
       .limit(1);
 
     if (lockedKey) {
-      if (lockedKey.authorityBindingDigest !== authorityBindingDigest) {
-        return { success: false, code: "UNAUTHORIZED", error: "No autorizado." };
+      const evalResult = evaluateIdempotencyRecord<TransferInventoryQuarantineResult>(
+        lockedKey,
+        authorityBindingDigest,
+        requestFingerprint
+      );
+      if (!evalResult.proceed) {
+        return evalResult.result;
       }
-      if (lockedKey.requestFingerprint !== requestFingerprint) {
-        return {
-          success: false,
-          code: "IDEMPOTENCY_CONFLICT",
-          error: "Conflicto de idempotencia.",
-        };
-      }
-      const payload = lockedKey.responsePayload as TransferInventoryQuarantineResult;
-      return { ...payload, replayed: true };
     }
 
     if (testInventoryTransactionHook) {
@@ -1005,10 +1089,47 @@ export async function allocateOrderInventoryAfterPaymentApproval(
     };
   }
 
+  // Exact complete-set classification:
   const allAllocated = reservations.every(
     (r: typeof inventoryReservations.$inferSelect) => r.status === "ALLOCATED"
   );
+  const allVerificationHold = reservations.every(
+    (r: typeof inventoryReservations.$inferSelect) => r.status === "VERIFICATION_HOLD"
+  );
+
+  // Case B: ALL ALLOCATED -> Potential Idempotent Replay
   if (allAllocated) {
+    const itemAllocatedDeltas = new Map<string, number>();
+    for (const line of reservations) {
+      const current = itemAllocatedDeltas.get(line.inventoryItemId) ?? 0;
+      itemAllocatedDeltas.set(line.inventoryItemId, current + line.quantity);
+    }
+    const itemIds = Array.from(itemAllocatedDeltas.keys()).sort();
+
+    const lockedItems = await tx
+      .select()
+      .from(inventoryItems)
+      .where(inArray(inventoryItems.id, itemIds))
+      .orderBy(asc(inventoryItems.id))
+      .for("update");
+
+    const itemMap = new Map<string, InventoryItem>();
+    for (const it of lockedItems) {
+      itemMap.set(it.id, it);
+    }
+
+    // Verify balance consistency: physical quantityAllocated must be >= order's allocated quantity
+    for (const [itemId, neededQty] of itemAllocatedDeltas.entries()) {
+      const it = itemMap.get(itemId);
+      if (!it || it.quantityAllocated < neededQty) {
+        return {
+          success: false,
+          code: "INCONSISTENT_ALLOCATED_BALANCE",
+          error: `Balance inconsistente para el item ${itemId} durante el replay de asignación.`,
+        };
+      }
+    }
+
     return {
       success: true,
       alreadyAllocated: true,
@@ -1021,36 +1142,18 @@ export async function allocateOrderInventoryAfterPaymentApproval(
     };
   }
 
-  const hasActive = reservations.some(
-    (r: typeof inventoryReservations.$inferSelect) => r.status === "ACTIVE"
-  );
-  if (hasActive) {
-    return {
-      success: false,
-      code: "ACTIVE_RESERVATION_CANNOT_BE_ALLOCATED",
-      error:
-        "No se puede asignar stock directamente desde reservas en estado ACTIVE. Requiere revisión previa (VERIFICATION_HOLD).",
-    };
-  }
-
-  const hasInvalidStatus = reservations.some(
-    (r: typeof inventoryReservations.$inferSelect) =>
-      r.status !== "VERIFICATION_HOLD" && r.status !== "ALLOCATED"
-  );
-  if (hasInvalidStatus) {
+  // Case C: Any mixed or invalid state fails closed
+  if (!allVerificationHold) {
     return {
       success: false,
       code: "INVALID_RESERVATION_STATE_FOR_ALLOCATION",
-      error:
-        "El pedido contiene reservas en estado no elegible para asignación normal (por ejemplo, RELEASED o CONSUMED).",
+      error: "El conjunto de reservas del pedido no es homogéneo en estado VERIFICATION_HOLD.",
     };
   }
 
-  const linesToAllocate = reservations.filter(
-    (r: typeof inventoryReservations.$inferSelect) => r.status === "VERIFICATION_HOLD"
-  );
+  // Case A: ALL VERIFICATION_HOLD -> Proceed with whole-order allocation
   const itemHoldDeltas = new Map<string, number>();
-  for (const line of linesToAllocate) {
+  for (const line of reservations) {
     const current = itemHoldDeltas.get(line.inventoryItemId) ?? 0;
     itemHoldDeltas.set(line.inventoryItemId, current + line.quantity);
   }
@@ -1090,7 +1193,7 @@ export async function allocateOrderInventoryAfterPaymentApproval(
 
   const ledgerEntryIds: string[] = [];
 
-  for (const line of linesToAllocate) {
+  for (const line of reservations) {
     const it = itemMap.get(line.inventoryItemId)!;
     const newReserved = it.quantityReserved - line.quantity;
     const newAllocated = it.quantityAllocated + line.quantity;
@@ -1141,8 +1244,8 @@ export async function allocateOrderInventoryAfterPaymentApproval(
     success: true,
     alreadyAllocated: false,
     orderId,
-    allocatedLinesCount: linesToAllocate.length,
-    totalQuantityAllocated: linesToAllocate.reduce(
+    allocatedLinesCount: reservations.length,
+    totalQuantityAllocated: reservations.reduce(
       (acc: number, r: typeof inventoryReservations.$inferSelect) => acc + r.quantity,
       0
     ),
@@ -1179,10 +1282,46 @@ export async function reacquireOrderInventoryAfterLatePayment(
     };
   }
 
+  // Exact complete-set classification
   const allAllocated = reservations.every(
     (r: typeof inventoryReservations.$inferSelect) => r.status === "ALLOCATED"
   );
+  const allReleased = reservations.every(
+    (r: typeof inventoryReservations.$inferSelect) => r.status === "RELEASED"
+  );
+
+  // Case B: ALL ALLOCATED -> Verified Idempotent Replay
   if (allAllocated) {
+    const itemAllocatedDeltas = new Map<string, number>();
+    for (const line of reservations) {
+      const current = itemAllocatedDeltas.get(line.inventoryItemId) ?? 0;
+      itemAllocatedDeltas.set(line.inventoryItemId, current + line.quantity);
+    }
+    const itemIds = Array.from(itemAllocatedDeltas.keys()).sort();
+
+    const lockedItems = await tx
+      .select()
+      .from(inventoryItems)
+      .where(inArray(inventoryItems.id, itemIds))
+      .orderBy(asc(inventoryItems.id))
+      .for("update");
+
+    const itemMap = new Map<string, InventoryItem>();
+    for (const it of lockedItems) {
+      itemMap.set(it.id, it);
+    }
+
+    for (const [itemId, neededQty] of itemAllocatedDeltas.entries()) {
+      const it = itemMap.get(itemId);
+      if (!it || it.quantityAllocated < neededQty) {
+        return {
+          success: false,
+          code: "INCONSISTENT_ALLOCATED_BALANCE",
+          error: `Balance inconsistente para el item ${itemId} durante el replay de reasignación.`,
+        };
+      }
+    }
+
     return {
       success: true,
       alreadyAllocated: true,
@@ -1195,24 +1334,19 @@ export async function reacquireOrderInventoryAfterLatePayment(
     };
   }
 
-  const invalidLines = reservations.filter(
-    (r: typeof inventoryReservations.$inferSelect) =>
-      r.status !== "RELEASED" && r.status !== "ALLOCATED"
-  );
-  if (invalidLines.length > 0) {
+  // Case C: Any mixed or non-RELEASED state fails closed
+  if (!allReleased) {
     return {
       success: false,
       code: "INVALID_STATE_FOR_REACQUISITION",
       error:
-        "La reasignación de pago tardío solo puede aplicarse a reservas previamente liberadas (RELEASED).",
+        "La reasignación de pago tardío requiere que todas las reservas del pedido se encuentren en estado RELEASED.",
     };
   }
 
-  const linesToReacquire = reservations.filter(
-    (r: typeof inventoryReservations.$inferSelect) => r.status === "RELEASED"
-  );
+  // Case A: ALL RELEASED -> Recheck ATS atomically and acquire
   const itemQtyMap = new Map<string, number>();
-  for (const line of linesToReacquire) {
+  for (const line of reservations) {
     const current = itemQtyMap.get(line.inventoryItemId) ?? 0;
     itemQtyMap.set(line.inventoryItemId, current + line.quantity);
   }
@@ -1253,7 +1387,7 @@ export async function reacquireOrderInventoryAfterLatePayment(
 
   const ledgerEntryIds: string[] = [];
 
-  for (const line of linesToReacquire) {
+  for (const line of reservations) {
     const it = itemMap.get(line.inventoryItemId)!;
     const newAllocated = it.quantityAllocated + line.quantity;
 
@@ -1267,8 +1401,8 @@ export async function reacquireOrderInventoryAfterLatePayment(
 
     it.quantityAllocated = newAllocated;
 
+    // Replacement ALLOCATED reservation preserves original authoritative expires_at (lineage-compatible)
     const newResId = generateUuidV7();
-    const oneYearLater = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
     await tx.insert(inventoryReservations).values({
       id: newResId,
       inventoryItemId: it.id,
@@ -1276,7 +1410,7 @@ export async function reacquireOrderInventoryAfterLatePayment(
       orderItemId: line.orderItemId,
       quantity: line.quantity,
       status: "ALLOCATED",
-      expiresAt: oneYearLater,
+      expiresAt: line.expiresAt,
     });
 
     const ledgerEntryId = generateUuidV7();
@@ -1305,8 +1439,8 @@ export async function reacquireOrderInventoryAfterLatePayment(
     success: true,
     alreadyAllocated: false,
     orderId,
-    reacquiredLinesCount: linesToReacquire.length,
-    totalQuantityAllocated: linesToReacquire.reduce(
+    reacquiredLinesCount: reservations.length,
+    totalQuantityAllocated: reservations.reduce(
       (acc: number, r: typeof inventoryReservations.$inferSelect) => acc + r.quantity,
       0
     ),
@@ -1369,6 +1503,10 @@ export async function expireUnpaidOrderReservations(
       };
     }
 
+    // Determine transaction database timestamp
+    const [nowRow] = await tx.execute(sql`SELECT NOW() as db_now`);
+    const dbNow = nowRow?.db_now ? new Date(nowRow.db_now as string | Date) : new Date();
+
     const activeReservations = await tx
       .select()
       .from(inventoryReservations)
@@ -1381,6 +1519,24 @@ export async function expireUnpaidOrderReservations(
     if (!activeReservations || activeReservations.length === 0) {
       return {
         success: true,
+        code: "NO_ACTIVE_RESERVATIONS",
+        orderId,
+        releasedLinesCount: 0,
+        totalQuantityReleased: 0,
+        orderStatusTransitioned: false,
+      };
+    }
+
+    // Expiration Domain Invariant (Section 9):
+    // Require AT LEAST ONE ACTIVE reservation whose expires_at <= dbNow
+    const hasExpiredActiveLine = activeReservations.some(
+      (r: typeof inventoryReservations.$inferSelect) => r.expiresAt <= dbNow
+    );
+
+    if (!hasExpiredActiveLine) {
+      return {
+        success: true,
+        code: "NO_EXPIRED_RESERVATIONS",
         orderId,
         releasedLinesCount: 0,
         totalQuantityReleased: 0,
@@ -1408,7 +1564,6 @@ export async function expireUnpaidOrderReservations(
     }
 
     const ledgerEntryIds: string[] = [];
-    const now = new Date();
 
     for (const r of activeReservations) {
       const it = itemMap.get(r.inventoryItemId)!;
@@ -1424,7 +1579,7 @@ export async function expireUnpaidOrderReservations(
         .update(inventoryItems)
         .set({
           quantityReserved: newReserved,
-          updatedAt: now,
+          updatedAt: dbNow,
         })
         .where(eq(inventoryItems.id, it.id));
 
@@ -1434,11 +1589,11 @@ export async function expireUnpaidOrderReservations(
         .update(inventoryReservations)
         .set({
           status: "RELEASED",
-          updatedAt: now,
+          updatedAt: dbNow,
         })
         .where(eq(inventoryReservations.id, r.id));
 
-      const isTriggeringExpiry = r.expiresAt <= now;
+      const isTriggeringExpiry = r.expiresAt <= dbNow;
       const movementType = isTriggeringExpiry ? "RESERVATION_EXPIRED" : "RESERVATION_RELEASED";
 
       const ledgerEntryId = generateUuidV7();
@@ -1469,9 +1624,9 @@ export async function expireUnpaidOrderReservations(
       .update(orders)
       .set({
         status: "EXPIRED",
-        cancelledAt: now,
+        cancelledAt: dbNow,
         cancelReason: "Expiración automática por falta de pago.",
-        updatedAt: now,
+        updatedAt: dbNow,
       })
       .where(eq(orders.id, orderId));
 
@@ -1558,7 +1713,10 @@ export async function getVariantAvailability(
   const variantId = varVal.normalized;
 
   const configResult = getInventoryConfig();
-  const primaryLocationCode = configResult.config?.primaryLocationCode ?? "LOC-LIM-01";
+  if (!configResult.valid || !configResult.config) {
+    return null;
+  }
+  const primaryLocationCode = configResult.config.primaryLocationCode;
   const locationCode = (input.locationCode ?? primaryLocationCode).trim().toUpperCase();
 
   const [location] = await db
@@ -1758,7 +1916,11 @@ export async function repairInventoryDiscrepancy(
 
   const configResult = getInventoryConfig();
   if (!configResult.valid || !configResult.config) {
-    return { success: false, code: "SYSTEM_ERROR", error: "Error de configuración de inventario." };
+    return {
+      success: false,
+      code: "SYSTEM_ERROR",
+      error: configResult.error ?? "Error de configuración de inventario.",
+    };
   }
   const { idempotencyTtlMinutes, hmacSecret } = configResult.config;
 
@@ -1779,18 +1941,14 @@ export async function repairInventoryDiscrepancy(
     .limit(1);
 
   if (existingKey) {
-    if (existingKey.authorityBindingDigest !== authorityBindingDigest) {
-      return { success: false, code: "UNAUTHORIZED", error: "No autorizado." };
+    const evalResult = evaluateIdempotencyRecord<RepairInventoryDiscrepancyResult>(
+      existingKey,
+      authorityBindingDigest,
+      requestFingerprint
+    );
+    if (!evalResult.proceed) {
+      return evalResult.result;
     }
-    if (existingKey.requestFingerprint !== requestFingerprint) {
-      return {
-        success: false,
-        code: "IDEMPOTENCY_CONFLICT",
-        error: "Conflicto de idempotencia con parámetros distintos.",
-      };
-    }
-    const payload = existingKey.responsePayload as RepairInventoryDiscrepancyResult;
-    return { ...payload, replayed: true };
   }
 
   const advisoryKey = createInventoryItemAdvisoryLockKey(namespacedKey);
@@ -1806,18 +1964,14 @@ export async function repairInventoryDiscrepancy(
       .limit(1);
 
     if (lockedKey) {
-      if (lockedKey.authorityBindingDigest !== authorityBindingDigest) {
-        return { success: false, code: "UNAUTHORIZED", error: "No autorizado." };
+      const evalResult = evaluateIdempotencyRecord<RepairInventoryDiscrepancyResult>(
+        lockedKey,
+        authorityBindingDigest,
+        requestFingerprint
+      );
+      if (!evalResult.proceed) {
+        return evalResult.result;
       }
-      if (lockedKey.requestFingerprint !== requestFingerprint) {
-        return {
-          success: false,
-          code: "IDEMPOTENCY_CONFLICT",
-          error: "Conflicto de idempotencia.",
-        };
-      }
-      const payload = lockedKey.responsePayload as RepairInventoryDiscrepancyResult;
-      return { ...payload, replayed: true };
     }
 
     const [item] = await tx
@@ -1861,16 +2015,41 @@ export async function repairInventoryDiscrepancy(
       );
     const expectedAllocated = allocResult?.allocatedSum ?? 0;
 
+    // Reconciliation Repair Capacity Violation Invariant (Section 11):
+    // Do NOT repair an item if physical on_hand is less than expectedReserved + expectedAllocated
+    const committedTotalExpected = expectedReserved + expectedAllocated;
+    if (item.quantityOnHand < committedTotalExpected) {
+      return {
+        success: false,
+        code: "CAPACITY_VIOLATION_REQUIRES_MANUAL_RESOLUTION",
+        error: `La reparación automática no es posible porque el stock físico (${item.quantityOnHand}) es inferior a la suma requerida de reservas y asignaciones (${committedTotalExpected}). Requiere resolución operativa manual.`,
+      };
+    }
+
     const reservedDelta = expectedReserved - item.quantityReserved;
     const allocatedDelta = expectedAllocated - item.quantityAllocated;
 
+    const expiresAt = new Date(Date.now() + idempotencyTtlMinutes * 60 * 1000);
+
     if (reservedDelta === 0 && allocatedDelta === 0) {
-      return {
+      const zeroResultPayload: RepairInventoryDiscrepancyResult = {
         success: true,
         replayed: false,
         inventoryItemId: item.id,
         resultingBalances: computeBalances(item),
       };
+
+      await tx.insert(idempotencyKeys).values({
+        id: generateUuidV7(),
+        idempotencyKey: namespacedKey,
+        operationType: "INVENTORY_MUTATION",
+        authorityBindingDigest,
+        requestFingerprint,
+        responsePayload: zeroResultPayload,
+        expiresAt,
+      });
+
+      return zeroResultPayload;
     }
 
     await tx
@@ -1931,7 +2110,6 @@ export async function repairInventoryDiscrepancy(
       ledgerEntryId,
     };
 
-    const expiresAt = new Date(Date.now() + idempotencyTtlMinutes * 60 * 1000);
     await tx.insert(idempotencyKeys).values({
       id: generateUuidV7(),
       idempotencyKey: namespacedKey,
