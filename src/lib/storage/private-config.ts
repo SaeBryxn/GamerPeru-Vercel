@@ -15,6 +15,16 @@ function isPlaceholderOrEmpty(val: string | undefined): boolean {
   return false;
 }
 
+let testStorageClientOverride: S3Client | null = null;
+
+/**
+ * Test seam to inject a mock/in-memory S3Client during integration tests.
+ * Never used in production (defaults to null).
+ */
+export function setTestStorageClientOverride(client: S3Client | null): void {
+  testStorageClientOverride = client;
+}
+
 /**
  * Validates private Cloudflare R2 storage capability in a fail-closed manner.
  * Rejects placeholder credentials and returns typed availability.
@@ -29,6 +39,17 @@ export function validatePrivateStorageCapability(
     paymentMediaBucket?: string;
   }
 ): StorageCapabilityResult {
+  if (testStorageClientOverride) {
+    return {
+      isAvailable: true,
+      bucketName:
+        capability === "PROOF_UPLOAD"
+          ? (customEnv?.proofsBucket ?? R2_BUCKETS.PRIVATE_PROOFS)
+          : (customEnv?.paymentMediaBucket ?? R2_BUCKETS.PRIVATE_PAYMENT_MEDIA),
+      client: testStorageClientOverride,
+    };
+  }
+
   const accountId = customEnv?.accountId ?? serverEnv.R2_ACCOUNT_ID;
   const accessKeyId = customEnv?.accessKeyId ?? serverEnv.R2_ACCESS_KEY_ID;
   const secretAccessKey = customEnv?.secretAccessKey ?? serverEnv.R2_SECRET_ACCESS_KEY;

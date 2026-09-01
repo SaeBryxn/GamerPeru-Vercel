@@ -278,11 +278,26 @@ describe("Payment Storage Security & Structural Validation Unit Tests", () => {
 
       expect(res.success).toBe(true);
       if (res.success) {
-        expect(res.finalKey).toBe(
-          "payment-proofs/final/0191c900-0000-7000-8000-000000000001/0191c900-0000-7000-8000-000000000002.png"
+        expect(res.finalKey).toMatch(
+          /^payment-proofs\/final\/0191c900-0000-7000-8000-000000000001\/0191c900-0000-7000-8000-000000000002\/[0-9a-fA-F-]{36}\.png$/
         );
+        expect(res.candidateId).toBeDefined();
       }
       expect(calls).toEqual(["HeadObjectCommand", "GetObjectCommand", "CopyObjectCommand"]);
+
+      // Two consecutive invocations produce different candidate keys
+      const res2 = await validateAndFinalizeStagingProof({
+        s3Client: mockS3,
+        bucketName: "test-bucket",
+        paymentId: "0191c900-0000-7000-8000-000000000001",
+        uploadIntentId: "0191c900-0000-7000-8000-000000000002",
+        stagingKey:
+          "payment-proofs/staging/0191c900-0000-7000-8000-000000000001/0191c900-0000-7000-8000-000000000002",
+      });
+      if (res.success && res2.success) {
+        expect(res.finalKey).not.toEqual(res2.finalKey);
+        expect(res.candidateId).not.toEqual(res2.candidateId);
+      }
     });
   });
 });

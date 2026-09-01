@@ -703,8 +703,14 @@ export async function submitPaymentProof(
           };
         }
 
-        const expectedKeyPrefix = `payment-proofs/final/${lockedPayment.id}/${txUploadIntent.id}`;
-        if (!finalizedProof.finalKey.startsWith(expectedKeyPrefix)) {
+        const expectedKeyPrefix = `payment-proofs/final/${lockedPayment.id}/${txUploadIntent.id}/`;
+        const candidateKeyRegex = new RegExp(
+          `^payment-proofs/final/${lockedPayment.id}/${txUploadIntent.id}/[0-9a-fA-F-]{36}\\.(jpg|jpeg|png|webp)$`
+        );
+        if (
+          !finalizedProof.finalKey.startsWith(expectedKeyPrefix) ||
+          !candidateKeyRegex.test(finalizedProof.finalKey)
+        ) {
           return {
             success: false as const,
             code: "PROOF_VALIDATION_FAILED" as const,

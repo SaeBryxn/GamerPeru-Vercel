@@ -10,6 +10,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { R2_BUCKETS } from "./r2";
+import { generateUuidV7 } from "@/db/utils/uuid";
 
 export const MAX_PROOF_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
@@ -463,10 +464,12 @@ export async function validateAndFinalizeStagingProof(params: {
   paymentId: string;
   uploadIntentId: string;
   stagingKey: string;
+  candidateId?: string;
 }): Promise<
   | {
       success: true;
       finalKey: string;
+      candidateId: string;
       mimeType: "image/jpeg" | "image/png" | "image/webp";
       fileSizeBytes: number;
       checksumSha256: string;
@@ -538,8 +541,9 @@ export async function validateAndFinalizeStagingProof(params: {
   // 4. Compute full SHA-256
   const checksumSha256 = computeBufferSha256(buffer);
 
-  // 5. Build final deterministic key
-  const finalKey = `payment-proofs/final/${params.paymentId}/${params.uploadIntentId}.${validation.extension}`;
+  // 5. Build unique request-owned candidate key with server-generated candidateId
+  const candidateId = params.candidateId ?? generateUuidV7();
+  const finalKey = `payment-proofs/final/${params.paymentId}/${params.uploadIntentId}/${candidateId}.${validation.extension}`;
 
   // 6. CopyObject from staging to final
   try {
@@ -561,6 +565,7 @@ export async function validateAndFinalizeStagingProof(params: {
   return {
     success: true,
     finalKey,
+    candidateId,
     mimeType: validation.mimeType,
     fileSizeBytes: buffer.length,
     checksumSha256,

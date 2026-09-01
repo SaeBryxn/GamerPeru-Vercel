@@ -1,11 +1,13 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import postgres from "postgres";
+import type { S3Client } from "@aws-sdk/client-s3";
 import { generateUuidV7 } from "@/db/utils/uuid";
 import { generateAnonymousSessionToken } from "@/lib/cart/session";
 import { submitCheckout } from "@/lib/checkout";
 import { loadAuthorizedPaymentInstructions } from "@/lib/payments/reader";
 import { resolveAuthorizedPayment } from "@/lib/payments/authority";
 import { createPaymentProofUploadIntent, submitPaymentProof } from "@/lib/payments/service";
+import { setTestStorageClientOverride } from "@/lib/storage/private-config";
 import {
   computePaymentSessionTokenDigest,
   generateSecurePaymentSessionToken,
@@ -1203,6 +1205,449 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
         WHERE event_name = 'PaymentSubmitted' AND aggregate_id = ${auth.payment.id}
       `;
       expect(outbox.length).toBe(0);
+    });
+  });
+
+  describe("GP-019 / CHK2-BR3 — Race-Safe R2 Candidate Ownership Suite", () => {
+    const VALID_1X1_PNG = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "base64"
+    );
+
+    interface MockS3Store {
+      client: S3Client;
+      objects: Map<string, Buffer>;
+      commandLog: { command: string; key?: string; source?: string; destination?: string }[];
+    }
+
+    interface S3CommandInput {
+      Key?: string;
+      CopySource?: string;
+      [k: string]: unknown;
+    }
+
+    function createMockS3Store(options?: {
+      coordinateTwoCopies?: boolean;
+      onCommand?: (commandName: string, input: S3CommandInput) => Promise<void> | void;
+    }): MockS3Store {
+      const objects = new Map<string, Buffer>();
+      const commandLog: { command: string; key?: string; source?: string; destination?: string }[] =
+        [];
+
+      let copyCount = 0;
+      let copyResolve: (() => void) | null = null;
+      const bothCopiesPromise = new Promise<void>((resolve) => {
+        copyResolve = resolve;
+      });
+
+      const client = {
+        send: async (cmd: { constructor: { name: string }; input: S3CommandInput }) => {
+          const commandName = cmd.constructor.name;
+          if (options?.onCommand) {
+            await options.onCommand(commandName, cmd.input);
+          }
+
+          if (commandName === "HeadObjectCommand") {
+            const key = String(cmd.input.Key ?? "");
+            commandLog.push({ command: "HeadObjectCommand", key });
+            const buf = objects.get(key);
+            if (!buf) {
+              const err = new Error("NotFound");
+              err.name = "NotFound";
+              throw err;
+            }
+            return { ContentLength: buf.length, ContentType: "image/png" };
+          }
+          if (commandName === "GetObjectCommand") {
+            const key = String(cmd.input.Key ?? "");
+            commandLog.push({ command: "GetObjectCommand", key });
+            const buf = objects.get(key);
+            if (!buf) {
+              const err = new Error("NotFound");
+              err.name = "NotFound";
+              throw err;
+            }
+            return {
+              Body: {
+                transformToByteArray: () => Promise.resolve(new Uint8Array(buf)),
+              },
+            };
+          }
+          if (commandName === "CopyObjectCommand") {
+            const destKey = String(cmd.input.Key ?? "");
+            const source = String(cmd.input.CopySource ?? "");
+            const srcKey = source.includes("/")
+              ? source.substring(source.indexOf("/") + 1)
+              : source;
+            commandLog.push({ command: "CopyObjectCommand", source: srcKey, destination: destKey });
+            const srcBuf = objects.get(srcKey) ?? VALID_1X1_PNG;
+            objects.set(destKey, srcBuf);
+
+            if (options?.coordinateTwoCopies) {
+              copyCount++;
+              if (copyCount === 2) {
+                copyResolve?.();
+              } else {
+                await bothCopiesPromise;
+              }
+            }
+            return {};
+          }
+          if (commandName === "DeleteObjectCommand") {
+            const key = String(cmd.input.Key ?? "");
+            commandLog.push({ command: "DeleteObjectCommand", key });
+            objects.delete(key);
+            return {};
+          }
+          return {};
+        },
+      } as unknown as S3Client;
+
+      return { client, objects, commandLog };
+    }
+
+    afterEach(() => {
+      setTestStorageClientOverride(null);
+    });
+
+    it("Section 7: Real simultaneous same-key + same-proof race preserves winner object and cleans up loser candidate", async () => {
+      const order = await createGuestOrder();
+      currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+      const auth = await resolveAuthorizedPayment(order.orderNumber);
+      if (!auth.authorized) throw new Error("Order not authorized");
+
+      // 1. Create upload intent
+      const intentRes = await createPaymentProofUploadIntent({
+        orderNumber: order.orderNumber,
+        declaredMimeType: "image/png",
+        declaredSizeBytes: VALID_1X1_PNG.length,
+      });
+      expect(intentRes.success).toBe(true);
+      if (!intentRes.success) throw new Error("Upload intent failed");
+
+      const [intentRow] = await sqlClient`
+        SELECT staging_object_key FROM payment_proof_upload_intents WHERE id = ${intentRes.uploadIntentId}
+      `;
+      const stagingKey = intentRow!.staging_object_key;
+
+      // 2. Setup mock S3 with coordination barrier so BOTH requests copy candidates before either commits
+      const mockStore = createMockS3Store({ coordinateTwoCopies: true });
+      mockStore.objects.set(stagingKey, VALID_1X1_PNG);
+      setTestStorageClientOverride(mockStore.client);
+
+      const attemptId = generateUuidV7();
+      const opCode = "OP-BR3-SIMULTANEOUS-RACE";
+
+      // 3. Launch genuinely simultaneous exact retry requests
+      const [res1, res2] = await Promise.all([
+        submitPaymentProof({
+          orderNumber: order.orderNumber,
+          submissionAttemptId: attemptId,
+          operationCode: opCode,
+          uploadIntentId: intentRes.uploadIntentId,
+        }),
+        submitPaymentProof({
+          orderNumber: order.orderNumber,
+          submissionAttemptId: attemptId,
+          operationCode: opCode,
+          uploadIntentId: intentRes.uploadIntentId,
+        }),
+      ]);
+
+      // 4. Assert both API results succeeded with exactly 1 fresh and 1 replay
+      expect(res1.success).toBe(true);
+      expect(res2.success).toBe(true);
+      if (!res1.success || !res2.success) throw new Error("Submissions failed");
+
+      const replayFlags = [res1.replayed, res2.replayed].sort();
+      expect(replayFlags).toEqual([false, true]);
+
+      // 5. In PostgreSQL: exactly 1 payment_submission, 1 outbox_event, 1 idempotency_key, 1 media_asset
+      const submissions = await sqlClient`
+        SELECT id, proof_media_id FROM payment_submissions WHERE payment_id = ${auth.payment.id}
+      `;
+      expect(submissions.length).toBe(1);
+
+      const outbox = await sqlClient`
+        SELECT id FROM outbox_events WHERE event_name = 'PaymentSubmitted' AND aggregate_id = ${auth.payment.id}
+      `;
+      expect(outbox.length).toBe(1);
+
+      const namespacedKey = `PAYMENT_SUBMISSION:${attemptId}`;
+      const idempotency = await sqlClient`
+        SELECT id FROM idempotency_keys WHERE idempotency_key = ${namespacedKey}
+      `;
+      expect(idempotency.length).toBe(1);
+
+      const media = await sqlClient`
+        SELECT id, object_key, security_class FROM media_assets WHERE id = ${submissions[0]!.proof_media_id}
+      `;
+      expect(media.length).toBe(1);
+      expect(media[0]!.security_class).toBe("PRIVATE_PAYMENT_PROOF");
+
+      const winnerObjectKey = media[0]!.object_key;
+
+      // 6. Verify candidate keys from CopyObjectCommand
+      const copyCommands = mockStore.commandLog.filter((c) => c.command === "CopyObjectCommand");
+      expect(copyCommands.length).toBe(2);
+      const dest1 = copyCommands[0]!.destination!;
+      const dest2 = copyCommands[1]!.destination!;
+
+      // Prove that both invocations received DIFFERENT unique candidate keys
+      expect(dest1).not.toEqual(dest2);
+
+      const loserCandidateKey = dest1 === winnerObjectKey ? dest2 : dest1;
+      expect(loserCandidateKey).not.toEqual(winnerObjectKey);
+
+      // 7. Prove winner object EXISTS in storage and loser candidate object was DELETED
+      expect(mockStore.objects.has(winnerObjectKey)).toBe(true);
+      expect(mockStore.objects.has(loserCandidateKey)).toBe(false);
+
+      // 8. Prove DeleteObjectCommand was issued for loser candidate and NEVER for winner candidate
+      const deleteCommands = mockStore.commandLog.filter(
+        (c) => c.command === "DeleteObjectCommand"
+      );
+      const deletedKeys = deleteCommands.map((c) => c.key);
+      expect(deletedKeys).toContain(loserCandidateKey);
+      expect(deletedKeys).not.toContain(winnerObjectKey);
+      expect(deletedKeys).toContain(stagingKey); // Post-commit staging cleanup
+    });
+
+    it("Section 8: Fast replay test after commit executes 0 storage operations", async () => {
+      const order = await createGuestOrder();
+      currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+      const auth = await resolveAuthorizedPayment(order.orderNumber);
+      if (!auth.authorized) throw new Error("Order not authorized");
+
+      const intentRes = await createPaymentProofUploadIntent({
+        orderNumber: order.orderNumber,
+        declaredMimeType: "image/png",
+        declaredSizeBytes: VALID_1X1_PNG.length,
+      });
+      expect(intentRes.success).toBe(true);
+      if (!intentRes.success) throw new Error("Upload intent failed");
+
+      const [intentRow] = await sqlClient`
+        SELECT staging_object_key FROM payment_proof_upload_intents WHERE id = ${intentRes.uploadIntentId}
+      `;
+      const stagingKey = intentRow!.staging_object_key;
+
+      const mockStore = createMockS3Store();
+      mockStore.objects.set(stagingKey, VALID_1X1_PNG);
+      setTestStorageClientOverride(mockStore.client);
+
+      const attemptId = generateUuidV7();
+      const opCode = "OP-BR3-FAST-REPLAY";
+
+      // Initial submission commits
+      const res1 = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: opCode,
+        uploadIntentId: intentRes.uploadIntentId,
+      });
+      expect(res1.success).toBe(true);
+      if (res1.success) {
+        expect(res1.replayed).toBe(false);
+      }
+
+      // Clear storage command log
+      mockStore.commandLog.length = 0;
+
+      // Exact replay after committed
+      const res2 = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: opCode,
+        uploadIntentId: intentRes.uploadIntentId,
+      });
+      expect(res2.success).toBe(true);
+      if (res2.success) {
+        expect(res2.replayed).toBe(true);
+      }
+
+      // Must execute ZERO storage calls
+      expect(mockStore.commandLog.length).toBe(0);
+    });
+
+    it("Section 9A: IDEMPOTENCY_CONFLICT after candidate copy deletes candidate only", async () => {
+      const order = await createGuestOrder();
+      currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+      const auth = await resolveAuthorizedPayment(order.orderNumber);
+      if (!auth.authorized) throw new Error("Order not authorized");
+
+      const intentRes = await createPaymentProofUploadIntent({
+        orderNumber: order.orderNumber,
+        declaredMimeType: "image/png",
+        declaredSizeBytes: VALID_1X1_PNG.length,
+      });
+      expect(intentRes.success).toBe(true);
+      if (!intentRes.success) throw new Error("Upload intent failed");
+
+      const [intentRow] = await sqlClient`
+        SELECT staging_object_key FROM payment_proof_upload_intents WHERE id = ${intentRes.uploadIntentId}
+      `;
+      const stagingKey = intentRow!.staging_object_key;
+
+      const attemptId = generateUuidV7();
+      const namespacedKey = `PAYMENT_SUBMISSION:${attemptId}`;
+
+      // Mock S3 hook: during CopyObjectCommand, pre-insert conflicting idempotency row
+      const mockStore = createMockS3Store({
+        onCommand: async (cmdName) => {
+          if (cmdName === "CopyObjectCommand") {
+            await sqlClient`
+              INSERT INTO idempotency_keys (
+                id, idempotency_key, operation_type, authority_binding_digest, request_fingerprint, response_payload, expires_at
+              ) VALUES (
+                ${generateUuidV7()},
+                ${namespacedKey},
+                'PAYMENT_SUBMISSION',
+                ${auth.authorityBindingDigest},
+                'conflicting-fingerprint-digest',
+                NULL,
+                NOW() + INTERVAL '1 hour'
+              )
+              ON CONFLICT DO NOTHING
+            `;
+          }
+        },
+      });
+      mockStore.objects.set(stagingKey, VALID_1X1_PNG);
+      setTestStorageClientOverride(mockStore.client);
+
+      const res = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: attemptId,
+        operationCode: "OP-CONFLICT-CLEANUP",
+        uploadIntentId: intentRes.uploadIntentId,
+      });
+
+      expect(res.success).toBe(false);
+      if (!res.success) {
+        expect(res.code).toBe("IDEMPOTENCY_CONFLICT");
+      }
+
+      // Candidate key was deleted
+      const copyCmd = mockStore.commandLog.find((c) => c.command === "CopyObjectCommand");
+      expect(copyCmd).toBeDefined();
+      const candidateKey = copyCmd!.destination!;
+      expect(mockStore.objects.has(candidateKey)).toBe(false);
+    });
+
+    it("Section 9B: INVALID_PAYMENT_STATE after candidate copy deletes candidate", async () => {
+      const order = await createGuestOrder();
+      currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+      const auth = await resolveAuthorizedPayment(order.orderNumber);
+      if (!auth.authorized) throw new Error("Order not authorized");
+
+      const intentRes = await createPaymentProofUploadIntent({
+        orderNumber: order.orderNumber,
+        declaredMimeType: "image/png",
+        declaredSizeBytes: VALID_1X1_PNG.length,
+      });
+      expect(intentRes.success).toBe(true);
+      if (!intentRes.success) throw new Error("Upload intent failed");
+
+      const [intentRow] = await sqlClient`
+        SELECT staging_object_key FROM payment_proof_upload_intents WHERE id = ${intentRes.uploadIntentId}
+      `;
+      const stagingKey = intentRow!.staging_object_key;
+
+      // Hook: during copy, set payment status to CANCELLED in DB
+      const mockStore = createMockS3Store({
+        onCommand: async (cmdName) => {
+          if (cmdName === "CopyObjectCommand") {
+            await sqlClient`
+              UPDATE payments SET status = 'CANCELLED' WHERE id = ${auth.payment.id}
+            `;
+          }
+        },
+      });
+      mockStore.objects.set(stagingKey, VALID_1X1_PNG);
+      setTestStorageClientOverride(mockStore.client);
+
+      const res = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: generateUuidV7(),
+        operationCode: "OP-INVALID-STATE",
+        uploadIntentId: intentRes.uploadIntentId,
+      });
+
+      expect(res.success).toBe(false);
+      if (!res.success) {
+        expect(res.code).toBe("INVALID_PAYMENT_STATE");
+      }
+
+      const copyCmd = mockStore.commandLog.find((c) => c.command === "CopyObjectCommand");
+      expect(copyCmd).toBeDefined();
+      const candidateKey = copyCmd!.destination!;
+      expect(mockStore.objects.has(candidateKey)).toBe(false);
+    });
+
+    it("Section 9C: Transaction rollback after candidate copy deletes candidate", async () => {
+      const order = await createGuestOrder();
+      currentMockPaymentSessionCookie = order.guestPaymentSessionCookie;
+
+      const auth = await resolveAuthorizedPayment(order.orderNumber);
+      if (!auth.authorized) throw new Error("Order not authorized");
+
+      const intentRes = await createPaymentProofUploadIntent({
+        orderNumber: order.orderNumber,
+        declaredMimeType: "image/png",
+        declaredSizeBytes: VALID_1X1_PNG.length,
+      });
+      expect(intentRes.success).toBe(true);
+      if (!intentRes.success) throw new Error("Upload intent failed");
+
+      const [intentRow] = await sqlClient`
+        SELECT staging_object_key FROM payment_proof_upload_intents WHERE id = ${intentRes.uploadIntentId}
+      `;
+      const stagingKey = intentRow!.staging_object_key;
+
+      // Hook: during copy, expire the reservation and force inventory underflow to trigger transaction rollback
+      const mockStore = createMockS3Store({
+        onCommand: async (cmdName) => {
+          if (cmdName === "CopyObjectCommand") {
+            await sqlClient`
+              UPDATE inventory_reservations SET expires_at = NOW() - INTERVAL '10 minutes' WHERE order_id = ${auth.order.id}
+            `;
+            await sqlClient`
+              UPDATE inventory_items SET quantity_reserved = 0 WHERE id = ${inventoryItemId1}
+            `;
+          }
+        },
+      });
+      mockStore.objects.set(stagingKey, VALID_1X1_PNG);
+      setTestStorageClientOverride(mockStore.client);
+
+      const res = await submitPaymentProof({
+        orderNumber: order.orderNumber,
+        submissionAttemptId: generateUuidV7(),
+        operationCode: "OP-ROLLBACK",
+        uploadIntentId: intentRes.uploadIntentId,
+      });
+
+      expect(res.success).toBe(false);
+      if (!res.success) {
+        expect(res.code).toBe("SYSTEM_ERROR");
+      }
+
+      // Candidate key was deleted
+      const copyCmd = mockStore.commandLog.find((c) => c.command === "CopyObjectCommand");
+      expect(copyCmd).toBeDefined();
+      const candidateKey = copyCmd!.destination!;
+      expect(mockStore.objects.has(candidateKey)).toBe(false);
+
+      // Verify 0 payment submissions created
+      const submissions = await sqlClient`
+        SELECT id FROM payment_submissions WHERE payment_id = ${auth.payment.id}
+      `;
+      expect(submissions.length).toBe(0);
     });
   });
 });
