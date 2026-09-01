@@ -102,8 +102,8 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
     await expect(page.locator("aside")).toContainText(ADMIN_E2E_USERS.superadmin.email);
     await expect(page.locator("aside")).toContainText("SUPER_ADMIN");
 
-    // Verify brand badge
-    await expect(page.locator("aside").getByText("ADMIN")).toBeVisible();
+    // Verify brand badge with exact text matching to avoid role pill collisions
+    await expect(page.locator("aside").getByText("ADMIN", { exact: true })).toBeVisible();
 
     // Verify navigation has active state and no dead future links
     const overviewLink = page.locator('aside a[href="/admin"]');
@@ -199,8 +199,9 @@ test.describe("GP-022 / BR1 — Real Local Supabase Admin E2E Suite", () => {
     await expect(drawer).toBeVisible();
     await expect(menuButton).toHaveAttribute("aria-expanded", "true");
 
-    // Click outside drawer on backdrop
-    await page.mouse.click(10, 10);
+    // Click backdrop outside drawer area
+    const backdrop = page.locator("[class*='drawerBackdrop']");
+    await backdrop.click({ position: { x: 320, y: 300 } });
     await expect(drawer).toBeHidden();
     await expect(menuButton).toBeFocused();
     await expect(menuButton).toHaveAttribute("aria-expanded", "false");
