@@ -298,12 +298,13 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     }
 
     const [cart] = await sqlClient`
-      INSERT INTO carts (id, session_token, customer_id, status, created_at, updated_at)
+      INSERT INTO carts (id, session_token, customer_id, status, expires_at, created_at, updated_at)
       VALUES (
         ${generateUuidV7()},
         ${rawCartToken},
         ${options?.isAuth ? (options.customerProfileId ?? customerProfileId1) : null},
         'ACTIVE',
+        NOW() + INTERVAL '7 days',
         NOW(),
         NOW()
       )
