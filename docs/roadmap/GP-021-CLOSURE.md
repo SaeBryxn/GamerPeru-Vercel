@@ -1,4 +1,4 @@
-# GP-021 — Canonical Closure Report Candidate
+# GP-021 / CHK2-BR1 — Canonical Closure Report Candidate
 
 ## Status
 
@@ -12,109 +12,114 @@
 - **Starting Checkpoint for GP-021 Work**: `5676d532d1e2c109913d814a07164be979f2aadf`
 - **Key GP-021 Gate Lineage**:
   - `CHK1`: Inventory Engine Domain Contract, Operational Policy, Boundary Reconciliation & Implementation Plan Freeze `[APPROVED WITH BINDING AMENDMENTS]`
-  - `CHK2`: Inventory Engine Implementation, Concurrency Validation, Migration Safety Hardening & Final Closure Candidate `[COMPLETED]`
+  - `CHK2`: Inventory Engine Implementation, Concurrency Validation, Migration Safety Hardening & Final Closure Candidate `[REJECTED - REQUIRED BR1 REMEDIATION]`
+  - `CHK2-BR1`: Inventory Safety, Idempotency, Expiration Worker & CI Remediation `[COMPLETED]`
 - **Target Branch**: `main`
 
 ---
 
-## Binding External Amendments Reconciliation
+## Historical CI Execution Correction & Forensic Audit
 
-The implementation strictly honors all 8 authoritative external amendments from CHK1 review:
+The previous closure draft incorrectly characterized earlier CI runs as successful. In accordance with Section 2 of the BR1 contract, the canonical historical record is explicitly corrected:
 
-1. **A. RBAC & Staff Exposure**: Zero reuse or broadening of `orders:manage`, `catalog:manage`, or `orders:verify` for inventory administration. Human inventory mutations (receiving, adjustments, quarantine transfers, reconciliation repairs) are implemented strictly as HEADLESS internal domain services with zero browser/staff Server Actions, zero public API endpoints, and zero unauthenticated UI exposure in GP-021. Protected Admin exposure and the canonical `inventory:manage` permission are deferred to GP-022. Background reservation expiration authenticates under `'SYSTEM'` actor.
-2. **B. Normal Allocation Precondition**: Normal payment-approval allocation strictly enforces that all order reservations must be in `VERIFICATION_HOLD` status. Any attempt to normal-allocate from `ACTIVE` fails closed with a typed domain error (`ACTIVE_RESERVATION_CANNOT_BE_ALLOCATED`). Replaying an all-`ALLOCATED` order returns idempotent success without duplicate ledger records. Mixed reservation states fail closed.
-3. **C. Late-Payment Reacquisition**: For late payment confirmations on orders whose reservations were already `RELEASED`, the historical `RELEASED` rows remain immutable. The reacquisition seam acquires deterministic `InventoryItem` locks, rechecks $\text{available\_to\_sell} = \text{quantity\_on\_hand} - \text{quantity\_reserved} - \text{quantity\_allocated}$ for all lines atomically, increments `quantity_allocated` (with `quantity_on_hand` and `quantity_reserved` unchanged), and creates new `ALLOCATED` reservations. If any line has insufficient stock, the entire reacquisition rolls back with typed `INSUFFICIENT_STOCK_FOR_REACQUISITION`.
-4. **D. Quarantine / Damaged Location Policy**: Implemented as dedicated operational location transfers outside the primary fulfillment location (`CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE`). Zero hardcoded or seeded production warehouse rows. Moves are atomic transfers locking source and destination `InventoryItems` deterministically (`id ASC`), decrementing source on-hand and incrementing destination on-hand with two correlated `MANUAL_ADJUSTMENT` ledger entries sharing the same `reference_id` (correlation ID) and audit log.
-5. **E. Outbox Events**: Zero unauthorized inventory event names (`InventoryLowStock`, `InventoryReservationExpired`, `InventoryAllocated`) added to the canonical catalog. Low-stock signaling is implemented as a server-authoritative derived query ($\text{available\_to\_sell} \le \text{reorder\_point}$ where $\text{reorder\_point} > 0$).
-6. **F. Idempotency & Cryptography**: Reuses existing `idempotency_keys` table with `operation_type = 'INVENTORY_MUTATION'`. Request fingerprint is SHA-256 of normalized mutation intent; authority binding digest is separate HMAC of actor identity. Concurrent same-key races serialize using PostgreSQL transaction advisory locks before key insertion.
-7. **G. Reconciliation & Discrepancy Representation**: Zero invented `InventoryDiscrepancy` physical table. Discrepancy analysis is a read-only structured audit comparing reserved/allocated balances against active reservation sums and ledger snapshots. Repair is an append-only compensating ledger adjustment executed under staff invocation with `AuditEvent`.
-8. **H. Schema & Migration Decision**: `GP021_IMPLEMENTATION_REQUIRES_NO_SCHEMA_MIGRATION`. Zero migration files generated (no 0012). Migration count remains frozen at 0000 through 0011. Hosted Supabase was completely untouched.
+1. **Run 33489856547** (Head SHA: `e9446e5b3a4b6a2aca78fa260ed0fe89cee67936`): **FAILURE**
+   - Failed specifically in `Real Local PostgreSQL / Supabase Checkout Runtime` at `Run Dedicated Inventory Live Integration Tests`.
+2. **Run 33490597816** (Head SHA: `becbdd408e683c1d2d249e249ec3583f34f0fbae`): **FAILURE**
+   - Concluded with identical failure in `Real Local PostgreSQL / Supabase Checkout Runtime` at `Run Dedicated Inventory Live Integration Tests`.
+
+Neither historical run is preserved or claimed as canonical green evidence.
 
 ---
 
-## Executive Summary & Delivered Scope
+## Binding External Amendments & BR1 Remediation Reconciliation
 
-1. **Migration-Target Safety Guard (`src/db/migration-guard.ts` & `drizzle.config.ts`)**:
-   - Implemented fail-closed environment validation to prevent accidental execution of local development/test migrations against hosted Supabase (directly resolving the GP-020 incident).
-   - In default `local` mode: asserts that target database host is strictly `127.0.0.1` or `localhost`. Throws `MIGRATION_GUARD_VIOLATION` before opening any connection if pointing to a remote host.
-   - In `hosted` mode: strictly requires both `GAMERPERU_MIGRATION_ENV=hosted` AND `AUTHORIZED_HOSTED_DEPLOYMENT=true` with project ref verification (`jpjffalmvlxpufvtvskx`).
-   - Covered by 9 deterministic unit tests proving all boundary cases, pooler port rejection, and secret redaction.
-2. **Headless Warehouse Receiving Service (`src/lib/inventory/service.ts`)**:
-   - Atomically increments `quantity_on_hand` and appends immutable `RECEIVING` ledger entry.
-   - Supports conflict-safe initial `InventoryItem` creation on first receiving of a `(variant_id, location_id)` pair using PostgreSQL `ON CONFLICT DO NOTHING` and locked select.
-   - Full idempotency support with replay and conflict detection.
-3. **Headless Manual Adjustment Service**:
-   - Supports unambiguous `DELTA` (positive/negative non-zero delta) and `PHYSICAL_COUNT` (authoritative counted quantity) commands.
-   - Strictly enforces balance invariants ($\text{new\_on\_hand} \ge 0$ and $\text{new\_on\_hand} \ge \text{quantity\_reserved} + \text{quantity\_allocated}$).
-   - Appends immutable `MANUAL_ADJUSTMENT` ledger entry and `AuditEvent`.
-4. **Quarantine / Damaged Stock Transfer Service**:
-   - Atomic logical transfer between source and destination operational locations.
-   - Deterministic row locking (`id ASC`) prevents deadlocks during bidirectional transfers.
-   - Creates two correlated ledger entries sharing a single correlation ID.
-5. **Composable Payment Allocation & Late Reacquisition Seams**:
-   - `allocateOrderInventoryAfterPaymentApproval`: Transaction-composable seam for future GP-028 payment confirmation. Transitions `VERIFICATION_HOLD` $\to$ `ALLOCATED`, decrements `quantity_reserved`, increments `quantity_allocated`, appends `ALLOCATION_CONFIRMED`. Rejects `ACTIVE` and mixed states.
-   - `reacquireOrderInventoryAfterLatePayment`: Transaction-composable seam for legitimate late payments on `RELEASED` orders. Re-evaluates ATS under lock, increments `quantity_allocated`, creates new `ALLOCATED` reservations, rolls back atomically on insufficient stock.
-6. **Reservation Expiration Engine & Background Inngest Worker**:
-   - `expireUnpaidOrderReservations`: Releases expired `ACTIVE` reservations, decrements `quantity_reserved`, appends `RESERVATION_EXPIRED` / `RESERVATION_RELEASED`, transitions `Order` from `PENDING` $\to$ `EXPIRED` (when `Payment` is `UNPAID`). `VERIFICATION_HOLD` is strictly immune.
-   - `processReservationExpirationBatch`: Bounded batch scanner executing under PostgreSQL advisory and row locks.
-   - `src/lib/inngest/functions/inventory-expiration.ts`: Inngest background job scheduled every 2 minutes.
-7. **Read-Only Reconciliation & Staff Repair Service**:
-   - `reconcileInventory`: Read-only audit detecting reserved drift, allocated drift, capacity violations, and ledger mismatch across all inventory items with zero state mutation.
-   - `repairInventoryDiscrepancy`: Appends compensating ledger adjustment and records `AuditEvent` under authorized supervisor invocation.
-8. **Low-Stock & Availability Queries**:
-   - `getVariantAvailability`: Computes real-time $\text{available\_to\_sell} = \text{on\_hand} - \text{reserved} - \text{allocated}$ and derived `isLowStock` ($\text{ATS} \le \text{reorder\_point}$ where $\text{reorder\_point} > 0$). Zero internal quantities exposed to public callers.
+The BR1 implementation strictly addresses all binding amendments and reviewer findings:
+
+1. **A. RBAC & Staff Exposure**: Zero reuse or broadening of `orders:manage`, `catalog:manage`, or `orders:verify` for inventory administration. Human inventory mutations (receiving, adjustments, quarantine transfers, reconciliation repairs) are implemented strictly as HEADLESS internal domain services with zero browser/staff Server Actions, zero public API endpoints, and zero unauthenticated UI exposure in GP-021. Protected Admin exposure and the canonical `inventory:manage` permission are deferred to GP-022. Background reservation expiration authenticates under `'SYSTEM'` actor.
+2. **B. Fail-Closed Configuration (Section 3)**:
+   - Removed all unsafe/invented runtime fallbacks (`LOC-LIM-01`, `LOC-LIM-QUARANTINE`, silent 1440-minute TTL, `gp_inventory_default_hmac_secret_2026_fallback`, or Supabase JWT fallback).
+   - `CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE` is authoritative and validated.
+   - `INVENTORY_HMAC_SECRET` requires an explicit, strong server-only secret (minimum 32 characters / 256 bits).
+   - `INVENTORY_IDEMPOTENCY_TTL_MINUTES` is explicitly validated (positive bounded integer 1–10080).
+   - `INVENTORY_QUARANTINE_LOCATION_CODE` validated when present.
+   - Covered by 7 unit tests in `tests/unit/inventory/inventory-config.test.ts`.
+3. **C. Hardened Migration Target Guard (Section 4)**:
+   - LOCAL mode strictly permits only `127.0.0.1` or `localhost`, port `54322`, and database `postgres`. Arbitrary ports (5432, 5433) fail closed BEFORE connection.
+   - HOSTED mode strictly requires `GAMERPERU_MIGRATION_ENV=hosted` AND `AUTHORIZED_HOSTED_DEPLOYMENT=true`, project ref `jpjffalmvlxpufvtvskx`, database `postgres`, and port `5432` only. Port 6543 (pooler) and all non-5432 ports are forbidden.
+   - Credentials strictly redacted in all error messages.
+   - Covered by 13 deterministic unit tests in `tests/unit/inventory/migration-target-guard.test.ts`.
+4. **D. Idempotency Evaluation Order & Zero-Effect Adjustments (Section 5 & 6)**:
+   - Exact semantic ordering enforced: 1. Authority binding $\to$ 2. Expiration $\to$ 3. Operation compatibility $\to$ 4. Request fingerprint $\to$ 5. Committed replay.
+   - Expired keys return typed `IDEMPOTENCY_EXPIRED` (never replayed).
+   - Zero-effect adjustments (`appliedDelta === 0`) persist idempotency payload to ensure retry-stability while writing 0 ledger entries and 0 audit events. Subsequent retries replay the 0-delta payload regardless of future stock changes.
+5. **E. Normal Allocation Complete State Classification (Section 7)**:
+   - Whole-order evaluation:
+     - `ALL VERIFICATION_HOLD`: proceeds with allocation (`VERIFICATION_HOLD -> ALLOCATED`, `quantity_reserved -= qty`, `quantity_allocated += qty`, `ALLOCATION_CONFIRMED` ledger entries).
+     - `ALL ALLOCATED`: verified idempotent replay after balance consistency validation (`alreadyAllocated: true`).
+     - Any mixed or invalid state (`VERIFICATION_HOLD + ALLOCATED`, `ACTIVE`, `RELEASED`, `CONSUMED`): fails closed with typed error (`INVALID_RESERVATION_STATE_FOR_ALLOCATION`), 0 balance mutation, 0 ledger rows.
+6. **F. Late Reacquisition Complete State Classification (Section 8)**:
+   - Whole-order evaluation:
+     - `ALL RELEASED`: atomically rechecks ATS under lock for all items; on sufficient stock, increments `quantity_allocated`, inserts new `ALLOCATED` reservations preserving the original authoritative `expires_at` (lineage-compatible, non-invented). On insufficient stock, rolls back atomically with `INSUFFICIENT_STOCK_FOR_REACQUISITION`.
+     - `ALL ALLOCATED`: verified idempotent replay.
+     - Any mixed or invalid state fails closed.
+7. **G. Expiration In-Domain Eligibility (Section 9)**:
+   - Requires payment to be `UNPAID` and order to be `PENDING`.
+   - Queries transaction database timestamp (`NOW()`).
+   - Requires AT LEAST ONE active reservation with `expires_at <= dbNow`. If 0 lines are expired, returns no-op (`NO_EXPIRED_RESERVATIONS`, 0 releases, order remains PENDING).
+   - When legitimately triggered: releases whole active order; expired lines receive `RESERVATION_EXPIRED` ledger, future active lines in same order receive `RESERVATION_RELEASED` (co-release) ledger. `VERIFICATION_HOLD` is strictly immune.
+8. **H. Inngest Worker Registration (Section 10)**:
+   - Created `src/app/api/inngest/route.ts` registering `inventoryReservationExpirationJob` with Next.js Inngest `serve` integration.
+   - Exports `GET`, `POST`, `PUT`.
+   - Verified via `tests/unit/inventory/inngest-route.test.ts` and clean Next.js production build.
+9. **I. Reconciliation Capacity Violation Guard (Section 11)**:
+   - Auto-repair rejected if $\text{quantity\_on\_hand} < \text{expectedReserved} + \text{expectedAllocated}$ with typed code `CAPACITY_VIOLATION_REQUIRES_MANUAL_RESOLUTION`, preventing artificial capacity violations.
+10. **J. Schema & Migration Freeze (Section 15)**:
+    - `GP021_IMPLEMENTATION_REQUIRES_NO_SCHEMA_MIGRATION`.
+    - Migration count remains frozen at 0000 through 0011 (no 0012). Hosted Supabase untouched.
 
 ---
 
 ## Local Verification & Quality Gates Summary
 
 - `pnpm format:check` $\to$ **PASS** (100% Prettier compliant)
-- `pnpm typecheck` $\to$ **PASS** (Zero TypeScript compilation errors)
-- `pnpm lint` $\to$ **PASS** (Zero ESLint errors and warnings across all files)
-- `pnpm test` $\to$ **PASS** (73 unit test files, 940 passed, 0 failed, 100% clean)
-- `pnpm build` $\to$ **PASS** (Next.js production build compiled and optimized successfully)
+- `pnpm typecheck` $\to$ **PASS** (Zero TypeScript compilation errors across codebase and tests)
+- `pnpm lint` $\to$ **PASS** (Zero ESLint errors and warnings with `--max-warnings=0`)
+- `pnpm test` $\to$ **PASS** (75 unit test files, 953 passed, 0 failed, 100% clean)
+- `pnpm build` $\to$ **PASS** (Next.js production build compiled and static pages optimized, including `/api/inngest`)
+- `git diff --check` $\to$ **PASS** (Zero whitespace or format errors)
 
 ---
 
-## Real PostgreSQL Integration & Concurrency Test Suite
+## Real PostgreSQL Integration & Concurrency Test Matrix
 
-Dedicated suite `tests/inventory-integration/inventory-live-scenarios.test.ts` executed via `pnpm test:inventory:live` with Vitest config `vitest.inventory.integration.config.ts`:
+Suite `tests/inventory-integration/inventory-live-scenarios.test.ts` covers:
 
-- **Scenario 1 & 2**: Receiving increments on-hand and appends `RECEIVING` ledger entry with exact deltas and resulting balances.
+- **Scenario 1 & 2**: Receiving increments on-hand and appends `RECEIVING` ledger entry with exact deltas and balances.
 - **Scenario 3 & 4**: Idempotent receiving replay returns identical payload without duplicate increments.
-- **Scenario 5**: Idempotency conflict on altered receiving parameters returns `IDEMPOTENCY_CONFLICT`.
+- **Scenario 5 & 5B**: Changed payload returns `IDEMPOTENCY_CONFLICT`; expired key returns `IDEMPOTENCY_EXPIRED`.
 - **Scenario 6 & 7**: Positive and negative `DELTA` manual adjustments update balances correctly.
-- **Scenario 8**: `PHYSICAL_COUNT` adjustment calculates exact delta from current balance.
+- **Scenario 8 & 8B**: `PHYSICAL_COUNT` adjustment calculates exact delta; zero-effect adjustment persists idempotency with 0 ledger rows and stable replay.
 - **Scenario 9 & 10**: Adjustments resulting in negative stock or violating committed holds fail closed (`NEGATIVE_ON_HAND_DISALLOWED`, `INSUFFICIENT_UNCOMMITTED_STOCK`).
 - **Scenario 12 & 13**: Quarantine transfer decrements source and increments destination with correlated ledger entries.
 - **Scenario 15**: Normal allocation transitions `VERIFICATION_HOLD` $\to$ `ALLOCATED` atomically.
-- **Scenario 16**: Normal allocation rejects `ACTIVE` reservations with fail-closed error.
-- **Scenario 18**: All-`ALLOCATED` replay returns idempotent success with zero duplicate ledger rows.
-- **Scenario 19 & 20**: Late reacquisition creates `ALLOCATED` reservations when stock exists and rejects when insufficient.
-- **Scenario 22 & 23**: Expiration worker releases expired `ACTIVE` reservations and transitions Order to `EXPIRED`.
+- **Scenario 16**: Normal allocation rejects `ACTIVE` and mixed reservation states with fail-closed error.
+- **Scenario 18**: All-`ALLOCATED` replay verifies balance consistency and returns idempotent success with zero duplicate ledger rows.
+- **Scenario 19 & 20**: Late reacquisition creates `ALLOCATED` reservations preserving original `expires_at` when stock exists, rejects when insufficient.
+- **Scenario 21**: Direct expiration called before expiry date results in zero mutation (no-op).
+- **Scenario 22 & 23**: Legitimate expired trigger releases whole active order with exact movement classifications (`RESERVATION_EXPIRED` vs `RESERVATION_RELEASED` co-release).
 - **Scenario 24**: `VERIFICATION_HOLD` reservations are immune from expiration.
 - **Scenario 25**: Batch processor runs across qualifying expired orders safely.
 - **Scenario 26 & 30**: Reconciliation detects reserved drift and repair service restores balance with compensating ledger and `AuditEvent`.
+- **Scenario 26B**: Repair rejected when expected reservations exceed physical on-hand (`CAPACITY_VIOLATION_REQUIRES_MANUAL_RESOLUTION`).
 - **Scenario 31**: `getVariantAvailability` returns derived ATS and low-stock signal.
 - **Race A**: Two concurrent receiving operations serialize cleanly; both increments commit.
+- **Race B**: Concurrent first `InventoryItem` creation for same variant and location creates exactly 1 record with combined stock.
 - **Race C**: Manual decrement vs concurrent reservation on final available stock prevents oversell.
-- **Race F**: Two simultaneous expiration workers targeting the same order serialize safely without double-release.
-- **Race G**: Two simultaneous payment-approval allocation attempts execute idempotently.
-
----
-
-## Canonical CI Workflow Integration & Execution Evidence
-
-- **Pushed Commits**:
-  - `2cbe67f`: `feat(inventory): implement inventory engine, concurrency validation and migration safety hardening`
-  - `e9446e5`: `fix(inventory): align variant and payment fixture schema in live integration test`
-- **Workflow Run**: [Run 33489856547](https://github.com/latamcreativa/GamerPeru/actions/runs/33489856547)
-- **Workflow Matrix Jobs**:
-  1. `Format, Typecheck, Lint, Test, Build & E2E` (Prettier, TypeScript, ESLint 0 warnings, 73 test files / 940 unit tests, Next.js build, 142 Playwright E2E & WCAG tests)
-  2. `Real Local PostgreSQL / Supabase Checkout Runtime` (`pnpm test:cart:concurrency`, `pnpm test:checkout:live`, `pnpm test:payment:live`, `pnpm test:order:live`, `pnpm test:inventory:live`)
-  3. `Real Local PostgreSQL / Supabase Customer Account Runtime`
-  4. `Production Secret & Environment Hygiene Check`
-- Added `pnpm test:inventory:live` to `.github/workflows/ci.yml` in the `Real Local PostgreSQL / Supabase Checkout Runtime` job.
+- **Race D**: Expiration vs real payment submission concurrency preserves hold and skips expiration.
+- **Race E**: Expiration vs customer cancellation concurrency handles terminal state safely with exactly 1 release.
+- **Race F**: Two simultaneous expiration workers targeting the same expired order serialize safely without double-release.
+- **Race G**: Two simultaneous payment-approval allocation attempts execute idempotently (one allocates, other returns `alreadyAllocated`).
+- **Race I**: Late reacquisition vs concurrent stock-consuming operation prevents oversell.
 
 ---
 
@@ -143,4 +148,4 @@ Dedicated suite `tests/inventory-integration/inventory-live-scenarios.test.ts` e
 
 ## Final Recommendation
 
-**`PASS`** — GP-021 Inventory Engine implementation, concurrency verification, migration target safety hardening, and documentation are complete and verified with zero warnings.
+**`PASS`** — GP-021 / CHK2-BR1 Inventory Safety, Idempotency, Expiration Worker & CI Remediation is complete, fully tested, and verified with zero warnings.
