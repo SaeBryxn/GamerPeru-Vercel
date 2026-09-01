@@ -1118,14 +1118,35 @@ export async function allocateOrderInventoryAfterPaymentApproval(
       itemMap.set(it.id, it);
     }
 
-    // Verify balance consistency: physical quantityAllocated must be >= order's allocated quantity
-    for (const [itemId, neededQty] of itemAllocatedDeltas.entries()) {
+    // Verify balance consistency: physical quantityAllocated must EQUAL the authoritative sum of ALL ALLOCATED reservations
+    for (const itemId of itemIds) {
       const it = itemMap.get(itemId);
-      if (!it || it.quantityAllocated < neededQty) {
+      if (!it) {
+        return {
+          success: false,
+          code: "INVENTORY_ITEMS_UNRESOLVED",
+          error: `No se pudo bloquear el item de inventario ${itemId}.`,
+        };
+      }
+
+      const [allocSumRow] = await tx
+        .select({
+          totalAllocated: sql<number>`COALESCE(SUM(${inventoryReservations.quantity}), 0)::int`,
+        })
+        .from(inventoryReservations)
+        .where(
+          and(
+            eq(inventoryReservations.inventoryItemId, it.id),
+            eq(inventoryReservations.status, "ALLOCATED")
+          )
+        );
+      const authoritativeAllocatedTotal = allocSumRow?.totalAllocated ?? 0;
+
+      if (it.quantityAllocated !== authoritativeAllocatedTotal) {
         return {
           success: false,
           code: "INCONSISTENT_ALLOCATED_BALANCE",
-          error: `Balance inconsistente para el item ${itemId} durante el replay de asignación.`,
+          error: `Balance inconsistente para el item ${it.id} durante el replay de asignación (físico asignado: ${it.quantityAllocated}, reservas asignadas autoritativas: ${authoritativeAllocatedTotal}).`,
         };
       }
     }
@@ -1292,12 +1313,9 @@ export async function reacquireOrderInventoryAfterLatePayment(
 
   // Case B: ALL ALLOCATED -> Verified Idempotent Replay
   if (allAllocated) {
-    const itemAllocatedDeltas = new Map<string, number>();
-    for (const line of reservations) {
-      const current = itemAllocatedDeltas.get(line.inventoryItemId) ?? 0;
-      itemAllocatedDeltas.set(line.inventoryItemId, current + line.quantity);
-    }
-    const itemIds = Array.from(itemAllocatedDeltas.keys()).sort();
+    const itemIds = Array.from(
+      new Set(reservations.map((r: typeof inventoryReservations.$inferSelect) => r.inventoryItemId))
+    ).sort();
 
     const lockedItems = await tx
       .select()
@@ -1311,13 +1329,34 @@ export async function reacquireOrderInventoryAfterLatePayment(
       itemMap.set(it.id, it);
     }
 
-    for (const [itemId, neededQty] of itemAllocatedDeltas.entries()) {
+    for (const itemId of itemIds) {
       const it = itemMap.get(itemId);
-      if (!it || it.quantityAllocated < neededQty) {
+      if (!it) {
+        return {
+          success: false,
+          code: "INVENTORY_ITEMS_UNRESOLVED",
+          error: `No se pudo bloquear el item de inventario ${itemId}.`,
+        };
+      }
+
+      const [allocSumRow] = await tx
+        .select({
+          totalAllocated: sql<number>`COALESCE(SUM(${inventoryReservations.quantity}), 0)::int`,
+        })
+        .from(inventoryReservations)
+        .where(
+          and(
+            eq(inventoryReservations.inventoryItemId, it.id),
+            eq(inventoryReservations.status, "ALLOCATED")
+          )
+        );
+      const authoritativeAllocatedTotal = allocSumRow?.totalAllocated ?? 0;
+
+      if (it.quantityAllocated !== authoritativeAllocatedTotal) {
         return {
           success: false,
           code: "INCONSISTENT_ALLOCATED_BALANCE",
-          error: `Balance inconsistente para el item ${itemId} durante el replay de reasignación.`,
+          error: `Balance inconsistente para el item ${it.id} durante el replay de reasignación (físico asignado: ${it.quantityAllocated}, reservas asignadas autoritativas: ${authoritativeAllocatedTotal}).`,
         };
       }
     }

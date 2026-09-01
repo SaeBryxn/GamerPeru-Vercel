@@ -1,7 +1,19 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import postgres from "postgres";
 import { generateUuidV7 } from "@/db/utils/uuid";
 import { db } from "@/db";
+import { generateAnonymousSessionToken } from "@/lib/cart/session";
+import { submitCheckout } from "@/lib/checkout";
+import { submitPaymentProof, __setTestPaymentTransactionHook } from "@/lib/payments/service";
+import {
+  computePaymentSessionTokenDigest,
+  generateSecurePaymentSessionToken,
+} from "@/lib/payments/crypto";
+import {
+  cancelUnpaidOrder,
+  applyTerminalPaymentRejectionConsequences,
+  __setTestOrderTransactionHook,
+} from "@/lib/orders/service";
 import {
   adjustInventory,
   allocateOrderInventoryAfterPaymentApproval,
@@ -39,6 +51,30 @@ export function assertAuthorizedLocalPostgresTarget(rawUrl: string | undefined):
   return urlString;
 }
 
+// Cookie & Auth context mocks for services calling next/headers
+let currentMockCartCookie: string | null = null;
+let currentMockPaymentSessionCookie: string | null = null;
+
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(() => {
+    return Promise.resolve({
+      get: (name: string) => {
+        if (name === "gp_cart_session") {
+          return currentMockCartCookie ? { value: currentMockCartCookie } : null;
+        }
+        if (name === "gp_payment_session" || name === "__Secure-gp_payment_session") {
+          return currentMockPaymentSessionCookie
+            ? { value: currentMockPaymentSessionCookie }
+            : null;
+        }
+        return null;
+      },
+      set: vi.fn(),
+      delete: vi.fn(),
+    });
+  }),
+}));
+
 describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurrency Suite", () => {
   const connectionString = assertAuthorizedLocalPostgresTarget(process.env.DATABASE_URL);
   let sqlClient: postgres.Sql;
@@ -50,6 +86,8 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   const variantId1 = `${fixturePrefix}000000000004`;
   const variantId2 = `${fixturePrefix}000000000005`;
   const variantId3 = `${fixturePrefix}000000000006`;
+  const raceCVariantId = `${fixturePrefix}000000000007`;
+  const reconVariantId = `${fixturePrefix}000000000008`;
 
   const primaryLocId = `${fixturePrefix}000000000010`;
   const quarantineLocId = `${fixturePrefix}000000000011`;
@@ -59,6 +97,8 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   const paymentMethodId = `${fixturePrefix}000000000020`;
   const paymentInstructionId = `${fixturePrefix}000000000021`;
   const paymentMethodCode = "TEST-INV-PAY";
+  const shippingMethodId = `${fixturePrefix}000000000030`;
+  const shippingMethodCode = "TEST-SHIP-STD";
 
   beforeAll(async () => {
     process.env.CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE = primaryLocCode;
@@ -66,26 +106,17 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     process.env.INVENTORY_IDEMPOTENCY_TTL_MINUTES = "1440";
     process.env.INVENTORY_HMAC_SECRET =
       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    process.env.CHECKOUT_HMAC_SECRET =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    process.env.ORDER_MANAGEMENT_IDEMPOTENCY_TTL_MINUTES = "60";
+    process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES = "60";
+    process.env.CHECKOUT_IDEMPOTENCY_TTL_MINUTES = "60";
+    process.env.CHECKOUT_RESERVATION_TTL_MINUTES = "30";
 
     sqlClient = postgres(connectionString, { max: 10 });
 
     // Clean fixtures
-    await sqlClient`DELETE FROM inventory_ledger_entries WHERE actor_id LIKE 'test-%' OR reference_id LIKE 'TEST-%' OR reference_id LIKE 'PO-%' OR reference_id LIKE 'AUDIT-%' OR reference_id LIKE 'TR-%' OR reference_id LIKE 'REPAIR-%' OR reference_id LIKE 'PAY-%'`;
-    await sqlClient`DELETE FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
-    await sqlClient`DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%') OR payment_method_code = ${paymentMethodCode}`;
-    await sqlClient`UPDATE payment_method_configurations SET current_instruction_version_id = NULL WHERE id = ${paymentMethodId} OR code = ${paymentMethodCode}`;
-    await sqlClient`DELETE FROM payment_instruction_versions WHERE id = ${paymentInstructionId} OR payment_method_code = ${paymentMethodCode}`;
-    await sqlClient`DELETE FROM payment_method_configurations WHERE id = ${paymentMethodId} OR code = ${paymentMethodCode}`;
-    await sqlClient`DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
-    await sqlClient`DELETE FROM orders WHERE order_number LIKE 'GP-TEST-%'`;
-    await sqlClient`DELETE FROM inventory_items WHERE variant_id IN (${variantId1}, ${variantId2}, ${variantId3})`;
-    await sqlClient`DELETE FROM product_variants WHERE id IN (${variantId1}, ${variantId2}, ${variantId3})`;
-    await sqlClient`DELETE FROM products WHERE id = ${productId}`;
-    await sqlClient`DELETE FROM categories WHERE id = ${categoryId}`;
-    await sqlClient`DELETE FROM brands WHERE id = ${brandId}`;
-    await sqlClient`DELETE FROM inventory_locations WHERE id IN (${primaryLocId}, ${quarantineLocId}) OR code IN (${primaryLocCode}, ${quarantineLocCode})`;
-    await sqlClient`DELETE FROM idempotency_keys WHERE idempotency_key LIKE 'INVENTORY_%'`;
-    await sqlClient`DELETE FROM audit_events WHERE actor_id LIKE 'test-%'`;
+    await cleanupAllTestFixtures();
 
     // Seed base locations
     await sqlClient`
@@ -120,7 +151,9 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       VALUES 
         (${variantId1}, ${productId}, 'SKU-INV-001', 'Black Edition', 15000, 'ACTIVE', NOW(), NOW()),
         (${variantId2}, ${productId}, 'SKU-INV-002', 'White Edition', 15000, 'ACTIVE', NOW(), NOW()),
-        (${variantId3}, ${productId}, 'SKU-INV-003', 'Red Edition', 15000, 'ACTIVE', NOW(), NOW())
+        (${variantId3}, ${productId}, 'SKU-INV-003', 'Red Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${raceCVariantId}, ${productId}, 'SKU-INV-RACEC', 'Race C Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${reconVariantId}, ${productId}, 'SKU-INV-RECON', 'Recon Edition', 15000, 'ACTIVE', NOW(), NOW())
       ON CONFLICT (sku) DO NOTHING;
     `;
 
@@ -142,35 +175,47 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       SET current_instruction_version_id = ${paymentInstructionId} 
       WHERE id = ${paymentMethodId};
     `;
+
+    await sqlClient`
+      INSERT INTO shipping_methods (id, code, name, base_price_cents, estimated_days_min, estimated_days_max, is_active, created_at)
+      VALUES (${shippingMethodId}, ${shippingMethodCode}, 'Envío Regular', 1500, 1, 2, true, NOW())
+      ON CONFLICT (code) DO NOTHING;
+    `;
   });
 
   afterEach(async () => {
+    currentMockCartCookie = null;
+    currentMockPaymentSessionCookie = null;
     __setTestInventoryTransactionHook(null);
+    __setTestPaymentTransactionHook(null);
+    __setTestOrderTransactionHook(null);
   });
 
   afterAll(async () => {
-    // Cleanup
-    await sqlClient`DELETE FROM inventory_ledger_entries WHERE actor_id LIKE 'test-%' OR reference_id LIKE 'TEST-%' OR reference_id LIKE 'PO-%' OR reference_id LIKE 'AUDIT-%' OR reference_id LIKE 'TR-%' OR reference_id LIKE 'REPAIR-%' OR reference_id LIKE 'PAY-%'`;
-    await sqlClient`DELETE FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
-    await sqlClient`DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%') OR payment_method_code = ${paymentMethodCode}`;
-    await sqlClient`UPDATE payment_method_configurations SET current_instruction_version_id = NULL WHERE id = ${paymentMethodId} OR code = ${paymentMethodCode}`;
-    await sqlClient`DELETE FROM payment_instruction_versions WHERE id = ${paymentInstructionId} OR payment_method_code = ${paymentMethodCode}`;
-    await sqlClient`DELETE FROM payment_method_configurations WHERE id = ${paymentMethodId} OR code = ${paymentMethodCode}`;
-    await sqlClient`DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
-    await sqlClient`DELETE FROM orders WHERE order_number LIKE 'GP-TEST-%'`;
-    await sqlClient`DELETE FROM inventory_items WHERE variant_id IN (${variantId1}, ${variantId2}, ${variantId3})`;
-    await sqlClient`DELETE FROM product_variants WHERE id IN (${variantId1}, ${variantId2}, ${variantId3})`;
-    await sqlClient`DELETE FROM products WHERE id = ${productId}`;
-    await sqlClient`DELETE FROM categories WHERE id = ${categoryId}`;
-    await sqlClient`DELETE FROM brands WHERE id = ${brandId}`;
-    await sqlClient`DELETE FROM inventory_locations WHERE id IN (${primaryLocId}, ${quarantineLocId})`;
-    await sqlClient`DELETE FROM idempotency_keys WHERE idempotency_key LIKE 'INVENTORY_%'`;
-    await sqlClient`DELETE FROM audit_events WHERE actor_id LIKE 'test-%'`;
-
+    await cleanupAllTestFixtures();
     await sqlClient.end();
   });
 
-  // Helper to create synthetic orders with reservations
+  async function cleanupAllTestFixtures() {
+    await sqlClient`DELETE FROM inventory_ledger_entries WHERE actor_id LIKE 'test-%' OR reference_id LIKE 'TEST-%' OR reference_id LIKE 'PO-%' OR reference_id LIKE 'AUDIT-%' OR reference_id LIKE 'TR-%' OR reference_id LIKE 'REPAIR-%' OR reference_id LIKE 'PAY-%'`;
+    await sqlClient`DELETE FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
+    await sqlClient`DELETE FROM guest_payment_access_grants WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%'))`;
+    await sqlClient`DELETE FROM guest_payment_sessions`;
+    await sqlClient`DELETE FROM payment_submissions WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%'))`;
+    await sqlClient`DELETE FROM payment_proof_upload_intents WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%'))`;
+    await sqlClient`DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%') OR payment_method_code = ${paymentMethodCode}`;
+    await sqlClient`DELETE FROM order_address_snapshots WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
+    await sqlClient`DELETE FROM order_pricing_snapshots WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
+    await sqlClient`DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
+    await sqlClient`DELETE FROM orders WHERE order_number LIKE 'GP-TEST-%'`;
+    await sqlClient`DELETE FROM cart_items WHERE variant_id IN (${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId})`;
+    await sqlClient`DELETE FROM carts WHERE session_token LIKE 'test-cart-%'`;
+    await sqlClient`DELETE FROM inventory_items WHERE variant_id IN (${variantId1}, ${variantId2}, ${variantId3}, ${raceCVariantId}, ${reconVariantId})`;
+    await sqlClient`DELETE FROM idempotency_keys WHERE idempotency_key LIKE 'INVENTORY_%' OR idempotency_key LIKE 'CHECKOUT_%' OR idempotency_key LIKE 'ORDER_%' OR idempotency_key LIKE 'PAYMENT_%'`;
+    await sqlClient`DELETE FROM audit_events WHERE actor_id LIKE 'test-%'`;
+  }
+
+  // Canonical helper to seed test orders satisfying complete current Order schema
   async function seedTestOrder(params: {
     orderNumber: string;
     variantId: string;
@@ -197,7 +242,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     `;
     const itemId = item!.id;
 
-    // Adjust reserved/allocated if starting in non-released state
     if (params.reservationStatus === "ACTIVE" || params.reservationStatus === "VERIFICATION_HOLD") {
       await sqlClient`
         UPDATE inventory_items 
@@ -212,25 +256,48 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       `;
     }
 
+    // Insert complete canonical Order schema
     await sqlClient`
-      INSERT INTO orders (id, order_number, status, subtotal_cents, discount_cents, shipping_cents, total_cents, currency, created_at, updated_at)
-      VALUES (${orderId}, ${params.orderNumber}, 'PENDING', 15000, 0, 0, 15000, 'PEN', NOW(), NOW());
+      INSERT INTO orders (
+        id, order_number, customer_email, customer_phone, status,
+        subtotal_cents, discount_cents, shipping_cents, total_cents, currency,
+        created_at, updated_at
+      ) VALUES (
+        ${orderId}, ${params.orderNumber}, 'test.customer@gamerperu.pe', '999888777', 'PENDING',
+        15000, 0, 0, 15000, 'PEN',
+        NOW(), NOW()
+      );
     `;
 
     await sqlClient`
-      INSERT INTO order_items (id, order_id, variant_id, sku_snapshot, product_name_snapshot, variant_title_snapshot, unit_price_cents_snapshot, quantity, line_total_cents, created_at)
-      VALUES (${orderItemId}, ${orderId}, ${params.variantId}, 'SKU-INV-001', 'Test Prod', 'Black', 15000, ${params.quantity}, 15000 * ${params.quantity}, NOW());
+      INSERT INTO order_items (
+        id, order_id, variant_id, sku_snapshot, product_name_snapshot,
+        variant_title_snapshot, unit_price_cents_snapshot, quantity, line_total_cents, created_at
+      ) VALUES (
+        ${orderItemId}, ${orderId}, ${params.variantId}, 'SKU-INV-001', 'Test Prod',
+        'Black', 15000, ${params.quantity}, 15000 * ${params.quantity}, NOW()
+      );
     `;
 
     await sqlClient`
-      INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, status, created_at, updated_at)
-      VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${paymentInstructionId}, 15000, 'UNPAID', NOW(), NOW());
+      INSERT INTO payments (
+        id, order_id, payment_method_code, instruction_version_id,
+        amount_cents, status, created_at, updated_at
+      ) VALUES (
+        ${paymentId}, ${orderId}, ${paymentMethodCode}, ${paymentInstructionId},
+        15000, 'UNPAID', NOW(), NOW()
+      );
     `;
 
     const expiresAt = params.expiresAt ?? new Date(Date.now() + 30 * 60 * 1000);
     await sqlClient`
-      INSERT INTO inventory_reservations (id, inventory_item_id, order_id, order_item_id, quantity, status, expires_at, created_at, updated_at)
-      VALUES (${resId}, ${itemId}, ${orderId}, ${orderItemId}, ${params.quantity}, ${params.reservationStatus}, ${expiresAt}, NOW(), NOW());
+      INSERT INTO inventory_reservations (
+        id, inventory_item_id, order_id, order_item_id,
+        quantity, status, expires_at, created_at, updated_at
+      ) VALUES (
+        ${resId}, ${itemId}, ${orderId}, ${orderItemId},
+        ${params.quantity}, ${params.reservationStatus}, ${expiresAt}, NOW(), NOW()
+      );
     `;
 
     return { orderId, orderItemId, paymentId, reservationId: resId, inventoryItemId: itemId };
@@ -289,7 +356,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
 
     const onHandAfterFirst = res1.resultingBalances!.quantityOnHand;
 
-    // Second execution with same attempt key
     const res2 = await receiveInventory({
       attemptId,
       variantId: variantId1,
@@ -324,7 +390,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       attemptId,
       variantId: variantId1,
       locationCode: primaryLocCode,
-      quantity: 20, // Changed quantity
+      quantity: 20,
       referenceId: "PO-2026-003",
       actorId: "test-staff-1",
     });
@@ -345,7 +411,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     });
     expect(res.success).toBe(true);
 
-    // Manually expire the key in database
     const namespacedKey = `INVENTORY_RECEIVING:${attemptId}`;
     await sqlClient`
       UPDATE idempotency_keys
@@ -423,7 +488,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
 
   it("Scenario 8B: Zero-effect adjustment is retry-stable and writes 0 ledger rows", async () => {
     const attemptId = "att-adj-zero-001";
-    // First count to 120 (current on-hand is already 120 from Scenario 8)
     const resZero1 = await adjustInventory({
       attemptId,
       variantId: variantId1,
@@ -440,13 +504,11 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(resZero1.appliedDelta).toBe(0);
     expect(resZero1.resultingBalances!.quantityOnHand).toBe(120);
 
-    // Verify ZERO ledger entries and ZERO audit events were written for this zero-effect reference
     const [zeroLedger] = await sqlClient`
       SELECT count(*)::int as count FROM inventory_ledger_entries WHERE reference_id = 'AUDIT-ZERO-01';
     `;
     expect(zeroLedger!.count).toBe(0);
 
-    // Mutate stock in between via a separate attempt
     await adjustInventory({
       attemptId: "att-adj-between-001",
       variantId: variantId1,
@@ -458,7 +520,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       actorId: "test-staff-1",
     });
 
-    // Retry the exact original zero-effect attemptId: must replay original result, NOT re-apply delta!
     const resZero2 = await adjustInventory({
       attemptId,
       variantId: variantId1,
@@ -474,7 +535,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(resZero2.replayed).toBe(true);
     expect(resZero2.appliedDelta).toBe(0);
 
-    // Verify stock remained 130 (not forced back to 120 by retry)
     const [item] = await sqlClient`
       SELECT quantity_on_hand FROM inventory_items WHERE id = ${resZero1.inventoryItemId!};
     `;
@@ -507,7 +567,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       variantId: variantId2,
       locationCode: primaryLocCode,
       commandKind: "PHYSICAL_COUNT",
-      countedQuantity: 50, // 50 < 80 reserved
+      countedQuantity: 50,
       reason: "Conteo menor que reservas",
       referenceId: "AUDIT-2026-05",
       actorId: "test-staff-1",
@@ -618,7 +678,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(allocResult.code).toBe("INVALID_RESERVATION_STATE_FOR_ALLOCATION");
   });
 
-  it("Scenario 18: all-ALLOCATED replay verifies balance consistency and returns alreadyAllocated with zero duplicate ledger rows", async () => {
+  it("Scenario 18: all-ALLOCATED replay verifies authoritative exact total and returns alreadyAllocated", async () => {
     const { orderId } = await seedTestOrder({
       orderNumber: "GP-TEST-ALLOC-REPLAY-001",
       variantId: variantId1,
@@ -638,7 +698,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       SELECT count(*)::int as count FROM inventory_ledger_entries WHERE reference_id = 'PAY-TEST-003';
     `;
 
-    // Replay allocation
     const replayResult = await db.transaction(async (tx) => {
       return await allocateOrderInventoryAfterPaymentApproval(tx, {
         orderId,
@@ -656,12 +715,109 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(ledgerCountAfter!.count).toBe(ledgerCountBefore!.count);
   });
 
+  it("Scenario 18B: all-ALLOCATED replay fails if physical allocated balance is less than authoritative reservation sum", async () => {
+    const { orderId, inventoryItemId } = await seedTestOrder({
+      orderNumber: "GP-TEST-ALLOC-DRIFT-UNDER",
+      variantId: variantId1,
+      quantity: 2,
+      reservationStatus: "ALLOCATED",
+    });
+
+    // Inject under-count drift: physical quantity_allocated < sum of allocated reservations
+    await sqlClient`
+      UPDATE inventory_items
+      SET quantity_allocated = quantity_allocated - 1
+      WHERE id = ${inventoryItemId};
+    `;
+
+    const failReplay = await db.transaction(async (tx) => {
+      return await allocateOrderInventoryAfterPaymentApproval(tx, {
+        orderId,
+        actorId: "test-admin-verifier",
+        referenceId: "PAY-DRIFT-1",
+      });
+    });
+
+    expect(failReplay.success).toBe(false);
+    expect(failReplay.code).toBe("INCONSISTENT_ALLOCATED_BALANCE");
+  });
+
+  it("Scenario 18C: all-ALLOCATED replay fails if physical allocated balance is greater than authoritative reservation sum", async () => {
+    const { orderId, inventoryItemId } = await seedTestOrder({
+      orderNumber: "GP-TEST-ALLOC-DRIFT-OVER",
+      variantId: variantId1,
+      quantity: 2,
+      reservationStatus: "ALLOCATED",
+    });
+
+    // Inject over-count drift: physical quantity_allocated > sum of allocated reservations
+    await sqlClient`
+      UPDATE inventory_items
+      SET quantity_allocated = quantity_allocated + 5
+      WHERE id = ${inventoryItemId};
+    `;
+
+    const failReplay = await db.transaction(async (tx) => {
+      return await allocateOrderInventoryAfterPaymentApproval(tx, {
+        orderId,
+        actorId: "test-admin-verifier",
+        referenceId: "PAY-DRIFT-2",
+      });
+    });
+
+    expect(failReplay.success).toBe(false);
+    expect(failReplay.code).toBe("INCONSISTENT_ALLOCATED_BALANCE");
+  });
+
+  it("Scenario 18D: legitimate InventoryItem shared by multiple allocated Orders replays correctly when total matches exactly", async () => {
+    const { orderId: order1 } = await seedTestOrder({
+      orderNumber: "GP-TEST-MULTI-ALLOC-1",
+      variantId: variantId1,
+      quantity: 2,
+      reservationStatus: "VERIFICATION_HOLD",
+    });
+    const { orderId: order2 } = await seedTestOrder({
+      orderNumber: "GP-TEST-MULTI-ALLOC-2",
+      variantId: variantId1,
+      quantity: 3,
+      reservationStatus: "VERIFICATION_HOLD",
+    });
+
+    await db.transaction(async (tx) => {
+      await allocateOrderInventoryAfterPaymentApproval(tx, {
+        orderId: order1,
+        actorId: "test-verifier",
+        referenceId: "PAY-MULTI-1",
+      });
+    });
+
+    await db.transaction(async (tx) => {
+      await allocateOrderInventoryAfterPaymentApproval(tx, {
+        orderId: order2,
+        actorId: "test-verifier",
+        referenceId: "PAY-MULTI-2",
+      });
+    });
+
+    // Replay order1: allocated quantity on item is 5, sum of allocated reservations for that item is 5.
+    const replayOrder1 = await db.transaction(async (tx) => {
+      return await allocateOrderInventoryAfterPaymentApproval(tx, {
+        orderId: order1,
+        actorId: "test-verifier",
+        referenceId: "PAY-MULTI-1",
+      });
+    });
+
+    expect(replayOrder1.success).toBe(true);
+    expect(replayOrder1.alreadyAllocated).toBe(true);
+  });
+
   // -------------------------------------------------------------------------
   // 5. Late-Payment Reacquisition Scenarios
   // -------------------------------------------------------------------------
 
   it("Scenario 19 & 20: late reacquisition creates ALLOCATED reservation with original expires_at when stock exists, rejects if insufficient", async () => {
-    const originalExpiry = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
+    const originalExpiry = new Date(Date.now() - 60 * 60 * 1000);
     const { orderId: orderIdWithStock, inventoryItemId } = await seedTestOrder({
       orderNumber: "GP-TEST-LATE-001",
       variantId: variantId1,
@@ -690,7 +846,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     `;
     expect(itemAfter!.quantity_allocated).toBe(itemBefore!.quantity_allocated + 2);
 
-    // Verify replacement ALLOCATED reservation preserves original authoritative expires_at
     const [newAllocRes] = await sqlClient`
       SELECT status, expires_at FROM inventory_reservations
       WHERE order_id = ${orderIdWithStock} AND status = 'ALLOCATED';
@@ -723,7 +878,7 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   // -------------------------------------------------------------------------
 
   it("Scenario 21: direct expiration called before expiry date results in zero mutation (no-op)", async () => {
-    const futureDate = new Date(Date.now() + 20 * 60 * 1000); // 20 mins in future
+    const futureDate = new Date(Date.now() + 20 * 60 * 1000);
     const { orderId, inventoryItemId } = await seedTestOrder({
       orderNumber: "GP-TEST-EXP-FUTURE-001",
       variantId: variantId1,
@@ -746,7 +901,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(expireResult.releasedLinesCount).toBe(0);
     expect(expireResult.orderStatusTransitioned).toBe(false);
 
-    // Verify order and stock were untouched
     const [order] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
     expect(order!.status).toBe("PENDING");
 
@@ -757,8 +911,8 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   });
 
   it("Scenario 22 & 23: legitimate expired trigger releases whole active order with exact movement classifications", async () => {
-    const pastDate = new Date(Date.now() - 10 * 60 * 1000); // Expired 10 mins ago
-    const futureDate = new Date(Date.now() + 15 * 60 * 1000); // Future line in same order
+    const pastDate = new Date(Date.now() - 10 * 60 * 1000);
+    const futureDate = new Date(Date.now() + 15 * 60 * 1000);
 
     const { orderId, inventoryItemId } = await seedTestOrder({
       orderNumber: "GP-TEST-EXP-MIXED-001",
@@ -768,19 +922,28 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       expiresAt: pastDate,
     });
 
-    // Add a second ACTIVE line to the same order with future expiry (co-release test)
     const orderItemId2 = generateUuidV7();
     const resId2 = generateUuidV7();
     await sqlClient`
-      INSERT INTO order_items (id, order_id, variant_id, sku_snapshot, product_name_snapshot, variant_title_snapshot, unit_price_cents_snapshot, quantity, line_total_cents, created_at)
-      VALUES (${orderItemId2}, ${orderId}, ${variantId1}, 'SKU-INV-001', 'Test Prod', 'Black', 15000, 3, 45000, NOW());
+      INSERT INTO order_items (
+        id, order_id, variant_id, sku_snapshot, product_name_snapshot,
+        variant_title_snapshot, unit_price_cents_snapshot, quantity, line_total_cents, created_at
+      ) VALUES (
+        ${orderItemId2}, ${orderId}, ${variantId1}, 'SKU-INV-001', 'Test Prod',
+        'Black', 15000, 3, 45000, NOW()
+      );
     `;
     await sqlClient`
       UPDATE inventory_items SET quantity_reserved = quantity_reserved + 3 WHERE id = ${inventoryItemId};
     `;
     await sqlClient`
-      INSERT INTO inventory_reservations (id, inventory_item_id, order_id, order_item_id, quantity, status, expires_at, created_at, updated_at)
-      VALUES (${resId2}, ${inventoryItemId}, ${orderId}, ${orderItemId2}, 3, 'ACTIVE', ${futureDate}, NOW(), NOW());
+      INSERT INTO inventory_reservations (
+        id, inventory_item_id, order_id, order_item_id,
+        quantity, status, expires_at, created_at, updated_at
+      ) VALUES (
+        ${resId2}, ${inventoryItemId}, ${orderId}, ${orderItemId2},
+        3, 'ACTIVE', ${futureDate}, NOW(), NOW()
+      );
     `;
 
     const expireResult = await expireUnpaidOrderReservations({
@@ -797,7 +960,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       await sqlClient`SELECT status, cancel_reason FROM orders WHERE id = ${orderId};`;
     expect(order!.status).toBe("EXPIRED");
 
-    // Verify ledger entry movement types: 1 RESERVATION_EXPIRED (line 1) and 1 RESERVATION_RELEASED (line 2 co-release)
     const ledgers = await sqlClient`
       SELECT movement_type, reserved_delta FROM inventory_ledger_entries WHERE reference_id = ${orderId} ORDER BY id ASC;
     `;
@@ -855,48 +1017,53 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   });
 
   // -------------------------------------------------------------------------
-  // 7. Reconciliation & Repair Scenarios (With Capacity Violation Guard)
+  // 7. Reconciliation & Repair Scenarios (With Full Test Isolation)
   // -------------------------------------------------------------------------
 
-  it("Scenario 26 & 30: reconciliation detects reserved drift and repair service corrects balance with audit log", async () => {
+  it("Scenario 26 & 30: reconciliation detects reserved drift on isolated item and repair corrects it with audit log", async () => {
     const [loc] =
       await sqlClient`SELECT id FROM inventory_locations WHERE code = ${primaryLocCode}`;
     const locId = loc!.id;
-    const [item] = await sqlClient`
-      SELECT id, quantity_on_hand, quantity_reserved, quantity_allocated 
-      FROM inventory_items WHERE variant_id = ${variantId1} AND location_id = ${locId};
-    `;
-    const itemId = item!.id;
 
-    // Artificial drift: inject synthetic drift in quantity_reserved
+    // Use dedicated reconVariantId with 0 external reservations
+    const reconItemId = generateUuidV7();
+    await sqlClient`
+      INSERT INTO inventory_items (id, variant_id, location_id, quantity_on_hand, quantity_reserved, quantity_allocated, reorder_point)
+      VALUES (${reconItemId}, ${reconVariantId}, ${locId}, 50, 0, 0, 5)
+      ON CONFLICT (variant_id, location_id) DO UPDATE SET quantity_on_hand = 50, quantity_reserved = 0, quantity_allocated = 0;
+    `;
+
+    // Inject exact artificial drift of 17
     await sqlClient`
       UPDATE inventory_items 
-      SET quantity_reserved = quantity_reserved + 17
-      WHERE id = ${itemId};
+      SET quantity_reserved = 17
+      WHERE id = ${reconItemId};
     `;
 
     const reconResult = await reconcileInventory();
     expect(reconResult.success).toBe(true);
-    const itemDiscrepancy = reconResult.discrepancies.find((d) => d.inventoryItemId === itemId);
+    const itemDiscrepancy = reconResult.discrepancies.find(
+      (d) => d.inventoryItemId === reconItemId
+    );
     expect(itemDiscrepancy).toBeDefined();
     expect(itemDiscrepancy?.reservedDrift).toBe(17);
+    expect(itemDiscrepancy?.expectedReserved).toBe(0);
 
-    // Repair discrepancy
     const repairResult = await repairInventoryDiscrepancy({
-      attemptId: "att-repair-001",
-      inventoryItemId: itemId,
-      reason: "Corrección de drift sintético de prueba",
+      attemptId: "att-repair-recon-iso",
+      inventoryItemId: reconItemId,
+      reason: "Corrección de drift aislado",
       actorId: "test-supervisor",
-      referenceId: "REPAIR-2026-001",
+      referenceId: "REPAIR-RECON-001",
     });
 
     expect(repairResult.success).toBe(true);
     expect(repairResult.ledgerEntryId).toBeDefined();
 
     const [itemRepaired] = await sqlClient`
-      SELECT quantity_reserved FROM inventory_items WHERE id = ${itemId};
+      SELECT quantity_reserved FROM inventory_items WHERE id = ${reconItemId};
     `;
-    expect(itemRepaired!.quantity_reserved).toBe(item!.quantity_reserved);
+    expect(itemRepaired!.quantity_reserved).toBe(0);
   });
 
   it("Scenario 26B: repair is rejected when expected reservations exceed physical on-hand (capacity violation guard)", async () => {
@@ -904,7 +1071,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       await sqlClient`SELECT id FROM inventory_locations WHERE code = ${primaryLocCode}`;
     const locId = loc!.id;
 
-    // Create an isolated item with on_hand = 3
     const testItemId = generateUuidV7();
     await sqlClient`
       INSERT INTO inventory_items (id, variant_id, location_id, quantity_on_hand, quantity_reserved, quantity_allocated, reorder_point)
@@ -912,19 +1078,29 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       ON CONFLICT (variant_id, location_id) DO UPDATE SET quantity_on_hand = 3, quantity_reserved = 0, quantity_allocated = 0;
     `;
 
-    // Seed an order reservation of 5 units against this item (5 > 3)
     const orderId = generateUuidV7();
     const orderItemId = generateUuidV7();
     await sqlClient`
-      INSERT INTO orders (id, order_number, status, subtotal_cents, discount_cents, shipping_cents, total_cents, currency, created_at, updated_at)
-      VALUES (${orderId}, 'GP-TEST-CAP-001', 'PENDING', 15000, 0, 0, 15000, 'PEN', NOW(), NOW());
+      INSERT INTO orders (
+        id, order_number, customer_email, customer_phone, status,
+        subtotal_cents, discount_cents, shipping_cents, total_cents, currency,
+        created_at, updated_at
+      ) VALUES (
+        ${orderId}, 'GP-TEST-CAP-001', 'test.customer@gamerperu.pe', '999888777', 'PENDING',
+        15000, 0, 0, 15000, 'PEN',
+        NOW(), NOW()
+      );
     `;
     await sqlClient`
-      INSERT INTO inventory_reservations (id, inventory_item_id, order_id, order_item_id, quantity, status, expires_at, created_at, updated_at)
-      VALUES (${generateUuidV7()}, ${testItemId}, ${orderId}, ${orderItemId}, 5, 'ACTIVE', NOW() + INTERVAL '1 hour', NOW(), NOW());
+      INSERT INTO inventory_reservations (
+        id, inventory_item_id, order_id, order_item_id,
+        quantity, status, expires_at, created_at, updated_at
+      ) VALUES (
+        ${generateUuidV7()}, ${testItemId}, ${orderId}, ${orderItemId},
+        5, 'ACTIVE', NOW() + INTERVAL '1 hour', NOW(), NOW()
+      );
     `;
 
-    // Attempt to repair item: expectedReserved is 5, but on_hand is only 3
     const repairFail = await repairInventoryDiscrepancy({
       attemptId: "att-repair-cap-fail",
       inventoryItemId: testItemId,
@@ -936,7 +1112,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(repairFail.success).toBe(false);
     expect(repairFail.code).toBe("CAPACITY_VIOLATION_REQUIRES_MANUAL_RESOLUTION");
 
-    // Verify item balances remained unmodified
     const [item] = await sqlClient`
       SELECT quantity_reserved FROM inventory_items WHERE id = ${testItemId};
     `;
@@ -996,7 +1171,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
   });
 
   it("Race B: Concurrent first InventoryItem creation for same variant and location", async () => {
-    // Use variantId3 on quarantine location where no inventory_item exists yet
     const [loc] =
       await sqlClient`SELECT id FROM inventory_locations WHERE code = ${quarantineLocCode}`;
     const locId = loc!.id;
@@ -1034,105 +1208,214 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(items[0]!.quantity_on_hand).toBe(25);
   });
 
-  it("Race C: Manual decrement vs concurrent reservation on final available stock prevents oversell", async () => {
+  it("Race C: Real Checkout reservation (submitCheckout) vs manual decrement (adjustInventory) on final ATS", async () => {
     const [loc] =
       await sqlClient`SELECT id FROM inventory_locations WHERE code = ${primaryLocCode}`;
     const locId = loc!.id;
+
+    // Set raceCVariantId stock to exactly 2 units
     await sqlClient`
-      UPDATE inventory_items 
-      SET quantity_on_hand = 5, quantity_reserved = 0, quantity_allocated = 0
-      WHERE variant_id = ${variantId1} AND location_id = ${locId};
+      INSERT INTO inventory_items (id, variant_id, location_id, quantity_on_hand, quantity_reserved, quantity_allocated, reorder_point)
+      VALUES (${generateUuidV7()}, ${raceCVariantId}, ${locId}, 2, 0, 0, 0)
+      ON CONFLICT (variant_id, location_id) DO UPDATE SET quantity_on_hand = 2, quantity_reserved = 0, quantity_allocated = 0;
     `;
 
-    const [adj1, adj2] = await Promise.all([
-      adjustInventory({
-        attemptId: "att-race-adj-1",
-        variantId: variantId1,
-        locationCode: primaryLocCode,
-        commandKind: "DELTA",
-        deltaQuantity: -5,
-        reason: "Venta física de mostrador",
-        referenceId: "AUDIT-RACE-1",
-        actorId: "test-staff-1",
+    // Create an anonymous cart with 2 units of raceCVariantId
+    const cartToken = generateAnonymousSessionToken();
+    currentMockCartCookie = cartToken;
+
+    const [cart] = await sqlClient`
+      INSERT INTO carts (id, session_token, status, expires_at, created_at, updated_at)
+      VALUES (${generateUuidV7()}, ${cartToken}, 'ACTIVE', NOW() + INTERVAL '7 days', NOW(), NOW())
+      RETURNING id;
+    `;
+
+    await sqlClient`
+      INSERT INTO cart_items (id, cart_id, variant_id, quantity, created_at, updated_at)
+      VALUES (${generateUuidV7()}, ${cart!.id}, ${raceCVariantId}, 2, NOW(), NOW());
+    `;
+
+    const deliveryAddress = {
+      recipientName: "Comprador Concurrente",
+      phone: "999888777",
+      streetAddress: "Av. Concurrencia 123",
+      department: "Lima",
+      province: "Lima",
+      district: "Miraflores",
+    };
+
+    // Execute real submitCheckout vs real adjustInventory concurrently
+    const [checkoutRes, adjRes] = await Promise.all([
+      submitCheckout({
+        checkoutAttemptId: generateUuidV7(),
+        customerEmail: "race.c@gamerperu.pe",
+        deliveryAddress,
+        shippingMethodCode,
+        paymentMethodCode,
+        reviewedSubtotalCents: 30000,
+        reviewedShippingCents: 1500,
+        reviewedTotalCents: 31500,
       }),
       adjustInventory({
-        attemptId: "att-race-adj-2",
-        variantId: variantId1,
+        attemptId: "att-race-c-adj",
+        variantId: raceCVariantId,
         locationCode: primaryLocCode,
         commandKind: "DELTA",
-        deltaQuantity: -5,
-        reason: "Venta física de mostrador concurrente",
-        referenceId: "AUDIT-RACE-2",
-        actorId: "test-staff-2",
+        deltaQuantity: -2,
+        reason: "Venta simultánea en tienda física",
+        referenceId: "AUDIT-RACE-C-1",
+        actorId: "test-staff-1",
       }),
     ]);
 
-    const successes = [adj1, adj2].filter((r) => r.success);
-    const failures = [adj1, adj2].filter((r) => !r.success);
+    const successes = [checkoutRes.success, adjRes.success].filter(Boolean);
+    const failures = [checkoutRes.success, adjRes.success].filter((s) => !s);
 
     expect(successes).toHaveLength(1);
     expect(failures).toHaveLength(1);
-    expect(failures[0]!.code).toBe("NEGATIVE_ON_HAND_DISALLOWED");
 
     const [itemFinal] = await sqlClient`
-      SELECT quantity_on_hand FROM inventory_items WHERE variant_id = ${variantId1} AND location_id = ${locId};
+      SELECT quantity_on_hand, quantity_reserved, quantity_allocated
+      FROM inventory_items WHERE variant_id = ${raceCVariantId} AND location_id = ${locId};
     `;
-    expect(itemFinal!.quantity_on_hand).toBe(0);
+    const finalATS =
+      itemFinal!.quantity_on_hand - itemFinal!.quantity_reserved - itemFinal!.quantity_allocated;
+    expect(finalATS).toBe(0);
   });
 
-  it("Race D: Expiration vs real payment submission concurrency", async () => {
+  it("Race D: Real Payment submission (submitPaymentProof) vs expiration concurrency", async () => {
     const pastDate = new Date(Date.now() - 5 * 60 * 1000);
-    const { orderId } = await seedTestOrder({
-      orderNumber: "GP-TEST-RACE-EXP-PAY-001",
+    const { orderId, paymentId } = await seedTestOrder({
+      orderNumber: "GP-TEST-RACE-D-001",
       variantId: variantId1,
       quantity: 2,
       reservationStatus: "ACTIVE",
       expiresAt: pastDate,
     });
 
-    // Simulate concurrent payment submission winning
-    await sqlClient`UPDATE payments SET status = 'SUBMITTED' WHERE order_id = ${orderId};`;
+    const sessionId = generateUuidV7();
+    const hmacSecret = process.env.CHECKOUT_HMAC_SECRET!;
+    const rawToken = generateSecurePaymentSessionToken();
+    const tokenDigest = computePaymentSessionTokenDigest(rawToken, hmacSecret);
+    currentMockPaymentSessionCookie = rawToken;
 
-    const expireResult = await expireUnpaidOrderReservations({
-      orderId,
-      actorId: "SYSTEM",
-    });
+    await sqlClient`
+      INSERT INTO guest_payment_sessions (id, token_digest, expires_at, created_at)
+      VALUES (${sessionId}, ${tokenDigest}, NOW() + INTERVAL '1 hour', NOW());
+    `;
 
-    expect(expireResult.success).toBe(true);
-    expect(expireResult.code).toBe("PAYMENT_NOT_UNPAID");
-    expect(expireResult.releasedLinesCount).toBe(0);
+    await sqlClient`
+      INSERT INTO guest_payment_access_grants (id, payment_id, session_id, expires_at, created_at)
+      VALUES (${generateUuidV7()}, ${paymentId}, ${sessionId}, NOW() + INTERVAL '1 hour', NOW());
+    `;
 
-    const [order] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
-    expect(order!.status).toBe("PENDING");
+    const [expRes, payRes] = await Promise.all([
+      expireUnpaidOrderReservations({ orderId, actorId: "SYSTEM-WORKER" }),
+      submitPaymentProof({
+        orderNumber: "GP-TEST-RACE-D-001",
+        operationCode: "12345678",
+        submissionAttemptId: "submission-attempt-race-d-001",
+      }),
+    ]);
+
+    expect(expRes.success).toBe(true);
+
+    const [paymentFinal] = await sqlClient`SELECT status FROM payments WHERE id = ${paymentId};`;
+    const [orderFinal] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
+
+    if (payRes.success) {
+      expect(paymentFinal!.status).toBe("SUBMITTED");
+      expect(orderFinal!.status).toBe("PENDING");
+    } else {
+      expect(orderFinal!.status).toBe("EXPIRED");
+    }
   });
 
-  it("Race E: Expiration vs customer cancellation concurrency", async () => {
+  it("Race E: Real cancellation (cancelUnpaidOrder) vs expiration concurrency", async () => {
     const pastDate = new Date(Date.now() - 5 * 60 * 1000);
-    const { orderId } = await seedTestOrder({
-      orderNumber: "GP-TEST-RACE-EXP-CANCEL-001",
+    const { orderId, paymentId } = await seedTestOrder({
+      orderNumber: "GP-TEST-RACE-E-001",
       variantId: variantId1,
       quantity: 2,
       reservationStatus: "ACTIVE",
       expiresAt: pastDate,
     });
 
-    // Simulate concurrent cancellation winning
-    await sqlClient`UPDATE orders SET status = 'CANCELLED' WHERE id = ${orderId};`;
+    const sessionId = generateUuidV7();
+    const hmacSecret = process.env.CHECKOUT_HMAC_SECRET!;
+    const rawToken = generateSecurePaymentSessionToken();
+    const tokenDigest = computePaymentSessionTokenDigest(rawToken, hmacSecret);
+    currentMockPaymentSessionCookie = rawToken;
 
-    const expireResult = await expireUnpaidOrderReservations({
-      orderId,
-      actorId: "SYSTEM",
-    });
+    await sqlClient`
+      INSERT INTO guest_payment_sessions (id, token_digest, expires_at, created_at)
+      VALUES (${sessionId}, ${tokenDigest}, NOW() + INTERVAL '1 hour', NOW());
+    `;
 
-    expect(expireResult.success).toBe(true);
-    expect(expireResult.code).toBe("ORDER_NOT_PENDING");
-    expect(expireResult.releasedLinesCount).toBe(0);
+    await sqlClient`
+      INSERT INTO guest_payment_access_grants (id, payment_id, session_id, expires_at, created_at)
+      VALUES (${generateUuidV7()}, ${paymentId}, ${sessionId}, NOW() + INTERVAL '1 hour', NOW());
+    `;
+
+    const [expRes, cancelRes] = await Promise.all([
+      expireUnpaidOrderReservations({ orderId, actorId: "SYSTEM-WORKER" }),
+      cancelUnpaidOrder({
+        orderNumber: "GP-TEST-RACE-E-001",
+        cancellationAttemptId: "cancellation-attempt-race-e-001",
+        reason: "Cancelación simultánea del cliente",
+      }),
+    ]);
+
+    expect(expRes.success).toBe(true);
+
+    const [orderFinal] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
+    expect(["EXPIRED", "CANCELLED"]).toContain(orderFinal!.status);
+
+    const [resFinal] = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${orderId};
+    `;
+    expect(resFinal!.status).toBe("RELEASED");
   });
 
-  it("Race F: Two simultaneous expiration workers targeting the same expired order serialize safely", async () => {
+  it("Race F: Allocation vs terminal consequence seam (applyTerminalPaymentRejectionConsequences) concurrency", async () => {
+    const { orderId, paymentId } = await seedTestOrder({
+      orderNumber: "GP-TEST-RACE-F-001",
+      variantId: variantId1,
+      quantity: 2,
+      reservationStatus: "VERIFICATION_HOLD",
+    });
+
+    await sqlClient`UPDATE payments SET status = 'REJECTED' WHERE id = ${paymentId};`;
+
+    const [allocRes, rejRes] = await Promise.allSettled([
+      db.transaction((tx) =>
+        allocateOrderInventoryAfterPaymentApproval(tx, {
+          orderId,
+          actorId: "test-verifier",
+          referenceId: "PAY-RACE-F-ALLOC",
+        })
+      ),
+      db.transaction((tx) =>
+        applyTerminalPaymentRejectionConsequences(tx, {
+          orderId,
+          paymentId,
+          rejectionReason: "Comprobante rechazado",
+        })
+      ),
+    ]);
+
+    const [orderFinal] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
+    const [resFinal] = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${orderId};
+    `;
+
+    expect(["ALLOCATED", "RELEASED"]).toContain(resFinal!.status);
+  });
+
+  it("Race G: Two simultaneous expiration workers targeting the same expired order serialize safely", async () => {
     const pastDate = new Date(Date.now() - 20 * 60 * 1000);
     const { orderId } = await seedTestOrder({
-      orderNumber: "GP-TEST-RACE-EXP-001",
+      orderNumber: "GP-TEST-RACE-G-001",
       variantId: variantId1,
       quantity: 2,
       reservationStatus: "ACTIVE",
@@ -1148,16 +1431,16 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(exp2.success).toBe(true);
 
     const releasedCounts = [exp1.releasedLinesCount, exp2.releasedLinesCount];
-    expect(releasedCounts).toContain(2); // One worker released the line
-    expect(releasedCounts).toContain(0); // Other worker found 0 active lines
+    expect(releasedCounts).toContain(2);
+    expect(releasedCounts).toContain(0);
 
     const [order] = await sqlClient`SELECT status FROM orders WHERE id = ${orderId};`;
     expect(order!.status).toBe("EXPIRED");
   });
 
-  it("Race G: Two simultaneous payment-approval allocation attempts execute idempotently", async () => {
+  it("Race H: Two simultaneous payment-approval allocation attempts execute idempotently", async () => {
     const { orderId } = await seedTestOrder({
-      orderNumber: "GP-TEST-RACE-ALLOC-001",
+      orderNumber: "GP-TEST-RACE-H-001",
       variantId: variantId1,
       quantity: 1,
       reservationStatus: "VERIFICATION_HOLD",
@@ -1168,14 +1451,14 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
         allocateOrderInventoryAfterPaymentApproval(tx, {
           orderId,
           actorId: "test-verifier-1",
-          referenceId: "PAY-RACE-1",
+          referenceId: "PAY-RACE-H-1",
         })
       ),
       db.transaction((tx) =>
         allocateOrderInventoryAfterPaymentApproval(tx, {
           orderId,
           actorId: "test-verifier-2",
-          referenceId: "PAY-RACE-2",
+          referenceId: "PAY-RACE-H-2",
         })
       ),
     ]);
@@ -1197,7 +1480,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
       await sqlClient`SELECT id FROM inventory_locations WHERE code = ${primaryLocCode}`;
     const locId = loc!.id;
 
-    // Set stock of variantId2 to exactly 4 units
     await sqlClient`
       UPDATE inventory_items
       SET quantity_on_hand = 4, quantity_reserved = 0, quantity_allocated = 0
@@ -1205,30 +1487,29 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     `;
 
     const { orderId: orderIdLate } = await seedTestOrder({
-      orderNumber: "GP-TEST-RACE-LATE-001",
+      orderNumber: "GP-TEST-RACE-I-001",
       variantId: variantId2,
       quantity: 4,
       reservationStatus: "RELEASED",
       initialOnHand: 4,
     });
 
-    // Run late reacquisition (needing 4) vs concurrent manual decrement (needing 4)
     const [reacq, adj] = await Promise.all([
       db.transaction((tx) =>
         reacquireOrderInventoryAfterLatePayment(tx, {
           orderId: orderIdLate,
           actorId: "test-admin-verifier",
-          referenceId: "PAY-RACE-LATE-1",
+          referenceId: "PAY-RACE-I-1",
         })
       ),
       adjustInventory({
-        attemptId: "att-race-reacq-adj",
+        attemptId: "att-race-i-adj",
         variantId: variantId2,
         locationCode: primaryLocCode,
         commandKind: "DELTA",
         deltaQuantity: -4,
         reason: "Venta simultánea",
-        referenceId: "AUDIT-RACE-REACQ-1",
+        referenceId: "AUDIT-RACE-I-1",
         actorId: "test-staff-1",
       }),
     ]);
@@ -1237,7 +1518,6 @@ describe("GP-021 / CHK2-BR1 — Real Local PostgreSQL Inventory Engine & Concurr
     expect(outcomes).toContain(true);
     expect(outcomes).toContain(false);
 
-    // Verify on-hand or allocated was updated without negative ATS
     const [item] = await sqlClient`
       SELECT quantity_on_hand, quantity_reserved, quantity_allocated
       FROM inventory_items WHERE variant_id = ${variantId2} AND location_id = ${locId};
