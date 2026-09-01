@@ -6,23 +6,16 @@ const databaseUrl = process.env.DATABASE_URL!;
 const sql = postgres(databaseUrl, { max: 1 });
 
 /**
- * Reusable robust PDP Add-to-Cart and navigate to checkout helper
+ * Reusable PDP Add-to-Cart and navigate to checkout helper
  */
 async function addProductAndGoToCheckout(page: Page) {
   await page.goto("/productos/mouse-cart-e2e");
   const addBtn = page.getByTestId("pdp-add-to-cart-button");
   await expect(addBtn).toBeVisible();
-  await expect(addBtn).toBeEnabled();
   await addBtn.click();
 
   const drawer = page.getByTestId("cart-drawer");
-  await expect(async () => {
-    const isDrawerOpen = await drawer.isVisible().catch(() => false);
-    if (!isDrawerOpen) {
-      await addBtn.click().catch(() => {});
-    }
-    expect(isDrawerOpen).toBe(true);
-  }).toPass({ timeout: 15000, intervals: [200, 500, 1000] });
+  await expect(drawer).toBeVisible();
 
   const checkoutBtn = page.getByTestId("cart-drawer-checkout-button");
   await expect(checkoutBtn).toBeVisible();

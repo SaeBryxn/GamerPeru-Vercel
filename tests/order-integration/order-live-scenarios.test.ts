@@ -149,6 +149,7 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     await sqlClient`DELETE FROM audit_events WHERE target_id IN (SELECT id::text FROM orders WHERE customer_email LIKE '%@gamerperu.pe')`;
     await sqlClient`DELETE FROM idempotency_keys`;
     await sqlClient`DELETE FROM payment_submissions WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@gamerperu.pe'))`;
+    await sqlClient`DELETE FROM payment_proof_upload_intents WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@gamerperu.pe'))`;
     await sqlClient`DELETE FROM guest_payment_access_grants WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@gamerperu.pe'))`;
     await sqlClient`DELETE FROM inventory_ledger_entries WHERE inventory_item_id IN (${inventoryItemId1}, ${inventoryItemId2}) OR reference_id IN (SELECT id::text FROM orders WHERE customer_email LIKE '%@gamerperu.pe')`;
     await sqlClient`DELETE FROM inventory_reservations WHERE inventory_item_id IN (${inventoryItemId1}, ${inventoryItemId2}) OR order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@gamerperu.pe')`;
