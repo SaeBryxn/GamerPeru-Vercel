@@ -174,7 +174,7 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     await sqlClient`DELETE FROM brands WHERE id = ${brandId}`;
     await sqlClient`DELETE FROM user_roles WHERE auth_user_id IN (${authUserId1}, ${authUserId2}, ${staffAuthUserId})`;
     await sqlClient`DELETE FROM customer_profiles WHERE id IN (${customerProfileId1}, ${customerProfileId2})`;
-    await sqlClient`DELETE FROM auth.users WHERE id IN (${authUserId1}, ${authUserId2}, ${staffAuthUserId})`;
+    await sqlClient`DELETE FROM auth.users WHERE email LIKE '%@gamerperu.pe' OR id IN (${authUserId1}, ${authUserId2}, ${staffAuthUserId})`;
 
     // Insert Base Fixtures
     await sqlClient`
@@ -241,10 +241,10 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     await sqlClient`
       INSERT INTO auth.users (id, email, raw_app_meta_data, raw_user_meta_data, is_super_admin, created_at, updated_at)
       VALUES 
-        (${authUserId1}, 'owner@gamerperu.pe', '{"provider":"email","providers":["email"]}', '{}', false, NOW(), NOW()),
-        (${authUserId2}, 'foreign@gamerperu.pe', '{"provider":"email","providers":["email"]}', '{}', false, NOW(), NOW()),
-        (${staffAuthUserId}, 'staff@gamerperu.pe', '{"provider":"email","providers":["email"]}', '{}', false, NOW(), NOW())
-      ON CONFLICT (id) DO NOTHING
+        (${authUserId1}, 'owner.ord@gamerperu.pe', '{"provider":"email","providers":["email"]}', '{}', false, NOW(), NOW()),
+        (${authUserId2}, 'foreign.ord@gamerperu.pe', '{"provider":"email","providers":["email"]}', '{}', false, NOW(), NOW()),
+        (${staffAuthUserId}, 'staff.ord@gamerperu.pe', '{"provider":"email","providers":["email"]}', '{}', false, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email
     `;
 
     // Customer Profiles

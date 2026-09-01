@@ -186,7 +186,7 @@
   font-family: var(--font-heading);
   font-size: 18px;
   font-weight: 800;
-  color: var(--color-brand-primary, #b91c1c);
+  color: #b91c1c;
 }
 
 .nextStepsCard {
