@@ -1,12 +1,9 @@
 import React from "react";
 import { redirect } from "next/navigation";
-import {
-  getVerifiedAuthContext,
-  CANONICAL_STAFF_ROLES,
-  AuthorizationUnavailableError,
-} from "@/lib/auth/rbac";
+import { getVerifiedAuthContext, hasAdminShellAccess } from "@/lib/auth/rbac";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
+import { AdminError } from "@/components/admin/admin-error";
 
 export const dynamic = "force-dynamic";
 
@@ -18,14 +15,10 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
   }
 
   if (authContext.status === "ERROR") {
-    throw new AuthorizationUnavailableError();
+    return <AdminError />;
   }
 
-  const isStaff =
-    authContext.roles.some((role) => CANONICAL_STAFF_ROLES.includes(role)) &&
-    authContext.permissions.size > 0;
-
-  if (!isStaff) {
+  if (!hasAdminShellAccess(authContext)) {
     return <AdminForbidden email={authContext.email} />;
   }
 

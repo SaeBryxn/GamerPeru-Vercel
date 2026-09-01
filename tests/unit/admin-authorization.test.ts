@@ -6,6 +6,7 @@ import {
   requireAdminAccess,
   requirePermission,
   hasPermission,
+  hasAdminShellAccess,
 } from "@/lib/auth/rbac";
 
 // Hoisted mock state
@@ -185,5 +186,48 @@ describe("GP-022 — Admin Server Authoritative Access Tests", () => {
     await expect(requirePermission("orders:manage")).resolves.toBeDefined();
     await expect(requirePermission("catalog:manage")).rejects.toThrow(ForbiddenError);
     await expect(requirePermission("inventory:manage")).rejects.toThrow(ForbiddenError);
+  });
+
+  it("A13: hasAdminShellAccess returns true only when status is READY, staff role exists, and permissions > 0", () => {
+    expect(
+      hasAdminShellAccess({
+        status: "READY",
+        authUserId: "user-1",
+        email: "staff@gamerperu.com",
+        roles: ["SUPER_ADMIN"],
+        permissions: new Set(["catalog:manage"]),
+      })
+    ).toBe(true);
+
+    expect(
+      hasAdminShellAccess({
+        status: "READY",
+        authUserId: "user-2",
+        email: "customer@gamerperu.pe",
+        roles: ["CUSTOMER"],
+        permissions: new Set(),
+      })
+    ).toBe(false);
+
+    expect(
+      hasAdminShellAccess({
+        status: "UNAUTHENTICATED",
+        authUserId: null,
+        email: null,
+        roles: [],
+        permissions: new Set(),
+      })
+    ).toBe(false);
+
+    expect(
+      hasAdminShellAccess({
+        status: "ERROR",
+        error: "rbac_resolution_failed",
+        authUserId: null,
+        email: null,
+        roles: [],
+        permissions: new Set(),
+      })
+    ).toBe(false);
   });
 });

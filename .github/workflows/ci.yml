@@ -184,6 +184,9 @@ jobs:
       - name: Seed Deterministic Checkout E2E Fixtures
         run: node scripts/test/seed-checkout-e2e.mjs
 
+      - name: Seed Deterministic Admin E2E Fixtures
+        run: node scripts/test/seed-admin-e2e.mjs
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
@@ -192,6 +195,9 @@ jobs:
 
       - name: Run Real Payment E2E Tests
         run: pnpm test:payment:e2e
+
+      - name: Run Real Admin E2E Tests
+        run: pnpm test:admin:e2e
 
       - name: Upload Checkout E2E Artifacts on Failure
         if: failure()
@@ -206,6 +212,10 @@ jobs:
       - name: Clean Up Checkout E2E Fixtures
         if: always()
         run: node scripts/test/cleanup-checkout-e2e.mjs
+
+      - name: Clean Up Admin E2E Fixtures
+        if: always()
+        run: node scripts/test/cleanup-admin-e2e.mjs
 
       - name: Stop Local Supabase
         if: always()
@@ -265,6 +275,9 @@ jobs:
 
       - name: Run Dedicated Inventory Live Integration Tests
         run: pnpm test:inventory:live
+
+      - name: Run Dedicated Admin Live Integration Tests
+        run: pnpm test:admin:live
 
       - name: Stop Local Supabase
         if: always()

@@ -194,6 +194,22 @@ export const getVerifiedAuthContext = cache(async (): Promise<VerifiedAuthContex
 });
 
 /**
+ * Evaluates whether a resolved auth context qualifies for Admin shell entry.
+ * Single source of truth for the Admin shell entry policy:
+ * 1. Must be in READY state
+ * 2. Must possess at least one canonical staff role
+ * 3. Must possess at least one canonical permission
+ */
+export function hasAdminShellAccess(context: VerifiedAuthContext): boolean {
+  if (context.status !== "READY") {
+    return false;
+  }
+  const hasStaffRole = context.roles.some((role) => CANONICAL_STAFF_ROLES.includes(role));
+  const hasPermissions = context.permissions.size > 0;
+  return hasStaffRole && hasPermissions;
+}
+
+/**
  * Authoritative server guard for Admin layout and protected routes.
  * Takes ZERO caller-controlled identity arguments.
  *
@@ -214,10 +230,7 @@ export async function requireAdminAccess(): Promise<VerifiedAuthContextReady> {
     throw new AuthorizationUnavailableError();
   }
 
-  const hasStaffRole = context.roles.some((role) => CANONICAL_STAFF_ROLES.includes(role));
-  const hasPermissions = context.permissions.size > 0;
-
-  if (!hasStaffRole || !hasPermissions) {
+  if (!hasAdminShellAccess(context)) {
     throw new ForbiddenError("No tienes permisos de personal para acceder a la administración.");
   }
 
