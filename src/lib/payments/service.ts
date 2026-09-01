@@ -7,6 +7,7 @@ import {
   inventoryLedgerEntries,
   inventoryReservations,
   mediaAssets,
+  orders,
   outboxEvents,
   paymentProofUploadIntents,
   paymentSubmissions,
@@ -556,6 +557,50 @@ export async function submitPaymentProof(
           success: false as const,
           code: "NOT_AVAILABLE" as const,
           error: "Pedido no disponible.",
+        };
+      }
+
+      // Step C1: Lock and Re-read Order under global lock order (Payment -> Order)
+      const [lockedOrder] = await tx
+        .select()
+        .from(orders)
+        .where(eq(orders.id, payment.orderId))
+        .for("update")
+        .limit(1);
+
+      if (!lockedOrder) {
+        return {
+          success: false as const,
+          code: "NOT_AVAILABLE" as const,
+          error: "Pedido no disponible.",
+        };
+      }
+
+      if (lockedOrder.status === "CANCELLED") {
+        return {
+          success: false as const,
+          code: "INVALID_PAYMENT_STATE" as const,
+          error: "El pedido se encuentra cancelado y no admite comprobantes de pago.",
+        };
+      }
+
+      if (lockedOrder.status === "REFUNDED") {
+        return {
+          success: false as const,
+          code: "INVALID_PAYMENT_STATE" as const,
+          error: "El pedido se encuentra reembolsado.",
+        };
+      }
+
+      if (
+        lockedOrder.status === "CONFIRMED" ||
+        lockedOrder.status === "PROCESSING" ||
+        lockedOrder.status === "FULFILLED"
+      ) {
+        return {
+          success: false as const,
+          code: "INVALID_PAYMENT_STATE" as const,
+          error: "El pedido ya cuenta con pago procesado.",
         };
       }
 

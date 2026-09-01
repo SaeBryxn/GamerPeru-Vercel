@@ -5,6 +5,8 @@ import { pgEnum } from "drizzle-orm/pg-core";
  */
 export const paymentMethodTypeEnum = pgEnum("payment_method_type", ["MANUAL", "GATEWAY"]);
 
+export type PaymentMethodType = (typeof paymentMethodTypeEnum.enumValues)[number];
+
 /**
  * Gamer Perú — Canonical Payment Status Enum
  *
@@ -24,3 +26,5 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "REJECTED",
   "REFUNDED",
 ]);
+
+export type PaymentStatus = (typeof paymentStatusEnum.enumValues)[number];

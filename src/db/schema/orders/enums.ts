@@ -21,3 +21,5 @@ export const orderStatusEnum = pgEnum("order_status", [
   "EXPIRED",
   "REFUNDED",
 ]);
+
+export type OrderStatus = (typeof orderStatusEnum.enumValues)[number];
