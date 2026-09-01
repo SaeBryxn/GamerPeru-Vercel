@@ -90,6 +90,11 @@ GP-022 delivers the complete, authoritative **Admin Foundation** for Gamer Perú
 - `pnpm build` $\to$ **PASS** (Next.js Turbopack production build succeeded; `ƒ /admin` dynamically compiled)
 - `pnpm test:e2e` $\to$ **PASS** (147 Playwright tests passed, 0 failed)
 - `git diff --check` $\to$ **PASS** (Zero whitespace or formatting errors)
+- **GitHub Actions CI Run [#176](https://github.com/latamcreativa/GamerPeru/actions/runs/33549751212)** $\to$ **SUCCESS** (All 4 matrix jobs passed, Total Duration: 8m 26s)
+  - `Format, Typecheck, Lint, Test, Build & E2E` $\to$ **SUCCESS** (7m 43s)
+  - `Real Local Supabase Cart E2E` $\to$ **SUCCESS** (5m 24s)
+  - `Real Local Supabase Checkout E2E` $\to$ **SUCCESS** (8m 21s)
+  - `Real Local PostgreSQL / Supabase Checkout Runtime` $\to$ **SUCCESS** (3m 28s)
 
 ---
 
