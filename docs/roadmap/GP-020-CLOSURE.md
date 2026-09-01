@@ -2,7 +2,7 @@
 
 ## Status
 
-**CANONICAL CLOSURE CANDIDATE (GP-020 / CHK2-BR1 REMEDIATED — READY FOR EXTERNAL REVIEW)**
+**CANONICAL CLOSURE CANDIDATE (GP-020 / CHK2-BR1A REMEDIATED — READY FOR EXTERNAL REVIEW)**
 
 ---
 
@@ -15,12 +15,14 @@
   - `CHK1`: Architecture, State Machine & Scope Alignment `[REJECTED REQUIRES R1]`
   - `CHK1-R1`: Refund Persistence, Cross-Domain Locking & Authority Reconciliation `[APPROVED / CLOSED]`
   - `CHK2`: Order Management, Refund Persistence, Audit & Concurrency Implementation `[REJECTED REQUIRES BR1]`
-  - `CHK2-BR1`: Terminal Refund Inventory Integrity, Financial Idempotency & Real Cancel-vs-Submit Concurrency `[COMPLETED / READY FOR REVIEW]`
-  - `CHK3`: Controlled Hosted Supabase Migration 0011 Deployment & Physical Verification `[PENDING AUTHORIZATION]`
+  - `CHK2-BR1`: Terminal Refund Inventory Integrity, Financial Idempotency & Real Cancel-vs-Submit Concurrency `[REJECTED REQUIRES BR1A]`
+  - `CHK2-BR1A`: Pre-Shipment Refund Consistency & CI Evidence Repair `[COMPLETED / READY FOR REVIEW]`
+  - `CHK3`: Controlled Hosted Supabase Migration 0011 Deployment & Physical Verification `[NOT DEPLOYED / PENDING AUTHORIZATION]`
 - **Candidate Head Branch**: `main`
-- **BR1 Remediation Commits**:
+- **BR1 / BR1A Remediation Commits**:
   - `777d0af`: `fix(orders): preserve stock and refund idempotency`
   - `bca5f9b`: `test(orders): isolate integration suite state and fix assertions`
+  - `f618627`: `fix(orders): fail closed on terminal refund inventory state`
 
 ---
 
@@ -32,7 +34,7 @@ GP-020 delivers the complete order lifecycle management, refund tracking, audit 
    - Creates `audit_actor_type` enum (`'CUSTOMER'`, `'ADMIN'`, `'SYSTEM'`).
    - Creates `refunds` table with `id` (UUIDv7), `order_id` (FK `orders.id` ON DELETE RESTRICT), `payment_id` (FK `payments.id` ON DELETE RESTRICT), `amount_cents` (>0), `reason` (non-empty), `external_reference`, `actor_auth_user_id` (FK `auth.users(id)` ON DELETE SET NULL), and `created_at`.
    - Creates `audit_events` table with `id` (UUIDv7), `timestamp`, `actor_type`, `actor_id`, `action`, `target_type`, `target_id`, `metadata` (JSONB), `ip_address`, and `request_id`.
-   - Includes compound indexes on `refunds(payment_id, created_at)`, `refunds(order_id)`, `audit_events(target_type, target_id, timestamp)`, and `audit_events(action, timestamp)`. Zero modifications to legacy migrations 0000–0010. Migration 0011 remains FROZEN.
+   - Includes compound indexes on `refunds(payment_id, created_at)`, `refunds(order_id)`, `audit_events(target_type, target_id, timestamp)`, and `audit_events(action, timestamp)`. Zero modifications to legacy migrations 0000–0010. Migration 0011 remains byte-for-byte FROZEN (Hosted Supabase: `NOT DEPLOYED / PENDING CHK3`).
 2. **Deterministic Order Authority Resolution**: Single authoritative resolver `resolveAuthorizedOrder` handles authenticated customers, guest sessions via `guest_payment_access_grants` and `idempotency_keys`, and authorized staff (`orders:manage`). Unauthenticated or unauthorized callers receive unified, anti-oracle `NOT_AVAILABLE`.
 3. **Shared Global Lock Ordering**: Both payment submission and order management mutations follow a strictly unified hierarchical row lock order:
    $$\text{pg\_advisory\_xact\_lock} \longrightarrow \text{payments} \longrightarrow \text{orders} \longrightarrow \text{shipments} \longrightarrow \text{inventory\_reservations} \longrightarrow \text{inventory\_items}$$
@@ -41,15 +43,15 @@ GP-020 delivers the complete order lifecycle management, refund tracking, audit 
 5. **Staff Paid Pre-Shipment Cancellation & Full Refund**: Allows staff (`orders:manage`) to cancel confirmed orders prior to fulfillment. Accurately calculates remaining refundable balance ($\text{refundableRemainingCents} = \text{Payment.amount\_cents} - \text{Payment.refunded\_amount\_cents}$), inserts a `Refund` entity, updates `Payment.refunded_amount_cents`, sets both `Payment` and `Order` to `REFUNDED`, releases `ALLOCATED` stock with `ALLOCATION_RELEASED` ledger entries, emits `OrderCancelled` and `RefundIssued` outbox events, and logs an `AuditEvent`.
 6. **Partial & Full Refund Tracking (Fulfillment-Aware Inventory Reconciliation)**: Staff can record individual refund transactions against confirmed payments. Strictly bounds cumulative refunds ($0 < \text{amount\_cents} \le \text{Payment.amount\_cents} - \text{Payment.refunded\_amount\_cents}$), maintaining the invariant $\text{Payment.refunded\_amount\_cents} = \sum \text{Refund.amount\_cents}$.
    - Partial refunds: Zero inventory mutation.
-   - Pre-shipment full refunds (`Shipment = UNFULFILLED` or absent, `Order = CONFIRMED`, `Reservations = ALLOCATED`): Transitions `Order` and `Payment` to `REFUNDED`, releases `ALLOCATED` stock to `RELEASED`, decrements `inventory_items.quantity_allocated` (guarded by pre-validation underflow check), appends `ALLOCATION_RELEASED` ledger entry. `quantity_on_hand` remains unchanged.
+   - Pre-shipment full refunds (`Shipment = UNFULFILLED` or absent, `Order = CONFIRMED`): Classifies all reservations prior to mutation. Fails closed with `FULFILLMENT_INCONSISTENCY` if ANY reservation is `ACTIVE`, `VERIFICATION_HOLD`, or `CONSUMED`.
+   - Pre-shipment allowed states: `ALLOCATED` and/or `RELEASED`. Groups `ALLOCATED` reservations by `inventoryItemId`, validates aggregate allocation balances (`item.quantityAllocated >= totalReleaseQuantity`), releases reservations to `RELEASED`, decrements `inventory_items.quantity_allocated`, and appends `ALLOCATION_RELEASED` ledger entries. `quantity_on_hand` remains unchanged.
    - Post-shipment full refunds (`Shipment = SHIPPED | DELIVERED` or reservations `CONSUMED`): Transitions `Order` and `Payment` to `REFUNDED` financially without releasing or restocking physical inventory.
-   - Inconsistent fulfillment states fail closed with domain error code `FULFILLMENT_INCONSISTENCY`.
    - Inventory underflow aborts transaction with `INVENTORY_INVARIANT_VIOLATION` and rolls back all financial mutations.
 7. **Dedicated Paid Cancellation Fingerprint & Strict Idempotency**:
    - `computePaidOrderCancellationFingerprint`: Dedicated namespace `paid_order_cancellation_intent` binding `orderId`, normalized `reason`, normalized `externalReference` (or `NO_EXTERNAL_REF`), and `authorityBindingDigest`.
    - Preserves leading zeros in `externalReference` without numeric casting.
    - Reusing idempotency key with modified `externalReference` returns `IDEMPOTENCY_CONFLICT` while preserving exactly one persistent financial mutation. Exact duplicates return cached response with `replayed: true`.
-   - Authority binding check evaluated strictly before expiration and fingerprint validation in both fast-check and locked paths.
+   - Authority binding check evaluated strictly before expiration and fingerprint validation in both fast-check and locked paths, returning indistinguishable safe non-oracle `NOT_AVAILABLE` on mismatch.
 8. **Real Cancel-vs-Submit Concurrency Synchronization**:
    - Converted Scenarios E and F to genuine concurrent race executions via `Promise.all` coordinated by test synchronization hooks (`__setTestOrderTransactionHook`, `__setTestPaymentTransactionHook`), which remain strictly disabled and inert in production (`process.env.NODE_ENV === 'production'`).
    - Race A (cancellation wins): submission enters transaction, waits on row lock, observes `CANCELLED` order on unblock, returns `INVALID_PAYMENT_STATE` with zero submission records and zero outbox events.
@@ -71,25 +73,35 @@ GP-020 delivers the complete order lifecycle management, refund tracking, audit 
 
 ---
 
-## Canonical CI Execution Evidence (Run 33476446869)
+## Historical CI Run Execution (Run 33476446869)
 
 - **Head Commit**: `bca5f9b` (`test(orders): isolate integration suite state and fix assertions`)
 - **Workflow Run**: [Run 33476446869](https://github.com/latamcreativa/GamerPeru/actions/runs/33476446869)
 - **Status**: `completed`
+- **Conclusion**: `failure`
+- **Failure Cause**: `Real Local PostgreSQL / Supabase Checkout Runtime` job failed during Scenario K4 due to `payment.id` being undefined when selecting only `status, refunded_amount_cents` from `payments` table. Fully remediated in commit `f618627`.
+
+---
+
+## Canonical CI Execution Evidence (Run 33478866574)
+
+- **Head Commit**: `f618627` (`fix(orders): fail closed on terminal refund inventory state`)
+- **Workflow Run**: [Run 33478866574](https://github.com/latamcreativa/GamerPeru/actions/runs/33478866574)
+- **Status**: `completed`
 - **Conclusion**: `success` (100% Green across all 4 matrix jobs)
 - **Detailed Job Breakdown**:
-  1. `Format, Typecheck, Lint, Test, Build & E2E` (Job `99745163456`): **SUCCESS**
+  1. `Format, Typecheck, Lint, Test, Build & E2E` (Job `99763813415`): **SUCCESS** (7m 1s)
      - Formatting: Prettier check clean
      - TypeScript: 0 errors
      - ESLint: 0 errors, 0 warnings
      - Vitest Unit: 68 test files, 901 unit tests passing cleanly
      - Next.js Production Build: Compiled and static page generation complete
      - Playwright E2E & WCAG 2.1 AA: 142 scenarios passing
-  2. `Real Local PostgreSQL / Supabase Checkout Runtime` (Job `99745163478`): **SUCCESS**
+  2. `Real Local PostgreSQL / Supabase Checkout Runtime` (Job `99763813460`): **SUCCESS** (3m 22s)
      - Executes `pnpm test:checkout:live` (12 live checkout scenarios)
      - Executes `pnpm test:payment:live` (14 live payment scenarios)
-     - Executes `pnpm test:order:live` (33 live order management scenarios, including Scenarios A–Z, Timeline, E/F genuine races, J1/J2 paid idempotency, and K1–K4 fulfillment-aware full refunds and underflow rollbacks)
-  3. `Real Local Supabase Checkout E2E` (Job `99745163490`): **SUCCESS**
+     - Executes `pnpm test:order:live` (38 live order management scenarios: Scenarios A–Z, Timeline, E/F genuine races, J1/J2 paid idempotency, and K1–K9 pre-shipment classification, aggregate underflow, and atomic rollback tests — 0 failed, 0 skipped)
+  3. `Real Local Supabase Checkout E2E` (Job `99763813353`): **SUCCESS** (5m 15s)
      - Guest checkout, dynamic shipping, double-click idempotency, unauthorized view protection, and customer cancellation E2E scenarios passing with 0 WCAG AA accessibility violations.
-  4. `Real Local Supabase Cart E2E` (Job `99745163512`): **SUCCESS**
+  4. `Real Local Supabase Cart E2E` (Job `99763813450`): **SUCCESS** (6m 2s)
      - Anonymous, authenticated, merge, inventory reservation, and drawer UI scenarios passing.
