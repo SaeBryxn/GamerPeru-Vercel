@@ -1558,12 +1558,12 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
       `;
       const stagingKey = intentRow!.staging_object_key;
 
-      // Hook: during copy, set payment status to CANCELLED in DB
+      // Hook: during copy, set payment status to PAID in DB
       const mockStore = createMockS3Store({
         onCommand: async (cmdName) => {
           if (cmdName === "CopyObjectCommand") {
             await sqlClient`
-              UPDATE payments SET status = 'CANCELLED' WHERE id = ${auth.payment.id}
+              UPDATE payments SET status = 'PAID' WHERE id = ${auth.payment.id}
             `;
           }
         },
