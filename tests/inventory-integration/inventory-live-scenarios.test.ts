@@ -55,13 +55,20 @@ describe("GP-021 — Real Local PostgreSQL Inventory Engine & Concurrency Suite"
   const primaryLocCode = "LOC-LIM-01";
   const quarantineLocCode = "LOC-LIM-QUARANTINE";
 
+  const paymentMethodId = `${fixturePrefix}000000000020`;
+  const paymentInstructionId = `${fixturePrefix}000000000021`;
+  const paymentMethodCode = "TEST-INV-PAY";
+
   beforeAll(async () => {
     sqlClient = postgres(connectionString, { max: 10 });
 
     // Clean fixtures
-    await sqlClient`DELETE FROM inventory_ledger_entries WHERE actor_id LIKE 'test-%' OR reference_id LIKE 'TEST-%' OR reference_id LIKE 'PO-%' OR reference_id LIKE 'AUDIT-%' OR reference_id LIKE 'TR-%' OR reference_id LIKE 'REPAIR-%'`;
+    await sqlClient`DELETE FROM inventory_ledger_entries WHERE actor_id LIKE 'test-%' OR reference_id LIKE 'TEST-%' OR reference_id LIKE 'PO-%' OR reference_id LIKE 'AUDIT-%' OR reference_id LIKE 'TR-%' OR reference_id LIKE 'REPAIR-%' OR reference_id LIKE 'PAY-%'`;
     await sqlClient`DELETE FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
-    await sqlClient`DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
+    await sqlClient`DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%') OR payment_method_code = ${paymentMethodCode}`;
+    await sqlClient`UPDATE payment_method_configurations SET current_instruction_version_id = NULL WHERE id = ${paymentMethodId} OR code = ${paymentMethodCode}`;
+    await sqlClient`DELETE FROM payment_instruction_versions WHERE id = ${paymentInstructionId} OR payment_method_code = ${paymentMethodCode}`;
+    await sqlClient`DELETE FROM payment_method_configurations WHERE id = ${paymentMethodId} OR code = ${paymentMethodCode}`;
     await sqlClient`DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
     await sqlClient`DELETE FROM orders WHERE order_number LIKE 'GP-TEST-%'`;
     await sqlClient`DELETE FROM inventory_items WHERE variant_id IN (${variantId1}, ${variantId2})`;
@@ -84,14 +91,14 @@ describe("GP-021 — Real Local PostgreSQL Inventory Engine & Concurrency Suite"
 
     // Seed catalog fixtures
     await sqlClient`
-      INSERT INTO brands (id, name, slug, description, status, created_at, updated_at)
-      VALUES (${brandId}, 'Test Brand', 'test-brand-inv', 'Test Brand Description', 'PUBLISHED', NOW(), NOW())
+      INSERT INTO brands (id, name, slug, status, created_at, updated_at)
+      VALUES (${brandId}, 'Test Brand', 'test-brand-inv', 'PUBLISHED', NOW(), NOW())
       ON CONFLICT (slug) DO NOTHING;
     `;
 
     await sqlClient`
-      INSERT INTO categories (id, name, slug, description, display_order, status, created_at, updated_at)
-      VALUES (${categoryId}, 'Test Category', 'test-cat-inv', 'Test Category Description', 0, 'PUBLISHED', NOW(), NOW())
+      INSERT INTO categories (id, name, slug, display_order, status, created_at, updated_at)
+      VALUES (${categoryId}, 'Test Category', 'test-cat-inv', 0, 'PUBLISHED', NOW(), NOW())
       ON CONFLICT (slug) DO NOTHING;
     `;
 
@@ -102,11 +109,30 @@ describe("GP-021 — Real Local PostgreSQL Inventory Engine & Concurrency Suite"
     `;
 
     await sqlClient`
-      INSERT INTO product_variants (id, product_id, sku, title, price_cents, cost_cents, is_active, created_at, updated_at)
+      INSERT INTO product_variants (id, product_id, sku, title, price_cents, status, created_at, updated_at)
       VALUES 
-        (${variantId1}, ${productId}, 'SKU-INV-001', 'Black Edition', 15000, 8000, true, NOW(), NOW()),
-        (${variantId2}, ${productId}, 'SKU-INV-002', 'White Edition', 15000, 8000, true, NOW(), NOW())
+        (${variantId1}, ${productId}, 'SKU-INV-001', 'Black Edition', 15000, 'ACTIVE', NOW(), NOW()),
+        (${variantId2}, ${productId}, 'SKU-INV-002', 'White Edition', 15000, 'ACTIVE', NOW(), NOW())
       ON CONFLICT (sku) DO NOTHING;
+    `;
+
+    // Seed payment method fixtures
+    await sqlClient`
+      INSERT INTO payment_method_configurations (id, code, name, is_active, display_order, current_instruction_version_id, created_at, updated_at)
+      VALUES (${paymentMethodId}, ${paymentMethodCode}, 'Test Inv Pay', true, 1, NULL, NOW(), NOW())
+      ON CONFLICT (code) DO NOTHING;
+    `;
+
+    await sqlClient`
+      INSERT INTO payment_instruction_versions (id, payment_method_code, version_number, qr_media_id, recipient_name, account_identifier, instruction_text, is_active, created_at)
+      VALUES (${paymentInstructionId}, ${paymentMethodCode}, 1, NULL, 'Gamer Peru SAC', '999888111', 'Test Instruction', true, NOW())
+      ON CONFLICT (id) DO NOTHING;
+    `;
+
+    await sqlClient`
+      UPDATE payment_method_configurations 
+      SET current_instruction_version_id = ${paymentInstructionId} 
+      WHERE id = ${paymentMethodId};
     `;
   });
 
@@ -116,9 +142,12 @@ describe("GP-021 — Real Local PostgreSQL Inventory Engine & Concurrency Suite"
 
   afterAll(async () => {
     // Cleanup
-    await sqlClient`DELETE FROM inventory_ledger_entries WHERE actor_id LIKE 'test-%' OR reference_id LIKE 'TEST-%' OR reference_id LIKE 'PO-%' OR reference_id LIKE 'AUDIT-%' OR reference_id LIKE 'TR-%' OR reference_id LIKE 'REPAIR-%'`;
+    await sqlClient`DELETE FROM inventory_ledger_entries WHERE actor_id LIKE 'test-%' OR reference_id LIKE 'TEST-%' OR reference_id LIKE 'PO-%' OR reference_id LIKE 'AUDIT-%' OR reference_id LIKE 'TR-%' OR reference_id LIKE 'REPAIR-%' OR reference_id LIKE 'PAY-%'`;
     await sqlClient`DELETE FROM inventory_reservations WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
-    await sqlClient`DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
+    await sqlClient`DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%') OR payment_method_code = ${paymentMethodCode}`;
+    await sqlClient`UPDATE payment_method_configurations SET current_instruction_version_id = NULL WHERE id = ${paymentMethodId} OR code = ${paymentMethodCode}`;
+    await sqlClient`DELETE FROM payment_instruction_versions WHERE id = ${paymentInstructionId} OR payment_method_code = ${paymentMethodCode}`;
+    await sqlClient`DELETE FROM payment_method_configurations WHERE id = ${paymentMethodId} OR code = ${paymentMethodCode}`;
     await sqlClient`DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE order_number LIKE 'GP-TEST-%')`;
     await sqlClient`DELETE FROM orders WHERE order_number LIKE 'GP-TEST-%'`;
     await sqlClient`DELETE FROM inventory_items WHERE variant_id IN (${variantId1}, ${variantId2})`;
@@ -184,8 +213,8 @@ describe("GP-021 — Real Local PostgreSQL Inventory Engine & Concurrency Suite"
     `;
 
     await sqlClient`
-      INSERT INTO payments (id, order_id, amount_cents, status, created_at, updated_at)
-      VALUES (${paymentId}, ${orderId}, 15000, 'UNPAID', NOW(), NOW());
+      INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, status, created_at, updated_at)
+      VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${paymentInstructionId}, 15000, 'UNPAID', NOW(), NOW());
     `;
 
     const expiresAt = params.expiresAt ?? new Date(Date.now() + 30 * 60 * 1000);
