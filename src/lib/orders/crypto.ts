@@ -49,6 +49,32 @@ export function computeOrderCancellationFingerprint(
 }
 
 /**
+ * Computes a domain-separated HMAC-SHA256 request fingerprint for paid order cancellation idempotency.
+ * Binds orderId, normalizedReason, externalReference (or explicit NO_EXTERNAL_REF sentinel), and authorityBindingDigest.
+ * Preserves leading zeroes and special characters in externalReference without numeric casting.
+ */
+export function computePaidOrderCancellationFingerprint(
+  params: {
+    orderId: string;
+    normalizedReason: string;
+    externalReference: string | null;
+    authorityBindingDigest: string;
+  },
+  hmacSecret: string
+): string {
+  const content = [
+    params.orderId,
+    params.normalizedReason,
+    params.externalReference ?? "NO_EXTERNAL_REF",
+    params.authorityBindingDigest,
+  ].join("|");
+
+  return createHmac("sha256", hmacSecret)
+    .update(`paid_order_cancellation_intent:${content}`)
+    .digest("hex");
+}
+
+/**
  * Computes a domain-separated HMAC-SHA256 request fingerprint for refund recording idempotency.
  */
 export function computeRefundFingerprint(

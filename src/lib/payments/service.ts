@@ -223,6 +223,17 @@ export async function createPaymentProofUploadIntent(
   };
 }
 
+// Test-only concurrency synchronization hook (strictly inert in production)
+let testPaymentTransactionHook:
+  ((stage: "before_lock" | "after_lock" | "before_commit") => Promise<void>) | null = null;
+
+export function __setTestPaymentTransactionHook(
+  hook: ((stage: "before_lock" | "after_lock" | "before_commit") => Promise<void>) | null
+) {
+  if (process.env.NODE_ENV === "production") return;
+  testPaymentTransactionHook = hook;
+}
+
 export type SubmitPaymentProofInput = {
   orderNumber: string;
   submissionAttemptId: string;
@@ -545,6 +556,10 @@ export async function submitPaymentProof(
       }
 
       // Step C: Lock Payment row
+      if (testPaymentTransactionHook) {
+        await testPaymentTransactionHook("before_lock");
+      }
+
       const [lockedPayment] = await tx
         .select()
         .from(payments)
@@ -567,6 +582,10 @@ export async function submitPaymentProof(
         .where(eq(orders.id, payment.orderId))
         .for("update")
         .limit(1);
+
+      if (testPaymentTransactionHook) {
+        await testPaymentTransactionHook("after_lock");
+      }
 
       if (!lockedOrder) {
         return {
@@ -856,6 +875,10 @@ export async function submitPaymentProof(
         responsePayload,
         expiresAt: idempotencyExpiresAt,
       });
+
+      if (testPaymentTransactionHook) {
+        await testPaymentTransactionHook("before_commit");
+      }
 
       return {
         success: true as const,

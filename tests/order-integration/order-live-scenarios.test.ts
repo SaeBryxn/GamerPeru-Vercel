@@ -9,8 +9,9 @@ import {
   getOrderTimeline,
   recordRefund,
   applyTerminalPaymentRejectionConsequences,
+  __setTestOrderTransactionHook,
 } from "@/lib/orders/service";
-import { submitPaymentProof } from "@/lib/payments/service";
+import { submitPaymentProof, __setTestPaymentTransactionHook } from "@/lib/payments/service";
 import { db } from "@/db";
 import { generateSecurePaymentSessionToken } from "@/lib/payments/crypto";
 
@@ -267,6 +268,8 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     currentMockCartCookie = null;
     currentMockPaymentSessionCookie = null;
     currentMockIdentity = { success: false };
+    __setTestOrderTransactionHook(null);
+    __setTestPaymentTransactionHook(null);
   });
 
   afterAll(async () => {
@@ -478,70 +481,145 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     expect(alreadyCancelledCount).toBe(1);
   });
 
-  // Scenario E: Cancellation wins vs submitPaymentProof
-  it("Scenario E: when cancellation wins, submitPaymentProof observes CANCELLED Order and returns INVALID_PAYMENT_STATE", async () => {
+  // Scenario E: Real concurrent race: cancellation wins vs submitPaymentProof
+  it("Scenario E: actual concurrent race: cancellation wins, submitPaymentProof observes CANCELLED Order and returns INVALID_PAYMENT_STATE", async () => {
     const { orderNumber } = await createTestOrder({ isAuth: true });
 
-    // Cancel order first
-    const cancelRes = await cancelUnpaidOrder({
+    let resolveCancelAcquiredLock: () => void;
+    const cancelAcquiredLock = new Promise<void>((resolve) => {
+      resolveCancelAcquiredLock = resolve;
+    });
+
+    let resolveSubmitEntered: () => void;
+    const submitEntered = new Promise<void>((resolve) => {
+      resolveSubmitEntered = resolve;
+    });
+
+    __setTestOrderTransactionHook(async (stage) => {
+      if (stage === "after_lock") {
+        resolveCancelAcquiredLock();
+        // Wait for submit to enter its transaction before allowing cancel to commit
+        await submitEntered;
+      }
+    });
+
+    __setTestPaymentTransactionHook(async (stage) => {
+      if (stage === "before_lock") {
+        resolveSubmitEntered();
+      }
+    });
+
+    const cancelPromise = cancelUnpaidOrder({
       orderNumber,
       cancellationAttemptId: generateUuidV7(),
+      reason: "Cancelación concurrente cliente",
     });
+
+    const submitPromise = cancelAcquiredLock.then(() =>
+      submitPaymentProof({
+        orderNumber,
+        submissionAttemptId: generateUuidV7(),
+        operationCode: "123456",
+      })
+    );
+
+    const [cancelRes, submitRes] = await Promise.all([cancelPromise, submitPromise]);
+
     expect(cancelRes.success).toBe(true);
-
-    // Try submit payment proof
-    const submitRes = await submitPaymentProof({
-      orderNumber,
-      submissionAttemptId: generateUuidV7(),
-      operationCode: "123456",
-    });
-
     expect(submitRes.success).toBe(false);
     if (!submitRes.success) {
       expect(submitRes.code).toBe("INVALID_PAYMENT_STATE");
     }
 
-    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
-    const [dbPayment] = await sqlClient`SELECT * FROM payments WHERE order_id = ${dbOrder!.id}`;
+    const [dbOrder] =
+      await sqlClient`SELECT id, status FROM orders WHERE order_number = ${orderNumber}`;
+    expect(dbOrder!.status).toBe("CANCELLED");
+
+    const [dbPayment] =
+      await sqlClient`SELECT status FROM payments WHERE order_id = ${dbOrder!.id}`;
     expect(dbPayment!.status).toBe("UNPAID");
+
+    const reservations = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${dbOrder!.id}
+    `;
+    expect(reservations.every((r) => r.status === "RELEASED")).toBe(true);
 
     const submissions =
       await sqlClient`SELECT * FROM payment_submissions WHERE payment_id = ${dbPayment!.id}`;
     expect(submissions.length).toBe(0);
+
+    const outboxSubmissions = await sqlClient`
+      SELECT * FROM outbox_events WHERE aggregate_id = ${dbPayment!.id} AND event_name = 'PaymentSubmitted'
+    `;
+    expect(outboxSubmissions.length).toBe(0);
   });
 
-  // Scenario F: submitPaymentProof wins vs cancellation
-  it("Scenario F: when submitPaymentProof wins, cancellation returns PAYMENT_REVIEW_IN_PROGRESS", async () => {
+  // Scenario F: Real concurrent race: submitPaymentProof wins vs cancellation
+  it("Scenario F: actual concurrent race: submitPaymentProof wins, cancellation returns PAYMENT_REVIEW_IN_PROGRESS", async () => {
     const { orderNumber } = await createTestOrder({ isAuth: true });
 
-    // Submit payment proof first
-    const submitRes = await submitPaymentProof({
+    let resolveSubmitAcquiredLock: () => void;
+    const submitAcquiredLock = new Promise<void>((resolve) => {
+      resolveSubmitAcquiredLock = resolve;
+    });
+
+    let resolveCancelEntered: () => void;
+    const cancelEntered = new Promise<void>((resolve) => {
+      resolveCancelEntered = resolve;
+    });
+
+    __setTestPaymentTransactionHook(async (stage) => {
+      if (stage === "after_lock") {
+        resolveSubmitAcquiredLock();
+        await cancelEntered;
+      }
+    });
+
+    __setTestOrderTransactionHook(async (stage) => {
+      if (stage === "before_lock") {
+        resolveCancelEntered();
+      }
+    });
+
+    const submitPromise = submitPaymentProof({
       orderNumber,
       submissionAttemptId: generateUuidV7(),
       operationCode: "654321",
     });
+
+    const cancelPromise = submitAcquiredLock.then(() =>
+      cancelUnpaidOrder({
+        orderNumber,
+        cancellationAttemptId: generateUuidV7(),
+        reason: "Cancelación tardía concurrente",
+      })
+    );
+
+    const [submitRes, cancelRes] = await Promise.all([submitPromise, cancelPromise]);
+
     expect(submitRes.success).toBe(true);
-
-    // Try cancel order
-    const cancelRes = await cancelUnpaidOrder({
-      orderNumber,
-      cancellationAttemptId: generateUuidV7(),
-    });
-
     expect(cancelRes.success).toBe(false);
     if (!cancelRes.success) {
       expect(cancelRes.code).toBe("PAYMENT_REVIEW_IN_PROGRESS");
     }
 
     const [dbOrder] =
-      await sqlClient`SELECT status FROM orders WHERE order_number = ${orderNumber}`;
+      await sqlClient`SELECT id, status FROM orders WHERE order_number = ${orderNumber}`;
     expect(dbOrder!.status).toBe("PENDING");
 
+    const [dbPayment] =
+      await sqlClient`SELECT status FROM payments WHERE order_id = ${dbOrder!.id}`;
+    expect(dbPayment!.status).toBe("SUBMITTED");
+
     const reservations = await sqlClient`
-      SELECT status FROM inventory_reservations 
-      WHERE order_id = (SELECT id FROM orders WHERE order_number = ${orderNumber})
+      SELECT status FROM inventory_reservations WHERE order_id = ${dbOrder!.id}
     `;
-    expect(reservations[0]!.status).toBe("VERIFICATION_HOLD");
+    expect(reservations.every((r) => r.status === "VERIFICATION_HOLD")).toBe(true);
+
+    const outboxCancellations = await sqlClient`
+      SELECT * FROM outbox_events WHERE aggregate_id = ${dbOrder!.id} AND event_name = 'OrderCancelled'
+    `;
+    expect(outboxCancellations.length).toBe(0);
   });
 
   // Scenario G: Valid EXPIRED late PaymentSubmission regression
@@ -685,6 +763,95 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     expect(sumRefunds).toBe(31500);
   });
 
+  // Scenario J1: Paid cancellation same key + changed externalReference returns IDEMPOTENCY_CONFLICT
+  it("Scenario J1: paid cancellation same key + changed externalReference returns IDEMPOTENCY_CONFLICT and leaves one financial mutation", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_reservations SET status = 'ALLOCATED' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_items SET quantity_reserved = 0, quantity_allocated = 2 WHERE id = ${inventoryItemId1}`;
+
+    setStaffAuth();
+    const attemptId = generateUuidV7();
+
+    const res1 = await cancelPaidPreShipmentAndRefund({
+      orderNumber,
+      cancellationAttemptId: attemptId,
+      reason: "Cancelación 1",
+      externalReference: "BKP-REF-ORIGINAL",
+    });
+    expect(res1.success).toBe(true);
+
+    const res2 = await cancelPaidPreShipmentAndRefund({
+      orderNumber,
+      cancellationAttemptId: attemptId,
+      reason: "Cancelación 1",
+      externalReference: "BKP-REF-CHANGED", // Changed external reference!
+    });
+    expect(res2.success).toBe(false);
+    if (!res2.success) {
+      expect(res2.code).toBe("IDEMPOTENCY_CONFLICT");
+    }
+
+    // Exactly one financial mutation exists
+    const refundsList = await sqlClient`SELECT * FROM refunds WHERE order_id = ${dbOrder!.id}`;
+    expect(refundsList.length).toBe(1);
+    expect(refundsList[0]!.external_reference).toBe("BKP-REF-ORIGINAL");
+
+    const outboxEvents = await sqlClient`
+      SELECT event_name FROM outbox_events 
+      WHERE aggregate_id = ${dbOrder!.id} AND event_name = 'OrderCancelled'
+    `;
+    expect(outboxEvents.length).toBe(1);
+
+    const auditList = await sqlClient`
+      SELECT * FROM audit_events WHERE target_id = ${dbOrder!.id} AND action = 'orders:refund_and_cancel'
+    `;
+    expect(auditList.length).toBe(1);
+  });
+
+  // Scenario J2: Same paid cancellation exact retry still replays
+  it("Scenario J2: same paid cancellation exact retry still replays", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_reservations SET status = 'ALLOCATED' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_items SET quantity_reserved = 0, quantity_allocated = 2 WHERE id = ${inventoryItemId1}`;
+
+    setStaffAuth();
+    const attemptId = generateUuidV7();
+
+    const res1 = await cancelPaidPreShipmentAndRefund({
+      orderNumber,
+      cancellationAttemptId: attemptId,
+      reason: "Cancelación idéntica",
+      externalReference: "BKP-SAME-REF",
+    });
+    expect(res1.success).toBe(true);
+    if (res1.success) {
+      expect(res1.replayed).toBe(false);
+    }
+
+    const res2 = await cancelPaidPreShipmentAndRefund({
+      orderNumber,
+      cancellationAttemptId: attemptId,
+      reason: "Cancelación idéntica",
+      externalReference: "BKP-SAME-REF",
+    });
+    expect(res2.success).toBe(true);
+    if (res2.success) {
+      expect(res2.replayed).toBe(true);
+      expect(res2.refundedAmountCents).toBe(31500);
+    }
+
+    const refundsList = await sqlClient`SELECT * FROM refunds WHERE order_id = ${dbOrder!.id}`;
+    expect(refundsList.length).toBe(1);
+  });
+
   // Scenario K: Partial refund: durable Refund, no inventory release
   it("Scenario K: partial refund persists Refund row and leaves inventory allocations unchanged", async () => {
     const { orderNumber } = await createTestOrder({ isAuth: true });
@@ -714,6 +881,233 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     const [item1] =
       await sqlClient`SELECT quantity_allocated FROM inventory_items WHERE id = ${inventoryItemId1}`;
     expect(item1!.quantity_allocated).toBe(2); // Unchanged!
+  });
+
+  // Scenario K1: recordRefund final full pre-shipment refund releases ALLOCATED stock
+  it("Scenario K1: recordRefund final full pre-shipment refund releases ALLOCATED stock", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_reservations SET status = 'ALLOCATED' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_items SET quantity_reserved = 0, quantity_allocated = 2, quantity_on_hand = 10 WHERE id = ${inventoryItemId1}`;
+
+    setStaffAuth();
+
+    const refundRes = await recordRefund({
+      orderNumber,
+      refundAttemptId: generateUuidV7(),
+      amountCents: 31500,
+      reason: "Reembolso total pre-despacho",
+      externalReference: "REF-FULL-1",
+    });
+
+    expect(refundRes.success).toBe(true);
+    if (refundRes.success) {
+      expect(refundRes.paymentStatus).toBe("REFUNDED");
+      expect(refundRes.orderStatus).toBe("REFUNDED");
+      expect(refundRes.totalRefundedCents).toBe(31500);
+    }
+
+    const [updatedOrder] = await sqlClient`SELECT status FROM orders WHERE id = ${dbOrder!.id}`;
+    expect(updatedOrder!.status).toBe("REFUNDED");
+
+    const [updatedPayment] =
+      await sqlClient`SELECT status, refunded_amount_cents FROM payments WHERE order_id = ${dbOrder!.id}`;
+    expect(updatedPayment!.status).toBe("REFUNDED");
+    expect(updatedPayment!.refunded_amount_cents).toBe(31500);
+
+    const reservations = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${dbOrder!.id}
+    `;
+    expect(reservations.every((r) => r.status === "RELEASED")).toBe(true);
+
+    const [item1] =
+      await sqlClient`SELECT quantity_allocated, quantity_on_hand FROM inventory_items WHERE id = ${inventoryItemId1}`;
+    expect(item1!.quantity_allocated).toBe(0); // Decremented
+    expect(item1!.quantity_on_hand).toBe(10); // Unchanged
+
+    const ledgerEntries = await sqlClient`
+      SELECT * FROM inventory_ledger_entries 
+      WHERE reference_id = ${dbOrder!.id} AND movement_type = 'ALLOCATION_RELEASED'
+    `;
+    expect(ledgerEntries.length).toBe(1);
+    expect(ledgerEntries[0]!.allocated_delta).toBe(-2);
+    expect(ledgerEntries[0]!.on_hand_delta).toBe(0);
+
+    const refundRows = await sqlClient`SELECT * FROM refunds WHERE order_id = ${dbOrder!.id}`;
+    expect(refundRows.length).toBe(1);
+    expect(refundRows[0]!.amount_cents).toBe(31500);
+    expect(refundRows[0]!.external_reference).toBe("REF-FULL-1");
+  });
+
+  // Scenario K2: recordRefund final full refund after prior partial refund releases only inventory once
+  it("Scenario K2: recordRefund final full refund after prior partial refund releases only inventory once and preserves Refund SUM invariant", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_reservations SET status = 'ALLOCATED' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_items SET quantity_reserved = 0, quantity_allocated = 2 WHERE id = ${inventoryItemId1}`;
+
+    setStaffAuth();
+
+    // 1. Partial refund of 10000 cents: zero stock release
+    const partialRes = await recordRefund({
+      orderNumber,
+      refundAttemptId: generateUuidV7(),
+      amountCents: 10000,
+      reason: "Reembolso parcial",
+      externalReference: "REF-PARTIAL",
+    });
+    expect(partialRes.success).toBe(true);
+    if (partialRes.success) {
+      expect(partialRes.paymentStatus).toBe("PAID");
+      expect(partialRes.orderStatus).toBe("CONFIRMED");
+    }
+
+    const [itemAfterPartial] =
+      await sqlClient`SELECT quantity_allocated FROM inventory_items WHERE id = ${inventoryItemId1}`;
+    expect(itemAfterPartial!.quantity_allocated).toBe(2); // Still allocated
+
+    // 2. Final refund of 21500 cents: releases allocated stock
+    const finalRes = await recordRefund({
+      orderNumber,
+      refundAttemptId: generateUuidV7(),
+      amountCents: 21500,
+      reason: "Reembolso saldo restante",
+      externalReference: "REF-FINAL",
+    });
+    expect(finalRes.success).toBe(true);
+    if (finalRes.success) {
+      expect(finalRes.paymentStatus).toBe("REFUNDED");
+      expect(finalRes.orderStatus).toBe("REFUNDED");
+      expect(finalRes.totalRefundedCents).toBe(31500);
+    }
+
+    const [itemAfterFinal] =
+      await sqlClient`SELECT quantity_allocated FROM inventory_items WHERE id = ${inventoryItemId1}`;
+    expect(itemAfterFinal!.quantity_allocated).toBe(0); // Released now
+
+    const reservations = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${dbOrder!.id}
+    `;
+    expect(reservations.every((r) => r.status === "RELEASED")).toBe(true);
+
+    const ledgerEntries = await sqlClient`
+      SELECT * FROM inventory_ledger_entries 
+      WHERE reference_id = ${dbOrder!.id} AND movement_type = 'ALLOCATION_RELEASED'
+    `;
+    expect(ledgerEntries.length).toBe(1); // Exactly once across both refunds
+
+    const refundRows = await sqlClient`SELECT * FROM refunds WHERE order_id = ${dbOrder!.id}`;
+    expect(refundRows.length).toBe(2);
+    const sumRefunds = refundRows.reduce((sum, r) => sum + r.amount_cents, 0);
+    expect(sumRefunds).toBe(31500);
+  });
+
+  // Scenario K3: recordRefund full refund after shipment/consumption does not restock
+  it("Scenario K3: recordRefund full refund after shipment/consumption does not restock", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_reservations SET status = 'CONSUMED' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_items SET quantity_reserved = 0, quantity_allocated = 0, quantity_on_hand = 10 WHERE id = ${inventoryItemId1}`;
+
+    // Add SHIPPED shipment
+    await sqlClient`
+      INSERT INTO shipments (id, order_id, status, tracking_number, created_at, updated_at)
+      VALUES (${generateUuidV7()}, ${dbOrder!.id}, 'SHIPPED', 'TRACK-123456', NOW(), NOW())
+    `;
+
+    setStaffAuth();
+
+    const refundRes = await recordRefund({
+      orderNumber,
+      refundAttemptId: generateUuidV7(),
+      amountCents: 31500,
+      reason: "Reembolso comercial post-entrega",
+    });
+
+    expect(refundRes.success).toBe(true);
+    if (refundRes.success) {
+      expect(refundRes.paymentStatus).toBe("REFUNDED");
+      expect(refundRes.orderStatus).toBe("REFUNDED");
+    }
+
+    const [item] =
+      await sqlClient`SELECT quantity_on_hand, quantity_allocated, quantity_reserved FROM inventory_items WHERE id = ${inventoryItemId1}`;
+    expect(item!.quantity_on_hand).toBe(10); // Not increased (no fake restock)
+    expect(item!.quantity_allocated).toBe(0); // Not decremented further
+    expect(item!.quantity_reserved).toBe(0);
+
+    const reservations = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${dbOrder!.id}
+    `;
+    expect(reservations.every((r) => r.status === "CONSUMED")).toBe(true); // Remains CONSUMED
+
+    const ledgerEntries = await sqlClient`
+      SELECT * FROM inventory_ledger_entries 
+      WHERE reference_id = ${dbOrder!.id} AND movement_type = 'ALLOCATION_RELEASED'
+    `;
+    expect(ledgerEntries.length).toBe(0); // Zero fake release entries
+  });
+
+  // Scenario K4: terminal refund allocation underflow rolls back everything
+  it("Scenario K4: terminal refund allocation underflow rolls back everything", async () => {
+    const { orderNumber } = await createTestOrder({ isAuth: true });
+    const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
+
+    await sqlClient`UPDATE orders SET status = 'CONFIRMED' WHERE id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'PAID' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE inventory_reservations SET status = 'ALLOCATED' WHERE order_id = ${dbOrder!.id}`;
+    // Force underflow: item quantity_allocated = 1, but reservation requires 2
+    await sqlClient`UPDATE inventory_items SET quantity_reserved = 0, quantity_allocated = 1 WHERE id = ${inventoryItemId1}`;
+
+    setStaffAuth();
+
+    const refundRes = await recordRefund({
+      orderNumber,
+      refundAttemptId: generateUuidV7(),
+      amountCents: 31500,
+      reason: "Reembolso total con underflow",
+    });
+
+    expect(refundRes.success).toBe(false);
+    if (!refundRes.success) {
+      expect(refundRes.code).toBe("INVENTORY_INVARIANT_VIOLATION");
+    }
+
+    // ACID Rollback verification
+    const [order] = await sqlClient`SELECT status FROM orders WHERE id = ${dbOrder!.id}`;
+    expect(order!.status).toBe("CONFIRMED");
+
+    const [payment] =
+      await sqlClient`SELECT status, refunded_amount_cents FROM payments WHERE order_id = ${dbOrder!.id}`;
+    expect(payment!.status).toBe("PAID");
+    expect(payment!.refunded_amount_cents).toBe(0);
+
+    const refundsList = await sqlClient`SELECT * FROM refunds WHERE order_id = ${dbOrder!.id}`;
+    expect(refundsList.length).toBe(0);
+
+    const reservations = await sqlClient`
+      SELECT status FROM inventory_reservations WHERE order_id = ${dbOrder!.id}
+    `;
+    expect(reservations.every((r) => r.status === "ALLOCATED")).toBe(true);
+
+    const ledgerEntries = await sqlClient`
+      SELECT * FROM inventory_ledger_entries WHERE reference_id = ${dbOrder!.id}
+    `;
+    expect(ledgerEntries.length).toBe(0);
+
+    const outboxEvents = await sqlClient`
+      SELECT * FROM outbox_events WHERE aggregate_id = ${payment!.id} AND event_name = 'RefundIssued'
+    `;
+    expect(outboxEvents.length).toBe(0);
   });
 
   // Scenario L: Concurrent different-key refunds never exceed Payment.amount_cents

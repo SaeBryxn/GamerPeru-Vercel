@@ -93,6 +93,8 @@ export type RecordRefundResult =
         | "REFUND_EXCEEDS_PAID_AMOUNT"
         | "IDEMPOTENCY_CONFLICT"
         | "IDEMPOTENCY_EXPIRED"
+        | "INVENTORY_INVARIANT_VIOLATION"
+        | "FULFILLMENT_INCONSISTENCY"
         | "SYSTEM_ERROR";
       error: string;
     };

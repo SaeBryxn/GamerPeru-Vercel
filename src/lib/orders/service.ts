@@ -19,7 +19,9 @@ import {
 import { generateUuidV7 } from "@/db/utils/uuid";
 import { getOrderManagementConfig } from "./config";
 import {
+  computeOrderAuthorityBindingDigest,
   computeOrderCancellationFingerprint,
+  computePaidOrderCancellationFingerprint,
   computeRefundFingerprint,
   createOrderAdvisoryLockKey,
 } from "./crypto";
@@ -41,6 +43,17 @@ import type {
   TerminalRejectionInput,
 } from "./types";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
+
+// Test-only concurrency synchronization hook (strictly inert in production)
+let testOrderTransactionHook:
+  ((stage: "before_lock" | "after_lock" | "before_commit") => Promise<void>) | null = null;
+
+export function __setTestOrderTransactionHook(
+  hook: ((stage: "before_lock" | "after_lock" | "before_commit") => Promise<void>) | null
+) {
+  if (process.env.NODE_ENV === "production") return;
+  testOrderTransactionHook = hook;
+}
 
 /**
  * Cancels an eligible unpaid order (PENDING + UNPAID).
@@ -193,6 +206,10 @@ export async function cancelUnpaidOrder(
       }
 
       // Step C: Global Lock Sequence: 1. Payment -> 2. Order -> 3. Shipment
+      if (testOrderTransactionHook) {
+        await testOrderTransactionHook("before_lock");
+      }
+
       const [lockedPayment] = await tx
         .select()
         .from(payments)
@@ -214,6 +231,10 @@ export async function cancelUnpaidOrder(
         .where(eq(orders.id, order.id))
         .for("update")
         .limit(1);
+
+      if (testOrderTransactionHook) {
+        await testOrderTransactionHook("after_lock");
+      }
 
       if (!lockedOrder) {
         return {
@@ -421,6 +442,10 @@ export async function cancelUnpaidOrder(
           .onConflictDoNothing({ target: idempotencyKeys.idempotencyKey });
       }
 
+      if (testOrderTransactionHook) {
+        await testOrderTransactionHook("before_commit");
+      }
+
       return {
         success: true as const,
         orderNumber: order.orderNumber,
@@ -539,11 +564,15 @@ export async function cancelPaidPreShipmentAndRefund(
   const { idempotencyTtlMinutes, hmacSecret } = configResult.config;
 
   const namespacedKey = `ORDER_CANCELLATION:${input.cancellationAttemptId}`;
-  const authorityBindingDigest = `staff:${staffAuthUserId}`;
-  const requestFingerprint = computeOrderCancellationFingerprint(
+  const authorityBindingDigest = computeOrderAuthorityBindingDigest(
+    { type: "STAFF", authUserId: staffAuthUserId },
+    hmacSecret
+  );
+  const requestFingerprint = computePaidOrderCancellationFingerprint(
     {
       orderId: order.id,
       normalizedReason,
+      externalReference: normalizedExtRef,
       authorityBindingDigest,
     },
     hmacSecret
@@ -558,6 +587,15 @@ export async function cancelPaidPreShipmentAndRefund(
 
   if (existingIdempotency) {
     const lookupNow = new Date();
+    // 1. Authority Binding Check (Evaluated FIRST)
+    if (existingIdempotency.authorityBindingDigest !== authorityBindingDigest) {
+      return {
+        success: false,
+        code: "UNAUTHORIZED",
+        error: "No tienes permisos de administración para este intento.",
+      };
+    }
+    // 2. Expiration Check (Evaluated BEFORE fingerprint)
     if (existingIdempotency.expiresAt <= lookupNow) {
       return {
         success: false,
@@ -565,6 +603,7 @@ export async function cancelPaidPreShipmentAndRefund(
         error: "El intento de cancelación expiró.",
       };
     }
+    // 3. Request Fingerprint Check
     if (existingIdempotency.requestFingerprint !== requestFingerprint) {
       return {
         success: false,
@@ -572,6 +611,7 @@ export async function cancelPaidPreShipmentAndRefund(
         error: "Conflicto de idempotencia: el contenido de la cancelación ha cambiado.",
       };
     }
+    // 4. Committed Replay
     if (existingIdempotency.responsePayload) {
       const payload = existingIdempotency.responsePayload as {
         orderNumber: string;
@@ -604,6 +644,15 @@ export async function cancelPaidPreShipmentAndRefund(
         .limit(1);
 
       if (lockedIdempotency) {
+        // 1. Authority Binding Check
+        if (lockedIdempotency.authorityBindingDigest !== authorityBindingDigest) {
+          return {
+            success: false as const,
+            code: "UNAUTHORIZED" as const,
+            error: "No tienes permisos de administración para este intento.",
+          };
+        }
+        // 2. Expiration Check
         if (lockedIdempotency.expiresAt <= txNow) {
           return {
             success: false as const,
@@ -611,11 +660,12 @@ export async function cancelPaidPreShipmentAndRefund(
             error: "El intento de cancelación expiró.",
           };
         }
+        // 3. Request Fingerprint Check
         if (lockedIdempotency.requestFingerprint !== requestFingerprint) {
           return {
             success: false as const,
             code: "IDEMPOTENCY_CONFLICT" as const,
-            error: "Conflicto de idempotencia.",
+            error: "Conflicto de idempotencia: el contenido de la cancelación ha cambiado.",
           };
         }
         if (lockedIdempotency.responsePayload) {
@@ -681,7 +731,7 @@ export async function cancelPaidPreShipmentAndRefund(
         };
       }
 
-      if (lockedOrder.status !== "CONFIRMED" && lockedOrder.status !== "PROCESSING") {
+      if (lockedOrder.status !== "CONFIRMED") {
         return {
           success: false as const,
           code: "INVALID_ORDER_STATE" as const,
@@ -1025,7 +1075,10 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
   const { idempotencyTtlMinutes, hmacSecret } = configResult.config;
 
   const namespacedKey = `REFUND_RECORDING:${input.refundAttemptId}`;
-  const authorityBindingDigest = `staff:${staffAuthUserId}`;
+  const authorityBindingDigest = computeOrderAuthorityBindingDigest(
+    { type: "STAFF", authUserId: staffAuthUserId },
+    hmacSecret
+  );
   const requestFingerprint = computeRefundFingerprint(
     {
       paymentId: payment.id,
@@ -1046,6 +1099,15 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
 
   if (existingIdempotency) {
     const lookupNow = new Date();
+    // 1. Authority Binding Check (Evaluated FIRST)
+    if (existingIdempotency.authorityBindingDigest !== authorityBindingDigest) {
+      return {
+        success: false,
+        code: "UNAUTHORIZED",
+        error: "No tienes permisos de administración para este intento.",
+      };
+    }
+    // 2. Expiration Check (Evaluated BEFORE fingerprint)
     if (existingIdempotency.expiresAt <= lookupNow) {
       return {
         success: false,
@@ -1053,6 +1115,7 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
         error: "El intento de reembolso expiró.",
       };
     }
+    // 3. Request Fingerprint Check
     if (existingIdempotency.requestFingerprint !== requestFingerprint) {
       return {
         success: false,
@@ -1060,6 +1123,7 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
         error: "Conflicto de idempotencia: el contenido del reembolso ha cambiado.",
       };
     }
+    // 4. Committed Replay
     if (existingIdempotency.responsePayload) {
       const payload = existingIdempotency.responsePayload as {
         refundId: string;
@@ -1098,6 +1162,15 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
         .limit(1);
 
       if (lockedIdempotency) {
+        // 1. Authority Binding Check
+        if (lockedIdempotency.authorityBindingDigest !== authorityBindingDigest) {
+          return {
+            success: false as const,
+            code: "UNAUTHORIZED" as const,
+            error: "No tienes permisos de administración para este intento.",
+          };
+        }
+        // 2. Expiration Check
         if (lockedIdempotency.expiresAt <= txNow) {
           return {
             success: false as const,
@@ -1105,11 +1178,12 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
             error: "El intento de reembolso expiró.",
           };
         }
+        // 3. Request Fingerprint Check
         if (lockedIdempotency.requestFingerprint !== requestFingerprint) {
           return {
             success: false as const,
             code: "IDEMPOTENCY_CONFLICT" as const,
-            error: "Conflicto de idempotencia.",
+            error: "Conflicto de idempotencia: el contenido del reembolso ha cambiado.",
           };
         }
         if (lockedIdempotency.responsePayload) {
@@ -1186,6 +1260,105 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
 
       const newTotalRefundedCents = lockedPayment.refundedAmountCents + validatedAmountCents;
       const isFullyRefunded = newTotalRefundedCents === lockedPayment.amountCents;
+
+      if (isFullyRefunded) {
+        // Step 4: Lock Shipment row FOR UPDATE when present
+        const [lockedShipment] = await tx
+          .select()
+          .from(shipments)
+          .where(eq(shipments.orderId, order.id))
+          .for("update")
+          .limit(1);
+
+        // Step 5: Lock Inventory Reservations in deterministic order (id ASC)
+        const orderReservations = await tx
+          .select()
+          .from(inventoryReservations)
+          .where(eq(inventoryReservations.orderId, order.id))
+          .orderBy(asc(inventoryReservations.id))
+          .for("update");
+
+        const isShippedOrDelivered =
+          lockedShipment &&
+          (lockedShipment.status === "SHIPPED" || lockedShipment.status === "DELIVERED");
+
+        if (isShippedOrDelivered) {
+          // Case B: SHIPPED / DELIVERED
+          // Stock is already CONSUMED. Financial full refund transitions Payment/Order to REFUNDED.
+          // Do NOT recreate stock, do NOT decrement allocated balance, do NOT increment on_hand.
+        } else if (!lockedShipment || lockedShipment.status === "UNFULFILLED") {
+          // Case A: PRE-SHIPMENT
+          const allocatedReservations = orderReservations.filter((r) => r.status === "ALLOCATED");
+
+          if (allocatedReservations.length > 0) {
+            // Step 6: Lock required inventory items in deterministic order (id ASC)
+            const itemIds = Array.from(
+              new Set(allocatedReservations.map((r) => r.inventoryItemId))
+            ).sort();
+
+            const lockedItems = await tx
+              .select()
+              .from(inventoryItems)
+              .where(inArray(inventoryItems.id, itemIds))
+              .orderBy(asc(inventoryItems.id))
+              .for("update");
+
+            const itemMap = new Map(lockedItems.map((item) => [item.id, item]));
+
+            // Pre-validation underflow check: assert quantity_allocated >= quantity for ALL lines
+            for (const res of allocatedReservations) {
+              const item = itemMap.get(res.inventoryItemId);
+              if (!item) {
+                throw new Error("INVENTORY_ITEM_NOT_FOUND");
+              }
+              if (item.quantityAllocated < res.quantity) {
+                throw new Error("INVENTORY_ALLOCATED_UNDERFLOW");
+              }
+            }
+
+            // Apply stock release mutations atomically
+            for (const res of allocatedReservations) {
+              const item = itemMap.get(res.inventoryItemId)!;
+              const newAllocated = item.quantityAllocated - res.quantity;
+
+              await tx
+                .update(inventoryReservations)
+                .set({ status: "RELEASED", updatedAt: txNow })
+                .where(eq(inventoryReservations.id, res.id));
+
+              await tx
+                .update(inventoryItems)
+                .set({ quantityAllocated: newAllocated, updatedAt: txNow })
+                .where(eq(inventoryItems.id, item.id));
+
+              item.quantityAllocated = newAllocated;
+
+              await tx.insert(inventoryLedgerEntries).values({
+                id: generateUuidV7(),
+                inventoryItemId: item.id,
+                movementType: "ALLOCATION_RELEASED",
+                onHandDelta: 0,
+                reservedDelta: 0,
+                allocatedDelta: -res.quantity,
+                quantityOnHandAfter: item.quantityOnHand,
+                quantityReservedAfter: item.quantityReserved,
+                quantityAllocatedAfter: newAllocated,
+                referenceType: "ORDER",
+                referenceId: order.id,
+                actorId: "ADMIN",
+              });
+            }
+          }
+          // Case C: If no ALLOCATED reservations (e.g. EXPIRED or already RELEASED), zero stock release occurs.
+        } else {
+          // Case D: Inconsistent pre-shipment/shipment state - fail closed
+          return {
+            success: false as const,
+            code: "FULFILLMENT_INCONSISTENCY" as const,
+            error: "El estado de despacho del pedido no permite el reembolso completo automático.",
+          };
+        }
+      }
 
       // Insert Refund Record
       const refundId = generateUuidV7();
@@ -1309,7 +1482,18 @@ export async function recordRefund(input: RecordRefundInput): Promise<RecordRefu
     });
 
     return transactionResult;
-  } catch {
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message === "INVENTORY_ALLOCATED_UNDERFLOW" ||
+        error.message === "INVENTORY_ITEM_NOT_FOUND")
+    ) {
+      return {
+        success: false,
+        code: "INVENTORY_INVARIANT_VIOLATION",
+        error: "Error de consistencia en el inventario durante el reembolso.",
+      };
+    }
     return {
       success: false,
       code: "SYSTEM_ERROR",
