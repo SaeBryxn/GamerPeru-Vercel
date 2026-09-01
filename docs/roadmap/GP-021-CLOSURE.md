@@ -103,9 +103,18 @@ Dedicated suite `tests/inventory-integration/inventory-live-scenarios.test.ts` e
 
 ---
 
-## Canonical CI Workflow Integration
+## Canonical CI Workflow Integration & Execution Evidence
 
-Added `pnpm test:inventory:live` to `.github/workflows/ci.yml` in the `Real Local PostgreSQL / Supabase Checkout Runtime` job following `pnpm test:order:live`.
+- **Pushed Commits**:
+  - `2cbe67f`: `feat(inventory): implement inventory engine, concurrency validation and migration safety hardening`
+  - `e9446e5`: `fix(inventory): align variant and payment fixture schema in live integration test`
+- **Workflow Run**: [Run 33489856547](https://github.com/latamcreativa/GamerPeru/actions/runs/33489856547)
+- **Workflow Matrix Jobs**:
+  1. `Format, Typecheck, Lint, Test, Build & E2E` (Prettier, TypeScript, ESLint 0 warnings, 73 test files / 940 unit tests, Next.js build, 142 Playwright E2E & WCAG tests)
+  2. `Real Local PostgreSQL / Supabase Checkout Runtime` (`pnpm test:cart:concurrency`, `pnpm test:checkout:live`, `pnpm test:payment:live`, `pnpm test:order:live`, `pnpm test:inventory:live`)
+  3. `Real Local PostgreSQL / Supabase Customer Account Runtime`
+  4. `Production Secret & Environment Hygiene Check`
+- Added `pnpm test:inventory:live` to `.github/workflows/ci.yml` in the `Real Local PostgreSQL / Supabase Checkout Runtime` job.
 
 ---
 
