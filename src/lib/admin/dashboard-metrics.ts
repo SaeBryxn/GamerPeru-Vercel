@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { MetricTrend, TrendSemanticState } from "./dashboard-types";
+import type { CountTrend, MonetaryTrend, TrendSemanticState } from "./dashboard-types";
 
 /**
  * Calculates Average Order Value (AOV) in integer minor-unit PEN cents
@@ -32,22 +32,17 @@ export function calculateAovCents(cohortNetCents: bigint, cohortActivePaidOrders
 }
 
 /**
- * Computes comparative period trends with truthful zero-baseline semantics.
+ * Computes comparative period trends for bounded count metrics.
  *
  * Invariants:
  * 1. previous = 0, current = 0 => delta = 0, percentageDelta = 0, semanticState = ZERO_BASELINE
  * 2. previous = 0, current > 0 => percentageDelta = null, semanticState = NEW (never +100%, Infinity, or NaN)
  * 3. previous > 0 => percentageDelta = ((current - previous) / previous) * 100
  */
-export function calculateMetricTrend(
-  current: number | bigint,
-  previous: number | bigint
-): MetricTrend {
-  const curr = typeof current === "bigint" ? Number(current) : current;
-  const prev = typeof previous === "bigint" ? Number(previous) : previous;
-  const absoluteDelta = curr - prev;
+export function calculateCountTrend(current: number, previous: number): CountTrend {
+  const absoluteDelta = current - previous;
 
-  if (prev === 0 && curr === 0) {
+  if (previous === 0 && current === 0) {
     return {
       currentValue: 0,
       previousValue: 0,
@@ -57,9 +52,9 @@ export function calculateMetricTrend(
     };
   }
 
-  if (prev === 0 && curr > 0) {
+  if (previous === 0 && current > 0) {
     return {
-      currentValue: curr,
+      currentValue: current,
       previousValue: 0,
       absoluteDelta,
       percentageDelta: null,
@@ -67,9 +62,9 @@ export function calculateMetricTrend(
     };
   }
 
-  if (prev === 0 && curr < 0) {
+  if (previous === 0 && current < 0) {
     return {
-      currentValue: curr,
+      currentValue: current,
       previousValue: 0,
       absoluteDelta,
       percentageDelta: null,
@@ -77,8 +72,7 @@ export function calculateMetricTrend(
     };
   }
 
-  const rawPercentage = ((curr - prev) / Math.abs(prev)) * 100;
-  // Round percentage to 2 decimal places without precision loss
+  const rawPercentage = ((current - previous) / Math.abs(previous)) * 100;
   const percentageDelta = Math.round(rawPercentage * 100) / 100;
 
   let semanticState: TrendSemanticState;
@@ -91,10 +85,76 @@ export function calculateMetricTrend(
   }
 
   return {
-    currentValue: curr,
-    previousValue: prev,
+    currentValue: current,
+    previousValue: previous,
     absoluteDelta,
     percentageDelta,
+    semanticState,
+  };
+}
+
+/**
+ * Computes comparative period trends for exact monetary values (bigint).
+ *
+ * Invariants:
+ * 1. previous = 0n, current = 0n => ZERO_BASELINE, all deltas 0n, percentage null/null
+ * 2. previous = 0n, current > 0n => NEW, percentage null/null (never Infinity)
+ * 3. previous > 0n => percentageNumerator = (current - previous) * 100, percentageDenominator = abs(previous)
+ *    CHK2 may format the visual percentage from this rational representation.
+ */
+export function calculateMonetaryTrend(current: bigint, previous: bigint): MonetaryTrend {
+  const absoluteDelta = current - previous;
+
+  if (previous === 0n && current === 0n) {
+    return {
+      currentValue: 0n,
+      previousValue: 0n,
+      absoluteDelta: 0n,
+      percentageNumerator: 0n,
+      percentageDenominator: 1n,
+      semanticState: "ZERO_BASELINE",
+    };
+  }
+
+  if (previous === 0n && current > 0n) {
+    return {
+      currentValue: current,
+      previousValue: 0n,
+      absoluteDelta,
+      percentageNumerator: null,
+      percentageDenominator: null,
+      semanticState: "NEW",
+    };
+  }
+
+  if (previous === 0n && current < 0n) {
+    return {
+      currentValue: current,
+      previousValue: 0n,
+      absoluteDelta,
+      percentageNumerator: null,
+      percentageDenominator: null,
+      semanticState: "NEGATIVE",
+    };
+  }
+
+  const absPrev = previous < 0n ? -previous : previous;
+
+  let semanticState: TrendSemanticState;
+  if (absoluteDelta > 0n) {
+    semanticState = "POSITIVE";
+  } else if (absoluteDelta < 0n) {
+    semanticState = "NEGATIVE";
+  } else {
+    semanticState = "FLAT";
+  }
+
+  return {
+    currentValue: current,
+    previousValue: previous,
+    absoluteDelta,
+    percentageNumerator: (current - previous) * 100n,
+    percentageDenominator: absPrev,
     semanticState,
   };
 }

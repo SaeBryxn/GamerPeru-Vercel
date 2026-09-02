@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { resolveDashboardPeriod } from "@/lib/admin/dashboard-period";
-import { calculateAovCents, calculateMetricTrend } from "@/lib/admin/dashboard-metrics";
+import {
+  calculateAovCents,
+  calculateCountTrend,
+  calculateMonetaryTrend,
+} from "@/lib/admin/dashboard-metrics";
 import { getAdminDashboardData } from "@/lib/admin/dashboard-reader";
 import * as rbac from "@/lib/auth/rbac";
 import type * as RbacModule from "@/lib/auth/rbac";
@@ -157,19 +161,57 @@ describe("GP-023 / CHK1 — Admin Dashboard Reader Unit Tests", () => {
     });
   });
 
-  describe("3. Trend Semantics & Zero-Baseline Behavior", () => {
+  describe("3. Count Trend Semantics & Zero-Baseline Behavior", () => {
     it("15. previous = 0 and current = 0 => delta = 0, percentage = 0, semanticState = ZERO_BASELINE", () => {
-      const trend = calculateMetricTrend(0, 0);
+      const trend = calculateCountTrend(0, 0);
       expect(trend.absoluteDelta).toBe(0);
       expect(trend.percentageDelta).toBe(0);
       expect(trend.semanticState).toBe("ZERO_BASELINE");
     });
 
     it("16. previous = 0 and current > 0 => percentage = null, semanticState = NEW (never +100% or Infinity)", () => {
-      const trend = calculateMetricTrend(150, 0);
+      const trend = calculateCountTrend(150, 0);
       expect(trend.absoluteDelta).toBe(150);
       expect(trend.percentageDelta).toBeNull();
       expect(trend.semanticState).toBe("NEW");
+    });
+  });
+
+  describe("3b. Monetary Trend Semantics (Exact BigInt)", () => {
+    it("15b. monetary previous = 0n and current = 0n => ZERO_BASELINE", () => {
+      const trend = calculateMonetaryTrend(0n, 0n);
+      expect(trend.absoluteDelta).toBe(0n);
+      expect(trend.percentageNumerator).toBe(0n);
+      expect(trend.percentageDenominator).toBe(1n);
+      expect(trend.semanticState).toBe("ZERO_BASELINE");
+    });
+
+    it("16b. monetary previous = 0n and current > 0n => NEW, percentage null/null", () => {
+      const trend = calculateMonetaryTrend(15000n, 0n);
+      expect(trend.absoluteDelta).toBe(15000n);
+      expect(trend.percentageNumerator).toBeNull();
+      expect(trend.percentageDenominator).toBeNull();
+      expect(trend.semanticState).toBe("NEW");
+    });
+
+    it("16c. monetary positive trend: exact rational percentage", () => {
+      const trend = calculateMonetaryTrend(200n, 100n);
+      expect(trend.absoluteDelta).toBe(100n);
+      expect(trend.percentageNumerator).toBe(10000n); // (200 - 100) * 100
+      expect(trend.percentageDenominator).toBe(100n); // abs(100)
+      expect(trend.semanticState).toBe("POSITIVE");
+    });
+
+    it("16d. monetary trend with values above Number.MAX_SAFE_INTEGER", () => {
+      const current = 9007199254740993n;
+      const previous = 9007199254740992n;
+      const trend = calculateMonetaryTrend(current, previous);
+      expect(trend.currentValue).toBe(9007199254740993n);
+      expect(trend.previousValue).toBe(9007199254740992n);
+      expect(trend.absoluteDelta).toBe(1n);
+      expect(trend.percentageNumerator).toBe(100n);
+      expect(trend.percentageDenominator).toBe(9007199254740992n);
+      expect(trend.semanticState).toBe("POSITIVE");
     });
   });
 
@@ -276,7 +318,7 @@ describe("GP-023 / CHK1 — Admin Dashboard Reader Unit Tests", () => {
   });
 
   describe("5. Currency Integrity Enforcement (Fail-Closed)", () => {
-    it("23. Currency-integrity READY case: all rows PEN + PEN", async () => {
+    it("23. Currency-integrity READY case: all rows PEN + PEN, monetary fields are bigint", async () => {
       vi.mocked(rbac.requireAdminAccess).mockResolvedValue({
         status: "READY",
         authUserId: "user-super-admin",
@@ -307,9 +349,12 @@ describe("GP-023 / CHK1 — Admin Dashboard Reader Unit Tests", () => {
 
       expect(payload.financialCohort.status).toBe("READY");
       if (payload.financialCohort.status === "READY") {
-        expect(payload.financialCohort.data.current.cohortGrossCents).toBe(50000);
-        expect(payload.financialCohort.data.current.cohortNetCents).toBe(48000);
-        expect(payload.financialCohort.data.current.aovCents).toBe(9600); // 48000 / 5
+        expect(payload.financialCohort.data.current.cohortGrossCents).toBe(50000n);
+        expect(payload.financialCohort.data.current.cohortNetCents).toBe(48000n);
+        expect(payload.financialCohort.data.current.aovCents).toBe(9600n);
+        expect(typeof payload.financialCohort.data.current.cohortGrossCents).toBe("bigint");
+        expect(typeof payload.financialCohort.data.current.cohortNetCents).toBe("bigint");
+        expect(typeof payload.financialCohort.data.current.aovCents).toBe("bigint");
       }
     });
 
@@ -519,6 +564,176 @@ describe("GP-023 / CHK1 — Admin Dashboard Reader Unit Tests", () => {
         if (refunds.refundOutflow.status === "UNAVAILABLE") {
           expect(refunds.refundOutflow.error).toBe("CURRENCY_INTEGRITY_ERROR");
         }
+      }
+    });
+  });
+
+  describe("6. End-to-End Precision: Values Above Number.MAX_SAFE_INTEGER", () => {
+    it("29. Cohort monetary fields remain exact bigint through reader payload for values > MAX_SAFE_INTEGER", async () => {
+      vi.mocked(rbac.requireAdminAccess).mockResolvedValue({
+        status: "READY",
+        authUserId: "user-super-admin",
+        email: "admin@gamerperu.pe",
+        roles: ["SUPER_ADMIN"],
+        permissions: new Set(["orders:manage", "orders:verify"]),
+      });
+
+      mockDbExecute.mockImplementation(async (query: unknown) => {
+        const text = getQueryText(query);
+        if (text.includes("cohort_gross_cents")) {
+          return [
+            {
+              total_created_orders: "1",
+              currency_anomaly_count: "0",
+              cohort_paid_orders: "1",
+              cohort_active_paid_orders: "1",
+              cohort_gross_cents: "9007199254740993",
+              cohort_net_cents: "9007199254740993",
+              cohort_pending_cents: "9007199254740993",
+            },
+          ] as never;
+        }
+        return [] as never;
+      });
+
+      const payload = await getAdminDashboardData();
+
+      expect(payload.financialCohort.status).toBe("READY");
+      if (payload.financialCohort.status === "READY") {
+        expect(payload.financialCohort.data.current.cohortGrossCents).toBe(9007199254740993n);
+        expect(payload.financialCohort.data.current.cohortNetCents).toBe(9007199254740993n);
+        expect(payload.financialCohort.data.current.cohortPendingCents).toBe(9007199254740993n);
+        expect(typeof payload.financialCohort.data.current.cohortGrossCents).toBe("bigint");
+        expect(typeof payload.financialCohort.data.current.cohortNetCents).toBe("bigint");
+        expect(typeof payload.financialCohort.data.current.cohortPendingCents).toBe("bigint");
+        expect(typeof payload.financialCohort.data.current.aovCents).toBe("bigint");
+      }
+    });
+
+    it("30. Queue amountCents remains exact bigint for values > MAX_SAFE_INTEGER", async () => {
+      vi.mocked(rbac.requireAdminAccess).mockResolvedValue({
+        status: "READY",
+        authUserId: "user-super-admin",
+        email: "admin@gamerperu.pe",
+        roles: ["SUPER_ADMIN"],
+        permissions: new Set(["orders:verify"]),
+      });
+
+      mockDbExecute.mockImplementation(async (query: unknown) => {
+        const text = getQueryText(query);
+        if (text.includes("queue_count")) {
+          return [
+            {
+              queue_count: "1",
+              queue_currency_anomaly_count: "0",
+              queue_amount_cents: "9007199254740993",
+            },
+          ] as never;
+        }
+        if (text.includes("submission_attempts_count")) {
+          return [{ submission_attempts_count: "0", distinct_payments_count: "0" }] as never;
+        }
+        if (text.includes("refund_currency_anomaly_count")) {
+          return [
+            { refund_count: "0", refund_currency_anomaly_count: "0", refund_outflow_cents: "0" },
+          ] as never;
+        }
+        return [] as never;
+      });
+
+      const payload = await getAdminDashboardData();
+
+      expect(payload.paymentVerification.status).toBe("READY");
+      if (payload.paymentVerification.status === "READY") {
+        const qa = payload.paymentVerification.data.snapshotQueue.queueAmount;
+        expect(qa.status).toBe("READY");
+        if (qa.status === "READY") {
+          expect(qa.amountCents).toBe(9007199254740993n);
+          expect(typeof qa.amountCents).toBe("bigint");
+        }
+      }
+    });
+
+    it("31. Refund outflowCents remains exact bigint for values > MAX_SAFE_INTEGER", async () => {
+      vi.mocked(rbac.requireAdminAccess).mockResolvedValue({
+        status: "READY",
+        authUserId: "user-super-admin",
+        email: "admin@gamerperu.pe",
+        roles: ["SUPER_ADMIN"],
+        permissions: new Set(["orders:verify"]),
+      });
+
+      mockDbExecute.mockImplementation(async (query: unknown) => {
+        const text = getQueryText(query);
+        if (text.includes("queue_count")) {
+          return [
+            { queue_count: "0", queue_currency_anomaly_count: "0", queue_amount_cents: "0" },
+          ] as never;
+        }
+        if (text.includes("submission_attempts_count")) {
+          return [{ submission_attempts_count: "0", distinct_payments_count: "0" }] as never;
+        }
+        if (text.includes("refund_currency_anomaly_count")) {
+          return [
+            {
+              refund_count: "1",
+              refund_currency_anomaly_count: "0",
+              refund_outflow_cents: "9007199254740993",
+            },
+          ] as never;
+        }
+        return [] as never;
+      });
+
+      const payload = await getAdminDashboardData();
+
+      expect(payload.paymentVerification.status).toBe("READY");
+      if (payload.paymentVerification.status === "READY") {
+        const ro = payload.paymentVerification.data.periodRefunds.refundOutflow;
+        expect(ro.status).toBe("READY");
+        if (ro.status === "READY") {
+          expect(ro.outflowCents).toBe(9007199254740993n);
+          expect(typeof ro.outflowCents).toBe("bigint");
+        }
+      }
+    });
+
+    it("32. Financial cohort trend values above MAX_SAFE_INTEGER remain exact bigint", async () => {
+      vi.mocked(rbac.requireAdminAccess).mockResolvedValue({
+        status: "READY",
+        authUserId: "user-super-admin",
+        email: "admin@gamerperu.pe",
+        roles: ["SUPER_ADMIN"],
+        permissions: new Set(["orders:manage", "orders:verify"]),
+      });
+
+      mockDbExecute.mockImplementation(async (query: unknown) => {
+        const text = getQueryText(query);
+        if (text.includes("cohort_gross_cents")) {
+          return [
+            {
+              total_created_orders: "1",
+              currency_anomaly_count: "0",
+              cohort_paid_orders: "1",
+              cohort_active_paid_orders: "1",
+              cohort_gross_cents: "9007199254740993",
+              cohort_net_cents: "9007199254740993",
+              cohort_pending_cents: "0",
+            },
+          ] as never;
+        }
+        return [] as never;
+      });
+
+      const payload = await getAdminDashboardData();
+
+      expect(payload.financialCohort.status).toBe("READY");
+      if (payload.financialCohort.status === "READY") {
+        const trends = payload.financialCohort.data.trends;
+        expect(typeof trends.gross.currentValue).toBe("bigint");
+        expect(typeof trends.gross.previousValue).toBe("bigint");
+        expect(typeof trends.gross.absoluteDelta).toBe("bigint");
+        expect(trends.gross.currentValue).toBe(9007199254740993n);
       }
     });
   });

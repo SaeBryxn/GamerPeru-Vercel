@@ -5,7 +5,7 @@ import type { ResolvedDashboardPeriod } from "./dashboard-period";
 
 export type TrendSemanticState = "POSITIVE" | "NEGATIVE" | "FLAT" | "NEW" | "ZERO_BASELINE";
 
-export interface MetricTrend {
+export interface CountTrend {
   currentValue: number;
   previousValue: number;
   absoluteDelta: number;
@@ -13,20 +13,29 @@ export interface MetricTrend {
   semanticState: TrendSemanticState;
 }
 
+export interface MonetaryTrend {
+  currentValue: bigint;
+  previousValue: bigint;
+  absoluteDelta: bigint;
+  percentageNumerator: bigint | null; // null when previousValue == 0 and currentValue > 0 (semantic state NEW)
+  percentageDenominator: bigint | null; // null when previousValue == 0 and currentValue > 0 (semantic state NEW)
+  semanticState: TrendSemanticState;
+}
+
 export interface CohortFinancialSummary {
-  cohortGrossCents: number;
-  cohortNetCents: number;
-  cohortPendingCents: number;
+  cohortGrossCents: bigint;
+  cohortNetCents: bigint;
+  cohortPendingCents: bigint;
   cohortPaidOrders: number;
   cohortActivePaidOrders: number;
-  aovCents: number; // Integer minor-unit PEN cents (ROUND HALF UP)
+  aovCents: bigint;
 }
 
 export interface CohortFinancialTrends {
-  gross: MetricTrend;
-  net: MetricTrend;
-  aov: MetricTrend;
-  paidOrders: MetricTrend;
+  gross: MonetaryTrend;
+  net: MonetaryTrend;
+  aov: MonetaryTrend;
+  paidOrders: CountTrend;
 }
 
 export type CohortFinancialsResult =
@@ -65,7 +74,7 @@ export type OrderPipelineResult =
         current: OrderPipelineSummary;
         previous: OrderPipelineSummary;
         trends: {
-          totalCreatedOrders: MetricTrend;
+          totalCreatedOrders: CountTrend;
         };
       };
     }
@@ -76,7 +85,7 @@ export type OrderPipelineResult =
 export type MonetaryQueueAmountResult =
   | {
       status: "READY";
-      amountCents: number;
+      amountCents: bigint;
     }
   | {
       status: "UNAVAILABLE";
@@ -87,7 +96,7 @@ export type MonetaryQueueAmountResult =
 export type MonetaryRefundOutflowResult =
   | {
       status: "READY";
-      outflowCents: number;
+      outflowCents: bigint;
     }
   | {
       status: "UNAVAILABLE";

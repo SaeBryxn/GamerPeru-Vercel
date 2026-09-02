@@ -10,7 +10,11 @@ import {
   type ResolvedDashboardPeriod,
   resolveDashboardPeriod,
 } from "./dashboard-period";
-import { calculateAovCents, calculateMetricTrend } from "./dashboard-metrics";
+import {
+  calculateAovCents,
+  calculateCountTrend,
+  calculateMonetaryTrend,
+} from "./dashboard-metrics";
 import type {
   AdminDashboardPayload,
   CatalogOverviewResult,
@@ -103,20 +107,20 @@ async function fetchSingleCohortFinancials(
   const cohortGrossCents = BigInt(row.cohort_gross_cents ?? 0);
   const cohortNetCents = BigInt(row.cohort_net_cents ?? 0);
   const cohortPendingCents = BigInt(row.cohort_pending_cents ?? 0);
-  const cohortPaidOrders = BigInt(row.cohort_paid_orders ?? 0);
-  const cohortActivePaidOrders = BigInt(row.cohort_active_paid_orders ?? 0);
+  const cohortPaidOrders = Number(row.cohort_paid_orders ?? 0);
+  const cohortActivePaidOrders = Number(row.cohort_active_paid_orders ?? 0);
 
-  const aovCents = calculateAovCents(cohortNetCents, cohortActivePaidOrders);
+  const aovCents = calculateAovCents(cohortNetCents, BigInt(cohortActivePaidOrders));
 
   return {
     status: "READY",
     summary: {
-      cohortGrossCents: Number(cohortGrossCents),
-      cohortNetCents: Number(cohortNetCents),
-      cohortPendingCents: Number(cohortPendingCents),
-      cohortPaidOrders: Number(cohortPaidOrders),
-      cohortActivePaidOrders: Number(cohortActivePaidOrders),
-      aovCents: Number(aovCents),
+      cohortGrossCents,
+      cohortNetCents,
+      cohortPendingCents,
+      cohortPaidOrders,
+      cohortActivePaidOrders,
+      aovCents,
     },
   };
 }
@@ -143,10 +147,10 @@ async function fetchCohortFinancials(
   const previous = prevResult.summary;
 
   const trends: CohortFinancialTrends = {
-    gross: calculateMetricTrend(current.cohortGrossCents, previous.cohortGrossCents),
-    net: calculateMetricTrend(current.cohortNetCents, previous.cohortNetCents),
-    aov: calculateMetricTrend(current.aovCents, previous.aovCents),
-    paidOrders: calculateMetricTrend(current.cohortPaidOrders, previous.cohortPaidOrders),
+    gross: calculateMonetaryTrend(current.cohortGrossCents, previous.cohortGrossCents),
+    net: calculateMonetaryTrend(current.cohortNetCents, previous.cohortNetCents),
+    aov: calculateMonetaryTrend(current.aovCents, previous.aovCents),
+    paidOrders: calculateCountTrend(current.cohortPaidOrders, previous.cohortPaidOrders),
   };
 
   return {
@@ -230,7 +234,7 @@ async function fetchOrderPipeline(period: ResolvedDashboardPeriod): Promise<Orde
       current,
       previous,
       trends: {
-        totalCreatedOrders: calculateMetricTrend(
+        totalCreatedOrders: calculateCountTrend(
           current.totalCreatedOrders,
           previous.totalCreatedOrders
         ),
@@ -319,7 +323,7 @@ async function fetchPaymentVerification(
   } else {
     queueAmount = {
       status: "READY",
-      amountCents: Number(queueRow.queue_amount_cents ?? 0),
+      amountCents: BigInt(queueRow.queue_amount_cents ?? 0),
     };
   }
 
@@ -353,7 +357,7 @@ async function fetchPaymentVerification(
   } else {
     refundOutflow = {
       status: "READY",
-      outflowCents: Number(refRow.refund_outflow_cents ?? 0),
+      outflowCents: BigInt(refRow.refund_outflow_cents ?? 0),
     };
   }
 

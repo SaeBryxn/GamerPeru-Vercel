@@ -40,6 +40,17 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
   const paymentMethodId = `${prefix}000000000031`;
   const instructionVersionId = `${prefix}000000000032`;
 
+  // GP-023 order number namespace for scoped cleanup
+  const GP023_ORDER_PREFIX = "GP023-%";
+
+  // Dedicated synthetic timestamp namespace for temporal metric isolation
+  // (ensures isolation from real-time NOW() orders created by other test suites in shared CI databases)
+  const TEST_NOW = new Date("2035-05-15T15:00:00.000Z");
+
+  // Sentinel: deterministic non-GP023 record proving cleanup isolation
+  const sentinelOrderId = "018faaaa-0099-7000-8000-000000000001";
+  const sentinelOrderNumber = "SENTINEL-NONGP023-001";
+
   beforeAll(async () => {
     const databaseUrl = assertLocalDatabaseTarget(rawDatabaseUrl);
     sql = postgres(databaseUrl, { max: 5 });
@@ -61,7 +72,7 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
     });
 
     // Clean any prior synthetic fixtures
-    await cleanupAllFixtures();
+    await cleanupGp023CommerceFixtures();
 
     // Seed base catalog & location fixtures
     await sql.begin(async (tx) => {
@@ -111,31 +122,125 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
     });
   });
 
-  async function cleanupAllFixtures() {
+  /**
+   * Scoped cleanup: deletes ONLY rows provably owned by GP-023 test fixtures.
+   * Never uses unqualified DELETE or TRUNCATE on shared commerce tables.
+   */
+  async function cleanupGp023CommerceFixtures() {
     await sql.begin(async (tx) => {
-      await tx`DELETE FROM payment_submissions`;
-      await tx`DELETE FROM payment_proof_upload_intents`;
-      await tx`DELETE FROM guest_payment_access_grants`;
-      await tx`DELETE FROM refunds`;
-      await tx`DELETE FROM payments`;
-      await tx`DELETE FROM inventory_ledger_entries`;
-      await tx`DELETE FROM inventory_reservations`;
-      await tx`DELETE FROM shipments`;
-      await tx`DELETE FROM order_pricing_snapshots`;
-      await tx`DELETE FROM order_address_snapshots`;
-      await tx`DELETE FROM order_items`;
-      await tx`DELETE FROM orders`;
-      await tx`DELETE FROM inventory_items WHERE location_id IN (${loc1Id}, ${loc2Id})`;
+      // Delete payment submissions for GP-023 payments only
+      await tx`
+        DELETE FROM payment_submissions
+        WHERE payment_id IN (
+          SELECT id FROM payments WHERE order_id IN (
+            SELECT id FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+          )
+        )
+      `;
+
+      // Delete payment proof upload intents for GP-023 payments only
+      await tx`
+        DELETE FROM payment_proof_upload_intents
+        WHERE payment_id IN (
+          SELECT id FROM payments WHERE order_id IN (
+            SELECT id FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+          )
+        )
+      `;
+
+      // Delete guest payment access grants for GP-023 orders only
+      await tx`
+        DELETE FROM guest_payment_access_grants
+        WHERE payment_id IN (
+          SELECT id FROM payments WHERE order_id IN (
+            SELECT id FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+          )
+        )
+      `;
+
+      // Delete refunds for GP-023 orders only
+      await tx`
+        DELETE FROM refunds
+        WHERE order_id IN (
+          SELECT id FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+        )
+      `;
+
+      // Delete payments for GP-023 orders only
+      await tx`
+        DELETE FROM payments
+        WHERE order_id IN (
+          SELECT id FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+        )
+      `;
+
+      // Delete inventory ledger entries for GP-023 locations only
+      await tx`
+        DELETE FROM inventory_ledger_entries
+        WHERE inventory_item_id IN (
+          SELECT id FROM inventory_items WHERE location_id IN (${loc1Id}, ${loc2Id})
+        )
+      `;
+
+      // Delete inventory reservations for GP-023 orders only
+      await tx`
+        DELETE FROM inventory_reservations
+        WHERE order_id IN (
+          SELECT id FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+        )
+      `;
+
+      // Delete shipments for GP-023 orders only
+      await tx`
+        DELETE FROM shipments
+        WHERE order_id IN (
+          SELECT id FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+        )
+      `;
+
+      // Delete order pricing snapshots for GP-023 orders only
+      await tx`
+        DELETE FROM order_pricing_snapshots
+        WHERE order_id IN (
+          SELECT id FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+        )
+      `;
+
+      // Delete order address snapshots for GP-023 orders only
+      await tx`
+        DELETE FROM order_address_snapshots
+        WHERE order_id IN (
+          SELECT id FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+        )
+      `;
+
+      // Delete order items for GP-023 orders only
+      await tx`
+        DELETE FROM order_items
+        WHERE order_id IN (
+          SELECT id FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+        )
+      `;
+
+      // Delete GP-023 orders only
+      await tx`
+        DELETE FROM orders WHERE order_number LIKE ${GP023_ORDER_PREFIX}
+      `;
+
+      // Delete inventory items only for GP-023 fixture locations
+      await tx`
+        DELETE FROM inventory_items WHERE location_id IN (${loc1Id}, ${loc2Id})
+      `;
     });
   }
 
   beforeEach(async () => {
-    await cleanupAllFixtures();
+    await cleanupGp023CommerceFixtures();
   });
 
   afterAll(async () => {
     if (sql) {
-      await cleanupAllFixtures();
+      await cleanupGp023CommerceFixtures();
       await sql`DELETE FROM inventory_locations WHERE id IN (${loc1Id}, ${loc2Id})`;
       await sql`DELETE FROM payment_instruction_versions WHERE id = ${instructionVersionId}`;
       await sql`DELETE FROM payment_method_configurations WHERE id = ${paymentMethodId}`;
@@ -148,15 +253,14 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
   });
 
   it("1. Empty dataset: returns clean zero state across all metrics", async () => {
-    const fixedNow = new Date("2026-09-02T15:00:00.000Z");
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: fixedNow });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     expect(result.financialCohort.status).toBe("READY");
     if (result.financialCohort.status === "READY") {
-      expect(result.financialCohort.data.current.cohortGrossCents).toBe(0);
-      expect(result.financialCohort.data.current.cohortNetCents).toBe(0);
+      expect(result.financialCohort.data.current.cohortGrossCents).toBe(0n);
+      expect(result.financialCohort.data.current.cohortNetCents).toBe(0n);
       expect(result.financialCohort.data.current.cohortPaidOrders).toBe(0);
-      expect(result.financialCohort.data.current.aovCents).toBe(0);
+      expect(result.financialCohort.data.current.aovCents).toBe(0n);
     }
 
     expect(result.orderPipeline.status).toBe("READY");
@@ -166,7 +270,8 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
 
     expect(result.paymentVerification.status).toBe("READY");
     if (result.paymentVerification.status === "READY") {
-      expect(result.paymentVerification.data.snapshotQueue.queueCount).toBe(0);
+      expect(result.paymentVerification.data.periodActivity.submissionAttemptsCount).toBe(0);
+      expect(result.paymentVerification.data.periodActivity.distinctPaymentsSubmittedCount).toBe(0);
       expect(result.paymentVerification.data.snapshotQueue.queueAmount.status).toBe("READY");
     }
   });
@@ -174,20 +279,19 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
   it("2. Unpaid order: counted in totalCreatedOrders, 0 in paid and revenue", async () => {
     const orderId = "018f0000-0023-7000-8000-000000000101";
     const paymentId = "018f0000-0023-7000-8000-000000000102";
-    const now = new Date("2026-09-02T15:00:00.000Z");
 
     await sql.begin(async (tx) => {
       await tx`
         INSERT INTO orders (id, order_number, customer_email, customer_phone, status, subtotal_cents, total_cents, currency, created_at)
-        VALUES (${orderId}, 'GP023-ORD-UNPAID', 'test.gp023.unpaid@gamerperu.pe', '999111222', 'PENDING', 10000, 10000, 'PEN', ${now});
+        VALUES (${orderId}, 'GP023-ORD-UNPAID', 'test.gp023.unpaid@gamerperu.pe', '999111222', 'PENDING', 10000, 10000, 'PEN', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, currency, status, created_at)
-        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 10000, 'PEN', 'UNPAID', ${now});
+        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 10000, 'PEN', 'UNPAID', ${TEST_NOW});
       `;
     });
 
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     if (result.orderPipeline.status === "READY") {
       expect(result.orderPipeline.data.current.totalCreatedOrders).toBe(1);
@@ -195,36 +299,35 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
     }
     if (result.financialCohort.status === "READY") {
       expect(result.financialCohort.data.current.cohortPaidOrders).toBe(0);
-      expect(result.financialCohort.data.current.cohortGrossCents).toBe(0);
-      expect(result.financialCohort.data.current.cohortNetCents).toBe(0);
-      expect(result.financialCohort.data.current.aovCents).toBe(0);
+      expect(result.financialCohort.data.current.cohortGrossCents).toBe(0n);
+      expect(result.financialCohort.data.current.cohortNetCents).toBe(0n);
+      expect(result.financialCohort.data.current.aovCents).toBe(0n);
     }
   });
 
   it("3. Paid order: recognized in gross/net realized revenue and AOV", async () => {
     const orderId = "018f0000-0023-7000-8000-000000000201";
     const paymentId = "018f0000-0023-7000-8000-000000000202";
-    const now = new Date("2026-09-02T15:00:00.000Z");
 
     await sql.begin(async (tx) => {
       await tx`
         INSERT INTO orders (id, order_number, customer_email, customer_phone, status, subtotal_cents, total_cents, currency, created_at)
-        VALUES (${orderId}, 'GP023-ORD-PAID', 'test.gp023.paid@gamerperu.pe', '999111222', 'CONFIRMED', 15000, 15000, 'PEN', ${now});
+        VALUES (${orderId}, 'GP023-ORD-PAID', 'test.gp023.paid@gamerperu.pe', '999111222', 'CONFIRMED', 15000, 15000, 'PEN', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, currency, status, created_at)
-        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 15000, 'PEN', 'PAID', ${now});
+        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 15000, 'PEN', 'PAID', ${TEST_NOW});
       `;
     });
 
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     if (result.financialCohort.status === "READY") {
       expect(result.financialCohort.data.current.cohortPaidOrders).toBe(1);
       expect(result.financialCohort.data.current.cohortActivePaidOrders).toBe(1);
-      expect(result.financialCohort.data.current.cohortGrossCents).toBe(15000);
-      expect(result.financialCohort.data.current.cohortNetCents).toBe(15000);
-      expect(result.financialCohort.data.current.aovCents).toBe(15000);
+      expect(result.financialCohort.data.current.cohortGrossCents).toBe(15000n);
+      expect(result.financialCohort.data.current.cohortNetCents).toBe(15000n);
+      expect(result.financialCohort.data.current.aovCents).toBe(15000n);
     }
   });
 
@@ -232,30 +335,29 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
     const orderId = "018f0000-0023-7000-8000-000000000301";
     const paymentId = "018f0000-0023-7000-8000-000000000302";
     const refundId = "018f0000-0023-7000-8000-000000000303";
-    const now = new Date("2026-09-02T15:00:00.000Z");
 
     await sql.begin(async (tx) => {
       await tx`
         INSERT INTO orders (id, order_number, customer_email, customer_phone, status, subtotal_cents, total_cents, currency, created_at)
-        VALUES (${orderId}, 'GP023-ORD-PARTIAL', 'test.gp023.partial@gamerperu.pe', '999111222', 'CONFIRMED', 10000, 10000, 'PEN', ${now});
+        VALUES (${orderId}, 'GP023-ORD-PARTIAL', 'test.gp023.partial@gamerperu.pe', '999111222', 'CONFIRMED', 10000, 10000, 'PEN', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, refunded_amount_cents, currency, status, created_at)
-        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 10000, 3000, 'PEN', 'PAID', ${now});
+        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 10000, 3000, 'PEN', 'PAID', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO refunds (id, order_id, payment_id, amount_cents, reason, created_at)
-        VALUES (${refundId}, ${orderId}, ${paymentId}, 3000, 'Devolución parcial', ${now});
+        VALUES (${refundId}, ${orderId}, ${paymentId}, 3000, 'Devolución parcial', ${TEST_NOW});
       `;
     });
 
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     if (result.financialCohort.status === "READY") {
-      expect(result.financialCohort.data.current.cohortGrossCents).toBe(10000);
-      expect(result.financialCohort.data.current.cohortNetCents).toBe(7000);
+      expect(result.financialCohort.data.current.cohortGrossCents).toBe(10000n);
+      expect(result.financialCohort.data.current.cohortNetCents).toBe(7000n);
       expect(result.financialCohort.data.current.cohortActivePaidOrders).toBe(1);
-      expect(result.financialCohort.data.current.aovCents).toBe(7000);
+      expect(result.financialCohort.data.current.aovCents).toBe(7000n);
     }
   });
 
@@ -263,72 +365,69 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
     const orderId = "018f0000-0023-7000-8000-000000000401";
     const paymentId = "018f0000-0023-7000-8000-000000000402";
     const refundId = "018f0000-0023-7000-8000-000000000403";
-    const now = new Date("2026-09-02T15:00:00.000Z");
 
     await sql.begin(async (tx) => {
       await tx`
         INSERT INTO orders (id, order_number, customer_email, customer_phone, status, subtotal_cents, total_cents, currency, created_at)
-        VALUES (${orderId}, 'GP023-ORD-FULL', 'test.gp023.full@gamerperu.pe', '999111222', 'REFUNDED', 5000, 5000, 'PEN', ${now});
+        VALUES (${orderId}, 'GP023-ORD-FULL', 'test.gp023.full@gamerperu.pe', '999111222', 'REFUNDED', 5000, 5000, 'PEN', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, refunded_amount_cents, currency, status, created_at)
-        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 5000, 5000, 'PEN', 'REFUNDED', ${now});
+        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 5000, 5000, 'PEN', 'REFUNDED', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO refunds (id, order_id, payment_id, amount_cents, reason, created_at)
-        VALUES (${refundId}, ${orderId}, ${paymentId}, 5000, 'Devolución total', ${now});
+        VALUES (${refundId}, ${orderId}, ${paymentId}, 5000, 'Devolución total', ${TEST_NOW});
       `;
     });
 
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     if (result.financialCohort.status === "READY") {
-      expect(result.financialCohort.data.current.cohortGrossCents).toBe(5000);
-      expect(result.financialCohort.data.current.cohortNetCents).toBe(0);
+      expect(result.financialCohort.data.current.cohortGrossCents).toBe(5000n);
+      expect(result.financialCohort.data.current.cohortNetCents).toBe(0n);
       expect(result.financialCohort.data.current.cohortPaidOrders).toBe(1);
       expect(result.financialCohort.data.current.cohortActivePaidOrders).toBe(0);
-      expect(result.financialCohort.data.current.aovCents).toBe(0);
+      expect(result.financialCohort.data.current.aovCents).toBe(0n);
     }
   });
 
   it("6. Missing Payment anomaly: order counted in totalCreatedOrders, 0 in payments, does not crash", async () => {
     const orderId = "018f0000-0023-7000-8000-000000000501";
-    const now = new Date("2026-09-02T15:00:00.000Z");
 
     // Insert order without any corresponding payment row
     await sql`
       INSERT INTO orders (id, order_number, customer_email, customer_phone, status, subtotal_cents, total_cents, currency, created_at)
-      VALUES (${orderId}, 'GP023-ORD-NOPAY', 'test.gp023.nopay@gamerperu.pe', '999111222', 'PENDING', 8000, 8000, 'PEN', ${now});
+      VALUES (${orderId}, 'GP023-ORD-NOPAY', 'test.gp023.nopay@gamerperu.pe', '999111222', 'PENDING', 8000, 8000, 'PEN', ${TEST_NOW});
     `;
 
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     if (result.orderPipeline.status === "READY") {
       expect(result.orderPipeline.data.current.totalCreatedOrders).toBe(1);
     }
     if (result.financialCohort.status === "READY") {
       expect(result.financialCohort.data.current.cohortPaidOrders).toBe(0);
-      expect(result.financialCohort.data.current.cohortGrossCents).toBe(0);
+      expect(result.financialCohort.data.current.cohortGrossCents).toBe(0n);
     }
   });
 
   it("7. Mixed-currency anomaly: Order PEN + Payment USD causes financial cohort to fail closed to CURRENCY_INTEGRITY_ERROR", async () => {
     const orderId = "018f0000-0023-7000-8000-000000000601";
     const paymentId = "018f0000-0023-7000-8000-000000000602";
-    const now = new Date("2026-09-02T15:00:00.000Z");
 
     await sql.begin(async (tx) => {
       await tx`
         INSERT INTO orders (id, order_number, customer_email, customer_phone, status, subtotal_cents, total_cents, currency, created_at)
-        VALUES (${orderId}, 'GP023-ORD-USD', 'test.gp023.usd@gamerperu.pe', '999111222', 'CONFIRMED', 10000, 10000, 'PEN', ${now});
+        VALUES (${orderId}, 'GP023-ORD-USD', 'test.gp023.usd@gamerperu.pe', '999111222', 'CONFIRMED', 10000, 10000, 'PEN', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, currency, status, created_at)
-        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 10000, 'USD', 'PAID', ${now});
+        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 10000, 'USD', 'PAID', ${TEST_NOW});
       `;
     });
 
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     expect(result.financialCohort.status).toBe("UNAVAILABLE");
     if (result.financialCohort.status === "UNAVAILABLE") {
@@ -341,35 +440,46 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
   });
 
   it("8. Payment verification queue: snapshot count and amount reported in real time", async () => {
+    // Record baseline snapshot queue (in case pre-existing payments exist in shared CI test DB)
+    const baseResult = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
+    const baseCount =
+      baseResult.paymentVerification.status === "READY"
+        ? baseResult.paymentVerification.data.snapshotQueue.queueCount
+        : 0;
+    const baseAmount =
+      baseResult.paymentVerification.status === "READY" &&
+      baseResult.paymentVerification.data.snapshotQueue.queueAmount.status === "READY"
+        ? baseResult.paymentVerification.data.snapshotQueue.queueAmount.amountCents
+        : 0n;
+
     const order1Id = "018f0000-0023-7000-8000-000000000701";
     const payment1Id = "018f0000-0023-7000-8000-000000000702";
     const order2Id = "018f0000-0023-7000-8000-000000000703";
     const payment2Id = "018f0000-0023-7000-8000-000000000704";
-    const now = new Date("2026-09-02T15:00:00.000Z");
 
     await sql.begin(async (tx) => {
       await tx`
         INSERT INTO orders (id, order_number, customer_email, customer_phone, status, subtotal_cents, total_cents, currency, created_at)
         VALUES
-          (${order1Id}, 'GP023-ORD-Q1', 'test.gp023.q1@gamerperu.pe', '999111222', 'PENDING', 5000, 5000, 'PEN', ${now}),
-          (${order2Id}, 'GP023-ORD-Q2', 'test.gp023.q2@gamerperu.pe', '999111222', 'PENDING', 7000, 7000, 'PEN', ${now});
+          (${order1Id}, 'GP023-ORD-Q1', 'test.gp023.q1@gamerperu.pe', '999111222', 'PENDING', 5000, 5000, 'PEN', ${TEST_NOW}),
+          (${order2Id}, 'GP023-ORD-Q2', 'test.gp023.q2@gamerperu.pe', '999111222', 'PENDING', 7000, 7000, 'PEN', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, currency, status, created_at)
         VALUES
-          (${payment1Id}, ${order1Id}, ${paymentMethodCode}, ${instructionVersionId}, 5000, 'PEN', 'SUBMITTED', ${now}),
-          (${payment2Id}, ${order2Id}, ${paymentMethodCode}, ${instructionVersionId}, 7000, 'PEN', 'VERIFYING', ${now});
+          (${payment1Id}, ${order1Id}, ${paymentMethodCode}, ${instructionVersionId}, 5000, 'PEN', 'SUBMITTED', ${TEST_NOW}),
+          (${payment2Id}, ${order2Id}, ${paymentMethodCode}, ${instructionVersionId}, 7000, 'PEN', 'VERIFYING', ${TEST_NOW});
       `;
     });
 
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     if (result.paymentVerification.status === "READY") {
       const queue = result.paymentVerification.data.snapshotQueue;
-      expect(queue.queueCount).toBe(2);
+      expect(queue.queueCount).toBe(baseCount + 2);
       expect(queue.queueAmount.status).toBe("READY");
       if (queue.queueAmount.status === "READY") {
-        expect(queue.queueAmount.amountCents).toBe(12000);
+        expect(queue.queueAmount.amountCents).toBe(baseAmount + 12000n);
       }
     }
   });
@@ -378,24 +488,23 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
     const orderId = "018f0000-0023-7000-8000-000000000801";
     const paymentId = "018f0000-0023-7000-8000-000000000802";
     const subId = "018f0000-0023-7000-8000-000000000803";
-    const now = new Date("2026-09-02T15:00:00.000Z");
 
     await sql.begin(async (tx) => {
       await tx`
         INSERT INTO orders (id, order_number, customer_email, customer_phone, status, subtotal_cents, total_cents, currency, created_at)
-        VALUES (${orderId}, 'GP023-ORD-SUB', 'test.gp023.sub@gamerperu.pe', '999111222', 'PENDING', 10000, 10000, 'PEN', ${now});
+        VALUES (${orderId}, 'GP023-ORD-SUB', 'test.gp023.sub@gamerperu.pe', '999111222', 'PENDING', 10000, 10000, 'PEN', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, currency, status, created_at)
-        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 10000, 'PEN', 'SUBMITTED', ${now});
+        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 10000, 'PEN', 'SUBMITTED', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO payment_submissions (id, payment_id, attempt_number, operation_code, submitted_at)
-        VALUES (${subId}, ${paymentId}, 1, 'OP-998877', ${now});
+        VALUES (${subId}, ${paymentId}, 1, 'OP-998877', ${TEST_NOW});
       `;
     });
 
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     if (result.paymentVerification.status === "READY") {
       const act = result.paymentVerification.data.periodActivity;
@@ -409,26 +518,25 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
     const paymentId = "018f0000-0023-7000-8000-000000000902";
     const sub1Id = "018f0000-0023-7000-8000-000000000903";
     const sub2Id = "018f0000-0023-7000-8000-000000000904";
-    const now = new Date("2026-09-02T15:00:00.000Z");
 
     await sql.begin(async (tx) => {
       await tx`
         INSERT INTO orders (id, order_number, customer_email, customer_phone, status, subtotal_cents, total_cents, currency, created_at)
-        VALUES (${orderId}, 'GP023-ORD-MULTISUB', 'test.gp023.multisub@gamerperu.pe', '999111222', 'PENDING', 10000, 10000, 'PEN', ${now});
+        VALUES (${orderId}, 'GP023-ORD-MULTISUB', 'test.gp023.multisub@gamerperu.pe', '999111222', 'PENDING', 10000, 10000, 'PEN', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, currency, status, created_at)
-        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 10000, 'PEN', 'SUBMITTED', ${now});
+        VALUES (${paymentId}, ${orderId}, ${paymentMethodCode}, ${instructionVersionId}, 10000, 'PEN', 'SUBMITTED', ${TEST_NOW});
       `;
       await tx`
         INSERT INTO payment_submissions (id, payment_id, attempt_number, operation_code, submitted_at)
         VALUES
-          (${sub1Id}, ${paymentId}, 1, 'OP-ATTEMPT-1', ${now}),
-          (${sub2Id}, ${paymentId}, 2, 'OP-ATTEMPT-2', ${now});
+          (${sub1Id}, ${paymentId}, 1, 'OP-ATTEMPT-1', ${TEST_NOW}),
+          (${sub2Id}, ${paymentId}, 2, 'OP-ATTEMPT-2', ${TEST_NOW});
       `;
     });
 
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     if (result.paymentVerification.status === "READY") {
       const act = result.paymentVerification.data.periodActivity;
@@ -502,10 +610,10 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
   });
 
   it("15. Temporal boundary rows: half-open interval [start, end) includes start and excludes end", async () => {
-    const now = new Date("2026-09-02T15:00:00.000Z");
-    // For TODAY: current window start is 2026-09-02 05:00:00.000Z, end is 2026-09-03 05:00:00.000Z
-    const exactStart = new Date("2026-09-02T05:00:00.000Z");
-    const exactEnd = new Date("2026-09-03T05:00:00.000Z");
+    // For TODAY with TEST_NOW (2035-05-15T15:00:00.000Z):
+    // current window in Lima time (UTC-5) is [2035-05-15T05:00:00.000Z, 2035-05-16T05:00:00.000Z)
+    const exactStart = new Date("2035-05-15T05:00:00.000Z");
+    const exactEnd = new Date("2035-05-16T05:00:00.000Z");
 
     const orderStartId = "018f0000-0023-7000-8000-000000001301";
     const orderEndId = "018f0000-0023-7000-8000-000000001302";
@@ -521,11 +629,84 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
       `;
     });
 
-    const result = await getAdminDashboardData({ periodSelector: "TODAY", now });
+    const result = await getAdminDashboardData({ periodSelector: "TODAY", now: TEST_NOW });
 
     if (result.orderPipeline.status === "READY") {
       // Exactly 1 order (the one at exactStart), the one at exactEnd is excluded!
       expect(result.orderPipeline.data.current.totalCreatedOrders).toBe(1);
     }
+  });
+
+  describe("16. Fixture Isolation Safety", () => {
+    it("16a. Sentinel record outside GP-023 namespace survives GP-023 cleanup", async () => {
+      // Create a sentinel order with a non-GP023 order number
+      await sql`
+        INSERT INTO orders (id, order_number, customer_email, customer_phone, status, subtotal_cents, total_cents, currency, created_at)
+        VALUES (${sentinelOrderId}, ${sentinelOrderNumber}, 'sentinel@gamerperu.pe', '999000000', 'PENDING', 1000, 1000, 'PEN', NOW())
+        ON CONFLICT (id) DO NOTHING;
+      `;
+
+      // Verify sentinel exists before cleanup
+      const beforeRows = await sql`SELECT id FROM orders WHERE id = ${sentinelOrderId}`;
+      expect(beforeRows.length).toBe(1);
+
+      // Run GP-023 scoped cleanup
+      await cleanupGp023CommerceFixtures();
+
+      // Verify sentinel still exists after cleanup
+      const afterRows =
+        await sql`SELECT id, order_number FROM orders WHERE id = ${sentinelOrderId}`;
+      expect(afterRows.length).toBe(1);
+      expect(afterRows[0]!.order_number).toBe(sentinelOrderNumber);
+
+      // Clean up sentinel explicitly
+      await sql`DELETE FROM orders WHERE id = ${sentinelOrderId}`;
+    });
+
+    it("16b. No unqualified DELETE or TRUNCATE on shared commerce tables in test source", async () => {
+      // Read the source of this test file and verify no unqualified DELETEs exist
+      const fs = await import("node:fs/promises");
+      const path = await import("node:path");
+      const fullSource = await fs.readFile(
+        path.resolve(__dirname, "admin-dashboard-live-scenarios.test.ts"),
+        "utf-8"
+      );
+
+      // Inspect test fixtures, setup, cleanup, and scenarios 1-16a (excluding this verification test)
+      const operationalSource = fullSource.slice(0, fullSource.indexOf("16b."));
+
+      // Strip single-line and multi-line comments so explanatory JSDoc does not trigger false positives
+      const codeWithoutComments = operationalSource
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "");
+
+      // Shared commerce tables that must never be globally cleared
+      const sharedTables = [
+        "orders",
+        "payments",
+        "refunds",
+        "payment_submissions",
+        "payment_proof_upload_intents",
+        "guest_payment_access_grants",
+        "order_items",
+        "order_pricing_snapshots",
+        "order_address_snapshots",
+        "shipments",
+        "inventory_reservations",
+        "inventory_ledger_entries",
+      ];
+
+      for (const table of sharedTables) {
+        // Match unqualified DELETE FROM <table> (no WHERE clause before statement terminator ; or backtick)
+        const unqualifiedPattern = new RegExp(`DELETE\\s+FROM\\s+${table}\\s*[;\`]`, "i");
+        expect(
+          unqualifiedPattern.test(codeWithoutComments),
+          `Found unqualified DELETE FROM ${table} without WHERE clause`
+        ).toBe(false);
+      }
+
+      // No TRUNCATE SQL statements anywhere in operational code
+      expect(codeWithoutComments).not.toMatch(/\bTRUNCATE\b/i);
+    });
   });
 });
