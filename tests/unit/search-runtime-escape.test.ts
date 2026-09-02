@@ -38,8 +38,16 @@ describe("GP-012 — PostgreSQL ESCAPE Semantics and Runtime Smoke", () => {
     "verifies standard_conforming_strings and runtime query execution against PostgreSQL",
     { timeout: 30000 },
     async () => {
+      let isLocal = false;
+      try {
+        const parsed = new URL(dbUrl!);
+        isLocal = parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost";
+      } catch {
+        // Fall back to default
+      }
+
       const sql = postgres(dbUrl!, {
-        ssl: "require",
+        ssl: isLocal ? false : "require",
         prepare: false,
       });
 
