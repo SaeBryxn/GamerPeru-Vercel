@@ -1,48 +1,33 @@
 import React from "react";
-import styles from "./page.module.css";
+import styles from "./loading.module.css";
 
-export default function AdminProtectedLoading() {
+export default function AdminDashboardLoading() {
   return (
     <div
       className={styles.container}
+      role="status"
       aria-busy="true"
-      aria-label="Cargando panel de administración"
+      aria-label="Cargando panel de administración..."
     >
-      <div className={styles.header}>
-        <div
-          style={{
-            height: "2rem",
-            width: "250px",
-            backgroundColor: "#e4e4e7",
-            borderRadius: "0.375rem",
-          }}
-        />
-        <div
-          style={{
-            height: "2.5rem",
-            width: "200px",
-            backgroundColor: "#e4e4e7",
-            borderRadius: "0.375rem",
-          }}
-        />
+      {/* Header Skeleton */}
+      <div className={styles.headerSkeleton}>
+        <div className={styles.titleSkeleton} />
+        <div className={styles.subtitleSkeleton} />
+        <div className={styles.controlsSkeleton} />
       </div>
-      <div className={styles.grid}>
-        <div
-          style={{
-            height: "180px",
-            backgroundColor: "#ffffff",
-            borderRadius: "0.75rem",
-            border: "1px solid #e4e4e7",
-          }}
-        />
-        <div
-          style={{
-            height: "180px",
-            backgroundColor: "#ffffff",
-            borderRadius: "0.75rem",
-            border: "1px solid #e4e4e7",
-          }}
-        />
+
+      {/* KPI Grid Skeleton */}
+      <div className={styles.kpiGridSkeleton}>
+        <div className={styles.kpiCardSkeleton} />
+        <div className={styles.kpiCardSkeleton} />
+        <div className={styles.kpiCardSkeleton} />
+        <div className={styles.kpiCardSkeleton} />
+      </div>
+
+      {/* Section Skeleton */}
+      <div className={styles.sectionSkeleton}>
+        <div className={styles.sectionHeaderSkeleton} />
+        <div className={styles.cardSkeleton} />
       </div>
     </div>
   );

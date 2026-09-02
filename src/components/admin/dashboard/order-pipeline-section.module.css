@@ -1,0 +1,164 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sectionIcon {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--color-brand-primary, #e11d48);
+}
+
+.sectionTitle {
+  font-family: var(--font-heading, sans-serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary, #09090b);
+  margin: 0;
+}
+
+.containerCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  background-color: var(--color-surface-card, #ffffff);
+  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  border-radius: var(--radius-lg, 0.75rem);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.summaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.summaryLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary, #52525b);
+}
+
+.summaryValue {
+  font-family: var(--font-heading, sans-serif);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary, #09090b);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  margin-top: 0.25rem;
+}
+
+.distributionBar {
+  display: flex;
+  height: 0.5rem;
+  border-radius: var(--radius-full, 9999px);
+  overflow: hidden;
+  background-color: var(--color-surface-secondary, #f4f4f5);
+  gap: 2px;
+}
+
+.barSegment {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .statusGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .statusGrid {
+    grid-template-columns: repeat(7, 1fr);
+  }
+}
+
+.statusCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.75rem;
+  background-color: var(--color-surface-secondary, #f4f4f5);
+  border-radius: var(--radius-md, 0.5rem);
+}
+
+.statusCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.statusDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full, 9999px);
+  flex-shrink: 0;
+}
+
+.statusName {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-secondary, #52525b);
+}
+
+.statusCount {
+  font-family: var(--font-heading, sans-serif);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #09090b);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status Color Palette */
+.statusPending {
+  background-color: #f59e0b;
+}
+.statusConfirmed {
+  background-color: #3b82f6;
+}
+.statusProcessing {
+  background-color: #8b5cf6;
+}
+.statusFulfilled {
+  background-color: #10b981;
+}
+.statusCancelled {
+  background-color: #ef4444;
+}
+.statusExpired {
+  background-color: #6b7280;
+}
+.statusRefunded {
+  background-color: #ec4899;
+}
+
+@media (prefers-color-scheme: dark) {
+  .statusCard {
+    background-color: var(--color-surface-dark-secondary, #18181b);
+  }
+}

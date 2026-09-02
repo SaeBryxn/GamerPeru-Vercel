@@ -186,6 +186,10 @@ export async function seedAdminUsers() {
 }
 
 // Execute seed if invoked directly
-if (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, "/")) {
+if (
+  process.argv[1] &&
+  (import.meta.url === `file://${process.argv[1]}`.replace(/\\/g, "/") ||
+    import.meta.url === `file:///${process.argv[1]}`.replace(/\\/g, "/"))
+) {
   seedAdminUsers();
 }

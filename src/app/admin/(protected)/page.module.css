@@ -1,147 +1,24 @@
-/* ==========================================================================
- * Gamer Perú — Admin Overview Page CSS Module
- * Authority: docs/design/GAMER_PERU_DESIGN_LANGUAGE.md
- * Tokens: src/styles/tokens.css & src/styles/typography.css
- * ========================================================================== */
-
 .container {
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  width: 100%;
 }
 
-.header {
+.dashboardBody {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--color-border-subtle, #e4e4e7);
+  gap: 2.25rem;
 }
 
-@media (min-width: 768px) {
-  .header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-}
-
-.title {
-  font-family: var(--font-heading, sans-serif);
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: var(--color-text-primary, #09090b);
-  margin: 0 0 0.25rem;
-}
-
-.subtitle {
-  font-size: 0.9375rem;
-  color: var(--color-text-secondary, #52525b);
-  margin: 0;
-}
-
-.userBanner {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  background-color: var(--color-surface-card, #ffffff);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
-  border-radius: var(--radius-md, 0.5rem);
-}
-
-.bannerIcon {
-  width: 2rem;
-  height: 2rem;
-  color: var(--color-brand-primary, #e11d48);
-  flex-shrink: 0;
-}
-
-.bannerEmail {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--color-text-primary, #09090b);
-}
-
-.bannerRoles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  margin-top: 0.25rem;
-}
-
-.roleTag {
-  font-size: 0.6875rem;
-  font-family: var(--font-heading, sans-serif);
-  font-weight: 600;
-  padding: 0.1rem 0.35rem;
-  background-color: var(--color-surface-secondary, #f4f4f5);
-  color: var(--color-brand-active, #be123c);
-  border-radius: var(--radius-sm, 0.25rem);
-}
-
-.grid {
+.lowerGrid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1.5rem;
+  gap: 2.25rem;
 }
 
-@media (min-width: 768px) {
-  .grid {
+@media (min-width: 1024px) {
+  .lowerGrid {
     grid-template-columns: 1fr 1fr;
   }
-}
-
-.card {
-  background-color: var(--color-surface-card, #ffffff);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
-  border-radius: var(--radius-lg, 0.75rem);
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.cardHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.cardIcon {
-  width: 1.5rem;
-  height: 1.5rem;
-  color: var(--color-status-success-text, #15803d);
-}
-
-.cardIconInfo {
-  width: 1.5rem;
-  height: 1.5rem;
-  color: var(--color-status-info-text, #0369a1);
-}
-
-.cardTitle {
-  font-family: var(--font-heading, sans-serif);
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--color-text-primary, #09090b);
-  margin: 0;
-}
-
-.cardText {
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: var(--color-text-secondary, #52525b);
-  margin: 0;
-}
-
-.statusList {
-  margin: 0;
-  padding-left: 1.25rem;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted, #71717a);
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
 }

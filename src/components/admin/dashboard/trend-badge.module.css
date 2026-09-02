@@ -1,0 +1,60 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 0.75rem;
+  font-family: var(--font-heading, sans-serif);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+}
+
+.text {
+  font-variant-numeric: tabular-nums;
+}
+
+.positive {
+  background-color: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.negative {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.neutral {
+  background-color: var(--color-surface-secondary, #f4f4f5);
+  color: var(--color-text-secondary, #52525b);
+  border: 1px solid var(--color-border-subtle, #e4e4e7);
+}
+
+@media (prefers-color-scheme: dark) {
+  .positive {
+    background-color: rgba(6, 95, 70, 0.2);
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.3);
+  }
+
+  .negative {
+    background-color: rgba(153, 27, 27, 0.2);
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.3);
+  }
+
+  .neutral {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #a1a1aa;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}
