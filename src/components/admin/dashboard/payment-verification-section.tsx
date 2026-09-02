@@ -1,7 +1,7 @@
 import React from "react";
 import type { PaymentVerificationResult } from "@/lib/admin/dashboard-types";
 import { formatCentsToPen, formatInteger } from "@/lib/admin/dashboard-format";
-import { CreditCard, Clock, RotateCcw, AlertCircle, CheckCircle2 } from "lucide-react";
+import { CreditCard, AlertCircle, CheckCircle2 } from "lucide-react";
 import styles from "./payment-verification-section.module.css";
 
 interface PaymentVerificationSectionProps {
@@ -32,11 +32,10 @@ export function PaymentVerificationSection({
         {/* Column 1: Current Operational Snapshot */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardTitleGroup}>
-              <Clock className={styles.cardIconSnapshot} aria-hidden="true" />
+            <div className={styles.titleWithBadge}>
               <h3 className={styles.cardTitle}>Por verificar ahora</h3>
+              <span className={styles.snapshotBadge}>Tiempo real</span>
             </div>
-            <span className={styles.snapshotBadge}>Tiempo real</span>
           </div>
 
           <div className={styles.snapshotRow}>
@@ -80,10 +79,8 @@ export function PaymentVerificationSection({
         {/* Column 2: Period Activity & Refunds */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardTitleGroup}>
-              <RotateCcw className={styles.cardIconActivity} aria-hidden="true" />
-              <h3 className={styles.cardTitle}>Actividad del período</h3>
-            </div>
+            <h3 className={styles.cardTitle}>Actividad del período</h3>
+            <span className={styles.cardCaption}>Comprobantes y reembolsos</span>
           </div>
 
           <div className={styles.activityGrid}>

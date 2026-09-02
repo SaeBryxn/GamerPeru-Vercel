@@ -1,7 +1,7 @@
 import React from "react";
 import type { InventoryOverviewResult } from "@/lib/admin/dashboard-types";
 import { formatInteger } from "@/lib/admin/dashboard-format";
-import { Boxes, AlertTriangle, CheckCircle2, Layers } from "lucide-react";
+import { Boxes, CheckCircle2 } from "lucide-react";
 import styles from "./inventory-overview-section.module.css";
 
 interface InventoryOverviewSectionProps {
@@ -31,11 +31,8 @@ export function InventoryOverviewSection({ inventoryOverview }: InventoryOvervie
         {/* Card 1: Balances Físicos Globales */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardTitleGroup}>
-              <Layers className={styles.cardIconBalances} aria-hidden="true" />
-              <h3 className={styles.cardTitle}>Balances físicos globales</h3>
-            </div>
-            <span className={styles.subtext}>Todas las ubicaciones</span>
+            <h3 className={styles.cardTitle}>Balances físicos globales</h3>
+            <span className={styles.cardCaption}>Todas las ubicaciones</span>
           </div>
 
           <div className={styles.balanceHighlight}>
@@ -48,24 +45,24 @@ export function InventoryOverviewSection({ inventoryOverview }: InventoryOvervie
             </span>
           </div>
 
-          <div className={styles.balanceGrid}>
-            <div className={styles.balanceItem} data-testid="inventory-on-hand">
-              <span className={styles.balanceLabel}>En mano (On Hand)</span>
-              <span className={styles.balanceValue}>
+          <div className={styles.breakdownGrid}>
+            <div className={styles.breakdownItem} data-testid="inventory-on-hand">
+              <span className={styles.breakdownLabel}>En mano (On Hand)</span>
+              <span className={styles.breakdownValue}>
                 {formatInteger(globalPhysicalBalances.onHandUnits)}
               </span>
             </div>
 
-            <div className={styles.balanceItem} data-testid="inventory-reserved">
-              <span className={styles.balanceLabel}>Reservadas</span>
-              <span className={styles.balanceValue}>
+            <div className={styles.breakdownItem} data-testid="inventory-reserved">
+              <span className={styles.breakdownLabel}>Reservadas</span>
+              <span className={styles.breakdownValue}>
                 {formatInteger(globalPhysicalBalances.reservedUnits)}
               </span>
             </div>
 
-            <div className={styles.balanceItem} data-testid="inventory-allocated">
-              <span className={styles.balanceLabel}>Asignadas</span>
-              <span className={styles.balanceValue}>
+            <div className={styles.breakdownItem} data-testid="inventory-allocated">
+              <span className={styles.breakdownLabel}>Asignadas</span>
+              <span className={styles.breakdownValue}>
                 {formatInteger(globalPhysicalBalances.allocatedUnits)}
               </span>
             </div>
@@ -75,16 +72,16 @@ export function InventoryOverviewSection({ inventoryOverview }: InventoryOvervie
         {/* Card 2: Alertas de Existencias */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardTitleGroup}>
-              <AlertTriangle className={styles.cardIconAlerts} aria-hidden="true" />
-              <h3 className={styles.cardTitle}>Alertas de existencias</h3>
-            </div>
+            <h3 className={styles.cardTitle}>Alertas de existencias</h3>
+            <span className={styles.cardCaption}>Monitoreo de niveles críticos</span>
           </div>
 
-          <div className={styles.alertsGrid}>
+          <div className={styles.alertsContainer}>
             {/* Out of stock SKUs */}
             <div
-              className={`${styles.alertItem} ${outOfStockActiveSkus > 0 ? styles.alertDanger : ""}`}
+              className={`${styles.alertItem} ${
+                outOfStockActiveSkus > 0 ? styles.alertDanger : styles.alertClean
+              }`}
               data-testid="inventory-out-of-stock-skus"
             >
               <div className={styles.alertItemHeader}>
@@ -104,7 +101,7 @@ export function InventoryOverviewSection({ inventoryOverview }: InventoryOvervie
             {/* Low stock active positions */}
             <div
               className={`${styles.alertItem} ${
-                lowStockActivePositions > 0 ? styles.alertWarning : ""
+                lowStockActivePositions > 0 ? styles.alertWarning : styles.alertClean
               }`}
               data-testid="inventory-low-stock-positions"
             >
