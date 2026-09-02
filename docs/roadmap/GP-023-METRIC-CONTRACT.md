@@ -2,7 +2,7 @@
 
 ## Status
 
-**METRIC CONTRACT PENDING EXTERNAL APPROVAL (IN DISCOVERY — CHK0-BR2 REMEDIATION)**
+**METRIC CONTRACT PENDING EXTERNAL APPROVAL (IN DISCOVERY — CHK0-BR3 REMEDIATION)**
 
 ---
 
@@ -79,7 +79,7 @@ To maintain complete mathematical truthfulness without inventing non-existent da
 - **Strict Labeling Invariant**: This metric **MUST NOT** be labeled "Ingresos recibidos en el periodo", "Caja del periodo", or "Pagos verificados en el rango".
 - **Canonical UI Label**: **"Valor Retenido del Cohorte" (Cohort Net Retained Value)**.
 
-### C. Future Cash Recognition Precondition & Strict Backfill Prohibition (CHK0-BR2 Remediation)
+### C. Future Cash Recognition Precondition & Strict Backfill Prohibition
 
 To support a future "Ingresos Recaudados en el Periodo" (Cash-Basis Accounting), the system requires an explicit immutable timestamp extension:
 
@@ -91,7 +91,7 @@ To support a future "Ingresos Recaudados en el Periodo" (Cash-Basis Accounting),
   3. In the absence of an authoritative historical event source, historical records prior to the introduction of `paid_at` will remain `paid_at = NULL / UNKNOWN`.
   4. Any future historical backfill requires separately proven authoritative evidence and its own approved migration/runbook.
   5. GP-023 cohort metrics do not depend on `paid_at` and remain fully implementable without this future backfill.
-  6. Zero migration `0013` is created in CHK0-BR2.
+  6. Zero migration `0013` is created in CHK0.
 
 ### D. Mathematical Formulas for Cohort Financial Metrics
 
@@ -173,32 +173,41 @@ Where:
 
 ## 7. Trend & Comparison Semantics
 
-### A. Comparison Window Resolution (CHK0-BR2 Remediation)
+### A. Comparison Window Resolution & Clamping Contract (CHK0-BR3 Remediation)
 
 For each selected reporting window $W_{\text{curr}} = [T_0, T_1)$, the preceding comparison window $W_{\text{prev}} = [T_{\text{prev\_start}}, T_{\text{prev\_end}})$ is determined deterministically based on the selector:
 
 1. **`TODAY`**:
-   - Current: $[\text{startOfTodayLima}, \text{startOfTomorrowLima})$
-   - Previous: $[\text{startOfYesterdayLima}, \text{startOfTodayLima})$
-   - _Rationale_: For administrative operations, comparing against the **immediately preceding full calendar day** provides the most meaningful operational benchmark.
+   - Current Window: $[\text{startOfTodayLima}, \text{startOfTomorrowLima})$
+   - Previous Window: $[\text{startOfYesterdayLima}, \text{startOfTodayLima})$
+   - _Semantics_: Compares against the **immediately preceding full Lima calendar day** for administrative operational consistency.
 2. **`LAST_7_DAYS`**:
-   - Current: $[\text{startOfTodayLima} - 6 \text{ calendar days}, \text{nowLima})$
+   - Current Window: $[\text{startOfTodayLima} - 6 \text{ calendar days}, \text{nowLima})$
    - Duration: $\Delta = \text{duration}(W_{\text{curr}})$
-   - Previous: $[(\text{startOfTodayLima} - 6 \text{ calendar days}) - \Delta, \text{startOfTodayLima} - 6 \text{ calendar days})$
-   - _Rationale_: Exactly equal duration immediately preceding the current window.
+   - Previous Window: $[(\text{startOfTodayLima} - 6 \text{ calendar days}) - \Delta, \text{startOfTodayLima} - 6 \text{ calendar days})$
+   - _Semantics_: Exactly equal duration immediately preceding the current window.
 3. **`LAST_30_DAYS`** (Default View):
-   - Current: $[\text{startOfTodayLima} - 29 \text{ calendar days}, \text{nowLima})$
+   - Current Window: $[\text{startOfTodayLima} - 29 \text{ calendar days}, \text{nowLima})$
    - Duration: $\Delta = \text{duration}(W_{\text{curr}})$
-   - Previous: $[(\text{startOfTodayLima} - 29 \text{ calendar days}) - \Delta, \text{startOfTodayLima} - 29 \text{ calendar days})$
-   - _Rationale_: Exactly equal duration immediately preceding the current window.
-4. **`THIS_MONTH`**:
-   - Current: $[\text{startOfMonthLima}, \text{nowLima})$
-   - Previous: $[\text{startOfPreviousMonthLima}, \text{startOfPreviousMonthLima} + (\text{nowLima} - \text{startOfMonthLima}))$
-   - _Rationale_: Compares against the **same elapsed portion of the previous calendar month** (Option B) for seasonal comparability.
+   - Previous Window: $[(\text{startOfTodayLima} - 29 \text{ calendar days}) - \Delta, \text{startOfTodayLima} - 29 \text{ calendar days})$
+   - _Semantics_: Exactly equal duration immediately preceding the current window.
+4. **`THIS_MONTH` (With Canonical Calendar Clamping)**:
+   - Current Window: $[\text{startOfCurrentMonthLima}, \text{nowLima})$
+   - Elapsed Duration: $\Delta_{\text{elapsed}} = \text{nowLima} - \text{startOfCurrentMonthLima}$
+   - Candidate Previous End: $T_{\text{candidate\_end}} = \text{startOfPreviousMonthLima} + \Delta_{\text{elapsed}}$
+   - Previous Month Exclusive Boundary: $T_{\text{prev\_month\_end}} = \text{startOfCurrentMonthLima}$
+   - Clamped Previous End: $T_{\text{prev\_end}} = \min(T_{\text{candidate\_end}}, T_{\text{prev\_month\_end}})$
+   - Previous Window: $[\text{startOfPreviousMonthLima}, T_{\text{prev\_end}})$
+   - _Clamping Semantics & Plain Language_: Compares against the same elapsed duration of the previous calendar month when that duration exists within the previous month. If the previous calendar month is shorter (e.g. February, April, June, September, November) and the current month has progressed beyond the total duration of the previous month, the comparison window is **strictly clamped** at the exclusive boundary of that previous month (`startOfCurrentMonthLima`). A previous-month comparison **MUST NEVER** spill into or include timestamps from the current month.
+   - _Concrete Conceptual Scenarios_:
+     - **Septiembre 2 vs Agosto**: $\Delta_{\text{elapsed}} \approx 1.5 \text{ días}$. $T_{\text{candidate\_end}} = \text{1 de Agosto 00:00} + 1.5 \text{ días} = \text{2 de Agosto 12:00}$. Cae holgadamente dentro de Agosto; ventana comparativa válida sin clamping.
+     - **Marzo 15 vs Febrero**: $\Delta_{\text{elapsed}} \approx 14.5 \text{ días}$. Cae dentro de Febrero; sin clamping.
+     - **Marzo 31 vs Febrero**: $\Delta_{\text{elapsed}} \approx 30.5 \text{ días}$. Sumar 30.5 días al 1 de Febrero cruzaría hacia Marzo. La comparación se clampa estrictamente en el límite exclusivo de Febrero (1 de Marzo `00:00:00.000` Lima). Cero timestamps de Marzo son incluidos en la ventana previa.
+     - **Mayo 31 vs Abril**: $\Delta_{\text{elapsed}} \approx 30.5 \text{ días}$. Abril tiene 30 días. Clampa estrictamente en el 1 de Mayo `00:00:00.000` Lima (límite exclusivo de Abril).
 
 ### B. Delta Formulas & Truthful Zero-Baseline Behavior
 
-For any metric $M$ with current value $V_{\text{curr}}$ and prior period value $V_{\text{prev}}$:
+For any metric $M$ with current value $V_{\text{curr}} and prior period value $V_{\text{prev}}$:
 
 - **Absolute Delta**: $\Delta_{\text{abs}} = V_{\text{curr}} - V_{\text{prev}}$
 - **Percentage Delta ($\Delta_{\%}$)**:
@@ -242,7 +251,7 @@ In GamerPeru's multi-location inventory engine, `inventory_items` is authoritati
      $$Q_{\text{ATS}} = \sum (\text{quantity\_on\_hand} - \text{quantity\_reserved} - \text{quantity\_allocated})$$
 3. **Out-of-Stock SKUs (SKUs sin Stock Disponible)**:
    Count of active product variants where the global sum of ATS across all locations is $\le 0$:
-   $$N_{\text{oos\_skus}} = \text{COUNT}(*) \text{ FROM (SELECT variant\_id, SUM(quantity\_on\_hand - quantity\_reserved - quantity\_allocated) AS total\_ats FROM inventory\_items JOIN product\_variants ON product\_variants.id = inventory\_items.variant\_id WHERE product\_variants.status = 'ACTIVE' GROUP BY variant\_id HAVING SUM(quantity\_on\_hand - quantity\_reserved - quantity\_allocated) <= 0)}$$
+   $$N_{\text{oos\_skus}} = \text{COUNT}(*) \text{ FROM (SELECT variant\_id, SUM(quantity\_on\_hand - quantity\_reserved - quantity\_allocated) AS total\_ats FROM inventory_items JOIN product_variants ON product_variants.id = inventory_items.variant_id WHERE product_variants.status = 'ACTIVE' GROUP BY variant_id HAVING SUM(quantity_on_hand - quantity_reserved - quantity_allocated) <= 0)}$$
 4. **Low-Stock Location Positions (Posiciones en Punto de Reorden)**:
    Because `reorder_point` is strictly location-specific, this metric is defined per location position:
    Count of `(variant_id, location_id)` positions where local $(\text{quantity\_on\_hand} - \text{quantity\_reserved} - \text{quantity\_allocated}) \le \text{reorder\_point} \text{ AND } > 0$.
@@ -258,7 +267,7 @@ In GamerPeru's multi-location inventory engine, `inventory_items` is authoritati
    - Displays all payments currently in `SUBMITTED` or `VERIFYING` status **regardless of when the order was created**. Staff needs real-time visibility into current unverified vouchers awaiting review in bank accounts:
      $$N_{\text{queue\_count}} = \text{COUNT}(\text{payments.id}) \quad \text{WHERE } \text{status} \in (\text{'SUBMITTED'}, \text{'VERIFYING'})$$
      $$V_{\text{queue\_amount}} = \sum \text{payments.amount\_cents} \quad \text{WHERE } \text{status} \in (\text{'SUBMITTED'}, \text{'VERIFYING'})$$
-2. **Secondary Metrics: Historical Submission Activity in Period (CHK0-BR2 Remediation)**
+2. **Secondary Metrics: Historical Submission Activity in Period**
    - **Submission Attempts During Period**: Total proof submission events created during $[T_{\text{start}}, T_{\text{end}})$:
      $$N_{\text{submissions\_in\_period}} = \text{COUNT}(\text{payment\_submissions.id}) \quad \text{WHERE } \text{submitted\_at} \ge T_{\text{start}} \text{ AND } \text{submitted\_at} < T_{\text{end}}$$
    - **Distinct Payments with Activity During Period**: Total affected payment cases that submitted at least one proof during $[T_{\text{start}}, T_{\text{end}})$:
@@ -278,7 +287,7 @@ Canonical statuses aligned strictly with `src/db/schema/orders/enums.ts`:
 
 ---
 
-## 12. Timezone & Temporal Reporting Windows (CHK0-BR2 Remediation)
+## 12. Timezone & Temporal Reporting Windows
 
 1. **Canonical Reporting Timezone**: **`America/Lima`** (UTC-5, Peru-First).
    - All relative period boundaries ("Hoy", "Últimos 7 días", "Últimos 30 días", "Este Mes") are computed relative to local calendar boundaries in Lima (`America/Lima`), then converted to UTC ISO strings for PostgreSQL range queries.
@@ -300,10 +309,12 @@ Canonical statuses aligned strictly with `src/db/schema/orders/enums.ts`:
      - End: Current instant (`nowLima`).
      - Represents exactly today's elapsed time plus the preceding 29 full Lima calendar days.
      - Comparison: Immediately preceding equal-duration interval $[(\text{startOfTodayLima} - 29 \text{ days}) - \Delta, \text{startOfTodayLima} - 29 \text{ days})$.
-   - **`THIS_MONTH`**: $[\text{startOfMonthLima}, \text{nowLima})$
+   - **`THIS_MONTH`**: $[\text{startOfCurrentMonthLima}, \text{nowLima})$
      - Start: Day 1 `00:00:00.000` Lima time of the current month.
      - End: Current instant (`nowLima`).
-     - Comparison: Same elapsed portion of the previous calendar month $[\text{startOfPreviousMonthLima}, \text{startOfPreviousMonthLima} + (\text{nowLima} - \text{startOfMonthLima}))$.
+     - Comparison: Same elapsed portion of the previous calendar month, strictly clamped at the exclusive end of that previous month:
+       $$T_{\text{prev\_end}} = \min(\text{startOfPreviousMonthLima} + (\text{nowLima} - \text{startOfCurrentMonthLima}), \text{startOfCurrentMonthLima})$$
+       Previous Window: $[\text{startOfPreviousMonthLima}, T_{\text{prev\_end}})$.
 
 ---
 
@@ -317,37 +328,38 @@ Canonical statuses aligned strictly with `src/db/schema/orders/enums.ts`:
 
 ---
 
-## 14. Database Source-of-Truth & Query Plan Matrix
+## 14. Database Source-of-Truth, Query Plan & Physical Index Alignment (CHK0-BR3 Remediation)
 
-| Dashboard Widget                           | Source Tables & Joins                                                             | Aggregation Formula & Status Filters                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Index Coverage                                                             | Potential Scan Risks & Benchmark Requirements                                                                                                                        |
-| :----------------------------------------- | :-------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Headline Cohort Financials & Orders**    | `orders` $O$<br>`JOIN payments` $P$ `ON P.order_id = O.id`                        | `SELECT`<br>&nbsp;&nbsp;`COUNT(O.id) AS total_created_orders,`<br>&nbsp;&nbsp;`COUNT(O.id) FILTER (WHERE P.status IN ('PAID','REFUNDED')) AS cohort_paid_orders,`<br>&nbsp;&nbsp;`COUNT(O.id) FILTER (WHERE P.status IN ('PAID','REFUNDED') AND (P.amount_cents - P.refunded_amount_cents) > 0) AS cohort_active_paid_orders,`<br>&nbsp;&nbsp;`COALESCE(SUM(P.amount_cents) FILTER (WHERE P.status IN ('PAID','REFUNDED')), 0) AS cohort_gross_cents,`<br>&nbsp;&nbsp;`COALESCE(SUM(P.amount_cents - P.refunded_amount_cents) FILTER (WHERE P.status IN ('PAID','REFUNDED')), 0) AS cohort_net_cents,`<br>&nbsp;&nbsp;`COALESCE(SUM(P.amount_cents) FILTER (WHERE P.status IN ('SUBMITTED','VERIFYING')), 0) AS cohort_pending_cents`<br>`FROM orders O`<br>`JOIN payments P ON P.order_id = O.id`<br>`WHERE O.created_at >= $1 AND O.created_at < $2` | `orders_status_created_at_idx`<br>`payments_status_created_at_idx`         | Index range scan on `orders.created_at` with nested index lookup on `payments.order_id`. Must be benchmarked under simulated 10k-order volume during implementation. |
-| **Current Payment Queue (Snapshot)**       | `payments` $P$                                                                    | `SELECT`<br>&nbsp;&nbsp;`COUNT(id) AS queue_count,`<br>&nbsp;&nbsp;`COALESCE(SUM(amount_cents), 0) AS queue_amount_cents`<br>`FROM payments`<br>`WHERE status IN ('SUBMITTED', 'VERIFYING')`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `payments_status_created_at_idx`                                           | Filtered index scan on `status`. Highly efficient for pending review items.                                                                                          |
-| **Payment Submissions in Period**          | `payment_submissions` $PS$                                                        | `SELECT`<br>&nbsp;&nbsp;`COUNT(id) AS submission_attempts_count,`<br>&nbsp;&nbsp;`COUNT(DISTINCT payment_id) AS distinct_payments_count`<br>`FROM payment_submissions`<br>`WHERE submitted_at >= $1 AND submitted_at < $2`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `payment_submissions_operation_code_submitted_idx`                         | Range scan on `submitted_at`. Avoids all cross-period mutable states.                                                                                                |
-| **Catalog Sellable SKUs Summary**          | `product_variants` $PV$<br>`JOIN products` $PR$ `ON PR.id = PV.product_id`        | `SELECT`<br>&nbsp;&nbsp;`COUNT(DISTINCT PR.id) FILTER (WHERE PR.status = 'PUBLISHED') AS published_products,`<br>&nbsp;&nbsp;`COUNT(DISTINCT PR.id) FILTER (WHERE PR.status = 'DRAFT') AS draft_products,`<br>&nbsp;&nbsp;`COUNT(PV.id) FILTER (WHERE PV.status = 'ACTIVE' AND PR.status = 'PUBLISHED') AS active_sellable_skus,`<br>&nbsp;&nbsp;`COUNT(PV.id) FILTER (WHERE PV.status = 'ACTIVE') AS total_active_variants`<br>`FROM products PR`<br>`LEFT JOIN product_variants PV ON PV.product_id = PR.id`                                                                                                                                                                                                                                                                                                                                         | `products_status_featured_idx`<br>`product_variants_product_id_status_idx` | Indexed join across active products and variants.                                                                                                                    |
-| **Global Stock & Out-of-Stock SKUs**       | `inventory_items` $II$<br>`JOIN product_variants` $PV$ `ON PV.id = II.variant_id` | `SELECT`<br>&nbsp;&nbsp;`COALESCE(SUM(quantity_on_hand), 0) AS on_hand,`<br>&nbsp;&nbsp;`COALESCE(SUM(quantity_reserved), 0) AS reserved,`<br>&nbsp;&nbsp;`COALESCE(SUM(quantity_allocated), 0) AS allocated,`<br>&nbsp;&nbsp;`COALESCE(SUM(quantity_on_hand - quantity_reserved - quantity_allocated), 0) AS available_to_sell,`<br>&nbsp;&nbsp;`COUNT(*) FILTER (WHERE (quantity_on_hand - quantity_reserved - quantity_allocated) <= reorder_point AND (quantity_on_hand - quantity_reserved - quantity_allocated) > 0) AS low_stock_positions`<br>`FROM inventory_items II`<br>`JOIN product_variants PV ON PV.id = II.variant_id`<br>`WHERE PV.status = 'ACTIVE'`                                                                                                                                                                                 | `inventory_items_variant_id_idx`                                           | Multi-location aggregate scan.                                                                                                                                       |
-| **Out-of-Stock SKUs (Global ATS $\le$ 0)** | Subquery over `inventory_items`                                                   | `SELECT COUNT(*) AS oos_skus FROM (`<br>&nbsp;&nbsp;`SELECT II.variant_id`<br>&nbsp;&nbsp;`FROM inventory_items II`<br>&nbsp;&nbsp;`JOIN product_variants PV ON PV.id = II.variant_id`<br>&nbsp;&nbsp;`WHERE PV.status = 'ACTIVE'`<br>&nbsp;&nbsp;`GROUP BY II.variant_id`<br>&nbsp;&nbsp;`HAVING SUM(II.quantity_on_hand - II.quantity_reserved - II.quantity_allocated) <= 0`<br>`) sub`                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `inventory_items_variant_id_idx`                                           | Evaluates true SKU-level aggregate stock rather than location rows.                                                                                                  |
+| Dashboard Widget                           | Source Tables & Joins                                                             | Aggregation Formula & Status Filters                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Existing Schema Index                                                                                                                | Physical Query-Index Alignment & Benchmark Requirement                                                                                                                                                                                                                                                                                                                                                                      |
+| :----------------------------------------- | :-------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Headline Cohort Financials & Orders**    | `orders` $O$<br>`JOIN payments` $P$ `ON P.order_id = O.id`                        | `SELECT`<br>&nbsp;&nbsp;`COUNT(O.id) AS total_created_orders,`<br>&nbsp;&nbsp;`COUNT(O.id) FILTER (WHERE P.status IN ('PAID','REFUNDED')) AS cohort_paid_orders,`<br>&nbsp;&nbsp;`COUNT(O.id) FILTER (WHERE P.status IN ('PAID','REFUNDED') AND (P.amount_cents - P.refunded_amount_cents) > 0) AS cohort_active_paid_orders,`<br>&nbsp;&nbsp;`COALESCE(SUM(P.amount_cents) FILTER (WHERE P.status IN ('PAID','REFUNDED')), 0) AS cohort_gross_cents,`<br>&nbsp;&nbsp;`COALESCE(SUM(P.amount_cents - P.refunded_amount_cents) FILTER (WHERE P.status IN ('PAID','REFUNDED')), 0) AS cohort_net_cents,`<br>&nbsp;&nbsp;`COALESCE(SUM(P.amount_cents) FILTER (WHERE P.status IN ('SUBMITTED','VERIFYING')), 0) AS cohort_pending_cents`<br>`FROM orders O`<br>`JOIN payments P ON P.order_id = O.id`<br>`WHERE O.created_at >= $1 AND O.created_at < $2` | `orders_status_created_at_idx` on `orders(status, created_at)`<br>`payments_status_created_at_idx` on `payments(status, created_at)` | **Alignment Assessment**: `orders_status_created_at_idx` has `status` as leading column, so it is **not ideally ordered** for a pure `created_at` range filter without leading status equality. Planner behavior must be measured with `EXPLAIN (ANALYZE, BUFFERS)` during the implementation gate. If sequential scan overhead is observed under benchmark volume, a dedicated `orders(created_at)` index may be proposed. |
+| **Current Payment Queue (Snapshot)**       | `payments` $P$                                                                    | `SELECT`<br>&nbsp;&nbsp;`COUNT(id) AS queue_count,`<br>&nbsp;&nbsp;`COALESCE(SUM(amount_cents), 0) AS queue_amount_cents`<br>`FROM payments`<br>`WHERE status IN ('SUBMITTED', 'VERIFYING')`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `payments_status_created_at_idx` on `payments(status, created_at)`                                                                   | **Alignment Assessment**: Query filters `WHERE status IN ('SUBMITTED', 'VERIFYING')`, which matches the leading column of the existing index. Index scan effectiveness must be validated under simulated queue volume during implementation.                                                                                                                                                                                |
+| **Payment Submissions in Period**          | `payment_submissions` $PS$                                                        | `SELECT`<br>&nbsp;&nbsp;`COUNT(id) AS submission_attempts_count,`<br>&nbsp;&nbsp;`COUNT(DISTINCT payment_id) AS distinct_payments_count`<br>`FROM payment_submissions`<br>`WHERE submitted_at >= $1 AND submitted_at < $2`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `payment_submissions_operation_code_submitted_idx` on `payment_submissions(operation_code, submitted_at)`                            | **Alignment Assessment**: The existing composite index has `operation_code` as leading column, so it is **not ideally ordered** for a pure `submitted_at` range query without `operation_code`. Planner behavior must be benchmarked during implementation. If needed, a dedicated `payment_submissions(submitted_at)` index may be proposed.                                                                               |
+| **Catalog Sellable SKUs Summary**          | `product_variants` $PV$<br>`JOIN products` $PR$ `ON PR.id = PV.product_id`        | `SELECT`<br>&nbsp;&nbsp;`COUNT(DISTINCT PR.id) FILTER (WHERE PR.status = 'PUBLISHED') AS published_products,`<br>&nbsp;&nbsp;`COUNT(DISTINCT PR.id) FILTER (WHERE PR.status = 'DRAFT') AS draft_products,`<br>&nbsp;&nbsp;`COUNT(PV.id) FILTER (WHERE PV.status = 'ACTIVE' AND PR.status = 'PUBLISHED') AS active_sellable_skus,`<br>&nbsp;&nbsp;`COUNT(PV.id) FILTER (WHERE PV.status = 'ACTIVE') AS total_active_variants`<br>`FROM products PR`<br>`LEFT JOIN product_variants PV ON PV.product_id = PR.id`                                                                                                                                                                                                                                                                                                                                         | `products_status_featured_idx`<br>`product_variants_product_id_status_idx`                                                           | Indexed join across active products and variants. Execution plans must be benchmarked.                                                                                                                                                                                                                                                                                                                                      |
+| **Global Stock & Out-of-Stock SKUs**       | `inventory_items` $II$<br>`JOIN product_variants` $PV$ `ON PV.id = II.variant_id` | `SELECT`<br>&nbsp;&nbsp;`COALESCE(SUM(quantity_on_hand), 0) AS on_hand,`<br>&nbsp;&nbsp;`COALESCE(SUM(quantity_reserved), 0) AS reserved,`<br>&nbsp;&nbsp;`COALESCE(SUM(quantity_allocated), 0) AS allocated,`<br>&nbsp;&nbsp;`COALESCE(SUM(quantity_on_hand - quantity_reserved - quantity_allocated), 0) AS available_to_sell,`<br>&nbsp;&nbsp;`COUNT(*) FILTER (WHERE (quantity_on_hand - quantity_reserved - quantity_allocated) <= reorder_point AND (quantity_on_hand - quantity_reserved - quantity_allocated) > 0) AS low_stock_positions`<br>`FROM inventory_items II`<br>`JOIN product_variants PV ON PV.id = II.variant_id`<br>`WHERE PV.status = 'ACTIVE'`                                                                                                                                                                                 | `inventory_items_variant_id_idx`                                                                                                     | Multi-location aggregate scan over variant foreign key index. Effectiveness must be benchmarked.                                                                                                                                                                                                                                                                                                                            |
+| **Out-of-Stock SKUs (Global ATS $\le$ 0)** | Subquery over `inventory_items`                                                   | `SELECT COUNT(*) AS oos_skus FROM (`<br>&nbsp;&nbsp;`SELECT II.variant_id`<br>&nbsp;&nbsp;`FROM inventory_items II`<br>&nbsp;&nbsp;`JOIN product_variants PV ON PV.id = II.variant_id`<br>&nbsp;&nbsp;`WHERE PV.status = 'ACTIVE'`<br>&nbsp;&nbsp;`GROUP BY II.variant_id`<br>&nbsp;&nbsp;`HAVING SUM(II.quantity_on_hand - II.quantity_reserved - II.quantity_allocated) <= 0`<br>`) sub`                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `inventory_items_variant_id_idx`                                                                                                     | Aggregates stock by `variant_id` to evaluate global SKU stock rather than individual location rows.                                                                                                                                                                                                                                                                                                                         |
 
 ---
 
 ## 15. Data Integrity & Edge-Case Matrix
 
-| Scenario / Edge Case                  | Expected System Behavior & Value                                                                                                  | Safety Invariant                                    |
-| :------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------- |
-| **Completely Empty Database**         | All counts = `0`, Net Value = `S/ 0.00`, AOV = `S/ 0.00`, Stock = `0`. Clean zero-state display.                                  | No runtime exceptions; SQL null coalescence to 0.   |
-| **Zero Orders in Period**             | Headline KPIs show `S/ 0.00` and `0 pedidos`. AOV returns `S/ 0.00`.                                                              | Never divide by zero.                               |
-| **Orders Created but 0 Paid**         | Total orders = $N$, Net Retained = `S/ 0.00`, Paid Orders = `0`, AOV = `S/ 0.00`.                                                 | Unpaid orders never count as realized sales.        |
-| **Cancelled Orders**                  | Counted in `CANCELLED` status breakdown; excluded from paid cohort value.                                                         | Cancelled amounts do not inflate revenue.           |
-| **Unverified Payment Proofs**         | Aggregated in Snapshot Queue ("Por Verificar"). Excluded from Net Retained Value.                                                 | Staff clearly sees claimed vs verified funds.       |
-| **Rejected Payment Proofs**           | Recorded in `REJECTED` status; revenue value = `0`.                                                                               | Rejected proofs ignored in sales metrics.           |
-| **Fully Refunded Orders**             | Net retained value is $0$; excluded from AOV denominator ($N_{\text{cohort\_paid\_active}}$).                                     | Prevents AOV depression from zero-value orders.     |
-| **Partially Refunded Orders**         | Net value reduced by `refunded_amount_cents`; retained in AOV denominator.                                                        | Accurate average ticket for retained funds.         |
-| **Previous Period = 0**               | Trend displays `percentageDelta = null`, visual badge `"Nuevo"`, and absolute delta $+S/ X.XX$.                                   | Never display `+100%`, `Infinity%`, or `NaN%`.      |
-| **Multi-Location Inventory**          | Location positions are counted as positions; Out-of-Stock is computed globally per SKU.                                           | Prevents duplicate or misleading SKU counts.        |
-| **DRAFT Product with ACTIVE Variant** | Excluded from "SKUs Vendibles Activos"; counted only in "Total Variantes".                                                        | Accurately reflects storefront customer visibility. |
-| **Exact Boundary Timestamps**         | Evaluated via $[T_{\text{start}}, T_{\text{end}})$ half-open interval ($t \ge T_{\text{start}} \text{ AND } t < T_{\text{end}}$). | Zero double-counting across adjacent periods.       |
-| **Unauthorized Staff Role**           | Financial cards omitted from server payload; clean access-restricted badge.                                                       | Zero privileged data leakage in HTML or JSON.       |
-| **Storefront Customer Access**        | Blocked at `/admin` layout boundary with HTTP 403 Forbidden.                                                                      | Complete platform isolation.                        |
+| Scenario / Edge Case                                | Expected System Behavior & Value                                                                                                                                                                                     | Safety Invariant                                                                                       |
+| :-------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------- |
+| **Completely Empty Database**                       | All counts = `0`, Net Value = `S/ 0.00`, AOV = `S/ 0.00`, Stock = `0`. Clean zero-state display.                                                                                                                     | No runtime exceptions; SQL null coalescence to 0.                                                      |
+| **Zero Orders in Period**                           | Headline KPIs show `S/ 0.00` and `0 pedidos`. AOV returns `S/ 0.00`.                                                                                                                                                 | Never divide by zero.                                                                                  |
+| **Orders Created but 0 Paid**                       | Total orders = $N$, Net Retained = `S/ 0.00`, Paid Orders = `0`, AOV = `S/ 0.00`.                                                                                                                                    | Unpaid orders never count as realized sales.                                                           |
+| **Cancelled Orders**                                | Counted in `CANCELLED` status breakdown; excluded from paid cohort value.                                                                                                                                            | Cancelled amounts do not inflate revenue.                                                              |
+| **Unverified Payment Proofs**                       | Aggregated in Snapshot Queue ("Por Verificar"). Excluded from Net Retained Value.                                                                                                                                    | Staff clearly sees claimed vs verified funds.                                                          |
+| **Rejected Payment Proofs**                         | Recorded in `REJECTED` status; revenue value = `0`.                                                                                                                                                                  | Rejected proofs ignored in sales metrics.                                                              |
+| **Fully Refunded Orders**                           | Net retained value is $0$; excluded from AOV denominator ($N_{\text{cohort\_paid\_active}}$).                                                                                                                        | Prevents AOV depression from zero-value orders.                                                        |
+| **Partially Refunded Orders**                       | Net value reduced by `refunded_amount_cents`; retained in AOV denominator.                                                                                                                                           | Accurate average ticket for retained funds.                                                            |
+| **Previous Period = 0**                             | Trend displays `percentageDelta = null`, visual badge `"Nuevo"`, and absolute delta $+S/ X.XX$.                                                                                                                      | Never display `+100%`, `Infinity%`, or `NaN%`.                                                         |
+| **Mes Anterior Más Corto (Clamping en THIS_MONTH)** | Consulta de `THIS_MONTH` realizada el 31 de Marzo frente a Febrero (o 31 de Mayo frente a Abril). La ventana previa se clampa deterministamente en el límite exclusivo del mes anterior (`startOfCurrentMonthLima`). | Jamás se incluyen timestamps de Marzo en la comparación previa de Febrero. Cero desbordamiento de mes. |
+| **Multi-Location Inventory**                        | Location positions are counted as positions; Out-of-Stock is computed globally per SKU.                                                                                                                              | Prevents duplicate or misleading SKU counts.                                                           |
+| **DRAFT Product with ACTIVE Variant**               | Excluded from "SKUs Vendibles Activos"; counted only in "Total Variantes".                                                                                                                                           | Accurately reflects storefront customer visibility.                                                    |
+| **Exact Boundary Timestamps**                       | Evaluated via $[T_{\text{start}}, T_{\text{end}})$ half-open interval ($t \ge T_{\text{start}} \text{ AND } t < T_{\text{end}}$).                                                                                    | Zero double-counting across adjacent periods.                                                          |
+| **Unauthorized Staff Role**                         | Financial cards omitted from server payload; clean access-restricted badge.                                                                                                                                          | Zero privileged data leakage in HTML or JSON.                                                          |
+| **Storefront Customer Access**                      | Blocked at `/admin` layout boundary with HTTP 403 Forbidden.                                                                                                                                                         | Complete platform isolation.                                                                           |
 
 ---
 
@@ -409,16 +421,39 @@ The dashboard integrates directly into the established **GP-022 Admin Shell** (`
 
 ---
 
-## 19. Performance & Index Observations
+## 19. Performance & Physical Index Alignment (CHK0-BR3 Remediation)
 
-- **Index Coverage**:
-  - `orders_status_created_at_idx` (`orders(status, created_at)`) covers cohort range queries.
-  - `payments_status_created_at_idx` (`payments(status, created_at)`) covers status filtering.
-  - `payment_submissions_operation_code_submitted_idx` covers submission range queries.
-  - `inventory_items_variant_id_idx` covers inventory joins.
-  - `product_variants_product_id_status_idx` covers catalog variant sellability joins.
-- **Performance Risks**: Unbounded date ranges could trigger table scans; queries must enforce bounded period parameters.
-- **Benchmark Requirement**: Execution times must be measured and documented under realistic fixture data during the implementation gate. Zero schema migrations (`0013`) are required for GP-023.
+### A. Existing Schema Index Analysis
+
+1. **`orders_status_created_at_idx` ON `orders(status, created_at)`**:
+   - _Physical Shape_: Composite B-tree index where `status` is the leading column.
+   - _Query Access Pattern_: GP-023 cohort queries filter on `orders.created_at >= $1 AND orders.created_at < $2` across all statuses or across a subset evaluated via conditional aggregation (`FILTER (WHERE ...)`).
+   - _Alignment Reality_: Because `status` is leading, the index is **not ideally ordered** for a pure range scan on `created_at`. PostgreSQL may elect a sequential scan or index skip scan depending on table cardinality.
+2. **`payment_submissions_operation_code_submitted_idx` ON `payment_submissions(operation_code, submitted_at)`**:
+   - _Physical Shape_: Composite B-tree index where `operation_code` is the leading column.
+   - _Query Access Pattern_: GP-023 period submission activity filters strictly on `submitted_at >= $1 AND submitted_at < $2`.
+   - _Alignment Reality_: Because `operation_code` is leading, this index does **not** provide an efficient index range scan for queries without `operation_code`.
+3. **`payments_status_created_at_idx` ON `payments(status, created_at)`**:
+   - _Physical Shape_: Composite B-tree index where `status` is the leading column.
+   - _Query Access Pattern_: Filters `WHERE status IN ('SUBMITTED', 'VERIFYING')`.
+   - _Alignment Reality_: Well-aligned with the leading column predicate.
+4. **`inventory_items_variant_id_idx` ON `inventory_items(variant_id)`**:
+   - _Alignment Reality_: Well-aligned for joining inventory items with active product variants.
+5. **`product_variants_product_id_status_idx` ON `product_variants(product_id, status)`**:
+   - _Alignment Reality_: Well-aligned for joining catalog variants by parent product and filtering by active status.
+
+### B. Removal of Unverified Performance Claims
+
+All unmeasured assertions (such as `< 10ms`, `sub-millisecond`, or `highly efficient`) have been removed from the contract. All query plans must be empirically validated using `EXPLAIN (ANALYZE, BUFFERS)` during the implementation gate under realistic benchmark volumes.
+
+### C. Candidate Indexes Deferred to Implementation Benchmarking
+
+If implementation-gate benchmarks on simulated 10k+ order volumes demonstrate that sequential scans cause unacceptable latency, the following dedicated indexes may be proposed:
+
+1. `orders_created_at_idx` ON `orders(created_at)`
+2. `payment_submissions_submitted_at_idx` ON `payment_submissions(submitted_at)`
+
+**Strict Freeze Invariant**: These candidate indexes are technical proposals for implementation benchmarking only. **Zero migrations (`0013`) are created in CHK0-BR3**.
 
 ---
 
@@ -446,16 +481,19 @@ The dashboard integrates directly into the established **GP-022 Admin Shell** (`
    - **Finding**: Current schema cannot compute "Cash received between Date A and Date B" because `payments.created_at` is order creation time and `payments.updated_at` is mutable.
    - **Resolution for GP-023**: Implement Strategy A (Cohort Financial Realization) with unambiguous labeling ("Valor Retenido del Cohorte").
    - **Future Requirement**: Introducing true cash-basis recognition requires adding an immutable `payments.paid_at` column in a future approved migration (e.g. during GP-028 payment verification queue). Automatic backfill from `updated_at` is strictly prohibited; historical records without an audit trace will remain `paid_at = NULL / UNKNOWN`.
-2. **Default Reporting Period**:
+2. **Query Index Benchmarking Precondition**:
+   - **Finding**: Existing indexes on `orders(status, created_at)` and `payment_submissions(operation_code, submitted_at)` have leading columns that do not match pure timestamp range queries.
+   - **Resolution for Implementation**: Validate query plans with `EXPLAIN ANALYZE` during the implementation checkpoint. If necessary, introduce dedicated single-column timestamp indexes in a separate implementation migration.
+3. **Default Reporting Period**:
    - **Resolution**: Default to `Últimos 30 días` (Last 30 days) with toggles for `Hoy`, `Últimos 7 días`, and `Este Mes` in `America/Lima`.
-3. **Multi-Currency Policy**:
+4. **Multi-Currency Policy**:
    - **Resolution**: All metrics displayed strictly in `PEN (S/.)`. Mixed currency addition without an approved FX policy is forbidden.
 
 ---
 
 ## 22. Proposed GP-023 Implementation Slices (For Subsequent Checkpoints)
 
-- **Slice 1 (Data Layer & Aggregated Readers)**: Implement `src/lib/admin/dashboard-reader.ts` containing single-pass aggregated PostgreSQL queries with strict RBAC permission gating and cohort realization formulas.
+- **Slice 1 (Data Layer & Aggregated Readers)**: Implement `src/lib/admin/dashboard-reader.ts` containing single-pass aggregated PostgreSQL queries with strict RBAC permission gating, clamped temporal resolution, and cohort realization formulas.
 - **Slice 2 (UI Components & Layout)**: Implement `DashboardKpiCard`, `OperationalStatusCard`, and `CatalogInventoryCard` in `src/components/admin/dashboard/` matching Gamer Perú design tokens.
 - **Slice 3 (Page Integration & Validation)**: Integrate into `src/app/admin/(protected)/page.tsx`, write comprehensive unit tests (`tests/unit/admin-dashboard.test.ts`), and add real local Supabase E2E tests (`tests/e2e/admin-dashboard.spec.ts`).
 
