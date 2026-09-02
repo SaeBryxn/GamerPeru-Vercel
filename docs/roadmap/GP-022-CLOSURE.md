@@ -1,4 +1,4 @@
-# GP-022 — Canonical Closure Report (CHK3-BR1 Remediation)
+# GP-022 — Canonical Closure Report (CHK3-FINAL Hosted Migration Deployment)
 
 ## Status
 
@@ -15,47 +15,62 @@
 - **Canonical Starting Checkpoint for GP-022 / CHK2-BR1**: `0148f733ef6f8c35fd0bbb1cf013bb9b9d24e502` (`docs(roadmap): record canonical CI execution evidence for GP-022 closure candidate`)
 - **CHK2-BR1 Implementation Fix Commit**: `9cd44caa24b64276073f54589e52e9bf739243b2` (CI Run ID `33567529733`, Status: `completed`, Conclusion: `success`)
 - **CHK2-BR1 Final Documentation Commit**: `b1a00947d12f2e6a6d58b0056f281810aa3ba59b` (CI Run ID `33568095383`, Status: `completed`, Conclusion: `success`)
-- **CHK3 External Audit Verdict**: `REJECTED` (Defects: hosted target identity guard overly permissive accepting hostile hosts if username contained project ref, and Drizzle post-migration table/column verification procedure incorrect)
-- **CHK3-BR1 Canonical Remediation Implementation Commit**: `c4e9b0c4005bf57ac759cfd92f75cc534d174284` (`fix(db): harden hosted migration target guard against hostile endpoints`)
+- **CHK3 External Audit Verdict**: `REJECTED` (Defects: hosted target identity guard overly permissive, and Drizzle post-migration table/column verification procedure incorrect)
+- **CHK3-BR1 Canonical Remediation Implementation Commit**: `c4e9b0c4005bf57ac759cfd92f75cc534d174284` (`fix(db): harden hosted migration target guard against hostile endpoints`, CI Run ID `33570942561`, Status: `completed`, Conclusion: `success`)
+- **CHK3-BR1 Final Documentation Commit**: `e06ba1312853c15568061d8ae36b95862a5d9710` (`docs(roadmap): update GP-022 closure candidate with CHK3-BR1 remediation evidence`, CI Run ID `33571474686`, Status: `completed`, Conclusion: `success`)
+- **CHK3-BR1 External Audit Verdict**: `APPROVED`
+- **CHK3-FINAL Controlled Hosted Migration Starting Checkpoint**: `e06ba1312853c15568061d8ae36b95862a5d9710`
 - **Target Branch**: `main`
 
 ---
 
-## Executive Summary of CHK3-BR1 Remediations & Stabilizations
+## Hosted Migration Deployment & Verification Evidence (CHK3-FINAL)
 
-GP-022 / CHK3-BR1 remediates the hosted migration safety guard and establishes the physical Drizzle verification baseline:
+### 1. Hosted Target Identity & Fail-Closed Guard
 
-1. **Hardened Hosted Target Identity Guard**:
-   - Refactored `resolveMigrationTarget()` in `src/db/migration-guard.ts` to strictly validate hosted endpoints.
-   - **Direct Connection Rule**: Accepts ONLY exact hostname `db.jpjffalmvlxpufvtvskx.supabase.co`, direct username `postgres` (or project-scoped `postgres.jpjffalmvlxpufvtvskx`), port strictly `5432`, database strictly `postgres`.
-   - **Session Pooler Fallback Rule**: Accepts ONLY subdomains ending in `.pooler.supabase.com` matching `/^[a-z0-9-]+(\.[a-z0-9-]+)*\.pooler\.supabase\.com$/`, username strictly `postgres.jpjffalmvlxpufvtvskx`, port strictly `5432`, database strictly `postgres`.
-   - **Hostile Target Rejections**: Formally rejects arbitrary hostnames even if username contains project ref, rejects domain spoofing attempts (`evil.example.com`, `supabase.com.evil.example`, `pooler.supabase.com.evil.example`, `db.jpjffalmvlxpufvtvskx.supabase.co.evil.example`), rejects transaction pooler port `6543`, arbitrary non-5432 ports, and non-postgres databases.
-   - Expanded unit test suite in `tests/unit/inventory/migration-target-guard.test.ts` with 15 comprehensive test cases covering the complete hostile matrix.
+- **Supabase Project Ref**: `jpjffalmvlxpufvtvskx`
+- **Database**: `postgres`
+- **Host**: `aws-0-sa-east-1.pooler.supabase.com` (Official Supabase Session Pooler IPv4)
+- **Port**: `5432` (Direct port `6543` forbidden)
+- **Username**: `postgres.jpjffalmvlxpufvtvskx`
+- **Sanitized Target URL**: `postgresql://postgres.jpjffalmvlxpufvtvskx:REDACTED@aws-0-sa-east-1.pooler.supabase.com:5432/postgres`
+- **Migration Target Guard**: Validated with `GAMERPERU_MIGRATION_ENV=hosted` and `AUTHORIZED_HOSTED_DEPLOYMENT=true` $\to$ **PASS**
 
-2. **Drizzle Migration History Physical Baseline**:
-   - Corrected migration history verification to query schema `drizzle` table `__drizzle_migrations` (`drizzle.__drizzle_migrations`).
-   - Verified physical Drizzle schema and record schema (`id: integer`, `hash: text`, `created_at: bigint`).
-   - Recorded canonical baseline for migration 0012 (`0012_canonical_inventory_permission`):
-     - `id`: `13`
-     - `hash`: `6704bde065e562e346a55ef173b0b3c2b4d15382f1064681ea16c4d216273668`
-     - `created_at`: `1788250000000` (matching `when` in `src/db/migrations/meta/_journal.json`)
-     - Total Drizzle records after 0012: exactly `13`.
+### 2. Phase 2: Pre-Migration Read-Only Preflight Results
 
-3. **Single Source of Truth for Admin Shell Entry**:
-   - `hasAdminShellAccess(context: VerifiedAuthContext): boolean` in `src/lib/auth/rbac.ts`.
-   - Unified `requireAdminAccess()` and `AdminProtectedLayout` evaluation criteria.
+- **Database & User Identity**: `current_database = 'postgres'`, `current_user = 'postgres'` $\to$ **PASS**
+- **Drizzle Migration Count**: `12` $\to$ **PASS**
+- **Latest Drizzle Migration (0011)**: `created_at = 1788231782857`, `hash = '0890b540ba993da662eeac4b35f619d36e2c0ab6cc8f812c31643b0b8d150efc'` $\to$ **PASS**
+- **0012 Drizzle Record Count**: `0` $\to$ **PASS**
+- **`inventory:manage` Permission Count**: `0` $\to$ **PASS**
+- **Deterministic UUID `018f0000-0000-7000-8000-00000000002b` Count**: `0` $\to$ **PASS**
+- **Baseline `role_permissions` Count**: `17` $\to$ **PASS**
+- **Baseline `CUSTOMER` Permissions**: `0` $\to$ **PASS**
 
-4. **Sanitized User-Facing Error Surfaces**:
-   - `src/components/admin/admin-error.tsx` displays only generic safe copy with zero raw error interpolation.
-   - Verified sensitive strings never leak into browser output.
+### 3. Phase 3 & 4: Controlled Deployment & Physical Verification Results
 
-5. **Mobile Drawer Trigger Ref & Focus Restoration Architecture**:
-   - `AdminHeader` accepts `triggerRef={menuButtonRef}` and dynamic `isMobileNavOpen` for accessible focus restoration and dynamic `aria-expanded` state.
+- **Execution Command**: `pnpm db:migrate` via canonical `drizzle-kit migrate`
+- **Deployment Timestamp**: `2026-09-02T01:49:31.607Z`
+- **Exit Code**: `0` (`migrations applied successfully!`, Duration: 2,951ms)
+- **Physical Verification**:
+  1. `inventory:manage` Row: `id = '018f0000-0000-7000-8000-00000000002b'`, `name = 'inventory:manage'` (1 row) $\to$ **PASS**
+  2. UUID Uniqueness: `1` $\to$ **PASS**
+  3. Exclusive Role Mapping: `SUPER_ADMIN | inventory:manage` (1 row) $\to$ **PASS**
+  4. Non-SUPER_ADMIN Mappings: `0` $\to$ **PASS**
+  5. `CUSTOMER` Role Mappings: `0` $\to$ **PASS**
+  6. Total Canonical `role_permissions` Count: `18` $\to$ **PASS**
+  7. Total `drizzle.__drizzle_migrations` Count: `13` $\to$ **PASS**
+  8. Migration 0012 Physical Drizzle Record: `created_at = 1788250000000`, `hash = '6704bde065e562e346a55ef173b0b3c2b4d15382f1064681ea16c4d216273668'` $\to$ **PASS**
+  9. Migration 0012 Record Uniqueness: `1` $\to$ **PASS**
 
-6. **Semantic Admin E2E Testing**:
-   - Overview navigation link scoped strictly to navigation landmark `getByRole("navigation", { name: "Secciones del panel" })`.
-   - Brand badge uses exact text matching `getByText("ADMIN", { exact: true })`.
-   - Backdrop click targets rendered backdrop element directly.
+### 4. Phase 5: Idempotency & NO-OP Second Run Results
+
+- **Second Execution Command**: `pnpm db:migrate` under identical hosted environment
+- **Exit Code**: `0` (`migrations applied successfully!`, Duration: 1,987ms)
+- **Drizzle Migrations Total**: `13` (Zero new rows inserted) $\to$ **PASS**
+- **`inventory:manage` Permission Count**: `1` (Zero duplicates) $\to$ **PASS**
+- **`inventory:manage` Role Mappings Count**: `1` (Zero duplicates) $\to$ **PASS**
+- **Total `role_permissions` Count**: `18` (Zero duplicates) $\to$ **PASS**
 
 ---
 
@@ -85,7 +100,7 @@ Total Canonical Mappings in Database: 18
 
 - `src/db/migrations/0012_canonical_inventory_permission.sql`: Data migration adding `inventory:manage` and mapping to `SUPER_ADMIN` (frozen, blob `e80c30ae9d0f86e14486b0fd5c782eb9ec3f7119`).
 - `src/db/migrations/meta/0012_snapshot.json`: Schema snapshot for migration 0012.
-- `src/db/migrations/meta/_journal.json`: Journal entry for migration 0012.
+- `src/db/migrations/meta/_journal.json`: Journal entry for migration 0012 (`when = 1788250000000`).
 - `src/db/migration-guard.ts`: Hardened target guard strictly validating direct and pooler Supabase endpoints and disallowing arbitrary hosts.
 - `src/lib/auth/rbac.ts`: Added `inventory:manage`, `CANONICAL_STAFF_ROLES`, `hasAdminShellAccess()`, `requireAdminAccess()`, and memoized `getVerifiedAuthContext()`.
 - `src/lib/supabase/proxy.ts`: Unconditional `Cache-Control: private, no-store` header injection for admin routes.
@@ -139,13 +154,11 @@ Total Canonical Mappings in Database: 18
 - `pnpm build` $\to$ **PASS** (Next.js Turbopack production build succeeded; `ƒ /admin` dynamically compiled)
 - `pnpm test:e2e` $\to$ **PASS** (142 Playwright tests passed, 0 failed)
 - `git diff --check` $\to$ **PASS** (Zero whitespace or formatting errors)
+- `Cloudflare R2` $\to$ **100% Untouched**
+- `GP-023` $\to$ **Not Begun**
 
 ---
 
 ## Verdict Recommendation
 
-**GP022_CHK3_BR1_READY_FOR_EXTERNAL_REVIEW**
-
-Upon external reviewer approval of this CHK3-BR1 remediation, proceed strictly to:
-
-- **GP-022 / CHK3**: Controlled hosted Supabase migration 0012 preflight and deployment gate.
+**GP022_CHK3_FINAL_READY_FOR_EXTERNAL_REVIEW**
