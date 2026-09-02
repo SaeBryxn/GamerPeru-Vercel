@@ -1,10 +1,8 @@
-# GP-023 — Admin Dashboard: Closure Candidate Report
+# GP-023 — Admin Dashboard: Closure Report
 
 ## Status
 
-READY FOR EXTERNAL CLOSURE APPROVAL / CHK3 VALIDATED
-
-_Note: Formal external closure approval is pending the next external review._
+CLOSED / EXTERNALLY APPROVED
 
 ---
 
@@ -29,13 +27,14 @@ All dashboard metrics are aggregate-only, read-only, and backed directly by cano
 | **CHK0** | Metric Contract & Source of Truth Specification  | `a8e171827eb5543f35e8dd2d64cd5791ffa7cb5a` | EXTERNALLY APPROVED / FROZEN |
 | **CHK1** | Reader Layer, Aggregations & Live DB Integration | `639fe78b9ed656e12bf8a216021e7f309d16eb68` | EXTERNALLY APPROVED / FROZEN |
 | **CHK2** | Visual Presentation, Responsive UX & Axe Audits  | `9b55d5b8f9b340bd692d8c5d4d3b61874ebd4c4a` | EXTERNALLY APPROVED / FROZEN |
-| **CHK3** | Final Integrated Validation & Closure Candidate  | `[External approval pending]`              | READY FOR EXTERNAL REVIEW    |
+| **CHK3** | Final Integrated Validation & Closure Candidate  | `f1e911b020e6f670f351bad96f4111e7a8c613b0` | EXTERNALLY APPROVED / FROZEN |
 
 ### Canonical Gate Commit Identification
 
 - **CHK0 Final Approval**: `a8e171827eb5543f35e8dd2d64cd5791ffa7cb5a` (_"docs(roadmap): define deterministic AOV rounding, fail-closed currency integrity, and physical payment cardinality (CHK0-BR5)"_)
-- **CHK1 Final Approval**: `639fe78b9ed656e12bf8a216021e7f309d16eb68` (_"feat(admin): live postgresql dashboard reader & integration test suite (GP-023 CHK1-BR1)"_)
+- **CHK1 Final Approval**: `639fe78b9ed656e12bf8a216021e7f309d16eb68` (_"fix(admin): preserve exact monetary bigint and isolate test fixtures (GP-023 CHK1-BR1)"_)
 - **CHK2 Final Approval**: `9b55d5b8f9b340bd692d8c5d4d3b61874ebd4c4a` (_"fix(admin): repair dashboard css module contracts and visual regression coverage (GP-023 CHK2-BR3)"_)
+- **CHK3 Final Approval**: `f1e911b020e6f670f351bad96f4111e7a8c613b0` (_"docs(roadmap): correct GP-023 closure evidence and canonical SHAs (CHK3-BR1)"_)
 
 ---
 
@@ -100,7 +99,7 @@ _Note: `admin:orders:read` does not exist in the canonical codebase and is not u
 
 ## 5. Visual Architecture, Responsiveness & Accessibility
 
-- **CSS Module Contracts**: Deterministically validated via `tests/unit/admin-dashboard-css-contract.test.ts` ensuring 100% of static `styles.<selector>` and dynamic status classes exist in stylesheets with zero dead selectors.
+- **CSS Module Contracts**: Deterministically validated via `tests/unit/admin-dashboard-css-contract.test.ts` verifying that: (1) all statically referenced dashboard `styles.foo` selectors resolve to selectors defined in their imported CSS Modules; (2) expected dynamic Order status selectors exist; (3) expected dynamic trend direction selectors exist; and (4) specifically obsolete Inventory and Payment selectors removed during CHK2-BR3 do not remain.
 - **WCAG 2.1 AA Accessibility**: 0 violations reported by automated Axe audits on `/admin`. All foreground/background color combinations satisfy minimum contrast ratios `>= 4.5:1` in both light and dark color schemes.
 - **Responsive Viewport Matrix**: Zero horizontal overflow verified across 8 viewports (320px, 360px, 375px, 480px, 768px, 1024px, 1440px, 1920px).
 - **Keyboard Navigation**: Skip links (`#admin-main-content`) and focus traps in mobile navigation drawers operate seamlessly.
