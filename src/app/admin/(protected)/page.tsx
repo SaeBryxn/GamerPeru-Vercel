@@ -19,9 +19,7 @@ interface AdminDashboardPageProps {
   searchParams?: Promise<{ period?: string }>;
 }
 
-export default async function AdminDashboardPage({
-  searchParams,
-}: AdminDashboardPageProps) {
+export default async function AdminDashboardPage({ searchParams }: AdminDashboardPageProps) {
   const resolvedParams = searchParams ? await searchParams : {};
   const rawPeriod = resolvedParams.period;
 
