@@ -64,7 +64,7 @@
 
 .subtext {
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #71717a);
+  color: #52525b;
   margin: 0;
   line-height: 1.5;
 }
