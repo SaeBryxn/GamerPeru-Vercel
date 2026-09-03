@@ -1,0 +1,1032 @@
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import postgres from "postgres";
+import { assertLocalDatabaseTarget } from "@/lib/admin/test-target-guard";
+import {
+  createProduct,
+  createVariant,
+  duplicateProduct,
+  getAdminProductDetail,
+  getAdminProductList,
+  getCategorySpecificationSchema,
+  getPublishedBrands,
+  getPublishedCategories,
+  transitionProductStatus,
+  updateProduct,
+  updateVariant,
+} from "@/lib/admin/catalog";
+import {
+  CatalogDomainError,
+  CatalogIdempotencyConflictError,
+  SkuImmutableError,
+  StaleWriteConflictError,
+} from "@/lib/admin/catalog/types";
+import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
+import type { SpecificationFieldDefinition } from "@/db/schema/catalog/category-specification-schemas";
+
+describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integration", () => {
+  const rawDatabaseUrl =
+    process.env.DATABASE_URL ??
+    process.env.DATABASE_MIGRATION_URL ??
+    "postgres://postgres:postgres@127.0.0.1:54322/postgres";
+
+  let pgSql: postgres.Sql;
+
+  // Dedicated prefix for test fixtures to guarantee zero collision and clean targeted teardown
+  const PFX = "018f0024-0000-7000-8000-";
+
+  const fixtureIds = {
+    // Auth users
+    superAdminUser: `${PFX}000000000001`,
+    adminCatalogUser: `${PFX}000000000002`,
+    adminOrdersUser: `${PFX}000000000003`,
+    customerUser: `${PFX}000000000004`,
+
+    // Brands
+    brandPublished: `${PFX}000000000010`,
+    brandDraft: `${PFX}000000000011`,
+
+    // Categories
+    catWithSchema: `${PFX}000000000020`,
+    catNoSchema: `${PFX}000000000021`,
+    catDraft: `${PFX}000000000022`,
+
+    // Specification Schemas
+    schemaForCat: `${PFX}000000000030`,
+
+    // Media Assets
+    mediaAssetPublic1: `${PFX}000000000040`,
+    mediaAssetPublic2: `${PFX}000000000041`,
+
+    // Pre-aggregated fan-out test product
+    fanoutProduct: `${PFX}000000000050`,
+    fanoutVariant: `${PFX}000000000051`,
+  };
+
+  // Auth Contexts for RBAC testing
+
+  const authAdminCatalog: VerifiedAuthContextReady = {
+    status: "READY",
+    authUserId: fixtureIds.adminCatalogUser,
+    email: "admincatalog.gp024@gamerperu.pe",
+    roles: ["ADMIN_CATALOG"],
+    permissions: new Set(["catalog:manage", "catalog:publish"]),
+  };
+
+  const authAdminManageOnly: VerifiedAuthContextReady = {
+    status: "READY",
+    authUserId: fixtureIds.adminCatalogUser,
+    email: "manageonly.gp024@gamerperu.pe",
+    roles: ["ADMIN_CATALOG"],
+    permissions: new Set(["catalog:manage"]),
+  };
+
+  const authAdminOrders: VerifiedAuthContextReady = {
+    status: "READY",
+    authUserId: fixtureIds.adminOrdersUser,
+    email: "adminorders.gp024@gamerperu.pe",
+    roles: ["ADMIN_ORDERS"],
+    permissions: new Set(["orders:manage"]),
+  };
+
+  const authCustomer: VerifiedAuthContextReady = {
+    status: "READY",
+    authUserId: fixtureIds.customerUser,
+    email: "customer.gp024@gamerperu.pe",
+    roles: ["CUSTOMER"],
+    permissions: new Set([]),
+  };
+
+  beforeAll(async () => {
+    const databaseUrl = assertLocalDatabaseTarget(rawDatabaseUrl);
+    pgSql = postgres(databaseUrl, { max: 1 });
+
+    // Seed test users & roles
+    await pgSql.begin(async (tx) => {
+      // 1. Auth Users
+      const users = [
+        { id: fixtureIds.superAdminUser, email: "superadmin.gp024@gamerperu.pe" },
+        { id: fixtureIds.adminCatalogUser, email: "admincatalog.gp024@gamerperu.pe" },
+        { id: fixtureIds.adminOrdersUser, email: "adminorders.gp024@gamerperu.pe" },
+        { id: fixtureIds.customerUser, email: "customer.gp024@gamerperu.pe" },
+      ];
+      for (const u of users) {
+        await tx`
+          INSERT INTO auth.users (id, email, raw_app_meta_data, raw_user_meta_data, is_super_admin, created_at, updated_at)
+          VALUES (${u.id}, ${u.email}, '{"provider":"email","providers":["email"]}', '{}', false, NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+        `;
+      }
+
+      // Assign user_roles
+      await tx`
+        INSERT INTO user_roles (auth_user_id, role_id)
+        VALUES
+          (${fixtureIds.superAdminUser}, (SELECT id FROM roles WHERE name = 'SUPER_ADMIN')),
+          (${fixtureIds.adminCatalogUser}, (SELECT id FROM roles WHERE name = 'ADMIN_CATALOG')),
+          (${fixtureIds.adminOrdersUser}, (SELECT id FROM roles WHERE name = 'ADMIN_ORDERS')),
+          (${fixtureIds.customerUser}, (SELECT id FROM roles WHERE name = 'CUSTOMER'))
+        ON CONFLICT DO NOTHING;
+      `;
+
+      // 2. Brands
+      await tx`
+        INSERT INTO brands (id, name, slug, description, status, created_at, updated_at)
+        VALUES
+          (${fixtureIds.brandPublished}, 'WLmouse Test', 'wlmouse-test', 'WLmouse testing brand', 'PUBLISHED', NOW(), NOW()),
+          (${fixtureIds.brandDraft}, 'Draft Brand Test', 'draft-brand-test', 'Draft brand testing', 'DRAFT', NOW(), NOW())
+        ON CONFLICT (id) DO NOTHING;
+      `;
+
+      // 3. Categories (created first with current_spec_schema_id = NULL to satisfy FK)
+      await tx`
+        INSERT INTO categories (id, name, slug, current_spec_schema_id, display_order, status, created_at, updated_at)
+        VALUES
+          (${fixtureIds.catWithSchema}, 'Mice Specs Cat', 'mice-specs-cat', NULL, 1, 'PUBLISHED', NOW(), NOW()),
+          (${fixtureIds.catNoSchema}, 'Accessories Cat', 'accessories-cat', NULL, 2, 'PUBLISHED', NOW(), NOW()),
+          (${fixtureIds.catDraft}, 'Draft Category', 'draft-cat', NULL, 3, 'DRAFT', NOW(), NOW())
+        ON CONFLICT (id) DO NOTHING;
+      `;
+
+      // 4. Category Specification Schema (v1)
+      const fieldDefs: SpecificationFieldDefinition[] = [
+        {
+          key: "sensor",
+          label: "Sensor Óptico",
+          dataType: "enum",
+          filterable: true,
+          filterKind: "ENUM_MULTI",
+          publicParam: "sensor",
+          displayOrder: 1,
+          options: [
+            { value: "paw3395", label: "PAW3395" },
+            { value: "paw3950", label: "PAW3950" },
+          ],
+        },
+        {
+          key: "polling_rate_hz",
+          label: "Tasa de Sondeo",
+          dataType: "number",
+          filterable: true,
+          filterKind: "NUMBER_RANGE",
+          publicParam: "tasa",
+          displayOrder: 2,
+          min: 125,
+          max: 8000,
+          step: 125,
+        },
+        {
+          key: "wireless",
+          label: "Conexión Inalámbrica",
+          dataType: "boolean",
+          filterable: true,
+          filterKind: "BOOLEAN",
+          publicParam: "inalambrico",
+          displayOrder: 3,
+        },
+      ];
+
+      await tx`
+        INSERT INTO category_specification_schemas (id, category_id, schema_version, field_definitions, is_active, created_at)
+        VALUES (
+          ${fixtureIds.schemaForCat},
+          ${fixtureIds.catWithSchema},
+          1,
+          ${pgSql.json(fieldDefs as unknown as postgres.JSONValue)},
+          TRUE,
+          NOW()
+        )
+        ON CONFLICT (id) DO NOTHING;
+      `;
+
+      // Link category to schema
+      await tx`
+        UPDATE categories SET current_spec_schema_id = ${fixtureIds.schemaForCat} WHERE id = ${fixtureIds.catWithSchema};
+      `;
+
+      // 5. Media Assets
+      await tx`
+        INSERT INTO media_assets (
+          id, object_key, security_class, media_type, mime_type, file_size_bytes, width, height, alt_text, checksum_sha256, created_at
+        ) VALUES (
+          ${fixtureIds.mediaAssetPublic1},
+          'catalog/test-wlmouse-main.webp',
+          'PUBLIC_MEDIA',
+          'IMAGE',
+          'image/webp',
+          35000,
+          1000,
+          1000,
+          'WLmouse Frontal',
+          NULL,
+          NOW()
+        ), (
+          ${fixtureIds.mediaAssetPublic2},
+          'catalog/test-wlmouse-variant.webp',
+          'PUBLIC_MEDIA',
+          'IMAGE',
+          'image/webp',
+          28000,
+          800,
+          800,
+          'WLmouse Variante',
+          NULL,
+          NOW()
+        )
+        ON CONFLICT (id) DO NOTHING;
+      `;
+    });
+  });
+
+  afterAll(async () => {
+    if (pgSql) {
+      await pgSql.begin(async (tx) => {
+        // Clean up only rows owned by this test suite
+        await tx`DELETE FROM audit_events WHERE actor_id IN (${fixtureIds.superAdminUser}, ${fixtureIds.adminCatalogUser}, ${fixtureIds.adminOrdersUser}, ${fixtureIds.customerUser});`;
+        await tx`DELETE FROM order_items WHERE id = ${`${PFX}000000000091`};`;
+        await tx`DELETE FROM orders WHERE id = ${`${PFX}000000000090`};`;
+        await tx`DELETE FROM inventory_items WHERE id = ${`${PFX}000000000088`};`;
+        await tx`DELETE FROM inventory_locations WHERE id = ${`${PFX}000000000087`};`;
+        await tx`DELETE FROM inventory_items WHERE id IN (${`${PFX}000000000061`}, ${`${PFX}000000000062`}, ${`${PFX}000000000063`});`;
+        await tx`DELETE FROM inventory_locations WHERE id IN (${`${PFX}000000000071`}, ${`${PFX}000000000072`}, ${`${PFX}000000000073`});`;
+        await tx`DELETE FROM order_items WHERE variant_id IN (SELECT id FROM product_variants WHERE sku LIKE 'GP024-%' OR sku LIKE 'GP-TEST-%');`;
+        await tx`DELETE FROM inventory_items WHERE variant_id IN (SELECT id FROM product_variants WHERE sku LIKE 'GP024-%' OR sku LIKE 'GP-TEST-%');`;
+        await tx`DELETE FROM product_media WHERE product_id IN (SELECT id FROM products WHERE slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%');`;
+        await tx`DELETE FROM product_specifications WHERE product_id IN (SELECT id FROM products WHERE slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%');`;
+        await tx`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%');`;
+        await tx`DELETE FROM products WHERE slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%';`;
+
+        await tx`UPDATE categories SET current_spec_schema_id = NULL WHERE id = ${fixtureIds.catWithSchema};`;
+        await tx`DELETE FROM category_specification_schemas WHERE id = ${fixtureIds.schemaForCat};`;
+        await tx`DELETE FROM categories WHERE id IN (${fixtureIds.catWithSchema}, ${fixtureIds.catNoSchema}, ${fixtureIds.catDraft});`;
+        await tx`DELETE FROM brands WHERE id IN (${fixtureIds.brandPublished}, ${fixtureIds.brandDraft});`;
+        await tx`DELETE FROM media_assets WHERE id IN (${fixtureIds.mediaAssetPublic1}, ${fixtureIds.mediaAssetPublic2});`;
+
+        const userIds = [
+          fixtureIds.superAdminUser,
+          fixtureIds.adminCatalogUser,
+          fixtureIds.adminOrdersUser,
+          fixtureIds.customerUser,
+        ];
+        await tx`DELETE FROM user_roles WHERE auth_user_id IN ${tx(userIds)};`;
+        await tx`DELETE FROM auth.users WHERE id IN ${tx(userIds)};`;
+      });
+      await pgSql.end();
+    }
+  });
+
+  describe("Product List Query Fan-Out Regression & Filters", () => {
+    beforeAll(async () => {
+      // Seed 1 product with 1 ACTIVE variant and 3 inventory items across 3 locations
+      await pgSql.begin(async (tx) => {
+        await tx`
+          INSERT INTO products (id, brand_id, category_id, name, slug, status, is_featured, created_at, updated_at)
+          VALUES (
+            ${fixtureIds.fanoutProduct},
+            ${fixtureIds.brandPublished},
+            ${fixtureIds.catWithSchema},
+            'Fanout Test Mouse',
+            'gp024-fanout-mouse',
+            'PUBLISHED',
+            false,
+            NOW(),
+            NOW()
+          ) ON CONFLICT (id) DO NOTHING;
+        `;
+
+        await tx`
+          INSERT INTO product_variants (
+            id, product_id, sku, title, price_cents, status, display_order, created_at, updated_at
+          ) VALUES (
+            ${fixtureIds.fanoutVariant},
+            ${fixtureIds.fanoutProduct},
+            'GP024-FANOUT-01',
+            'Standard Edition',
+            45000,
+            'ACTIVE',
+            0,
+            NOW(),
+            NOW()
+          ) ON CONFLICT (id) DO NOTHING;
+        `;
+
+        const loc1 = `${PFX}000000000071`;
+        const loc2 = `${PFX}000000000072`;
+        const loc3 = `${PFX}000000000073`;
+
+        await tx`
+          INSERT INTO inventory_locations (id, code, name, is_active, created_at)
+          VALUES
+            (${loc1}, 'LOC-LIMA-CENTRAL', 'Lima Central', true, NOW()),
+            (${loc2}, 'LOC-MIRAFLORES', 'Miraflores', true, NOW()),
+            (${loc3}, 'LOC-SAN-ISIDRO', 'San Isidro', true, NOW())
+          ON CONFLICT (id) DO NOTHING;
+        `;
+
+        // 3 inventory items across 3 warehouse locations
+        await tx`
+          INSERT INTO inventory_items (id, variant_id, location_id, quantity_on_hand, quantity_reserved, quantity_allocated, updated_at)
+          VALUES
+            (${`${PFX}000000000061`}, ${fixtureIds.fanoutVariant}, ${loc1}, 10, 2, 0, NOW()),
+            (${`${PFX}000000000062`}, ${fixtureIds.fanoutVariant}, ${loc2}, 25, 0, 0, NOW()),
+            (${`${PFX}000000000063`}, ${fixtureIds.fanoutVariant}, ${loc3}, 15, 0, 5, NOW())
+          ON CONFLICT (id) DO NOTHING;
+        `;
+      });
+    });
+
+    it("pre-aggregates variant and inventory CTEs with zero Cartesian fan-out", async () => {
+      const result = await getAdminProductList(
+        { search: "gp024-fanout-mouse" },
+        { authContext: authAdminCatalog }
+      );
+
+      expect(result.items).toHaveLength(1);
+      const item = result.items[0]!;
+
+      // Exact assertion: totalVariants must be 1, activeVariants must be 1 (NOT 3!)
+      expect(item.totalVariants).toBe(1);
+      expect(item.activeVariants).toBe(1);
+
+      // min and max active price cents
+      expect(item.minActivePriceCents).toBe(45000);
+      expect(item.maxActivePriceCents).toBe(45000);
+
+      // activeVariantAts:
+      // Loc 1: 10 - 2 - 0 = 8
+      // Loc 2: 25 - 0 - 0 = 25
+      // Loc 3: 15 - 0 - 5 = 10
+      // Sum = 8 + 25 + 10 = 43
+      expect(item.activeVariantAts).toBe(43);
+    });
+
+    it("enforces deterministic ordering p.updated_at DESC, p.id DESC", async () => {
+      const result = await getAdminProductList({}, { authContext: authAdminCatalog });
+      expect(result.items.length).toBeGreaterThan(0);
+
+      for (let i = 0; i < result.items.length - 1; i++) {
+        const a = result.items[i]!;
+        const b = result.items[i + 1]!;
+        if (a.updatedAt.getTime() === b.updatedAt.getTime()) {
+          expect(a.id >= b.id).toBe(true);
+        } else {
+          expect(a.updatedAt.getTime() >= b.updatedAt.getTime()).toBe(true);
+        }
+      }
+    });
+
+    it("filters correctly by brand, category, status, and search", async () => {
+      const byBrand = await getAdminProductList(
+        { brandId: fixtureIds.brandPublished },
+        { authContext: authAdminCatalog }
+      );
+      expect(byBrand.items.every((it) => it.brandId === fixtureIds.brandPublished)).toBe(true);
+
+      const byCat = await getAdminProductList(
+        { categoryId: fixtureIds.catWithSchema },
+        { authContext: authAdminCatalog }
+      );
+      expect(byCat.items.every((it) => it.categoryId === fixtureIds.catWithSchema)).toBe(true);
+
+      const byStatus = await getAdminProductList(
+        { status: "PUBLISHED" },
+        { authContext: authAdminCatalog }
+      );
+      expect(byStatus.items.every((it) => it.status === "PUBLISHED")).toBe(true);
+    });
+  });
+
+  describe("Reference Selectors", () => {
+    it("getPublishedBrands returns published brands and excludes draft brands", async () => {
+      const brands = await getPublishedBrands({ authContext: authAdminCatalog });
+      expect(brands.some((b) => b.id === fixtureIds.brandPublished)).toBe(true);
+      expect(brands.some((b) => b.id === fixtureIds.brandDraft)).toBe(false);
+    });
+
+    it("getPublishedCategories returns published categories and currentSpecSchemaId", async () => {
+      const cats = await getPublishedCategories({ authContext: authAdminCatalog });
+      const targetCat = cats.find((c) => c.id === fixtureIds.catWithSchema);
+      expect(targetCat).toBeDefined();
+      expect(targetCat?.currentSpecSchemaId).toBe(fixtureIds.schemaForCat);
+      expect(cats.some((c) => c.id === fixtureIds.catDraft)).toBe(false);
+    });
+
+    it("getCategorySpecificationSchema resolves validated schema via current_spec_schema_id", async () => {
+      const schema = await getCategorySpecificationSchema(fixtureIds.catWithSchema, {
+        authContext: authAdminCatalog,
+      });
+      expect(schema).toBeDefined();
+      expect(schema?.id).toBe(fixtureIds.schemaForCat);
+      expect(schema?.fieldDefinitions).toHaveLength(3);
+
+      const noSchema = await getCategorySpecificationSchema(fixtureIds.catNoSchema, {
+        authContext: authAdminCatalog,
+      });
+      expect(noSchema).toBeNull();
+    });
+  });
+
+  describe("Product Mutations & Transactional Integrity", () => {
+    let createdProdId: string;
+
+    it("creates a product in DRAFT status with initial variant and AuditEvent", async () => {
+      const prod = await createProduct(
+        {
+          name: "Nuevo Mouse Gamer",
+          slug: "gp024-mouse-test-01",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+          subtitle: "Ultraligero",
+          description: "Descripción detallada del producto de prueba.",
+          initialVariant: {
+            sku: "GP024-TEST-V01",
+            title: "Color Negro",
+            priceCents: 29900,
+            compareAtPriceCents: 34900,
+            costCents: 18000,
+            weightGrams: 42,
+            attributes: { color: "Negro" },
+          },
+          mutationRequestId: "req-create-001",
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      expect(prod.id).toBeDefined();
+      expect(prod.status).toBe("DRAFT");
+      createdProdId = prod.id;
+
+      // Verify AuditEvent
+      const auditRows = await pgSql`
+        SELECT * FROM audit_events WHERE target_id = ${prod.id} AND action = 'catalog:product:create' LIMIT 1;
+      `;
+      expect(auditRows).toHaveLength(1);
+      expect(auditRows[0]!.metadata.mutation_request_digest).toBeDefined();
+      expect(auditRows[0]!.metadata.request_fingerprint).toBeDefined();
+    });
+
+    it("handles idempotency: retry with same mutationRequestId returns existing product", async () => {
+      const replayedProd = await createProduct(
+        {
+          name: "Nuevo Mouse Gamer",
+          slug: "gp024-mouse-test-01",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+          subtitle: "Ultraligero",
+          description: "Descripción detallada del producto de prueba.",
+          initialVariant: {
+            sku: "GP024-TEST-V01",
+            title: "Color Negro",
+            priceCents: 29900,
+            compareAtPriceCents: 34900,
+            costCents: 18000,
+            weightGrams: 42,
+            attributes: { color: "Negro" },
+          },
+          mutationRequestId: "req-create-001",
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      expect(replayedProd.id).toBe(createdProdId);
+
+      // Verify no duplicate AuditEvents
+      const auditRows = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM audit_events WHERE target_id = ${createdProdId} AND action = 'catalog:product:create';
+      `;
+      expect(auditRows[0]!.cnt).toBe(1);
+    });
+
+    it("detects idempotency conflict if same mutationRequestId has modified payload", async () => {
+      await expect(
+        createProduct(
+          {
+            name: "Nombre Diferente",
+            slug: "gp024-mouse-test-conflict",
+            brandId: fixtureIds.brandPublished,
+            categoryId: fixtureIds.catWithSchema,
+            mutationRequestId: "req-create-001",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(CatalogIdempotencyConflictError);
+    });
+
+    it("updates product with optimistic concurrency check", async () => {
+      const detail = await getAdminProductDetail(createdProdId, { authContext: authAdminCatalog });
+      expect(detail).toBeDefined();
+
+      // Successful update
+      const updated = await updateProduct(
+        {
+          productId: createdProdId,
+          expectedUpdatedAt: detail!.product.updatedAt,
+          name: "Nuevo Mouse Gamer Pro",
+          specValues: {
+            sensor: "paw3395",
+            polling_rate_hz: 1000,
+            wireless: true,
+          },
+        },
+        { authContext: authAdminCatalog }
+      );
+      expect(updated.name).toBe("Nuevo Mouse Gamer Pro");
+
+      // Stale update throws 409 conflict
+      await expect(
+        updateProduct(
+          {
+            productId: createdProdId,
+            expectedUpdatedAt: new Date(new Date(detail!.product.updatedAt).getTime() - 10000), // explicitly stale timestamp
+            name: "Stale update",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(StaleWriteConflictError);
+    });
+  });
+
+  describe("SKU Immutability Post-Inventory & Post-Orders", () => {
+    let skuTestProdId: string;
+    let skuTestVarId: string;
+
+    beforeAll(async () => {
+      const prod = await createProduct(
+        {
+          name: "SKU Immutability Test Product",
+          slug: "gp024-sku-test-product",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+          initialVariant: {
+            sku: "GP-TEST-SKU-ORIGINAL",
+            title: "Original SKU Variant",
+            priceCents: 15000,
+          },
+        },
+        { authContext: authAdminCatalog }
+      );
+      skuTestProdId = prod.id;
+
+      const detail = await getAdminProductDetail(skuTestProdId, { authContext: authAdminCatalog });
+      skuTestVarId = detail!.variants[0]!.id;
+    });
+
+    it("allows SKU modification while zero inventory and zero orders exist", async () => {
+      const detail = await getAdminProductDetail(skuTestProdId, { authContext: authAdminCatalog });
+      const currentVar = detail!.variants[0]!;
+
+      const updated = await updateVariant(
+        {
+          variantId: skuTestVarId,
+          expectedUpdatedAt: currentVar.updatedAt,
+          sku: "GP-TEST-SKU-MODIFIED",
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      expect(updated.sku).toBe("GP-TEST-SKU-MODIFIED");
+    });
+
+    it("strictly blocks SKU modification once inventory items exist", async () => {
+      const locId = `${PFX}000000000087`;
+      await pgSql`
+        INSERT INTO inventory_locations (id, code, name, is_active, created_at)
+        VALUES (${locId}, 'LOC-TEST-024', 'Almacén Central Test', true, NOW())
+        ON CONFLICT (id) DO NOTHING;
+      `;
+
+      // Seed an inventory item for this variant
+      const invItemId = `${PFX}000000000088`;
+      await pgSql`
+        INSERT INTO inventory_items (id, variant_id, location_id, quantity_on_hand, quantity_reserved, quantity_allocated, updated_at)
+        VALUES (${invItemId}, ${skuTestVarId}, ${locId}, 5, 0, 0, NOW())
+        ON CONFLICT (id) DO NOTHING;
+      `;
+
+      const detail = await getAdminProductDetail(skuTestProdId, { authContext: authAdminCatalog });
+      const currentVar = detail!.variants[0]!;
+      expect(currentVar.isSkuImmutable).toBe(true);
+
+      // Attempt SKU change -> must throw SkuImmutableError
+      await expect(
+        updateVariant(
+          {
+            variantId: skuTestVarId,
+            expectedUpdatedAt: currentVar.updatedAt,
+            sku: "GP-TEST-SKU-BLOCKED",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(SkuImmutableError);
+
+      // Clean up inventory item and location
+      await pgSql`DELETE FROM inventory_items WHERE id = ${invItemId};`;
+      await pgSql`DELETE FROM inventory_locations WHERE id = ${locId};`;
+    });
+
+    it("strictly blocks SKU modification once order items exist and preserves sku_snapshot", async () => {
+      const orderId = `${PFX}000000000090`;
+      const orderItemId = `${PFX}000000000091`;
+
+      // Seed order and order item referencing variant
+      await pgSql.begin(async (tx) => {
+        await tx`
+          INSERT INTO orders (
+            id, order_number, customer_id, customer_email, customer_phone, status,
+            subtotal_cents, discount_cents, shipping_cents, total_cents,
+            currency, created_at, updated_at
+          ) VALUES (
+            ${orderId}, 'ORD-TEST-024', NULL, 'testbuyer@example.com', '999888777', 'PENDING',
+            15000, 0, 0, 15000,
+            'PEN', NOW(), NOW()
+          ) ON CONFLICT (id) DO NOTHING;
+        `;
+
+        await tx`
+          INSERT INTO order_items (
+            id, order_id, variant_id, sku_snapshot, product_name_snapshot, variant_title_snapshot,
+            unit_price_cents_snapshot, quantity, line_total_cents, created_at
+          ) VALUES (
+            ${orderItemId}, ${orderId}, ${skuTestVarId}, 'GP-TEST-SKU-MODIFIED', 'SKU Immutability Test Product', 'Default Variant',
+            15000, 1, 15000, NOW()
+          ) ON CONFLICT (id) DO NOTHING;
+        `;
+      });
+
+      const detail = await getAdminProductDetail(skuTestProdId, { authContext: authAdminCatalog });
+      const currentVar = detail!.variants[0]!;
+      expect(currentVar.isSkuImmutable).toBe(true);
+
+      // Attempt to modify SKU
+      await expect(
+        updateVariant(
+          {
+            variantId: skuTestVarId,
+            expectedUpdatedAt: currentVar.updatedAt,
+            sku: "GP-TEST-SKU-CANNOT-CHANGE",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(SkuImmutableError);
+
+      // Verify order item snapshot remains intact
+      const orderItem =
+        await pgSql`SELECT sku_snapshot FROM order_items WHERE id = ${orderItemId} LIMIT 1;`;
+      expect(orderItem[0]!.sku_snapshot).toBe("GP-TEST-SKU-MODIFIED");
+
+      // Clean up order
+      await pgSql`DELETE FROM order_items WHERE id = ${orderItemId};`;
+      await pgSql`DELETE FROM orders WHERE id = ${orderId};`;
+    });
+  });
+
+  describe("Category Change Specification Reconciliation", () => {
+    it("deletes specifications when moving to a category with no schema", async () => {
+      const prod = await createProduct(
+        {
+          name: "Category Change Mouse",
+          slug: "gp024-cat-change-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // Seed specs
+      const detail = await getAdminProductDetail(prod.id, { authContext: authAdminCatalog });
+      await updateProduct(
+        {
+          productId: prod.id,
+          expectedUpdatedAt: detail!.product.updatedAt,
+          specValues: { sensor: "paw3395", polling_rate_hz: 1000, wireless: true },
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const withSpecs = await getAdminProductDetail(prod.id, { authContext: authAdminCatalog });
+      expect(withSpecs!.specifications).toBeDefined();
+
+      // Change category to catNoSchema
+      const updated = await updateProduct(
+        {
+          productId: prod.id,
+          expectedUpdatedAt: withSpecs!.product.updatedAt,
+          categoryId: fixtureIds.catNoSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+      expect(updated.categoryId).toBe(fixtureIds.catNoSchema);
+
+      const afterChange = await getAdminProductDetail(prod.id, { authContext: authAdminCatalog });
+      expect(afterChange!.specifications).toBeNull();
+    });
+  });
+
+  describe("Duplicate Product Transaction", () => {
+    it("duplicates product with variants, specs, and remapped media with zero inventory/orders", async () => {
+      // 1. Create source product with specs, variants, media
+      const sourceProd = await createProduct(
+        {
+          name: "Master Source Product",
+          slug: "gp024-master-source",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+          subtitle: "Subtítulo de origen",
+          description: "Descripción completa de origen.",
+          initialVariant: {
+            sku: "GP024-SOURCE-V1",
+            title: "Edición Blanca",
+            priceCents: 39900,
+          },
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const detail1 = await getAdminProductDetail(sourceProd.id, { authContext: authAdminCatalog });
+      const v1Id = detail1!.variants[0]!.id;
+
+      // Add second variant
+      await createVariant(
+        {
+          productId: sourceProd.id,
+          sku: "GP024-SOURCE-V2",
+          title: "Edición Negra",
+          priceCents: 41900,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // Add specs
+      await updateProduct(
+        {
+          productId: sourceProd.id,
+          expectedUpdatedAt: detail1!.product.updatedAt,
+          specValues: { sensor: "paw3950", polling_rate_hz: 8000, wireless: true },
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // Attach global media and variant media
+      await pgSql`
+        INSERT INTO product_media (id, product_id, media_asset_id, variant_id, display_order, created_at)
+        VALUES
+          (${`${PFX}000000000101`}, ${sourceProd.id}, ${fixtureIds.mediaAssetPublic1}, NULL, 0, NOW()),
+          (${`${PFX}000000000102`}, ${sourceProd.id}, ${fixtureIds.mediaAssetPublic2}, ${v1Id}, 1, NOW())
+        ON CONFLICT (id) DO NOTHING;
+      `;
+
+      // Set global media as primary
+      await pgSql`
+        UPDATE products SET primary_media_id = ${fixtureIds.mediaAssetPublic1} WHERE id = ${sourceProd.id};
+      `;
+
+      // 2. Duplicate product
+      const duplicated = await duplicateProduct(
+        {
+          sourceProductId: sourceProd.id,
+          mutationRequestId: "req-dup-001",
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      expect(duplicated.id).not.toBe(sourceProd.id);
+      expect(duplicated.name).toBe("Master Source Product (Copia)");
+      expect(duplicated.status).toBe("DRAFT");
+      expect(duplicated.isFeatured).toBe(false);
+
+      // Verify cloned detail
+      const dupDetail = await getAdminProductDetail(duplicated.id, {
+        authContext: authAdminCatalog,
+      });
+      expect(dupDetail).toBeDefined();
+
+      // Variants
+      expect(dupDetail!.variants).toHaveLength(2);
+      expect(dupDetail!.variants[0]!.sku).toBe("GP024-SOURCE-V1-COPY");
+      expect(dupDetail!.variants[1]!.sku).toBe("GP024-SOURCE-V2-COPY");
+
+      // Specifications
+      expect(dupDetail!.specifications).toBeDefined();
+      expect(dupDetail!.specifications?.specValues).toEqual({
+        sensor: "paw3950",
+        polling_rate_hz: 8000,
+        wireless: true,
+      });
+
+      // Media attachments & remapping
+      expect(dupDetail!.media).toHaveLength(2);
+      const globalMedia = dupDetail!.media.find((m) => m.variantId === null);
+      const variantMedia = dupDetail!.media.find((m) => m.variantId !== null);
+
+      expect(globalMedia).toBeDefined();
+      expect(globalMedia?.mediaAssetId).toBe(fixtureIds.mediaAssetPublic1);
+      expect(dupDetail!.product.primaryMediaId).toBe(fixtureIds.mediaAssetPublic1);
+
+      // Variant media must be mapped to NEW variant ID (not source V1 ID!)
+      const clonedV1 = dupDetail!.variants.find((v) => v.title === "Edición Blanca");
+      expect(variantMedia?.variantId).toBe(clonedV1?.id);
+      expect(variantMedia?.variantId).not.toBe(v1Id);
+
+      // Zero inventory items on new variants
+      const invCount = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM inventory_items WHERE variant_id IN (${dupDetail!.variants[0]!.id}, ${dupDetail!.variants[1]!.id});
+      `;
+      expect(invCount[0]!.cnt).toBe(0);
+
+      // Replay returns same clone without cascading copies
+      const replayedDup = await duplicateProduct(
+        {
+          sourceProductId: sourceProd.id,
+          mutationRequestId: "req-dup-001",
+        },
+        { authContext: authAdminCatalog }
+      );
+      expect(replayedDup.id).toBe(duplicated.id);
+    });
+  });
+
+  describe("Status Lifecycle, Publish Readiness & Hard Delete Prevention", () => {
+    let lifecycleProdId: string;
+
+    beforeAll(async () => {
+      const prod = await createProduct(
+        {
+          name: "Lifecycle Product Test",
+          slug: "gp024-lifecycle-test",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+      lifecycleProdId = prod.id;
+    });
+
+    it("blocks publish if product does not meet publish readiness", async () => {
+      const detail = await getAdminProductDetail(lifecycleProdId, {
+        authContext: authAdminCatalog,
+      });
+
+      // Missing active variant and media
+      await expect(
+        transitionProductStatus(
+          {
+            productId: lifecycleProdId,
+            expectedUpdatedAt: detail!.product.updatedAt,
+            targetStatus: "PUBLISHED",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(CatalogDomainError);
+    });
+
+    it("publishes successfully once all blockers are resolved", async () => {
+      // 1. Add active variant
+      await createVariant(
+        {
+          productId: lifecycleProdId,
+          sku: "GP024-LIFE-V1",
+          title: "Versión Final",
+          priceCents: 59900,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // 2. Add specs
+      const detail1 = await getAdminProductDetail(lifecycleProdId, {
+        authContext: authAdminCatalog,
+      });
+      await updateProduct(
+        {
+          productId: lifecycleProdId,
+          expectedUpdatedAt: detail1!.product.updatedAt,
+          specValues: { sensor: "paw3395", polling_rate_hz: 1000, wireless: true },
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // 3. Attach global media
+      await pgSql`
+        INSERT INTO product_media (id, product_id, media_asset_id, variant_id, display_order, created_at)
+        VALUES (${`${PFX}000000000199`}, ${lifecycleProdId}, ${fixtureIds.mediaAssetPublic1}, NULL, 0, NOW())
+        ON CONFLICT (id) DO NOTHING;
+      `;
+      await pgSql`
+        UPDATE products SET primary_media_id = ${fixtureIds.mediaAssetPublic1} WHERE id = ${lifecycleProdId};
+      `;
+
+      // 4. Now attempt publish
+      const detailReady = await getAdminProductDetail(lifecycleProdId, {
+        authContext: authAdminCatalog,
+      });
+      expect(detailReady!.publishReadiness.isPublishable).toBe(true);
+
+      const published = await transitionProductStatus(
+        {
+          productId: lifecycleProdId,
+          expectedUpdatedAt: detailReady!.product.updatedAt,
+          targetStatus: "PUBLISHED",
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      expect(published.status).toBe("PUBLISHED");
+
+      // Verify AuditEvent
+      const audit = await pgSql`
+        SELECT * FROM audit_events WHERE target_id = ${lifecycleProdId} AND action = 'catalog:product:publish' LIMIT 1;
+      `;
+      expect(audit).toHaveLength(1);
+    });
+
+    it("unpublishes to DRAFT and archives with zero hard delete", async () => {
+      const detail1 = await getAdminProductDetail(lifecycleProdId, {
+        authContext: authAdminCatalog,
+      });
+
+      // Unpublish to DRAFT
+      const unpublished = await transitionProductStatus(
+        {
+          productId: lifecycleProdId,
+          expectedUpdatedAt: detail1!.product.updatedAt,
+          targetStatus: "DRAFT",
+        },
+        { authContext: authAdminCatalog }
+      );
+      expect(unpublished.status).toBe("DRAFT");
+
+      // Archive
+      const detail2 = await getAdminProductDetail(lifecycleProdId, {
+        authContext: authAdminCatalog,
+      });
+      const archived = await transitionProductStatus(
+        {
+          productId: lifecycleProdId,
+          expectedUpdatedAt: detail2!.product.updatedAt,
+          targetStatus: "ARCHIVED",
+        },
+        { authContext: authAdminCatalog }
+      );
+      expect(archived.status).toBe("ARCHIVED");
+
+      // Product still exists physically in PostgreSQL (Zero hard delete)
+      const physicalCheck =
+        await pgSql`SELECT id, status FROM products WHERE id = ${lifecycleProdId} LIMIT 1;`;
+      expect(physicalCheck[0]!.status).toBe("ARCHIVED");
+    });
+  });
+
+  describe("RBAC Enforcement", () => {
+    it("rejects unauthorized roles (CUSTOMER, ADMIN_ORDERS)", async () => {
+      // CUSTOMER rejected
+      await expect(
+        createProduct(
+          {
+            name: "Customer Mouse",
+            slug: "gp024-cust-mouse",
+            brandId: fixtureIds.brandPublished,
+            categoryId: fixtureIds.catNoSchema,
+          },
+          { authContext: authCustomer }
+        )
+      ).rejects.toThrow("No tienes permisos suficientes");
+
+      // ADMIN_ORDERS rejected
+      await expect(
+        createProduct(
+          {
+            name: "Orders Mouse",
+            slug: "gp024-orders-mouse",
+            brandId: fixtureIds.brandPublished,
+            categoryId: fixtureIds.catNoSchema,
+          },
+          { authContext: authAdminOrders }
+        )
+      ).rejects.toThrow("No tienes permisos suficientes");
+    });
+
+    it("requires catalog:publish permission to transition to PUBLISHED", async () => {
+      const prod = await createProduct(
+        {
+          name: "Publish Perm Mouse",
+          slug: "gp024-pub-perm-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const detail = await getAdminProductDetail(prod.id, { authContext: authAdminCatalog });
+
+      // Caller with only catalog:manage (missing catalog:publish) is rejected
+      await expect(
+        transitionProductStatus(
+          {
+            productId: prod.id,
+            expectedUpdatedAt: detail!.product.updatedAt,
+            targetStatus: "PUBLISHED",
+          },
+          { authContext: authAdminManageOnly }
+        )
+      ).rejects.toThrow("No tienes permisos suficientes");
+    });
+  });
+});
