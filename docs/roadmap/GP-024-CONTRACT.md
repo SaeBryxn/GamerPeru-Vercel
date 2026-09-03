@@ -1,14 +1,14 @@
-# GP-024 — Admin Product Manager Contract, Domain Reconciliation & Implementation Plan (CHK0-BR2)
+# GP-024 — Admin Product Manager Contract, Domain Reconciliation & Implementation Plan (CHK0-BR3)
 
 ## Status
 
-**IN DISCOVERY / CONTRACT PENDING EXTERNAL APPROVAL (CHK0-BR2)**
+**IN DISCOVERY / CONTRACT PENDING EXTERNAL APPROVAL (CHK0-BR3)**
 
 ---
 
 ## 1. Executive Summary & Starting Lineage
 
-This document establishes the canonical contract, domain reconciliation, operational boundaries, and implementation plan for **GP-024 (Admin Product Manager)**, incorporating all external review findings and architectural remediations from CHK0, CHK0-BR1, and CHK0-BR2.
+This document establishes the canonical contract, domain reconciliation, operational boundaries, and implementation plan for **GP-024 (Admin Product Manager)**, incorporating all external review findings and architectural remediations from CHK0, CHK0-BR1, CHK0-BR2, and CHK0-BR3.
 
 GP-024 implements administrative catalog authoring for Gamer Perú, providing authorized staff with the ability to create, edit, duplicate, archive, and publish hardware products, variants, SKUs, exact integer prices in Soles (`PEN`), media galleries, technical specifications, and SEO metadata.
 
@@ -16,13 +16,13 @@ GP-024 implements administrative catalog authoring for Gamer Perú, providing au
 
 - **Repository**: `latamcreativa/GamerPeru`
 - **Branch**: `main`
-- **Starting HEAD SHA**: `df10390e59ae60ba74371b5ac554e6afd5512f77`
-- **Parent Commit**: `ecd42b60278843ddbd57aa7d185b03cc8a1de39a`
+- **Starting HEAD SHA**: `f47b2c58f090bd51f477d1fbb850391d8cfe5fa7`
+- **Parent Commit**: `df10390e59ae60ba74371b5ac554e6afd5512f77`
 - **GP-023 Status**: `CLOSED / EXTERNALLY APPROVED / FROZEN`
 - **Migration 0012 Git Blob**: `e80c30ae9d0f86e14486b0fd5c782eb9ec3f7119` (Frozen)
 - **Migration 0013 Status**: Non-existent (Migration sequence strictly preserved through 0012)
 - **Hosted Supabase Status**: No repository/CI evidence of hosted mutation; Antigravity execution reports no hosted access.
-- **Cloudflare R2 Status**: No repository/CI evidence of R2 mutation; Antigravity execution reports no R2 access.
+- **Cloudflare R2 Status**: No repository/CI evidence of hosted mutation; Antigravity execution reports no hosted access.
 
 ---
 
@@ -33,12 +33,13 @@ GP-024 implements administrative catalog authoring for Gamer Perú, providing au
 1. **Product Authoring**: Creation, updating, drafting, archiving, and duplicating of conceptual hardware models (`products`).
 2. **Variant & SKU Management**: Authoring and configuring concrete sellable items (`product_variants`), SKUs, integer prices in Soles cents (`PEN`), compare-at prices, cost prices, physical weights, and swatch attributes.
 3. **Exact Monetary Lifecycle**: Integer minor-unit arithmetic in Peruvian Soles (`PEN`), exact decimal string parsing (`parsePenInputToCents`), zero floating-point scaling, and exact display formatting (`formatCentsToPen`).
-4. **Media Management & Staging Pipeline**: Stateless server-signed upload intents, private R2 staging bucket (`R2_CATALOG_STAGING_BUCKET`), server-side WebP normalization, SHA-256 content-hashed canonical keys in public media storage (`R2_PUBLIC_MEDIA_BUCKET`), and relational integrity enforcement (`media_assets`, `product_media`), strictly conforming to ADR-004.
-5. **Category Specifications**: Linking and validating dynamic hardware technical specifications against versioned category schemas (`product_specifications`, `category_specification_schemas`) using the authoritative `Category.current_spec_schema_id` pointer, with deterministic decimal rational step validation.
-6. **SEO & Metadata**: Authoring/deriving product slugs, meta descriptions, OpenGraph tags, and Schema.org structured data inputs.
-7. **Status Lifecycle**: Managing state transitions between `DRAFT`, `PUBLISHED`, and `ARCHIVED` with fail-closed publish validation.
-8. **RBAC & Auditing**: Authoritative server-side permission enforcement (`catalog:manage` for authoring, `catalog:publish` for publishing/unpublishing/archiving published products) and durable replay tracking via `audit_events`.
-9. **Admin UX**: Product list with multi-location fan-out pre-aggregation, search, filter, deterministic pagination, creation flow, and comprehensive multi-tab product editor.
+4. **Durable Replay & Idempotency Architecture**: Dual-digest architecture separating `mutationRequestDigest` (idempotency key identity) from `requestFingerprint` (authoritative normalized mutation payload), with early replay probing and conflict detection (`CATALOG_IDEMPOTENCY_CONFLICT`).
+5. **Media Management & Staging Pipeline**: Stateless server-signed upload intents binding variant ownership (`variantId`), private R2 staging bucket (`R2_CATALOG_STAGING_BUCKET`), early replay probing before staging operations, server-side WebP normalization, SHA-256 content-hashed canonical keys in public media storage (`R2_PUBLIC_MEDIA_BUCKET`), orphan retention on database failure, and relational integrity enforcement (`media_assets`, `product_media`), strictly conforming to ADR-004.
+6. **Category Specifications**: Linking and validating dynamic hardware technical specifications against versioned category schemas (`product_specifications`, `category_specification_schemas`) using the authoritative `Category.current_spec_schema_id` pointer, with deterministic decimal rational step validation.
+7. **SEO & Metadata**: Authoring/deriving product slugs, meta descriptions, OpenGraph tags, and Schema.org structured data inputs.
+8. **Status Lifecycle**: Managing state transitions between `DRAFT`, `PUBLISHED`, and `ARCHIVED` with fail-closed publish validation.
+9. **RBAC & Auditing**: Authoritative server-side permission enforcement (`catalog:manage` for authoring, `catalog:publish` for publishing/unpublishing/archiving published products) and durable replay tracking via `audit_events`.
+10. **Admin UX**: Product list with multi-location fan-out pre-aggregation, search, filter, deterministic pagination, creation flow, and comprehensive multi-tab product editor.
 
 ### Explicitly Out of Scope
 
@@ -87,9 +88,9 @@ Based on the physical Drizzle schema at [`src/db/schema/catalog/products.ts`](..
 | `slug`             | `varchar(200)`   | `string`                               | Required            | None               | `UNIQUE`, check `^[a-z0-9]+(?:-[a-z0-9]+)*$`        | Valid physical regex, globally unique     | Canonical URL `/productos/[slug]`. Changing breaks existing URLs! |
 | `subtitle`         | `varchar(255)`   | `string \| null`                       | Optional            | `null`             | Gin trigram index `products_subtitle_trgm_idx`      | Optional trimmed string, $\le 255$ chars  | PDP subtitle, 1st priority for SEO meta description               |
 | `description`      | `text`           | `string \| null`                       | Optional            | `null`             | None                                                | Optional string                           | PDP editorial markdown, 2nd priority for SEO meta description     |
-| `status`           | `catalog_status` | `"DRAFT" \| "PUBLISHED" \| "ARCHIVED"` | Required            | `"DRAFT"`          | Enum `catalog_status`, index `(status, isFeatured)` | Transition gated (Section 8)              | Public visibility. Only `PUBLISHED` appears on storefront         |
+| `status`           | `catalog_status` | `"DRAFT" \| "PUBLISHED" \| "ARCHIVED"` | Required            | `"DRAFT"`          | Enum `catalog_status`, index `(status, isFeatured)` | Transition gated (Section 9)              | Public visibility. Only `PUBLISHED` appears on storefront         |
 | `is_featured`      | `boolean`        | `boolean`                              | Required            | `false`            | Index `(status, isFeatured)`                        | Boolean                                   | Determines homepage / showcase hero prominence                    |
-| `primary_media_id` | `uuid`           | `string \| null`                       | Optional            | `null`             | FK $\to$ `media_assets.id` (`ON DELETE SET NULL`)   | Same-product global media (Section 11)    | Primary thumbnail, PDP hero fallback, OpenGraph social image      |
+| `primary_media_id` | `uuid`           | `string \| null`                       | Optional            | `null`             | FK $\to$ `media_assets.id` (`ON DELETE SET NULL`)   | Same-product global media (Section 13)    | Primary thumbnail, PDP hero fallback, OpenGraph social image      |
 | `created_at`       | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | B-Tree in pagination indexes                        | Immutable (system managed)                | Sorting by creation date                                          |
 | `updated_at`       | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | `$onUpdateFn(() => new Date())`                     | Used for optimistic concurrency check     | Concurrency conflict detection                                    |
 
@@ -236,7 +237,7 @@ function parsePenInputToCents(
 
 ### Exact Money Display Formatting
 
-authoritative display formatting reuses the existing BigInt-safe:
+Authoritative display formatting reuses the existing BigInt-safe:
 $$\text{formatCentsToPen(cents: bigint)}$$
 located in [`src/lib/admin/dashboard-format.ts`](../../src/lib/admin/dashboard-format.ts).
 
@@ -406,7 +407,7 @@ Before a product can transition to `PUBLISHED`, the system executes the Publish 
      - Specifications do not block publishing.
 7. **Media Integrity**:
    - At least **ONE** valid `PUBLIC_MEDIA` image belonging to the Product must exist (`products.primary_media_id` or `product_media` global image).
-   - Must satisfy all media relational integrity checks (Section 11).
+   - Must satisfy all media relational integrity checks (Section 13).
 
 ### Soft Quality Warnings (Informational; do NOT block publish)
 
@@ -418,130 +419,81 @@ Before a product can transition to `PUBLISHED`, the system executes the Publish 
 
 ---
 
-## 10. Durable Replay Identity & Transactional Audit Replay
+## 10. Durable Replay Identity: Dual-Digest Architecture
 
-### Architectural Separation: Concurrency Lock vs Durable Memory
+To guarantee strict idempotency without false positives or silent payload mutations, GP-024 enforces a **dual-digest replay architecture**:
 
-- **PostgreSQL Advisory Lock (`pg_advisory_xact_lock`)**: Serializes concurrent requests attempting the same logical operation. It releases automatically when the transaction completes and **does NOT remember past mutations**.
-- **Transactional AuditEvent Replay Marker**: Serves as the durable, committed record of completion. Because catalog mutations and their associated `audit_events` row execute in the **exact same PostgreSQL transaction**, an operation's completion is atomically recorded without requiring a schema migration.
+$$\text{mutationRequestDigest} \quad \text{vs} \quad \text{requestFingerprint}$$
 
-### Canonical Mutation Request Digest
+### 1. `mutationRequestDigest` (Idempotency Key Identity)
 
-For replay-sensitive mutations (Create Product, Create Variant, Duplicate Product, Media Finalization):
+Answers: _"Which logical idempotency attempt is this?"_
 
-1. The browser generates a high-entropy UUIDv4/UUIDv7 `mutationRequestId` once per logical operation, reused strictly for network/application retries of that exact request.
-2. The server computes the canonical digest using unambiguous structured encoding:
-   $$\text{digestInput} = \text{"v1|" } + \text{len(actorId)} + \text{":"} + \text{actorId} + \text{"|" } + \text{len(opType)} + \text{":"} + \text{opType} + \text{"|" } + \text{mutationRequestId}$$
-   $$\text{mutationRequestDigest} = \text{SHA-256}(\text{digestInput})$$
-3. Raw client tokens or secrets are never logged or persisted.
+- Generated on the client as a high-entropy UUIDv4/UUIDv7 `mutationRequestId` once per logical user action, reused on network or application retries of that exact request.
+- The server computes the digest using unambiguous length-prefixed structured encoding:
+  $$\text{digestInput} = \text{"v1|" } + \text{len(actorId)} + \text{":"} + \text{actorId} + \text{"|" } + \text{len(opType)} + \text{":"} + \text{opType} + \text{"|" } + \text{mutationRequestId}$$
+  $$\text{mutationRequestDigest} = \text{SHA-256}(\text{digestInput})$$
+- Raw client tokens or secrets are never logged or stored.
 
-### Durable Replay Lookup Workflow
+### 2. `requestFingerprint` (Authoritative Mutation Payload Identity)
 
-After authentication, permission verification, transaction start, and advisory lock acquisition, but **BEFORE** performing any business mutation:
+Answers: _"What exact validated business mutation was requested?"_
 
-1. Query committed `audit_events` for:
-   - `actor_id == verifiedActorId`
-   - `action == expectedCatalogAction`
-   - `metadata->>'mutation_request_digest' == mutationRequestDigest`
-2. **If a matching committed AuditEvent is found**:
-   - Verify `target_type` matches the expected entity type.
-   - Load the entity by `target_id` from the database.
-   - Verify the loaded entity is consistent with the replayed operation.
-   - Return the existing committed result.
-   - **Perform ZERO new business mutations and append ZERO duplicate AuditEvents.**
-3. **Replay Integrity Failure**:
-   - If an audit marker exists but the target entity is missing or inconsistent, fail closed immediately with:
-     $$\text{CATALOG\_REPLAY\_INTEGRITY\_ERROR}$$
-   - The system will never silently recreate a replacement object.
+- Computed on the server **AFTER** authentication, permission verification, input parsing, normalization, and validation, but **BEFORE** applying the mutation or inserting the `audit_events` row.
+- **Canonical Serialization Rules**:
+  1. Recursively sort all object keys in lexicographical order.
+  2. Preserve array ordering where order is semantically meaningful (e.g. variant display order).
+  3. Distinguish `null` from absent fields where the domain model distinguishes them.
+  4. Serialize exact integer monetary cents (`priceCents`, `compareAtPriceCents`, `costCents`), **never formatted PEN strings**.
+  5. Exclude volatile transport metadata (request headers, IP address, user agent, requestId).
+  6. Exclude secrets, bearer tokens, HMAC signatures, and server-generated timestamps (unless an explicit requested business field).
+  7. Do **NOT** use ordinary `JSON.stringify` on raw unordered client objects.
+- $$\text{requestFingerprint} = \text{SHA-256}(\text{canonicalSerializedPayload})$$
 
-### Operation-Specific Replay Behaviors
+### 3. Operation-Specific Fingerprint Payloads
 
 - **Create Product**:
-  - Replay marker resolves the exact created `Product`.
-  - A different logical operation attempting the same slug returns `SLUG_CONFLICT`.
+  $$\text{Payload} = \{\text{brandId, categoryId, description, isFeatured, name, slug, subtitle, initialVariant}\}$$
+  _(Status is canonically DRAFT and need not be client-supplied)._
 - **Create Variant**:
-  - Replay marker resolves the exact created `ProductVariant`.
-  - A different logical operation attempting the same SKU returns `SKU_CONFLICT`.
+  $$\text{Payload} = \{\text{attributes, compareAtPriceCents, costCents, displayOrder, priceCents, productId, sku, status, title, weightGrams}\}$$
 - **Duplicate Product**:
-  - Target duplicate slug is derived deterministically from:
-    $$\text{hash}(sourceProductId, verifiedActorId, mutationRequestDigest)$$
-  - AuditEvent records `source_product_id` and target `product_id`.
-  - On retry, verifies source matches, target exists, and returns the target without generating `-copy-1`, `-copy-2`.
-- **Status Transitions (Publish, Unpublish, Archive, Restore)**:
-  - If already at target status, returns an idempotent `NO-OP` without appending duplicate audit events.
-  - If a replay marker exists, returns the committed result after re-verifying current authorization.
+  $$\text{Payload} = \{\text{sourceProductId, options}\}$$
 - **Media Finalization**:
-  - Replay marker binds `actor_id`, `action`, target `product_id`, and `mutationRequestDigest`.
-  - Same logical retry returns the committed attachment without duplicate `product_media` joins.
+  $$\text{Payload} = \{\text{expectedIncomingMimeType, intentId, maximumBytes, productId, stagingObjectKey, variantId}\}$$
+  _(HMAC signatures, presigned URLs, and client credentials are never included)._
+- **Status Transitions**:
+  $$\text{Payload} = \{\text{requestedTargetStatus, targetProductId}\}$$
+
+### 4. Dual-Digest Verification & Conflict Detection
+
+When a committed `audit_events` marker matching `actor_id`, `action`, and `mutation_request_digest` is located:
+
+1. Compare stored `metadata.request_fingerprint` with current canonical `requestFingerprint`.
+2. **If equal**: The request is an authentic replay of the exact same mutation $\to$ verify target integrity and return the committed result.
+3. **If different**: The caller has reused an idempotency key with a changed mutation payload $\to$ **FAIL CLOSED** immediately with:
+   $$\text{CATALOG\_IDEMPOTENCY\_CONFLICT (HTTP 409 Conflict)}$$
+   - Zero new mutations are executed.
+   - Zero duplicate AuditEvents are appended.
+   - The old result is never returned for a changed request.
+
+### 5. Durable Replay Marker Physical Model
+
+- Replay tracking uses the existing `audit_events` physical table:
+  `actor_id`, `action`, `target_type`, `target_id`, `metadata`, `request_id`.
+- The metadata JSONB stores:
+  ```json
+  {
+    "mutation_request_digest": "3a8f...",
+    "request_fingerprint": "7c1e...",
+    "source_product_id": "01918a2b-..."
+  }
+  ```
+- **Physical Schema Reality**: No database-level `UNIQUE` index exists on `metadata.mutation_request_digest`. Concurrency protection is strictly guaranteed by transaction-scoped PostgreSQL advisory locks (`pg_advisory_xact_lock`) + lookup under lock + atomic transaction commit.
 
 ---
 
-## 11. Media Relational Integrity Contract
-
-The physical `product_media` table defines independent foreign keys:
-
-- `productId` $\to$ `products.id`
-- `variantId` $\to$ `product_variants.id`
-
-However, the physical schema lacks a composite foreign key guaranteeing that `product_variants.product_id == product_media.product_id`.
-
-### Canonical Application-Enforced Invariants
-
-1. **Variant Ownership Invariant**:
-   - For every `product_media` row where `variant_id IS NOT NULL`:
-   - The server mutation loads the referenced `ProductVariant`.
-   - It strictly requires:
-     $$\text{variant.product\_id} == \text{product\_media.product\_id}$$
-   - If mismatched, the transaction aborts with:
-     $$\text{MEDIA\_VARIANT\_PRODUCT\_MISMATCH}$$
-   - Client-reported variant ownership claims are never accepted without server-side verification.
-2. **Primary Media Invariant**:
-   - `products.primary_media_id` may only be set by GP-024 if:
-     1. The `MediaAsset` exists.
-     2. `security_class == 'PUBLIC_MEDIA'`.
-     3. `media_type == 'IMAGE'`.
-     4. MIME type is an allowed catalog image MIME (`image/webp`, `image/jpeg`, `image/png`, `image/avif`).
-     5. The asset is attached to the same Product through `product_media` with `variant_id IS NULL` (global image).
-   - A Product's primary image may never point to an unattached or unrelated product's asset.
-
----
-
-## 12. Duplicate Product — Variant Media Remapping
-
-When staff duplicates a product, media relationships must be remapped safely:
-
-1. **Variant Mapping**:
-   - As variants are cloned, an in-memory mapping is established:
-     $$\text{sourceVariantId} \implies \text{newVariantId}$$
-2. **Product Media Remapping**:
-   - **Global media (`variant_id IS NULL`)**:
-     Created with `new product_media.variant_id = NULL`.
-   - **Variant-specific media (`variant_id = sourceVariantId`)**:
-     Created with `new product_media.variant_id = mapped newVariantId`.
-   - **Invariant**: The duplicate product **NEVER** inherits a reference to a source variant ID.
-   - If any variant-specific media row cannot be mapped to a cloned variant, the duplicate transaction aborts.
-3. **Primary Media Reference**:
-   - `products.primary_media_id` is set to the same `MediaAsset.id` by reference, provided the asset was cloned as global media for the new Product.
-4. **Never Duplicated**:
-   - `inventory_items` and `inventory_ledger`: Duplicate has 0 stock.
-   - `order_items`: Zero historical orders.
-   - `product_stories`: Out of scope; duplicate has no story attached.
-   - Status is always reset to `DRAFT` and `is_featured = false`.
-
----
-
-## 13. Shared Media & Alt Text Semantics
-
-- **Asset-Level Metadata**: In the physical schema, `alt_text` resides on `media_assets.alt_text`. It is **NOT** stored per `product_media` join row.
-- **Shared Reference Impact**: When a `MediaAsset` is reused across multiple products (e.g. via product duplication or shared brand imagery), all referencing products share the exact same `alt_text`.
-- **Contract Rule**:
-  - Editing alt text in the Admin gallery updates the underlying `media_assets.alt_text`.
-  - The Admin UI must explicitly disclose when an asset is referenced by multiple entities: _"Este texto alternativo se actualiza en todas las referencias donde se utilice esta imagen."_
-  - GP-024 will not introduce a schema change for per-link alt text. Per-link alt text is deferred as a future schema enhancement if needed.
-
----
-
-## 14. Media Architecture: Private Staging & Signed Intent Security
+## 11. Media Architecture: Private Staging & Signed Intent Security
 
 ### The Unverified Upload Threat Boundary
 
@@ -569,53 +521,196 @@ Raw unverified bytes from browser uploads must **NEVER** be placed into the publ
 To eliminate database overhead for uncompleted uploads, upload intents use stateless, server-signed tokens:
 
 - **Dedicated Server Secret**: `CATALOG_MEDIA_INTENT_HMAC_SECRET` (minimum 32 bytes, required fail-closed outside deterministic test environments, never exposed to client, never logged).
-- **Token Payload**:
-  ```json
-  {
-    "version": 1,
-    "intentId": "01918a2b-...",
-    "verifiedActorId": "usr_...",
-    "productId": "prd_...",
-    "stagingObjectKey": "temp/catalog/01918a2b-...",
-    "expectedIncomingMimeType": "image/webp",
-    "maximumBytes": 10485760,
-    "issuedAt": 1725312000,
-    "expiresAt": 1725312600
-  }
-  ```
+- **Signed Variant Ownership Binding**:
+  - When requesting an upload intent, the browser supplies `productId` and optional `variantId`.
+  - **Intent-Time Ownership Validation**:
+    1. Server verifies `catalog:manage`.
+    2. Loads `Product`.
+    3. If `variantId` is provided: Loads `ProductVariant` and requires $\text{variant.product\_id} == \text{product.id}$. If mismatched, rejects with `MEDIA_VARIANT_PRODUCT_MISMATCH`.
+  - The signed token payload binds `variantId: string | null`:
+    ```json
+    {
+      "version": 1,
+      "intentId": "01918a2b-...",
+      "verifiedActorId": "usr_...",
+      "productId": "prd_...",
+      "variantId": "var_01918a2b-..." // or null for global media
+      "stagingObjectKey": "temp/catalog/01918a2b-...",
+      "expectedIncomingMimeType": "image/webp",
+      "maximumBytes": 10485760,
+      "issuedAt": 1725312000,
+      "expiresAt": 1725312600
+    }
+    ```
 - **Staging Object Key**: Opaque non-PII format: `temp/catalog/{intentId}`. Client cannot choose keys.
 - **Signature**: HMAC-SHA-256 over deterministic canonical JSON encoding of the payload.
 
-### Media Finalization Canonical Order
+---
 
-When the browser requests finalization, it submits strictly `{ intentToken, mutationRequestId }`. The server executes:
+## 12. Media Finalization: Two-Stage Replay & Execution Order
 
-1. Verify staff authentication from JWT.
-2. Verify staff has `catalog:manage`.
-3. Verify `intentToken` HMAC signature in constant time using `CATALOG_MEDIA_INTENT_HMAC_SECRET`.
-4. Verify token `version == 1` and `expiresAt > serverTime`.
-5. Verify current `verifiedActorId == token.verifiedActorId`.
-6. Verify target `productId == token.productId` and product exists in database.
-7. Perform `HEAD` against `R2_CATALOG_STAGING_BUCKET` using `token.stagingObjectKey`.
-8. Read actual staging bytes server-side and verify `Content-Length <= 10 MiB`.
-9. Validate actual image bytes (magic bytes / header check) to reject MIME/extension spoofing.
-10. Normalize image bytes to **actual WebP format**.
-11. Derive image dimensions (`width`, `height`) from validated final image server-side.
-12. Compute SHA-256 hash of final WebP bytes.
-13. Construct canonical public object key:
+### The Late-Replay Defect & Early Replay Probe
+
+In a single-stage check after staging operations, a successful finalization that deleted its staging object would fail on client retry when HEAD returned 404. GP-024 resolves this with an **Early Replay Probe**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant Server as Finalization Server Action
+    participant Audit as audit_events (DB)
+    participant Staging as R2 Private Staging
+    participant Public as R2 Public Media
+    participant DB as PostgreSQL Transaction
+
+    Client->>Server: finalizeMediaUpload({ intentToken, mutationRequestId })
+    Server->>Server: Verify Auth & HMAC Signature
+    Server->>Server: Compute mutationRequestDigest & requestFingerprint
+    Note over Server,Audit: EARLY REPLAY PROBE (Before Staging Ops)
+    Server->>Audit: Query replay marker (actor, action, digest)
+    alt Replay Marker Found
+        Server->>Server: Verify requestFingerprint matches
+        alt Fingerprint Mismatched
+            Server-->>Client: 409 CATALOG_IDEMPOTENCY_CONFLICT
+        else Fingerprint Matched
+            Server->>DB: Verify target attachment exists
+            Server-->>Client: Return committed result (Zero R2 ops, Zero DB writes)
+        end
+    end
+    Note over Server,Staging: Staging Validation & Transformation
+    Server->>Staging: HEAD stagingObjectKey & GET bytes
+    Server->>Server: Validate image magic bytes & Convert to WebP
+    Server->>Server: Compute SHA-256 of final WebP bytes
+    Server->>Public: Put WebP bytes to canonical key
+    Note over Server,DB: AUTHORITATIVE TRANSACTION LOCK & COMMIT
+    Server->>DB: BEGIN Transaction
+    Server->>DB: SELECT pg_advisory_xact_lock(digest)
+    Server->>Audit: Recheck replay marker under lock
+    alt Concurrent Commit Detected
+        Server->>DB: ROLLBACK Transaction
+        Server-->>Client: Return committed result
+    else Normal First Execution
+        Server->>DB: Re-verify variant ownership
+        Server->>DB: Insert/reuse media_assets & insert product_media
+        Server->>Audit: Insert AuditEvent with digests
+        Server->>DB: COMMIT Transaction
+        Server->>Staging: Best-effort DELETE stagingObjectKey
+        Server-->>Client: Return new attachment
+    end
+```
+
+### Authoritative Finalization Sequence
+
+1. Verify staff JWT authentication and `catalog:manage` permission.
+2. Verify `intentToken` HMAC signature in constant time using `CATALOG_MEDIA_INTENT_HMAC_SECRET`.
+3. Verify token `version == 1` and `expiresAt > serverTime`.
+4. Verify current `verifiedActorId == token.verifiedActorId`.
+5. Verify target `productId == token.productId` and product exists in database.
+6. Compute `mutationRequestDigest` and `requestFingerprint`.
+7. **EARLY REPLAY PROBE**:
+   - Query `audit_events` for `actor_id == token.verifiedActorId`, `action == 'catalog:media:attach'`, and `metadata->>'mutation_request_digest' == mutationRequestDigest`.
+   - If marker exists:
+     - Check `stored_fingerprint == current_fingerprint`. If different, fail with `CATALOG_IDEMPOTENCY_CONFLICT`.
+     - Verify target `product_media` attachment exists. If missing, fail with `CATALOG_REPLAY_INTEGRITY_ERROR`.
+     - **Return existing committed result immediately** (does not require staging object, performs zero R2 reads/writes, appends zero audit rows).
+8. Perform `HEAD` against `R2_CATALOG_STAGING_BUCKET` using `token.stagingObjectKey`.
+9. Read actual staging bytes server-side and verify `Content-Length <= 10 MiB`.
+10. Validate image magic bytes / headers to reject MIME/extension spoofing.
+11. Normalize image bytes to **actual WebP format**.
+12. Derive image dimensions (`width`, `height`) from validated final image server-side.
+13. Compute SHA-256 hash of final WebP bytes.
+14. Construct canonical public object key:
     $$\text{products/}\{brandSlug\}/\{productSlug\}/\{sha256\}.\text{webp}$$
-14. Write final WebP bytes to `R2_PUBLIC_MEDIA_BUCKET` (or confirm existence if content hash already exists).
-15. Start PostgreSQL transaction.
-16. Acquire advisory lock on `mutationRequestDigest` and check for existing durable replay marker.
-17. Enforce `product_media` variant ownership invariant.
-18. Create/reuse `media_assets` row and insert `product_media` join row.
-19. Append `audit_events` replay marker atomically.
-20. Commit PostgreSQL transaction.
-21. Best-effort delete private staging object from `R2_CATALOG_STAGING_BUCKET`.
+15. Write final WebP bytes to `R2_PUBLIC_MEDIA_BUCKET` (or confirm existence if content hash already exists).
+16. **BEGIN PostgreSQL Transaction**:
+    - Acquire transaction advisory lock: `SELECT pg_advisory_xact_lock(hash(mutationRequestDigest));`.
+    - Repeat replay lookup under lock. If another concurrent request committed, rollback and return committed result.
+    - **Re-verify Variant Ownership**: If `token.variantId != null`, load variant from DB and assert $\text{variant.product\_id} == \text{token.productId}$.
+    - Insert or reuse `media_assets` row.
+    - Insert `product_media` join row (`variant_id = token.variantId`).
+    - Insert `audit_events` replay marker containing `mutation_request_digest` and `request_fingerprint`.
+    - **COMMIT Transaction**.
+17. Best-effort delete private staging object from `R2_CATALOG_STAGING_BUCKET`.
+
+### Separate Catalog Media Mutation Contracts
+
+Upload finalization **only** attaches the image to the product/variant. All secondary operations are separate authorized mutations requiring `catalog:manage` and dedicated audit events:
+
+1. **Asset-Level Alt-Text Editing**: Updates `media_assets.alt_text` globally across all referencing products.
+2. **ProductMedia Display-Order Changes**: Updates `product_media.display_order` for ordering in PDP gallery.
+3. **Primary Media Designation**: Updates `products.primary_media_id`. Strictly requires global media (`variant_id IS NULL`).
+4. **Variant Reassignment**: Updates `product_media.variant_id`, re-verifying same-product ownership.
 
 ---
 
-## 15. Corrected Admin Product List Aggregation
+## 13. Media Relational Integrity & R2/DB Failure Semantics
+
+### Canonical Application-Enforced Invariants
+
+1. **Variant Ownership Invariant**:
+   - For every `product_media` row where `variant_id IS NOT NULL`:
+     $$\text{variant.product\_id} == \text{product\_media.product\_id}$$
+   - Mismatches reject with `MEDIA_VARIANT_PRODUCT_MISMATCH`.
+2. **Primary Media Invariant**:
+   - `products.primary_media_id` may only reference a `MediaAsset` that is attached to the same Product with `variant_id IS NULL` (global image). Variant-specific images cannot be primary.
+
+### Compensating Failure & Orphan Retention Semantics
+
+Because PostgreSQL and Cloudflare R2 do not participate in a two-phase commit:
+
+1. **Private Staging Failure**:
+   - Unfinished or failed staging uploads remain private.
+   - Expired intents cannot finalize.
+   - Staging objects expire safely via R2 lifecycle retention policies.
+2. **Canonical Public Object Written but Database Transaction Fails**:
+   - The validated WebP public object is written to `R2_PUBLIC_MEDIA_BUCKET` before the PostgreSQL attachment transaction commits.
+   - **Orphan-Retention Safety Rule**:
+     $$\text{DO NOT synchronously delete the canonical public content-hash object upon DB failure!}$$
+   - **Rationale**: Another concurrent request or existing product may be writing or referencing the exact same content hash. Synchronous deletion risks deleting an object that another committed `MediaAsset` references.
+   - **Rule**: Retain the orphan public object. Reference-aware garbage collection with a safe grace period may prune unreferenced objects later.
+3. **Attachment Removal / Shared-Asset Safety**:
+   - Removing a `product_media` link does **NOT** delete the underlying `MediaAsset` or R2 object.
+   - Future physical asset deletion requires verifying all relational references (`products.primary_media_id`, `brands.logo_media_id`, `product_media.media_asset_id`), plus accounting for unconstrained JSON references (Product Story blocks).
+   - Default safety rule: Prefer orphan retention over accidental deletion of referenced content.
+
+---
+
+## 14. Duplicate Product — Variant Media Remapping
+
+When staff duplicates a product, media relationships must be remapped safely:
+
+1. **Variant Mapping**:
+   - As variants are cloned, an in-memory mapping is established:
+     $$\text{sourceVariantId} \implies \text{newVariantId}$$
+2. **Product Media Remapping**:
+   - **Global media (`variant_id IS NULL`)**:
+     Created with `new product_media.variant_id = NULL`.
+   - **Variant-specific media (`variant_id = sourceVariantId`)**:
+     Created with `new product_media.variant_id = mapped newVariantId`.
+   - **Invariant**: The duplicate product **NEVER** inherits a reference to a source variant ID.
+   - If any variant-specific media row cannot be mapped to a cloned variant, the duplicate transaction aborts.
+3. **Primary Media Reference**:
+   - `products.primary_media_id` is set to the same `MediaAsset.id` by reference, provided the asset was cloned as global media for the new Product.
+4. **Never Duplicated**:
+   - `inventory_items` and `inventory_ledger`: Duplicate has 0 stock.
+   - `order_items`: Zero historical orders.
+   - `product_stories`: Out of scope; duplicate has no story attached.
+   - Status is always reset to `DRAFT` and `is_featured = false`.
+
+---
+
+## 15. Shared Media & Alt Text Semantics
+
+- **Asset-Level Metadata**: In the physical schema, `alt_text` resides on `media_assets.alt_text`. It is **NOT** stored per `product_media` join row.
+- **Shared Reference Impact**: When a `MediaAsset` is reused across multiple products (e.g. via product duplication or shared brand imagery), all referencing products share the exact same `alt_text`.
+- **Contract Rule**:
+  - Editing alt text in the Admin gallery updates the underlying `media_assets.alt_text`.
+  - The Admin UI must explicitly disclose when an asset is referenced by multiple entities: _"Este texto alternativo se actualiza en todas las referencias donde se utilice esta imagen."_
+  - GP-024 will not introduce a schema change for per-link alt text. Per-link alt text is deferred as a future schema enhancement if needed.
+
+---
+
+## 16. Corrected Admin Product List Aggregation
 
 ### Query Fan-Out Elimination
 
@@ -686,7 +781,7 @@ LIMIT $5 OFFSET $6;
 
 ---
 
-## 16. Resolved Reference Data Boundary (Option A)
+## 17. Resolved Reference Data Boundary (Option A)
 
 > [!IMPORTANT]
 > **EXTERNALLY RESOLVED: OPTION A ADOPTED (NOT A MIGRATION)**
@@ -710,7 +805,7 @@ LIMIT $5 OFFSET $6;
 
 ---
 
-## 17. RBAC Permission & Navigation Alignment
+## 18. RBAC Permission & Navigation Alignment
 
 All actions use canonical permissions from [`src/lib/auth/rbac.ts`](../../src/lib/auth/rbac.ts):
 
@@ -728,7 +823,7 @@ All actions use canonical permissions from [`src/lib/auth/rbac.ts`](../../src/li
 
 ---
 
-## 18. AuditEvent Contract
+## 19. AuditEvent Contract
 
 Privileged catalog mutations append immutable records to `audit_events` within the same transaction:
 
@@ -737,7 +832,7 @@ Privileged catalog mutations append immutable records to `audit_events` within t
 - `action`: Canonical action string
 - `targetType`: `'product'`, `'product_variant'`, `'product_media'`, `'product_specifications'`
 - `targetId`: String representation of entity UUID
-- `metadata`: Sanitized JSON diffs and `mutation_request_digest` (never raw binaries, tokens, or unredacted secrets)
+- `metadata`: Sanitized JSON diffs, `mutation_request_digest`, and `request_fingerprint` (never raw binaries, tokens, or unredacted secrets)
 - `ipAddress`: Client IP from request headers
 - `requestId`: Correlation / request ID
 
@@ -745,7 +840,7 @@ Canonical actions: `catalog:product:create`, `catalog:product:update`, `catalog:
 
 ---
 
-## 19. Migration & Infrastructure Readiness Analysis
+## 20. Migration & Infrastructure Readiness Analysis
 
 ### PostgreSQL Database Schema Determination
 
@@ -776,7 +871,7 @@ $$\mathbf{R2\_STAGING\_INFRA\_REQUIRED: YES}$$
 
 ---
 
-## 20. Quality Gates & Freeze Verifications
+## 21. Quality Gates & Freeze Verifications
 
 1. **Migration 0012 Frozen**: Exact blob `e80c30ae9d0f86e14486b0fd5c782eb9ec3f7119`.
 2. **Zero Migration 0013**: Verified.
@@ -787,18 +882,18 @@ $$\mathbf{R2\_STAGING\_INFRA\_REQUIRED: YES}$$
 
 ---
 
-## 21. Implementation Test Plan Matrix
+## 22. Implementation Test Plan Matrix
 
-| Test Category             | Surface                                                 | Scope / Scenarios                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| :------------------------ | :------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit Tests**            | `tests/unit/admin-catalog-*.test.ts`                    | - Exact PEN parsing: `parsePenInputToCents` (`"129.90"`, `"129"`, `"0.50"`, comma rejection, int32 boundary check, leading S/ normalization).<br>- Exact money display: `formatCentsToPen(BigInt(val))` boundaries.<br>- Rational step validation: `decimalToIntegerAndScale` (min=0 step=0.1, min=0.1 step=0.2, min undefined step=5, min=10 step=5).<br>- Value validator: `validateProductSpecificationValues` (type safety, enum checks, range checks, unknown key rejection, null normalization).<br>- Publish readiness: hard blockers vs soft warnings.<br>- Slug regex validation.<br>- Signed intent token HMAC verification.<br>- Digest generation and advisory lock hashing. |
-| **RBAC Integration**      | `tests/unit/admin-catalog-rbac.test.ts`                 | - `CUSTOMER` / `ADMIN_ORDERS` denied access.<br>- `ADMIN_CATALOG` permitted to create, edit, duplicate.<br>- `catalog:publish` strictly required to publish, unpublish, or archive published product.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **Live DB Integration**   | `tests/admin-integration/admin-product-manager.test.ts` | - Atomic creation of product + variant + audit replay marker.<br>- Durable replay lookup on retry.<br>- SKU immutability enforcement when inventory/orders exist.<br>- Media ownership verification (`MEDIA_VARIANT_PRODUCT_MISMATCH`).<br>- Duplicate product with variant media remapping.<br>- Category change specification clearing.<br>- Product list query pre-aggregation (zero fan-out across multiple locations).                                                                                                                                                                                                                                                              |
-| **Admin Playwright E2E**  | `tests/e2e/admin-product-manager.spec.ts`               | - Complete product authoring flow: New Product $\to$ Variants $\to$ Media $\to$ Specs $\to$ Publish.<br>- Duplicate flow in UI.<br>- Archive / restore in UI.<br>- Form error validation & focus management.<br>- Automated Axe accessibility audit (0 violations).<br>- Responsive layout checks across mobile and desktop.                                                                                                                                                                                                                                                                                                                                                             |
-| **Storefront Regression** | `tests/e2e/catalog-storefront-regression.spec.ts`       | - Published product appears on PDP and listings.<br>- Archived product returns 404.<br>- Inactive variant is not selectable/purchasable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Test Category             | Surface                                                 | Scope / Scenarios                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| :------------------------ | :------------------------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit Tests**            | `tests/unit/admin-catalog-*.test.ts`                    | - Exact PEN parsing: `parsePenInputToCents` (`"129.90"`, `"129"`, `"0.50"`, comma rejection, int32 boundary check, leading S/ normalization).<br>- Exact money display: `formatCentsToPen(BigInt(val))` boundaries.<br>- Rational step validation: `decimalToIntegerAndScale` (min=0 step=0.1, min=0.1 step=0.2, min undefined step=5, min=10 step=5).<br>- Value validator: `validateProductSpecificationValues` (type safety, enum checks, range checks, unknown key rejection, null normalization).<br>- Publish readiness: hard blockers vs soft warnings.<br>- Slug regex validation.<br>- Dual-digest generation: canonical serialization, `mutationRequestDigest`, `requestFingerprint`.<br>- Signed intent token HMAC verification with bound `variantId`. |
+| **RBAC Integration**      | `tests/unit/admin-catalog-rbac.test.ts`                 | - `CUSTOMER` / `ADMIN_ORDERS` denied access.<br>- `ADMIN_CATALOG` permitted to create, edit, duplicate.<br>- `catalog:publish` strictly required to publish, unpublish, or archive published product.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Live DB Integration**   | `tests/admin-integration/admin-product-manager.test.ts` | - Atomic creation of product + variant + audit replay marker.<br>- Dual-digest replay verification: exact payload returns committed result, changed payload returns `CATALOG_IDEMPOTENCY_CONFLICT`.<br>- Early media replay probe: returns committed attachment without staging object.<br>- Intent-time and finalization-time variant ownership checks.<br>- SKU immutability enforcement when inventory/orders exist.<br>- Media ownership verification (`MEDIA_VARIANT_PRODUCT_MISMATCH`).<br>- Duplicate product with variant media remapping.<br>- Category change specification clearing.<br>- Product list query pre-aggregation (zero fan-out across multiple locations).                                                                                  |
+| **Admin Playwright E2E**  | `tests/e2e/admin-product-manager.spec.ts`               | - Complete product authoring flow: New Product $\to$ Variants $\to$ Media $\to$ Specs $\to$ Publish.<br>- Duplicate flow in UI.<br>- Archive / restore in UI.<br>- Form error validation & focus management.<br>- Automated Axe accessibility audit (0 violations).<br>- Responsive layout checks across mobile and desktop.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Storefront Regression** | `tests/e2e/catalog-storefront-regression.spec.ts`       | - Published product appears on PDP and listings.<br>- Archived product returns 404.<br>- Inactive variant is not selectable/purchasable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ---
 
-## 22. Conclusion & Gate Readiness
+## 23. Conclusion & Gate Readiness
 
-All 29 contract and architecture requirements from CHK0, CHK0-BR1, and CHK0-BR2 have been resolved. The contract is 100% grounded in exact integer money semantics, physical schema truth, ADR-004 storage architecture, private media staging, and durable replay integrity. Zero unresolved contract decisions remain.
+All contract and architecture requirements across discovery and reviews (CHK0, CHK0-BR1, CHK0-BR2, and CHK0-BR3) have been fully codified. The contract is 100% grounded in exact integer money semantics, dual-digest idempotency protection, two-stage replay-safe media finalization, physical schema truth, ADR-004 storage architecture, private media staging, and orphan-retention failure safety. Zero unresolved contract decisions remain.
