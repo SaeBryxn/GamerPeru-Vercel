@@ -1,14 +1,14 @@
-# GP-024 — Admin Product Manager Contract, Domain Reconciliation & Implementation Plan (CHK0)
+# GP-024 — Admin Product Manager Contract, Domain Reconciliation & Implementation Plan (CHK0-BR1)
 
 ## Status
 
-**IN DISCOVERY / CONTRACT PENDING EXTERNAL APPROVAL (CHK0)**
+**IN DISCOVERY / CONTRACT PENDING EXTERNAL APPROVAL (CHK0-BR1)**
 
 ---
 
 ## 1. Executive Summary & Starting Lineage
 
-This document establishes the canonical contract, domain reconciliation, operational boundaries, and implementation plan for **GP-024 (Admin Product Manager)**.
+This document establishes the canonical contract, domain reconciliation, operational boundaries, and implementation plan for **GP-024 (Admin Product Manager)**, incorporating all external review findings and architectural remediations from CHK0-BR1.
 
 GP-024 implements administrative catalog authoring for Gamer Perú, providing authorized staff with the ability to create, edit, duplicate, archive, and publish hardware products, variants, SKUs, integer prices, media galleries, technical specifications, and SEO metadata.
 
@@ -16,9 +16,9 @@ GP-024 implements administrative catalog authoring for Gamer Perú, providing au
 
 - **Repository**: `latamcreativa/GamerPeru`
 - **Branch**: `main`
-- **Starting HEAD SHA**: `c72025bc6bc8fa768a506cf53472bbaf75d17895`
+- **Starting HEAD SHA**: `ecd42b60278843ddbd57aa7d185b03cc8a1de39a`
 - **Parent Commit**: `c72025bc6bc8fa768a506cf53472bbaf75d17895` (GP-023 Formal Closure)
-- **GP-023 Status**: `CLOSED / EXTERNALLY APPROVED / FROZEN` (CI Run ID `33618459290`, Conclusion `success`)
+- **GP-023 Status**: `CLOSED / EXTERNALLY APPROVED / FROZEN`
 - **Migration 0012 Git Blob**: `e80c30ae9d0f86e14486b0fd5c782eb9ec3f7119` (Frozen)
 - **Migration 0013 Status**: Non-existent (Migration sequence strictly preserved through 0012)
 - **Infrastructure Status**: Hosted Supabase and Cloudflare R2 remain 100% untouched.
@@ -31,26 +31,26 @@ GP-024 implements administrative catalog authoring for Gamer Perú, providing au
 
 1. **Product Authoring**: Creation, updating, drafting, archiving, and duplicating of conceptual hardware models (`products`).
 2. **Variant & SKU Management**: Authoring and configuring concrete sellable items (`product_variants`), SKUs, integer prices in Soles cents (`PEN`), compare-at prices, cost prices, physical weights, and swatch attributes.
-3. **Media Management**: Attaching, ordering, designating primary images, linking variant-specific images, and alt text authoring backed by Cloudflare R2 public storage (`media_assets`, `product_media`).
-4. **Category Specifications**: Linking and validating dynamic hardware technical specifications against versioned category schemas (`product_specifications`, `category_specification_schemas`).
+3. **Media Management**: Attaching, ordering, designating primary images, linking variant-specific images, and alt text authoring backed by Cloudflare R2 public storage (`media_assets`, `product_media`), conforming to ADR-004.
+4. **Category Specifications**: Linking and validating dynamic hardware technical specifications against versioned category schemas (`product_specifications`, `category_specification_schemas`) using the authoritative `Category.current_spec_schema_id` pointer.
 5. **SEO & Metadata**: Authoring/deriving product slugs, meta descriptions, OpenGraph tags, and Schema.org structured data inputs.
 6. **Status Lifecycle**: Managing state transitions between `DRAFT`, `PUBLISHED`, and `ARCHIVED` with fail-closed publish validation.
-7. **RBAC & Auditing**: Authoritative server-side permission enforcement (`catalog:manage`, `catalog:publish`) and immutable audit trail generation (`audit_events`).
+7. **RBAC & Auditing**: Authoritative server-side permission enforcement (`catalog:manage` for authoring, `catalog:publish` for publishing/unpublishing/archiving published products) and immutable audit trail generation (`audit_events`).
 8. **Admin UX**: Product list, search, filter, pagination, creation flow, and comprehensive product editor.
 
 ### Explicitly Out of Scope
 
-1. **Product Story Builder (GP-026)**: Visual block-based editorial story authoring (`product_stories`, `product_story_revisions`, 13 modular visual block types) is strictly OUT OF SCOPE. GP-024 will preserve existing story links by reference but will NOT provide story editing surfaces.
+1. **Product Story Builder (GP-026)**: Visual block-based editorial story authoring (`product_stories`, `product_story_revisions`, 13 modular visual block types) is strictly OUT OF SCOPE. GP-024 preserves existing story links by reference but does NOT provide story editing surfaces.
 2. **AI Product Research & Import (GP-025)**: LLM-assisted product research, specification scraping, and batch product-name importing are strictly OUT OF SCOPE. Ordinary manual authoring only.
-3. **Brand & Category Taxonomy CRUD**: Full administrative CRUD for creating new Brand and Category records is not explicitly part of GP-024. Product authoring selects from existing reference brands and categories. (See Section 10 for reference-data boundary decision).
-4. **Collection Merchandising**: Collections and ProductCollections are not part of GP-024.
+3. **Brand & Category Taxonomy CRUD**: Administrative CRUD for creating/editing Brand and Category records is strictly OUT OF SCOPE. Product authoring selects from existing reference brands and categories (resolved via Option A bootstrap).
+4. **Collection Merchandising**: Collections and ProductCollections are not part of GP-024 (and do not exist in the physical schema).
 5. **Direct Warehouse Stock Manipulation**: Adjusting physical warehouse stock balances or ledger movements belongs to GP-029 (Inventory Admin). GP-024 configures catalog sellability, variant pricing, and attributes; it does not author inventory adjustments.
 
 ---
 
 ## 3. Dependency Validation & Historical Documentation Drift Audit
 
-GP-024 declares dependencies on **GP-004** (Commerce Domain Model) and **GP-022** (Admin Foundation), and follows the recently closed **GP-023** (Admin Dashboard).
+GP-024 declares dependencies on **GP-004** (Commerce Domain Model) and **GP-022** (Admin Foundation), and follows the closed **GP-023** (Admin Dashboard).
 
 ### Dependency Status Verification
 
@@ -63,7 +63,7 @@ GP-024 declares dependencies on **GP-004** (Commerce Domain Model) and **GP-022*
    - Status: `CLOSED / EXTERNALLY APPROVED`
    - Canonical Evidence: [`docs/roadmap/GP-022-CLOSURE.md`](./GP-022-CLOSURE.md) (Formal Closure Checkpoint `0ee964936127fd4a7e602af09527c3e87175aaf5`).
    - Delivered: Protected Admin Shell layout, server-side RBAC guard (`requireAdminAccess`, `requirePermission`), `inventory:manage` permission (migration 0012), and E2E security test suites.
-   - **Historical Documentation Drift Note**: While `docs/roadmap/GP-022.md` still textually displays `Status: PLANNED`, this is confirmed as historical documentation drift only. `docs/roadmap/GP-022-CLOSURE.md` is the authoritative closure record. Per instructions, `docs/roadmap/GP-022.md` is NOT modified during CHK0 and GP-022 is NOT reopened.
+   - **Historical Documentation Drift Note**: While `docs/roadmap/GP-022.md` still textually displays `Status: PLANNED`, this is confirmed as historical documentation drift only. `docs/roadmap/GP-022-CLOSURE.md` is the authoritative closure record. `docs/roadmap/GP-022.md` is NOT modified and GP-022 is NOT reopened.
 
 3. **GP-023 (Admin Dashboard)**:
    - Status: `CLOSED / EXTERNALLY APPROVED / FROZEN`
@@ -72,81 +72,94 @@ GP-024 declares dependencies on **GP-004** (Commerce Domain Model) and **GP-022*
 
 ---
 
-## 4. Physical Product Entity Contract
+## 4. Physical Schema Truth — Product Entity Contract
 
-Based on the actual physical Drizzle schema at [`src/db/schema/catalog/products.ts`](../../src/db/schema/catalog/products.ts), the authoritative fields for `products` are:
+Based on the physical Drizzle schema at [`src/db/schema/catalog/products.ts`](../../src/db/schema/catalog/products.ts), the authoritative fields for `products` are:
 
-| Field / Column     | Database Type    | TypeScript Type                        | Required / Optional | Default            | Constraints & Indexes                               | Editable in Admin?              | Storefront & SEO Impact                                           |
-| :----------------- | :--------------- | :------------------------------------- | :------------------ | :----------------- | :-------------------------------------------------- | :------------------------------ | :---------------------------------------------------------------- |
-| `id`               | `uuid`           | `string`                               | Required            | `generateUuidV7()` | Primary Key, B-Tree                                 | No (Immutable)                  | Internal aggregate identity                                       |
-| `brand_id`         | `uuid`           | `string`                               | Required            | None               | FK $\to$ `brands.id` (`ON DELETE RESTRICT`)         | Yes (Requires `catalog:manage`) | Changes brand badge, PDP title, brand breadcrumb                  |
-| `category_id`      | `uuid`           | `string`                               | Required            | None               | FK $\to$ `categories.id` (`ON DELETE RESTRICT`)     | Yes (Requires `catalog:manage`) | Changes category page, facets, spec schema compatibility          |
-| `name`             | `varchar(200)`   | `string`                               | Required            | None               | Gin trigram index `products_name_trgm_idx`          | Yes (Requires `catalog:manage`) | Primary PDP H1, listing title, `<title>` metadata                 |
-| `slug`             | `varchar(200)`   | `string`                               | Required            | None               | `UNIQUE`, check `^[a-z0-9]+(?:-[a-z0-9]+)*$`        | Yes (With Warning)              | Canonical URL `/productos/[slug]`. Changing breaks existing URLs! |
-| `subtitle`         | `varchar(255)`   | `string \| null`                       | Optional            | `null`             | Gin trigram index `products_subtitle_trgm_idx`      | Yes (Requires `catalog:manage`) | PDP subtitle, 1st priority for SEO meta description               |
-| `description`      | `text`           | `string \| null`                       | Optional            | `null`             | None                                                | Yes (Requires `catalog:manage`) | PDP editorial markdown, 2nd priority for SEO meta description     |
-| `status`           | `catalog_status` | `"DRAFT" \| "PUBLISHED" \| "ARCHIVED"` | Required            | `"DRAFT"`          | Enum `catalog_status`, index `(status, isFeatured)` | Yes (Transition gated)          | Public visibility. Only `PUBLISHED` appears on storefront         |
-| `is_featured`      | `boolean`        | `boolean`                              | Required            | `false`            | Index `(status, isFeatured)`                        | Yes (Requires `catalog:manage`) | Determines homepage / showcase hero prominence                    |
-| `primary_media_id` | `uuid`           | `string \| null`                       | Optional            | `null`             | FK $\to$ `media_assets.id` (`ON DELETE SET NULL`)   | Yes (Requires `catalog:manage`) | Primary thumbnail, PDP hero fallback, OpenGraph social image      |
-| `created_at`       | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | B-Tree in pagination indexes                        | No (Auto-set)                   | Sorting by creation date                                          |
-| `updated_at`       | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | `$onUpdateFn(() => new Date())`                     | No (Auto-updated)               | Used for optimistic concurrency check                             |
+| Field / Column     | Database Type    | TypeScript Type                        | Required / Optional | Default            | Physical Database Constraints & Indexes             | Application Validation Contract           | Storefront & SEO Impact                                           |
+| :----------------- | :--------------- | :------------------------------------- | :------------------ | :----------------- | :-------------------------------------------------- | :---------------------------------------- | :---------------------------------------------------------------- |
+| `id`               | `uuid`           | `string`                               | Required            | `generateUuidV7()` | Primary Key, B-Tree                                 | Immutable                                 | Internal aggregate identity                                       |
+| `brand_id`         | `uuid`           | `string`                               | Required            | None               | FK $\to$ `brands.id` (`ON DELETE RESTRICT`)         | Valid existing published brand            | Changes brand badge, PDP title, brand breadcrumb                  |
+| `category_id`      | `uuid`           | `string`                               | Required            | None               | FK $\to$ `categories.id` (`ON DELETE RESTRICT`)     | Valid existing published category         | Changes category page, facets, spec schema compatibility          |
+| `name`             | `varchar(200)`   | `string`                               | Required            | None               | Gin trigram index `products_name_trgm_idx`          | Trimmed non-empty string, $\le 200$ chars | Primary PDP H1, listing title, `<title>` metadata                 |
+| `slug`             | `varchar(200)`   | `string`                               | Required            | None               | `UNIQUE`, check `^[a-z0-9]+(?:-[a-z0-9]+)*$`        | Valid physical regex, globally unique     | Canonical URL `/productos/[slug]`. Changing breaks existing URLs! |
+| `subtitle`         | `varchar(255)`   | `string \| null`                       | Optional            | `null`             | Gin trigram index `products_subtitle_trgm_idx`      | Optional trimmed string, $\le 255$ chars  | PDP subtitle, 1st priority for SEO meta description               |
+| `description`      | `text`           | `string \| null`                       | Optional            | `null`             | None                                                | Optional string                           | PDP editorial markdown, 2nd priority for SEO meta description     |
+| `status`           | `catalog_status` | `"DRAFT" \| "PUBLISHED" \| "ARCHIVED"` | Required            | `"DRAFT"`          | Enum `catalog_status`, index `(status, isFeatured)` | Transition gated (Section 6)              | Public visibility. Only `PUBLISHED` appears on storefront         |
+| `is_featured`      | `boolean`        | `boolean`                              | Required            | `false`            | Index `(status, isFeatured)`                        | Boolean                                   | Determines homepage / showcase hero prominence                    |
+| `primary_media_id` | `uuid`           | `string \| null`                       | Optional            | `null`             | FK $\to$ `media_assets.id` (`ON DELETE SET NULL`)   | Same-product global media (Section 9)     | Primary thumbnail, PDP hero fallback, OpenGraph social image      |
+| `created_at`       | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | B-Tree in pagination indexes                        | Immutable (system managed)                | Sorting by creation date                                          |
+| `updated_at`       | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | `$onUpdateFn(() => new Date())`                     | Used for optimistic concurrency check     | Concurrency conflict detection                                    |
 
-### Schema Accuracy Confirmation
+### Clarification on Physical vs Application Validation
 
-- Zero invented fields.
-- `products` does NOT contain pricing fields. Pricing belongs strictly to `product_variants`.
-- `products` does NOT contain a separate `seo_title` or `seo_description` column; storefront PDP SEO dynamically derives title and description from `name`, `brand.name`, `subtitle`, and `description`.
-- `products` does NOT contain a `deleted_at` column; soft-deletion is represented by `status = 'ARCHIVED'`.
+- The physical schema enforces `name: varchar(200) NOT NULL`. It does NOT enforce a minimum length. The application validation contract requires a trimmed non-empty string ($\le 200$ characters). (Invented restrictions such as `name.length >= 3` are removed).
+- Zero pricing fields exist on `products`. Pricing belongs strictly to `product_variants`.
+- Zero separate `seo_title` or `seo_description` columns exist. PDP SEO derives metadata dynamically.
+- Zero `deleted_at` column exists; soft-deletion is represented strictly by `status = 'ARCHIVED'`.
 
 ---
 
-## 5. Physical ProductVariant & SKU Contract
+## 5. Physical Schema Truth — ProductVariant & SKU Contract
 
-Based on the actual physical Drizzle schema at [`src/db/schema/catalog/product-variants.ts`](../../src/db/schema/catalog/product-variants.ts), the authoritative fields for `product_variants` are:
+Based on the physical Drizzle schema at [`src/db/schema/catalog/product-variants.ts`](../../src/db/schema/catalog/product-variants.ts), the authoritative fields for `product_variants` are:
 
-| Field / Column           | Database Type    | TypeScript Type                        | Required / Optional | Default            | Constraints & Checks                         | Editable in Admin?              | Commerce & Storefront Impact                                          |
-| :----------------------- | :--------------- | :------------------------------------- | :------------------ | :----------------- | :------------------------------------------- | :------------------------------ | :-------------------------------------------------------------------- |
-| `id`                     | `uuid`           | `string`                               | Required            | `generateUuidV7()` | Primary Key                                  | No (Immutable)                  | Referenced by cart items, order items, inventory items                |
-| `product_id`             | `uuid`           | `string`                               | Required            | None               | FK $\to$ `products.id` (`ON DELETE CASCADE`) | No (Immutable)                  | Parent product family                                                 |
-| `sku`                    | `varchar(50)`    | `string`                               | Required            | None               | `UNIQUE`, uppercase alphanumeric/hyphens     | Conditional (See Decision)      | Machine inventory identifier, order snapshot identifier               |
-| `title`                  | `varchar(150)`   | `string`                               | Required            | None               | Min 1 char                                   | Yes                             | Swatch title (e.g. "Negro / Omron Optical Switches")                  |
-| `price_cents`            | `integer`        | `number`                               | Required            | None               | Check `price_cents > 0`                      | Yes (Requires `catalog:manage`) | Authoritative selling price in Peruvian Soles (`PEN`)                 |
-| `compare_at_price_cents` | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR >= 0`                      | Yes (Requires `catalog:manage`) | Strikethrough original price                                          |
-| `cost_cents`             | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR >= 0`                      | Yes (Internal Staff only)       | Wholesale cost for internal margin tracking; never sent to storefront |
-| `weight_grams`           | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR > 0`                       | Yes                             | Physical product weight for shipping/specs                            |
-| `attributes`             | `jsonb`          | `Record<string, string>`               | Required            | `{}`               | Key-value pairs (swatches)                   | Yes                             | Color, switch, layout attributes                                      |
-| `status`                 | `variant_status` | `"ACTIVE" \| "INACTIVE" \| "ARCHIVED"` | Required            | `"ACTIVE"`         | Enum `variant_status`                        | Yes                             | Sellability condition. Must be `ACTIVE` to buy                        |
-| `display_order`          | `integer`        | `number`                               | Required            | `0`                | Check `display_order >= 0`                   | Yes                             | Determines order in PDP variant selector                              |
-| `created_at`             | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | B-Tree                                       | No                              | Audit & ordering                                                      |
-| `updated_at`             | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | `$onUpdateFn`                                | No                              | Optimistic concurrency check                                          |
+| Field / Column           | Database Type    | TypeScript Type                        | Required / Optional | Default            | Physical Database Constraints & Checks       | Application Validation Contract                           | Commerce & Storefront Impact                             |
+| :----------------------- | :--------------- | :------------------------------------- | :------------------ | :----------------- | :------------------------------------------- | :-------------------------------------------------------- | :------------------------------------------------------- |
+| `id`                     | `uuid`           | `string`                               | Required            | `generateUuidV7()` | Primary Key                                  | Immutable                                                 | Referenced by cart items, order items, inventory items   |
+| `product_id`             | `uuid`           | `string`                               | Required            | None               | FK $\to$ `products.id` (`ON DELETE CASCADE`) | Immutable                                                 | Parent product family                                    |
+| `sku`                    | `varchar(50)`    | `string`                               | Required            | None               | `UNIQUE` index `product_variants_sku_idx`    | Trimmed non-empty string, $\le 50$ chars, globally unique | Machine inventory identifier, order snapshot identifier  |
+| `title`                  | `varchar(150)`   | `string`                               | Required            | None               | `NOT NULL`                                   | Trimmed non-empty string, $\le 150$ chars                 | Swatch title (e.g. "Negro / Omron Optical")              |
+| `price_cents`            | `integer`        | `number`                               | Required            | None               | Check `price_cents > 0`                      | Integer Soles minor units $> 0$, $\le 2147483647$         | Authoritative selling price in Peruvian Soles (`PEN`)    |
+| `compare_at_price_cents` | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR >= 0`                      | Integer Soles minor units $\ge 0$                         | Strikethrough original price                             |
+| `cost_cents`             | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR >= 0`                      | Integer Soles minor units $\ge 0$                         | Wholesale cost for internal margin tracking (staff only) |
+| `weight_grams`           | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR > 0`                       | Integer grams $> 0$                                       | Physical product weight for shipping/specs               |
+| `attributes`             | `jsonb`          | `Record<string, string>`               | Required            | `{}`               | `NOT NULL`, default `{}`                     | Plain JSON object of key-value string swatches            | Color, switch, layout attributes                         |
+| `status`                 | `variant_status` | `"ACTIVE" \| "INACTIVE" \| "ARCHIVED"` | Required            | `"ACTIVE"`         | Enum `variant_status`                        | Enum value                                                | Sellability condition. Must be `ACTIVE` to buy           |
+| `display_order`          | `integer`        | `number`                               | Required            | `0`                | Check `display_order >= 0`                   | Integer $\ge 0$                                           | Determines order in PDP variant selector                 |
+| `created_at`             | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | B-Tree                                       | Immutable (system managed)                                | Audit & ordering                                         |
+| `updated_at`             | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | `$onUpdateFn`                                | Concurrency check                                         | Optimistic concurrency check                             |
+
+### Physical Schema Reality vs Application Validation
+
+1. **SKU Format**:
+   - The physical database enforces `sku varchar(50) NOT NULL UNIQUE`.
+   - The physical schema does NOT enforce uppercase-only, alphanumeric-only, or hyphen-only constraints.
+   - **Application Validation Contract**: A trimmed non-empty string of maximum 50 characters, verified globally unique. The application will NOT silently uppercase or rewrite a SKU unless explicitly entered by the user. No restrictive character regex will be invented without canonical evidence.
+2. **Variant Title**:
+   - The physical schema enforces `title varchar(150) NOT NULL`.
+   - The physical schema does NOT enforce a minimum non-empty length beyond `NOT NULL`.
+   - **Application Validation Contract**: Trimmed non-empty string, maximum 150 characters.
+3. **Variant Attributes**:
+   - The physical schema enforces `attributes jsonb NOT NULL default {}`.
+   - The physical schema does NOT contain a PostgreSQL `jsonb_typeof(...) = 'object'` check.
+   - **Application Validation Contract**: Server-side Zod validation verifies that `attributes` is a plain JavaScript object with string keys and string values (`Record<string, string>`).
 
 ### Storefront Sellability Invariant
 
 The project-wide canonical invariant established in GP-004 and GP-023 is strictly preserved:
 $$\text{Sellable SKU} \iff (\text{Product.status} = \text{'PUBLISHED'} \land \text{ProductVariant.status} = \text{'ACTIVE'})$$
 
-- If `Product.status !== 'PUBLISHED'`, zero variants are discoverable or purchasable on the storefront.
-- If `ProductVariant.status !== 'ACTIVE'`, the variant cannot be added to cart, displayed as purchasable, or checked out.
-
-### Contract Decision Required: SKU Immutability Post-Commerce Rule
+### Resolved Contract Decision: SKU Immutability Post-Commerce Rule
 
 > [!IMPORTANT]
-> **CONTRACT DECISION REQUIRED: Can a SKU be modified after creation?**
+> **EXTERNALLY RESOLVED CONTRACT DECISION: SKU Immutability Rule**
 >
-> **Analysis**:
+> A `ProductVariant.sku` MAY be modified only while BOTH conditions are true:
 >
-> 1. `order_items` stores an immutable `sku_snapshot: varchar(50)` captured at purchase time. However, `order_items.variant_id` also maintains a foreign key pointing to `product_variants.id` with `ON DELETE RESTRICT`.
-> 2. `inventory_items` references `product_variants.id`, but physical warehouse operations, supplier purchase orders, customs declarations, barcode labels, and physical invoices rely strictly on the textual SKU string (`WLM-BX-MAG-BLK-8K`).
-> 3. Modifying a SKU after stock has been received or orders have been fulfilled breaks the physical trace between warehouse bins and customer order history.
+> 1. **ZERO `inventory_items` rows** exist for that variant.
+> 2. **ZERO `order_items` rows** exist for that variant.
 >
-> **Proposed Canonical Rule**:
+> **Once either an inventory item or an order item exists:**
 >
-> - **Draft Phase (No Commerce)**: If a `ProductVariant` has ZERO inventory items, ZERO inventory ledger entries, and ZERO order items, staff with `catalog:manage` MAY edit the `sku` string (e.g. to fix a typo before launch).
-> - **Commerce Active (Immutable)**: If a `ProductVariant` has ANY existing `inventory_items`, `inventory_ledger` entries, or `order_items`, the `sku` column becomes **STRICTLY IMMUTABLE**. The Admin UI must disable the SKU input and display a lock badge explaining that historical stock/orders attach to this SKU. To change a physical SKU, staff must deactivate or archive the existing variant and create a new variant with the new SKU.
+> - The SKU is **PERMANENTLY IMMUTABLE** in GP-024.
+> - **Rationale**: `inventory_items.variant_id` uses `ON DELETE RESTRICT` and forms physical warehouse bin identity; `order_items.variant_id` uses `ON DELETE RESTRICT` and preserves immutable purchase facts (`sku_snapshot`). Because `inventory_ledger_entries` references `inventory_items` with `ON DELETE RESTRICT`, stock ledger records cannot exist without an `inventory_items` row.
+> - **Admin UI Behavior**: The SKU input is disabled with a lock icon and an explicit notice: _"Este SKU está vinculado a registros de inventario o pedidos históricos y no puede modificarse. Para cambiar el SKU comercial, desactiva esta variante y crea una nueva."_
+> - Historical `sku_snapshot` in `order_items` is never mutated.
 
 ---
 
-## 6. Product Status Lifecycle & Transition Contract
+## 6. Product Status Lifecycle & Hard Delete Prohibition
 
 The physical enum is `catalog_status`: `"DRAFT"`, `"PUBLISHED"`, `"ARCHIVED"`.
 
@@ -162,476 +175,301 @@ stateDiagram-v2
     ARCHIVED --> PUBLISHED : Restore & Publish (Requires catalog:publish + Validation)
 ```
 
-### Transition Rules
+### Hard Deletion is Strictly Forbidden in GP-024
 
-1. **Initial Creation**: Every newly created product enters `status = 'DRAFT'`. Zero products may be created directly in `PUBLISHED` state.
-2. **Draft Editing**: While in `DRAFT`, any field (name, slug, brand, category, specs, variants, pricing, media) can be edited freely without blocking publish validation.
+- GP-024 contains **ZERO hard deletion** of `products` or `product_variants`.
+- GP-024 has no `catalog:delete` or `catalog:purge` permission.
+- Authorization is never bypassed via a hardcoded `SUPER_ADMIN` role branch.
+- **"D" in CRUD maps strictly to ARCHIVE** (`status -> ARCHIVED`).
+- If physical database purges are ever required for test data, privacy compliance, or administrative maintenance, they must be governed by a future, separately authorized maintenance contract/gate.
+
+### Lifecycle Transition Rules
+
+1. **Initial Creation**: Enters `status = 'DRAFT'`. Zero products may be created directly in `PUBLISHED` state.
+2. **Draft Editing**: While in `DRAFT`, fields may be edited freely without blocking publish validation.
 3. **Publish Transition (`DRAFT -> PUBLISHED` or `ARCHIVED -> PUBLISHED`)**:
-   - Strictly requires the `catalog:publish` permission.
-   - Evaluates the fail-closed **Publish Readiness Validator** (Section 17). If any hard blocker fails, the transaction is rejected and the product remains in its previous state.
+   - Strictly requires `catalog:publish`.
+   - Executes the fail-closed Publish Readiness Validator (Section 8). If any hard blocker fails, the transaction aborts.
 4. **Unpublish Transition (`PUBLISHED -> DRAFT`)**:
    - Strictly requires `catalog:publish`.
    - Product immediately disappears from public storefront, search results, category pages, and PDP routes.
-   - In-flight carts containing variants from this product will fail checkout availability validation.
+   - Active carts with variants from this product will fail checkout availability validation.
 5. **Archive Transition (`PUBLISHED -> ARCHIVED` or `DRAFT -> ARCHIVED`)**:
    - `PUBLISHED -> ARCHIVED` requires `catalog:publish`.
    - `DRAFT -> ARCHIVED` requires `catalog:manage`.
-   - Represents the canonical "Delete" in CRUD for products with historical references.
 6. **Restore Transition (`ARCHIVED -> DRAFT`)**:
    - Requires `catalog:manage`. Reopens the archived product for editing in draft status.
-7. **What "D" in CRUD Means (Destructive vs Soft Deletion)**:
-   - **Historical Commerce Invariant**: Hard SQL deletion (`DELETE FROM products WHERE id = ...`) is **STRICTLY FORBIDDEN** once any variant has inventory records, ledger entries, or order line snapshots (`ON DELETE RESTRICT` will reject it at the database level).
-   - "Delete" in the Admin Product Manager UI maps semantically to **Archive** (`status = 'ARCHIVED'`).
-   - Hard deletion is permitted ONLY for orphaned drafts that have ZERO variants with inventory or orders, and only via explicit Super Admin action with confirmation. The standard Admin action is Archive.
 
 ---
 
-## 7. Money & Currency Contract
+## 7. Category Specifications Contract & Value Validation
 
-Gamer Perú enforces a zero floating-point policy across all layers.
+Hardware attributes are structured dynamically per category using PostgreSQL `JSONB` in `product_specifications`, validated against versioned schemas in `category_specification_schemas`.
 
-### Storage & Calculation Rules
+### Canonical Schema Selection via Category Pointer
 
-- **Canonical Currency**: `PEN` (Peruvian Soles, ISO 4217).
-- **Physical Column Types**: `integer("price_cents")`, `integer("compare_at_price_cents")`, `integer("cost_cents")`.
-- **Database Constraints**:
-  - `price_cents > 0` (selling price must be strictly positive).
-  - `compare_at_price_cents IS NULL OR compare_at_price_cents >= 0`.
-  - `cost_cents IS NULL OR cost_cents >= 0`.
-  - Maximum value: PostgreSQL signed 32-bit `INTEGER` max is `2,147,483,647` cents ($\approx \text{S/ } 21,474,836.47$), which exceeds any gaming peripheral price.
+The physical `categories` table contains the column:
+$$\text{categories.current\_spec\_schema\_id}$$
 
-### Admin Input / Display Conversion
+This column is the single source of truth for the category's active specification schema.
 
-- **Display Formatting**: Uses `formatCentsToPen` from `src/lib/admin/dashboard-format.ts`:
-  $$12990 \text{ cents} \implies \text{"S/ 129.90"}$$
-- **Input Parsing Algorithm (Zero Floating Point)**:
-  Form inputs accept strings such as `"129.90"` or `"S/ 129.90"`.
-  ```typescript
-  export function parsePenInputToCents(
-    rawInput: string
-  ): { success: true; cents: number } | { success: false; error: string } {
-    const cleaned = rawInput
-      .trim()
-      .replace(/^S\/\s*/i, "")
-      .replace(/,/g, "");
-    if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) {
-      return { success: false, error: "Formato de precio inválido. Ejemplo: 129.90" };
-    }
-    const [solesPart, centsPart = ""] = cleaned.split(".");
-    const soles = BigInt(solesPart);
-    const cents = BigInt(centsPart.padEnd(2, "0"));
-    const totalCents = soles * 100n + cents;
-    if (totalCents <= 0n) {
-      return { success: false, error: "El precio debe ser mayor a cero." };
-    }
-    if (totalCents > 2147483647n) {
-      return { success: false, error: "El precio excede el límite permitido." };
-    }
-    return { success: true, cents: Number(totalCents) };
-  }
-  ```
-- **Invariant**: No `parseFloat(input) * 100` is permitted anywhere in Admin mutation handlers.
+**Canonical Admin Selection Workflow**:
 
----
+1. Read `Product.category_id`.
+2. Read `Category.current_spec_schema_id`.
+3. If `current_spec_schema_id IS NULL`: The category currently has no authoritative specification schema. Technical specifications are not applicable and are not a publish blocker.
+4. If `current_spec_schema_id IS NOT NULL`: Fetch exactly that `CategorySpecificationSchema` record by ID.
+5. Fail closed unless all integrity conditions are met:
+   - `schema.id == category.current_spec_schema_id`
+   - `schema.category_id == category.id`
+   - `schema.is_active == true`
+   - `schema.schema_version > 0`
+   - `schema.field_definitions` passes `validateSpecificationFieldDefinitions(...)` (`src/lib/discovery-filters/schema-validation.ts`).
+6. If the pointer is missing, inactive, mismatched, or invalid, the system halts with:
+   $$\text{SPECIFICATION\_SCHEMA\_INTEGRITY\_ERROR}$$
+   The system will never silently discover or fall back to an arbitrary active schema.
 
-## 8. Brand & Category Reference-Data Boundary
+### Application-Level Specification Value Validator
 
-> [!WARNING]
-> **REFERENCE_DATA_BOUNDARY_REQUIRES_EXTERNAL_DECISION**
->
-> **Audit Finding**:
->
-> 1. `products.brand_id` and `products.category_id` are `NOT NULL` foreign keys referencing `brands.id` and `categories.id` with `ON DELETE RESTRICT`.
-> 2. The storefront PDP reader (`buildPublishedProductBaseBySlugQuery`) performs `INNER JOIN brands` and `INNER JOIN categories` filtering on `brands.status = 'PUBLISHED'` and `categories.status = 'PUBLISHED'`.
-> 3. If a product references a Brand or Category that does not exist or is not `PUBLISHED`, the storefront query returns 0 rows (404).
-> 4. `GP-024.md` declares scope as: `"Products/variants/SKU/price/media/specs/SEO CRUD/archive/duplicate"`. It does NOT declare Brand CRUD or Category CRUD.
-> 5. A full audit of `ROADMAP.md` (GP-000 through GP-052) confirms that **NO dedicated "Brand Admin" or "Category Admin" GP exists in the roadmap**.
-> 6. In a clean, unseeded local PostgreSQL database (or fresh production database), `brands`, `categories`, and `category_specification_schemas` tables are completely empty! (Migrations 0000-0012 seed RBAC roles and permissions, but zero catalog reference data).
+`validateSpecificationFieldDefinitions(...)` validates category schema field definitions, **NOT** product specification values. GP-024 defines a new application-level helper:
+$$\text{validateProductSpecificationValues(validatedFieldDefinitions, rawSpecValues)}$$
 
-### Options for External Decision
+**Required Validation Behavior**:
 
-| Option                                                                                    | Description                                                                                                                                                                                                                                                                                                                                                      | Pros                                                                                                                          | Cons & Risks                                                                                                    |
-| :---------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------- |
-| **Option A (Recommended): Reference Data Seed Migration + Read-Only Selectors in GP-024** | Author a canonical seed migration / bootstrap command for core Gamer Perú reference taxonomy (Brands: WLMouse, Pulsar, Lamzu, Wooting, Endgame Gear, Artisan; Categories: Mouses, Teclados, Audio, Mousepads, Accesorios; plus CategorySpecificationSchemas v1). In GP-024, the Product Manager provides searchable `<select>` dropdowns for Brand and Category. | Preserves strict GP-024 scope boundary; eliminates local DB 404s; guarantees consistent spec schemas across all environments. | Requires an authorized seed migration before production catalog entry.                                          |
-| **Option B: Add Lightweight Brand & Category Creation Modals to GP-024**                  | Expand GP-024 scope to include "Crear Marca" and "Crear Categoría" slide-over modals within the product editor if a desired brand/category does not yet exist.                                                                                                                                                                                                   | Enables autonomous self-service bootstrapping from Admin UI without running database scripts.                                 | Scope expansion for GP-024; adds complexity around slug uniqueness, logos, parent categories, and spec schemas. |
-| **Option C: Authorize a Future Dedicated Taxonomy Admin GP (e.g. GP-024B)**               | Defer all Brand/Category editing to a new future roadmap item. In GP-024, staff can only select from whatever exists in the database.                                                                                                                                                                                                                            | Keeps GP-024 strictly isolated.                                                                                               | Leaves the operational bootstrap question unresolved unless seed data is populated manually.                    |
-
-**Recommended Decision**: Option A. The canonical peripheral brands and categories should be provisioned via an authorized reference seed, while GP-024 provides resilient dropdown selectors that fetch active, published brands and categories.
+1. `rawSpecValues` must be a plain JSON object (`Record<string, unknown>`).
+2. **Strict Key Allowlist**: Every persisted key must match a declared `field.key` in the validated `fieldDefinitions`. Any unknown key causes immediate validation **REJECTION**.
+3. **Typed Non-Null Value Validation**: For each present non-null value:
+   - **`dataType: "enum"`**: Must be a string matching one declared `options[].value`.
+   - **`dataType: "number"`**: Must be a finite number. If `min` is defined, $\text{value} \ge \text{min}$. If `max` is defined, $\text{value} \le \text{max}$. If `step` is defined, $(\text{value} - \text{min}) \pmod{\text{step}} = 0$ within floating tolerance.
+   - **`dataType: "boolean"`**: Must be boolean.
+   - **`dataType: "string"`**: Must be a string.
+4. **Null / Unset Semantics**:
+   - `null` or `undefined` is treated as unset/missing.
+   - `null` is never treated as a valid typed value satisfying a field.
+   - Unset keys are normalized out before persisting to `product_specifications.spec_values`.
+5. **No Invented "Required" Fields**:
+   - In the current schema, `SpecificationFieldDefinition` has **NO `required` property**.
+   - GP-024 v1 cannot truthfully enforce "all required fields".
+   - If `Category.current_spec_schema_id` is non-null: `ProductSpecifications` must reference that current schema, and every _present_ value must pass type validation. Missing specification keys are permitted.
+6. **Transactional Category Change Reconciliation**:
+   - When `product.category_id` is changed, the specification link must be reconciled in the same transaction:
+   - Resolve the new `Category.current_spec_schema_id`.
+   - If `NULL`: Delete the existing `ProductSpecifications` record.
+   - If non-null: Replace `ProductSpecifications` with a record referencing the new schema and empty `spec_values = {}`, unless new values were validated against that new schema in the same request.
+   - **Invariant**: Old-category `spec_values` are never retained under a new Category.
 
 ---
 
-## 9. Collection Boundary
+## 8. Corrected Publish Readiness Validator Contract
 
-- **Physical Schema Audit**: A grep across all Drizzle schema definitions and migrations 0000-0012 confirms that `collections` and `product_collections` tables **DO NOT EXIST physically in the database**.
-- **Scope Ruling**: Collection management is **STRICTLY OUT OF SCOPE** for GP-024. Zero collection assignment UI, selectors, or mutations will be implemented.
-
----
-
-## 10. Category Specifications Contract
-
-Hardware attributes are structured dynamically per category using PostgreSQL `JSONB` in `product_specifications`, validated against `category_specification_schemas`.
-
-### Architectural Invariants (Reconciled with Storefront Reader)
-
-1. **Category Linkage**: `product_specifications.schema_id` must reference a `category_specification_schemas` row whose `category_id` equals the product's `category_id`.
-   - Storefront check: `if (specRow.schemaCategoryId !== productBase.category.id)` $\implies$ dropped (`pdp_cross_category_specification_schema_dropped`).
-2. **Schema Version Consistency**: `product_specifications.schema_version` must equal `category_specification_schemas.schema_version`.
-   - Storefront check: `if (specRow.productSchemaVersion !== specRow.categorySchemaVersion)` $\implies$ dropped (`pdp_specification_schema_version_mismatch_dropped`).
-3. **Fail-Closed Field Validation**:
-   - When Admin saves technical specifications, every field key in `spec_values` is validated against `field_definitions` of the category's active schema using `validateSpecificationFieldDefinitions` (`src/lib/discovery-filters/schema-validation.ts`):
-     - **Enum fields (`dataType: "enum"`)**: Value must match one of the defined `options[].value`.
-     - **Numeric fields (`dataType: "number"`)**: Value must be a finite number, and if `min`/`max` are defined in schema, must satisfy $\text{min} \le \text{value} \le \text{max}$.
-     - **Boolean fields (`dataType: "boolean"`)**: Value must be boolean.
-     - **String fields (`dataType: "string"`)**: Value must be string.
-4. **Category Change Behavior**:
-   - If an Admin user changes a product's Category from e.g. "Mouses" to "Teclados", the existing mouse specifications become invalid.
-   - **Contract Rule**: Changing `category_id` on an existing product in the editor triggers a confirmation dialog warning that existing specifications will be cleared. The Admin mutation must replace the `product_specifications` record with the new category's active schema or clear `spec_values` to prevent persisting orphaned cross-category specifications.
-
----
-
-## 11. Media & Cloudflare R2 Contract
-
-Based on ADR-004, `src/lib/storage/r2.ts`, and `src/db/schema/catalog/media-assets.ts`:
-
-### Storage & Delivery Architecture
-
-1. **Bucket**: `R2_PUBLIC_MEDIA_BUCKET` (default `gamerperu-public-media`).
-2. **Delivery Origin**: `NEXT_PUBLIC_CDN_URL` (production `https://media.gamerperu.com`, local development `http://localhost:3000/media`).
-3. **Security Class**: Must be set strictly to `security_class = 'PUBLIC_MEDIA'`.
-4. **Allowed Media Types**:
-   - PDP Storefront exclusively renders images (`asset.mimeType.startsWith("image/")`).
-   - Allowed MIME types: `image/webp`, `image/jpeg`, `image/png`, `image/avif`.
-   - Videos and documents are rejected for PDP gallery imagery in v1.
-5. **Size Limit**: Maximum 10MB per image file.
-6. **Object Key Convention**:
-   $$\text{products/}\{slug\}/\{uuidv7\}-\{sanitizedFilename\}.\text{webp}$$
-   Keys must not contain path traversal (`..`), backslashes, control characters, or query/hash fragments.
-7. **Privileged Upload Lifecycle**:
-   - Step 1: Client requests pre-signed upload intent from server action (guarded by `requirePermission("catalog:manage")`).
-   - Step 2: Server generates pre-signed PUT URL using `@aws-sdk/s3-request-presigner` against R2 bucket with 10-minute expiry.
-   - Step 3: Browser uploads raw binary directly to Cloudflare R2 via `PUT`.
-   - Step 4: Browser notifies server action with object key, file size, MIME type, dimensions (`width`, `height`), and optional SHA-256 checksum.
-   - Step 5: Server creates `media_assets` row and links to `product_media` within a PostgreSQL transaction.
-   - **Security Invariant**: Cloudflare R2 access keys and secret keys NEVER reach the browser.
-8. **Primary Media Semantics**:
-   - `products.primary_media_id` points to the designated hero asset.
-   - If unset, the PDP reader falls back to the first `product_media` row with `display_order = 0`.
-   - In the Admin gallery editor, staff can click "Establecer como principal" on any uploaded image.
-9. **Variant-Specific Media**:
-   - `product_media.variant_id` is nullable.
-   - When set, the image is associated with a specific colorway/swatch variant. When the customer selects that variant on the PDP, the gallery jumps to that image.
-
----
-
-## 12. Storefront SEO & Metadata Contract
-
-Based on [`src/lib/catalog/pdp-seo.ts`](../../src/lib/catalog/pdp-seo.ts):
-
-### Derived Metadata Rules
-
-1. **Canonical URL**: `https://${APP_CONFIG.canonicalHost}/productos/${product.slug}`
-2. **Page Title (`<title>`)**:
-   $$\{product.name\} \text{ — } \{product.brand.name\} \text{ \| Gamer Perú}$$
-3. **Meta Description**:
-   - 1st Priority: `product.subtitle` (if non-empty, normalized to $\le 160$ chars).
-   - 2nd Priority: `product.description` (if non-empty, normalized to $\le 160$ chars).
-   - Fallback: `"Conoce " + product.name + " de " + product.brand.name + " en Gamer Perú. Revisa sus características, variantes y precio en soles."`
-4. **Social Image (OpenGraph / Twitter)**:
-   - Evaluates `resolveProductSocialImage(product)`:
-     - Candidate 1: `product.primaryMedia` (ONLY if `variantId === null` and MIME is `image/*`).
-     - Candidate 2: First global image in `product.media` where `variantId === null`.
-     - Candidate 3: `null` (strictly rejects variant-specific images, videos, documents, or brand logos).
-5. **Schema.org Structured Data**:
-   - Emits `@context: "https://schema.org"` with `@graph` containing `Product`, `BreadcrumbList`, and optional `FAQPage`.
-   - Product offers node is emitted if all active variants share the same price.
-6. **Robots Indexability**:
-   - `PUBLISHED` products emit `robots: { index: true, follow: true }`.
-   - `DRAFT` and `ARCHIVED` products return 404 on the public storefront, ensuring search engines never index unapproved products.
-
-### Published Slug Changes & URL Redirection
-
-> [!WARNING]
-> **SLUG REDIRECTION GAP**:
-> The physical database schema (migrations 0000-0012) contains **NO redirect table** or slug alias history.
-> If staff changes the `slug` of an already `PUBLISHED` product:
->
-> - The canonical URL changes immediately.
-> - The old URL will immediately return 404 (Not Found) on the storefront.
-> - Search engines and external customer bookmarks will encounter a broken link.
->
-> **Contract Rule**:
->
-> - The Admin UI must display a clear warning when editing the slug of a `PUBLISHED` product: _"Modificar el slug de un producto publicado cambiará su URL canónica y puede generar enlaces rotos en motores de búsqueda. Procede con precaución."_
-> - Full automatic 301 redirection history is deferred to a future SEO enhancement gate (GP-036 / GP-037).
-
----
-
-## 13. Duplicate Product Contract
-
-"Duplicate" is explicitly in scope for GP-024.
-
-### Duplication Semantics
-
-When staff duplicates a product:
-
-| Element                  | Duplication Behavior        | Notes                                                                                                                                         |
-| :----------------------- | :-------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                     | **REGENERATED**             | New UUIDv7 primary key                                                                                                                        |
-| `name`                   | **COPIED WITH SUFFIX**      | `"${original.name} (Copia)"` (truncated to $\le 200$ chars if needed)                                                                         |
-| `slug`                   | **REGENERATED**             | `"${original.slug}-copia-${uniqueSuffix}"` (validated against slug regex)                                                                     |
-| `status`                 | **RESET TO DRAFT**          | **ALWAYS** `status = 'DRAFT'`, regardless of original status                                                                                  |
-| `brand_id`               | **COPIED**                  | Same brand reference                                                                                                                          |
-| `category_id`            | **COPIED**                  | Same category reference                                                                                                                       |
-| `subtitle`               | **COPIED**                  | Same subtitle                                                                                                                                 |
-| `description`            | **COPIED**                  | Same markdown description                                                                                                                     |
-| `is_featured`            | **RESET TO FALSE**          | New duplicate is never featured by default                                                                                                    |
-| `primary_media_id`       | **COPIED BY REFERENCE**     | Points to existing `media_assets.id`                                                                                                          |
-| `product_media`          | **COPIED**                  | New `product_media` rows created with new IDs, linking new `productId` to existing `mediaAssetId`                                             |
-| `product_specifications` | **COPIED**                  | New row created with new `productId`, same `schemaId`, `schemaVersion`, and `specValues`                                                      |
-| `product_variants`       | **COPIED WITH UNIQUE SKUs** | Variants are duplicated with new UUIDv7 IDs; `sku` is suffixed with `"-COPY-" + suffix`; title, price, attributes copied; `status = 'ACTIVE'` |
-| `inventory_items`        | **NEVER DUPLICATED**        | Duplicate has **0 physical stock** (no inventory records created)                                                                             |
-| `inventory_ledger`       | **NEVER DUPLICATED**        | Zero historical stock movements                                                                                                               |
-| `order_items`            | **NEVER DUPLICATED**        | Zero historical orders                                                                                                                        |
-| `product_stories`        | **NOT DUPLICATED**          | Story builder is out of scope; duplicate product has no story revision attached                                                               |
-| `audit_events`           | **NEW EVENT**               | Emits `catalog:product:duplicate` audit event capturing source and target IDs                                                                 |
-
----
-
-## 14. Archive / Restore Contract
-
-"Archive" is explicitly in scope for GP-024.
-
-### Archiving Rules
-
-1. **Permissions**:
-   - Archiving a `PUBLISHED` product: Requires `catalog:publish`.
-   - Archiving a `DRAFT` product: Requires `catalog:manage`.
-2. **Storefront Consequence**:
-   - `status` transitions to `'ARCHIVED'`.
-   - Storefront queries filter strictly on `status = 'PUBLISHED'`, so the product immediately disappears from PDP, category pages, brand pages, and search.
-3. **Cart & Checkout Consequence**:
-   - Any variant belonging to an archived product fails real-time availability checks in `validateCartItemsForCheckout`. The customer is informed that the item is no longer available.
-4. **Commerce History Immutability**:
-   - All historical `order_items` snapshots remain completely unaffected and immutable.
-   - `inventory_items` and `inventory_ledger` records remain intact, preserving physical stock facts.
-5. **Variant Status Handling**:
-   - When a product is archived, its variants do not need to be mutated in the database because the parent `Product.status = 'ARCHIVED'` already invalidates the sellability invariant ($\text{Product.status} = \text{'PUBLISHED'} \land \text{ProductVariant.status} = \text{'ACTIVE'}$).
-6. **Restore Workflow**:
-   - An archived product can be restored to `DRAFT` status by staff with `catalog:manage`.
-   - Restoring directly to `PUBLISHED` requires `catalog:publish` and re-running the full Publish Readiness Validator.
-
----
-
-## 15. Publish Readiness Validator Contract
-
-Before a product can transition to `PUBLISHED`, the system executes a deterministic validator.
+Before a product can transition to `PUBLISHED`, the system executes the Publish Readiness Validator.
 
 ### Hard Blockers (Must all pass; failure rejects transition)
 
-1. **Name**: `product.name.trim().length >= 3` and $\le 200$ chars.
-2. **Slug**: Valid kebab-case format (`^[a-z0-9]+(?:-[a-z0-9]+)*$`) and globally unique in `products`.
-3. **Brand Verification**:
-   - `product.brand_id` must exist.
-   - **Crucial**: Referenced Brand must have `status = 'PUBLISHED'` (otherwise the storefront query `INNER JOIN brands WHERE brands.status = 'PUBLISHED'` will return 404).
-4. **Category Verification**:
-   - `product.category_id` must exist.
-   - **Crucial**: Referenced Category must have `status = 'PUBLISHED'` (otherwise the storefront query `INNER JOIN categories WHERE categories.status = 'PUBLISHED'` will return 404).
+1. **Product Name**: Trimmed non-empty string $\le 200$ characters.
+2. **Product Slug**: Valid physical regex (`^[a-z0-9]+(?:-[a-z0-9]+)*$`) and globally unique.
+3. **Brand Verification**: Referenced Brand exists and has `status = 'PUBLISHED'`.
+4. **Category Verification**: Referenced Category exists and has `status = 'PUBLISHED'`.
 5. **Sellable Variants**:
-   - Product must have at least **ONE** variant with `status = 'ACTIVE'`.
-   - Every active variant must have:
-     - Non-empty, unique `sku`.
+   - At least **ONE** `ProductVariant` with `status = 'ACTIVE'`.
+   - Each active variant must have:
+     - Trimmed non-empty `sku` $\le 50$ chars, globally unique.
      - `price_cents > 0`.
-     - Valid `attributes` JSON object.
-6. **Technical Specifications**:
-   - If the category has an active specification schema, `product_specifications` must exist, match `category_id` and `schema_version`, and all required fields must be present and valid.
-7. **Primary Media**:
-   - At least one valid public image must be attached (`primary_media_id !== null` or at least one row in `product_media` with `mime_type` starting with `image/`).
+     - Valid `attributes` object conforming to GP-024 validation.
+6. **Specification Integrity**:
+   - If `Category.current_spec_schema_id IS NOT NULL`:
+     - `product_specifications` must exist.
+     - Must reference `schema_id == Category.current_spec_schema_id`.
+     - Must match `schema_version == currentSchema.schema_version`.
+     - All present values in `spec_values` must pass `validateProductSpecificationValues`.
+   - If `Category.current_spec_schema_id IS NULL`:
+     - Specifications do not block publishing.
+7. **Media Integrity**:
+   - At least **ONE** valid `PUBLIC_MEDIA` image belonging to the Product must exist (`products.primary_media_id` or `product_media` global image).
+   - Must satisfy all media relational integrity checks (Section 9).
 
-### Soft Quality Warnings (Displayed in Admin UI; do NOT block publish)
+### Soft Quality Warnings (Informational; do NOT block publish)
 
-1. Missing `subtitle` (falls back to description for SEO).
-2. Short `description` ($< 50$ chars).
-3. No `compare_at_price_cents` (no discount displayed).
-4. Missing `weight_grams` on variants.
-5. Zero Available To Sell (ATS) stock across warehouses (product will display as "Agotado" on storefront, which is a legitimate commercial state).
-
----
-
-## 16. RBAC Permission Matrix
-
-Using only canonical permissions that physically exist in PostgreSQL (`src/lib/auth/rbac.ts`):
-
-- `catalog:manage`
-- `catalog:publish`
-- `catalog:ai_research` (GP-025, out of scope for GP-024)
-
-| Admin Product Manager Action                      | Required Permission                   | SUPER_ADMIN | ADMIN_CATALOG | ADMIN_ORDERS | ADMIN_SUPPORT |   CUSTOMER   |
-| :------------------------------------------------ | :------------------------------------ | :---------: | :-----------: | :----------: | :-----------: | :----------: |
-| **View Product List (`/admin/productos`)**        | `catalog:manage` OR `catalog:publish` |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **View Product Editor (`/admin/productos/[id]`)** | `catalog:manage` OR `catalog:publish` |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Create Draft Product**                          | `catalog:manage`                      |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Edit Draft Details / Copy / SEO**               | `catalog:manage`                      |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Edit Published Details / Copy / SEO**           | `catalog:manage`                      |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Create / Edit Variants & Pricing**              | `catalog:manage`                      |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Upload / Attach / Reorder Media**               | `catalog:manage`                      |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Edit Technical Specifications**                 | `catalog:manage`                      |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Duplicate Product**                             | `catalog:manage`                      |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Archive Draft Product**                         | `catalog:manage`                      |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Restore Archived Product to Draft**             | `catalog:manage`                      |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Publish Product (`* -> PUBLISHED`)**            | **`catalog:publish`**                 |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Unpublish Product (`PUBLISHED -> DRAFT`)**      | **`catalog:publish`**                 |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
-| **Archive Published Product**                     | **`catalog:publish`**                 |   Granted   |    Granted    | Denied (403) | Denied (403)  | Denied (403) |
+- Missing `subtitle`.
+- Short `description` ($< 50$ chars).
+- No `compare_at_price_cents`.
+- Missing `weight_grams` on variants.
+- Zero active Available To Sell (ATS) stock (product displays as "Agotado" on storefront, which is a legitimate commerce state).
 
 ---
 
-## 17. AuditEvent Contract
+## 9. Media Relational Integrity Contract
 
-Privileged catalog mutations append immutable audit records to `audit_events` within the same database transaction.
+The physical `product_media` table defines independent foreign keys:
 
-### Audit Schema
+- `productId` $\to$ `products.id`
+- `variantId` $\to$ `product_variants.id`
 
-- `actorType`: `'ADMIN'`
-- `actorId`: `authContext.authUserId`
-- `action`: Canonical action string
-- `targetType`: `'product'`, `'product_variant'`, `'product_media'`, `'product_specifications'`
-- `targetId`: String representation of entity UUID
-- `metadata`: Sanitized JSON diff
-- `ipAddress`: Client IP address from request headers
-- `requestId`: Correlation / request ID
+However, the physical schema lacks a composite foreign key guaranteeing that `product_variants.product_id == product_media.product_id`.
 
-### Canonical Actions & Sanitized Payloads
+### Canonical Application-Enforced Invariants
 
-| Action String               | Target Type              | Sanitized Metadata Payload                                           |
-| :-------------------------- | :----------------------- | :------------------------------------------------------------------- |
-| `catalog:product:create`    | `product`                | `{ name, slug, brand_id, category_id, status: 'DRAFT' }`             |
-| `catalog:product:update`    | `product`                | Changed fields only (e.g. `{ before: { name }, after: { name } }`)   |
-| `catalog:product:publish`   | `product`                | `{ previous_status, active_variant_count, primary_media_id }`        |
-| `catalog:product:unpublish` | `product`                | `{ previous_status: 'PUBLISHED', target_status: 'DRAFT' }`           |
-| `catalog:product:archive`   | `product`                | `{ previous_status }`                                                |
-| `catalog:product:restore`   | `product`                | `{ target_status: 'DRAFT' }`                                         |
-| `catalog:product:duplicate` | `product`                | `{ source_product_id, new_product_id, variant_count }`               |
-| `catalog:variant:create`    | `product_variant`        | `{ product_id, sku, title, price_cents }`                            |
-| `catalog:variant:update`    | `product_variant`        | Changed fields (e.g. `{ sku, price_cents_diff: { before, after } }`) |
-| `catalog:media:attach`      | `product_media`          | `{ product_id, media_asset_id, variant_id, display_order }`          |
-| `catalog:media:remove`      | `product_media`          | `{ product_id, media_asset_id }`                                     |
-| `catalog:specs:update`      | `product_specifications` | `{ product_id, schema_id, schema_version, field_count }`             |
-
-**Data Minimization Invariant**: No raw image binaries, base64 data, presigned URLs, or secrets are ever recorded in `audit_events.metadata`.
+1. **Variant Ownership Invariant**:
+   - For every `product_media` row where `variant_id IS NOT NULL`:
+   - The server mutation loads the referenced `ProductVariant`.
+   - It strictly requires:
+     $$\text{variant.product\_id} == \text{product\_media.product\_id}$$
+   - If mismatched, the transaction aborts with:
+     $$\text{MEDIA\_VARIANT\_PRODUCT\_MISMATCH}$$
+   - Client-reported variant ownership claims are never accepted without server-side verification.
+2. **Primary Media Invariant**:
+   - `products.primary_media_id` may only be set by GP-024 if:
+     1. The `MediaAsset` exists.
+     2. `security_class == 'PUBLIC_MEDIA'`.
+     3. `media_type == 'IMAGE'`.
+     4. MIME type is an allowed catalog image MIME (`image/webp`, `image/jpeg`, `image/png`, `image/avif`).
+     5. The asset is attached to the same Product through `product_media` with `variant_id IS NULL` (global image).
+   - A Product's primary image may never point to an unattached or unrelated product's asset.
 
 ---
 
-## 18. Transaction & Concurrency Contract
+## 10. Duplicate Product — Variant Media Remapping
 
-### Atomic Multi-Row Operations
+When staff duplicates a product, media relationships must be remapped safely:
 
-The following workflows must execute inside a single PostgreSQL ACID transaction (`await db.transaction(async (tx) => { ... })`):
-
-1. **Create Product Initial Flow**:
-   - `INSERT INTO products`
-   - `INSERT INTO product_variants` (at least one initial default variant)
-   - `INSERT INTO audit_events`
-2. **Duplicate Product Flow**:
-   - `INSERT INTO products` (duplicate record)
-   - `INSERT INTO product_variants` (duplicate variants with unique SKUs)
-   - `INSERT INTO product_media` (duplicate media linkages)
-   - `INSERT INTO product_specifications` (duplicate specs)
-   - `INSERT INTO audit_events`
-3. **Publish Transition Flow**:
-   - Execute publish validation queries against current state.
-   - `UPDATE products SET status = 'PUBLISHED', updated_at = NOW() WHERE id = ...`
-   - `INSERT INTO audit_events`
-4. **Specifications Update**:
-   - `INSERT INTO product_specifications ... ON CONFLICT (product_id) DO UPDATE ...`
-   - `UPDATE products SET updated_at = NOW() WHERE id = ...`
-   - `INSERT INTO audit_events`
-
-### Concurrency & Race Conditions
-
-1. **Slug Collisions**: Handled deterministically by PostgreSQL `UNIQUE INDEX products_slug_idx`. If two admins submit the same slug simultaneously, the second transaction fails with a Postgres unique constraint violation (`23505`). The application maps this to a user-friendly error: _"El slug ya está en uso por otro producto."_
-2. **SKU Collisions**: Handled deterministically by PostgreSQL `UNIQUE INDEX product_variants_sku_idx`.
-3. **Optimistic Locking Guard**:
-   - To prevent Admin A silently overwriting edits made by Admin B:
-   - The editor form submits the `updatedAt` ISO timestamp that was fetched when the page loaded.
-   - The server mutation executes:
-     `UPDATE products SET ... WHERE id = $1 AND updated_at = $2`
-   - If zero rows are updated, the server throws a `409 Conflict`: _"Este producto ha sido modificado por otro usuario mientras lo editabas. Por favor recarga la página para ver los cambios más recientes."_
+1. **Variant Mapping**:
+   - As variants are cloned, an in-memory mapping is established:
+     $$\text{sourceVariantId} \implies \text{newVariantId}$$
+2. **Product Media Remapping**:
+   - **Global media (`variant_id IS NULL`)**:
+     Created with `new product_media.variant_id = NULL`.
+   - **Variant-specific media (`variant_id = sourceVariantId`)**:
+     Created with `new product_media.variant_id = mapped newVariantId`.
+   - **Invariant**: The duplicate product **NEVER** inherits a reference to a source variant ID.
+   - If any variant-specific media row cannot be mapped to a cloned variant, the duplicate transaction aborts.
+3. **Primary Media Reference**:
+   - `products.primary_media_id` is set to the same `MediaAsset.id` by reference, provided the asset was cloned as global media for the new Product.
+4. **Never Duplicated**:
+   - `inventory_items` and `inventory_ledger`: Duplicate has 0 stock.
+   - `order_items`: Zero historical orders.
+   - `product_stories`: Out of scope; duplicate has no story attached.
+   - Status is always reset to `DRAFT` and `is_featured = false`.
 
 ---
 
-## 19. Mutation Safety & Idempotency Rules
+## 11. Shared Media & Alt Text Semantics
 
-- **Server-Side Validation**: All incoming mutation payloads are validated server-side using strict Zod schemas before database queries execute.
-- **Replay Protection**:
-  - Critical actions like "Publicar" or "Duplicar" use client-side button disabling and transaction guards.
-  - Duplication generates a deterministic UUIDv7 on the server, avoiding duplicate records if a form is double-submitted.
-- **Idempotent Status Transitions**:
-  - Calling `publishProduct` on an already `PUBLISHED` product is an idempotent NO-OP (returns existing product without re-appending duplicate audit events).
-  - Calling `archiveProduct` on an already `ARCHIVED` product is an idempotent NO-OP.
-
----
-
-## 20. Server / Client Security Boundary
-
-1. **Privileged Writes Execute Server-Side**: All mutations are implemented via Next.js Server Actions with `"use server"` or authenticated Route Handlers.
-2. **Zero Client Trust**:
-   - Roles, permissions, and staff identity are never accepted from form fields, query parameters, or client state.
-   - Every mutation immediately invokes:
-     `const authContext = await requirePermission("catalog:manage");` (or `"catalog:publish"`)
-   - Identity is derived strictly via cryptographic verification (`getVerifiedIdentity` $\to$ Supabase JWT claims $\to$ direct PostgreSQL RBAC resolution).
-3. **Zero Secrets in Browser**: Cloudflare R2 credentials, database connection strings, and service role keys are strictly `server-only`.
+- **Asset-Level Metadata**: In the physical schema, `alt_text` resides on `media_assets.alt_text`. It is **NOT** stored per `product_media` join row.
+- **Shared Reference Impact**: When a `MediaAsset` is reused across multiple products (e.g. via product duplication or shared brand imagery), all referencing products share the exact same `alt_text`.
+- **Contract Rule**:
+  - Editing alt text in the Admin gallery updates the underlying `media_assets.alt_text`.
+  - The Admin UI must explicitly disclose when an asset is referenced by multiple entities: _"Este texto alternativo se actualiza en todas las referencias donde se utilice esta imagen."_
+  - GP-024 will not introduce a schema change for per-link alt text. Per-link alt text is deferred as a future schema enhancement if needed.
 
 ---
 
-## 21. Admin Route Architecture & UX Information Architecture
+## 12. Public Media Pipeline & ADR-004 Alignment
 
-### Proposed Route Structure
+In strict adherence to accepted **ADR-004**:
 
-Following existing Gamer Perú admin conventions (`/admin/(protected)/...`):
+### Canonical Storage Identity
 
-1. **Product List**: `/admin/productos`
-   - Data table displaying products with status badge, thumbnail, brand, category, active variant count, price range, stock alert indicator, and last updated date.
-   - Search bar (by name or slug).
-   - Filter dropdowns: Status (`Todos`, `Publicados`, `Borradores`, `Archivados`), Marca, Categoría.
-   - Action: "Nuevo Producto" primary button.
-2. **New Product Creation**: `/admin/productos/nuevo`
-   - Streamlined creation form: Name, Brand, Category, Initial Variant SKU & Price in Soles.
-   - Slug auto-generated in real-time with override capability.
-   - Creates initial `DRAFT` product and redirects to editor.
-3. **Product Editor**: `/admin/productos/[id]`
-   - Organized into clean, accessible tabs / sections:
-     - **Pestaña 1: General**: Name, Slug, Subtitle, Editorial Description (Markdown), Brand, Category, Featured toggle.
-     - **Pestaña 2: Variantes y Precios**: Variant table, SKU, Title, Price (`PEN`), Compare-at Price, Cost, Weight, Attributes (color, switch), Active/Inactive toggle, Add Variant modal.
-     - **Pestaña 3: Galería Multimedia**: Upload dropzone, image grid, drag-to-reorder / display order, "Establecer como principal", variant assignment dropdown, alt text editor.
-     - **Pestaña 4: Especificaciones Técnicas**: Dynamic form generated from category schema (enum dropdowns, number inputs with units, booleans).
-     - **Pestaña 5: SEO y Metadatos**: Live SERP preview, canonical URL preview, OpenGraph card preview, validation feedback.
-   - **Sticky Action Bar**:
-     - Status badge (`BORRADOR`, `PUBLICADO`, `ARCHIVADO`).
-     - "Guardar Cambios" button.
-     - "Duplicar" button.
-     - "Archivar" / "Restaurar" button.
-     - "Publicar" button (with pre-flight readiness checklist modal).
-4. **Navigation Integration**:
-   - `src/lib/admin/navigation.ts` will be updated during implementation to expose:
-     ```typescript
-     {
-       id: "products",
-       label: "Productos",
-       href: "/admin/productos",
-       iconName: "Package",
-       description: "Gestión de catálogo, variantes y precios",
-       requiredPermission: "catalog:manage",
-     }
-     ```
+- **Incoming Image Formats**: `image/jpeg`, `image/png`, `image/webp`, `image/avif`.
+- **Maximum Incoming Size**: 10 MiB (enforced as a GP-024 application limit, not a database constraint).
+- **Transformation to Canonical Format**:
+  - Before a `MediaAsset` becomes canonical, the uploaded image must be converted to **actual WebP bytes**.
+  - Merely renaming a file extension to `.webp` while keeping JPEG/PNG bytes is strictly forbidden.
+- **Canonical Content-Hashed Object Key**:
+  $$\text{products/}\{brandSlug\}/\{productSlug\}/\{sha256\}.\text{webp}$$
+  Where `{sha256}` is the lowercase hexadecimal SHA-256 hash of the final WebP bytes.
+- **Temporary Upload Separation**:
+  - Temporary uploads from browser pre-signed PUTs are stored under a dedicated temporary prefix:
+    $$\text{temp/uploads/}\{actorId\}/\{intentId\}.\text{tmp}$$
+  - Temporary objects are **NOT** registered as `media_assets`.
+  - Temporary objects have bounded lifecycle cleanup semantics.
 
 ---
 
-## 22. Product List Query Contract
+## 13. Media Upload Intent & Finalization Security
 
-The Admin product list query needs to provide operational scannability without causing N+1 database queries.
+The browser runtime is treated as untrusted presentation.
 
-### Query Design
+### Upload Lifecycle
+
+1. **Server-Generated Upload Intent**:
+   - Staff with `catalog:manage` requests an upload intent via a Server Action.
+   - The server binds:
+     - `actorId` (from verified JWT claims)
+     - `productId` (target product)
+     - `intentId` (UUIDv7)
+     - `tempObjectKey` (under `temp/uploads/...`)
+     - Allowed MIME types and size limit (10 MiB)
+     - Short expiration (10 minutes)
+   - Server returns the presigned R2 PUT URL. The browser cannot choose arbitrary keys.
+2. **Direct Browser Upload**:
+   - Browser uploads raw binary directly to R2 using the presigned PUT URL.
+3. **Server-Side Finalization Verification**:
+   - Browser invokes `finalizeMediaUpload({ intentId })`.
+   - Server verifies:
+     A. Intent is authentic, unexpired, and belongs to the current staff actor and target Product.
+     B. Performs `HEAD` against R2 to confirm the temporary object exists.
+     C. Confirms `Content-Length <= 10 MiB`.
+     D. Validates actual image bytes to reject MIME spoofing.
+     E. Normalizes image bytes to canonical WebP format.
+     F. Computes SHA-256 hash of final WebP bytes.
+     G. Constructs canonical key: `products/{brandSlug}/{productSlug}/{sha256}.webp`.
+     H. Copies/puts final WebP bytes to the canonical key in R2 and deletes the temporary object.
+     I. Registers `media_assets` and attaches `product_media` in a PostgreSQL transaction.
+   - Client-reported `fileSize`, `mimeType`, `width`, `height`, or `checksum` are **never trusted** without server verification.
+
+---
+
+## 14. Media Failure & Orphan Cleanup
+
+Because PostgreSQL and Cloudflare R2 do not participate in a two-phase commit, compensating failure logic is enforced:
+
+1. **Temporary Upload Failure**:
+   - If the browser fails to upload or finalization is never called, temporary objects expire via R2 lifecycle rules or best-effort deletion.
+2. **Canonical Object Written but Database Transaction Fails**:
+   - If final WebP bytes are written to R2 but the PostgreSQL transaction fails, the server performs best-effort cleanup of the canonical object **only if** no other `media_assets` record references that key.
+3. **Attachment Removal & Reference-Aware Deletion**:
+   - Removing an image from a Product deletes the `product_media` row.
+   - The underlying `MediaAsset` and R2 object are **NOT** deleted immediately if any reference remains:
+     - `products.primary_media_id`
+     - `brands.logo_media_id`
+     - Other `product_media.media_asset_id` rows
+   - (Note: Product Story blocks store JSON payloads rather than DB foreign keys; do not assume automatic relational protection).
+4. **Default Safety Rule**:
+   - Prefer orphan retention over accidental deletion of an object that may still be referenced.
+   - Physical R2 deletion is performed only after a reference-aware orphan audit. Zero R2 operations are executed in CHK0-BR1.
+
+---
+
+## 15. Corrected Admin Product List Aggregation
+
+### Query Fan-Out Elimination
+
+In the original CHK0 draft, joining `product_variants` and `inventory_items` directly created a Cartesian fan-out whenever variants had inventory across multiple locations.
+
+### Canonical Query Architecture
+
+The query pre-aggregates variants and inventory using CTEs / subqueries to guarantee mathematical correctness:
 
 ```sql
+WITH variant_summary AS (
+  SELECT
+    pv.product_id,
+    COUNT(pv.id) AS total_variants,
+    COUNT(CASE WHEN pv.status = 'ACTIVE' THEN 1 END) AS active_variants,
+    MIN(CASE WHEN pv.status = 'ACTIVE' THEN pv.price_cents END) AS min_active_price_cents,
+    MAX(CASE WHEN pv.status = 'ACTIVE' THEN pv.price_cents END) AS max_active_price_cents
+  FROM product_variants pv
+  GROUP BY pv.product_id
+),
+active_inventory_summary AS (
+  SELECT
+    pv.product_id,
+    COALESCE(SUM(ii.quantity_on_hand - ii.quantity_reserved - ii.quantity_allocated), 0) AS active_variant_ats
+  FROM product_variants pv
+  INNER JOIN inventory_items ii ON pv.id = ii.variant_id
+  WHERE pv.status = 'ACTIVE'
+  GROUP BY pv.product_id
+)
 SELECT
   p.id,
   p.name,
@@ -643,149 +481,170 @@ SELECT
   c.name AS category_name,
   ma.object_key AS primary_media_key,
   ma.alt_text AS primary_media_alt,
-  COUNT(pv.id) AS total_variants,
-  COUNT(CASE WHEN pv.status = 'ACTIVE' THEN 1 END) AS active_variants,
-  MIN(pv.price_cents) AS min_price_cents,
-  MAX(pv.price_cents) AS max_price_cents,
-  COALESCE(SUM(ii.quantity_on_hand - ii.quantity_reserved - ii.quantity_allocated), 0) AS total_ats
+  COALESCE(vs.total_variants, 0) AS total_variants,
+  COALESCE(vs.active_variants, 0) AS active_variants,
+  vs.min_active_price_cents,
+  vs.max_active_price_cents,
+  COALESCE(ais.active_variant_ats, 0) AS active_variant_ats
 FROM products p
 INNER JOIN brands b ON p.brand_id = b.id
 INNER JOIN categories c ON p.category_id = c.id
 LEFT JOIN media_assets ma ON p.primary_media_id = ma.id
-LEFT JOIN product_variants pv ON p.id = pv.product_id
-LEFT JOIN inventory_items ii ON pv.id = ii.variant_id
+LEFT JOIN variant_summary vs ON p.id = vs.product_id
+LEFT JOIN active_inventory_summary ais ON p.id = ais.product_id
 WHERE ($1::text IS NULL OR p.status = $1)
   AND ($2::uuid IS NULL OR p.brand_id = $2)
   AND ($3::uuid IS NULL OR p.category_id = $3)
   AND ($4::text IS NULL OR p.name ILIKE '%' || $4 || '%' OR p.slug ILIKE '%' || $4 || '%')
-GROUP BY p.id, b.name, c.name, ma.object_key, ma.alt_text
-ORDER BY p.updated_at DESC
+ORDER BY p.updated_at DESC, p.id DESC
 LIMIT $5 OFFSET $6;
 ```
 
-- Executed in a single query with deterministic pagination.
-- Price range formatted cleanly: `"S/ 129.90"` (if min = max) or `"S/ 129.90 - S/ 189.90"`.
+### Aggregate Metrics Definitions
+
+1. **`totalVariants`**: Total distinct `product_variants` belonging to the Product.
+2. **`activeVariants`**: Distinct `product_variants` with `status = 'ACTIVE'`.
+3. **Commercial Price Range (`min_active_price_cents` / `max_active_price_cents`)**:
+   - Derived **strictly from ACTIVE variants**.
+   - If `active_variants = 0`, commercial price range displays as `"No disponible"` / `null`, **NOT `S/ 0.00`**.
+4. **`activeVariantAts`**:
+   - Available To Sell stock aggregated across `inventory_items` belonging **strictly to ACTIVE variants**.
+   - Explicitly distinguished from GP-023 global physical inventory (which includes stock of inactive/archived variants).
+5. **Deterministic Pagination**:
+   - Enforces composite ordering: `ORDER BY p.updated_at DESC, p.id DESC`.
 
 ---
 
-## 23. Error & Validation UX Contract
+## 16. Idempotency & Replay Contract
 
-1. **Sanitized User Errors**:
-   - Internal Postgres exceptions, connection strings, and stack traces are caught server-side, logged to structured logging (`logger.error`), and converted into friendly, actionable UI error messages.
-2. **Deterministic Error Mapping**:
-   - `23505 (unique_violation)` on slug: _"El slug '...' ya está en uso. Por favor elige otro."_
-   - `23505 (unique_violation)` on sku: _"El SKU '...' ya existe en otro producto o variante."_
-   - `23503 (foreign_key_violation)`: _"La marca o categoría seleccionada no existe."_
-   - `23514 (check_violation)` on price: _"El precio debe ser un número positivo en Soles."_
-   - Stale update conflict: _"El producto fue modificado por otro usuario mientras lo editabas. Recarga la página para ver la versión actualizada."_
-3. **Form Error Association**:
-   - Validation errors link directly to the specific form input using `aria-describedby` and `aria-invalid="true"`.
+### Replay Architecture
 
----
-
-## 24. Accessibility Contract (WCAG 2.1 AA)
-
-1. **Keyboard Operability**: All controls (tabs, modals, variant additions, image uploads, publish actions) are 100% operable via keyboard (`Tab`, `Enter`, `Space`, `Escape`, arrow keys for tabs).
-2. **Focus Management**:
-   - Opening confirmation modals traps focus within the dialog.
-   - Closing a modal returns focus to the triggering element.
-   - Validation errors shift focus to the first invalid field.
-3. **Contrast & Color**:
-   - Minimum contrast ratio $\ge 4.5:1$ across dark and light modes.
-   - Status badges use distinct icons and text labels, not color alone (e.g. `[●] Publicado`, `[○] Borrador`, `[⊘] Archivado`).
-4. **Touch Targets**: All buttons, table row actions, and swatch pickers maintain minimum clickable areas of $44 \times 44\text{ px}$.
-5. **Reduced Motion**: All animations and modal transitions respect `prefers-reduced-motion: reduce`.
+1. **UUIDv7 is Not an Idempotency Mechanism**:
+   - Generating a random or timestamped UUIDv7 does not prevent double-submit duplication.
+   - Client-side button disabling is a UX affordance only, not authoritative replay protection.
+2. **Existing Idempotency Table**:
+   - The PostgreSQL `idempotency_keys` table uses an enum (`idempotency_operation_type`) that does not include catalog operations.
+   - That enum is **NOT** altered in GP-024 to preserve `SCHEMA_CHANGE_REQUIRED: NO`.
+3. **GP-024 Application-Level Replay Architecture**:
+   - **`mutationRequestId`**: Every replay-sensitive Admin submission generates a high-entropy `mutationRequestId` (UUID) in the browser, reused on network retry.
+   - **Advisory Lock Serialization**: Server computes a deterministic 64-bit integer hash from `(actorId, operationType, mutationRequestId)` and acquires a PostgreSQL transaction advisory lock:
+     ```sql
+     SELECT pg_advisory_xact_lock($1);
+     ```
+   - **Create Product**: Slug uniqueness is authoritative. If the same `mutationRequestId` retries, the server identifies the existing product and returns it. If a different operation collides on the same slug, it returns `SLUG_CONFLICT`.
+   - **Duplicate Product**: Target duplicate slug and suffix are derived deterministically from:
+     $$\text{hash}(sourceProductId, actorId, mutationRequestId)$$
+     Retrying the same request returns the existing duplicate rather than generating `-copy-1`, `-copy-2`, etc.
+   - **Create Variant**: SKU uniqueness is authoritative. Retrying the same mutation returns the existing variant.
+   - **Media Finalization**: Canonical content-hash `objectKey` provides stable identity. Reuses existing `MediaAsset` and avoids duplicate `product_media` joins.
+   - **Publish / Archive**: If already at target status, returns idempotent NO-OP without appending duplicate audit events.
+   - **Audit Trail**: Metadata records `mutation_request_digest` (SHA-256 of requestId), never raw auth tokens.
 
 ---
 
-## 25. Performance Contract
+## 17. Resolved Reference Data Boundary (Option A)
 
-1. **Zero N+1 Queries**: List view and editor views execute batched queries or structured joins.
-2. **Index Alignment**:
-   - List filtering leverages `products_slug_idx`, `products_category_pagination_idx`, `products_brand_pagination_idx`, `products_name_trgm_idx`.
-   - Variants query leverages `product_variants_product_id_status_idx`.
-   - Media query leverages `product_media_product_idx`.
-3. **Server Component Streaming**: The product editor uses React Server Components for base data loading and Suspense boundaries for heavy sub-panels (media, variants, specs).
+> [!IMPORTANT]
+> **EXTERNALLY RESOLVED: OPTION A ADOPTED (NOT A MIGRATION)**
+>
+> 1. **Option A is Confirmed**:
+>    - GP-024 does **NOT** implement Brand CRUD or Category CRUD.
+>    - GP-024 Product authoring selects existing `PUBLISHED` Brands and Categories via search/select dropdowns.
+> 2. **Not a Drizzle Migration**:
+>    - This reference data provisioning is **NOT** a Drizzle migration.
+>    - Zero migration files (`0013`) are created.
+> 3. **Guarded Bootstrap Command**:
+>    - Future implementation provides an idempotent bootstrap script (`scripts/bootstrap-catalog-reference-data.mjs`) guarded for local development and authorized production execution.
+>    - Uses natural keys (`slug`) for idempotency (`ON CONFLICT (slug) DO UPDATE`).
+> 4. **Brand Manifest is Business Data**:
+>    - Brand names (WLMouse, Pulsar, Lamzu, Wooting, Endgame Gear, Artisan) are example candidates, not immutable architectural constants. The actual manifest is a version-controlled business data file.
+> 5. **Category & Specification Schema Alignment**:
+>    - Bootstrap establishes:
+>      1. `categories` row
+>      2. `category_specification_schemas` row
+>      3. `categories.current_spec_schema_id` pointing to that schema.
 
 ---
 
-## 26. Migration Readiness Analysis
+## 18. RBAC Permission & Navigation Alignment
 
-### Authoritative Determination
+All actions use canonical permissions from [`src/lib/auth/rbac.ts`](../../src/lib/auth/rbac.ts):
+
+- `catalog:manage`
+- `catalog:publish`
+- `catalog:ai_research` (owned by GP-025, excluded from GP-024)
+
+### Normalized Authorization Matrix
+
+- **Navigation Entry (`/admin/productos`)**: Requires `catalog:manage`.
+- **Product Editor Entry (`/admin/productos/[id]`)**: Requires `catalog:manage`.
+- **Ordinary Authoring Mutations**: Requires `catalog:manage` (draft editing, variants, specs, media, SEO, duplicate, archive draft, restore).
+- **Publishing Actions**: Requires `catalog:publish` (publish draft, unpublish published product, archive published product).
+- Because canonical `ADMIN_CATALOG` possesses both `catalog:manage` and `catalog:publish`, role ergonomics remain seamless without hardcoded role bypasses.
+
+---
+
+## 19. AuditEvent Contract
+
+Privileged catalog mutations append immutable records to `audit_events` within the same transaction:
+
+- `actorType`: `'ADMIN'`
+- `actorId`: `authContext.authUserId`
+- `action`: Canonical action string
+- `targetType`: `'product'`, `'product_variant'`, `'product_media'`, `'product_specifications'`
+- `targetId`: String representation of entity UUID
+- `metadata`: Sanitized JSON diffs (never raw binaries, tokens, or unredacted secrets)
+- `ipAddress`: Client IP from request headers
+- `requestId`: Correlation / request ID
+
+Canonical actions: `catalog:product:create`, `catalog:product:update`, `catalog:product:publish`, `catalog:product:unpublish`, `catalog:product:archive`, `catalog:product:restore`, `catalog:product:duplicate`, `catalog:variant:create`, `catalog:variant:update`, `catalog:media:attach`, `catalog:media:remove`, `catalog:specs:update`.
+
+---
+
+## 20. Migration Readiness Analysis
 
 $$\mathbf{SCHEMA\_CHANGE\_REQUIRED: NO}$$
 
-**Rationale**:
-Every physical table, foreign key, enum, and constraint required for GP-024 is **already present** in the database schema established in migrations 0000 through 0012:
+**Full Justification**:
 
-- `products`: Complete with slug, status, brand, category, media pointer.
-- `product_variants`: Complete with sku, pricing, attributes, weight, status.
-- `media_assets` & `product_media`: Complete with Cloudflare R2 object keys, display orders, variant linkages.
-- `category_specification_schemas` & `product_specifications`: Complete with versioned JSONB definitions.
-- `audit_events`: Complete with actor, action, target, sanitized metadata.
-- `roles`, `permissions`, `user_roles`: Complete with `catalog:manage` and `catalog:publish`.
+- Physical `products`, `product_variants`, `media_assets`, `product_media`, `category_specification_schemas`, and `product_specifications` tables already exist in migrations 0000-0012.
+- `Category.current_spec_schema_id` already exists.
+- SKU immutability is enforced at the application/service layer using existing FK relationships.
+- Specification value validation is an application-level helper.
+- Media upload safety and WebP transformation use application/storage logic.
+- Idempotency uses application-level advisory locking and request digests.
+- Reference taxonomy bootstrap is executed via a separate operational script, not a Drizzle migration.
 
-### Migration / Index Candidates (Non-Blocking / Deferred)
+### Deferred Index Candidate
 
-1. **Candidate Index 1 (`products_admin_list_idx`)**:
-   `CREATE INDEX products_admin_list_idx ON products (status, updated_at DESC);`
-   - _Reason_: Optimizes Admin table sorting by `updated_at DESC` when filtered by status.
-   - _Recommendation_: Not required for v1 catalog scale ($< 500$ products). Defer to performance hardening (GP-044).
-2. **Candidate Index 2 (`product_variants_product_sku_idx`)**:
-   - Existing unique index on `sku` is already optimal.
-3. **Migration 0013 Status**: **NO MIGRATION 0013 WILL BE CREATED IN GP-024.**
+- `CREATE INDEX products_admin_list_idx ON products (status, updated_at DESC);`
+- **Classification**: `PERFORMANCE CANDIDATE / NOT AUTHORIZED / NON-BLOCKING`. Zero migrations will be created.
 
 ---
 
-## 27. Local Database & Initial Catalog Bootstrap Strategy
+## 21. Quality Gates & Freeze Verifications
 
-### Current Reality Audit
-
-1. In a fresh local development database (`127.0.0.1:54322/postgres`), running `pnpm db:migrate` applies migrations 0000-0012.
-2. This provisions the database schema and RBAC roles/permissions (migration 0006, 0012).
-3. However, `brands`, `categories`, and `category_specification_schemas` contain **0 rows**.
-4. Consequently:
-   - Accessing `/categorias/mouses` returns 404 because `categories` row does not exist.
-   - Accessing `/marcas/wlmouse` returns 404 because `brands` row does not exist.
-   - Opening `/admin/productos/nuevo` would have empty Brand and Category dropdowns unless reference data exists.
-5. In development, setting `DEV_CATALOG_PREVIEW=1` activates synthetic memory fixtures for the storefront, but synthetic data is NOT saved in PostgreSQL and cannot be edited by Admin.
-
-### Operational Bootstrap Path
-
-To resolve this cleanly without violating the migration freeze:
-
-1. Define a seed script `scripts/bootstrap-catalog-reference-data.mjs` (or similar) that can be run on local and production databases to insert the canonical reference Brands (WLMouse, Pulsar, Lamzu, Wooting, Endgame Gear, Artisan) and Categories (Mouses, Teclados, Audio, Mousepads, Accesorios) with their initial `CategorySpecificationSchema` records.
-2. Keep this bootstrap script decoupled from Drizzle migrations until external architecture approval authorizes a formal reference-data migration gate.
+1. **Migration 0012 Frozen**: Exact blob `e80c30ae9d0f86e14486b0fd5c782eb9ec3f7119`.
+2. **Zero Migration 0013**: Verified.
+3. **GP-023 Frozen**: Dashboard metrics and UI remain untouched.
+4. **GP-025 Not Begun**: AI Product Research remains untouched.
+5. **GP-026 Not Begun**: Product Story Builder remains untouched.
+6. **Hosted Supabase & Cloudflare R2**: 100% Untouched.
 
 ---
 
-## 28. Comprehensive Implementation Test Plan Matrix
+## 22. Implementation Test Plan Matrix
 
-When implementation begins (in subsequent gates, not CHK0), the following test matrix will be executed:
-
-| Test Category                 | Surface                                                 | Scope / Scenarios                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| :---------------------------- | :------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit Tests**                | `tests/unit/admin-catalog-*.test.ts`                    | - Money parsing: `parsePenInputToCents` edge cases (commas, decimals, negatives, max ints).<br>- Publish readiness validator: hard blockers vs soft warnings.<br>- Slug normalization & regex validation.<br>- Spec validation against category schemas.<br>- Optimistic concurrency comparison logic.                                                                                                                                                |
-| **RBAC Integration Tests**    | `tests/unit/admin-catalog-rbac.test.ts`                 | - `CUSTOMER` denied access to `/admin/productos` (throws `ForbiddenError`).<br>- `ADMIN_ORDERS` denied access (throws `ForbiddenError`).<br>- `ADMIN_CATALOG` permitted to create draft, edit, duplicate.<br>- `ADMIN_CATALOG` denied publish/unpublish if lacking `catalog:publish`.<br>- `SUPER_ADMIN` permitted all catalog operations.                                                                                                            |
-| **Live Database Integration** | `tests/admin-integration/admin-product-manager.test.ts` | - Atomic creation of product + variant.<br>- Duplicate product: verifies new IDs, suffixed SKU, `DRAFT` status, 0 inventory, shared media reference.<br>- Archive product: verifies storefront exclusion and order history preservation.<br>- Category change: verifies spec invalidation / cleanup.<br>- Concurrency conflict: detects updated_at mismatch and throws 409.<br>- AuditEvent emission: verifies action, actor, target, sanitized diff. |
-| **Admin Playwright E2E**      | `tests/e2e/admin-product-manager.spec.ts`               | - Complete product authoring flow: New Product $\to$ Variants $\to$ Media $\to$ Specs $\to$ Publish.<br>- Duplicate product flow in UI.<br>- Archive and restore flow in UI.<br>- Form error validation & focus management.<br>- Automated Axe accessibility audit (0 violations).<br>- Responsive layout checks across mobile and desktop.                                                                                                           |
-| **Storefront Regression**     | `tests/e2e/catalog-storefront-regression.spec.ts`       | - Published product appears on PDP, category page, and brand page.<br>- Archived/draft product returns 404.<br>- Inactive variant is not selectable or purchasable.<br>- PDP structured data and metadata render accurately.                                                                                                                                                                                                                          |
+| Test Category             | Surface                                                 | Scope / Scenarios                                                                                                                                                                                                                                                                                                                                                |
+| :------------------------ | :------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit Tests**            | `tests/unit/admin-catalog-*.test.ts`                    | - Money parsing: `parsePenInputToCents` edge cases.<br>- Value validator: `validateProductSpecificationValues` (type safety, enum checks, range checks, unknown key rejection, null normalization).<br>- Publish readiness: hard blockers vs soft warnings.<br>- Slug regex validation.<br>- Advisory lock key generation.                                       |
+| **RBAC Integration**      | `tests/unit/admin-catalog-rbac.test.ts`                 | - `CUSTOMER` / `ADMIN_ORDERS` denied access.<br>- `ADMIN_CATALOG` permitted to create, edit, duplicate.<br>- `catalog:publish` strictly required to publish, unpublish, or archive published product.                                                                                                                                                            |
+| **Live DB Integration**   | `tests/admin-integration/admin-product-manager.test.ts` | - Atomic creation of product + variant.<br>- SKU immutability enforcement when inventory/orders exist.<br>- Media ownership verification (`MEDIA_VARIANT_PRODUCT_MISMATCH`).<br>- Duplicate product with variant media remapping.<br>- Category change specification clearing.<br>- Product list query pre-aggregation (zero fan-out across multiple locations). |
+| **Admin Playwright E2E**  | `tests/e2e/admin-product-manager.spec.ts`               | - Complete product authoring flow: New Product $\to$ Variants $\to$ Media $\to$ Specs $\to$ Publish.<br>- Duplicate flow in UI.<br>- Archive / restore in UI.<br>- Form error validation & focus management.<br>- Automated Axe accessibility audit (0 violations).<br>- Responsive layout checks across mobile and desktop.                                     |
+| **Storefront Regression** | `tests/e2e/catalog-storefront-regression.spec.ts`       | - Published product appears on PDP and listings.<br>- Archived product returns 404.<br>- Inactive variant is not selectable/purchasable.                                                                                                                                                                                                                         |
 
 ---
 
-## 29. Open Decisions Requiring External Architecture Approval
+## 23. Conclusion & Gate Readiness
 
-Before implementation begins, the following two decisions require external approval:
-
-1. **Reference Data Boundary (Section 8)**: Confirm adoption of **Option A** (authoritative reference seed for Brands, Categories, and CategorySpecificationSchemas) versus expanding GP-024 to include full Brand/Category CRUD.
-2. **SKU Immutability Rule (Section 5)**: Confirm adoption of the proposed rule: SKU is editable in Draft with 0 stock/orders, but becomes strictly immutable once any inventory ledger movement or order line snapshot attaches to the variant.
-
----
-
-## 30. Conclusion & Gate Readiness
-
-- CHK0 discovery is 100% complete.
-- Domain reconciliation across physical schema, storefront readers, SEO, and RBAC is established.
-- Physical schema requires zero Drizzle migrations for GP-024 (`SCHEMA_CHANGE_REQUIRED: NO`).
-- All quality gates pass (`pnpm format:check`, `git diff --check`).
-- Repository is ready for external review of `docs/roadmap/GP-024-CONTRACT.md`.
+All 26 remediation requirements from CHK0-BR1 review have been resolved. The contract is 100% grounded in the physical database schema, ADR-004 storage architecture, and project security invariants. Zero unresolved decisions remain.
