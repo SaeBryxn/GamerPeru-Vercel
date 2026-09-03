@@ -10,6 +10,7 @@ import type {
 } from "@/db/schema";
 import type { PublishBlocker, PublishWarning, PublishReadinessResult } from "./types";
 import { validateProductSpecificationValues } from "./specifications";
+import { isValidStringRecord } from "./record";
 
 export const PRODUCT_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const ALLOWED_IMAGE_MIME_TYPES = ["image/webp", "image/png", "image/jpeg"];
@@ -139,11 +140,7 @@ export function evaluatePublishReadiness(input: PublishReadinessInput): PublishR
         });
       }
 
-      if (
-        typeof v.attributes !== "object" ||
-        v.attributes === null ||
-        Array.isArray(v.attributes)
-      ) {
+      if (!isValidStringRecord(v.attributes)) {
         blockers.push({
           code: "VARIANT_ATTRIBUTES_INVALID",
           message: `La variante "${v.title}" tiene atributos con formato inválido.`,

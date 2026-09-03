@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { validateSpecificationFieldDefinitions } from "@/lib/discovery-filters/schema-validation";
 import type { CategorySpecificationSchema, SpecificationFieldDefinition } from "@/db/schema";
 import { CatalogDomainError, SpecificationSchemaIntegrityError } from "./types";
+import { isPlainRecord } from "./record";
 
 export interface SpecificationValidationResult {
   success: boolean;
@@ -139,7 +140,7 @@ export function validateProductSpecificationValues(
   fieldDefinitions: SpecificationFieldDefinition[],
   rawSpecValues: unknown
 ): SpecificationValidationResult {
-  if (!rawSpecValues || typeof rawSpecValues !== "object" || Array.isArray(rawSpecValues)) {
+  if (!isPlainRecord(rawSpecValues)) {
     return {
       success: false,
       error: "Las especificaciones técnicas deben ser un objeto JSON.",
@@ -152,7 +153,7 @@ export function validateProductSpecificationValues(
     fieldMap.set(field.key, field);
   }
 
-  const inputObj = rawSpecValues as Record<string, unknown>;
+  const inputObj = rawSpecValues;
   const cleanSpecValues: Record<string, string | number | boolean> = {};
 
   for (const [key, value] of Object.entries(inputObj)) {

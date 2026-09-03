@@ -5,3 +5,4 @@ export * from "./publish-readiness";
 export * from "./crypto";
 export * from "./readers";
 export * from "./service";
+export * from "./record";

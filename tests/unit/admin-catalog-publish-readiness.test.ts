@@ -425,4 +425,122 @@ describe("Admin Catalog Publish Readiness Pure Evaluator", () => {
       expect(res.blockers.some((b) => b.code === "NO_VALID_PUBLIC_MEDIA")).toBe(true);
     });
   });
+
+  describe("Variant Persisted Attributes Validation (Defect B / BR3)", () => {
+    it("accepts attributes = { color: 'black' }", () => {
+      const res = evaluatePublishReadiness({
+        product: baseProduct,
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [{ ...baseVariant, attributes: { color: "black" } }],
+        media: [baseMediaAttachment],
+        primaryMediaAsset: baseMediaAsset,
+      });
+      expect(res.isPublishable).toBe(true);
+      expect(res.blockers.some((b) => b.code === "VARIANT_ATTRIBUTES_INVALID")).toBe(false);
+    });
+
+    it("accepts attributes = {}", () => {
+      const res = evaluatePublishReadiness({
+        product: baseProduct,
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [{ ...baseVariant, attributes: {} }],
+        media: [baseMediaAttachment],
+        primaryMediaAsset: baseMediaAsset,
+      });
+      expect(res.isPublishable).toBe(true);
+      expect(res.blockers.some((b) => b.code === "VARIANT_ATTRIBUTES_INVALID")).toBe(false);
+    });
+
+    it("rejects attributes = { color: 123 } with VARIANT_ATTRIBUTES_INVALID and isPublishable == false", () => {
+      const malformed = { color: 123 } as unknown as Record<string, string>;
+      const res = evaluatePublishReadiness({
+        product: baseProduct,
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [{ ...baseVariant, attributes: malformed }],
+        media: [baseMediaAttachment],
+        primaryMediaAsset: baseMediaAsset,
+      });
+      expect(res.isPublishable).toBe(false);
+      const blocker = res.blockers.find((b) => b.code === "VARIANT_ATTRIBUTES_INVALID");
+      expect(blocker).toBeDefined();
+      expect(blocker?.message).toBe(
+        `La variante "${baseVariant.title}" tiene atributos con formato inválido.`
+      );
+    });
+
+    it("rejects attributes = { wireless: true } with VARIANT_ATTRIBUTES_INVALID", () => {
+      const malformed = { wireless: true } as unknown as Record<string, string>;
+      const res = evaluatePublishReadiness({
+        product: baseProduct,
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [{ ...baseVariant, attributes: malformed }],
+        media: [baseMediaAttachment],
+        primaryMediaAsset: baseMediaAsset,
+      });
+      expect(res.isPublishable).toBe(false);
+      expect(res.blockers.some((b) => b.code === "VARIANT_ATTRIBUTES_INVALID")).toBe(true);
+    });
+
+    it("rejects attributes = { nested: { value: 'x' } } with VARIANT_ATTRIBUTES_INVALID", () => {
+      const malformed = { nested: { value: "x" } } as unknown as Record<string, string>;
+      const res = evaluatePublishReadiness({
+        product: baseProduct,
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [{ ...baseVariant, attributes: malformed }],
+        media: [baseMediaAttachment],
+        primaryMediaAsset: baseMediaAsset,
+      });
+      expect(res.isPublishable).toBe(false);
+      expect(res.blockers.some((b) => b.code === "VARIANT_ATTRIBUTES_INVALID")).toBe(true);
+    });
+
+    it("rejects attributes = [] with VARIANT_ATTRIBUTES_INVALID", () => {
+      const malformed = [] as unknown as Record<string, string>;
+      const res = evaluatePublishReadiness({
+        product: baseProduct,
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [{ ...baseVariant, attributes: malformed }],
+        media: [baseMediaAttachment],
+        primaryMediaAsset: baseMediaAsset,
+      });
+      expect(res.isPublishable).toBe(false);
+      expect(res.blockers.some((b) => b.code === "VARIANT_ATTRIBUTES_INVALID")).toBe(true);
+    });
+
+    it("accepts legitimate long string key/value without arbitrary length rejections", () => {
+      const longKey = "custom_attribute_key_".repeat(6);
+      const longVal = "very_detailed_attribute_value_string_".repeat(12);
+      const validAttrs = { [longKey]: longVal, color: "Midnight Blue", edition: "Special Edition" };
+      const res = evaluatePublishReadiness({
+        product: baseProduct,
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [{ ...baseVariant, attributes: validAttrs }],
+        media: [baseMediaAttachment],
+        primaryMediaAsset: baseMediaAsset,
+      });
+      expect(res.isPublishable).toBe(true);
+      expect(res.blockers.some((b) => b.code === "VARIANT_ATTRIBUTES_INVALID")).toBe(false);
+    });
+  });
 });
