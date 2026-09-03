@@ -17,9 +17,12 @@ import {
 import {
   CatalogDomainError,
   CatalogIdempotencyConflictError,
+  CatalogReplayIntegrityError,
   SkuImmutableError,
+  SpecificationSchemaIntegrityError,
   StaleWriteConflictError,
 } from "@/lib/admin/catalog/types";
+import { resolveAuthoritativeCategorySpecificationSchema } from "@/lib/admin/catalog/specifications";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import type { SpecificationFieldDefinition } from "@/db/schema/catalog/category-specification-schemas";
 
@@ -40,6 +43,8 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
     adminCatalogUser: `${PFX}000000000002`,
     adminOrdersUser: `${PFX}000000000003`,
     customerUser: `${PFX}000000000004`,
+    adminSupportUser: `${PFX}000000000005`,
+    aiResearchUser: `${PFX}000000000006`,
 
     // Brands
     brandPublished: `${PFX}000000000010`,
@@ -96,6 +101,22 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
     permissions: new Set([]),
   };
 
+  const authAdminSupport: VerifiedAuthContextReady = {
+    status: "READY",
+    authUserId: fixtureIds.adminSupportUser,
+    email: "adminsupport.gp024@gamerperu.pe",
+    roles: ["ADMIN_SUPPORT"],
+    permissions: new Set(["support:manage", "support:review_rma"]),
+  };
+
+  const authAiResearchOnly: VerifiedAuthContextReady = {
+    status: "READY",
+    authUserId: fixtureIds.aiResearchUser,
+    email: "airesearch.gp024@gamerperu.pe",
+    roles: ["ADMIN_CATALOG"],
+    permissions: new Set(["catalog:ai_research"]),
+  };
+
   beforeAll(async () => {
     const databaseUrl = assertLocalDatabaseTarget(rawDatabaseUrl);
     pgSql = postgres(databaseUrl, { max: 1 });
@@ -108,6 +129,8 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
         { id: fixtureIds.adminCatalogUser, email: "admincatalog.gp024@gamerperu.pe" },
         { id: fixtureIds.adminOrdersUser, email: "adminorders.gp024@gamerperu.pe" },
         { id: fixtureIds.customerUser, email: "customer.gp024@gamerperu.pe" },
+        { id: fixtureIds.adminSupportUser, email: "adminsupport.gp024@gamerperu.pe" },
+        { id: fixtureIds.aiResearchUser, email: "airesearch.gp024@gamerperu.pe" },
       ];
       for (const u of users) {
         await tx`
@@ -124,7 +147,9 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
           (${fixtureIds.superAdminUser}, (SELECT id FROM roles WHERE name = 'SUPER_ADMIN')),
           (${fixtureIds.adminCatalogUser}, (SELECT id FROM roles WHERE name = 'ADMIN_CATALOG')),
           (${fixtureIds.adminOrdersUser}, (SELECT id FROM roles WHERE name = 'ADMIN_ORDERS')),
-          (${fixtureIds.customerUser}, (SELECT id FROM roles WHERE name = 'CUSTOMER'))
+          (${fixtureIds.customerUser}, (SELECT id FROM roles WHERE name = 'CUSTOMER')),
+          (${fixtureIds.adminSupportUser}, (SELECT id FROM roles WHERE name = 'ADMIN_SUPPORT')),
+          (${fixtureIds.aiResearchUser}, (SELECT id FROM roles WHERE name = 'ADMIN_CATALOG'))
         ON CONFLICT DO NOTHING;
       `;
 
@@ -241,7 +266,7 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
     if (pgSql) {
       await pgSql.begin(async (tx) => {
         // Clean up only rows owned by this test suite
-        await tx`DELETE FROM audit_events WHERE actor_id IN (${fixtureIds.superAdminUser}, ${fixtureIds.adminCatalogUser}, ${fixtureIds.adminOrdersUser}, ${fixtureIds.customerUser});`;
+        await tx`DELETE FROM audit_events WHERE actor_id IN (${fixtureIds.superAdminUser}, ${fixtureIds.adminCatalogUser}, ${fixtureIds.adminOrdersUser}, ${fixtureIds.customerUser}, ${fixtureIds.adminSupportUser}, ${fixtureIds.aiResearchUser});`;
         await tx`DELETE FROM order_items WHERE id = ${`${PFX}000000000091`};`;
         await tx`DELETE FROM orders WHERE id = ${`${PFX}000000000090`};`;
         await tx`DELETE FROM inventory_items WHERE id = ${`${PFX}000000000088`};`;
@@ -266,6 +291,8 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
           fixtureIds.adminCatalogUser,
           fixtureIds.adminOrdersUser,
           fixtureIds.customerUser,
+          fixtureIds.adminSupportUser,
+          fixtureIds.aiResearchUser,
         ];
         await tx`DELETE FROM user_roles WHERE auth_user_id IN ${tx(userIds)};`;
         await tx`DELETE FROM auth.users WHERE id IN ${tx(userIds)};`;
@@ -511,6 +538,30 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
       ).rejects.toThrow(CatalogIdempotencyConflictError);
     });
 
+    it("proves known raw mutationRequestId does NOT appear in audit_events.request_id or metadata", async () => {
+      const knownRawId = "SECRET-RAW-MUTATION-REQUEST-ID-GP024";
+      const p = await createProduct(
+        {
+          name: "Audit Privacy Mouse",
+          slug: "gp024-audit-privacy-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+          mutationRequestId: knownRawId,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const auditRows = await pgSql`
+        SELECT * FROM audit_events WHERE target_id = ${p.id} AND action = 'catalog:product:create';
+      `;
+      expect(auditRows).toHaveLength(1);
+      const audit = auditRows[0]!;
+      expect(audit.request_id).toBeNull();
+      expect(JSON.stringify(audit.metadata)).not.toContain(knownRawId);
+      expect(audit.metadata.mutation_request_digest).toBeDefined();
+      expect(audit.metadata.request_fingerprint).toBeDefined();
+    });
+
     it("updates product with optimistic concurrency check", async () => {
       const detail = await getAdminProductDetail(createdProdId, { authContext: authAdminCatalog });
       expect(detail).toBeDefined();
@@ -718,6 +769,185 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
 
       const afterChange = await getAdminProductDetail(prod.id, { authContext: authAdminCatalog });
       expect(afterChange!.specifications).toBeNull();
+    });
+
+    it("rejects when Category.current_spec_schema_id points to schema of another category", async () => {
+      const foreignCatId = `${PFX}000000000025`;
+      const foreignSchemaId = `${PFX}000000000035`;
+      await pgSql.begin(async (tx) => {
+        await tx`
+          INSERT INTO categories (id, name, slug, current_spec_schema_id, display_order, status, created_at, updated_at)
+          VALUES (${foreignCatId}, 'Foreign Cat', 'foreign-cat-test', NULL, 10, 'PUBLISHED', NOW(), NOW())
+          ON CONFLICT (id) DO NOTHING;
+        `;
+        await tx`
+          INSERT INTO category_specification_schemas (id, category_id, schema_version, field_definitions, is_active, created_at)
+          VALUES (${foreignSchemaId}, ${foreignCatId}, 1, '[]'::jsonb, TRUE, NOW())
+          ON CONFLICT (id) DO NOTHING;
+        `;
+        await tx`
+          UPDATE categories SET current_spec_schema_id = ${foreignSchemaId} WHERE id = ${fixtureIds.catNoSchema};
+        `;
+      });
+
+      try {
+        await expect(
+          getCategorySpecificationSchema(fixtureIds.catNoSchema, { authContext: authAdminCatalog })
+        ).rejects.toThrow(SpecificationSchemaIntegrityError);
+      } finally {
+        await pgSql`UPDATE categories SET current_spec_schema_id = NULL WHERE id = ${fixtureIds.catNoSchema};`;
+        await pgSql`DELETE FROM category_specification_schemas WHERE id = ${foreignSchemaId};`;
+        await pgSql`DELETE FROM categories WHERE id = ${foreignCatId};`;
+      }
+    });
+
+    it("rejects when Category.current_spec_schema_id points to an inactive schema", async () => {
+      const inactiveSchemaId = `${PFX}000000000036`;
+      await pgSql.begin(async (tx) => {
+        await tx`
+          INSERT INTO category_specification_schemas (id, category_id, schema_version, field_definitions, is_active, created_at)
+          VALUES (${inactiveSchemaId}, ${fixtureIds.catWithSchema}, 2, '[]'::jsonb, FALSE, NOW())
+          ON CONFLICT (id) DO NOTHING;
+        `;
+        await tx`
+          UPDATE categories SET current_spec_schema_id = ${inactiveSchemaId} WHERE id = ${fixtureIds.catWithSchema};
+        `;
+      });
+
+      try {
+        await expect(
+          getCategorySpecificationSchema(fixtureIds.catWithSchema, {
+            authContext: authAdminCatalog,
+          })
+        ).rejects.toThrow(SpecificationSchemaIntegrityError);
+      } finally {
+        await pgSql`UPDATE categories SET current_spec_schema_id = ${fixtureIds.schemaForCat} WHERE id = ${fixtureIds.catWithSchema};`;
+        await pgSql`DELETE FROM category_specification_schemas WHERE id = ${inactiveSchemaId};`;
+      }
+    });
+
+    it("rejects when schema_version <= 0", async () => {
+      let callCount = 0;
+      const stubExecutor = {
+        execute: async () => {
+          callCount++;
+          if (callCount === 1) {
+            return [
+              { id: fixtureIds.catWithSchema, current_spec_schema_id: fixtureIds.schemaForCat },
+            ];
+          }
+          return [
+            {
+              id: fixtureIds.schemaForCat,
+              category_id: fixtureIds.catWithSchema,
+              schema_version: 0,
+              field_definitions: [],
+              is_active: true,
+              created_at: new Date(),
+            },
+          ];
+        },
+      };
+
+      await expect(
+        resolveAuthoritativeCategorySpecificationSchema(
+          fixtureIds.catWithSchema,
+          stubExecutor as unknown as Parameters<
+            typeof resolveAuthoritativeCategorySpecificationSchema
+          >[1]
+        )
+      ).rejects.toThrow(SpecificationSchemaIntegrityError);
+    });
+
+    it("rejects when field_definitions is malformed", async () => {
+      const malformedSchemaId = `${PFX}000000000038`;
+      await pgSql.begin(async (tx) => {
+        await tx`
+          INSERT INTO category_specification_schemas (id, category_id, schema_version, field_definitions, is_active, created_at)
+          VALUES (${malformedSchemaId}, ${fixtureIds.catWithSchema}, 99, '[{"invalid":"field"}]'::jsonb, TRUE, NOW())
+          ON CONFLICT (id) DO NOTHING;
+        `;
+        await tx`
+          UPDATE categories SET current_spec_schema_id = ${malformedSchemaId} WHERE id = ${fixtureIds.catWithSchema};
+        `;
+      });
+
+      try {
+        await expect(
+          getCategorySpecificationSchema(fixtureIds.catWithSchema, {
+            authContext: authAdminCatalog,
+          })
+        ).rejects.toThrow(SpecificationSchemaIntegrityError);
+      } finally {
+        await pgSql`UPDATE categories SET current_spec_schema_id = ${fixtureIds.schemaForCat} WHERE id = ${fixtureIds.catWithSchema};`;
+        await pgSql`DELETE FROM category_specification_schemas WHERE id = ${malformedSchemaId};`;
+      }
+    });
+
+    it("rolls back Product category update transaction when target category has corrupt schema", async () => {
+      const corruptCatId = `${PFX}000000000029`;
+      const corruptSchemaId = `${PFX}000000000039`;
+
+      await pgSql.begin(async (tx) => {
+        await tx`
+          INSERT INTO categories (id, name, slug, current_spec_schema_id, display_order, status, created_at, updated_at)
+          VALUES (${corruptCatId}, 'Corrupt Cat', 'corrupt-cat', NULL, 99, 'PUBLISHED', NOW(), NOW())
+          ON CONFLICT (id) DO NOTHING;
+        `;
+        await tx`
+          INSERT INTO category_specification_schemas (id, category_id, schema_version, field_definitions, is_active, created_at)
+          VALUES (${corruptSchemaId}, ${corruptCatId}, 1, '[{"invalid":"corrupt"}]'::jsonb, TRUE, NOW())
+          ON CONFLICT (id) DO NOTHING;
+        `;
+        await tx`UPDATE categories SET current_spec_schema_id = ${corruptSchemaId} WHERE id = ${corruptCatId};`;
+      });
+
+      const prod = await createProduct(
+        {
+          name: "Rollback Test Mouse",
+          slug: "gp024-rollback-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const detail = await getAdminProductDetail(prod.id, { authContext: authAdminCatalog });
+      await updateProduct(
+        {
+          productId: prod.id,
+          expectedUpdatedAt: detail!.product.updatedAt,
+          specValues: { sensor: "paw3395", polling_rate_hz: 1000, wireless: true },
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const beforeUpdate = await getAdminProductDetail(prod.id, { authContext: authAdminCatalog });
+
+      // Attempt updating to corrupt category -> throws SpecificationSchemaIntegrityError
+      await expect(
+        updateProduct(
+          {
+            productId: prod.id,
+            expectedUpdatedAt: beforeUpdate!.product.updatedAt,
+            categoryId: corruptCatId,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(SpecificationSchemaIntegrityError);
+
+      // Verify transaction rolled back: original category and specifications remain intact
+      const afterFailedUpdate = await getAdminProductDetail(prod.id, {
+        authContext: authAdminCatalog,
+      });
+      expect(afterFailedUpdate!.product.categoryId).toBe(fixtureIds.catWithSchema);
+      expect(afterFailedUpdate!.specifications).toBeDefined();
+      expect(afterFailedUpdate!.specifications?.schemaId).toBe(fixtureIds.schemaForCat);
+
+      // Cleanup
+      await pgSql`UPDATE categories SET current_spec_schema_id = NULL WHERE id = ${corruptCatId};`;
+      await pgSql`DELETE FROM category_specification_schemas WHERE id = ${corruptSchemaId};`;
+      await pgSql`DELETE FROM categories WHERE id = ${corruptCatId};`;
     });
   });
 
@@ -1027,6 +1257,439 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
           { authContext: authAdminManageOnly }
         )
       ).rejects.toThrow("No tienes permisos suficientes");
+    });
+
+    it("ADMIN_SUPPORT without catalog permissions is rejected with FORBIDDEN (403)", async () => {
+      try {
+        await createProduct(
+          {
+            name: "Support Mouse",
+            slug: "gp024-support-mouse",
+            brandId: fixtureIds.brandPublished,
+            categoryId: fixtureIds.catNoSchema,
+          },
+          { authContext: authAdminSupport }
+        );
+        expect.unreachable("Should have thrown");
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(CatalogDomainError);
+        const cErr = err as CatalogDomainError;
+        expect(cErr.code).toBe("FORBIDDEN");
+        expect(cErr.httpStatus).toBe(403);
+      }
+    });
+
+    it("catalog:ai_research ONLY is rejected with FORBIDDEN (403) on catalog:manage operations", async () => {
+      try {
+        await createProduct(
+          {
+            name: "AI Research Mouse",
+            slug: "gp024-ai-mouse",
+            brandId: fixtureIds.brandPublished,
+            categoryId: fixtureIds.catNoSchema,
+          },
+          { authContext: authAiResearchOnly }
+        );
+        expect.unreachable("Should have thrown");
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(CatalogDomainError);
+        const cErr = err as CatalogDomainError;
+        expect(cErr.code).toBe("FORBIDDEN");
+        expect(cErr.httpStatus).toBe(403);
+      }
+    });
+  });
+
+  describe("Exact Optimistic Concurrency Invariants", () => {
+    let concProdId: string;
+    let concVarId: string;
+
+    beforeAll(async () => {
+      const p = await createProduct(
+        {
+          name: "Exact Concurrency Mouse",
+          slug: "gp024-exact-conc-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+          initialVariant: {
+            sku: "GP024-EXACT-CONC-V1",
+            title: "Conc Variant",
+            priceCents: 10000,
+          },
+        },
+        { authContext: authAdminCatalog }
+      );
+      concProdId = p.id;
+      const detail = await getAdminProductDetail(p.id, { authContext: authAdminCatalog });
+      concVarId = detail!.variants[0]!.id;
+    });
+
+    it("1. Product edit: actual - 1 ms throws STALE_WRITE_CONFLICT", async () => {
+      const detail = await getAdminProductDetail(concProdId, { authContext: authAdminCatalog });
+      const actualTime = new Date(detail!.product.updatedAt).getTime();
+      await expect(
+        updateProduct(
+          {
+            productId: concProdId,
+            expectedUpdatedAt: new Date(actualTime - 1),
+            name: "Should Fail 1ms",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(StaleWriteConflictError);
+    });
+
+    it("2. Product edit: actual - 500 ms throws STALE_WRITE_CONFLICT", async () => {
+      const detail = await getAdminProductDetail(concProdId, { authContext: authAdminCatalog });
+      const actualTime = new Date(detail!.product.updatedAt).getTime();
+      await expect(
+        updateProduct(
+          {
+            productId: concProdId,
+            expectedUpdatedAt: new Date(actualTime - 500),
+            name: "Should Fail 500ms",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(StaleWriteConflictError);
+    });
+
+    it("3. Variant edit: actual - 1 ms throws STALE_WRITE_CONFLICT", async () => {
+      const detail = await getAdminProductDetail(concProdId, { authContext: authAdminCatalog });
+      const actualTime = new Date(detail!.variants[0]!.updatedAt).getTime();
+      await expect(
+        updateVariant(
+          {
+            variantId: concVarId,
+            expectedUpdatedAt: new Date(actualTime - 1),
+            title: "Should Fail Variant 1ms",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(StaleWriteConflictError);
+    });
+
+    it("4. Status transition: actual - 1 ms throws STALE_WRITE_CONFLICT", async () => {
+      const detail = await getAdminProductDetail(concProdId, { authContext: authAdminCatalog });
+      const actualTime = new Date(detail!.product.updatedAt).getTime();
+      await expect(
+        transitionProductStatus(
+          {
+            productId: concProdId,
+            expectedUpdatedAt: new Date(actualTime - 1),
+            targetStatus: "ARCHIVED",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(StaleWriteConflictError);
+    });
+
+    it("5. Exact timestamp succeeds", async () => {
+      const detail = await getAdminProductDetail(concProdId, { authContext: authAdminCatalog });
+      const updated = await updateProduct(
+        {
+          productId: concProdId,
+          expectedUpdatedAt: detail!.product.updatedAt,
+          name: "Exact Time Update Success",
+        },
+        { authContext: authAdminCatalog }
+      );
+      expect(updated.name).toBe("Exact Time Update Success");
+    });
+  });
+
+  describe("Status Transition TOCTOU & Authorization Invariants", () => {
+    it("TOCTOU race: closes race between initial read and locked status transition", async () => {
+      // 1. Create a DRAFT product
+      const p = await createProduct(
+        {
+          name: "TOCTOU Race Mouse",
+          slug: "gp024-toctou-race-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // Manually set status to PUBLISHED in DB directly (simulating concurrent publish)
+      await pgSql`UPDATE products SET status = 'PUBLISHED', updated_at = NOW() WHERE id = ${p.id};`;
+
+      const [freshProd] = await pgSql`SELECT updated_at FROM products WHERE id = ${p.id};`;
+
+      // Actor with only catalog:manage attempts DRAFT -> ARCHIVED
+      // Even though requested targetStatus is ARCHIVED, the LOCKED current status is PUBLISHED!
+      // Transitioning from PUBLISHED -> ARCHIVED requires catalog:publish.
+      await expect(
+        transitionProductStatus(
+          {
+            productId: p.id,
+            expectedUpdatedAt: freshProd!.updated_at,
+            targetStatus: "ARCHIVED",
+          },
+          { authContext: authAdminManageOnly } // lacks catalog:publish
+        )
+      ).rejects.toThrow("No tienes permisos suficientes");
+    });
+
+    it("same-target PUBLISHED transition requires catalog:publish permission", async () => {
+      const p = await createProduct(
+        {
+          name: "Same Target Publish Mouse",
+          slug: "gp024-same-pub-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // Manually set to PUBLISHED
+      await pgSql`UPDATE products SET status = 'PUBLISHED', updated_at = NOW() WHERE id = ${p.id};`;
+      const [freshProd] = await pgSql`SELECT updated_at FROM products WHERE id = ${p.id};`;
+
+      // Manage-only caller calling transitionProductStatus(PUBLISHED) on already PUBLISHED product
+      await expect(
+        transitionProductStatus(
+          {
+            productId: p.id,
+            expectedUpdatedAt: freshProd!.updated_at,
+            targetStatus: "PUBLISHED",
+          },
+          { authContext: authAdminManageOnly }
+        )
+      ).rejects.toThrow("No tienes permisos suficientes");
+    });
+  });
+
+  describe("Concurrent Mutations, Replay & Error Mapping", () => {
+    it("A. Concurrent same-request Create Product: exactly 1 Product, 1 AuditEvent, both resolve same ID", async () => {
+      const sharedReqId = "concurrent-create-req-001";
+      const payload = {
+        name: "Concurrent Test Mouse",
+        slug: "gp024-concurrent-create-mouse",
+        brandId: fixtureIds.brandPublished,
+        categoryId: fixtureIds.catNoSchema,
+        mutationRequestId: sharedReqId,
+      };
+
+      const [res1, res2] = await Promise.all([
+        createProduct(payload, { authContext: authAdminCatalog }),
+        createProduct(payload, { authContext: authAdminCatalog }),
+      ]);
+
+      expect(res1.id).toBe(res2.id);
+
+      const prodCount = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM products WHERE slug = 'gp024-concurrent-create-mouse';
+      `;
+      expect(prodCount[0]!.cnt).toBe(1);
+
+      const auditCount = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM audit_events WHERE target_id = ${res1.id} AND action = 'catalog:product:create';
+      `;
+      expect(auditCount[0]!.cnt).toBe(1);
+    });
+
+    it("B. Concurrent changed-payload same idempotency key: 1 commits, 1 gets CATALOG_IDEMPOTENCY_CONFLICT", async () => {
+      const sharedReqId = "concurrent-conflict-req-002";
+      const payloadA = {
+        name: "Conflict Mouse A",
+        slug: "gp024-conflict-mouse-a",
+        brandId: fixtureIds.brandPublished,
+        categoryId: fixtureIds.catNoSchema,
+        mutationRequestId: sharedReqId,
+      };
+      const payloadB = {
+        name: "Conflict Mouse B",
+        slug: "gp024-conflict-mouse-b",
+        brandId: fixtureIds.brandPublished,
+        categoryId: fixtureIds.catNoSchema,
+        mutationRequestId: sharedReqId,
+      };
+
+      const results = await Promise.allSettled([
+        createProduct(payloadA, { authContext: authAdminCatalog }),
+        createProduct(payloadB, { authContext: authAdminCatalog }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      const rejectedReason = (rejected[0] as PromiseRejectedResult).reason;
+      expect(rejectedReason).toBeInstanceOf(CatalogIdempotencyConflictError);
+    });
+
+    it("C. Create Variant replay returns existing without duplicate rows or audit events", async () => {
+      const p = await createProduct(
+        {
+          name: "Variant Replay Mouse",
+          slug: "gp024-var-replay-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const vPayload = {
+        productId: p.id,
+        sku: "GP024-VREPLAY-01",
+        title: "Replay Variant",
+        priceCents: 20000,
+        mutationRequestId: "var-replay-req-001",
+      };
+
+      const v1 = await createVariant(vPayload, { authContext: authAdminCatalog });
+      const v2 = await createVariant(vPayload, { authContext: authAdminCatalog });
+
+      expect(v1.id).toBe(v2.id);
+
+      const vCount = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM product_variants WHERE id = ${v1.id};
+      `;
+      expect(vCount[0]!.cnt).toBe(1);
+
+      const auditCount = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM audit_events WHERE target_id = ${v1.id} AND action = 'catalog:variant:create';
+      `;
+      expect(auditCount[0]!.cnt).toBe(1);
+    });
+
+    it("D. Unique business-key race: slug conflict maps to SLUG_CONFLICT (409) not raw 23505", async () => {
+      await createProduct(
+        {
+          name: "Slug Race Base",
+          slug: "gp024-slug-race",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      try {
+        await createProduct(
+          {
+            name: "Slug Race Conflict",
+            slug: "gp024-slug-race",
+            brandId: fixtureIds.brandPublished,
+            categoryId: fixtureIds.catNoSchema,
+          },
+          { authContext: authAdminCatalog }
+        );
+        expect.unreachable("Should have thrown");
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(CatalogDomainError);
+        const cErr = err as CatalogDomainError;
+        expect(cErr.code).toBe("SLUG_CONFLICT");
+        expect(cErr.httpStatus).toBe(409);
+      }
+    });
+
+    it("D. Unique business-key race: SKU conflict maps to SKU_CONFLICT (409) not raw 23505", async () => {
+      const p = await createProduct(
+        {
+          name: "SKU Race Base",
+          slug: "gp024-sku-race-prod",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+          initialVariant: {
+            sku: "GP024-SKU-RACE-01",
+            title: "SKU Race V1",
+            priceCents: 10000,
+          },
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      try {
+        await createVariant(
+          {
+            productId: p.id,
+            sku: "GP024-SKU-RACE-01",
+            title: "SKU Race Duplicate",
+            priceCents: 12000,
+          },
+          { authContext: authAdminCatalog }
+        );
+        expect.unreachable("Should have thrown");
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(CatalogDomainError);
+        const cErr = err as CatalogDomainError;
+        expect(cErr.code).toBe("SKU_CONFLICT");
+        expect(cErr.httpStatus).toBe(409);
+      }
+    });
+
+    it("E. Status replay: does not insert duplicate AuditEvents", async () => {
+      const p = await createProduct(
+        {
+          name: "Status Replay Mouse",
+          slug: "gp024-status-replay-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const detail = await getAdminProductDetail(p.id, { authContext: authAdminCatalog });
+
+      const transitionInput = {
+        productId: p.id,
+        expectedUpdatedAt: detail!.product.updatedAt,
+        targetStatus: "ARCHIVED" as const,
+        mutationRequestId: "status-replay-req-001",
+      };
+
+      const res1 = await transitionProductStatus(transitionInput, {
+        authContext: authAdminCatalog,
+      });
+      expect(res1.status).toBe("ARCHIVED");
+
+      // Replay with exact same mutationRequestId and targetStatus
+      const res2 = await transitionProductStatus(transitionInput, {
+        authContext: authAdminCatalog,
+      });
+      expect(res2.status).toBe("ARCHIVED");
+
+      const auditCount = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM audit_events WHERE target_id = ${p.id} AND action = 'catalog:product:archive';
+      `;
+      expect(auditCount[0]!.cnt).toBe(1);
+    });
+  });
+
+  describe("Audit & Replay Target Integrity", () => {
+    it("throws CatalogReplayIntegrityError if replay lookup target_type does not match canonical entity type", async () => {
+      const reqId = "corrupt-replay-req-001";
+      const p = await createProduct(
+        {
+          name: "Replay Target Integrity Mouse",
+          slug: "gp024-replay-target-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+          mutationRequestId: reqId,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // Corrupt the audit event target_type to something unexpected
+      await pgSql`
+        UPDATE audit_events SET target_type = 'order' WHERE target_id = ${p.id} AND action = 'catalog:product:create';
+      `;
+
+      // Replay should now detect mismatch and fail closed with CatalogReplayIntegrityError
+      await expect(
+        createProduct(
+          {
+            name: "Replay Target Integrity Mouse",
+            slug: "gp024-replay-target-mouse",
+            brandId: fixtureIds.brandPublished,
+            categoryId: fixtureIds.catNoSchema,
+            mutationRequestId: reqId,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(CatalogReplayIntegrityError);
     });
   });
 });

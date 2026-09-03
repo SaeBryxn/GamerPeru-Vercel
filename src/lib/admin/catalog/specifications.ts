@@ -1,4 +1,8 @@
-import type { SpecificationFieldDefinition } from "@/db/schema";
+import { sql, type SQLWrapper } from "drizzle-orm";
+import { db } from "@/db";
+import { validateSpecificationFieldDefinitions } from "@/lib/discovery-filters/schema-validation";
+import type { CategorySpecificationSchema, SpecificationFieldDefinition } from "@/db/schema";
+import { CatalogDomainError, SpecificationSchemaIntegrityError } from "./types";
 
 export interface SpecificationValidationResult {
   success: boolean;
@@ -274,4 +278,95 @@ export function validateProductSpecificationValues(
     success: true,
     specValues: cleanSpecValues,
   };
+}
+
+export interface AuthoritativeSpecificationSchemaResult {
+  hasSchema: boolean;
+  schema: CategorySpecificationSchema | null;
+}
+
+/**
+ * Resolves the authoritative current specification schema for a Category.
+ * Strict rules:
+ * 1. Read category.current_spec_schema_id.
+ * 2. If NULL, return { hasSchema: false, schema: null }.
+ * 3. If non-null, load EXACTLY that schema ID.
+ * 4. Require:
+ *    - schema.id === category.current_spec_schema_id
+ *    - schema.category_id === category.id
+ *    - schema.is_active === true
+ *    - schema.schema_version > 0
+ * 5. Run validateSpecificationFieldDefinitions(schema.field_definitions, { categoryId, schemaId }).
+ * 6. If validation returns null -> FAIL CLOSED with SPECIFICATION_SCHEMA_INTEGRITY_ERROR.
+ */
+export async function resolveAuthoritativeCategorySpecificationSchema(
+  categoryId: string,
+  executor: { execute: (query: SQLWrapper) => Promise<unknown> } = db
+): Promise<AuthoritativeSpecificationSchemaResult> {
+  const catRows = (await executor.execute(sql`
+    SELECT id, current_spec_schema_id FROM categories WHERE id = ${categoryId}::uuid LIMIT 1;
+  `)) as { id: string; current_spec_schema_id: string | null }[];
+
+  if (!catRows[0]) {
+    throw new CatalogDomainError("La categoría seleccionada no existe.", "INVALID_CATEGORY", 404);
+  }
+
+  const currentSpecSchemaId = catRows[0].current_spec_schema_id;
+  if (!currentSpecSchemaId) {
+    return { hasSchema: false, schema: null };
+  }
+
+  const schemaRows = (await executor.execute(sql`
+    SELECT id, category_id, schema_version, field_definitions, is_active, created_at
+    FROM category_specification_schemas
+    WHERE id = ${currentSpecSchemaId}::uuid
+    LIMIT 1;
+  `)) as {
+    id: string;
+    category_id: string;
+    schema_version: number;
+    field_definitions: unknown;
+    is_active: boolean;
+    created_at: string | Date;
+  }[];
+
+  const rawSchema = schemaRows[0];
+  if (!rawSchema) {
+    throw new SpecificationSchemaIntegrityError(
+      "El esquema de especificaciones referenciado por la categoría no existe."
+    );
+  }
+
+  if (
+    rawSchema.id !== currentSpecSchemaId ||
+    rawSchema.category_id !== categoryId ||
+    !rawSchema.is_active ||
+    rawSchema.schema_version <= 0
+  ) {
+    throw new SpecificationSchemaIntegrityError(
+      "El esquema de especificaciones de la categoría no es íntegro, no coincide con la categoría o está inactivo."
+    );
+  }
+
+  const validatedFields = validateSpecificationFieldDefinitions(rawSchema.field_definitions, {
+    categoryId,
+    schemaId: currentSpecSchemaId,
+  });
+
+  if (!validatedFields) {
+    throw new SpecificationSchemaIntegrityError(
+      "Las definiciones de campos del esquema de especificaciones son inválidas o están malformadas."
+    );
+  }
+
+  const schema: CategorySpecificationSchema = {
+    id: String(rawSchema.id),
+    categoryId: String(rawSchema.category_id),
+    schemaVersion: Number(rawSchema.schema_version),
+    fieldDefinitions: rawSchema.field_definitions as SpecificationFieldDefinition[],
+    isActive: Boolean(rawSchema.is_active),
+    createdAt: new Date(String(rawSchema.created_at)),
+  };
+
+  return { hasSchema: true, schema };
 }

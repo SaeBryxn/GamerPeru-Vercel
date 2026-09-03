@@ -3,7 +3,11 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { generateUuidV7 } from "@/db/utils/uuid";
-import { requirePermission, type VerifiedAuthContextReady } from "@/lib/auth/rbac";
+import {
+  requirePermission,
+  requireAdminAccess,
+  type VerifiedAuthContextReady,
+} from "@/lib/auth/rbac";
 import type { Product, ProductVariant } from "@/db/schema";
 import type {
   CreateProductInput,
@@ -12,6 +16,7 @@ import type {
   StatusTransitionInput,
   UpdateProductInput,
   UpdateVariantInput,
+  VariantStatus,
 } from "./types";
 import {
   CatalogDomainError,
@@ -25,10 +30,12 @@ import {
   computeRequestFingerprint,
   createCatalogAdvisoryLockKey,
 } from "./crypto";
-import { validateProductSpecificationValues } from "./specifications";
+import {
+  validateProductSpecificationValues,
+  resolveAuthoritativeCategorySpecificationSchema,
+} from "./specifications";
 import { PRODUCT_SLUG_REGEX } from "./publish-readiness";
 import { getAdminProductDetail } from "./readers";
-import type { SpecificationFieldDefinition } from "@/db/schema";
 
 export interface ServiceOptions {
   authContext?: VerifiedAuthContextReady;
@@ -102,6 +109,245 @@ async function resolveActorAndAssertPermission(
   };
 }
 
+async function resolveAuthContext(options?: ServiceOptions): Promise<VerifiedAuthContextReady> {
+  if (options?.authContext) {
+    return options.authContext;
+  }
+  return await requireAdminAccess();
+}
+
+export interface RawVariantInput {
+  sku?: unknown;
+  title?: unknown;
+  priceCents?: unknown;
+  compareAtPriceCents?: unknown;
+  costCents?: unknown;
+  weightGrams?: unknown;
+  displayOrder?: unknown;
+  status?: unknown;
+  attributes?: unknown;
+}
+
+export interface ValidatedVariantInput {
+  sku: string;
+  title: string;
+  priceCents: number;
+  compareAtPriceCents: number | null;
+  costCents: number | null;
+  weightGrams: number | null;
+  displayOrder: number;
+  status: VariantStatus;
+  attributes: Record<string, string>;
+}
+
+export function validateProductVariantInput(
+  raw: RawVariantInput,
+  _context: "create" | "update" = "create"
+): ValidatedVariantInput {
+  if (typeof raw.sku !== "string") {
+    throw new CatalogDomainError("El SKU debe ser una cadena de texto.", "INVALID_SKU", 400);
+  }
+  const sku = raw.sku.trim();
+  if (!sku || sku.length > 50) {
+    throw new CatalogDomainError(
+      "El SKU no puede estar vacío ni exceder 50 caracteres.",
+      "INVALID_SKU",
+      400
+    );
+  }
+
+  if (typeof raw.title !== "string") {
+    throw new CatalogDomainError(
+      "El título de la variante debe ser una cadena de texto.",
+      "INVALID_VARIANT_TITLE",
+      400
+    );
+  }
+  const title = raw.title.trim();
+  if (!title || title.length > 150) {
+    throw new CatalogDomainError(
+      "El título de la variante no puede estar vacío ni exceder 150 caracteres.",
+      "INVALID_VARIANT_TITLE",
+      400
+    );
+  }
+
+  if (
+    typeof raw.priceCents !== "number" ||
+    !Number.isInteger(raw.priceCents) ||
+    raw.priceCents < 1 ||
+    raw.priceCents > 2147483647
+  ) {
+    throw new CatalogDomainError(
+      "El precio de venta debe ser un entero positivo entre 1 y 2147483647 centavos.",
+      "INVALID_PRICE",
+      400
+    );
+  }
+  const priceCents = raw.priceCents;
+
+  let compareAtPriceCents: number | null = null;
+  if (raw.compareAtPriceCents !== null && raw.compareAtPriceCents !== undefined) {
+    if (
+      typeof raw.compareAtPriceCents !== "number" ||
+      !Number.isInteger(raw.compareAtPriceCents) ||
+      raw.compareAtPriceCents < 0 ||
+      raw.compareAtPriceCents > 2147483647
+    ) {
+      throw new CatalogDomainError(
+        "El precio de comparación debe ser un entero entre 0 y 2147483647 centavos.",
+        "INVALID_COMPARE_AT_PRICE",
+        400
+      );
+    }
+    compareAtPriceCents = raw.compareAtPriceCents;
+  }
+
+  let costCents: number | null = null;
+  if (raw.costCents !== null && raw.costCents !== undefined) {
+    if (
+      typeof raw.costCents !== "number" ||
+      !Number.isInteger(raw.costCents) ||
+      raw.costCents < 0 ||
+      raw.costCents > 2147483647
+    ) {
+      throw new CatalogDomainError(
+        "El costo debe ser un entero entre 0 y 2147483647 centavos.",
+        "INVALID_COST",
+        400
+      );
+    }
+    costCents = raw.costCents;
+  }
+
+  let weightGrams: number | null = null;
+  if (raw.weightGrams !== null && raw.weightGrams !== undefined) {
+    if (
+      typeof raw.weightGrams !== "number" ||
+      !Number.isInteger(raw.weightGrams) ||
+      raw.weightGrams <= 0 ||
+      raw.weightGrams > 2147483647
+    ) {
+      throw new CatalogDomainError(
+        "El peso debe ser un entero positivo mayor a 0 gramos dentro del rango permitido.",
+        "INVALID_WEIGHT",
+        400
+      );
+    }
+    weightGrams = raw.weightGrams;
+  }
+
+  let displayOrder = 0;
+  if (raw.displayOrder !== null && raw.displayOrder !== undefined) {
+    if (
+      typeof raw.displayOrder !== "number" ||
+      !Number.isInteger(raw.displayOrder) ||
+      raw.displayOrder < 0 ||
+      raw.displayOrder > 2147483647
+    ) {
+      throw new CatalogDomainError(
+        "El orden de visualización debe ser un entero no negativo dentro del rango permitido.",
+        "INVALID_DISPLAY_ORDER",
+        400
+      );
+    }
+    displayOrder = raw.displayOrder;
+  }
+
+  let status: VariantStatus = "ACTIVE";
+  if (raw.status !== null && raw.status !== undefined) {
+    if (raw.status !== "ACTIVE" && raw.status !== "INACTIVE" && raw.status !== "ARCHIVED") {
+      throw new CatalogDomainError(
+        "El estado de la variante es inválido.",
+        "INVALID_VARIANT_STATUS",
+        400
+      );
+    }
+    status = raw.status;
+  }
+
+  let attributes: Record<string, string> = {};
+  if (raw.attributes !== null && raw.attributes !== undefined) {
+    if (
+      typeof raw.attributes !== "object" ||
+      Array.isArray(raw.attributes) ||
+      raw.attributes === null
+    ) {
+      throw new CatalogDomainError(
+        "Los atributos de la variante deben ser un objeto plano clave-valor.",
+        "INVALID_VARIANT_ATTRIBUTES",
+        400
+      );
+    }
+    const cleanedAttrs: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw.attributes)) {
+      if (typeof k !== "string" || typeof v !== "string") {
+        throw new CatalogDomainError(
+          "Todos los nombres y valores de atributos deben ser cadenas de texto.",
+          "INVALID_VARIANT_ATTRIBUTES",
+          400
+        );
+      }
+      const trimmedKey = k.trim();
+      const trimmedVal = v.trim();
+      if (!trimmedKey || trimmedKey.length > 50) {
+        throw new CatalogDomainError(
+          "Las claves de los atributos deben tener entre 1 y 50 caracteres.",
+          "INVALID_VARIANT_ATTRIBUTES",
+          400
+        );
+      }
+      if (!trimmedVal || trimmedVal.length > 100) {
+        throw new CatalogDomainError(
+          "Los valores de los atributos deben tener entre 1 y 100 caracteres.",
+          "INVALID_VARIANT_ATTRIBUTES",
+          400
+        );
+      }
+      cleanedAttrs[trimmedKey] = trimmedVal;
+    }
+    attributes = cleanedAttrs;
+  }
+
+  return {
+    sku,
+    title,
+    priceCents,
+    compareAtPriceCents,
+    costCents,
+    weightGrams,
+    displayOrder,
+    status,
+    attributes,
+  };
+}
+
+function handleDatabaseError(err: unknown): never {
+  if (err instanceof CatalogDomainError) {
+    throw err;
+  }
+  const pgErr = err as { code?: string; constraint_name?: string; message?: string };
+  if (pgErr?.code === "23505") {
+    const constraint = (pgErr.constraint_name ?? pgErr.message ?? "").toLowerCase();
+    if (constraint.includes("slug") || constraint.includes("products_slug_unique")) {
+      throw new CatalogDomainError(
+        "El slug ya está en uso por otro producto.",
+        "SLUG_CONFLICT",
+        409
+      );
+    }
+    if (constraint.includes("sku") || constraint.includes("product_variants_sku_unique")) {
+      throw new CatalogDomainError("El SKU ya está registrado en el sistema.", "SKU_CONFLICT", 409);
+    }
+    throw new CatalogDomainError(
+      "Conflicto de unicidad en la base de datos.",
+      "UNIQUE_CONFLICT",
+      409
+    );
+  }
+  throw err;
+}
+
 /**
  * Creates a new Product in DRAFT status with optional initial Variant.
  * Guaranteed transactional with durable AuditEvent and advisory-locked idempotency replay.
@@ -156,197 +402,188 @@ export async function createProduct(
     ? createCatalogAdvisoryLockKey(mutationRequestDigest)
     : null;
 
-  return await db.transaction(async (tx): Promise<Product> => {
-    // Acquire Transaction Advisory Lock if idempotent
-    if (lockKey !== null && mutationRequestDigest) {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`);
+  try {
+    return await db.transaction(async (tx): Promise<Product> => {
+      // Acquire Transaction Advisory Lock if idempotent
+      if (lockKey !== null && mutationRequestDigest) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`);
 
-      // Replay lookup under lock
-      const existingAuditRows = (await tx.execute(sql`
-        SELECT * FROM audit_events
-        WHERE actor_id = ${authUserId}
-          AND action = 'catalog:product:create'
-          AND metadata->>'mutation_request_digest' = ${mutationRequestDigest}
-        ORDER BY timestamp DESC
-        LIMIT 1;
-      `)) as unknown as { target_id: string; metadata: { request_fingerprint?: string } }[];
+        // Replay lookup under lock
+        const existingAuditRows = (await tx.execute(sql`
+          SELECT * FROM audit_events
+          WHERE actor_id = ${authUserId}
+            AND action = 'catalog:product:create'
+            AND metadata->>'mutation_request_digest' = ${mutationRequestDigest}
+          ORDER BY timestamp DESC
+          LIMIT 1;
+        `)) as unknown as {
+          target_type: string;
+          target_id: string;
+          metadata: { request_fingerprint?: string };
+        }[];
 
-      if (existingAuditRows[0]) {
-        const storedFingerprint = existingAuditRows[0].metadata?.request_fingerprint;
-        if (storedFingerprint !== requestFingerprint) {
-          throw new CatalogIdempotencyConflictError();
+        if (existingAuditRows[0]) {
+          const storedFingerprint = existingAuditRows[0].metadata?.request_fingerprint;
+          if (storedFingerprint !== requestFingerprint) {
+            throw new CatalogIdempotencyConflictError();
+          }
+
+          if (existingAuditRows[0].target_type !== "product") {
+            throw new CatalogReplayIntegrityError();
+          }
+
+          const targetProductId = existingAuditRows[0].target_id;
+          const [targetProdRow] = (await tx.execute(sql`
+            SELECT * FROM products WHERE id = ${targetProductId}::uuid LIMIT 1;
+          `)) as unknown as Record<string, unknown>[];
+
+          if (!targetProdRow) {
+            throw new CatalogReplayIntegrityError();
+          }
+
+          return mapProductRow(targetProdRow);
         }
-
-        const targetProductId = existingAuditRows[0].target_id;
-        const [targetProdRow] = (await tx.execute(sql`
-          SELECT * FROM products WHERE id = ${targetProductId}::uuid LIMIT 1;
-        `)) as unknown as Record<string, unknown>[];
-
-        if (!targetProdRow) {
-          throw new CatalogReplayIntegrityError();
-        }
-
-        return mapProductRow(targetProdRow);
       }
-    }
 
-    // Verify Brand exists and is PUBLISHED
-    const brandRows = (await tx.execute(sql`
-      SELECT status FROM brands WHERE id = ${input.brandId}::uuid LIMIT 1;
-    `)) as unknown as { status: string }[];
+      // Verify Brand exists and is PUBLISHED
+      const brandRows = (await tx.execute(sql`
+        SELECT status FROM brands WHERE id = ${input.brandId}::uuid LIMIT 1;
+      `)) as unknown as { status: string }[];
 
-    if (!brandRows[0] || brandRows[0].status !== "PUBLISHED") {
-      throw new CatalogDomainError(
-        "La marca seleccionada no existe o no está publicada.",
-        "INVALID_BRAND"
-      );
-    }
-
-    // Verify Category exists and is PUBLISHED
-    const categoryRows = (await tx.execute(sql`
-      SELECT status FROM categories WHERE id = ${input.categoryId}::uuid LIMIT 1;
-    `)) as unknown as { status: string }[];
-
-    if (!categoryRows[0] || categoryRows[0].status !== "PUBLISHED") {
-      throw new CatalogDomainError(
-        "La categoría seleccionada no existe o no está publicada.",
-        "INVALID_CATEGORY"
-      );
-    }
-
-    // Check slug uniqueness
-    const slugConflictRows = (await tx.execute(sql`
-      SELECT id FROM products WHERE slug = ${trimmedSlug} LIMIT 1;
-    `)) as unknown as { id: string }[];
-
-    if (slugConflictRows[0]) {
-      throw new CatalogDomainError(
-        `El slug "${trimmedSlug}" ya está en uso por otro producto.`,
-        "SLUG_CONFLICT",
-        409
-      );
-    }
-
-    const productId = generateUuidV7();
-
-    // Insert Product (Canonically DRAFT)
-    const [rawCreated] = (await tx.execute(sql`
-      INSERT INTO products (
-        id, brand_id, category_id, name, slug, subtitle, description, status, is_featured, created_at, updated_at
-      ) VALUES (
-        ${productId}::uuid,
-        ${input.brandId}::uuid,
-        ${input.categoryId}::uuid,
-        ${trimmedName},
-        ${trimmedSlug},
-        ${input.subtitle?.trim() ?? null},
-        ${input.description?.trim() ?? null},
-        'DRAFT',
-        ${Boolean(input.isFeatured)},
-        NOW(),
-        NOW()
-      )
-      RETURNING *;
-    `)) as unknown as Record<string, unknown>[];
-
-    if (!rawCreated) {
-      throw new CatalogDomainError("No se pudo crear el producto.", "CREATE_PRODUCT_FAILED", 500);
-    }
-
-    const createdProduct = mapProductRow(rawCreated);
-
-    // Insert Initial Variant if provided
-    if (input.initialVariant) {
-      const v = input.initialVariant;
-      const vSku = v.sku.trim();
-      const vTitle = v.title.trim();
-
-      if (!vSku || vSku.length > 50) {
+      if (!brandRows[0] || brandRows[0].status !== "PUBLISHED") {
         throw new CatalogDomainError(
-          "El SKU de la variante debe tener entre 1 y 50 caracteres.",
-          "INVALID_VARIANT_SKU"
-        );
-      }
-      if (!vTitle || vTitle.length > 150) {
-        throw new CatalogDomainError(
-          "El título de la variante debe tener entre 1 y 150 caracteres.",
-          "INVALID_VARIANT_TITLE"
-        );
-      }
-      if (!v.priceCents || v.priceCents <= 0) {
-        throw new CatalogDomainError(
-          "El precio de la variante debe ser mayor a 0.",
-          "INVALID_VARIANT_PRICE"
+          "La marca seleccionada no existe o no está publicada.",
+          "INVALID_BRAND"
         );
       }
 
-      // Check SKU uniqueness
-      const skuConflictRows = (await tx.execute(sql`
-        SELECT id FROM product_variants WHERE sku = ${vSku} LIMIT 1;
+      // Verify Category exists and is PUBLISHED
+      const categoryRows = (await tx.execute(sql`
+        SELECT status FROM categories WHERE id = ${input.categoryId}::uuid LIMIT 1;
+      `)) as unknown as { status: string }[];
+
+      if (!categoryRows[0] || categoryRows[0].status !== "PUBLISHED") {
+        throw new CatalogDomainError(
+          "La categoría seleccionada no existe o no está publicada.",
+          "INVALID_CATEGORY"
+        );
+      }
+
+      // Check slug uniqueness
+      const slugConflictRows = (await tx.execute(sql`
+        SELECT id FROM products WHERE slug = ${trimmedSlug} LIMIT 1;
       `)) as unknown as { id: string }[];
 
-      if (skuConflictRows[0]) {
+      if (slugConflictRows[0]) {
         throw new CatalogDomainError(
-          `El SKU "${vSku}" ya está registrado en el sistema.`,
-          "SKU_CONFLICT",
+          `El slug "${trimmedSlug}" ya está en uso por otro producto.`,
+          "SLUG_CONFLICT",
           409
         );
       }
 
-      await tx.execute(sql`
-        INSERT INTO product_variants (
-          id, product_id, sku, title, price_cents, compare_at_price_cents, cost_cents,
-          weight_grams, attributes, status, display_order, created_at, updated_at
+      const productId = generateUuidV7();
+
+      // Insert Product (Canonically DRAFT)
+      const [rawCreated] = (await tx.execute(sql`
+        INSERT INTO products (
+          id, brand_id, category_id, name, slug, subtitle, description, status, is_featured, created_at, updated_at
         ) VALUES (
-          ${generateUuidV7()}::uuid,
           ${productId}::uuid,
-          ${vSku},
-          ${vTitle},
-          ${v.priceCents},
-          ${v.compareAtPriceCents ?? null},
-          ${v.costCents ?? null},
-          ${v.weightGrams ?? null},
-          ${JSON.stringify(v.attributes ?? {})}::jsonb,
-          'ACTIVE',
-          0,
+          ${input.brandId}::uuid,
+          ${input.categoryId}::uuid,
+          ${trimmedName},
+          ${trimmedSlug},
+          ${input.subtitle?.trim() ?? null},
+          ${input.description?.trim() ?? null},
+          'DRAFT',
+          ${Boolean(input.isFeatured)},
           NOW(),
           NOW()
+        )
+        RETURNING *;
+      `)) as unknown as Record<string, unknown>[];
+
+      if (!rawCreated) {
+        throw new CatalogDomainError("No se pudo crear el producto.", "CREATE_PRODUCT_FAILED", 500);
+      }
+
+      const createdProduct = mapProductRow(rawCreated);
+
+      // Insert Initial Variant if provided
+      if (input.initialVariant) {
+        const validatedVariant = validateProductVariantInput(input.initialVariant, "create");
+
+        // Check SKU uniqueness
+        const skuConflictRows = (await tx.execute(sql`
+          SELECT id FROM product_variants WHERE sku = ${validatedVariant.sku} LIMIT 1;
+        `)) as unknown as { id: string }[];
+
+        if (skuConflictRows[0]) {
+          throw new CatalogDomainError(
+            `El SKU "${validatedVariant.sku}" ya está registrado en el sistema.`,
+            "SKU_CONFLICT",
+            409
+          );
+        }
+
+        await tx.execute(sql`
+          INSERT INTO product_variants (
+            id, product_id, sku, title, price_cents, compare_at_price_cents, cost_cents,
+            weight_grams, attributes, status, display_order, created_at, updated_at
+          ) VALUES (
+            ${generateUuidV7()}::uuid,
+            ${productId}::uuid,
+            ${validatedVariant.sku},
+            ${validatedVariant.title},
+            ${validatedVariant.priceCents},
+            ${validatedVariant.compareAtPriceCents},
+            ${validatedVariant.costCents},
+            ${validatedVariant.weightGrams},
+            ${JSON.stringify(validatedVariant.attributes)}::jsonb,
+            'ACTIVE',
+            ${validatedVariant.displayOrder},
+            NOW(),
+            NOW()
+          );
+        `);
+      }
+
+      // Insert Transactional AuditEvent: request_id is NULL (raw mutationRequestId is NOT persisted)
+      const auditMetadata: Record<string, unknown> = {
+        name: trimmedName,
+        slug: trimmedSlug,
+        brand_id: input.brandId,
+        category_id: input.categoryId,
+      };
+      if (mutationRequestDigest) {
+        auditMetadata.mutation_request_digest = mutationRequestDigest;
+      }
+      if (requestFingerprint) {
+        auditMetadata.request_fingerprint = requestFingerprint;
+      }
+
+      await tx.execute(sql`
+        INSERT INTO audit_events (
+          id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
+        ) VALUES (
+          ${generateUuidV7()}::uuid,
+          NOW(),
+          'ADMIN',
+          ${authUserId},
+          'catalog:product:create',
+          'product',
+          ${productId},
+          ${JSON.stringify(auditMetadata)}::jsonb,
+          NULL
         );
       `);
-    }
 
-    // Insert Transactional AuditEvent
-    const auditMetadata: Record<string, unknown> = {
-      name: trimmedName,
-      slug: trimmedSlug,
-      brand_id: input.brandId,
-      category_id: input.categoryId,
-    };
-    if (mutationRequestDigest) {
-      auditMetadata.mutation_request_digest = mutationRequestDigest;
-    }
-    if (requestFingerprint) {
-      auditMetadata.request_fingerprint = requestFingerprint;
-    }
-
-    await tx.execute(sql`
-      INSERT INTO audit_events (
-        id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
-      ) VALUES (
-        ${generateUuidV7()}::uuid,
-        NOW(),
-        'ADMIN',
-        ${authUserId},
-        'catalog:product:create',
-        'product',
-        ${productId},
-        ${JSON.stringify(auditMetadata)}::jsonb,
-        ${input.mutationRequestId ?? null}
-      );
-    `);
-
-    return createdProduct;
-  });
+      return createdProduct;
+    });
+  } catch (err) {
+    handleDatabaseError(err);
+  }
 }
 
 /**
@@ -359,119 +596,117 @@ export async function updateProduct(
 ): Promise<Product> {
   const { authUserId } = await resolveActorAndAssertPermission("catalog:manage", options);
 
-  return await db.transaction(async (tx): Promise<Product> => {
-    // 1. Load current product under lock
-    const currentRows = (await tx.execute(sql`
-      SELECT * FROM products WHERE id = ${input.productId}::uuid FOR UPDATE LIMIT 1;
-    `)) as unknown as Record<string, unknown>[];
+  try {
+    return await db.transaction(async (tx): Promise<Product> => {
+      // 1. Load current product under lock
+      const currentRows = (await tx.execute(sql`
+        SELECT * FROM products WHERE id = ${input.productId}::uuid FOR UPDATE LIMIT 1;
+      `)) as unknown as Record<string, unknown>[];
 
-    if (!currentRows[0]) {
-      throw new CatalogDomainError("El producto no existe.", "PRODUCT_NOT_FOUND", 404);
-    }
+      if (!currentRows[0]) {
+        throw new CatalogDomainError("El producto no existe.", "PRODUCT_NOT_FOUND", 404);
+      }
 
-    const current = mapProductRow(currentRows[0]);
+      const current = mapProductRow(currentRows[0]);
 
-    // 2. Optimistic Concurrency Check
-    const expectedTime = new Date(input.expectedUpdatedAt).getTime();
-    const actualTime = new Date(current.updatedAt).getTime();
-    if (Math.abs(expectedTime - actualTime) > 1000) {
-      throw new StaleWriteConflictError();
-    }
-
-    // 3. Prepare updated values
-    let targetName = current.name;
-    if (input.name !== undefined) {
-      const trimmedName = input.name.trim();
-      if (!trimmedName || trimmedName.length > 200) {
+      // 2. Exact Optimistic Concurrency Check (no 1000ms window)
+      const expectedTime = new Date(input.expectedUpdatedAt).getTime();
+      const actualTime = new Date(current.updatedAt).getTime();
+      if (Number.isNaN(expectedTime)) {
         throw new CatalogDomainError(
-          "El nombre del producto no puede estar vacío ni exceder 200 caracteres.",
-          "INVALID_PRODUCT_NAME"
+          "El timestamp expectedUpdatedAt es inválido.",
+          "INVALID_TIMESTAMP",
+          400
         );
       }
-      targetName = trimmedName;
-    }
-
-    let targetSlug = current.slug;
-    if (input.slug !== undefined) {
-      const trimmedSlug = input.slug.trim().toLowerCase();
-      if (!trimmedSlug || !PRODUCT_SLUG_REGEX.test(trimmedSlug) || trimmedSlug.length > 200) {
-        throw new CatalogDomainError(
-          "El slug del producto contiene caracteres inválidos.",
-          "INVALID_PRODUCT_SLUG"
-        );
+      if (expectedTime !== actualTime) {
+        throw new StaleWriteConflictError();
       }
-      if (trimmedSlug !== current.slug) {
-        const slugCheck = (await tx.execute(sql`
-          SELECT id FROM products WHERE slug = ${trimmedSlug} AND id <> ${current.id} LIMIT 1;
-        `)) as unknown as { id: string }[];
-        if (slugCheck[0]) {
+
+      // 3. Prepare updated values
+      let targetName = current.name;
+      if (input.name !== undefined) {
+        const trimmedName = input.name.trim();
+        if (!trimmedName || trimmedName.length > 200) {
           throw new CatalogDomainError(
-            `El slug "${trimmedSlug}" ya está en uso por otro producto.`,
-            "SLUG_CONFLICT",
-            409
+            "El nombre del producto no puede estar vacío ni exceder 200 caracteres.",
+            "INVALID_PRODUCT_NAME"
           );
         }
-        targetSlug = trimmedSlug;
+        targetName = trimmedName;
       }
-    }
 
-    let targetBrandId = current.brandId;
-    if (input.brandId !== undefined && input.brandId !== current.brandId) {
-      const bRows = (await tx.execute(sql`
-        SELECT status FROM brands WHERE id = ${input.brandId}::uuid LIMIT 1;
-      `)) as unknown as { status: string }[];
-      if (!bRows[0] || bRows[0].status !== "PUBLISHED") {
-        throw new CatalogDomainError(
-          "La marca seleccionada no existe o no está publicada.",
-          "INVALID_BRAND"
-        );
-      }
-      targetBrandId = input.brandId;
-    }
-
-    let targetCategoryId = current.categoryId;
-    const categoryChanged =
-      input.categoryId !== undefined && input.categoryId !== current.categoryId;
-
-    if (categoryChanged) {
-      const cRows = (await tx.execute(sql`
-        SELECT status, current_spec_schema_id FROM categories WHERE id = ${input.categoryId}::uuid LIMIT 1;
-      `)) as unknown as { status: string; current_spec_schema_id: string | null }[];
-
-      if (!cRows[0] || cRows[0].status !== "PUBLISHED") {
-        throw new CatalogDomainError(
-          "La categoría seleccionada no existe o no está publicada.",
-          "INVALID_CATEGORY"
-        );
-      }
-      targetCategoryId = input.categoryId!;
-
-      // CATEGORY-CHANGE SPECIFICATION RECONCILIATION
-      const newSchemaId = cRows[0].current_spec_schema_id;
-      if (!newSchemaId) {
-        // Clear specifications
-        await tx.execute(sql`
-          DELETE FROM product_specifications WHERE product_id = ${current.id}::uuid;
-        `);
-      } else {
-        const schemaRows = (await tx.execute(sql`
-          SELECT * FROM category_specification_schemas WHERE id = ${newSchemaId}::uuid AND is_active = TRUE LIMIT 1;
-        `)) as unknown as {
-          schema_version: number;
-          field_definitions: SpecificationFieldDefinition[];
-        }[];
-
-        if (!schemaRows[0]) {
-          await tx.execute(
-            sql`DELETE FROM product_specifications WHERE product_id = ${current.id}::uuid;`
+      let targetSlug = current.slug;
+      if (input.slug !== undefined) {
+        const trimmedSlug = input.slug.trim().toLowerCase();
+        if (!trimmedSlug || !PRODUCT_SLUG_REGEX.test(trimmedSlug) || trimmedSlug.length > 200) {
+          throw new CatalogDomainError(
+            "El slug del producto contiene caracteres inválidos.",
+            "INVALID_PRODUCT_SLUG"
           );
+        }
+        if (trimmedSlug !== current.slug) {
+          const slugCheck = (await tx.execute(sql`
+            SELECT id FROM products WHERE slug = ${trimmedSlug} AND id <> ${current.id} LIMIT 1;
+          `)) as unknown as { id: string }[];
+          if (slugCheck[0]) {
+            throw new CatalogDomainError(
+              `El slug "${trimmedSlug}" ya está en uso por otro producto.`,
+              "SLUG_CONFLICT",
+              409
+            );
+          }
+          targetSlug = trimmedSlug;
+        }
+      }
+
+      let targetBrandId = current.brandId;
+      if (input.brandId !== undefined && input.brandId !== current.brandId) {
+        const bRows = (await tx.execute(sql`
+          SELECT status FROM brands WHERE id = ${input.brandId}::uuid LIMIT 1;
+        `)) as unknown as { status: string }[];
+        if (!bRows[0] || bRows[0].status !== "PUBLISHED") {
+          throw new CatalogDomainError(
+            "La marca seleccionada no existe o no está publicada.",
+            "INVALID_BRAND"
+          );
+        }
+        targetBrandId = input.brandId;
+      }
+
+      let targetCategoryId = current.categoryId;
+      const categoryChanged =
+        input.categoryId !== undefined && input.categoryId !== current.categoryId;
+
+      if (categoryChanged) {
+        const cRows = (await tx.execute(sql`
+          SELECT status, current_spec_schema_id FROM categories WHERE id = ${input.categoryId}::uuid LIMIT 1;
+        `)) as unknown as { status: string; current_spec_schema_id: string | null }[];
+
+        if (!cRows[0] || cRows[0].status !== "PUBLISHED") {
+          throw new CatalogDomainError(
+            "La categoría seleccionada no existe o no está publicada.",
+            "INVALID_CATEGORY"
+          );
+        }
+        targetCategoryId = input.categoryId!;
+
+        // CATEGORY-CHANGE SPECIFICATION RECONCILIATION
+        // Authoritative resolver: if pointer is NULL -> clear specs; if pointer non-null but invalid -> throws and aborts transaction!
+        const { hasSchema, schema: newSchema } =
+          await resolveAuthoritativeCategorySpecificationSchema(targetCategoryId, tx);
+
+        if (!hasSchema) {
+          // Clear specifications
+          await tx.execute(sql`
+            DELETE FROM product_specifications WHERE product_id = ${current.id}::uuid;
+          `);
         } else {
-          const newSchema = schemaRows[0];
           let valuesToPersist: Record<string, unknown> = {};
 
           if (input.specValues) {
             const validation = validateProductSpecificationValues(
-              newSchema.field_definitions,
+              newSchema!.fieldDefinitions,
               input.specValues
             );
             if (!validation.success) {
@@ -488,8 +723,8 @@ export async function updateProduct(
               product_id, schema_id, schema_version, spec_values, updated_at
             ) VALUES (
               ${current.id}::uuid,
-              ${newSchemaId}::uuid,
-              ${newSchema.schema_version},
+              ${newSchema!.id}::uuid,
+              ${newSchema!.schemaVersion},
               ${JSON.stringify(valuesToPersist)}::jsonb,
               NOW()
             )
@@ -500,124 +735,111 @@ export async function updateProduct(
               updated_at = NOW();
           `);
         }
-      }
-    } else if (input.specValues !== undefined && input.specValues !== null) {
-      // Specification update without category change
-      const catRows = (await tx.execute(sql`
-        SELECT current_spec_schema_id FROM categories WHERE id = ${current.categoryId}::uuid LIMIT 1;
-      `)) as unknown as { current_spec_schema_id: string | null }[];
+      } else if (input.specValues !== undefined && input.specValues !== null) {
+        // Specification update without category change
+        const { hasSchema, schema: activeSchema } =
+          await resolveAuthoritativeCategorySpecificationSchema(current.categoryId, tx);
 
-      const schemaId = catRows[0]?.current_spec_schema_id;
-      if (!schemaId) {
-        throw new CatalogDomainError(
-          "La categoría del producto no tiene un esquema de especificaciones activo.",
-          "NO_SPEC_SCHEMA"
+        if (!hasSchema) {
+          throw new CatalogDomainError(
+            "La categoría del producto no tiene un esquema de especificaciones activo.",
+            "NO_SPEC_SCHEMA",
+            422
+          );
+        }
+
+        const validation = validateProductSpecificationValues(
+          activeSchema!.fieldDefinitions,
+          input.specValues
         );
+        if (!validation.success) {
+          throw new CatalogDomainError(
+            validation.error ?? "Valores de especificaciones inválidos.",
+            validation.code ?? "INVALID_SPECS"
+          );
+        }
+
+        await tx.execute(sql`
+          INSERT INTO product_specifications (
+            product_id, schema_id, schema_version, spec_values, updated_at
+          ) VALUES (
+            ${current.id}::uuid,
+            ${activeSchema!.id}::uuid,
+            ${activeSchema!.schemaVersion},
+            ${JSON.stringify(validation.specValues ?? {})}::jsonb,
+            NOW()
+          )
+          ON CONFLICT (product_id) DO UPDATE SET
+            schema_id = EXCLUDED.schema_id,
+            schema_version = EXCLUDED.schema_version,
+            spec_values = EXCLUDED.spec_values,
+            updated_at = NOW();
+        `);
       }
 
-      const schemaRows = (await tx.execute(sql`
-        SELECT * FROM category_specification_schemas WHERE id = ${schemaId}::uuid AND is_active = TRUE LIMIT 1;
-      `)) as unknown as {
-        schema_version: number;
-        field_definitions: SpecificationFieldDefinition[];
-      }[];
+      const targetSubtitle =
+        input.subtitle !== undefined ? (input.subtitle?.trim() ?? null) : current.subtitle;
+      const targetDescription =
+        input.description !== undefined ? (input.description?.trim() ?? null) : current.description;
+      const targetIsFeatured =
+        input.isFeatured !== undefined ? Boolean(input.isFeatured) : current.isFeatured;
 
-      if (!schemaRows[0]) {
-        throw new CatalogDomainError(
-          "El esquema de especificaciones no está disponible.",
-          "SPEC_SCHEMA_UNAVAILABLE"
-        );
+      // Update Product
+      const [rawUpdated] = (await tx.execute(sql`
+        UPDATE products SET
+          name = ${targetName},
+          slug = ${targetSlug},
+          brand_id = ${targetBrandId}::uuid,
+          category_id = ${targetCategoryId}::uuid,
+          subtitle = ${targetSubtitle},
+          description = ${targetDescription},
+          is_featured = ${targetIsFeatured},
+          updated_at = NOW()
+        WHERE id = ${current.id}::uuid
+        RETURNING *;
+      `)) as unknown as Record<string, unknown>[];
+
+      if (!rawUpdated) {
+        throw new CatalogDomainError("No se pudo actualizar el producto.", "UPDATE_FAILED", 500);
       }
 
-      const validation = validateProductSpecificationValues(
-        schemaRows[0].field_definitions,
-        input.specValues
-      );
-      if (!validation.success) {
-        throw new CatalogDomainError(
-          validation.error ?? "Valores de especificaciones inválidos.",
-          validation.code ?? "INVALID_SPECS"
-        );
-      }
+      const updatedProduct = mapProductRow(rawUpdated);
 
+      // Insert AuditEvent: request_id is NULL (raw mutationRequestId is NOT persisted)
       await tx.execute(sql`
-        INSERT INTO product_specifications (
-          product_id, schema_id, schema_version, spec_values, updated_at
+        INSERT INTO audit_events (
+          id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
         ) VALUES (
-          ${current.id}::uuid,
-          ${schemaId}::uuid,
-          ${schemaRows[0].schema_version},
-          ${JSON.stringify(validation.specValues ?? {})}::jsonb,
-          NOW()
-        )
-        ON CONFLICT (product_id) DO UPDATE SET
-          schema_id = EXCLUDED.schema_id,
-          schema_version = EXCLUDED.schema_version,
-          spec_values = EXCLUDED.spec_values,
-          updated_at = NOW();
+          ${generateUuidV7()}::uuid,
+          NOW(),
+          'ADMIN',
+          ${authUserId},
+          'catalog:product:update',
+          'product',
+          ${current.id},
+          ${JSON.stringify({
+            before: {
+              name: current.name,
+              slug: current.slug,
+              brandId: current.brandId,
+              categoryId: current.categoryId,
+            },
+            after: {
+              name: targetName,
+              slug: targetSlug,
+              brandId: targetBrandId,
+              categoryId: targetCategoryId,
+            },
+          })}::jsonb,
+          NULL
+        );
       `);
-    }
 
-    const targetSubtitle =
-      input.subtitle !== undefined ? (input.subtitle?.trim() ?? null) : current.subtitle;
-    const targetDescription =
-      input.description !== undefined ? (input.description?.trim() ?? null) : current.description;
-    const targetIsFeatured =
-      input.isFeatured !== undefined ? Boolean(input.isFeatured) : current.isFeatured;
-
-    // Update Product
-    const [rawUpdated] = (await tx.execute(sql`
-      UPDATE products SET
-        name = ${targetName},
-        slug = ${targetSlug},
-        brand_id = ${targetBrandId}::uuid,
-        category_id = ${targetCategoryId}::uuid,
-        subtitle = ${targetSubtitle},
-        description = ${targetDescription},
-        is_featured = ${targetIsFeatured},
-        updated_at = NOW()
-      WHERE id = ${current.id}::uuid
-      RETURNING *;
-    `)) as unknown as Record<string, unknown>[];
-
-    if (!rawUpdated) {
-      throw new CatalogDomainError("No se pudo actualizar el producto.", "UPDATE_FAILED", 500);
-    }
-
-    const updatedProduct = mapProductRow(rawUpdated);
-
-    // Insert AuditEvent
-    await tx.execute(sql`
-      INSERT INTO audit_events (
-        id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
-      ) VALUES (
-        ${generateUuidV7()}::uuid,
-        NOW(),
-        'ADMIN',
-        ${authUserId},
-        'catalog:product:update',
-        'product',
-        ${current.id},
-        ${JSON.stringify({
-          before: {
-            name: current.name,
-            slug: current.slug,
-            brandId: current.brandId,
-            categoryId: current.categoryId,
-          },
-          after: {
-            name: targetName,
-            slug: targetSlug,
-            brandId: targetBrandId,
-            categoryId: targetCategoryId,
-          },
-        })}::jsonb,
-        ${input.mutationRequestId ?? null}
-      );
-    `);
-
-    return updatedProduct;
-  });
+      return updatedProduct;
+    });
+  } catch (err) {
+    handleDatabaseError(err);
+  }
 }
 
 /**
@@ -629,25 +851,7 @@ export async function createVariant(
 ): Promise<ProductVariant> {
   const { authUserId } = await resolveActorAndAssertPermission("catalog:manage", options);
 
-  const trimmedSku = input.sku?.trim() ?? "";
-  if (!trimmedSku || trimmedSku.length > 50) {
-    throw new CatalogDomainError(
-      "El SKU es obligatorio y debe tener como máximo 50 caracteres.",
-      "INVALID_SKU"
-    );
-  }
-
-  const trimmedTitle = input.title?.trim() ?? "";
-  if (!trimmedTitle || trimmedTitle.length > 150) {
-    throw new CatalogDomainError(
-      "El título de la variante es obligatorio y debe tener como máximo 150 caracteres.",
-      "INVALID_VARIANT_TITLE"
-    );
-  }
-
-  if (!input.priceCents || input.priceCents <= 0) {
-    throw new CatalogDomainError("El precio de venta debe ser mayor a 0.", "INVALID_PRICE");
-  }
+  const validated = validateProductVariantInput(input, "create");
 
   // Idempotency Digests
   let mutationRequestDigest: string | null = null;
@@ -660,16 +864,16 @@ export async function createVariant(
       input.mutationRequestId
     );
     requestFingerprint = computeRequestFingerprint({
-      attributes: input.attributes ?? {},
-      compareAtPriceCents: input.compareAtPriceCents ?? null,
-      costCents: input.costCents ?? null,
-      displayOrder: input.displayOrder ?? 0,
-      priceCents: input.priceCents,
+      attributes: validated.attributes,
+      compareAtPriceCents: validated.compareAtPriceCents,
+      costCents: validated.costCents,
+      displayOrder: validated.displayOrder,
+      priceCents: validated.priceCents,
       productId: input.productId,
-      sku: trimmedSku,
-      status: input.status ?? "ACTIVE",
-      title: trimmedTitle,
-      weightGrams: input.weightGrams ?? null,
+      sku: validated.sku,
+      status: validated.status,
+      title: validated.title,
+      weightGrams: validated.weightGrams,
     });
   }
 
@@ -677,119 +881,131 @@ export async function createVariant(
     ? createCatalogAdvisoryLockKey(mutationRequestDigest)
     : null;
 
-  return await db.transaction(async (tx): Promise<ProductVariant> => {
-    // Replay lookup under lock
-    if (lockKey !== null && mutationRequestDigest) {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`);
+  try {
+    return await db.transaction(async (tx): Promise<ProductVariant> => {
+      // Replay lookup under lock
+      if (lockKey !== null && mutationRequestDigest) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`);
 
-      const existingAuditRows = (await tx.execute(sql`
-        SELECT * FROM audit_events
-        WHERE actor_id = ${authUserId}
-          AND action = 'catalog:variant:create'
-          AND metadata->>'mutation_request_digest' = ${mutationRequestDigest}
-        ORDER BY timestamp DESC
-        LIMIT 1;
-      `)) as unknown as { target_id: string; metadata: { request_fingerprint?: string } }[];
+        const existingAuditRows = (await tx.execute(sql`
+          SELECT * FROM audit_events
+          WHERE actor_id = ${authUserId}
+            AND action = 'catalog:variant:create'
+            AND metadata->>'mutation_request_digest' = ${mutationRequestDigest}
+          ORDER BY timestamp DESC
+          LIMIT 1;
+        `)) as unknown as {
+          target_type: string;
+          target_id: string;
+          metadata: { request_fingerprint?: string };
+        }[];
 
-      if (existingAuditRows[0]) {
-        const storedFingerprint = existingAuditRows[0].metadata?.request_fingerprint;
-        if (storedFingerprint !== requestFingerprint) {
-          throw new CatalogIdempotencyConflictError();
+        if (existingAuditRows[0]) {
+          const storedFingerprint = existingAuditRows[0].metadata?.request_fingerprint;
+          if (storedFingerprint !== requestFingerprint) {
+            throw new CatalogIdempotencyConflictError();
+          }
+
+          if (existingAuditRows[0].target_type !== "product_variant") {
+            throw new CatalogReplayIntegrityError();
+          }
+
+          const targetVariantId = existingAuditRows[0].target_id;
+          const [targetVarRow] = (await tx.execute(sql`
+            SELECT * FROM product_variants WHERE id = ${targetVariantId}::uuid LIMIT 1;
+          `)) as unknown as Record<string, unknown>[];
+
+          if (!targetVarRow || String(targetVarRow.product_id) !== input.productId) {
+            throw new CatalogReplayIntegrityError();
+          }
+
+          return mapVariantRow(targetVarRow);
         }
-
-        const targetVariantId = existingAuditRows[0].target_id;
-        const [targetVarRow] = (await tx.execute(sql`
-          SELECT * FROM product_variants WHERE id = ${targetVariantId}::uuid LIMIT 1;
-        `)) as unknown as Record<string, unknown>[];
-
-        if (!targetVarRow) {
-          throw new CatalogReplayIntegrityError();
-        }
-
-        return mapVariantRow(targetVarRow);
       }
-    }
 
-    // Verify Product exists
-    const prodRows = (await tx.execute(sql`
-      SELECT id FROM products WHERE id = ${input.productId}::uuid LIMIT 1;
-    `)) as unknown as { id: string }[];
+      // Verify Product exists
+      const prodRows = (await tx.execute(sql`
+        SELECT id FROM products WHERE id = ${input.productId}::uuid LIMIT 1;
+      `)) as unknown as { id: string }[];
 
-    if (!prodRows[0]) {
-      throw new CatalogDomainError("El producto asignado no existe.", "PRODUCT_NOT_FOUND", 404);
-    }
+      if (!prodRows[0]) {
+        throw new CatalogDomainError("El producto asignado no existe.", "PRODUCT_NOT_FOUND", 404);
+      }
 
-    // Check SKU uniqueness
-    const skuConflict = (await tx.execute(sql`
-      SELECT id FROM product_variants WHERE sku = ${trimmedSku} LIMIT 1;
-    `)) as unknown as { id: string }[];
+      // Check SKU uniqueness
+      const skuConflict = (await tx.execute(sql`
+        SELECT id FROM product_variants WHERE sku = ${validated.sku} LIMIT 1;
+      `)) as unknown as { id: string }[];
 
-    if (skuConflict[0]) {
-      throw new CatalogDomainError(
-        `El SKU "${trimmedSku}" ya está registrado en el sistema.`,
-        "SKU_CONFLICT",
-        409
-      );
-    }
+      if (skuConflict[0]) {
+        throw new CatalogDomainError(
+          `El SKU "${validated.sku}" ya está registrado en el sistema.`,
+          "SKU_CONFLICT",
+          409
+        );
+      }
 
-    const variantId = generateUuidV7();
+      const variantId = generateUuidV7();
 
-    const [rawCreated] = (await tx.execute(sql`
-      INSERT INTO product_variants (
-        id, product_id, sku, title, price_cents, compare_at_price_cents, cost_cents,
-        weight_grams, attributes, status, display_order, created_at, updated_at
-      ) VALUES (
-        ${variantId}::uuid,
-        ${input.productId}::uuid,
-        ${trimmedSku},
-        ${trimmedTitle},
-        ${input.priceCents},
-        ${input.compareAtPriceCents ?? null},
-        ${input.costCents ?? null},
-        ${input.weightGrams ?? null},
-        ${JSON.stringify(input.attributes ?? {})}::jsonb,
-        ${input.status ?? "ACTIVE"},
-        ${input.displayOrder ?? 0},
-        NOW(),
-        NOW()
-      )
-      RETURNING *;
-    `)) as unknown as Record<string, unknown>[];
+      const [rawCreated] = (await tx.execute(sql`
+        INSERT INTO product_variants (
+          id, product_id, sku, title, price_cents, compare_at_price_cents, cost_cents,
+          weight_grams, attributes, status, display_order, created_at, updated_at
+        ) VALUES (
+          ${variantId}::uuid,
+          ${input.productId}::uuid,
+          ${validated.sku},
+          ${validated.title},
+          ${validated.priceCents},
+          ${validated.compareAtPriceCents},
+          ${validated.costCents},
+          ${validated.weightGrams},
+          ${JSON.stringify(validated.attributes)}::jsonb,
+          ${validated.status},
+          ${validated.displayOrder},
+          NOW(),
+          NOW()
+        )
+        RETURNING *;
+      `)) as unknown as Record<string, unknown>[];
 
-    if (!rawCreated) {
-      throw new CatalogDomainError("No se pudo crear la variante.", "CREATE_FAILED", 500);
-    }
+      if (!rawCreated) {
+        throw new CatalogDomainError("No se pudo crear la variante.", "CREATE_FAILED", 500);
+      }
 
-    const createdVariant = mapVariantRow(rawCreated);
+      const createdVariant = mapVariantRow(rawCreated);
 
-    // Insert AuditEvent
-    const auditMetadata: Record<string, unknown> = {
-      product_id: input.productId,
-      sku: trimmedSku,
-      title: trimmedTitle,
-      price_cents: input.priceCents,
-    };
-    if (mutationRequestDigest) auditMetadata.mutation_request_digest = mutationRequestDigest;
-    if (requestFingerprint) auditMetadata.request_fingerprint = requestFingerprint;
+      // Insert AuditEvent: request_id is NULL (raw mutationRequestId is NOT persisted)
+      const auditMetadata: Record<string, unknown> = {
+        product_id: input.productId,
+        sku: validated.sku,
+        title: validated.title,
+        price_cents: validated.priceCents,
+      };
+      if (mutationRequestDigest) auditMetadata.mutation_request_digest = mutationRequestDigest;
+      if (requestFingerprint) auditMetadata.request_fingerprint = requestFingerprint;
 
-    await tx.execute(sql`
-      INSERT INTO audit_events (
-        id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
-      ) VALUES (
-        ${generateUuidV7()}::uuid,
-        NOW(),
-        'ADMIN',
-        ${authUserId},
-        'catalog:variant:create',
-        'product_variant',
-        ${variantId},
-        ${JSON.stringify(auditMetadata)}::jsonb,
-        ${input.mutationRequestId ?? null}
-      );
-    `);
+      await tx.execute(sql`
+        INSERT INTO audit_events (
+          id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
+        ) VALUES (
+          ${generateUuidV7()}::uuid,
+          NOW(),
+          'ADMIN',
+          ${authUserId},
+          'catalog:variant:create',
+          'product_variant',
+          ${variantId},
+          ${JSON.stringify(auditMetadata)}::jsonb,
+          NULL
+        );
+      `);
 
-    return createdVariant;
-  });
+      return createdVariant;
+    });
+  } catch (err) {
+    handleDatabaseError(err);
+  }
 }
 
 /**
@@ -802,37 +1018,53 @@ export async function updateVariant(
 ): Promise<ProductVariant> {
   const { authUserId } = await resolveActorAndAssertPermission("catalog:manage", options);
 
-  return await db.transaction(async (tx): Promise<ProductVariant> => {
-    // 1. Load current variant under lock
-    const currentRows = (await tx.execute(sql`
-      SELECT * FROM product_variants WHERE id = ${input.variantId}::uuid FOR UPDATE LIMIT 1;
-    `)) as unknown as Record<string, unknown>[];
+  try {
+    return await db.transaction(async (tx): Promise<ProductVariant> => {
+      // 1. Load current variant under lock
+      const currentRows = (await tx.execute(sql`
+        SELECT * FROM product_variants WHERE id = ${input.variantId}::uuid FOR UPDATE LIMIT 1;
+      `)) as unknown as Record<string, unknown>[];
 
-    if (!currentRows[0]) {
-      throw new CatalogDomainError("La variante no existe.", "VARIANT_NOT_FOUND", 404);
-    }
-
-    const current = mapVariantRow(currentRows[0]);
-
-    // 2. Optimistic Concurrency Check
-    const expectedTime = new Date(input.expectedUpdatedAt).getTime();
-    const actualTime = new Date(current.updatedAt).getTime();
-    if (Math.abs(expectedTime - actualTime) > 1000) {
-      throw new StaleWriteConflictError();
-    }
-
-    // 3. SKU Immutability Rule Enforcement
-    let targetSku = current.sku;
-    if (input.sku !== undefined) {
-      const trimmedSku = input.sku.trim();
-      if (!trimmedSku || trimmedSku.length > 50) {
-        throw new CatalogDomainError(
-          "El SKU no puede estar vacío ni exceder 50 caracteres.",
-          "INVALID_SKU"
-        );
+      if (!currentRows[0]) {
+        throw new CatalogDomainError("La variante no existe.", "VARIANT_NOT_FOUND", 404);
       }
 
-      if (trimmedSku !== current.sku) {
+      const current = mapVariantRow(currentRows[0]);
+
+      // 2. Exact Optimistic Concurrency Check (no 1000ms tolerance)
+      const expectedTime = new Date(input.expectedUpdatedAt).getTime();
+      const actualTime = new Date(current.updatedAt).getTime();
+      if (Number.isNaN(expectedTime)) {
+        throw new CatalogDomainError(
+          "El timestamp expectedUpdatedAt es inválido.",
+          "INVALID_TIMESTAMP",
+          400
+        );
+      }
+      if (expectedTime !== actualTime) {
+        throw new StaleWriteConflictError();
+      }
+
+      // 3. Assemble and validate target variant state using canonical validator
+      const candidateTarget: RawVariantInput = {
+        sku: input.sku ?? current.sku,
+        title: input.title ?? current.title,
+        priceCents: input.priceCents ?? current.priceCents,
+        compareAtPriceCents:
+          input.compareAtPriceCents !== undefined
+            ? input.compareAtPriceCents
+            : current.compareAtPriceCents,
+        costCents: input.costCents !== undefined ? input.costCents : current.costCents,
+        weightGrams: input.weightGrams !== undefined ? input.weightGrams : current.weightGrams,
+        displayOrder: input.displayOrder ?? current.displayOrder,
+        status: input.status ?? current.status,
+        attributes: input.attributes ?? current.attributes,
+      };
+
+      const validated = validateProductVariantInput(candidateTarget, "update");
+
+      // 4. SKU Immutability Rule Enforcement
+      if (validated.sku !== current.sku) {
         // Check if ANY inventory_items or order_items exist
         const historyRows = (await tx.execute(sql`
           SELECT
@@ -846,134 +1078,85 @@ export async function updateVariant(
 
         // Check uniqueness for new SKU
         const conflictRows = (await tx.execute(sql`
-          SELECT id FROM product_variants WHERE sku = ${trimmedSku} AND id <> ${current.id} LIMIT 1;
+          SELECT id FROM product_variants WHERE sku = ${validated.sku} AND id <> ${current.id} LIMIT 1;
         `)) as unknown as { id: string }[];
 
         if (conflictRows[0]) {
           throw new CatalogDomainError(
-            `El SKU "${trimmedSku}" ya está registrado en el sistema.`,
+            `El SKU "${validated.sku}" ya está registrado en el sistema.`,
             "SKU_CONFLICT",
             409
           );
         }
-
-        targetSku = trimmedSku;
       }
-    }
 
-    let targetTitle = current.title;
-    if (input.title !== undefined) {
-      const trimmedTitle = input.title.trim();
-      if (!trimmedTitle || trimmedTitle.length > 150) {
-        throw new CatalogDomainError(
-          "El título de la variante no puede estar vacío ni exceder 150 caracteres.",
-          "INVALID_VARIANT_TITLE"
+      const [rawUpdated] = (await tx.execute(sql`
+        UPDATE product_variants SET
+          sku = ${validated.sku},
+          title = ${validated.title},
+          price_cents = ${validated.priceCents},
+          compare_at_price_cents = ${validated.compareAtPriceCents},
+          cost_cents = ${validated.costCents},
+          weight_grams = ${validated.weightGrams},
+          attributes = ${JSON.stringify(validated.attributes)}::jsonb,
+          status = ${validated.status},
+          display_order = ${validated.displayOrder},
+          updated_at = NOW()
+        WHERE id = ${current.id}::uuid
+        RETURNING *;
+      `)) as unknown as Record<string, unknown>[];
+
+      if (!rawUpdated) {
+        throw new CatalogDomainError("No se pudo actualizar la variante.", "UPDATE_FAILED", 500);
+      }
+
+      const updatedVariant = mapVariantRow(rawUpdated);
+
+      // Insert AuditEvent: request_id is NULL (raw mutationRequestId is NOT persisted)
+      await tx.execute(sql`
+        INSERT INTO audit_events (
+          id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
+        ) VALUES (
+          ${generateUuidV7()}::uuid,
+          NOW(),
+          'ADMIN',
+          ${authUserId},
+          'catalog:variant:update',
+          'product_variant',
+          ${current.id},
+          ${JSON.stringify({
+            before: { sku: current.sku, title: current.title, price_cents: current.priceCents },
+            after: {
+              sku: validated.sku,
+              title: validated.title,
+              price_cents: validated.priceCents,
+            },
+          })}::jsonb,
+          NULL
         );
-      }
-      targetTitle = trimmedTitle;
-    }
+      `);
 
-    const targetPriceCents = input.priceCents ?? current.priceCents;
-    if (targetPriceCents <= 0) {
-      throw new CatalogDomainError("El precio de venta debe ser mayor a 0.", "INVALID_PRICE");
-    }
-
-    const targetCompareAt =
-      input.compareAtPriceCents !== undefined
-        ? input.compareAtPriceCents
-        : current.compareAtPriceCents;
-    const targetCost = input.costCents !== undefined ? input.costCents : current.costCents;
-    const targetWeight = input.weightGrams !== undefined ? input.weightGrams : current.weightGrams;
-    const targetAttributes = input.attributes ?? current.attributes;
-    const targetStatus = input.status ?? current.status;
-    const targetDisplayOrder = input.displayOrder ?? current.displayOrder;
-
-    const [rawUpdated] = (await tx.execute(sql`
-      UPDATE product_variants SET
-        sku = ${targetSku},
-        title = ${targetTitle},
-        price_cents = ${targetPriceCents},
-        compare_at_price_cents = ${targetCompareAt},
-        cost_cents = ${targetCost},
-        weight_grams = ${targetWeight},
-        attributes = ${JSON.stringify(targetAttributes)}::jsonb,
-        status = ${targetStatus},
-        display_order = ${targetDisplayOrder},
-        updated_at = NOW()
-      WHERE id = ${current.id}::uuid
-      RETURNING *;
-    `)) as unknown as Record<string, unknown>[];
-
-    if (!rawUpdated) {
-      throw new CatalogDomainError("No se pudo actualizar la variante.", "UPDATE_FAILED", 500);
-    }
-
-    const updatedVariant = mapVariantRow(rawUpdated);
-
-    // Insert AuditEvent
-    await tx.execute(sql`
-      INSERT INTO audit_events (
-        id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
-      ) VALUES (
-        ${generateUuidV7()}::uuid,
-        NOW(),
-        'ADMIN',
-        ${authUserId},
-        'catalog:variant:update',
-        'product_variant',
-        ${current.id},
-        ${JSON.stringify({
-          before: { sku: current.sku, title: current.title, price_cents: current.priceCents },
-          after: { sku: targetSku, title: targetTitle, price_cents: targetPriceCents },
-        })}::jsonb,
-        ${input.mutationRequestId ?? null}
-      );
-    `);
-
-    return updatedVariant;
-  });
+      return updatedVariant;
+    });
+  } catch (err) {
+    handleDatabaseError(err);
+  }
 }
 
 /**
  * Transitions Product Status (DRAFT, PUBLISHED, ARCHIVED).
  * Enforces canonical RBAC permissions (catalog:publish required for publish/unpublish)
- * and fail-closed Publish Readiness validation.
+ * derived exclusively from the authoritative LOCKED row state to close TOCTOU race conditions.
  */
 export async function transitionProductStatus(
   input: StatusTransitionInput,
   options?: ServiceOptions
 ): Promise<Product> {
-  const isPublishing = input.targetStatus === "PUBLISHED";
+  // 1. Authenticate the current actor & 2. Obtain authoritative permission context
+  const authContext = await resolveAuthContext(options);
+  const authUserId = authContext.authUserId;
 
-  // First fetch current status to check required permission
-  const currentStatusRows = (await db.execute(sql`
-    SELECT status, updated_at FROM products WHERE id = ${input.productId}::uuid LIMIT 1;
-  `)) as unknown as { status: "DRAFT" | "PUBLISHED" | "ARCHIVED"; updated_at: string | Date }[];
-
-  if (!currentStatusRows[0]) {
-    throw new CatalogDomainError("El producto no existe.", "PRODUCT_NOT_FOUND", 404);
-  }
-
-  const currentStatus = currentStatusRows[0].status;
-
-  // Target-state idempotency check before auth resolution:
-  if (currentStatus === input.targetStatus) {
-    await resolveActorAndAssertPermission("catalog:manage", options);
-    const [p] = (await db.execute(
-      sql`SELECT * FROM products WHERE id = ${input.productId}::uuid LIMIT 1;`
-    )) as unknown as Product[];
-    if (!p) {
-      throw new CatalogDomainError("El producto no existe.", "PRODUCT_NOT_FOUND", 404);
-    }
-    return p;
-  }
-
-  const requiresPublishPerm = isPublishing || currentStatus === "PUBLISHED";
-  const requiredPerm = requiresPublishPerm ? "catalog:publish" : "catalog:manage";
-
-  const { authUserId } = await resolveActorAndAssertPermission(requiredPerm, options);
-
-  // Idempotency Digests
+  // Idempotency Digests (computed before transaction so advisory lock key is ready)
   let mutationRequestDigest: string | null = null;
   let requestFingerprint: string | null = null;
 
@@ -993,135 +1176,172 @@ export async function transitionProductStatus(
     ? createCatalogAdvisoryLockKey(mutationRequestDigest)
     : null;
 
-  return await db.transaction(async (tx): Promise<Product> => {
-    // Replay lookup under lock
-    if (lockKey !== null && mutationRequestDigest) {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`);
-
-      const existingAuditRows = (await tx.execute(sql`
-        SELECT * FROM audit_events
-        WHERE actor_id = ${authUserId}
-          AND action LIKE 'catalog:product:%'
-          AND metadata->>'mutation_request_digest' = ${mutationRequestDigest}
-        ORDER BY timestamp DESC
-        LIMIT 1;
-      `)) as unknown as { target_id: string; metadata: { request_fingerprint?: string } }[];
-
-      if (existingAuditRows[0]) {
-        const storedFingerprint = existingAuditRows[0].metadata?.request_fingerprint;
-        if (storedFingerprint !== requestFingerprint) {
-          throw new CatalogIdempotencyConflictError();
-        }
-
-        const [targetProdRow] = (await tx.execute(sql`
-          SELECT * FROM products WHERE id = ${input.productId}::uuid LIMIT 1;
-        `)) as unknown as Record<string, unknown>[];
-
-        if (!targetProdRow) {
-          throw new CatalogReplayIntegrityError();
-        }
-
-        return mapProductRow(targetProdRow);
+  try {
+    return await db.transaction(async (tx): Promise<Product> => {
+      // 4. Acquire any idempotency advisory lock required
+      if (lockKey !== null && mutationRequestDigest) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`);
       }
-    }
 
-    // 1. Load product under lock
-    const [rawProduct] = (await tx.execute(sql`
-      SELECT * FROM products WHERE id = ${input.productId}::uuid FOR UPDATE LIMIT 1;
-    `)) as unknown as Record<string, unknown>[];
+      // 5. SELECT Product ... FOR UPDATE (authoritative locked state)
+      const [rawProduct] = (await tx.execute(sql`
+        SELECT * FROM products WHERE id = ${input.productId}::uuid FOR UPDATE LIMIT 1;
+      `)) as unknown as Record<string, unknown>[];
 
-    if (!rawProduct) {
-      throw new CatalogDomainError("El producto no existe.", "PRODUCT_NOT_FOUND", 404);
-    }
-    const product = mapProductRow(rawProduct);
+      if (!rawProduct) {
+        throw new CatalogDomainError("El producto no existe.", "PRODUCT_NOT_FOUND", 404);
+      }
+      const product = mapProductRow(rawProduct);
 
-    // 2. Optimistic concurrency check
-    const expectedTime = new Date(input.expectedUpdatedAt).getTime();
-    const actualTime = new Date(product.updatedAt).getTime();
-    if (Math.abs(expectedTime - actualTime) > 1000) {
-      throw new StaleWriteConflictError();
-    }
+      // 6. Use the LOCKED current status + requested target status to determine required permission
+      // Canonical Status Permission Matrix:
+      // DRAFT -> PUBLISHED: catalog:publish
+      // ARCHIVED -> PUBLISHED: catalog:publish
+      // PUBLISHED -> DRAFT: catalog:publish
+      // PUBLISHED -> ARCHIVED: catalog:publish
+      // DRAFT -> ARCHIVED: catalog:manage
+      // ARCHIVED -> DRAFT: catalog:manage
+      // Same target PUBLISHED: catalog:publish
+      // Same target DRAFT or ARCHIVED: catalog:manage
+      let requiredPermission: "catalog:manage" | "catalog:publish";
+      if (input.targetStatus === "PUBLISHED" || product.status === "PUBLISHED") {
+        requiredPermission = "catalog:publish";
+      } else {
+        requiredPermission = "catalog:manage";
+      }
 
-    // 3. Target-state idempotency inside transaction
-    if (product.status === input.targetStatus) {
-      return product;
-    }
-
-    // 4. If transitioning to PUBLISHED, execute Publish Readiness Validator
-    if (isPublishing) {
-      const detail = await getAdminProductDetail(product.id, {
-        authContext: options?.authContext ?? {
-          status: "READY",
-          authUserId,
-          email: null,
-          roles: ["ADMIN_CATALOG"],
-          permissions: new Set(["catalog:manage", "catalog:publish"]),
-        },
-      });
-
-      if (!detail || !detail.publishReadiness.isPublishable) {
-        const firstBlocker = detail?.publishReadiness.blockers[0];
+      // 7. Assert required permission against verified server-side permission set
+      if (!authContext.permissions.has(requiredPermission)) {
         throw new CatalogDomainError(
-          firstBlocker?.message ?? "El producto no cumple con los requisitos de publicación.",
-          firstBlocker?.code ?? "PUBLISH_READINESS_FAILED",
-          422
+          "No tienes permisos suficientes para realizar esta transición de estado.",
+          "FORBIDDEN",
+          403
         );
       }
-    }
 
-    // 5. Update Status
-    const [rawUpdated] = (await tx.execute(sql`
-      UPDATE products SET
-        status = ${input.targetStatus},
-        updated_at = NOW()
-      WHERE id = ${product.id}::uuid
-      RETURNING *;
-    `)) as unknown as Record<string, unknown>[];
+      // 8. Replay lookup under lock
+      if (lockKey !== null && mutationRequestDigest) {
+        const existingAuditRows = (await tx.execute(sql`
+          SELECT * FROM audit_events
+          WHERE actor_id = ${authUserId}
+            AND action LIKE 'catalog:product:%'
+            AND metadata->>'mutation_request_digest' = ${mutationRequestDigest}
+          ORDER BY timestamp DESC
+          LIMIT 1;
+        `)) as unknown as {
+          target_type: string;
+          target_id: string;
+          metadata: { request_fingerprint?: string };
+        }[];
 
-    if (!rawUpdated) {
-      throw new CatalogDomainError(
-        "No se pudo actualizar el estado del producto.",
-        "UPDATE_FAILED",
-        500
-      );
-    }
+        if (existingAuditRows[0]) {
+          const storedFingerprint = existingAuditRows[0].metadata?.request_fingerprint;
+          if (storedFingerprint !== requestFingerprint) {
+            throw new CatalogIdempotencyConflictError();
+          }
 
-    const updatedProduct = mapProductRow(rawUpdated);
+          if (existingAuditRows[0].target_type !== "product") {
+            throw new CatalogReplayIntegrityError();
+          }
 
-    // 6. Action string mapping
-    let actionString = "catalog:product:update_status";
-    if (isPublishing) actionString = "catalog:product:publish";
-    else if (currentStatus === "PUBLISHED" && input.targetStatus === "DRAFT")
-      actionString = "catalog:product:unpublish";
-    else if (input.targetStatus === "ARCHIVED") actionString = "catalog:product:archive";
-    else if (currentStatus === "ARCHIVED" && input.targetStatus === "DRAFT")
-      actionString = "catalog:product:restore";
+          if (existingAuditRows[0].target_id !== product.id) {
+            throw new CatalogReplayIntegrityError();
+          }
 
-    const auditMetadata: Record<string, unknown> = {
-      from_status: currentStatus,
-      to_status: input.targetStatus,
-    };
-    if (mutationRequestDigest) auditMetadata.mutation_request_digest = mutationRequestDigest;
-    if (requestFingerprint) auditMetadata.request_fingerprint = requestFingerprint;
+          return product;
+        }
+      }
 
-    await tx.execute(sql`
-      INSERT INTO audit_events (
-        id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
-      ) VALUES (
-        ${generateUuidV7()}::uuid,
-        NOW(),
-        'ADMIN',
-        ${authUserId},
-        ${actionString},
-        'product',
-        ${product.id},
-        ${JSON.stringify(auditMetadata)}::jsonb,
-        ${input.mutationRequestId ?? null}
-      );
-    `);
+      // Exact Optimistic Concurrency Check (no tolerance window)
+      const expectedTime = new Date(input.expectedUpdatedAt).getTime();
+      const actualTime = new Date(product.updatedAt).getTime();
+      if (Number.isNaN(expectedTime)) {
+        throw new CatalogDomainError(
+          "El timestamp expectedUpdatedAt es inválido.",
+          "INVALID_TIMESTAMP",
+          400
+        );
+      }
+      if (expectedTime !== actualTime) {
+        throw new StaleWriteConflictError();
+      }
 
-    return updatedProduct;
-  });
+      // Target-state idempotency inside transaction
+      if (product.status === input.targetStatus) {
+        return product;
+      }
+
+      // If transitioning to PUBLISHED, execute Publish Readiness Validator
+      if (input.targetStatus === "PUBLISHED") {
+        const detail = await getAdminProductDetail(product.id, { authContext });
+
+        if (!detail || !detail.publishReadiness.isPublishable) {
+          const firstBlocker = detail?.publishReadiness.blockers[0];
+          throw new CatalogDomainError(
+            firstBlocker?.message ?? "El producto no cumple con los requisitos de publicación.",
+            firstBlocker?.code ?? "PUBLISH_READINESS_FAILED",
+            422
+          );
+        }
+      }
+
+      // Update Status in database
+      const [rawUpdated] = (await tx.execute(sql`
+        UPDATE products SET
+          status = ${input.targetStatus},
+          updated_at = NOW()
+        WHERE id = ${product.id}::uuid
+        RETURNING *;
+      `)) as unknown as Record<string, unknown>[];
+
+      if (!rawUpdated) {
+        throw new CatalogDomainError(
+          "No se pudo actualizar el estado del producto.",
+          "UPDATE_FAILED",
+          500
+        );
+      }
+
+      const updatedProduct = mapProductRow(rawUpdated);
+
+      // Action string mapping using LOCKED product.status
+      let actionString = "catalog:product:update_status";
+      if (input.targetStatus === "PUBLISHED") actionString = "catalog:product:publish";
+      else if (product.status === "PUBLISHED" && input.targetStatus === "DRAFT")
+        actionString = "catalog:product:unpublish";
+      else if (input.targetStatus === "ARCHIVED") actionString = "catalog:product:archive";
+      else if (product.status === "ARCHIVED" && input.targetStatus === "DRAFT")
+        actionString = "catalog:product:restore";
+
+      const auditMetadata: Record<string, unknown> = {
+        from_status: product.status,
+        to_status: input.targetStatus,
+      };
+      if (mutationRequestDigest) auditMetadata.mutation_request_digest = mutationRequestDigest;
+      if (requestFingerprint) auditMetadata.request_fingerprint = requestFingerprint;
+
+      // AuditEvent: request_id is NULL (raw mutationRequestId is NOT persisted)
+      await tx.execute(sql`
+        INSERT INTO audit_events (
+          id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
+        ) VALUES (
+          ${generateUuidV7()}::uuid,
+          NOW(),
+          'ADMIN',
+          ${authUserId},
+          ${actionString},
+          'product',
+          ${product.id},
+          ${JSON.stringify(auditMetadata)}::jsonb,
+          NULL
+        );
+      `);
+
+      return updatedProduct;
+    });
+  } catch (err) {
+    handleDatabaseError(err);
+  }
 }
 
 /**
@@ -1155,257 +1375,268 @@ export async function duplicateProduct(
     ? createCatalogAdvisoryLockKey(mutationRequestDigest)
     : null;
 
-  return await db.transaction(async (tx): Promise<Product> => {
-    // Replay lookup under lock
-    if (lockKey !== null && mutationRequestDigest) {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`);
+  try {
+    return await db.transaction(async (tx): Promise<Product> => {
+      // Replay lookup under lock
+      if (lockKey !== null && mutationRequestDigest) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`);
 
-      const existingAuditRows = (await tx.execute(sql`
-        SELECT * FROM audit_events
-        WHERE actor_id = ${authUserId}
-          AND action = 'catalog:product:duplicate'
-          AND metadata->>'mutation_request_digest' = ${mutationRequestDigest}
-        ORDER BY timestamp DESC
-        LIMIT 1;
-      `)) as unknown as { target_id: string; metadata: { request_fingerprint?: string } }[];
+        const existingAuditRows = (await tx.execute(sql`
+          SELECT * FROM audit_events
+          WHERE actor_id = ${authUserId}
+            AND action = 'catalog:product:duplicate'
+            AND metadata->>'mutation_request_digest' = ${mutationRequestDigest}
+          ORDER BY timestamp DESC
+          LIMIT 1;
+        `)) as unknown as {
+          target_type: string;
+          target_id: string;
+          metadata: { request_fingerprint?: string };
+        }[];
 
-      if (existingAuditRows[0]) {
-        const storedFingerprint = existingAuditRows[0].metadata?.request_fingerprint;
-        if (storedFingerprint !== requestFingerprint) {
-          throw new CatalogIdempotencyConflictError();
+        if (existingAuditRows[0]) {
+          const storedFingerprint = existingAuditRows[0].metadata?.request_fingerprint;
+          if (storedFingerprint !== requestFingerprint) {
+            throw new CatalogIdempotencyConflictError();
+          }
+
+          if (existingAuditRows[0].target_type !== "product") {
+            throw new CatalogReplayIntegrityError();
+          }
+
+          const [targetProdRow] = (await tx.execute(sql`
+            SELECT * FROM products WHERE id = ${existingAuditRows[0].target_id}::uuid LIMIT 1;
+          `)) as unknown as Record<string, unknown>[];
+
+          if (!targetProdRow) {
+            throw new CatalogReplayIntegrityError();
+          }
+
+          return mapProductRow(targetProdRow);
         }
-
-        const [targetProdRow] = (await tx.execute(sql`
-          SELECT * FROM products WHERE id = ${existingAuditRows[0].target_id}::uuid LIMIT 1;
-        `)) as unknown as Record<string, unknown>[];
-
-        if (!targetProdRow) {
-          throw new CatalogReplayIntegrityError();
-        }
-
-        return mapProductRow(targetProdRow);
       }
-    }
 
-    // 1. Load source product
-    const sourceRows = (await tx.execute(sql`
-      SELECT * FROM products WHERE id = ${input.sourceProductId}::uuid LIMIT 1;
-    `)) as unknown as Record<string, unknown>[];
+      // 1. Load source product
+      const sourceRows = (await tx.execute(sql`
+        SELECT * FROM products WHERE id = ${input.sourceProductId}::uuid LIMIT 1;
+      `)) as unknown as Record<string, unknown>[];
 
-    if (!sourceRows[0]) {
-      throw new CatalogDomainError(
-        "El producto de origen no existe.",
-        "SOURCE_PRODUCT_NOT_FOUND",
-        404
-      );
-    }
-
-    const source = mapProductRow(sourceRows[0]);
-
-    // 2. Derive duplicate name and unique slug
-    const duplicateName = input.options?.customName?.trim() ?? `${source.name} (Copia)`;
-    let baseDuplicateSlug =
-      input.options?.customSlug?.trim().toLowerCase() ?? `${source.slug}-copia`;
-    if (!PRODUCT_SLUG_REGEX.test(baseDuplicateSlug)) {
-      baseDuplicateSlug = `${source.slug}-copia`;
-    }
-
-    // Check slug uniqueness and append counter if necessary
-    let duplicateSlug = baseDuplicateSlug;
-    let slugSuffix = 1;
-    while (true) {
-      const conflict = (await tx.execute(sql`
-        SELECT id FROM products WHERE slug = ${duplicateSlug} LIMIT 1;
-      `)) as unknown as { id: string }[];
-
-      if (!conflict[0]) {
-        break;
+      if (!sourceRows[0]) {
+        throw new CatalogDomainError(
+          "El producto de origen no existe.",
+          "SOURCE_PRODUCT_NOT_FOUND",
+          404
+        );
       }
-      slugSuffix++;
-      duplicateSlug = `${baseDuplicateSlug}-${slugSuffix}`;
-    }
 
-    const newProductId = generateUuidV7();
+      const source = mapProductRow(sourceRows[0]);
 
-    // 3. Create duplicate Product in DRAFT status, isFeatured = false
-    const [clonedRow] = (await tx.execute(sql`
-      INSERT INTO products (
-        id, brand_id, category_id, name, slug, subtitle, description, status, is_featured, primary_media_id, created_at, updated_at
-      ) VALUES (
-        ${newProductId}::uuid,
-        ${source.brandId}::uuid,
-        ${source.categoryId}::uuid,
-        ${duplicateName},
-        ${duplicateSlug},
-        ${source.subtitle},
-        ${source.description},
-        'DRAFT',
-        FALSE,
-        NULL,
-        NOW(),
-        NOW()
-      )
-      RETURNING *;
-    `)) as unknown as Record<string, unknown>[];
+      // 2. Derive duplicate name and unique slug
+      const duplicateName = input.options?.customName?.trim() ?? `${source.name} (Copia)`;
+      let baseDuplicateSlug =
+        input.options?.customSlug?.trim().toLowerCase() ?? `${source.slug}-copia`;
+      if (!PRODUCT_SLUG_REGEX.test(baseDuplicateSlug)) {
+        baseDuplicateSlug = `${source.slug}-copia`;
+      }
 
-    if (!clonedRow) {
-      throw new CatalogDomainError("No se pudo duplicar el producto.", "DUPLICATE_FAILED", 500);
-    }
-
-    const duplicatedProduct = mapProductRow(clonedRow);
-
-    // 4. Duplicate Variants and build sourceVariantId -> newVariantId map
-    const rawSourceVariants = (await tx.execute(sql`
-      SELECT * FROM product_variants WHERE product_id = ${source.id}::uuid ORDER BY display_order ASC;
-    `)) as unknown as Record<string, unknown>[];
-
-    const sourceVariants = rawSourceVariants.map(mapVariantRow);
-
-    const variantIdMap = new Map<string, string>();
-
-    for (const sv of sourceVariants) {
-      const newVarId = generateUuidV7();
-      variantIdMap.set(sv.id, newVarId);
-
-      // Derive unique duplicate SKU
-      let duplicateSku = `${sv.sku}-COPY`;
-      let skuSuffix = 1;
+      // Check slug uniqueness and append counter if necessary
+      let duplicateSlug = baseDuplicateSlug;
+      let slugSuffix = 1;
       while (true) {
-        const skuConflict = (await tx.execute(sql`
-          SELECT id FROM product_variants WHERE sku = ${duplicateSku} LIMIT 1;
+        const conflict = (await tx.execute(sql`
+          SELECT id FROM products WHERE slug = ${duplicateSlug} LIMIT 1;
         `)) as unknown as { id: string }[];
-        if (!skuConflict[0]) {
+
+        if (!conflict[0]) {
           break;
         }
-        skuSuffix++;
-        duplicateSku = `${sv.sku}-COPY-${skuSuffix}`;
+        duplicateSlug = `${baseDuplicateSlug}-${slugSuffix}`;
+        slugSuffix++;
       }
 
-      await tx.execute(sql`
-        INSERT INTO product_variants (
-          id, product_id, sku, title, price_cents, compare_at_price_cents, cost_cents,
-          weight_grams, attributes, status, display_order, created_at, updated_at
+      const newProductId = generateUuidV7();
+
+      // 3. Insert Cloned Product (Canonically DRAFT, is_featured FALSE)
+      const [rawNewProduct] = (await tx.execute(sql`
+        INSERT INTO products (
+          id, brand_id, category_id, name, slug, subtitle, description, status, is_featured, created_at, updated_at
         ) VALUES (
-          ${newVarId}::uuid,
           ${newProductId}::uuid,
-          ${duplicateSku},
-          ${sv.title},
-          ${sv.priceCents},
-          ${sv.compareAtPriceCents},
-          ${sv.costCents},
-          ${sv.weightGrams},
-          ${JSON.stringify(sv.attributes ?? {})}::jsonb,
-          ${sv.status},
-          ${sv.displayOrder},
+          ${source.brandId}::uuid,
+          ${source.categoryId}::uuid,
+          ${duplicateName},
+          ${duplicateSlug},
+          ${source.subtitle},
+          ${source.description},
+          'DRAFT',
+          FALSE,
           NOW(),
           NOW()
-        );
-      `);
-    }
+        )
+        RETURNING *;
+      `)) as unknown as Record<string, unknown>[];
 
-    // 5. Duplicate Product Specifications
-    const specRows = (await tx.execute(sql`
-      SELECT * FROM product_specifications WHERE product_id = ${source.id}::uuid LIMIT 1;
-    `)) as unknown as {
-      schema_id: string;
-      schema_version: number;
-      spec_values: Record<string, unknown>;
-    }[];
-
-    if (specRows[0]) {
-      await tx.execute(sql`
-        INSERT INTO product_specifications (
-          product_id, schema_id, schema_version, spec_values, updated_at
-        ) VALUES (
-          ${newProductId}::uuid,
-          ${specRows[0].schema_id}::uuid,
-          ${specRows[0].schema_version},
-          ${JSON.stringify(specRows[0].spec_values ?? {})}::jsonb,
-          NOW()
-        );
-      `);
-    }
-
-    // 6. Duplicate Media with Variant Remapping
-    const sourceMedia = (await tx.execute(sql`
-      SELECT * FROM product_media WHERE product_id = ${source.id}::uuid ORDER BY display_order ASC;
-    `)) as unknown as {
-      id: string;
-      media_asset_id: string;
-      variant_id: string | null;
-      display_order: number;
-    }[];
-
-    let newPrimaryMediaId: string | null = null;
-
-    for (const sm of sourceMedia) {
-      let targetVariantId: string | null = null;
-
-      if (sm.variant_id !== null) {
-        const mapped = variantIdMap.get(sm.variant_id);
-        if (!mapped) {
-          throw new CatalogDomainError(
-            "Fallo de integridad: variante asociada a la imagen no pudo ser mapeada.",
-            "VARIANT_MAPPING_FAILED",
-            500
-          );
-        }
-        targetVariantId = mapped;
-      } else {
-        // Global media: check if this was the primary media
-        if (source.primaryMediaId === sm.media_asset_id) {
-          newPrimaryMediaId = sm.media_asset_id;
-        }
+      if (!rawNewProduct) {
+        throw new CatalogDomainError("Fallo al duplicar el producto.", "DUPLICATE_FAILED", 500);
       }
 
+      const duplicatedProduct = mapProductRow(rawNewProduct);
+
+      // 4. Clone Variants (Generating new IDs and SKUs, preserving pricing and attributes)
+      const sourceVariants = (await tx.execute(sql`
+        SELECT * FROM product_variants WHERE product_id = ${source.id}::uuid ORDER BY display_order ASC;
+      `)) as unknown as Record<string, unknown>[];
+
+      const variantIdMap = new Map<string, string>(); // oldVariantId -> newVariantId
+
+      for (const rawVar of sourceVariants) {
+        const sv = mapVariantRow(rawVar);
+        const newVariantId = generateUuidV7();
+        variantIdMap.set(sv.id, newVariantId);
+
+        // Derive unique SKU for duplicate variant
+        let duplicateSku = `${sv.sku}-COPY`;
+        let skuSuffix = 1;
+        while (true) {
+          const skuConflict = (await tx.execute(sql`
+            SELECT id FROM product_variants WHERE sku = ${duplicateSku} LIMIT 1;
+          `)) as unknown as { id: string }[];
+
+          if (!skuConflict[0]) {
+            break;
+          }
+          duplicateSku = `${sv.sku}-COPY-${skuSuffix}`;
+          skuSuffix++;
+        }
+
+        await tx.execute(sql`
+          INSERT INTO product_variants (
+            id, product_id, sku, title, price_cents, compare_at_price_cents, cost_cents,
+            weight_grams, attributes, status, display_order, created_at, updated_at
+          ) VALUES (
+            ${newVariantId}::uuid,
+            ${newProductId}::uuid,
+            ${duplicateSku},
+            ${sv.title},
+            ${sv.priceCents},
+            ${sv.compareAtPriceCents ?? null},
+            ${sv.costCents ?? null},
+            ${sv.weightGrams ?? null},
+            ${JSON.stringify(sv.attributes ?? {})}::jsonb,
+            ${sv.status},
+            ${sv.displayOrder},
+            NOW(),
+            NOW()
+          );
+        `);
+      }
+
+      // 5. Clone Specifications
+      const specRows = (await tx.execute(sql`
+        SELECT * FROM product_specifications WHERE product_id = ${source.id}::uuid LIMIT 1;
+      `)) as unknown as {
+        schema_id: string;
+        schema_version: number;
+        spec_values: Record<string, unknown>;
+      }[];
+
+      if (specRows[0]) {
+        await tx.execute(sql`
+          INSERT INTO product_specifications (
+            product_id, schema_id, schema_version, spec_values, updated_at
+          ) VALUES (
+            ${newProductId}::uuid,
+            ${specRows[0].schema_id}::uuid,
+            ${specRows[0].schema_version},
+            ${JSON.stringify(specRows[0].spec_values ?? {})}::jsonb,
+            NOW()
+          );
+        `);
+      }
+
+      // 6. Duplicate Media with Variant Remapping
+      const sourceMedia = (await tx.execute(sql`
+        SELECT * FROM product_media WHERE product_id = ${source.id}::uuid ORDER BY display_order ASC;
+      `)) as unknown as {
+        id: string;
+        media_asset_id: string;
+        variant_id: string | null;
+        display_order: number;
+      }[];
+
+      let newPrimaryMediaId: string | null = null;
+
+      for (const sm of sourceMedia) {
+        let targetVariantId: string | null = null;
+
+        if (sm.variant_id !== null) {
+          const mapped = variantIdMap.get(sm.variant_id);
+          if (!mapped) {
+            throw new CatalogDomainError(
+              "Fallo de integridad: variante asociada a la imagen no pudo ser mapeada.",
+              "VARIANT_MAPPING_FAILED",
+              500
+            );
+          }
+          targetVariantId = mapped;
+        } else {
+          // Global media: check if this was the primary media
+          if (source.primaryMediaId === sm.media_asset_id) {
+            newPrimaryMediaId = sm.media_asset_id;
+          }
+        }
+
+        await tx.execute(sql`
+          INSERT INTO product_media (
+            id, product_id, media_asset_id, variant_id, display_order, created_at
+          ) VALUES (
+            ${generateUuidV7()}::uuid,
+            ${newProductId}::uuid,
+            ${sm.media_asset_id}::uuid,
+            ${targetVariantId ? sql`${targetVariantId}::uuid` : sql`NULL`},
+            ${sm.display_order},
+            NOW()
+          );
+        `);
+      }
+
+      // If source primary media was attached globally, link it on the duplicate
+      if (newPrimaryMediaId) {
+        await tx.execute(sql`
+          UPDATE products SET primary_media_id = ${newPrimaryMediaId}::uuid WHERE id = ${newProductId}::uuid;
+        `);
+        duplicatedProduct.primaryMediaId = newPrimaryMediaId;
+      }
+
+      // 7. Insert AuditEvent: request_id is NULL (raw mutationRequestId is NOT persisted)
+      const auditMetadata: Record<string, unknown> = {
+        source_product_id: source.id,
+        duplicate_product_id: newProductId,
+        name: duplicateName,
+        slug: duplicateSlug,
+      };
+      if (mutationRequestDigest) auditMetadata.mutation_request_digest = mutationRequestDigest;
+      if (requestFingerprint) auditMetadata.request_fingerprint = requestFingerprint;
+
       await tx.execute(sql`
-        INSERT INTO product_media (
-          id, product_id, media_asset_id, variant_id, display_order, created_at
+        INSERT INTO audit_events (
+          id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
         ) VALUES (
           ${generateUuidV7()}::uuid,
-          ${newProductId}::uuid,
-          ${sm.media_asset_id}::uuid,
-          ${targetVariantId ? sql`${targetVariantId}::uuid` : sql`NULL`},
-          ${sm.display_order},
-          NOW()
+          NOW(),
+          'ADMIN',
+          ${authUserId},
+          'catalog:product:duplicate',
+          'product',
+          ${newProductId},
+          ${JSON.stringify(auditMetadata)}::jsonb,
+          NULL
         );
       `);
-    }
 
-    // If source primary media was attached globally, link it on the duplicate
-    if (newPrimaryMediaId) {
-      await tx.execute(sql`
-        UPDATE products SET primary_media_id = ${newPrimaryMediaId}::uuid WHERE id = ${newProductId}::uuid;
-      `);
-      duplicatedProduct.primaryMediaId = newPrimaryMediaId;
-    }
-
-    // 7. Insert AuditEvent
-    const auditMetadata: Record<string, unknown> = {
-      source_product_id: source.id,
-      duplicate_product_id: newProductId,
-      name: duplicateName,
-      slug: duplicateSlug,
-    };
-    if (mutationRequestDigest) auditMetadata.mutation_request_digest = mutationRequestDigest;
-    if (requestFingerprint) auditMetadata.request_fingerprint = requestFingerprint;
-
-    await tx.execute(sql`
-      INSERT INTO audit_events (
-        id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
-      ) VALUES (
-        ${generateUuidV7()}::uuid,
-        NOW(),
-        'ADMIN',
-        ${authUserId},
-        'catalog:product:duplicate',
-        'product',
-        ${newProductId},
-        ${JSON.stringify(auditMetadata)}::jsonb,
-        ${input.mutationRequestId ?? null}
-      );
-    `);
-
-    return duplicatedProduct;
-  });
+      return duplicatedProduct;
+    });
+  } catch (err) {
+    handleDatabaseError(err);
+  }
 }

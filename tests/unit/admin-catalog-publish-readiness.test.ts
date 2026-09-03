@@ -307,4 +307,122 @@ describe("Admin Catalog Publish Readiness Pure Evaluator", () => {
     expect(resultWithWarnings.warnings.some((w) => w.code === "NO_COMPARE_AT_PRICE")).toBe(true);
     expect(resultWithWarnings.warnings.some((w) => w.code === "MISSING_WEIGHT")).toBe(true);
   });
+
+  describe("Section 17 Media Readiness Invariants", () => {
+    it("A. global PUBLIC_MEDIA IMAGE image/webp is valid", () => {
+      const res = evaluatePublishReadiness({
+        product: baseProduct,
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [baseVariant],
+        media: [baseMediaAttachment],
+        primaryMediaAsset: baseMediaAsset,
+      });
+      expect(res.isPublishable).toBe(true);
+      expect(res.blockers.some((b) => b.code === "NO_VALID_PUBLIC_MEDIA")).toBe(false);
+    });
+
+    it("B. global PUBLIC_MEDIA IMAGE with disallowed MIME does NOT satisfy media readiness", () => {
+      const disallowedAsset: MediaAsset = {
+        ...baseMediaAsset,
+        id: "018f0000-0000-7000-8000-000000000099",
+        mimeType: "video/mp4",
+      };
+      const res = evaluatePublishReadiness({
+        product: { ...baseProduct, primaryMediaId: null },
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [baseVariant],
+        media: [
+          { ...baseMediaAttachment, mediaAssetId: disallowedAsset.id, mediaAsset: disallowedAsset },
+        ],
+      });
+      expect(res.isPublishable).toBe(false);
+      expect(res.blockers.some((b) => b.code === "NO_VALID_PUBLIC_MEDIA")).toBe(true);
+    });
+
+    it("C. disallowed image set as primary is still blocked (cannot bypass via non-null primaryMediaId)", () => {
+      const disallowedAsset: MediaAsset = {
+        ...baseMediaAsset,
+        id: "018f0000-0000-7000-8000-000000000099",
+        mimeType: "application/pdf",
+      };
+      const res = evaluatePublishReadiness({
+        product: { ...baseProduct, primaryMediaId: disallowedAsset.id },
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [baseVariant],
+        media: [
+          { ...baseMediaAttachment, mediaAssetId: disallowedAsset.id, mediaAsset: disallowedAsset },
+        ],
+        primaryMediaAsset: disallowedAsset,
+      });
+      expect(res.isPublishable).toBe(false);
+      expect(res.blockers.some((b) => b.code === "NO_VALID_PUBLIC_MEDIA")).toBe(true);
+      expect(res.blockers.some((b) => b.code === "PRIMARY_MEDIA_INVALID_ASSET")).toBe(true);
+    });
+
+    it("D. allowed global image + valid primary is fully publishable", () => {
+      const res = evaluatePublishReadiness({
+        product: baseProduct,
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [baseVariant],
+        media: [baseMediaAttachment],
+        primaryMediaAsset: baseMediaAsset,
+      });
+      expect(res.isPublishable).toBe(true);
+      expect(res.blockers).toHaveLength(0);
+    });
+
+    it("E. cross-product Variant media is strictly blocked", () => {
+      const foreignVariantId = "018f0000-0000-7000-8000-000000000999";
+      const res = evaluatePublishReadiness({
+        product: baseProduct,
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [baseVariant],
+        media: [
+          baseMediaAttachment,
+          {
+            ...baseMediaAttachment,
+            id: "018f0000-0000-7000-8000-000000000021",
+            variantId: foreignVariantId,
+          },
+        ],
+        primaryMediaAsset: baseMediaAsset,
+      });
+      expect(res.isPublishable).toBe(false);
+      expect(res.blockers.some((b) => b.code === "MEDIA_VARIANT_PRODUCT_MISMATCH")).toBe(true);
+    });
+
+    it("F. variant-specific-only image does not satisfy global publish-media requirement", () => {
+      const res = evaluatePublishReadiness({
+        product: { ...baseProduct, primaryMediaId: null },
+        brand: baseBrand,
+        category: baseCategory,
+        currentSpecSchema: baseSchema,
+        specifications: baseSpecs,
+        variants: [baseVariant],
+        media: [
+          {
+            ...baseMediaAttachment,
+            variantId: baseVariant.id, // Only variant-attached, zero global
+          },
+        ],
+      });
+      expect(res.isPublishable).toBe(false);
+      expect(res.blockers.some((b) => b.code === "NO_VALID_PUBLIC_MEDIA")).toBe(true);
+    });
+  });
 });

@@ -13,13 +13,10 @@ import type {
   BrandReference,
   CategoryReference,
 } from "./types";
+import { CatalogDomainError } from "./types";
 import { evaluatePublishReadiness } from "./publish-readiness";
-import { validateSpecificationFieldDefinitions } from "@/lib/discovery-filters/schema-validation";
-import type {
-  CategorySpecificationSchema,
-  SpecificationFieldDefinition,
-  MediaAsset,
-} from "@/db/schema";
+import { resolveAuthoritativeCategorySpecificationSchema } from "./specifications";
+import type { CategorySpecificationSchema, MediaAsset } from "@/db/schema";
 
 export interface ReaderOptions {
   authContext?: VerifiedAuthContextReady;
@@ -36,7 +33,11 @@ export async function getAdminProductList(
 ): Promise<AdminProductListResult> {
   if (options?.authContext) {
     if (!options.authContext.permissions.has("catalog:manage")) {
-      throw new Error("No tienes permisos para ver el catálogo administrativo.");
+      throw new CatalogDomainError(
+        "No tienes permisos para ver el catálogo administrativo.",
+        "FORBIDDEN",
+        403
+      );
     }
   } else {
     await requirePermission("catalog:manage");
@@ -193,7 +194,11 @@ export async function getAdminProductDetail(
 ): Promise<AdminProductDetail | null> {
   if (options?.authContext) {
     if (!options.authContext.permissions.has("catalog:manage")) {
-      throw new Error("No tienes permisos para ver el catálogo administrativo.");
+      throw new CatalogDomainError(
+        "No tienes permisos para ver el catálogo administrativo.",
+        "FORBIDDEN",
+        403
+      );
     }
   } else {
     await requirePermission("catalog:manage");
@@ -271,28 +276,11 @@ export async function getAdminProductDetail(
     updatedAt: new Date(String(rawCat.updated_at)),
   };
 
-  // 4. Load Category Specification Schema if current_spec_schema_id is set
-  let currentSpecSchema: CategorySpecificationSchema | null = null;
-  if (category.currentSpecSchemaId) {
-    const schemaRows = (await db.execute(sql`
-      SELECT * FROM category_specification_schemas
-      WHERE id = ${category.currentSpecSchemaId}::uuid
-        AND is_active = TRUE
-      LIMIT 1;
-    `)) as unknown as Record<string, unknown>[];
-
-    if (schemaRows[0]) {
-      const s = schemaRows[0];
-      currentSpecSchema = {
-        id: String(s.id),
-        categoryId: String(s.category_id),
-        schemaVersion: Number(s.schema_version),
-        fieldDefinitions: s.field_definitions as SpecificationFieldDefinition[],
-        isActive: Boolean(s.is_active),
-        createdAt: new Date(String(s.created_at)),
-      };
-    }
-  }
+  // 4. Load Category Specification Schema using strict authoritative resolver
+  const { schema: currentSpecSchema } = await resolveAuthoritativeCategorySpecificationSchema(
+    product.categoryId,
+    db
+  );
 
   // 5. Load Product Specifications
   const specRows = (await db.execute(sql`
@@ -477,7 +465,7 @@ export async function getAdminProductDetail(
 export async function getPublishedBrands(options?: ReaderOptions): Promise<BrandReference[]> {
   if (options?.authContext) {
     if (!options.authContext.permissions.has("catalog:manage")) {
-      throw new Error("No tienes permisos para consultar marcas.");
+      throw new CatalogDomainError("No tienes permisos para consultar marcas.", "FORBIDDEN", 403);
     }
   } else {
     await requirePermission("catalog:manage");
@@ -511,7 +499,11 @@ export async function getPublishedCategories(
 ): Promise<CategoryReference[]> {
   if (options?.authContext) {
     if (!options.authContext.permissions.has("catalog:manage")) {
-      throw new Error("No tienes permisos para consultar categorías.");
+      throw new CatalogDomainError(
+        "No tienes permisos para consultar categorías.",
+        "FORBIDDEN",
+        403
+      );
     }
   } else {
     await requirePermission("catalog:manage");
@@ -548,44 +540,16 @@ export async function getCategorySpecificationSchema(
 ): Promise<CategorySpecificationSchema | null> {
   if (options?.authContext) {
     if (!options.authContext.permissions.has("catalog:manage")) {
-      throw new Error("No tienes permisos para consultar esquemas de especificaciones.");
+      throw new CatalogDomainError(
+        "No tienes permisos para consultar esquemas de especificaciones.",
+        "FORBIDDEN",
+        403
+      );
     }
   } else {
     await requirePermission("catalog:manage");
   }
 
-  const catRows = (await db.execute(sql`
-    SELECT current_spec_schema_id FROM categories WHERE id = ${categoryId}::uuid LIMIT 1;
-  `)) as unknown as { current_spec_schema_id: string | null }[];
-
-  const schemaId = catRows[0]?.current_spec_schema_id;
-  if (!schemaId) {
-    return null;
-  }
-
-  const schemaRows = (await db.execute(sql`
-    SELECT * FROM category_specification_schemas
-    WHERE id = ${schemaId}::uuid
-      AND is_active = TRUE
-    LIMIT 1;
-  `)) as unknown as Record<string, unknown>[];
-
-  if (!schemaRows[0]) {
-    return null;
-  }
-
-  const rawSchema = schemaRows[0];
-  const fieldDefs = validateSpecificationFieldDefinitions(rawSchema.field_definitions, {
-    categoryId,
-    schemaId,
-  });
-
-  return {
-    id: String(rawSchema.id),
-    categoryId: String(rawSchema.category_id),
-    schemaVersion: Number(rawSchema.schema_version),
-    fieldDefinitions: (fieldDefs ?? []) as unknown as SpecificationFieldDefinition[],
-    isActive: Boolean(rawSchema.is_active),
-    createdAt: new Date(String(rawSchema.created_at)),
-  };
+  const result = await resolveAuthoritativeCategorySpecificationSchema(categoryId, db);
+  return result.schema;
 }

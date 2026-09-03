@@ -242,3 +242,12 @@ export class SkuImmutableError extends CatalogDomainError {
     this.name = "SkuImmutableError";
   }
 }
+
+export class SpecificationSchemaIntegrityError extends CatalogDomainError {
+  constructor(
+    message = "El esquema de especificaciones de la categoría no es íntegro, no coincide con la categoría o está inactivo."
+  ) {
+    super(message, "SPECIFICATION_SCHEMA_INTEGRITY_ERROR", 422);
+    this.name = "SpecificationSchemaIntegrityError";
+  }
+}

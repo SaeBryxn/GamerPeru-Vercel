@@ -249,17 +249,23 @@ export function evaluatePublishReadiness(input: PublishReadinessInput): PublishR
       });
     } else {
       const asset = primaryMediaItem.mediaAsset ?? primaryMediaAsset;
-      if (!asset || asset.securityClass !== "PUBLIC_MEDIA" || asset.mediaType !== "IMAGE") {
+      if (
+        !asset ||
+        asset.securityClass !== "PUBLIC_MEDIA" ||
+        asset.mediaType !== "IMAGE" ||
+        !ALLOWED_IMAGE_MIME_TYPES.includes(asset.mimeType)
+      ) {
         blockers.push({
           code: "PRIMARY_MEDIA_INVALID_ASSET",
-          message: "La imagen principal debe ser un asset público de tipo imagen.",
+          message:
+            "La imagen principal debe ser un asset público de tipo imagen con formato permitido (WebP, PNG o JPEG).",
           field: "primaryMediaId",
         });
       }
     }
   }
 
-  if (!hasValidGlobalPublicImage && !product.primaryMediaId) {
+  if (!hasValidGlobalPublicImage) {
     blockers.push({
       code: "NO_VALID_PUBLIC_MEDIA",
       message: "El producto debe tener al menos una imagen pública global para publicarse.",
