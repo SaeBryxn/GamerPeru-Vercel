@@ -1,6 +1,6 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
+import { sql, type SQLWrapper } from "drizzle-orm";
 import { db } from "@/db";
 import { requirePermission, type VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import type {
@@ -184,30 +184,18 @@ export async function getAdminProductList(
 }
 
 /**
- * Admin Product Detail Reader.
- * Reads complete authoritative product aggregate including Brand, Category, Spec Schema,
- * ProductSpecifications, Variants, Media gallery, and Publish Readiness evaluation.
+ * Internal transaction-aware catalog aggregate loader.
+ * Used after status transition authorization has already verified the actor.
+ * Performs ZERO public-reader RBAC decisions and executes against the provided transaction/executor.
  */
-export async function getAdminProductDetail(
+export async function loadInternalProductDetail(
   productId: string,
-  options?: ReaderOptions
+  executor: { execute: (query: SQLWrapper) => Promise<unknown> } = db
 ): Promise<AdminProductDetail | null> {
-  if (options?.authContext) {
-    if (!options.authContext.permissions.has("catalog:manage")) {
-      throw new CatalogDomainError(
-        "No tienes permisos para ver el catálogo administrativo.",
-        "FORBIDDEN",
-        403
-      );
-    }
-  } else {
-    await requirePermission("catalog:manage");
-  }
-
   // 1. Load Product
-  const productRows = (await db.execute(sql`
+  const productRows = (await executor.execute(sql`
     SELECT * FROM products WHERE id = ${productId}::uuid LIMIT 1;
-  `)) as unknown as Record<string, unknown>[];
+  `)) as Record<string, unknown>[];
 
   if (!productRows[0]) {
     return null;
@@ -230,9 +218,9 @@ export async function getAdminProductDetail(
   };
 
   // 2. Load Brand
-  const brandRows = (await db.execute(sql`
+  const brandRows = (await executor.execute(sql`
     SELECT * FROM brands WHERE id = ${product.brandId}::uuid LIMIT 1;
-  `)) as unknown as Record<string, unknown>[];
+  `)) as Record<string, unknown>[];
 
   if (!brandRows[0]) {
     throw new Error(`Integridad rota: marca ${product.brandId} no encontrada.`);
@@ -252,9 +240,9 @@ export async function getAdminProductDetail(
   };
 
   // 3. Load Category
-  const categoryRows = (await db.execute(sql`
+  const categoryRows = (await executor.execute(sql`
     SELECT * FROM categories WHERE id = ${product.categoryId}::uuid LIMIT 1;
-  `)) as unknown as Record<string, unknown>[];
+  `)) as Record<string, unknown>[];
 
   if (!categoryRows[0]) {
     throw new Error(`Integridad rota: categoría ${product.categoryId} no encontrada.`);
@@ -279,13 +267,13 @@ export async function getAdminProductDetail(
   // 4. Load Category Specification Schema using strict authoritative resolver
   const { schema: currentSpecSchema } = await resolveAuthoritativeCategorySpecificationSchema(
     product.categoryId,
-    db
+    executor
   );
 
   // 5. Load Product Specifications
-  const specRows = (await db.execute(sql`
+  const specRows = (await executor.execute(sql`
     SELECT * FROM product_specifications WHERE product_id = ${productId}::uuid LIMIT 1;
-  `)) as unknown as Record<string, unknown>[];
+  `)) as Record<string, unknown>[];
 
   const specifications = specRows[0]
     ? {
@@ -301,7 +289,7 @@ export async function getAdminProductDetail(
     : null;
 
   // 6. Load Product Variants and determine SKU immutability
-  const variantRows = (await db.execute(sql`
+  const variantRows = (await executor.execute(sql`
     SELECT
       pv.*,
       (
@@ -312,7 +300,7 @@ export async function getAdminProductDetail(
     FROM product_variants pv
     WHERE pv.product_id = ${productId}::uuid
     ORDER BY pv.display_order ASC, pv.created_at ASC;
-  `)) as unknown as Record<string, unknown>[];
+  `)) as Record<string, unknown>[];
 
   const variants: AdminProductDetailVariant[] = variantRows.map((v) => ({
     id: String(v.id),
@@ -333,7 +321,7 @@ export async function getAdminProductDetail(
   }));
 
   // 7. Load Product Media gallery
-  const mediaRows = (await db.execute(sql`
+  const mediaRows = (await executor.execute(sql`
     SELECT
       pm.id AS pm_id,
       pm.product_id,
@@ -354,7 +342,7 @@ export async function getAdminProductDetail(
     INNER JOIN media_assets ma ON pm.media_asset_id = ma.id
     WHERE pm.product_id = ${productId}::uuid
     ORDER BY pm.display_order ASC, pm.created_at ASC;
-  `)) as unknown as Record<string, unknown>[];
+  `)) as Record<string, unknown>[];
 
   const media: AdminProductDetailMedia[] = mediaRows.map((m) => ({
     id: String(m.pm_id),
@@ -377,9 +365,9 @@ export async function getAdminProductDetail(
   // 8. Primary Media Asset
   let primaryMedia: AdminProductDetailMedia["mediaAsset"] | null = null;
   if (product.primaryMediaId) {
-    const primaryAssetRows = (await db.execute(sql`
+    const primaryAssetRows = (await executor.execute(sql`
       SELECT * FROM media_assets WHERE id = ${product.primaryMediaId}::uuid LIMIT 1;
-    `)) as unknown as Record<string, unknown>[];
+    `)) as Record<string, unknown>[];
 
     if (primaryAssetRows[0]) {
       const pa = primaryAssetRows[0];
@@ -409,24 +397,24 @@ export async function getAdminProductDetail(
       securityClass: m.mediaAsset.securityClass as MediaAsset["securityClass"],
       mediaType: m.mediaAsset.mediaType as MediaAsset["mediaType"],
       mimeType: m.mediaAsset.mimeType,
-      fileSizeBytes: 1000,
+      fileSizeBytes: 0,
       width: m.mediaAsset.width,
       height: m.mediaAsset.height,
       altText: m.mediaAsset.altText,
-      checksumSha256: null,
+      checksumSha256: "",
       createdAt: m.createdAt,
     },
   }));
 
-  const primaryMediaAssetForEvaluation =
-    primaryMedia && product.primaryMediaId
+  const primaryMediaAssetForEvaluation: MediaAsset | null =
+    product.primaryMediaId && primaryMedia
       ? {
           id: product.primaryMediaId,
           objectKey: primaryMedia.objectKey,
           securityClass: primaryMedia.securityClass as MediaAsset["securityClass"],
           mediaType: primaryMedia.mediaType as MediaAsset["mediaType"],
           mimeType: primaryMedia.mimeType,
-          fileSizeBytes: 1000,
+          fileSizeBytes: 0,
           width: primaryMedia.width,
           height: primaryMedia.height,
           altText: primaryMedia.altText,
@@ -457,6 +445,31 @@ export async function getAdminProductDetail(
     primaryMedia: primaryMediaAssetForEvaluation,
     publishReadiness,
   };
+}
+
+/**
+ * Admin Product Detail Reader.
+ * Authoritative reader for single product details, variants, media, specifications,
+ * and pre-computed publish readiness for the Admin Product Manager.
+ * Strictly requires catalog:manage permission.
+ */
+export async function getAdminProductDetail(
+  productId: string,
+  options?: ReaderOptions
+): Promise<AdminProductDetail | null> {
+  if (options?.authContext) {
+    if (!options.authContext.permissions.has("catalog:manage")) {
+      throw new CatalogDomainError(
+        "No tienes permisos para ver el catálogo administrativo.",
+        "FORBIDDEN",
+        403
+      );
+    }
+  } else {
+    await requirePermission("catalog:manage");
+  }
+
+  return await loadInternalProductDetail(productId, db);
 }
 
 /**

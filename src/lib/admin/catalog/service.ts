@@ -35,7 +35,7 @@ import {
   resolveAuthoritativeCategorySpecificationSchema,
 } from "./specifications";
 import { PRODUCT_SLUG_REGEX } from "./publish-readiness";
-import { getAdminProductDetail } from "./readers";
+import { loadInternalProductDetail } from "./readers";
 
 export interface ServiceOptions {
   authContext?: VerifiedAuthContextReady;
@@ -268,11 +268,7 @@ export function validateProductVariantInput(
 
   let attributes: Record<string, string> = {};
   if (raw.attributes !== null && raw.attributes !== undefined) {
-    if (
-      typeof raw.attributes !== "object" ||
-      Array.isArray(raw.attributes) ||
-      raw.attributes === null
-    ) {
+    if (!isPlainObject(raw.attributes)) {
       throw new CatalogDomainError(
         "Los atributos de la variante deben ser un objeto plano clave-valor.",
         "INVALID_VARIANT_ATTRIBUTES",
@@ -288,23 +284,7 @@ export function validateProductVariantInput(
           400
         );
       }
-      const trimmedKey = k.trim();
-      const trimmedVal = v.trim();
-      if (!trimmedKey || trimmedKey.length > 50) {
-        throw new CatalogDomainError(
-          "Las claves de los atributos deben tener entre 1 y 50 caracteres.",
-          "INVALID_VARIANT_ATTRIBUTES",
-          400
-        );
-      }
-      if (!trimmedVal || trimmedVal.length > 100) {
-        throw new CatalogDomainError(
-          "Los valores de los atributos deben tener entre 1 y 100 caracteres.",
-          "INVALID_VARIANT_ATTRIBUTES",
-          400
-        );
-      }
-      cleanedAttrs[trimmedKey] = trimmedVal;
+      cleanedAttrs[k] = v;
     }
     attributes = cleanedAttrs;
   }
@@ -322,21 +302,56 @@ export function validateProductVariantInput(
   };
 }
 
+function isPlainObject(val: unknown): val is Record<string, unknown> {
+  if (val === null || typeof val !== "object" || Array.isArray(val)) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(val);
+  return proto === null || proto === Object.prototype;
+}
+
 function handleDatabaseError(err: unknown): never {
   if (err instanceof CatalogDomainError) {
     throw err;
   }
-  const pgErr = err as { code?: string; constraint_name?: string; message?: string };
-  if (pgErr?.code === "23505") {
-    const constraint = (pgErr.constraint_name ?? pgErr.message ?? "").toLowerCase();
-    if (constraint.includes("slug") || constraint.includes("products_slug_unique")) {
+  const anyErr = (err && typeof err === "object" ? err : {}) as Record<string, unknown>;
+  const cause = (
+    anyErr.cause && typeof anyErr.cause === "object" ? anyErr.cause : anyErr.origin
+  ) as Record<string, unknown> | undefined;
+
+  const code = String(anyErr.code ?? cause?.code ?? "");
+  const constraintName = String(
+    anyErr.constraint_name ?? anyErr.constraint ?? cause?.constraint_name ?? cause?.constraint ?? ""
+  );
+  const detail = String(anyErr.detail ?? cause?.detail ?? "");
+  const message = `${String(anyErr.message ?? "")} ${String(cause?.message ?? "")}`;
+  const tableName = String(
+    anyErr.table_name ?? anyErr.table ?? cause?.table_name ?? cause?.table ?? ""
+  );
+
+  const fullText = `${constraintName} ${detail} ${message} ${tableName}`.toLowerCase();
+
+  if (
+    code === "23505" ||
+    fullText.includes("23505") ||
+    fullText.includes("duplicate key value violates unique constraint")
+  ) {
+    if (
+      fullText.includes("products_slug_unique") ||
+      fullText.includes("slug") ||
+      tableName === "products"
+    ) {
       throw new CatalogDomainError(
         "El slug ya está en uso por otro producto.",
         "SLUG_CONFLICT",
         409
       );
     }
-    if (constraint.includes("sku") || constraint.includes("product_variants_sku_unique")) {
+    if (
+      fullText.includes("product_variants_sku_unique") ||
+      fullText.includes("sku") ||
+      tableName === "product_variants"
+    ) {
       throw new CatalogDomainError("El SKU ya está registrado en el sistema.", "SKU_CONFLICT", 409);
     }
     throw new CatalogDomainError(
@@ -376,6 +391,33 @@ export async function createProduct(
     );
   }
 
+  // Normalize Subtitle & Description exactly as persistence stores them
+  const normalizedSubtitle =
+    typeof input.subtitle === "string" && input.subtitle.trim().length > 0
+      ? input.subtitle.trim()
+      : null;
+  const normalizedDescription =
+    typeof input.description === "string" && input.description.trim().length > 0
+      ? input.description.trim()
+      : null;
+
+  // Validate and normalize Initial Variant using central authoritative validator
+  const validatedInitialVariant = input.initialVariant
+    ? validateProductVariantInput(input.initialVariant, "create")
+    : null;
+
+  // Single canonical normalized mutation payload used for both fingerprint and persistence
+  const normalizedProductPayload = {
+    brandId: input.brandId,
+    categoryId: input.categoryId,
+    description: normalizedDescription,
+    initialVariant: validatedInitialVariant,
+    isFeatured: Boolean(input.isFeatured),
+    name: trimmedName,
+    slug: trimmedSlug,
+    subtitle: normalizedSubtitle,
+  };
+
   // Idempotency Digests
   let mutationRequestDigest: string | null = null;
   let requestFingerprint: string | null = null;
@@ -386,16 +428,7 @@ export async function createProduct(
       "catalog:product:create",
       input.mutationRequestId
     );
-    requestFingerprint = computeRequestFingerprint({
-      brandId: input.brandId,
-      categoryId: input.categoryId,
-      description: input.description ?? null,
-      initialVariant: input.initialVariant ?? null,
-      isFeatured: Boolean(input.isFeatured),
-      name: trimmedName,
-      slug: trimmedSlug,
-      subtitle: input.subtitle ?? null,
-    });
+    requestFingerprint = computeRequestFingerprint(normalizedProductPayload);
   }
 
   const lockKey = mutationRequestDigest
@@ -447,7 +480,7 @@ export async function createProduct(
 
       // Verify Brand exists and is PUBLISHED
       const brandRows = (await tx.execute(sql`
-        SELECT status FROM brands WHERE id = ${input.brandId}::uuid LIMIT 1;
+        SELECT status FROM brands WHERE id = ${normalizedProductPayload.brandId}::uuid LIMIT 1;
       `)) as unknown as { status: string }[];
 
       if (!brandRows[0] || brandRows[0].status !== "PUBLISHED") {
@@ -459,7 +492,7 @@ export async function createProduct(
 
       // Verify Category exists and is PUBLISHED
       const categoryRows = (await tx.execute(sql`
-        SELECT status FROM categories WHERE id = ${input.categoryId}::uuid LIMIT 1;
+        SELECT status FROM categories WHERE id = ${normalizedProductPayload.categoryId}::uuid LIMIT 1;
       `)) as unknown as { status: string }[];
 
       if (!categoryRows[0] || categoryRows[0].status !== "PUBLISHED") {
@@ -471,12 +504,12 @@ export async function createProduct(
 
       // Check slug uniqueness
       const slugConflictRows = (await tx.execute(sql`
-        SELECT id FROM products WHERE slug = ${trimmedSlug} LIMIT 1;
+        SELECT id FROM products WHERE slug = ${normalizedProductPayload.slug} LIMIT 1;
       `)) as unknown as { id: string }[];
 
       if (slugConflictRows[0]) {
         throw new CatalogDomainError(
-          `El slug "${trimmedSlug}" ya está en uso por otro producto.`,
+          `El slug "${normalizedProductPayload.slug}" ya está en uso por otro producto.`,
           "SLUG_CONFLICT",
           409
         );
@@ -490,14 +523,14 @@ export async function createProduct(
           id, brand_id, category_id, name, slug, subtitle, description, status, is_featured, created_at, updated_at
         ) VALUES (
           ${productId}::uuid,
-          ${input.brandId}::uuid,
-          ${input.categoryId}::uuid,
-          ${trimmedName},
-          ${trimmedSlug},
-          ${input.subtitle?.trim() ?? null},
-          ${input.description?.trim() ?? null},
+          ${normalizedProductPayload.brandId}::uuid,
+          ${normalizedProductPayload.categoryId}::uuid,
+          ${normalizedProductPayload.name},
+          ${normalizedProductPayload.slug},
+          ${normalizedProductPayload.subtitle},
+          ${normalizedProductPayload.description},
           'DRAFT',
-          ${Boolean(input.isFeatured)},
+          ${normalizedProductPayload.isFeatured},
           NOW(),
           NOW()
         )
@@ -511,8 +544,8 @@ export async function createProduct(
       const createdProduct = mapProductRow(rawCreated);
 
       // Insert Initial Variant if provided
-      if (input.initialVariant) {
-        const validatedVariant = validateProductVariantInput(input.initialVariant, "create");
+      if (normalizedProductPayload.initialVariant) {
+        const validatedVariant = normalizedProductPayload.initialVariant;
 
         // Check SKU uniqueness
         const skuConflictRows = (await tx.execute(sql`
@@ -541,7 +574,7 @@ export async function createProduct(
             ${validatedVariant.costCents},
             ${validatedVariant.weightGrams},
             ${JSON.stringify(validatedVariant.attributes)}::jsonb,
-            'ACTIVE',
+            ${validatedVariant.status},
             ${validatedVariant.displayOrder},
             NOW(),
             NOW()
@@ -1273,7 +1306,7 @@ export async function transitionProductStatus(
 
       // If transitioning to PUBLISHED, execute Publish Readiness Validator
       if (input.targetStatus === "PUBLISHED") {
-        const detail = await getAdminProductDetail(product.id, { authContext });
+        const detail = await loadInternalProductDetail(product.id, tx);
 
         if (!detail || !detail.publishReadiness.isPublishable) {
           const firstBlocker = detail?.publishReadiness.blockers[0];
@@ -1355,6 +1388,24 @@ export async function duplicateProduct(
 ): Promise<Product> {
   const { authUserId } = await resolveActorAndAssertPermission("catalog:manage", options);
 
+  // Normalize customName and customSlug
+  const normalizedCustomName =
+    typeof input.options?.customName === "string" && input.options.customName.trim().length > 0
+      ? input.options.customName.trim()
+      : null;
+  const rawCustomSlug =
+    typeof input.options?.customSlug === "string" && input.options.customSlug.trim().length > 0
+      ? input.options.customSlug.trim().toLowerCase()
+      : null;
+  const normalizedCustomSlug =
+    rawCustomSlug && PRODUCT_SLUG_REGEX.test(rawCustomSlug) ? rawCustomSlug : null;
+
+  const normalizedDuplicatePayload = {
+    customName: normalizedCustomName,
+    customSlug: normalizedCustomSlug,
+    sourceProductId: input.sourceProductId,
+  };
+
   // Idempotency Digests
   let mutationRequestDigest: string | null = null;
   let requestFingerprint: string | null = null;
@@ -1365,10 +1416,7 @@ export async function duplicateProduct(
       "catalog:product:duplicate",
       input.mutationRequestId
     );
-    requestFingerprint = computeRequestFingerprint({
-      sourceProductId: input.sourceProductId,
-      options: input.options ?? {},
-    });
+    requestFingerprint = computeRequestFingerprint(normalizedDuplicatePayload);
   }
 
   const lockKey = mutationRequestDigest
@@ -1432,12 +1480,8 @@ export async function duplicateProduct(
       const source = mapProductRow(sourceRows[0]);
 
       // 2. Derive duplicate name and unique slug
-      const duplicateName = input.options?.customName?.trim() ?? `${source.name} (Copia)`;
-      let baseDuplicateSlug =
-        input.options?.customSlug?.trim().toLowerCase() ?? `${source.slug}-copia`;
-      if (!PRODUCT_SLUG_REGEX.test(baseDuplicateSlug)) {
-        baseDuplicateSlug = `${source.slug}-copia`;
-      }
+      const duplicateName = normalizedCustomName ?? `${source.name} (Copia)`;
+      const baseDuplicateSlug = normalizedCustomSlug ?? `${source.slug}-copia`;
 
       // Check slug uniqueness and append counter if necessary
       let duplicateSlug = baseDuplicateSlug;

@@ -363,7 +363,7 @@ export async function resolveAuthoritativeCategorySpecificationSchema(
     id: String(rawSchema.id),
     categoryId: String(rawSchema.category_id),
     schemaVersion: Number(rawSchema.schema_version),
-    fieldDefinitions: rawSchema.field_definitions as SpecificationFieldDefinition[],
+    fieldDefinitions: validatedFields as unknown as SpecificationFieldDefinition[],
     isActive: Boolean(rawSchema.is_active),
     createdAt: new Date(String(rawSchema.created_at)),
   };

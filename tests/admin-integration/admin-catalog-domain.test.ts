@@ -32,6 +32,7 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
     process.env.DATABASE_MIGRATION_URL ??
     "postgres://postgres:postgres@127.0.0.1:54322/postgres";
 
+  const databaseUrl = assertLocalDatabaseTarget(rawDatabaseUrl);
   let pgSql: postgres.Sql;
 
   // Dedicated prefix for test fixtures to guarantee zero collision and clean targeted teardown
@@ -117,9 +118,16 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
     permissions: new Set(["catalog:ai_research"]),
   };
 
+  const authAdminPublishOnly: VerifiedAuthContextReady = {
+    status: "READY",
+    authUserId: fixtureIds.adminCatalogUser,
+    email: "publishonly.gp024@gamerperu.pe",
+    roles: ["ADMIN_CATALOG"],
+    permissions: new Set(["catalog:publish"]),
+  };
+
   beforeAll(async () => {
-    const databaseUrl = assertLocalDatabaseTarget(rawDatabaseUrl);
-    pgSql = postgres(databaseUrl, { max: 1 });
+    pgSql = postgres(databaseUrl, { max: 10 });
 
     // Seed test users & roles
     await pgSql.begin(async (tx) => {
@@ -275,10 +283,10 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
         await tx`DELETE FROM inventory_locations WHERE id IN (${`${PFX}000000000071`}, ${`${PFX}000000000072`}, ${`${PFX}000000000073`});`;
         await tx`DELETE FROM order_items WHERE variant_id IN (SELECT id FROM product_variants WHERE sku LIKE 'GP024-%' OR sku LIKE 'GP-TEST-%');`;
         await tx`DELETE FROM inventory_items WHERE variant_id IN (SELECT id FROM product_variants WHERE sku LIKE 'GP024-%' OR sku LIKE 'GP-TEST-%');`;
-        await tx`DELETE FROM product_media WHERE product_id IN (SELECT id FROM products WHERE slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%');`;
-        await tx`DELETE FROM product_specifications WHERE product_id IN (SELECT id FROM products WHERE slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%');`;
-        await tx`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%');`;
-        await tx`DELETE FROM products WHERE slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%';`;
+        await tx`DELETE FROM product_media WHERE product_id IN (SELECT id FROM products WHERE category_id IN (${fixtureIds.catWithSchema}, ${fixtureIds.catNoSchema}, ${fixtureIds.catDraft}) OR brand_id IN (${fixtureIds.brandPublished}, ${fixtureIds.brandDraft}) OR slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%');`;
+        await tx`DELETE FROM product_specifications WHERE product_id IN (SELECT id FROM products WHERE category_id IN (${fixtureIds.catWithSchema}, ${fixtureIds.catNoSchema}, ${fixtureIds.catDraft}) OR brand_id IN (${fixtureIds.brandPublished}, ${fixtureIds.brandDraft}) OR slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%');`;
+        await tx`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE category_id IN (${fixtureIds.catWithSchema}, ${fixtureIds.catNoSchema}, ${fixtureIds.catDraft}) OR brand_id IN (${fixtureIds.brandPublished}, ${fixtureIds.brandDraft}) OR slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%');`;
+        await tx`DELETE FROM products WHERE category_id IN (${fixtureIds.catWithSchema}, ${fixtureIds.catNoSchema}, ${fixtureIds.catDraft}) OR brand_id IN (${fixtureIds.brandPublished}, ${fixtureIds.brandDraft}) OR slug LIKE 'gp024-%' OR slug LIKE 'wlmouse-test-%';`;
 
         await tx`UPDATE categories SET current_spec_schema_id = NULL WHERE id = ${fixtureIds.catWithSchema};`;
         await tx`DELETE FROM category_specification_schemas WHERE id = ${fixtureIds.schemaForCat};`;
@@ -1399,36 +1407,93 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
   });
 
   describe("Status Transition TOCTOU & Authorization Invariants", () => {
-    it("TOCTOU race: closes race between initial read and locked status transition", async () => {
+    it("TOCTOU race: true concurrent PostgreSQL row lock race catches concurrent status publish", async () => {
       // 1. Create a DRAFT product
       const p = await createProduct(
         {
-          name: "TOCTOU Race Mouse",
-          slug: "gp024-toctou-race-mouse",
+          name: "Real TOCTOU Race Mouse",
+          slug: "gp024-real-toctou-mouse",
           brandId: fixtureIds.brandPublished,
           categoryId: fixtureIds.catNoSchema,
         },
         { authContext: authAdminCatalog }
       );
 
-      // Manually set status to PUBLISHED in DB directly (simulating concurrent publish)
-      await pgSql`UPDATE products SET status = 'PUBLISHED', updated_at = NOW() WHERE id = ${p.id};`;
+      const clientA = postgres(databaseUrl, { max: 1 });
+      try {
+        let lockAcquiredResolve!: () => void;
+        const lockAcquiredPromise = new Promise<void>((r) => {
+          lockAcquiredResolve = r;
+        });
 
-      const [freshProd] = await pgSql`SELECT updated_at FROM products WHERE id = ${p.id};`;
+        let resumeTxAResolve!: () => void;
+        const resumeTxAPromise = new Promise<void>((r) => {
+          resumeTxAResolve = r;
+        });
 
-      // Actor with only catalog:manage attempts DRAFT -> ARCHIVED
-      // Even though requested targetStatus is ARCHIVED, the LOCKED current status is PUBLISHED!
-      // Transitioning from PUBLISHED -> ARCHIVED requires catalog:publish.
-      await expect(
-        transitionProductStatus(
+        // 2 & 3. Transaction A selects product FOR UPDATE while status is DRAFT
+        const txAPromise = clientA.begin(async (txA) => {
+          const [lockedRow] = (await txA`
+            SELECT id, status, updated_at FROM products WHERE id = ${p.id}::uuid FOR UPDATE;
+          `) as { id: string; status: string; updated_at: Date }[];
+
+          expect(lockedRow!.status).toBe("DRAFT");
+          lockAcquiredResolve();
+
+          // Wait until transitionProductStatus is started and waiting on lock
+          await resumeTxAPromise;
+
+          // 6. Still inside transaction A: update status to PUBLISHED
+          await txA`
+            UPDATE products SET status = 'PUBLISHED', updated_at = NOW() WHERE id = ${p.id}::uuid;
+          `;
+        });
+
+        // Wait for txA to acquire row lock
+        await lockAcquiredPromise;
+
+        // 4. While A still owns row lock, start transitionProductStatus from actor M with ONLY catalog:manage
+        const transitionPromise = transitionProductStatus(
           {
             productId: p.id,
-            expectedUpdatedAt: freshProd!.updated_at,
+            expectedUpdatedAt: p.updatedAt,
             targetStatus: "ARCHIVED",
           },
-          { authContext: authAdminManageOnly } // lacks catalog:publish
-        )
-      ).rejects.toThrow("No tienes permisos suficientes");
+          { authContext: authAdminManageOnly }
+        );
+
+        // 5. Confirm transition promise is waiting on row lock
+        let isWaiting = false;
+        for (let i = 0; i < 40; i++) {
+          const lockWaiters = (await pgSql`
+            SELECT COUNT(*)::int AS cnt
+            FROM pg_locks
+            WHERE granted = false;
+          `) as { cnt: number }[];
+
+          if (lockWaiters[0] && lockWaiters[0].cnt > 0) {
+            isWaiting = true;
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 25));
+        }
+        expect(isWaiting).toBe(true);
+
+        // 7. COMMIT transaction A
+        resumeTxAResolve();
+        await txAPromise;
+
+        // 8 & 9. The waiting transition now acquires row lock, observes PUBLISHED, requires catalog:publish, fails with 403
+        await expect(transitionPromise).rejects.toThrow("No tienes permisos suficientes");
+
+        // 10. Final Product remains PUBLISHED
+        const [finalProd] = (await pgSql`
+          SELECT status FROM products WHERE id = ${p.id}::uuid;
+        `) as { status: string }[];
+        expect(finalProd!.status).toBe("PUBLISHED");
+      } finally {
+        await clientA.end();
+      }
     });
 
     it("same-target PUBLISHED transition requires catalog:publish permission", async () => {
@@ -1555,7 +1620,7 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
       expect(auditCount[0]!.cnt).toBe(1);
     });
 
-    it("D. Unique business-key race: slug conflict maps to SLUG_CONFLICT (409) not raw 23505", async () => {
+    it("D_seq1. Sequential unique slug conflict maps to SLUG_CONFLICT (409) not raw 23505", async () => {
       await createProduct(
         {
           name: "Slug Race Base",
@@ -1582,10 +1647,12 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
         const cErr = err as CatalogDomainError;
         expect(cErr.code).toBe("SLUG_CONFLICT");
         expect(cErr.httpStatus).toBe(409);
+        expect(cErr.message).not.toContain("23505");
+        expect(cErr.message).not.toContain("products_slug_unique");
       }
     });
 
-    it("D. Unique business-key race: SKU conflict maps to SKU_CONFLICT (409) not raw 23505", async () => {
+    it("D_seq2. Sequential unique SKU conflict maps to SKU_CONFLICT (409) not raw 23505", async () => {
       const p = await createProduct(
         {
           name: "SKU Race Base",
@@ -1617,7 +1684,101 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
         const cErr = err as CatalogDomainError;
         expect(cErr.code).toBe("SKU_CONFLICT");
         expect(cErr.httpStatus).toBe(409);
+        expect(cErr.message).not.toContain("23505");
+        expect(cErr.message).not.toContain("product_variants_sku_unique");
       }
+    });
+
+    it("D_conc1. True concurrent Slug collision race: 1 commits, 1 receives sanitized SLUG_CONFLICT (409), count = 1", async () => {
+      const contestedSlug = "gp024-concurrent-slug-race";
+      const payloadA = {
+        name: "Contender Slug Alpha",
+        slug: contestedSlug,
+        brandId: fixtureIds.brandPublished,
+        categoryId: fixtureIds.catNoSchema,
+        mutationRequestId: "slug-race-alpha-req",
+      };
+      const payloadB = {
+        name: "Contender Slug Beta",
+        slug: contestedSlug,
+        brandId: fixtureIds.brandPublished,
+        categoryId: fixtureIds.catNoSchema,
+        mutationRequestId: "slug-race-beta-req",
+      };
+
+      const results = await Promise.allSettled([
+        createProduct(payloadA, { authContext: authAdminCatalog }),
+        createProduct(payloadB, { authContext: authAdminCatalog }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+
+      const rejReason = (rejected[0] as PromiseRejectedResult).reason;
+      expect(rejReason).toBeInstanceOf(CatalogDomainError);
+      expect((rejReason as CatalogDomainError).code).toBe("SLUG_CONFLICT");
+      expect((rejReason as CatalogDomainError).httpStatus).toBe(409);
+      expect((rejReason as Error).message).not.toContain("23505");
+      expect((rejReason as Error).message).not.toContain("products_slug_unique");
+
+      const count = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM products WHERE slug = ${contestedSlug};
+      `;
+      expect(count[0]!.cnt).toBe(1);
+    });
+
+    it("D_conc2. True concurrent SKU collision race: 1 commits, 1 receives sanitized SKU_CONFLICT (409), count = 1", async () => {
+      const p = await createProduct(
+        {
+          name: "SKU True Race Host",
+          slug: "gp024-sku-true-race-host",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const contestedSku = "GP024-SKU-CONC-RACE";
+      const vPayloadA = {
+        productId: p.id,
+        sku: contestedSku,
+        title: "Variant Alpha",
+        priceCents: 15000,
+        mutationRequestId: "sku-race-alpha-req",
+      };
+      const vPayloadB = {
+        productId: p.id,
+        sku: contestedSku,
+        title: "Variant Beta",
+        priceCents: 18000,
+        mutationRequestId: "sku-race-beta-req",
+      };
+
+      const results = await Promise.allSettled([
+        createVariant(vPayloadA, { authContext: authAdminCatalog }),
+        createVariant(vPayloadB, { authContext: authAdminCatalog }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+
+      const rejReason = (rejected[0] as PromiseRejectedResult).reason;
+      expect(rejReason).toBeInstanceOf(CatalogDomainError);
+      expect((rejReason as CatalogDomainError).code).toBe("SKU_CONFLICT");
+      expect((rejReason as CatalogDomainError).httpStatus).toBe(409);
+      expect((rejReason as Error).message).not.toContain("23505");
+      expect((rejReason as Error).message).not.toContain("product_variants_sku_unique");
+
+      const count = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM product_variants WHERE sku = ${contestedSku};
+      `;
+      expect(count[0]!.cnt).toBe(1);
     });
 
     it("E. Status replay: does not insert duplicate AuditEvents", async () => {
@@ -1655,6 +1816,207 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
         SELECT COUNT(*)::int AS cnt FROM audit_events WHERE target_id = ${p.id} AND action = 'catalog:product:archive';
       `;
       expect(auditCount[0]!.cnt).toBe(1);
+    });
+
+    it("F. Normalization-equivalent Create Replay: raw whitespace in initial fields returns SAME product with 0 conflict", async () => {
+      const sharedReqId = "norm-create-req-001";
+      const rawPayload = {
+        name: "Normalized Product Test",
+        slug: "gp024-norm-product-test",
+        subtitle: "  Ultraligero  ",
+        description: "  Texto normalizado  ",
+        brandId: fixtureIds.brandPublished,
+        categoryId: fixtureIds.catNoSchema,
+        initialVariant: {
+          sku: "  GP024-NORM-01  ",
+          title: "  Negro  ",
+          priceCents: 10000,
+        },
+        mutationRequestId: sharedReqId,
+      };
+
+      const p1 = await createProduct(rawPayload, { authContext: authAdminCatalog });
+
+      // Retry with same mutationRequestId and same normalized values already trimmed
+      const trimmedPayload = {
+        name: "Normalized Product Test",
+        slug: "gp024-norm-product-test",
+        subtitle: "Ultraligero",
+        description: "Texto normalizado",
+        brandId: fixtureIds.brandPublished,
+        categoryId: fixtureIds.catNoSchema,
+        initialVariant: {
+          sku: "GP024-NORM-01",
+          title: "Negro",
+          priceCents: 10000,
+        },
+        mutationRequestId: sharedReqId,
+      };
+
+      const p2 = await createProduct(trimmedPayload, { authContext: authAdminCatalog });
+
+      expect(p1.id).toBe(p2.id);
+
+      const prodCount = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM products WHERE slug = 'gp024-norm-product-test';
+      `;
+      expect(prodCount[0]!.cnt).toBe(1);
+
+      const auditCount = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM audit_events WHERE target_id = ${p1.id} AND action = 'catalog:product:create';
+      `;
+      expect(auditCount[0]!.cnt).toBe(1);
+
+      // Genuinely changed normalized payload must still produce CATALOG_IDEMPOTENCY_CONFLICT (409)
+      const changedPayload = {
+        ...trimmedPayload,
+        description: "Texto modificado diferente",
+      };
+      await expect(
+        createProduct(changedPayload, { authContext: authAdminCatalog })
+      ).rejects.toThrow(CatalogIdempotencyConflictError);
+    });
+
+    it("G. Normalization-equivalent Duplicate Replay: whitespace/case in custom options resolves to same duplicate", async () => {
+      const source = await createProduct(
+        {
+          name: "Duplicate Source Base",
+          slug: "gp024-dup-norm-source",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const sharedReqId = "dup-norm-req-001";
+      const rawOptions = {
+        customName: "  Clon Normalizado  ",
+        customSlug: "  GP024-CLON-NORMALIZADO-SLUG  ",
+      };
+
+      const d1 = await duplicateProduct(
+        {
+          sourceProductId: source.id,
+          options: rawOptions,
+          mutationRequestId: sharedReqId,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // Retry with same mutationRequestId and already normalized options
+      const normalizedOptions = {
+        customName: "Clon Normalizado",
+        customSlug: "gp024-clon-normalizado-slug",
+      };
+
+      const d2 = await duplicateProduct(
+        {
+          sourceProductId: source.id,
+          options: normalizedOptions,
+          mutationRequestId: sharedReqId,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      expect(d1.id).toBe(d2.id);
+
+      // Genuinely different normalized duplicate options returns CATALOG_IDEMPOTENCY_CONFLICT
+      await expect(
+        duplicateProduct(
+          {
+            sourceProductId: source.id,
+            options: { customName: "Clon Totalmente Diferente" },
+            mutationRequestId: sharedReqId,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(CatalogIdempotencyConflictError);
+    });
+  });
+
+  describe("Publish-Only Permission Isolation (Defect B)", () => {
+    it("actor with catalog:publish ONLY can publish a ready product, but cannot manage or view admin catalog", async () => {
+      // 1. Build a fully publish-ready product using authorized adminCatalog
+      const readyProd = await createProduct(
+        {
+          name: "Publish Only Test Mouse",
+          slug: "gp024-pub-only-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+          initialVariant: {
+            sku: "GP024-PUB-ONLY-01",
+            title: "Edición Publicable",
+            priceCents: 25000,
+          },
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // Add valid specs
+      await updateProduct(
+        {
+          productId: readyProd.id,
+          expectedUpdatedAt: readyProd.updatedAt,
+          specValues: { sensor: "paw3950", polling_rate_hz: 8000, wireless: true },
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // Add public approved media
+      await pgSql`
+        INSERT INTO product_media (id, product_id, media_asset_id, variant_id, display_order, created_at)
+        VALUES (${`${PFX}000000000301`}, ${readyProd.id}, ${fixtureIds.mediaAssetPublic1}, NULL, 0, NOW())
+        ON CONFLICT (id) DO NOTHING;
+      `;
+      await pgSql`
+        UPDATE products SET primary_media_id = ${fixtureIds.mediaAssetPublic1} WHERE id = ${readyProd.id};
+      `;
+
+      const [freshProd] = await pgSql`
+        SELECT updated_at FROM products WHERE id = ${readyProd.id};
+      `;
+
+      // 2. Call transitionProductStatus to PUBLISHED with publish-only context
+      const published = await transitionProductStatus(
+        {
+          productId: readyProd.id,
+          expectedUpdatedAt: freshProd!.updated_at,
+          targetStatus: "PUBLISHED",
+        },
+        { authContext: authAdminPublishOnly }
+      );
+
+      expect(published.status).toBe("PUBLISHED");
+
+      // Verify canonical publish AuditEvent exists
+      const pubAudit = await pgSql`
+        SELECT COUNT(*)::int AS cnt FROM audit_events
+        WHERE target_id = ${readyProd.id} AND action = 'catalog:product:publish';
+      `;
+      expect(pubAudit[0]!.cnt).toBe(1);
+
+      // 3. Prove same publish-only context CANNOT call getAdminProductList
+      await expect(getAdminProductList({}, { authContext: authAdminPublishOnly })).rejects.toThrow(
+        "No tienes permisos para ver el catálogo administrativo."
+      );
+
+      // 4. Prove same publish-only context CANNOT call getAdminProductDetail
+      await expect(
+        getAdminProductDetail(readyProd.id, { authContext: authAdminPublishOnly })
+      ).rejects.toThrow("No tienes permisos para ver el catálogo administrativo.");
+
+      // 5. Prove same publish-only context CANNOT perform ordinary authoring (createProduct)
+      await expect(
+        createProduct(
+          {
+            name: "Unauthorized Authoring Mouse",
+            slug: "gp024-unauth-authoring-mouse",
+            brandId: fixtureIds.brandPublished,
+            categoryId: fixtureIds.catNoSchema,
+          },
+          { authContext: authAdminPublishOnly }
+        )
+      ).rejects.toThrow("No tienes permisos suficientes");
     });
   });
 

@@ -185,10 +185,35 @@ describe("validateProductVariantInput - Canonical Variant Mutation Validator", (
     ).toThrowError(CatalogDomainError);
   });
 
-  // Attributes validation
-  it("rejects attributes = [] (array instead of plain object)", () => {
+  // Attributes validation (Defect E)
+  it("rejects attributes = [] (array)", () => {
     expect(() =>
       validateProductVariantInput({ ...validBase, attributes: [] }, "create")
+    ).toThrowError(CatalogDomainError);
+  });
+
+  it("rejects attributes = new Date()", () => {
+    expect(() =>
+      validateProductVariantInput({ ...validBase, attributes: new Date() }, "create")
+    ).toThrowError(CatalogDomainError);
+  });
+
+  it("rejects attributes = new Map()", () => {
+    expect(() =>
+      validateProductVariantInput({ ...validBase, attributes: new Map() }, "create")
+    ).toThrowError(CatalogDomainError);
+  });
+
+  it("rejects attributes = new Set()", () => {
+    expect(() =>
+      validateProductVariantInput({ ...validBase, attributes: new Set() }, "create")
+    ).toThrowError(CatalogDomainError);
+  });
+
+  it("rejects attributes = class instance", () => {
+    class CustomAttributes {}
+    expect(() =>
+      validateProductVariantInput({ ...validBase, attributes: new CustomAttributes() }, "create")
     ).toThrowError(CatalogDomainError);
   });
 
@@ -198,23 +223,18 @@ describe("validateProductVariantInput - Canonical Variant Mutation Validator", (
     ).toThrowError(CatalogDomainError);
   });
 
-  it("rejects empty attribute keys or values", () => {
-    expect(() =>
-      validateProductVariantInput({ ...validBase, attributes: { "   ": "value" } }, "create")
-    ).toThrowError(CatalogDomainError);
-    expect(() =>
-      validateProductVariantInput({ ...validBase, attributes: { key: "   " } }, "create")
-    ).toThrowError(CatalogDomainError);
+  it("accepts legitimate plain string->string objects without arbitrary 50/100 length rejections", () => {
+    const longKey = "custom_attribute_key_".repeat(5); // > 100 chars
+    const longVal = "very_detailed_attribute_value_string_".repeat(10); // > 300 chars
+    const plain = { [longKey]: longVal, color: "Midnight Blue", sensor: "PAW3395" };
+    const res = validateProductVariantInput({ ...validBase, attributes: plain }, "create");
+    expect(res.attributes).toEqual(plain);
   });
 
-  it("trims valid attribute keys and values", () => {
-    const res = validateProductVariantInput(
-      {
-        ...validBase,
-        attributes: { "  color  ": "  Blue  " },
-      },
-      "create"
-    );
-    expect(res.attributes).toEqual({ color: "Blue" });
+  it("accepts null-prototype plain objects", () => {
+    const nullProto = Object.create(null);
+    nullProto.edition = "Founder Edition";
+    const res = validateProductVariantInput({ ...validBase, attributes: nullProto }, "create");
+    expect(res.attributes).toEqual({ edition: "Founder Edition" });
   });
 });
