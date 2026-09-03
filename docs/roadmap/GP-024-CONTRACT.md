@@ -1,27 +1,28 @@
-# GP-024 — Admin Product Manager Contract, Domain Reconciliation & Implementation Plan (CHK0-BR1)
+# GP-024 — Admin Product Manager Contract, Domain Reconciliation & Implementation Plan (CHK0-BR2)
 
 ## Status
 
-**IN DISCOVERY / CONTRACT PENDING EXTERNAL APPROVAL (CHK0-BR1)**
+**IN DISCOVERY / CONTRACT PENDING EXTERNAL APPROVAL (CHK0-BR2)**
 
 ---
 
 ## 1. Executive Summary & Starting Lineage
 
-This document establishes the canonical contract, domain reconciliation, operational boundaries, and implementation plan for **GP-024 (Admin Product Manager)**, incorporating all external review findings and architectural remediations from CHK0-BR1.
+This document establishes the canonical contract, domain reconciliation, operational boundaries, and implementation plan for **GP-024 (Admin Product Manager)**, incorporating all external review findings and architectural remediations from CHK0, CHK0-BR1, and CHK0-BR2.
 
-GP-024 implements administrative catalog authoring for Gamer Perú, providing authorized staff with the ability to create, edit, duplicate, archive, and publish hardware products, variants, SKUs, integer prices, media galleries, technical specifications, and SEO metadata.
+GP-024 implements administrative catalog authoring for Gamer Perú, providing authorized staff with the ability to create, edit, duplicate, archive, and publish hardware products, variants, SKUs, exact integer prices in Soles (`PEN`), media galleries, technical specifications, and SEO metadata.
 
 ### Baseline Lineage Verification
 
 - **Repository**: `latamcreativa/GamerPeru`
 - **Branch**: `main`
-- **Starting HEAD SHA**: `ecd42b60278843ddbd57aa7d185b03cc8a1de39a`
-- **Parent Commit**: `c72025bc6bc8fa768a506cf53472bbaf75d17895` (GP-023 Formal Closure)
+- **Starting HEAD SHA**: `df10390e59ae60ba74371b5ac554e6afd5512f77`
+- **Parent Commit**: `ecd42b60278843ddbd57aa7d185b03cc8a1de39a`
 - **GP-023 Status**: `CLOSED / EXTERNALLY APPROVED / FROZEN`
 - **Migration 0012 Git Blob**: `e80c30ae9d0f86e14486b0fd5c782eb9ec3f7119` (Frozen)
 - **Migration 0013 Status**: Non-existent (Migration sequence strictly preserved through 0012)
-- **Infrastructure Status**: Hosted Supabase and Cloudflare R2 remain 100% untouched.
+- **Hosted Supabase Status**: No repository/CI evidence of hosted mutation; Antigravity execution reports no hosted access.
+- **Cloudflare R2 Status**: No repository/CI evidence of R2 mutation; Antigravity execution reports no R2 access.
 
 ---
 
@@ -31,12 +32,13 @@ GP-024 implements administrative catalog authoring for Gamer Perú, providing au
 
 1. **Product Authoring**: Creation, updating, drafting, archiving, and duplicating of conceptual hardware models (`products`).
 2. **Variant & SKU Management**: Authoring and configuring concrete sellable items (`product_variants`), SKUs, integer prices in Soles cents (`PEN`), compare-at prices, cost prices, physical weights, and swatch attributes.
-3. **Media Management**: Attaching, ordering, designating primary images, linking variant-specific images, and alt text authoring backed by Cloudflare R2 public storage (`media_assets`, `product_media`), conforming to ADR-004.
-4. **Category Specifications**: Linking and validating dynamic hardware technical specifications against versioned category schemas (`product_specifications`, `category_specification_schemas`) using the authoritative `Category.current_spec_schema_id` pointer.
-5. **SEO & Metadata**: Authoring/deriving product slugs, meta descriptions, OpenGraph tags, and Schema.org structured data inputs.
-6. **Status Lifecycle**: Managing state transitions between `DRAFT`, `PUBLISHED`, and `ARCHIVED` with fail-closed publish validation.
-7. **RBAC & Auditing**: Authoritative server-side permission enforcement (`catalog:manage` for authoring, `catalog:publish` for publishing/unpublishing/archiving published products) and immutable audit trail generation (`audit_events`).
-8. **Admin UX**: Product list, search, filter, pagination, creation flow, and comprehensive product editor.
+3. **Exact Monetary Lifecycle**: Integer minor-unit arithmetic in Peruvian Soles (`PEN`), exact decimal string parsing (`parsePenInputToCents`), zero floating-point scaling, and exact display formatting (`formatCentsToPen`).
+4. **Media Management & Staging Pipeline**: Stateless server-signed upload intents, private R2 staging bucket (`R2_CATALOG_STAGING_BUCKET`), server-side WebP normalization, SHA-256 content-hashed canonical keys in public media storage (`R2_PUBLIC_MEDIA_BUCKET`), and relational integrity enforcement (`media_assets`, `product_media`), strictly conforming to ADR-004.
+5. **Category Specifications**: Linking and validating dynamic hardware technical specifications against versioned category schemas (`product_specifications`, `category_specification_schemas`) using the authoritative `Category.current_spec_schema_id` pointer, with deterministic decimal rational step validation.
+6. **SEO & Metadata**: Authoring/deriving product slugs, meta descriptions, OpenGraph tags, and Schema.org structured data inputs.
+7. **Status Lifecycle**: Managing state transitions between `DRAFT`, `PUBLISHED`, and `ARCHIVED` with fail-closed publish validation.
+8. **RBAC & Auditing**: Authoritative server-side permission enforcement (`catalog:manage` for authoring, `catalog:publish` for publishing/unpublishing/archiving published products) and durable replay tracking via `audit_events`.
+9. **Admin UX**: Product list with multi-location fan-out pre-aggregation, search, filter, deterministic pagination, creation flow, and comprehensive multi-tab product editor.
 
 ### Explicitly Out of Scope
 
@@ -85,15 +87,15 @@ Based on the physical Drizzle schema at [`src/db/schema/catalog/products.ts`](..
 | `slug`             | `varchar(200)`   | `string`                               | Required            | None               | `UNIQUE`, check `^[a-z0-9]+(?:-[a-z0-9]+)*$`        | Valid physical regex, globally unique     | Canonical URL `/productos/[slug]`. Changing breaks existing URLs! |
 | `subtitle`         | `varchar(255)`   | `string \| null`                       | Optional            | `null`             | Gin trigram index `products_subtitle_trgm_idx`      | Optional trimmed string, $\le 255$ chars  | PDP subtitle, 1st priority for SEO meta description               |
 | `description`      | `text`           | `string \| null`                       | Optional            | `null`             | None                                                | Optional string                           | PDP editorial markdown, 2nd priority for SEO meta description     |
-| `status`           | `catalog_status` | `"DRAFT" \| "PUBLISHED" \| "ARCHIVED"` | Required            | `"DRAFT"`          | Enum `catalog_status`, index `(status, isFeatured)` | Transition gated (Section 6)              | Public visibility. Only `PUBLISHED` appears on storefront         |
+| `status`           | `catalog_status` | `"DRAFT" \| "PUBLISHED" \| "ARCHIVED"` | Required            | `"DRAFT"`          | Enum `catalog_status`, index `(status, isFeatured)` | Transition gated (Section 8)              | Public visibility. Only `PUBLISHED` appears on storefront         |
 | `is_featured`      | `boolean`        | `boolean`                              | Required            | `false`            | Index `(status, isFeatured)`                        | Boolean                                   | Determines homepage / showcase hero prominence                    |
-| `primary_media_id` | `uuid`           | `string \| null`                       | Optional            | `null`             | FK $\to$ `media_assets.id` (`ON DELETE SET NULL`)   | Same-product global media (Section 9)     | Primary thumbnail, PDP hero fallback, OpenGraph social image      |
+| `primary_media_id` | `uuid`           | `string \| null`                       | Optional            | `null`             | FK $\to$ `media_assets.id` (`ON DELETE SET NULL`)   | Same-product global media (Section 11)    | Primary thumbnail, PDP hero fallback, OpenGraph social image      |
 | `created_at`       | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | B-Tree in pagination indexes                        | Immutable (system managed)                | Sorting by creation date                                          |
 | `updated_at`       | `timestamptz`    | `Date`                                 | Required            | `NOW()`            | `$onUpdateFn(() => new Date())`                     | Used for optimistic concurrency check     | Concurrency conflict detection                                    |
 
 ### Clarification on Physical vs Application Validation
 
-- The physical schema enforces `name: varchar(200) NOT NULL`. It does NOT enforce a minimum length. The application validation contract requires a trimmed non-empty string ($\le 200$ characters). (Invented restrictions such as `name.length >= 3` are removed).
+- The physical schema enforces `name: varchar(200) NOT NULL`. It does NOT enforce a minimum length in SQL. The application validation contract requires a trimmed non-empty string ($\le 200$ characters). (Invented restrictions such as `name.length >= 3` are removed).
 - Zero pricing fields exist on `products`. Pricing belongs strictly to `product_variants`.
 - Zero separate `seo_title` or `seo_description` columns exist. PDP SEO derives metadata dynamically.
 - Zero `deleted_at` column exists; soft-deletion is represented strictly by `status = 'ARCHIVED'`.
@@ -111,8 +113,8 @@ Based on the physical Drizzle schema at [`src/db/schema/catalog/product-variants
 | `sku`                    | `varchar(50)`    | `string`                               | Required            | None               | `UNIQUE` index `product_variants_sku_idx`    | Trimmed non-empty string, $\le 50$ chars, globally unique | Machine inventory identifier, order snapshot identifier  |
 | `title`                  | `varchar(150)`   | `string`                               | Required            | None               | `NOT NULL`                                   | Trimmed non-empty string, $\le 150$ chars                 | Swatch title (e.g. "Negro / Omron Optical")              |
 | `price_cents`            | `integer`        | `number`                               | Required            | None               | Check `price_cents > 0`                      | Integer Soles minor units $> 0$, $\le 2147483647$         | Authoritative selling price in Peruvian Soles (`PEN`)    |
-| `compare_at_price_cents` | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR >= 0`                      | Integer Soles minor units $\ge 0$                         | Strikethrough original price                             |
-| `cost_cents`             | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR >= 0`                      | Integer Soles minor units $\ge 0$                         | Wholesale cost for internal margin tracking (staff only) |
+| `compare_at_price_cents` | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR >= 0`                      | Integer Soles minor units $\ge 0$, $\le 2147483647$       | Strikethrough original price                             |
+| `cost_cents`             | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR >= 0`                      | Integer Soles minor units $\ge 0$, $\le 2147483647$       | Wholesale cost for internal margin tracking (staff only) |
 | `weight_grams`           | `integer`        | `number \| null`                       | Optional            | `null`             | Check `IS NULL OR > 0`                       | Integer grams $> 0$                                       | Physical product weight for shipping/specs               |
 | `attributes`             | `jsonb`          | `Record<string, string>`               | Required            | `{}`               | `NOT NULL`, default `{}`                     | Plain JSON object of key-value string swatches            | Color, switch, layout attributes                         |
 | `status`                 | `variant_status` | `"ACTIVE" \| "INACTIVE" \| "ARCHIVED"` | Required            | `"ACTIVE"`         | Enum `variant_status`                        | Enum value                                                | Sellability condition. Must be `ACTIVE` to buy           |
@@ -159,7 +161,183 @@ $$\text{Sellable SKU} \iff (\text{Product.status} = \text{'PUBLISHED'} \land \te
 
 ---
 
-## 6. Product Status Lifecycle & Hard Delete Prohibition
+## 6. Money & PEN Input/Display Contract
+
+GP-024 directly authors integer monetary values for `product_variants.price_cents`, `compare_at_price_cents`, and `cost_cents`. Exact minor-unit integer semantics must be strictly enforced.
+
+### Physical Truth
+
+- `price_cents`: PostgreSQL `INTEGER` $> 0$ (check `price_cents > 0`).
+- `compare_at_price_cents`: PostgreSQL `INTEGER` nullable, `NULL` or $\ge 0$ (check `IS NULL OR >= 0`).
+- `cost_cents`: PostgreSQL `INTEGER` nullable, `NULL` or $\ge 0$ (check `IS NULL OR >= 0`).
+- Maximum storable value: `2147483647` cents (signed 32-bit integer).
+- Canonical currency: Peruvian Soles (`PEN`).
+- **Zero binary floating-point arithmetic is allowed for monetary input scaling.**
+
+### Exact PEN Input Parsing (`parsePenInputToCents`)
+
+The authoritative input to the parser is a **STRING** (never start from a JavaScript `number`):
+
+```typescript
+function parsePenInputToCents(
+  rawInput: string,
+  field: "price_cents" | "compare_at_price_cents" | "cost_cents"
+): number | null;
+```
+
+#### Accepted Decimal Syntax
+
+- Digits, or digits `.` one-or-two decimal digits (e.g. `"129"`, `"129.9"`, `"129.90"`, `"0"`, `"0.50"`).
+- An optional leading `"S/"` or `"s/"` plus arbitrary whitespace is trimmed/normalized.
+- **Strict Comma Rejection**: Ambiguous comma notation (e.g. `"129,90"`) is **strictly rejected**. The parser will never guess whether comma means decimal point or thousands separator.
+- Thousand separators are not required and are not accepted in raw editable Admin inputs.
+
+#### Exact Parsing Algorithm
+
+1. Trim leading and trailing whitespace.
+2. Remove optional leading `"S/"` or `"s/"` and trim again.
+3. If empty/blank:
+   - For `compare_at_price_cents` or `cost_cents`: Return `null`.
+   - For `price_cents`: Reject as missing required price.
+4. Validate string against exact regex: `^\d+(?:\.\d{1,2})?$`. If not matching, reject with `INVALID_MONEY_SYNTAX`.
+5. Split by `"."` into `wholePartStr` and optional `fractionPartStr`.
+6. Pad `fractionPartStr` to exactly 2 digits:
+   - If omitted: `"00"`
+   - If 1 digit (e.g. `"9"`): `"90"`
+   - If 2 digits (e.g. `"90"`): `"90"`
+7. Convert both parts to `BigInt`:
+   $$\text{totalCents} = (\text{BigInt}(\text{wholePartStr}) \times 100\text{n}) + \text{BigInt}(\text{fractionPartPadded})$$
+8. Apply field-specific range validation while still `BigInt`:
+   - `price_cents`: Require $\text{totalCents} \ge 1\text{n}$.
+   - `compare_at_price_cents`: Require $\text{totalCents} \ge 0\text{n}$.
+   - `cost_cents`: Require $\text{totalCents} \ge 0\text{n}$.
+9. Check PostgreSQL `INTEGER` (int32) boundary:
+   $$\text{totalCents} \le 2147483647\text{n}$$
+   If exceeded, reject with `MONEY_VALUE_EXCEEDS_MAX_INT32`.
+10. **Only after proving int32 safety**, convert to JavaScript Number:
+    $$\text{Number}(\text{totalCents})$$
+    (Every int32 value from $0$ to $2,147,483,647$ is exactly representable in JavaScript IEEE-754 double precision without precision loss).
+
+#### Strictly Forbidden in Monetary Code
+
+- `parseFloat(...)`
+- `Number(rawInput) * 100`
+- `Math.round(parsedFloat * 100)`
+- `toFixed(...)` as authoritative parsing
+- Any binary floating-point multiplication/division for currency scaling.
+
+### Field-Specific Money Rules
+
+1. `price_cents`: Must be $\ge 1\text{n}$ before conversion. Required.
+2. `compare_at_price_cents`: Blank $\to$ `null`. Non-blank $\to 0\text{n} \le \text{cents} \le 2147483647\text{n}$.
+3. `cost_cents`: Blank $\to$ `null`. Non-blank $\to 0\text{n} \le \text{cents} \le 2147483647\text{n}$.
+   - The `price_cents > 0` rule is never applied to optional cost/compare-at fields.
+   - `cost_cents` is internal staff data; it is **never exposed** in public storefront GraphQL/REST/SSR payloads.
+
+### Exact Money Display Formatting
+
+authoritative display formatting reuses the existing BigInt-safe:
+$$\text{formatCentsToPen(cents: bigint)}$$
+located in [`src/lib/admin/dashboard-format.ts`](../../src/lib/admin/dashboard-format.ts).
+
+For physical int32 `ProductVariant` values:
+
+```typescript
+formatCentsToPen(BigInt(priceCents));
+```
+
+- Never format authoritative money by dividing a Number by 100 in ad-hoc strings.
+- Canonical display examples:
+  - `12990` $\to$ `"S/ 129.90"`
+  - `1` $\to$ `"S/ 0.01"`
+  - `0` $\to$ `"S/ 0.00"`
+  - `2147483647` $\to$ `"S/ 21,474,836.47"`
+
+---
+
+## 7. Category Specifications & Deterministic Step Validation
+
+Hardware attributes are structured dynamically per category using PostgreSQL `JSONB` in `product_specifications`, validated against versioned schemas in `category_specification_schemas`.
+
+### Canonical Schema Selection via Category Pointer
+
+The physical `categories` table contains:
+$$\text{categories.current\_spec\_schema\_id}$$
+
+This column is the single source of truth for the category's active specification schema.
+
+**Canonical Selection Workflow**:
+
+1. Read `Product.category_id`.
+2. Read `Category.current_spec_schema_id`.
+3. If `current_spec_schema_id IS NULL`: The category currently has no authoritative specification schema. Technical specifications are not applicable and are not a publish blocker.
+4. If `current_spec_schema_id IS NOT NULL`: Fetch exactly that `CategorySpecificationSchema` record by ID.
+5. Fail closed unless all integrity conditions are met:
+   - `schema.id == category.current_spec_schema_id`
+   - `schema.category_id == category.id`
+   - `schema.is_active == true`
+   - `schema.schema_version > 0`
+   - `schema.field_definitions` passes `validateSpecificationFieldDefinitions(...)` (`src/lib/discovery-filters/schema-validation.ts`).
+6. If the pointer is missing, inactive, mismatched, or invalid, the system halts with:
+   $$\text{SPECIFICATION\_SCHEMA\_INTEGRITY\_ERROR}$$
+   The system will never silently discover or fall back to an arbitrary active schema.
+
+### Application-Level Specification Value Validator
+
+`validateSpecificationFieldDefinitions(...)` validates category schema field definitions, **NOT** product specification values. GP-024 defines the application-level helper:
+$$\text{validateProductSpecificationValues(validatedFieldDefinitions, rawSpecValues)}$$
+
+**Required Validation Behavior**:
+
+1. `rawSpecValues` must be a plain JSON object (`Record<string, unknown>`).
+2. **Strict Key Allowlist**: Every persisted key must match a declared `field.key` in the validated `fieldDefinitions`. Any unknown key causes immediate validation **REJECTION**.
+3. **Typed Non-Null Value Validation**: For each present non-null value:
+   - **`dataType: "enum"`**: Must be a string matching one declared `options[].value`.
+   - **`dataType: "boolean"`**: Must be boolean.
+   - **`dataType: "string"`**: Must be a string.
+   - **`dataType: "number"`**: Must be a finite number.
+     - If `min` is defined: $\text{value} \ge \text{min}$.
+     - If `max` is defined: $\text{value} \le \text{max}$.
+     - If `step` is defined: Must pass the **Deterministic Rational Step Validation** defined below.
+4. **Deterministic Decimal Rational Step Validation**:
+   - Floating-point modulo and arbitrary epsilon thresholds (e.g. `1e-9`) are **strictly prohibited**.
+   - **Canonical Step Base**:
+     $$\text{base} = \begin{cases} \text{field.min} & \text{if field.min is defined} \\ 0 & \text{otherwise} \end{cases}$$
+   - **Required Semantic**: $(\text{value} - \text{base})$ must be an exact integer multiple of `step`.
+   - **Rational Normalization Algorithm (`decimalToIntegerAndScale`)**:
+     1. Convert `value.toString()`, `base.toString()`, and `step.toString()` to exact decimal components, handling ordinary decimal notation and scientific exponent notation (`Number.toString()`).
+     2. Count decimal places for all three numbers and determine the maximum scale:
+        $$\text{maxScale} = \max(\text{scale}(\text{value}), \text{scale}(\text{base}), \text{scale}(\text{step}))$$
+     3. Scale `value`, `base`, and `step` to `BigInt` integers using $10^{\text{maxScale}}$:
+        - $\text{valueInt} = \text{toBigInt}(\text{value}, \text{maxScale})$
+        - $\text{baseInt} = \text{toBigInt}(\text{base}, \text{maxScale})$
+        - $\text{stepInt} = \text{toBigInt}(\text{step}, \text{maxScale})$
+     4. Require $\text{stepInt} > 0\text{n}$.
+     5. Enforce exact integer divisibility:
+        $$(\text{valueInt} - \text{baseInt}) \pmod{\text{stepInt}} == 0\text{n}$$
+   - **Validated Test Cases**:
+     - `min=0, step=0.1, value=0.3` $\to$ **Valid** $((3 - 0) \pmod 1 == 0)$
+     - `min=0.1, step=0.2, value=0.5` $\to$ **Valid** $((5 - 1) \pmod 2 == 0)$
+     - `min undefined, step=5, value=15` $\to$ **Valid** $(\text{base}=0, (15 - 0) \pmod 5 == 0)$
+     - `min undefined, step=5, value=12` $\to$ **Invalid** $(\text{base}=0, 12 \pmod 5 == 2 \neq 0)$
+     - `min=10, step=5, value=15` $\to$ **Valid** $((15 - 10) \pmod 5 == 0)$
+5. **Null / Unset Semantics**:
+   - `null` or `undefined` is treated as unset/missing.
+   - `null` is never treated as a valid typed value satisfying a field.
+   - Unset keys are normalized out before persisting to `product_specifications.spec_values`.
+6. **No Invented "Required" Fields**:
+   - In the physical schema, `SpecificationFieldDefinition` has **NO `required` property**.
+   - If `Category.current_spec_schema_id` is non-null: `ProductSpecifications` must reference that current schema, and every _present_ value must pass type validation. Missing specification keys are permitted.
+7. **Transactional Category Change Reconciliation**:
+   - When `product.category_id` is changed, the specification link must be reconciled in the same transaction:
+   - Resolve the new `Category.current_spec_schema_id`.
+   - If `NULL`: Delete the existing `ProductSpecifications` record.
+   - If non-null: Replace `ProductSpecifications` with a record referencing the new schema and empty `spec_values = {}`, unless new values were validated against that new schema in the same request.
+   - **Invariant**: Old-category `spec_values` are never retained under a new Category.
+
+---
+
+## 8. Product Status Lifecycle & Hard Delete Prohibition
 
 The physical enum is `catalog_status`: `"DRAFT"`, `"PUBLISHED"`, `"ARCHIVED"`.
 
@@ -189,7 +367,7 @@ stateDiagram-v2
 2. **Draft Editing**: While in `DRAFT`, fields may be edited freely without blocking publish validation.
 3. **Publish Transition (`DRAFT -> PUBLISHED` or `ARCHIVED -> PUBLISHED`)**:
    - Strictly requires `catalog:publish`.
-   - Executes the fail-closed Publish Readiness Validator (Section 8). If any hard blocker fails, the transaction aborts.
+   - Executes the fail-closed Publish Readiness Validator (Section 9). If any hard blocker fails, the transaction aborts.
 4. **Unpublish Transition (`PUBLISHED -> DRAFT`)**:
    - Strictly requires `catalog:publish`.
    - Product immediately disappears from public storefront, search results, category pages, and PDP routes.
@@ -202,65 +380,7 @@ stateDiagram-v2
 
 ---
 
-## 7. Category Specifications Contract & Value Validation
-
-Hardware attributes are structured dynamically per category using PostgreSQL `JSONB` in `product_specifications`, validated against versioned schemas in `category_specification_schemas`.
-
-### Canonical Schema Selection via Category Pointer
-
-The physical `categories` table contains the column:
-$$\text{categories.current\_spec\_schema\_id}$$
-
-This column is the single source of truth for the category's active specification schema.
-
-**Canonical Admin Selection Workflow**:
-
-1. Read `Product.category_id`.
-2. Read `Category.current_spec_schema_id`.
-3. If `current_spec_schema_id IS NULL`: The category currently has no authoritative specification schema. Technical specifications are not applicable and are not a publish blocker.
-4. If `current_spec_schema_id IS NOT NULL`: Fetch exactly that `CategorySpecificationSchema` record by ID.
-5. Fail closed unless all integrity conditions are met:
-   - `schema.id == category.current_spec_schema_id`
-   - `schema.category_id == category.id`
-   - `schema.is_active == true`
-   - `schema.schema_version > 0`
-   - `schema.field_definitions` passes `validateSpecificationFieldDefinitions(...)` (`src/lib/discovery-filters/schema-validation.ts`).
-6. If the pointer is missing, inactive, mismatched, or invalid, the system halts with:
-   $$\text{SPECIFICATION\_SCHEMA\_INTEGRITY\_ERROR}$$
-   The system will never silently discover or fall back to an arbitrary active schema.
-
-### Application-Level Specification Value Validator
-
-`validateSpecificationFieldDefinitions(...)` validates category schema field definitions, **NOT** product specification values. GP-024 defines a new application-level helper:
-$$\text{validateProductSpecificationValues(validatedFieldDefinitions, rawSpecValues)}$$
-
-**Required Validation Behavior**:
-
-1. `rawSpecValues` must be a plain JSON object (`Record<string, unknown>`).
-2. **Strict Key Allowlist**: Every persisted key must match a declared `field.key` in the validated `fieldDefinitions`. Any unknown key causes immediate validation **REJECTION**.
-3. **Typed Non-Null Value Validation**: For each present non-null value:
-   - **`dataType: "enum"`**: Must be a string matching one declared `options[].value`.
-   - **`dataType: "number"`**: Must be a finite number. If `min` is defined, $\text{value} \ge \text{min}$. If `max` is defined, $\text{value} \le \text{max}$. If `step` is defined, $(\text{value} - \text{min}) \pmod{\text{step}} = 0$ within floating tolerance.
-   - **`dataType: "boolean"`**: Must be boolean.
-   - **`dataType: "string"`**: Must be a string.
-4. **Null / Unset Semantics**:
-   - `null` or `undefined` is treated as unset/missing.
-   - `null` is never treated as a valid typed value satisfying a field.
-   - Unset keys are normalized out before persisting to `product_specifications.spec_values`.
-5. **No Invented "Required" Fields**:
-   - In the current schema, `SpecificationFieldDefinition` has **NO `required` property**.
-   - GP-024 v1 cannot truthfully enforce "all required fields".
-   - If `Category.current_spec_schema_id` is non-null: `ProductSpecifications` must reference that current schema, and every _present_ value must pass type validation. Missing specification keys are permitted.
-6. **Transactional Category Change Reconciliation**:
-   - When `product.category_id` is changed, the specification link must be reconciled in the same transaction:
-   - Resolve the new `Category.current_spec_schema_id`.
-   - If `NULL`: Delete the existing `ProductSpecifications` record.
-   - If non-null: Replace `ProductSpecifications` with a record referencing the new schema and empty `spec_values = {}`, unless new values were validated against that new schema in the same request.
-   - **Invariant**: Old-category `spec_values` are never retained under a new Category.
-
----
-
-## 8. Corrected Publish Readiness Validator Contract
+## 9. Corrected Publish Readiness Validator Contract
 
 Before a product can transition to `PUBLISHED`, the system executes the Publish Readiness Validator.
 
@@ -274,7 +394,7 @@ Before a product can transition to `PUBLISHED`, the system executes the Publish 
    - At least **ONE** `ProductVariant` with `status = 'ACTIVE'`.
    - Each active variant must have:
      - Trimmed non-empty `sku` $\le 50$ chars, globally unique.
-     - `price_cents > 0`.
+     - `price_cents > 0` (parsed via exact money parser).
      - Valid `attributes` object conforming to GP-024 validation.
 6. **Specification Integrity**:
    - If `Category.current_spec_schema_id IS NOT NULL`:
@@ -286,7 +406,7 @@ Before a product can transition to `PUBLISHED`, the system executes the Publish 
      - Specifications do not block publishing.
 7. **Media Integrity**:
    - At least **ONE** valid `PUBLIC_MEDIA` image belonging to the Product must exist (`products.primary_media_id` or `product_media` global image).
-   - Must satisfy all media relational integrity checks (Section 9).
+   - Must satisfy all media relational integrity checks (Section 11).
 
 ### Soft Quality Warnings (Informational; do NOT block publish)
 
@@ -298,7 +418,65 @@ Before a product can transition to `PUBLISHED`, the system executes the Publish 
 
 ---
 
-## 9. Media Relational Integrity Contract
+## 10. Durable Replay Identity & Transactional Audit Replay
+
+### Architectural Separation: Concurrency Lock vs Durable Memory
+
+- **PostgreSQL Advisory Lock (`pg_advisory_xact_lock`)**: Serializes concurrent requests attempting the same logical operation. It releases automatically when the transaction completes and **does NOT remember past mutations**.
+- **Transactional AuditEvent Replay Marker**: Serves as the durable, committed record of completion. Because catalog mutations and their associated `audit_events` row execute in the **exact same PostgreSQL transaction**, an operation's completion is atomically recorded without requiring a schema migration.
+
+### Canonical Mutation Request Digest
+
+For replay-sensitive mutations (Create Product, Create Variant, Duplicate Product, Media Finalization):
+
+1. The browser generates a high-entropy UUIDv4/UUIDv7 `mutationRequestId` once per logical operation, reused strictly for network/application retries of that exact request.
+2. The server computes the canonical digest using unambiguous structured encoding:
+   $$\text{digestInput} = \text{"v1|" } + \text{len(actorId)} + \text{":"} + \text{actorId} + \text{"|" } + \text{len(opType)} + \text{":"} + \text{opType} + \text{"|" } + \text{mutationRequestId}$$
+   $$\text{mutationRequestDigest} = \text{SHA-256}(\text{digestInput})$$
+3. Raw client tokens or secrets are never logged or persisted.
+
+### Durable Replay Lookup Workflow
+
+After authentication, permission verification, transaction start, and advisory lock acquisition, but **BEFORE** performing any business mutation:
+
+1. Query committed `audit_events` for:
+   - `actor_id == verifiedActorId`
+   - `action == expectedCatalogAction`
+   - `metadata->>'mutation_request_digest' == mutationRequestDigest`
+2. **If a matching committed AuditEvent is found**:
+   - Verify `target_type` matches the expected entity type.
+   - Load the entity by `target_id` from the database.
+   - Verify the loaded entity is consistent with the replayed operation.
+   - Return the existing committed result.
+   - **Perform ZERO new business mutations and append ZERO duplicate AuditEvents.**
+3. **Replay Integrity Failure**:
+   - If an audit marker exists but the target entity is missing or inconsistent, fail closed immediately with:
+     $$\text{CATALOG\_REPLAY\_INTEGRITY\_ERROR}$$
+   - The system will never silently recreate a replacement object.
+
+### Operation-Specific Replay Behaviors
+
+- **Create Product**:
+  - Replay marker resolves the exact created `Product`.
+  - A different logical operation attempting the same slug returns `SLUG_CONFLICT`.
+- **Create Variant**:
+  - Replay marker resolves the exact created `ProductVariant`.
+  - A different logical operation attempting the same SKU returns `SKU_CONFLICT`.
+- **Duplicate Product**:
+  - Target duplicate slug is derived deterministically from:
+    $$\text{hash}(sourceProductId, verifiedActorId, mutationRequestDigest)$$
+  - AuditEvent records `source_product_id` and target `product_id`.
+  - On retry, verifies source matches, target exists, and returns the target without generating `-copy-1`, `-copy-2`.
+- **Status Transitions (Publish, Unpublish, Archive, Restore)**:
+  - If already at target status, returns an idempotent `NO-OP` without appending duplicate audit events.
+  - If a replay marker exists, returns the committed result after re-verifying current authorization.
+- **Media Finalization**:
+  - Replay marker binds `actor_id`, `action`, target `product_id`, and `mutationRequestDigest`.
+  - Same logical retry returns the committed attachment without duplicate `product_media` joins.
+
+---
+
+## 11. Media Relational Integrity Contract
 
 The physical `product_media` table defines independent foreign keys:
 
@@ -328,7 +506,7 @@ However, the physical schema lacks a composite foreign key guaranteeing that `pr
 
 ---
 
-## 10. Duplicate Product — Variant Media Remapping
+## 12. Duplicate Product — Variant Media Remapping
 
 When staff duplicates a product, media relationships must be remapped safely:
 
@@ -352,7 +530,7 @@ When staff duplicates a product, media relationships must be remapped safely:
 
 ---
 
-## 11. Shared Media & Alt Text Semantics
+## 13. Shared Media & Alt Text Semantics
 
 - **Asset-Level Metadata**: In the physical schema, `alt_text` resides on `media_assets.alt_text`. It is **NOT** stored per `product_media` join row.
 - **Shared Reference Impact**: When a `MediaAsset` is reused across multiple products (e.g. via product duplication or shared brand imagery), all referencing products share the exact same `alt_text`.
@@ -363,80 +541,77 @@ When staff duplicates a product, media relationships must be remapped safely:
 
 ---
 
-## 12. Public Media Pipeline & ADR-004 Alignment
+## 14. Media Architecture: Private Staging & Signed Intent Security
 
-In strict adherence to accepted **ADR-004**:
+### The Unverified Upload Threat Boundary
 
-### Canonical Storage Identity
+Raw unverified bytes from browser uploads must **NEVER** be placed into the public catalog delivery bucket (`gamerperu-public-media` / `media.gamerperu.com`). Unvalidated binaries could otherwise be served directly via CDN before validation or transformation.
 
-- **Incoming Image Formats**: `image/jpeg`, `image/png`, `image/webp`, `image/avif`.
-- **Maximum Incoming Size**: 10 MiB (enforced as a GP-024 application limit, not a database constraint).
-- **Transformation to Canonical Format**:
-  - Before a `MediaAsset` becomes canonical, the uploaded image must be converted to **actual WebP bytes**.
-  - Merely renaming a file extension to `.webp` while keeping JPEG/PNG bytes is strictly forbidden.
-- **Canonical Content-Hashed Object Key**:
-  $$\text{products/}\{brandSlug\}/\{productSlug\}/\{sha256\}.\text{webp}$$
-  Where `{sha256}` is the lowercase hexadecimal SHA-256 hash of the final WebP bytes.
-- **Temporary Upload Separation**:
-  - Temporary uploads from browser pre-signed PUTs are stored under a dedicated temporary prefix:
-    $$\text{temp/uploads/}\{actorId\}/\{intentId\}.\text{tmp}$$
-  - Temporary objects are **NOT** registered as `media_assets`.
-  - Temporary objects have bounded lifecycle cleanup semantics.
+### Infrastructure Classification & Private Staging Bucket
 
----
+- **Security Class**: `PRIVATE / NON-PUBLIC STAGING`
+- **Dedicated Private Bucket Configuration**:
+  $$\text{R2\_CATALOG\_STAGING\_BUCKET}$$
+  _(Logical reference name: `gamerperu-catalog-staging-private`)_
+- **Staging Bucket Properties**:
+  - No public custom domain.
+  - No anonymous public read.
+  - No directory listing.
+  - Accessible strictly via short-lived presigned upload URLs and server-side credentials.
+  - Bounded lifecycle cleanup rules (e.g. 24-hour auto-deletion of expired staging objects).
+  - **Strict Boundary**: Payment voucher buckets (`gamerperu-private-proofs`) are **never reused**. Catalog staging and customer payment evidence remain completely segregated.
+- **Infrastructure Result**:
+  $$\mathbf{R2\_STAGING\_INFRA\_REQUIRED: YES}$$
+  _(PostgreSQL schema change remains `NO`. Staging bucket provisioning is an R2 cloud infrastructure requirement deferred to the implementation/infrastructure gate)._
 
-## 13. Media Upload Intent & Finalization Security
+### Stateless Server-Signed Upload Intent Token
 
-The browser runtime is treated as untrusted presentation.
+To eliminate database overhead for uncompleted uploads, upload intents use stateless, server-signed tokens:
 
-### Upload Lifecycle
+- **Dedicated Server Secret**: `CATALOG_MEDIA_INTENT_HMAC_SECRET` (minimum 32 bytes, required fail-closed outside deterministic test environments, never exposed to client, never logged).
+- **Token Payload**:
+  ```json
+  {
+    "version": 1,
+    "intentId": "01918a2b-...",
+    "verifiedActorId": "usr_...",
+    "productId": "prd_...",
+    "stagingObjectKey": "temp/catalog/01918a2b-...",
+    "expectedIncomingMimeType": "image/webp",
+    "maximumBytes": 10485760,
+    "issuedAt": 1725312000,
+    "expiresAt": 1725312600
+  }
+  ```
+- **Staging Object Key**: Opaque non-PII format: `temp/catalog/{intentId}`. Client cannot choose keys.
+- **Signature**: HMAC-SHA-256 over deterministic canonical JSON encoding of the payload.
 
-1. **Server-Generated Upload Intent**:
-   - Staff with `catalog:manage` requests an upload intent via a Server Action.
-   - The server binds:
-     - `actorId` (from verified JWT claims)
-     - `productId` (target product)
-     - `intentId` (UUIDv7)
-     - `tempObjectKey` (under `temp/uploads/...`)
-     - Allowed MIME types and size limit (10 MiB)
-     - Short expiration (10 minutes)
-   - Server returns the presigned R2 PUT URL. The browser cannot choose arbitrary keys.
-2. **Direct Browser Upload**:
-   - Browser uploads raw binary directly to R2 using the presigned PUT URL.
-3. **Server-Side Finalization Verification**:
-   - Browser invokes `finalizeMediaUpload({ intentId })`.
-   - Server verifies:
-     A. Intent is authentic, unexpired, and belongs to the current staff actor and target Product.
-     B. Performs `HEAD` against R2 to confirm the temporary object exists.
-     C. Confirms `Content-Length <= 10 MiB`.
-     D. Validates actual image bytes to reject MIME spoofing.
-     E. Normalizes image bytes to canonical WebP format.
-     F. Computes SHA-256 hash of final WebP bytes.
-     G. Constructs canonical key: `products/{brandSlug}/{productSlug}/{sha256}.webp`.
-     H. Copies/puts final WebP bytes to the canonical key in R2 and deletes the temporary object.
-     I. Registers `media_assets` and attaches `product_media` in a PostgreSQL transaction.
-   - Client-reported `fileSize`, `mimeType`, `width`, `height`, or `checksum` are **never trusted** without server verification.
+### Media Finalization Canonical Order
 
----
+When the browser requests finalization, it submits strictly `{ intentToken, mutationRequestId }`. The server executes:
 
-## 14. Media Failure & Orphan Cleanup
-
-Because PostgreSQL and Cloudflare R2 do not participate in a two-phase commit, compensating failure logic is enforced:
-
-1. **Temporary Upload Failure**:
-   - If the browser fails to upload or finalization is never called, temporary objects expire via R2 lifecycle rules or best-effort deletion.
-2. **Canonical Object Written but Database Transaction Fails**:
-   - If final WebP bytes are written to R2 but the PostgreSQL transaction fails, the server performs best-effort cleanup of the canonical object **only if** no other `media_assets` record references that key.
-3. **Attachment Removal & Reference-Aware Deletion**:
-   - Removing an image from a Product deletes the `product_media` row.
-   - The underlying `MediaAsset` and R2 object are **NOT** deleted immediately if any reference remains:
-     - `products.primary_media_id`
-     - `brands.logo_media_id`
-     - Other `product_media.media_asset_id` rows
-   - (Note: Product Story blocks store JSON payloads rather than DB foreign keys; do not assume automatic relational protection).
-4. **Default Safety Rule**:
-   - Prefer orphan retention over accidental deletion of an object that may still be referenced.
-   - Physical R2 deletion is performed only after a reference-aware orphan audit. Zero R2 operations are executed in CHK0-BR1.
+1. Verify staff authentication from JWT.
+2. Verify staff has `catalog:manage`.
+3. Verify `intentToken` HMAC signature in constant time using `CATALOG_MEDIA_INTENT_HMAC_SECRET`.
+4. Verify token `version == 1` and `expiresAt > serverTime`.
+5. Verify current `verifiedActorId == token.verifiedActorId`.
+6. Verify target `productId == token.productId` and product exists in database.
+7. Perform `HEAD` against `R2_CATALOG_STAGING_BUCKET` using `token.stagingObjectKey`.
+8. Read actual staging bytes server-side and verify `Content-Length <= 10 MiB`.
+9. Validate actual image bytes (magic bytes / header check) to reject MIME/extension spoofing.
+10. Normalize image bytes to **actual WebP format**.
+11. Derive image dimensions (`width`, `height`) from validated final image server-side.
+12. Compute SHA-256 hash of final WebP bytes.
+13. Construct canonical public object key:
+    $$\text{products/}\{brandSlug\}/\{productSlug\}/\{sha256\}.\text{webp}$$
+14. Write final WebP bytes to `R2_PUBLIC_MEDIA_BUCKET` (or confirm existence if content hash already exists).
+15. Start PostgreSQL transaction.
+16. Acquire advisory lock on `mutationRequestDigest` and check for existing durable replay marker.
+17. Enforce `product_media` variant ownership invariant.
+18. Create/reuse `media_assets` row and insert `product_media` join row.
+19. Append `audit_events` replay marker atomically.
+20. Commit PostgreSQL transaction.
+21. Best-effort delete private staging object from `R2_CATALOG_STAGING_BUCKET`.
 
 ---
 
@@ -444,11 +619,7 @@ Because PostgreSQL and Cloudflare R2 do not participate in a two-phase commit, c
 
 ### Query Fan-Out Elimination
 
-In the original CHK0 draft, joining `product_variants` and `inventory_items` directly created a Cartesian fan-out whenever variants had inventory across multiple locations.
-
-### Canonical Query Architecture
-
-The query pre-aggregates variants and inventory using CTEs / subqueries to guarantee mathematical correctness:
+Joining `product_variants` and `inventory_items` directly causes Cartesian fan-out when variants have inventory across multiple locations. The canonical query pre-aggregates variants and inventory using CTEs:
 
 ```sql
 WITH variant_summary AS (
@@ -515,34 +686,7 @@ LIMIT $5 OFFSET $6;
 
 ---
 
-## 16. Idempotency & Replay Contract
-
-### Replay Architecture
-
-1. **UUIDv7 is Not an Idempotency Mechanism**:
-   - Generating a random or timestamped UUIDv7 does not prevent double-submit duplication.
-   - Client-side button disabling is a UX affordance only, not authoritative replay protection.
-2. **Existing Idempotency Table**:
-   - The PostgreSQL `idempotency_keys` table uses an enum (`idempotency_operation_type`) that does not include catalog operations.
-   - That enum is **NOT** altered in GP-024 to preserve `SCHEMA_CHANGE_REQUIRED: NO`.
-3. **GP-024 Application-Level Replay Architecture**:
-   - **`mutationRequestId`**: Every replay-sensitive Admin submission generates a high-entropy `mutationRequestId` (UUID) in the browser, reused on network retry.
-   - **Advisory Lock Serialization**: Server computes a deterministic 64-bit integer hash from `(actorId, operationType, mutationRequestId)` and acquires a PostgreSQL transaction advisory lock:
-     ```sql
-     SELECT pg_advisory_xact_lock($1);
-     ```
-   - **Create Product**: Slug uniqueness is authoritative. If the same `mutationRequestId` retries, the server identifies the existing product and returns it. If a different operation collides on the same slug, it returns `SLUG_CONFLICT`.
-   - **Duplicate Product**: Target duplicate slug and suffix are derived deterministically from:
-     $$\text{hash}(sourceProductId, actorId, mutationRequestId)$$
-     Retrying the same request returns the existing duplicate rather than generating `-copy-1`, `-copy-2`, etc.
-   - **Create Variant**: SKU uniqueness is authoritative. Retrying the same mutation returns the existing variant.
-   - **Media Finalization**: Canonical content-hash `objectKey` provides stable identity. Reuses existing `MediaAsset` and avoids duplicate `product_media` joins.
-   - **Publish / Archive**: If already at target status, returns idempotent NO-OP without appending duplicate audit events.
-   - **Audit Trail**: Metadata records `mutation_request_digest` (SHA-256 of requestId), never raw auth tokens.
-
----
-
-## 17. Resolved Reference Data Boundary (Option A)
+## 16. Resolved Reference Data Boundary (Option A)
 
 > [!IMPORTANT]
 > **EXTERNALLY RESOLVED: OPTION A ADOPTED (NOT A MIGRATION)**
@@ -566,7 +710,7 @@ LIMIT $5 OFFSET $6;
 
 ---
 
-## 18. RBAC Permission & Navigation Alignment
+## 17. RBAC Permission & Navigation Alignment
 
 All actions use canonical permissions from [`src/lib/auth/rbac.ts`](../../src/lib/auth/rbac.ts):
 
@@ -584,7 +728,7 @@ All actions use canonical permissions from [`src/lib/auth/rbac.ts`](../../src/li
 
 ---
 
-## 19. AuditEvent Contract
+## 18. AuditEvent Contract
 
 Privileged catalog mutations append immutable records to `audit_events` within the same transaction:
 
@@ -593,7 +737,7 @@ Privileged catalog mutations append immutable records to `audit_events` within t
 - `action`: Canonical action string
 - `targetType`: `'product'`, `'product_variant'`, `'product_media'`, `'product_specifications'`
 - `targetId`: String representation of entity UUID
-- `metadata`: Sanitized JSON diffs (never raw binaries, tokens, or unredacted secrets)
+- `metadata`: Sanitized JSON diffs and `mutation_request_digest` (never raw binaries, tokens, or unredacted secrets)
 - `ipAddress`: Client IP from request headers
 - `requestId`: Correlation / request ID
 
@@ -601,7 +745,9 @@ Canonical actions: `catalog:product:create`, `catalog:product:update`, `catalog:
 
 ---
 
-## 20. Migration Readiness Analysis
+## 19. Migration & Infrastructure Readiness Analysis
+
+### PostgreSQL Database Schema Determination
 
 $$\mathbf{SCHEMA\_CHANGE\_REQUIRED: NO}$$
 
@@ -609,11 +755,19 @@ $$\mathbf{SCHEMA\_CHANGE\_REQUIRED: NO}$$
 
 - Physical `products`, `product_variants`, `media_assets`, `product_media`, `category_specification_schemas`, and `product_specifications` tables already exist in migrations 0000-0012.
 - `Category.current_spec_schema_id` already exists.
-- SKU immutability is enforced at the application/service layer using existing FK relationships.
-- Specification value validation is an application-level helper.
-- Media upload safety and WebP transformation use application/storage logic.
-- Idempotency uses application-level advisory locking and request digests.
+- Exact PEN money parsing and int32 range bounds are application-enforced.
+- Deterministic rational step validation is application-enforced.
+- Durable replay identity leverages existing `audit_events.metadata`.
+- SKU immutability is enforced at the application layer using existing FK relationships.
 - Reference taxonomy bootstrap is executed via a separate operational script, not a Drizzle migration.
+
+### Cloud Storage Infrastructure Determination
+
+$$\mathbf{R2\_STAGING\_INFRA\_REQUIRED: YES}$$
+
+- Dedicated private bucket `R2_CATALOG_STAGING_BUCKET` must be provisioned before real direct-upload media can be activated in production.
+- This is an external Cloudflare R2 infrastructure dependency, **NOT a PostgreSQL schema migration**.
+- No infrastructure mutations are executed during this documentation gate.
 
 ### Deferred Index Candidate
 
@@ -622,29 +776,29 @@ $$\mathbf{SCHEMA\_CHANGE\_REQUIRED: NO}$$
 
 ---
 
-## 21. Quality Gates & Freeze Verifications
+## 20. Quality Gates & Freeze Verifications
 
 1. **Migration 0012 Frozen**: Exact blob `e80c30ae9d0f86e14486b0fd5c782eb9ec3f7119`.
 2. **Zero Migration 0013**: Verified.
 3. **GP-023 Frozen**: Dashboard metrics and UI remain untouched.
 4. **GP-025 Not Begun**: AI Product Research remains untouched.
 5. **GP-026 Not Begun**: Product Story Builder remains untouched.
-6. **Hosted Supabase & Cloudflare R2**: 100% Untouched.
+6. **Hosted Supabase & Cloudflare R2**: Untouched (No repository/CI evidence of hosted mutation; Antigravity execution reports no hosted access).
 
 ---
 
-## 22. Implementation Test Plan Matrix
+## 21. Implementation Test Plan Matrix
 
-| Test Category             | Surface                                                 | Scope / Scenarios                                                                                                                                                                                                                                                                                                                                                |
-| :------------------------ | :------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unit Tests**            | `tests/unit/admin-catalog-*.test.ts`                    | - Money parsing: `parsePenInputToCents` edge cases.<br>- Value validator: `validateProductSpecificationValues` (type safety, enum checks, range checks, unknown key rejection, null normalization).<br>- Publish readiness: hard blockers vs soft warnings.<br>- Slug regex validation.<br>- Advisory lock key generation.                                       |
-| **RBAC Integration**      | `tests/unit/admin-catalog-rbac.test.ts`                 | - `CUSTOMER` / `ADMIN_ORDERS` denied access.<br>- `ADMIN_CATALOG` permitted to create, edit, duplicate.<br>- `catalog:publish` strictly required to publish, unpublish, or archive published product.                                                                                                                                                            |
-| **Live DB Integration**   | `tests/admin-integration/admin-product-manager.test.ts` | - Atomic creation of product + variant.<br>- SKU immutability enforcement when inventory/orders exist.<br>- Media ownership verification (`MEDIA_VARIANT_PRODUCT_MISMATCH`).<br>- Duplicate product with variant media remapping.<br>- Category change specification clearing.<br>- Product list query pre-aggregation (zero fan-out across multiple locations). |
-| **Admin Playwright E2E**  | `tests/e2e/admin-product-manager.spec.ts`               | - Complete product authoring flow: New Product $\to$ Variants $\to$ Media $\to$ Specs $\to$ Publish.<br>- Duplicate flow in UI.<br>- Archive / restore in UI.<br>- Form error validation & focus management.<br>- Automated Axe accessibility audit (0 violations).<br>- Responsive layout checks across mobile and desktop.                                     |
-| **Storefront Regression** | `tests/e2e/catalog-storefront-regression.spec.ts`       | - Published product appears on PDP and listings.<br>- Archived product returns 404.<br>- Inactive variant is not selectable/purchasable.                                                                                                                                                                                                                         |
+| Test Category             | Surface                                                 | Scope / Scenarios                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| :------------------------ | :------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unit Tests**            | `tests/unit/admin-catalog-*.test.ts`                    | - Exact PEN parsing: `parsePenInputToCents` (`"129.90"`, `"129"`, `"0.50"`, comma rejection, int32 boundary check, leading S/ normalization).<br>- Exact money display: `formatCentsToPen(BigInt(val))` boundaries.<br>- Rational step validation: `decimalToIntegerAndScale` (min=0 step=0.1, min=0.1 step=0.2, min undefined step=5, min=10 step=5).<br>- Value validator: `validateProductSpecificationValues` (type safety, enum checks, range checks, unknown key rejection, null normalization).<br>- Publish readiness: hard blockers vs soft warnings.<br>- Slug regex validation.<br>- Signed intent token HMAC verification.<br>- Digest generation and advisory lock hashing. |
+| **RBAC Integration**      | `tests/unit/admin-catalog-rbac.test.ts`                 | - `CUSTOMER` / `ADMIN_ORDERS` denied access.<br>- `ADMIN_CATALOG` permitted to create, edit, duplicate.<br>- `catalog:publish` strictly required to publish, unpublish, or archive published product.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Live DB Integration**   | `tests/admin-integration/admin-product-manager.test.ts` | - Atomic creation of product + variant + audit replay marker.<br>- Durable replay lookup on retry.<br>- SKU immutability enforcement when inventory/orders exist.<br>- Media ownership verification (`MEDIA_VARIANT_PRODUCT_MISMATCH`).<br>- Duplicate product with variant media remapping.<br>- Category change specification clearing.<br>- Product list query pre-aggregation (zero fan-out across multiple locations).                                                                                                                                                                                                                                                              |
+| **Admin Playwright E2E**  | `tests/e2e/admin-product-manager.spec.ts`               | - Complete product authoring flow: New Product $\to$ Variants $\to$ Media $\to$ Specs $\to$ Publish.<br>- Duplicate flow in UI.<br>- Archive / restore in UI.<br>- Form error validation & focus management.<br>- Automated Axe accessibility audit (0 violations).<br>- Responsive layout checks across mobile and desktop.                                                                                                                                                                                                                                                                                                                                                             |
+| **Storefront Regression** | `tests/e2e/catalog-storefront-regression.spec.ts`       | - Published product appears on PDP and listings.<br>- Archived product returns 404.<br>- Inactive variant is not selectable/purchasable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ---
 
-## 23. Conclusion & Gate Readiness
+## 22. Conclusion & Gate Readiness
 
-All 26 remediation requirements from CHK0-BR1 review have been resolved. The contract is 100% grounded in the physical database schema, ADR-004 storage architecture, and project security invariants. Zero unresolved decisions remain.
+All 29 contract and architecture requirements from CHK0, CHK0-BR1, and CHK0-BR2 have been resolved. The contract is 100% grounded in exact integer money semantics, physical schema truth, ADR-004 storage architecture, private media staging, and durable replay integrity. Zero unresolved contract decisions remain.
