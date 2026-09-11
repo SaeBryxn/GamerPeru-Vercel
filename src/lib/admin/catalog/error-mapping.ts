@@ -10,6 +10,12 @@ import {
 /**
  * Maps known domain errors to intentional Admin-facing feedback.
  * Pure synchronous mapping safe for client or server components.
+ *
+ * Strict fail-closed boundary:
+ * Only explicitly allowlisted canonical domain codes produce specific messages.
+ * Any unknown CatalogDomainError code, database error, internal exception, or
+ * arbitrary coded error returns generic sanitized UNKNOWN_ERROR behavior.
+ * Zero internal details, SQL, constraint names, or credentials are ever returned.
  */
 export function mapDomainErrorToUi(err: unknown): { error: string; code: string } {
   if (err instanceof CatalogIdempotencyConflictError) {
@@ -64,7 +70,7 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
         };
       case "INVALID_SKU":
         return {
-          error: "El SKU ingresado no es válido. Debe contener caracteres alfanuméricos válidos.",
+          error: "El SKU debe ser un texto no vacío de hasta 50 caracteres.",
           code: "INVALID_SKU",
         };
       case "INVALID_MONEY_SYNTAX":
@@ -79,12 +85,12 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
         };
       case "INVALID_PRICE":
         return {
-          error: "El precio debe ser un monto válido mayor o igual a cero.",
+          error: "El precio debe ser un monto válido mayor a cero.",
           code: "INVALID_PRICE",
         };
       case "INVALID_COMPARE_AT_PRICE":
         return {
-          error: "El precio de comparación debe ser mayor o igual al precio de venta.",
+          error: "El precio de comparación debe ser un monto válido mayor o igual a cero.",
           code: "INVALID_COMPARE_AT_PRICE",
         };
       case "INVALID_COST":
@@ -94,7 +100,7 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
         };
       case "INVALID_WEIGHT":
         return {
-          error: "El peso debe ser un número entero mayor o igual a cero en gramos.",
+          error: "El peso debe ser un número entero mayor a cero en gramos.",
           code: "INVALID_WEIGHT",
         };
       case "INVALID_STATUS_TRANSITION":
@@ -124,13 +130,13 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
         };
       case "INVALID_PRODUCT_NAME":
         return {
-          error: "El nombre del producto no puede estar vacío ni exceder 255 caracteres.",
+          error: "El nombre del producto no puede estar vacío ni exceder 200 caracteres.",
           code: "INVALID_PRODUCT_NAME",
         };
       case "INVALID_PRODUCT_SLUG":
         return {
           error:
-            "El slug del producto no es válido. Debe contener entre 3 y 200 caracteres en minúsculas, números y guiones.",
+            "El slug del producto no es válido. Debe contener hasta 200 caracteres en minúsculas, números y guiones.",
           code: "INVALID_PRODUCT_SLUG",
         };
       case "INVALID_BRAND":
@@ -159,25 +165,15 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
           code: "FORBIDDEN",
         };
       default:
+        // Fail-closed for unknown CatalogDomainError codes
         return {
-          error: err.message,
-          code: err.code,
+          error: "Ocurrió un error inesperado al procesar la solicitud.",
+          code: "UNKNOWN_ERROR",
         };
     }
   }
 
-  if (
-    err instanceof Error &&
-    "code" in err &&
-    typeof (err as { code: unknown }).code === "string"
-  ) {
-    const code = (err as { code: string }).code;
-    return {
-      error: err.message,
-      code,
-    };
-  }
-
+  // Fail-closed for all unknown errors, database errors, stack traces, etc.
   return {
     error: "Ocurrió un error inesperado al procesar la solicitud.",
     code: "UNKNOWN_ERROR",

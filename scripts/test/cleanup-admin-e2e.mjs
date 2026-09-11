@@ -45,7 +45,10 @@ export async function cleanupAdminUsers() {
       await tx`DELETE FROM customer_profiles WHERE auth_user_id IN ${tx(ADMIN_E2E_USER_IDS)}`;
     });
 
-    // 2. Delete Auth users exclusively via Supabase Admin Auth API
+    // 2. Clean up deterministic Product Manager test fixtures
+    await cleanupAdminProductFixtures(sql);
+
+    // 3. Delete Auth users exclusively via Supabase Admin Auth API
     for (const id of ADMIN_E2E_USER_IDS) {
       const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
       if (
@@ -60,7 +63,7 @@ export async function cleanupAdminUsers() {
       }
     }
 
-    console.log("[Admin E2E Cleanup] Cleaned up Admin E2E test users.");
+    console.log("[Admin E2E Cleanup] Cleaned up Admin E2E test users and product fixtures.");
   } catch (err) {
     console.error(
       "[Admin E2E Cleanup] Failed to cleanup:",
@@ -70,6 +73,102 @@ export async function cleanupAdminUsers() {
   } finally {
     await sql.end();
   }
+}
+
+export async function cleanupAdminProductFixtures(clientSql) {
+  console.log("[Admin E2E Cleanup] Cleaning up deterministic Product Manager fixtures...");
+
+  await clientSql.begin(async (tx) => {
+    // 1. Inventory Items
+    await tx`
+      DELETE FROM inventory_items
+      WHERE id = '018f0000-0000-7000-8000-000000004a03'
+         OR variant_id IN (
+           SELECT id FROM product_variants WHERE product_id IN (
+             SELECT id FROM products WHERE category_id IN ('018f0000-0000-7000-8000-00000000ca01', '018f0000-0000-7000-8000-00000000ca02') OR brand_id = '018f0000-0000-7000-8000-00000000ba01'
+           )
+         );
+    `;
+
+    // 2. Product Specifications (scoped to owned test categories / products)
+    await tx`
+      DELETE FROM product_specifications
+      WHERE product_id IN (
+        SELECT id FROM products WHERE category_id IN ('018f0000-0000-7000-8000-00000000ca01', '018f0000-0000-7000-8000-00000000ca02') OR brand_id = '018f0000-0000-7000-8000-00000000ba01' OR id IN ('018f0000-0000-7000-8000-000000001a01', '018f0000-0000-7000-8000-000000001a02', '018f0000-0000-7000-8000-000000001a03', '018f0000-0000-7000-8000-000000001a04')
+      ) OR schema_id IN ('018f0000-0000-7000-8000-000000005a01', '018f0000-0000-7000-8000-000000005b01');
+    `;
+
+    // 3. Product Media
+    await tx`
+      DELETE FROM product_media
+      WHERE product_id IN (
+        SELECT id FROM products WHERE category_id IN ('018f0000-0000-7000-8000-00000000ca01', '018f0000-0000-7000-8000-00000000ca02') OR brand_id = '018f0000-0000-7000-8000-00000000ba01' OR id IN ('018f0000-0000-7000-8000-000000001a01', '018f0000-0000-7000-8000-000000001a02', '018f0000-0000-7000-8000-000000001a03', '018f0000-0000-7000-8000-000000001a04')
+      ) OR media_asset_id IN ('018f0000-0000-7000-8000-000000006a01', '018f0000-0000-7000-8000-000000006a02');
+    `;
+
+    // 4. Media Assets
+    await tx`
+      DELETE FROM media_assets
+      WHERE id IN (
+        '018f0000-0000-7000-8000-000000006a01',
+        '018f0000-0000-7000-8000-000000006a02'
+      );
+    `;
+
+    // 5. Product Variants (scoped)
+    await tx`
+      DELETE FROM product_variants
+      WHERE product_id IN (
+        SELECT id FROM products WHERE category_id IN ('018f0000-0000-7000-8000-00000000ca01', '018f0000-0000-7000-8000-00000000ca02') OR brand_id = '018f0000-0000-7000-8000-00000000ba01' OR id IN ('018f0000-0000-7000-8000-000000001a01', '018f0000-0000-7000-8000-000000001a02', '018f0000-0000-7000-8000-000000001a03', '018f0000-0000-7000-8000-000000001a04')
+      );
+    `;
+
+    // 6. Products (scoped strictly to owned categories, brand, or fixed test IDs)
+    await tx`
+      DELETE FROM products
+      WHERE category_id IN ('018f0000-0000-7000-8000-00000000ca01', '018f0000-0000-7000-8000-00000000ca02')
+         OR brand_id = '018f0000-0000-7000-8000-00000000ba01'
+         OR id IN ('018f0000-0000-7000-8000-000000001a01', '018f0000-0000-7000-8000-000000001a02', '018f0000-0000-7000-8000-000000001a03', '018f0000-0000-7000-8000-000000001a04')
+         OR slug LIKE 'e2e-%' OR slug LIKE 'mouse-gamer-e2e-%' OR slug LIKE 'prod-e2e-%' OR slug LIKE 'mouse-pro-wireless-%';
+    `;
+
+    // 7. Clear Category Schemas Pointer & Delete Schemas & Categories
+    await tx`
+      UPDATE categories
+      SET current_spec_schema_id = NULL
+      WHERE id IN (
+        '018f0000-0000-7000-8000-00000000ca01',
+        '018f0000-0000-7000-8000-00000000ca02'
+      );
+    `;
+
+    await tx`
+      DELETE FROM category_specification_schemas
+      WHERE id IN (
+        '018f0000-0000-7000-8000-000000005a01',
+        '018f0000-0000-7000-8000-000000005b01'
+      ) OR category_id IN (
+        '018f0000-0000-7000-8000-00000000ca01',
+        '018f0000-0000-7000-8000-00000000ca02'
+      );
+    `;
+
+    await tx`
+      DELETE FROM categories
+      WHERE id IN (
+        '018f0000-0000-7000-8000-00000000ca01',
+        '018f0000-0000-7000-8000-00000000ca02'
+      );
+    `;
+
+    // 8. Test Brand
+    await tx`
+      DELETE FROM brands
+      WHERE id = '018f0000-0000-7000-8000-00000000ba01';
+    `;
+  });
+
+  console.log("[Admin E2E Cleanup] Successfully cleaned up Product Manager fixtures.");
 }
 
 // Execute cleanup if invoked directly

@@ -16,7 +16,6 @@ import {
   getPublishedCategories,
 } from "@/lib/admin/catalog/readers";
 import { formatCentsToPenDisplay } from "@/lib/admin/catalog/money";
-import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import type { CatalogStatus } from "@/lib/admin/catalog/types";
 import styles from "./products.module.css";
 
@@ -200,10 +199,6 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
             </thead>
             <tbody>
               {listResult.items.map((item) => {
-                const thumbUrl = item.primaryMediaKey
-                  ? resolvePublicMediaUrl(item.primaryMediaKey)
-                  : null;
-
                 let priceDisplay = "Sin precio";
                 if (item.minActivePriceCents !== null) {
                   const minFormatted =
@@ -220,16 +215,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                   <tr key={item.id} data-testid={`product-row-${item.id}`}>
                     <td>
                       <div className={styles.mediaThumb}>
-                        {thumbUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={thumbUrl}
-                            alt={item.primaryMediaAlt ?? item.name}
-                            loading="lazy"
-                          />
-                        ) : (
-                          <ImageIcon size={18} aria-hidden="true" />
-                        )}
+                        <ImageIcon size={20} style={{ color: "#a1a1aa" }} aria-hidden="true" />
                       </div>
                     </td>
                     <td>

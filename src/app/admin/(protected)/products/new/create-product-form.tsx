@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, AlertCircle } from "lucide-react";
 import { createProductAction } from "@/lib/admin/catalog/actions";
+import { MutationRequestTracker } from "@/lib/admin/catalog/mutation-request";
 import type { BrandReference, CategoryReference } from "@/lib/admin/catalog/types";
 import styles from "./new-product.module.css";
 
@@ -16,17 +17,19 @@ interface CreateProductFormProps {
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
+    .trim()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 }
 
 export function CreateProductForm({ brands, categories }: CreateProductFormProps) {
   const router = useRouter();
+  const mutationTracker = useRef(new MutationRequestTracker());
 
+  // General fields
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
@@ -67,9 +70,7 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
     setErrorMessage(null);
     setErrorCode(null);
 
-    const mutationRequestId = crypto.randomUUID();
-
-    const result = await createProductAction({
+    const payload = {
       name: name.trim(),
       slug: slug.trim(),
       brandId,
@@ -79,7 +80,7 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
       isFeatured,
       initialVariant: sku.trim()
         ? {
-            sku: sku.trim().toUpperCase(),
+            sku: sku.trim(),
             title: variantTitle.trim() ? variantTitle.trim() : "Estándar",
             pricePen: pricePen.trim(),
             compareAtPricePen: compareAtPricePen.trim() ? compareAtPricePen.trim() : null,
@@ -87,14 +88,29 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
             weightGrams: weightGrams ? parseInt(weightGrams, 10) : null,
           }
         : undefined,
-      mutationRequestId,
-    });
+    };
 
-    if (result.success && result.data?.product) {
-      router.push(`/admin/products/${result.data.product.id}`);
-    } else {
-      setErrorMessage(result.error ?? "No se pudo crear el producto.");
-      setErrorCode(result.code ?? null);
+    const mutationRequestId = mutationTracker.current.getRequestId(payload);
+
+    try {
+      const result = await createProductAction({
+        ...payload,
+        mutationRequestId,
+      });
+
+      // Definitive structured response completes attempt
+      mutationTracker.current.complete();
+
+      if (result.success && result.data?.product) {
+        router.push(`/admin/products/${result.data.product.id}`);
+      } else {
+        setErrorMessage(result.error ?? "No se pudo crear el producto.");
+        setErrorCode(result.code ?? null);
+        setIsSubmitting(false);
+      }
+    } catch {
+      // Transport exception: tracker keeps active ID for retry with same payload
+      setErrorMessage("Error de conexión al enviar la solicitud. Puedes reintentar.");
       setIsSubmitting(false);
     }
   };
@@ -148,7 +164,7 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
               data-testid="input-slug"
             />
             <p className={styles.helpText}>
-              Identificador URL único (3 a 200 caracteres en minúsculas y guiones).
+              Identificador URL único (hasta 200 caracteres en minúsculas y guiones).
             </p>
           </div>
         </div>
@@ -204,7 +220,7 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
             type="text"
             value={subtitle}
             onChange={(e) => setSubtitle(e.target.value)}
-            placeholder="Ej: Sensor PAW3395 de 26,000 DPI con estructura de magnesio ultraligera"
+            placeholder="Breve descripción complementaria"
             className={styles.input}
             data-testid="input-subtitle"
           />
@@ -212,35 +228,36 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
 
         <div className={styles.field}>
           <label htmlFor="description" className={styles.label}>
-            Descripción Detallada
+            Descripción Completa (Opcional)
           </label>
           <textarea
             id="description"
             rows={4}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Descripción completa del producto para la tienda y optimización de motores de búsqueda..."
+            placeholder="Detalles sobre el producto, tecnología, materiales..."
             className={styles.textarea}
             data-testid="input-description"
           />
         </div>
 
-        <label className={styles.checkboxField}>
-          <input
-            type="checkbox"
-            checked={isFeatured}
-            onChange={(e) => setIsFeatured(e.target.checked)}
-            className={styles.checkbox}
-            data-testid="checkbox-featured"
-          />
-          <span className={styles.checkboxLabel}>Destacar en la página de inicio (isFeatured)</span>
-        </label>
+        <div className={styles.checkboxField}>
+          <label className={styles.checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={isFeatured}
+              onChange={(e) => setIsFeatured(e.target.checked)}
+              data-testid="input-featured"
+            />
+            <span>Marcar como producto destacado en la tienda</span>
+          </label>
+        </div>
       </div>
 
-      {/* Initial Variant Card */}
-      <div className={styles.card}>
-        <h2 className={styles.cardTitle}>Variante Inicial</h2>
-        <p className={styles.cardDescription}>
+      {/* Section: Initial Variant */}
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>Variante Inicial Predeterminada</h2>
+        <p className={styles.sectionDescription}>
           Crea la variante predeterminada del producto (SKU, precios en Soles y peso).
         </p>
 
@@ -254,7 +271,7 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
               type="text"
               required
               value={sku}
-              onChange={(e) => setSku(e.target.value.toUpperCase())}
+              onChange={(e) => setSku(e.target.value)}
               placeholder="Ej: WLM-BX-BLK"
               className={styles.input}
               data-testid="input-variant-sku"
@@ -342,7 +359,7 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
           <input
             id="weightGrams"
             type="number"
-            min="0"
+            min="1"
             step="1"
             value={weightGrams}
             onChange={(e) => setWeightGrams(e.target.value)}

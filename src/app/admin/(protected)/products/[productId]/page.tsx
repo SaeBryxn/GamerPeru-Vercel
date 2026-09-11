@@ -7,6 +7,7 @@ import {
   getPublishedBrands,
   getPublishedCategories,
 } from "@/lib/admin/catalog/readers";
+import { sanitizeProductDetailForUi } from "@/lib/admin/catalog/ui-dto";
 import { ProductEditor } from "./product-editor";
 
 export const dynamic = "force-dynamic";
@@ -39,9 +40,12 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     notFound();
   }
 
+  const sanitizedDetail = sanitizeProductDetailForUi(detail);
+
   return (
     <ProductEditor
-      initialDetail={detail}
+      key={sanitizedDetail.product.id}
+      initialDetail={sanitizedDetail}
       brands={brands}
       categories={categories}
       actorPermissions={Array.from(authContext.permissions)}
