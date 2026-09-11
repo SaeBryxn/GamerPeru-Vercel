@@ -3,8 +3,24 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Validation suite to run"
+        required: true
+        type: choice
+        options:
+          - catalog
+          - full
+        default: full
 
 permissions:
   contents: read
@@ -14,8 +30,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Format, Typecheck, Lint, Test, Build & E2E
+  light-ci:
+    name: Light CI
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -46,8 +63,10 @@ jobs:
       - name: Run Lint
         run: pnpm lint
 
-      - name: Run Unit Tests
-        run: pnpm test
+      - name: Run Unit Tests (Light - No DB)
+        run: unset DATABASE_URL; pnpm test
+        env:
+          DATABASE_URL: ""
 
       - name: Run Next.js Build
         run: pnpm build
@@ -58,16 +77,11 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_ci_placeholder_key"
           DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:54322/postgres"
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run E2E & Accessibility Tests
-        run: pnpm test:e2e
-
-  cart-e2e:
-    name: Real Local Supabase Cart E2E
+  catalog-gate:
+    name: Catalog Gate
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'catalog'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -88,82 +102,29 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Start Local Supabase
-        run: pnpm supabase:start
-
-      - name: Verify Supabase Status & Extract Real Local Anon Key
         run: |
-          pnpm supabase:status
-          STATUS_ENV=$(pnpm exec supabase status -o env)
-          ANON_KEY=$(echo "$STATUS_ENV" | grep 'ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
-          API_URL=$(echo "$STATUS_ENV" | grep 'API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
-          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL:-http://127.0.0.1:54321}" >> $GITHUB_ENV
-          echo "DATABASE_MIGRATION_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
-          echo "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+          START_LOG="${RUNNER_TEMP:-/tmp}/supabase_start.log"
+          if ! pnpm supabase:start > "$START_LOG" 2>&1; then
+            echo "ERROR: Local Supabase failed to start." >&2
+            exit 1
+          fi
+          echo "Local Supabase started successfully."
 
-      - name: Run Database Migrations
-        run: pnpm db:migrate
-
-      - name: Seed Deterministic Cart E2E Fixtures
-        run: node scripts/test/seed-cart-e2e.mjs
-
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run Real Cart E2E Tests
-        run: pnpm test:cart:e2e
-
-      - name: Upload Cart E2E Artifacts on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-cart-e2e-results
-          path: |
-            test-results/
-            playwright-report/
-          retention-days: 7
-
-      - name: Clean Up Cart E2E Fixtures
-        if: always()
-        run: node scripts/test/cleanup-cart-e2e.mjs
-
-      - name: Stop Local Supabase
-        if: always()
-        run: pnpm supabase:stop
-
-  checkout-e2e:
-    name: Real Local Supabase Checkout E2E
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 11.22.0
-
-      - name: Set up Node.js 24
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Start Local Supabase
-        run: pnpm supabase:start
-
-      - name: Verify Supabase Status & Extract Real Local Anon Key
+      - name: Configure Local Environment & Deterministic Test Configuration
         run: |
-          pnpm supabase:status
           STATUS_ENV=$(pnpm exec supabase status -o env)
-          ANON_KEY=$(echo "$STATUS_ENV" | grep 'ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
-          SERVICE_KEY=$(echo "$STATUS_ENV" | grep 'SERVICE_ROLE_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
-          API_URL=$(echo "$STATUS_ENV" | grep 'API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          ANON_KEY=$(echo "$STATUS_ENV" | grep '^ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          SERVICE_KEY=$(echo "$STATUS_ENV" | grep '^SERVICE_ROLE_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          API_URL=$(echo "$STATUS_ENV" | grep '^API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+
+          if [ -z "$ANON_KEY" ] || [ -z "$SERVICE_KEY" ] || [ -z "$API_URL" ]; then
+            echo "ERROR: Failed to extract required local Supabase credentials from status." >&2
+            exit 1
+          fi
+
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_KEY"
+
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> $GITHUB_ENV
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL:-http://127.0.0.1:54321}" >> $GITHUB_ENV
@@ -172,86 +133,6 @@ jobs:
           echo "SESSION_COOKIE_SECRET=gamer-peru-session-cookie-secret-min-32-chars-long" >> $GITHUB_ENV
           echo "CHECKOUT_HMAC_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" >> $GITHUB_ENV
           echo "CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE=ALMACEN_CENTRAL_TEST" >> $GITHUB_ENV
-          echo "CHECKOUT_RESERVATION_TTL_MINUTES=30" >> $GITHUB_ENV
-          echo "CHECKOUT_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
-          echo "PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
-          echo "ORDER_MANAGEMENT_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
-          echo "R2_ACCOUNT_ID=0123456789abcdef0123456789abcdef" >> $GITHUB_ENV
-          echo "R2_ACCESS_KEY_ID=test-r2-access-key-id-12345" >> $GITHUB_ENV
-          echo "R2_SECRET_ACCESS_KEY=test-r2-secret-access-key-67890" >> $GITHUB_ENV
-
-      - name: Run Database Migrations
-        run: pnpm db:migrate
-
-      - name: Seed Deterministic Checkout E2E Fixtures
-        run: node scripts/test/seed-checkout-e2e.mjs
-
-      - name: Seed Deterministic Admin E2E Fixtures
-        run: node scripts/test/seed-admin-e2e.mjs
-
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run Real Checkout E2E Tests
-        run: pnpm test:checkout:e2e
-
-      - name: Run Real Payment E2E Tests
-        run: pnpm test:payment:e2e
-
-      - name: Run Real Admin E2E Tests
-        run: pnpm test:admin:e2e
-
-      - name: Upload Checkout E2E Artifacts on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-checkout-e2e-results
-          path: |
-            test-results/
-            playwright-report/
-          retention-days: 7
-
-      - name: Clean Up Checkout E2E Fixtures
-        if: always()
-        run: node scripts/test/cleanup-checkout-e2e.mjs
-
-      - name: Clean Up Admin E2E Fixtures
-        if: always()
-        run: node scripts/test/cleanup-admin-e2e.mjs
-
-      - name: Stop Local Supabase
-        if: always()
-        run: pnpm supabase:stop
-
-  checkout-live:
-    name: Real Local PostgreSQL / Supabase Checkout Runtime
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Set up Node.js 24
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Start Local Supabase
-        run: pnpm supabase:start
-
-      - name: Configure Local Environment & Deterministic Test Configuration
-        run: |
-          echo "DATABASE_MIGRATION_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
-          echo "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
-          echo "CHECKOUT_HMAC_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" >> $GITHUB_ENV
-          echo "CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE=TEST-CHECKOUT-LOC" >> $GITHUB_ENV
           echo "CHECKOUT_RESERVATION_TTL_MINUTES=30" >> $GITHUB_ENV
           echo "CHECKOUT_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
           echo "PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
@@ -265,6 +146,137 @@ jobs:
 
       - name: Run Database Migrations
         run: pnpm db:migrate
+
+      - name: Check Formatting
+        run: pnpm format:check
+
+      - name: Run Typecheck
+        run: pnpm typecheck
+
+      - name: Run Lint
+        run: pnpm lint
+
+      - name: Run Catalog Unit Tests
+        run: pnpm vitest run tests/unit/admin-catalog-*.test.ts
+
+      - name: Run Dedicated Admin Live Integration Tests
+        run: pnpm test:admin:live
+
+      - name: Run Next.js Build
+        run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Seed Deterministic Admin E2E Fixtures
+        run: node scripts/test/seed-admin-e2e.mjs
+
+      - name: Run Real Admin E2E Tests
+        run: pnpm test:admin:e2e
+
+      - name: Upload Admin E2E Artifacts on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-admin-e2e-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Clean Up Admin E2E Fixtures
+        if: always()
+        run: node scripts/test/cleanup-admin-e2e.mjs
+
+      - name: Stop Local Supabase
+        if: always()
+        run: pnpm supabase:stop
+
+  full-gate:
+    name: Full Gate
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Local Supabase
+        run: |
+          START_LOG="${RUNNER_TEMP:-/tmp}/supabase_start.log"
+          if ! pnpm supabase:start > "$START_LOG" 2>&1; then
+            echo "ERROR: Local Supabase failed to start." >&2
+            exit 1
+          fi
+          echo "Local Supabase started successfully."
+
+      - name: Configure Local Environment & Deterministic Test Configuration
+        run: |
+          STATUS_ENV=$(pnpm exec supabase status -o env)
+          ANON_KEY=$(echo "$STATUS_ENV" | grep '^ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          SERVICE_KEY=$(echo "$STATUS_ENV" | grep '^SERVICE_ROLE_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          API_URL=$(echo "$STATUS_ENV" | grep '^API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+
+          if [ -z "$ANON_KEY" ] || [ -z "$SERVICE_KEY" ] || [ -z "$API_URL" ]; then
+            echo "ERROR: Failed to extract required local Supabase credentials from status." >&2
+            exit 1
+          fi
+
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_KEY"
+
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> $GITHUB_ENV
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL:-http://127.0.0.1:54321}" >> $GITHUB_ENV
+          echo "DATABASE_MIGRATION_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+          echo "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54322/postgres" >> $GITHUB_ENV
+          echo "SESSION_COOKIE_SECRET=gamer-peru-session-cookie-secret-min-32-chars-long" >> $GITHUB_ENV
+          echo "CHECKOUT_HMAC_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" >> $GITHUB_ENV
+          echo "CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE=ALMACEN_CENTRAL_TEST" >> $GITHUB_ENV
+          echo "CHECKOUT_RESERVATION_TTL_MINUTES=30" >> $GITHUB_ENV
+          echo "CHECKOUT_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
+          echo "PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
+          echo "ORDER_MANAGEMENT_IDEMPOTENCY_TTL_MINUTES=60" >> $GITHUB_ENV
+          echo "INVENTORY_HMAC_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" >> $GITHUB_ENV
+          echo "INVENTORY_IDEMPOTENCY_TTL_MINUTES=1440" >> $GITHUB_ENV
+          echo "INVENTORY_QUARANTINE_LOCATION_CODE=LOC-LIM-QUARANTINE" >> $GITHUB_ENV
+          echo "R2_ACCOUNT_ID=0123456789abcdef0123456789abcdef" >> $GITHUB_ENV
+          echo "R2_ACCESS_KEY_ID=test-r2-access-key-id-12345" >> $GITHUB_ENV
+          echo "R2_SECRET_ACCESS_KEY=test-r2-secret-access-key-67890" >> $GITHUB_ENV
+
+      - name: Run Database Migrations
+        run: pnpm db:migrate
+
+      - name: Check Formatting
+        run: pnpm format:check
+
+      - name: Run Typecheck
+        run: pnpm typecheck
+
+      - name: Run Lint
+        run: pnpm lint
+
+      - name: Run Unit Tests
+        run: pnpm test
+
+      - name: Run Next.js Build
+        run: pnpm build
 
       - name: Run Dedicated Checkout Live Integration Tests
         run: pnpm test:checkout:live
@@ -280,6 +292,56 @@ jobs:
 
       - name: Run Dedicated Admin Live Integration Tests
         run: pnpm test:admin:live
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Full Storefront E2E Tests
+        run: pnpm test:e2e
+
+      - name: Seed Deterministic Cart E2E Fixtures
+        run: node scripts/test/seed-cart-e2e.mjs
+
+      - name: Run Real Cart E2E Tests
+        run: pnpm test:cart:e2e
+
+      - name: Clean Up Cart E2E Fixtures
+        if: always()
+        run: node scripts/test/cleanup-cart-e2e.mjs
+
+      - name: Seed Deterministic Checkout E2E Fixtures
+        run: node scripts/test/seed-checkout-e2e.mjs
+
+      - name: Seed Deterministic Admin E2E Fixtures
+        run: node scripts/test/seed-admin-e2e.mjs
+
+      - name: Run Real Checkout E2E Tests
+        run: pnpm test:checkout:e2e
+
+      - name: Run Real Payment E2E Tests
+        run: pnpm test:payment:e2e
+
+      - name: Run Real Admin E2E Tests
+        run: pnpm test:admin:e2e
+
+      - name: Upload Full Gate Artifacts on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-full-gate-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Clean Up Checkout E2E Fixtures
+        if: always()
+        run: node scripts/test/cleanup-checkout-e2e.mjs
+
+      - name: Clean Up Admin E2E Fixtures
+        if: always()
+        run: node scripts/test/cleanup-admin-e2e.mjs
 
       - name: Stop Local Supabase
         if: always()
