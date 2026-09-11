@@ -15,6 +15,12 @@ import {
   Loader2,
   Image as ImageIcon,
   Lock,
+  Upload,
+  ArrowUp,
+  ArrowDown,
+  Star,
+  Tag,
+  Globe,
 } from "lucide-react";
 import {
   updateProductAction,
@@ -22,7 +28,14 @@ import {
   updateVariantAction,
   duplicateProductAction,
   transitionProductStatusAction,
+  requestMediaUploadIntentAction,
+  finalizeMediaUploadAction,
+  updateMediaAltTextAction,
+  reorderProductMediaAction,
+  setPrimaryMediaAction,
+  reassignProductMediaVariantAction,
 } from "@/lib/admin/catalog/actions";
+import type { AllowedMediaUploadMimeType } from "@/lib/admin/catalog/media-crypto";
 import { formatCentsToPenDisplay } from "@/lib/admin/catalog/money";
 import { MutationRequestTracker } from "@/lib/admin/catalog/mutation-request";
 import type { AdminProductUiDetail } from "@/lib/admin/catalog/ui-dto";
@@ -123,6 +136,44 @@ export function ProductEditor({
   const [editVarStatus, setEditVarStatus] = useState<VariantStatus>("ACTIVE");
   const [isUpdatingVariant, setIsUpdatingVariant] = useState(false);
   const [editVariantError, setEditVariantError] = useState<string | null>(null);
+
+  // Media Authoring & Management State (CHK3)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadTargetVariantId, setUploadTargetVariantId] = useState<string>("");
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [uploadStage, setUploadStage] = useState<
+    "idle" | "requesting_intent" | "uploading_staging" | "finalizing" | "success" | "error"
+  >("idle");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [clientFileError, setClientFileError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Media Operation Feedback State
+  const [isSettingPrimary, setIsSettingPrimary] = useState<string | null>(null);
+  const [isReorderingMedia, setIsReorderingMedia] = useState(false);
+  const [mediaOpError, setMediaOpError] = useState<string | null>(null);
+  const [mediaOpSuccess, setMediaOpSuccess] = useState<string | null>(null);
+
+  // Alt Text Modal State
+  const [altTextModalMedia, setAltTextModalMedia] = useState<
+    AdminProductUiDetail["media"][number] | null
+  >(null);
+  const [altTextInput, setAltTextInput] = useState("");
+  const [isSavingAltText, setIsSavingAltText] = useState(false);
+  const [altTextError, setAltTextError] = useState<string | null>(null);
+  const altTextDialogRef = useRef<HTMLDivElement | null>(null);
+  const altTextTriggerRef = useRef<HTMLElement | null>(null);
+
+  // Variant Reassignment Modal State
+  const [variantModalMedia, setVariantModalMedia] = useState<
+    AdminProductUiDetail["media"][number] | null
+  >(null);
+  const [reassignVariantTarget, setReassignVariantTarget] = useState<string>("");
+  const [isReassigningVariant, setIsReassigningVariant] = useState(false);
+  const [reassignVariantError, setReassignVariantError] = useState<string | null>(null);
+  const variantDialogRef = useRef<HTMLDivElement | null>(null);
+  const variantTriggerRef = useRef<HTMLElement | null>(null);
 
   // Lifecycle Transition Confirmation Dialog State
   const [pendingTransition, setPendingTransition] = useState<{
@@ -243,6 +294,11 @@ export function ProductEditor({
   const editVarTracker = useRef(new MutationRequestTracker());
   const duplicateTracker = useRef(new MutationRequestTracker());
   const transitionTracker = useRef(new MutationRequestTracker());
+  const mediaUploadTracker = useRef(new MutationRequestTracker());
+  const mediaAltTracker = useRef(new MutationRequestTracker());
+  const mediaReorderTracker = useRef(new MutationRequestTracker());
+  const mediaPrimaryTracker = useRef(new MutationRequestTracker());
+  const mediaVariantTracker = useRef(new MutationRequestTracker());
 
   // Authoritative State Resynchronization:
   // When initialDetail updates (from router refresh, category reconciliation, or identity change),
@@ -574,6 +630,293 @@ export function ProductEditor({
       setEditVariantError("Error de conexión al actualizar la variante.");
     } finally {
       setIsUpdatingVariant(false);
+    }
+  };
+
+  // Focus & Escape management for Alt-Text Modal
+  useEffect(() => {
+    if (!altTextModalMedia) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAltTextModalMedia(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [altTextModalMedia]);
+
+  // Focus & Escape management for Variant Reassignment Modal
+  useEffect(() => {
+    if (!variantModalMedia) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setVariantModalMedia(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [variantModalMedia]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    setUploadError(null);
+    setUploadSuccess(null);
+    if (!file) {
+      setSelectedFile(null);
+      setClientFileError(null);
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/avif"];
+    if (!allowedTypes.includes(file.type)) {
+      setClientFileError(
+        "Formato de archivo no permitido. Solo se aceptan JPEG, PNG, WebP o AVIF."
+      );
+      setSelectedFile(null);
+      return;
+    }
+
+    if (file.size > 10485760) {
+      setClientFileError(
+        "El archivo seleccionado excede el límite máximo de 10 MiB (10485760 bytes)."
+      );
+      setSelectedFile(null);
+      return;
+    }
+
+    setClientFileError(null);
+    setSelectedFile(file);
+  };
+
+  const handleStartUpload = async () => {
+    if (!selectedFile) return;
+    setIsUploadingMedia(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+    setUploadStage("requesting_intent");
+
+    try {
+      const intentRes = await requestMediaUploadIntentAction({
+        productId: product.id,
+        variantId: uploadTargetVariantId ? uploadTargetVariantId : null,
+        mimeType: selectedFile.type as AllowedMediaUploadMimeType,
+      });
+
+      if (!intentRes.success || !intentRes.data) {
+        setUploadError(intentRes.error ?? "No se pudo generar la autorización de subida.");
+        setUploadStage("error");
+        setIsUploadingMedia(false);
+        return;
+      }
+
+      const { signedIntentToken, presignedPutUrl, requiredHeaders } = intentRes.data;
+
+      setUploadStage("uploading_staging");
+      const putRes = await fetch(presignedPutUrl, {
+        method: "PUT",
+        headers: requiredHeaders,
+        body: selectedFile,
+      });
+
+      if (!putRes.ok) {
+        setUploadError("Error al transferir el archivo al almacenamiento temporal.");
+        setUploadStage("error");
+        setIsUploadingMedia(false);
+        return;
+      }
+
+      setUploadStage("finalizing");
+      const finalPayload = {
+        productId: product.id,
+        signedIntentToken,
+      };
+      const mutationRequestId = mediaUploadTracker.current.getRequestId(finalPayload);
+
+      const finalRes = await finalizeMediaUploadAction({
+        productId: product.id,
+        signedIntentToken,
+        mutationRequestId,
+      });
+
+      mediaUploadTracker.current.complete();
+
+      if (finalRes.success) {
+        setUploadSuccess("Imagen subida y normalizada a WebP exitosamente.");
+        setUploadStage("success");
+        setSelectedFile(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        router.refresh();
+      } else {
+        setUploadError(finalRes.error ?? "Error al finalizar el registro del activo multimedia.");
+        setUploadStage("error");
+      }
+    } catch {
+      setUploadError("Error de conexión durante el proceso de subida.");
+      setUploadStage("error");
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
+  const handleSetPrimary = async (item: AdminProductUiDetail["media"][number]) => {
+    if (item.variantId !== null) return;
+    setIsSettingPrimary(item.id);
+    setMediaOpError(null);
+    setMediaOpSuccess(null);
+
+    const payload = {
+      productId: product.id,
+      productMediaId: item.id,
+      expectedUpdatedAt: new Date(product.updatedAt).toISOString(),
+    };
+    const mutationRequestId = mediaPrimaryTracker.current.getRequestId(payload);
+
+    try {
+      const res = await setPrimaryMediaAction({
+        ...payload,
+        mutationRequestId,
+      });
+      mediaPrimaryTracker.current.complete();
+
+      if (res.success) {
+        setMediaOpSuccess("Imagen principal actualizada exitosamente.");
+        router.refresh();
+      } else {
+        setMediaOpError(res.error ?? "No se pudo actualizar la imagen principal.");
+      }
+    } catch {
+      setMediaOpError("Error de conexión al asignar imagen principal.");
+    } finally {
+      setIsSettingPrimary(null);
+    }
+  };
+
+  const handleOpenAltTextModal = (
+    m: AdminProductUiDetail["media"][number],
+    triggerElement: HTMLElement | null
+  ) => {
+    altTextTriggerRef.current = triggerElement;
+    setAltTextModalMedia(m);
+    setAltTextInput(m.altText ?? "");
+    setAltTextError(null);
+  };
+
+  const handleSaveAltText = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!altTextModalMedia) return;
+    setIsSavingAltText(true);
+    setAltTextError(null);
+
+    const payload = {
+      productId: product.id,
+      mediaAssetId: altTextModalMedia.mediaAssetId,
+      altText: altTextInput.trim() ? altTextInput.trim() : null,
+    };
+    const mutationRequestId = mediaAltTracker.current.getRequestId(payload);
+
+    try {
+      const res = await updateMediaAltTextAction({
+        ...payload,
+        mutationRequestId,
+      });
+      mediaAltTracker.current.complete();
+
+      if (res.success) {
+        const trigger = altTextTriggerRef.current;
+        setAltTextModalMedia(null);
+        setMediaOpSuccess("Texto alternativo actualizado exitosamente en todas sus referencias.");
+        if (trigger) trigger.focus();
+        router.refresh();
+      } else {
+        setAltTextError(res.error ?? "No se pudo actualizar el texto alternativo.");
+      }
+    } catch {
+      setAltTextError("Error de conexión al actualizar texto alternativo.");
+    } finally {
+      setIsSavingAltText(false);
+    }
+  };
+
+  const handleMoveMedia = async (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= media.length) return;
+
+    setIsReorderingMedia(true);
+    setMediaOpError(null);
+    setMediaOpSuccess(null);
+
+    const reordered = [...media];
+    const temp = reordered[index]!;
+    reordered[index] = reordered[targetIndex]!;
+    reordered[targetIndex] = temp;
+
+    const orderedIds = reordered.map((m) => m.id);
+    const payload = {
+      productId: product.id,
+      orderedProductMediaIds: orderedIds,
+    };
+    const mutationRequestId = mediaReorderTracker.current.getRequestId(payload);
+
+    try {
+      const res = await reorderProductMediaAction({
+        ...payload,
+        mutationRequestId,
+      });
+      mediaReorderTracker.current.complete();
+
+      if (res.success) {
+        router.refresh();
+      } else {
+        setMediaOpError(res.error ?? "No se pudo reordenar los medios multimedia.");
+      }
+    } catch {
+      setMediaOpError("Error de conexión al reordenar medios multimedia.");
+    } finally {
+      setIsReorderingMedia(false);
+    }
+  };
+
+  const handleOpenVariantModal = (
+    m: AdminProductUiDetail["media"][number],
+    triggerElement: HTMLElement | null
+  ) => {
+    variantTriggerRef.current = triggerElement;
+    setVariantModalMedia(m);
+    setReassignVariantTarget(m.variantId ?? "");
+    setReassignVariantError(null);
+  };
+
+  const handleSaveVariantAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!variantModalMedia) return;
+    setIsReassigningVariant(true);
+    setReassignVariantError(null);
+
+    const payload = {
+      productId: product.id,
+      productMediaId: variantModalMedia.id,
+      targetVariantId: reassignVariantTarget ? reassignVariantTarget : null,
+    };
+    const mutationRequestId = mediaVariantTracker.current.getRequestId(payload);
+
+    try {
+      const res = await reassignProductMediaVariantAction({
+        ...payload,
+        mutationRequestId,
+      });
+      mediaVariantTracker.current.complete();
+
+      if (res.success) {
+        const trigger = variantTriggerRef.current;
+        setVariantModalMedia(null);
+        setMediaOpSuccess("Asociación de variante actualizada exitosamente.");
+        if (trigger) trigger.focus();
+        router.refresh();
+      } else {
+        setReassignVariantError(res.error ?? "No se pudo reasignar la variante.");
+      }
+    } catch {
+      setReassignVariantError("Error de conexión al reasignar variante.");
+    } finally {
+      setIsReassigningVariant(false);
     }
   };
 
@@ -1266,17 +1609,130 @@ export function ProductEditor({
         </div>
       </section>
 
-      {/* Section: Read-Only Media Gallery */}
+      {/* Section: Product Media Authoring Gallery */}
       <section className={styles.card} data-testid="section-media">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <h2 className={styles.cardTitle}>Medios Multimedia (Solo Lectura)</h2>
-            <p className={styles.cardDescription} data-testid="media-readonly-notice">
-              Visualización de activos multimedia asociados. La subida y administración de archivos
-              se gestiona en el módulo de almacenamiento correspondiente.
+            <h2 className={styles.cardTitle}>Medios Multimedia</h2>
+            <p className={styles.cardDescription}>
+              Gestione las imágenes del catálogo. Las subidas se firman criptográficamente, se
+              cargan directamente a Cloudflare R2 y se normalizan automáticamente a formato WebP
+              optimizado.
             </p>
           </div>
         </div>
+
+        {/* Upload Control Box */}
+        <div className={styles.mediaUploadBox} data-testid="media-upload-area">
+          <span
+            style={{
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              color: "var(--color-text-primary, #18181b)",
+            }}
+          >
+            Subir Nueva Imagen
+          </span>
+          <div className={styles.mediaUploadLimits} data-testid="media-upload-limits">
+            Formatos admitidos: JPEG, PNG, WebP, AVIF. Tamaño máximo: 10 MiB (10,485,760 bytes).
+            Normalización automática a WebP optimizado y direccionamiento por contenido SHA-256.
+          </div>
+
+          <div className={styles.mediaUploadControls}>
+            <input
+              id="media-file-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className={styles.mediaFileInput}
+              data-testid="input-media-file"
+              disabled={isUploadingMedia}
+            />
+
+            <select
+              id="media-upload-variant"
+              value={uploadTargetVariantId}
+              onChange={(e) => setUploadTargetVariantId(e.target.value)}
+              className={styles.mediaVariantSelect}
+              data-testid="select-media-upload-variant"
+              disabled={isUploadingMedia}
+            >
+              <option value="">Global (Todo el producto)</option>
+              {variants.map((v) => (
+                <option key={v.id} value={v.id}>
+                  Variante: {v.title} ({v.sku})
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={handleStartUpload}
+              disabled={!selectedFile || isUploadingMedia}
+              className={styles.primaryButton}
+              data-testid="btn-upload-media"
+            >
+              {isUploadingMedia ? (
+                <>
+                  <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                  <span>
+                    {uploadStage === "requesting_intent"
+                      ? "Autorizando..."
+                      : uploadStage === "uploading_staging"
+                        ? "Subiendo a R2..."
+                        : uploadStage === "finalizing"
+                          ? "Normalizando WebP..."
+                          : "Procesando..."}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Upload size={14} aria-hidden="true" />
+                  <span>Subir Imagen</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {clientFileError && (
+            <div className={styles.mediaUploadError} data-testid="media-client-error">
+              {clientFileError}
+            </div>
+          )}
+
+          {uploadError && (
+            <div className={styles.mediaUploadError} data-testid="media-upload-error">
+              {uploadError}
+            </div>
+          )}
+
+          {uploadSuccess && (
+            <div className={styles.mediaUploadSuccess} data-testid="media-upload-success">
+              {uploadSuccess}
+            </div>
+          )}
+        </div>
+
+        {/* Operational Notifications */}
+        {mediaOpError && (
+          <div
+            className={styles.mediaUploadError}
+            data-testid="media-op-error"
+            style={{ marginTop: "1rem" }}
+          >
+            {mediaOpError}
+          </div>
+        )}
+        {mediaOpSuccess && (
+          <div
+            className={styles.mediaUploadSuccess}
+            data-testid="media-op-success"
+            style={{ marginTop: "1rem" }}
+          >
+            {mediaOpSuccess}
+          </div>
+        )}
 
         {/* Primary Media Banner */}
         {primaryMedia && (
@@ -1351,11 +1807,16 @@ export function ProductEditor({
           </div>
         )}
 
-        {/* Media Gallery */}
+        {/* Media Gallery Grid */}
         {media.length > 0 ? (
           <div className={styles.mediaGrid}>
-            {media.map((m) => {
+            {media.map((m, idx) => {
               const url = m.publicUrl;
+              const isPrimary = m.mediaAssetId === product.primaryMediaId;
+              const isVariantScoped = m.variantId !== null;
+              const assignedVariant = m.variantId
+                ? variants.find((v) => v.id === m.variantId)
+                : null;
 
               return (
                 <div key={m.id} className={styles.mediaCard} data-testid={`media-card-${m.id}`}>
@@ -1371,12 +1832,36 @@ export function ProductEditor({
                       <ImageIcon size={32} style={{ color: "#a1a1aa" }} aria-hidden="true" />
                     )}
                   </div>
+
+                  <div className={styles.mediaCardBadges}>
+                    {isPrimary && (
+                      <span className={styles.badgePrimary} data-testid={`badge-primary-${m.id}`}>
+                        <Star size={10} fill="currentColor" aria-hidden="true" />
+                        <span>Principal</span>
+                      </span>
+                    )}
+                    {isVariantScoped ? (
+                      <span className={styles.badgeVariant} data-testid={`badge-variant-${m.id}`}>
+                        <Tag size={10} aria-hidden="true" />
+                        <span>
+                          Variante: {assignedVariant ? assignedVariant.title : m.variantId}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className={styles.badgeGlobal} data-testid={`badge-global-${m.id}`}>
+                        <Globe size={10} aria-hidden="true" />
+                        <span>Global</span>
+                      </span>
+                    )}
+                  </div>
+
                   <div className={styles.mediaInfo}>
                     <span className={styles.mediaKey}>
-                      {m.altText ?? `Asset Multimedia ${m.displayOrder}`}
+                      {m.altText ?? `Asset Multimedia (Pos. ${m.displayOrder})`}
                     </span>
                     <span className={styles.mediaClass}>
-                      Orden: {m.displayOrder} | {m.securityClass}
+                      Orden: {m.displayOrder} · {m.mimeType}
+                      {m.width && m.height ? ` · ${m.width}×${m.height}px` : ""}
                     </span>
                     {!url && (
                       <span
@@ -1387,13 +1872,90 @@ export function ProductEditor({
                       </span>
                     )}
                   </div>
+
+                  {/* Actions Toolbar */}
+                  <div className={styles.mediaActionsToolbar}>
+                    <button
+                      type="button"
+                      disabled={isPrimary || isVariantScoped || isSettingPrimary === m.id}
+                      onClick={() => handleSetPrimary(m)}
+                      className={styles.mediaActionButton}
+                      title={
+                        isVariantScoped
+                          ? "Las imágenes de variante no pueden ser asignadas como principal global"
+                          : isPrimary
+                            ? "Ya es la imagen principal"
+                            : "Asignar como imagen principal"
+                      }
+                      data-testid={`btn-set-primary-${m.id}`}
+                    >
+                      {isSettingPrimary === m.id ? (
+                        <Loader2 size={12} className={styles.spinner} aria-hidden="true" />
+                      ) : (
+                        <Star
+                          size={12}
+                          fill={isPrimary ? "currentColor" : "none"}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span>{isPrimary ? "Principal" : "Hacer Principal"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenAltTextModal(m, e.currentTarget)}
+                      className={styles.mediaActionButton}
+                      title="Editar texto alternativo (alt text)"
+                      data-testid={`btn-edit-alt-${m.id}`}
+                    >
+                      <Edit2 size={12} aria-hidden="true" />
+                      <span>Alt Text</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenVariantModal(m, e.currentTarget)}
+                      className={styles.mediaActionButton}
+                      title="Asignar o cambiar variante"
+                      data-testid={`btn-reassign-variant-${m.id}`}
+                    >
+                      <Tag size={12} aria-hidden="true" />
+                      <span>Variante</span>
+                    </button>
+
+                    <div className={styles.mediaReorderButtons}>
+                      <button
+                        type="button"
+                        disabled={idx === 0 || isReorderingMedia}
+                        onClick={() => handleMoveMedia(idx, "up")}
+                        className={styles.mediaReorderButton}
+                        aria-label="Mover hacia arriba"
+                        title="Mover hacia arriba"
+                        data-testid={`btn-move-up-${m.id}`}
+                      >
+                        <ArrowUp size={12} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx === media.length - 1 || isReorderingMedia}
+                        onClick={() => handleMoveMedia(idx, "down")}
+                        className={styles.mediaReorderButton}
+                        aria-label="Mover hacia abajo"
+                        title="Mover hacia abajo"
+                        data-testid={`btn-move-down-${m.id}`}
+                      >
+                        <ArrowDown size={12} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               );
             })}
           </div>
         ) : (
-          <p className={styles.cardDescription}>
-            Este producto no tiene medios multimedia registrados.
+          <p className={styles.cardDescription} data-testid="media-empty-state">
+            Este producto no tiene medios multimedia registrados. Seleccione una imagen arriba para
+            subirla.
           </p>
         )}
       </section>
@@ -1900,6 +2462,199 @@ export function ProductEditor({
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alt-Text Editor Modal */}
+      {altTextModalMedia && (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-alt-title"
+        >
+          <div
+            ref={altTextDialogRef}
+            className={styles.modalContent}
+            data-testid="modal-alt-text"
+            tabIndex={-1}
+          >
+            <div className={styles.modalHeader}>
+              <h3 id="modal-alt-title" className={styles.modalTitle}>
+                Editar Texto Alternativo
+              </h3>
+            </div>
+            <p className={styles.sharedAltNotice} data-testid="notice-shared-alt-text">
+              El texto alternativo describe la imagen para accesibilidad y SEO. Al actualizarse a
+              nivel de MediaAsset, se comparte con cualquier otra referencia a esta misma imagen.
+            </p>
+            <form
+              onSubmit={handleSaveAltText}
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            >
+              <div className={styles.field}>
+                <label htmlFor="media-alt-input" className={styles.label}>
+                  Texto Alternativo (máx. 255 caracteres)
+                </label>
+                <input
+                  id="media-alt-input"
+                  type="text"
+                  maxLength={255}
+                  value={altTextInput}
+                  onChange={(e) => setAltTextInput(e.target.value)}
+                  className={styles.input}
+                  placeholder="Ej: Mouse inalámbrico blanco vista lateral"
+                  data-testid="input-media-alt-text"
+                />
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "var(--color-text-secondary, #71717a)",
+                    textAlign: "right",
+                  }}
+                >
+                  {altTextInput.length}/255
+                </div>
+              </div>
+
+              {altTextError && (
+                <div className={styles.mediaUploadError} data-testid="alt-text-error">
+                  {altTextError}
+                </div>
+              )}
+
+              <div className={styles.modalActions}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAltTextModalMedia(null);
+                    altTextTriggerRef.current?.focus();
+                  }}
+                  className={styles.secondaryButton}
+                  data-testid="btn-cancel-alt-text"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingAltText}
+                  className={styles.primaryButton}
+                  data-testid="btn-save-alt-text"
+                >
+                  {isSavingAltText ? (
+                    <>
+                      <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                      <span>Guardando...</span>
+                    </>
+                  ) : (
+                    <span>Guardar Texto</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Variant Reassignment Modal */}
+      {variantModalMedia && (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-variant-title"
+        >
+          <div
+            ref={variantDialogRef}
+            className={styles.modalContent}
+            data-testid="modal-reassign-variant"
+            tabIndex={-1}
+          >
+            <div className={styles.modalHeader}>
+              <h3 id="modal-variant-title" className={styles.modalTitle}>
+                Asignar Imagen a Variante
+              </h3>
+            </div>
+            <form
+              onSubmit={handleSaveVariantAssignment}
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            >
+              <div className={styles.field}>
+                <label htmlFor="select-reassign-variant" className={styles.label}>
+                  Ámbito de Asociación
+                </label>
+                <select
+                  id="select-reassign-variant"
+                  value={reassignVariantTarget}
+                  onChange={(e) => setReassignVariantTarget(e.target.value)}
+                  className={styles.select}
+                  data-testid="select-media-variant"
+                >
+                  <option value="">Global (Todo el producto)</option>
+                  {variants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      Variante: {v.title} ({v.sku})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {variantModalMedia.mediaAssetId === product.primaryMediaId &&
+                reassignVariantTarget !== "" && (
+                  <div
+                    style={{
+                      padding: "0.75rem",
+                      backgroundColor: "#fffbeb",
+                      border: "1px solid #fef3c7",
+                      borderRadius: "6px",
+                      color: "#92400e",
+                      fontSize: "0.75rem",
+                      lineHeight: "1.4",
+                    }}
+                    data-testid="variant-primary-warning"
+                  >
+                    Atención: Esta imagen es la imagen principal actual del producto. Para asignarla
+                    a una variante específica, el producto debe conservar otra imagen global o
+                    designar otra imagen como principal antes del cambio.
+                  </div>
+                )}
+
+              {reassignVariantError && (
+                <div className={styles.mediaUploadError} data-testid="reassign-variant-error">
+                  {reassignVariantError}
+                </div>
+              )}
+
+              <div className={styles.modalActions}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVariantModalMedia(null);
+                    variantTriggerRef.current?.focus();
+                  }}
+                  className={styles.secondaryButton}
+                  data-testid="btn-cancel-reassign-variant"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isReassigningVariant}
+                  className={styles.primaryButton}
+                  data-testid="btn-save-reassign-variant"
+                >
+                  {isReassigningVariant ? (
+                    <>
+                      <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                      <span>Guardando...</span>
+                    </>
+                  ) : (
+                    <span>Guardar Asignación</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

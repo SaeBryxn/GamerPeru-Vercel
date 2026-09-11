@@ -20,9 +20,11 @@ export const serverEnvSchema = z
     R2_ACCESS_KEY_ID: z.string().optional(),
     R2_SECRET_ACCESS_KEY: z.string().optional(),
     R2_PUBLIC_MEDIA_BUCKET: z.string().default("gamerperu-public-media"),
+    R2_CATALOG_STAGING_BUCKET: z.string().default("gamerperu-catalog-staging-private"),
     R2_PRIVATE_PROOFS_BUCKET: z.string().default("gamerperu-private-proofs"),
     R2_PRIVATE_PAYMENT_MEDIA_BUCKET: z.string().default("gamerperu-private-payment-media"),
     R2_DB_BACKUPS_BUCKET: z.string().default("gamerperu-db-backups-private"),
+    CATALOG_MEDIA_INTENT_HMAC_SECRET: z.string().optional(),
     INNGEST_EVENT_KEY: z.string().optional(),
     INNGEST_SIGNING_KEY: z.string().optional(),
     AI_ENCRYPTION_KEY_V1: z
@@ -80,9 +82,11 @@ function parseServerEnv(): ServerEnv {
     R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
     R2_PUBLIC_MEDIA_BUCKET: process.env.R2_PUBLIC_MEDIA_BUCKET,
+    R2_CATALOG_STAGING_BUCKET: process.env.R2_CATALOG_STAGING_BUCKET,
     R2_PRIVATE_PROOFS_BUCKET: process.env.R2_PRIVATE_PROOFS_BUCKET,
     R2_PRIVATE_PAYMENT_MEDIA_BUCKET: process.env.R2_PRIVATE_PAYMENT_MEDIA_BUCKET,
     R2_DB_BACKUPS_BUCKET: process.env.R2_DB_BACKUPS_BUCKET,
+    CATALOG_MEDIA_INTENT_HMAC_SECRET: process.env.CATALOG_MEDIA_INTENT_HMAC_SECRET,
     INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
     INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
     AI_ENCRYPTION_KEY_V1: process.env.AI_ENCRYPTION_KEY_V1,
@@ -101,3 +105,87 @@ export const serverEnv = new Proxy({} as ServerEnv, {
     return env[prop as keyof typeof env];
   },
 });
+
+export interface CatalogMediaRuntimeConfig {
+  r2AccountId: string;
+  r2AccessKeyId: string;
+  r2SecretAccessKey: string;
+  r2PublicMediaBucket: string;
+  r2CatalogStagingBucket: string;
+  catalogMediaIntentHmacSecret: string;
+}
+
+/**
+ * Validates and returns full real-runtime configuration for Cloudflare R2 catalog media operations.
+ * Fails closed if any credential, bucket, or secret is absent or uses placeholder values.
+ */
+export function requireCatalogMediaRuntimeConfig(): CatalogMediaRuntimeConfig {
+  const accountId = serverEnv.R2_ACCOUNT_ID;
+  const accessKeyId = serverEnv.R2_ACCESS_KEY_ID;
+  const secretAccessKey = serverEnv.R2_SECRET_ACCESS_KEY;
+  const publicMediaBucket = serverEnv.R2_PUBLIC_MEDIA_BUCKET;
+  const catalogStagingBucket = serverEnv.R2_CATALOG_STAGING_BUCKET;
+  const secret = serverEnv.CATALOG_MEDIA_INTENT_HMAC_SECRET;
+
+  if (!accountId || accountId.startsWith("placeholder_") || accountId.trim() === "") {
+    throw new Error("R2_ACCOUNT_ID is required for real catalog media storage operations.");
+  }
+  if (!accessKeyId || accessKeyId.startsWith("placeholder_") || accessKeyId.trim() === "") {
+    throw new Error("R2_ACCESS_KEY_ID is required for real catalog media storage operations.");
+  }
+  if (
+    !secretAccessKey ||
+    secretAccessKey.startsWith("placeholder_") ||
+    secretAccessKey.trim() === ""
+  ) {
+    throw new Error("R2_SECRET_ACCESS_KEY is required for real catalog media storage operations.");
+  }
+  if (!publicMediaBucket || publicMediaBucket.trim() === "") {
+    throw new Error(
+      "R2_PUBLIC_MEDIA_BUCKET is required for real catalog media storage operations."
+    );
+  }
+  if (!catalogStagingBucket || catalogStagingBucket.trim() === "") {
+    throw new Error(
+      "R2_CATALOG_STAGING_BUCKET is required for real catalog media storage operations."
+    );
+  }
+  if (!secret || secret.trim() === "") {
+    throw new Error("CATALOG_MEDIA_INTENT_HMAC_SECRET is required for catalog media operations.");
+  }
+
+  const isHex64 = /^[0-9a-fA-F]{64}$/.test(secret.trim());
+  if (!isHex64) {
+    throw new Error(
+      "CATALOG_MEDIA_INTENT_HMAC_SECRET must be a 64-character hexadecimal string representing 32 bytes of high entropy."
+    );
+  }
+
+  return {
+    r2AccountId: accountId.trim(),
+    r2AccessKeyId: accessKeyId.trim(),
+    r2SecretAccessKey: secretAccessKey.trim(),
+    r2PublicMediaBucket: publicMediaBucket.trim(),
+    r2CatalogStagingBucket: catalogStagingBucket.trim(),
+    catalogMediaIntentHmacSecret: secret.trim(),
+  };
+}
+
+/**
+ * Validates and retrieves the catalog media intent signing secret.
+ * Allows override in deterministic test environments.
+ */
+export function getCatalogMediaIntentSecret(overrideSecret?: string): string {
+  const secret = overrideSecret ?? serverEnv.CATALOG_MEDIA_INTENT_HMAC_SECRET;
+  if (!secret || secret.trim() === "") {
+    throw new Error("CATALOG_MEDIA_INTENT_HMAC_SECRET is required.");
+  }
+  const trimmed = secret.trim();
+  const isHex64 = /^[0-9a-fA-F]{64}$/.test(trimmed);
+  if (!isHex64) {
+    throw new Error(
+      "CATALOG_MEDIA_INTENT_HMAC_SECRET must be a 64-character hexadecimal string representing 32 bytes of high entropy."
+    );
+  }
+  return trimmed;
+}

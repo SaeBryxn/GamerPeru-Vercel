@@ -164,6 +164,97 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
           error: "No tienes los permisos necesarios para realizar esta acción.",
           code: "FORBIDDEN",
         };
+      case "MEDIA_VARIANT_PRODUCT_MISMATCH":
+        return {
+          error: "La variante no pertenece al producto especificado.",
+          code: "MEDIA_VARIANT_PRODUCT_MISMATCH",
+        };
+      case "MEDIA_UPLOAD_INTENT_CONSUMPTION_INTEGRITY_ERROR":
+        return {
+          error: "Error en la verificación de integridad del intento de subida de medios.",
+          code: "MEDIA_UPLOAD_INTENT_CONSUMPTION_INTEGRITY_ERROR",
+        };
+      case "MEDIA_UNSUPPORTED_TYPE":
+        return {
+          error: "El formato de imagen no es soportado. Formatos aceptados: JPEG, PNG, WebP, AVIF.",
+          code: "MEDIA_UNSUPPORTED_TYPE",
+        };
+      case "MEDIA_FILE_OVERSIZE":
+        return {
+          error: "El tamaño del archivo excede el límite máximo permitido de 10 MiB.",
+          code: "MEDIA_FILE_OVERSIZE",
+        };
+      case "MEDIA_FILE_EMPTY":
+        return {
+          error: "El archivo de imagen está vacío.",
+          code: "MEDIA_FILE_EMPTY",
+        };
+      case "MEDIA_CORRUPT_OR_SPOOFED":
+        return {
+          error: "El archivo no contiene una imagen válida o no coincide con el formato esperado.",
+          code: "MEDIA_CORRUPT_OR_SPOOFED",
+        };
+      case "MEDIA_STAGING_NOT_FOUND":
+        return {
+          error: "No se encontró el archivo temporal en el almacenamiento intermedio.",
+          code: "MEDIA_STAGING_NOT_FOUND",
+        };
+      case "MEDIA_PUBLIC_INTEGRITY_MISMATCH":
+        return {
+          error: "Error de integridad al almacenar la imagen pública.",
+          code: "MEDIA_PUBLIC_INTEGRITY_MISMATCH",
+        };
+      case "PRIMARY_MEDIA_MUST_BE_GLOBAL":
+        return {
+          error: "Solo un medio multimedia global puede ser designado como imagen principal.",
+          code: "PRIMARY_MEDIA_MUST_BE_GLOBAL",
+        };
+      case "PRIMARY_MEDIA_MUST_BE_PUBLIC":
+        return {
+          error: "Solo medios públicos pueden ser designados como imagen principal.",
+          code: "PRIMARY_MEDIA_MUST_BE_PUBLIC",
+        };
+      case "PRIMARY_MEDIA_MUST_BE_IMAGE":
+        return {
+          error: "Solo archivos de tipo imagen pueden ser designados como imagen principal.",
+          code: "PRIMARY_MEDIA_MUST_BE_IMAGE",
+        };
+      case "PRIMARY_MEDIA_INVALID_MIME":
+        return {
+          error: "El formato de la imagen no es válido para ser imagen principal.",
+          code: "PRIMARY_MEDIA_INVALID_MIME",
+        };
+      case "PRIMARY_MEDIA_CANNOT_BE_VARIANT_SPECIFIC":
+        return {
+          error:
+            "No se puede asignar a una variante el medio que respalda la imagen principal actual.",
+          code: "PRIMARY_MEDIA_CANNOT_BE_VARIANT_SPECIFIC",
+        };
+      case "MEDIA_ASSET_NOT_FOUND":
+        return {
+          error: "El activo multimedia solicitado no existe o no está asociado al producto.",
+          code: "MEDIA_ASSET_NOT_FOUND",
+        };
+      case "PRODUCT_MEDIA_NOT_FOUND":
+        return {
+          error: "El elemento multimedia solicitado no fue encontrado en este producto.",
+          code: "PRODUCT_MEDIA_NOT_FOUND",
+        };
+      case "INVALID_ALT_TEXT":
+        return {
+          error: "El texto alternativo no es válido o excede el límite de 255 caracteres.",
+          code: "INVALID_ALT_TEXT",
+        };
+      case "INVALID_REORDER_PAYLOAD":
+        return {
+          error: "La lista de elementos a reordenar no es válida.",
+          code: "INVALID_REORDER_PAYLOAD",
+        };
+      case "INVALID_MUTATION_REQUEST_ID":
+        return {
+          error: "El identificador de solicitud de mutación es obligatorio.",
+          code: "INVALID_MUTATION_REQUEST_ID",
+        };
       default:
         // Fail-closed for unknown CatalogDomainError codes
         return {

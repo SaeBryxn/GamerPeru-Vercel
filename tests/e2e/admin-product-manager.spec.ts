@@ -192,7 +192,9 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     // Verify mixed-case SKU was NOT silently converted to uppercase
-    await expect(page.locator(`text=${mixedCaseSku}`)).toBeVisible();
+    await expect(
+      page.locator('[data-testid="table-variants"]').locator(`text=${mixedCaseSku}`)
+    ).toBeVisible();
 
     // Direct PostgreSQL Readback Evidence for minor-unit integer cents (Requirement E)
     const variantRows = await sql`
@@ -290,7 +292,9 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
 
     // Modal closes and new variant is visible with exact casing
     await expect(page.locator('[data-testid="modal-create-variant"]')).toHaveCount(0);
-    await expect(page.locator(`text=${specialCasingSku}`)).toBeVisible();
+    await expect(
+      page.locator('[data-testid="table-variants"]').locator(`text=${specialCasingSku}`)
+    ).toBeVisible();
 
     // DB confirmation
     const varRow =
@@ -326,7 +330,9 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await page.locator('[data-testid="btn-confirm-edit-variant"]').click();
 
     await expect(page.locator('[data-testid="modal-edit-variant"]')).toHaveCount(0);
-    await expect(page.locator("text=Variante Publicable Actualizada")).toBeVisible();
+    await expect(
+      page.locator('[data-testid="table-variants"]').locator("text=Variante Publicable Actualizada")
+    ).toBeVisible();
     await expect(page.locator("text=S/ 169.90")).toBeVisible();
   });
 
@@ -687,9 +693,9 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
   });
 
   // --------------------------------------------------------------------------
-  // Requirement S: Media Security Boundary & Zero Upload Path
+  // Requirement S: Media Security Boundary & Product Media Authoring (CHK3)
   // --------------------------------------------------------------------------
-  test("Requirement S: Zero media upload UI exists and non-public media asset sentinel keys are never exposed", async ({
+  test("Requirement S: Media authoring UI exists, private sentinel keys are never exposed, and zero deletion control is present", async ({
     page,
   }) => {
     await loginAndNavigateTo(
@@ -698,16 +704,41 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.sentinelProduct.id}`
     );
 
-    // 1. Zero file upload controls
-    await expect(page.locator('input[type="file"]')).toHaveCount(0);
-    await expect(page.locator('[data-testid="media-readonly-notice"]')).toBeVisible();
+    // 1. Media Authoring controls are present
+    await expect(page.locator('[data-testid="section-media"]')).toBeVisible();
+    await expect(page.locator('[data-testid="media-upload-area"]')).toBeVisible();
+    await expect(page.locator('[data-testid="media-upload-limits"]')).toContainText("10 MiB");
+    await expect(page.locator('input[data-testid="input-media-file"]')).toBeVisible();
+    await expect(page.locator('[data-testid="select-media-upload-variant"]')).toBeVisible();
+    await expect(page.locator('[data-testid="btn-upload-media"]')).toBeVisible();
 
     // 2. Private sentinel objectKey must NEVER appear in the client DOM or page source
     const pageContent = await page.content();
     expect(pageContent).not.toContain(ADMIN_E2E_PRODUCT_FIXTURES.sentinelProduct.sentinelKey);
 
-    // 3. Shows safe metadata / placeholder
-    await expect(page.locator("text=[Privado]")).toBeVisible();
+    // 3. Shows safe metadata / placeholder for non-public media
+    await expect(page.locator("text=[Privado]").first()).toBeVisible();
+
+    // 4. Modals and action buttons
+    const altBtn = page.locator('[data-testid^="btn-edit-alt-"]').first();
+    if (await altBtn.isVisible()) {
+      await altBtn.click();
+      await expect(page.locator('[data-testid="modal-alt-text"]')).toBeVisible();
+      await expect(page.locator('[data-testid="notice-shared-alt-text"]')).toBeVisible();
+      await page.locator('[data-testid="btn-cancel-alt-text"]').click();
+      await expect(page.locator('[data-testid="modal-alt-text"]')).not.toBeVisible();
+    }
+
+    const varBtn = page.locator('[data-testid^="btn-reassign-variant-"]').first();
+    if (await varBtn.isVisible()) {
+      await varBtn.click();
+      await expect(page.locator('[data-testid="modal-reassign-variant"]')).toBeVisible();
+      await page.locator('[data-testid="btn-cancel-reassign-variant"]').click();
+      await expect(page.locator('[data-testid="modal-reassign-variant"]')).not.toBeVisible();
+    }
+
+    // 5. Zero permanent deletion controls exist across the entire media section
+    await expect(page.locator('[data-testid^="btn-delete-media"]')).toHaveCount(0);
   });
 
   // --------------------------------------------------------------------------

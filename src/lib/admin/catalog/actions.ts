@@ -10,6 +10,16 @@ import {
   duplicateProduct,
   transitionProductStatus,
 } from "./service";
+import {
+  requestCatalogMediaUploadIntent,
+  finalizeCatalogMediaUpload,
+  updateMediaAssetAltText,
+  reorderProductMedia,
+  setProductPrimaryMedia,
+  reassignProductMediaVariant,
+  type RequestCatalogMediaUploadIntentResult,
+} from "./media-service";
+import type { AllowedMediaUploadMimeType } from "./media-crypto";
 import { parsePenInputToCents } from "./money";
 import { mapDomainErrorToUi } from "./error-mapping";
 import { type CatalogStatus, type VariantStatus } from "./types";
@@ -503,6 +513,327 @@ export async function transitionProductStatusAction(
     revalidatePath(`/admin/products/${input.productId}`);
 
     return { success: true, data: { product } };
+  } catch (err) {
+    const uiError = mapDomainErrorToUi(err);
+    return { success: false, ...uiError };
+  }
+}
+
+export interface RequestMediaUploadIntentActionInput {
+  productId: string;
+  variantId?: string | null;
+  mimeType: AllowedMediaUploadMimeType;
+}
+
+/**
+ * Server Action: Request a signed media upload intent and presigned PUT URL.
+ */
+export async function requestMediaUploadIntentAction(
+  input: RequestMediaUploadIntentActionInput
+): Promise<ActionResult<RequestCatalogMediaUploadIntentResult>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
+    return {
+      success: false,
+      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
+      code: "AUTHENTICATION_REQUIRED",
+    };
+  }
+
+  if (!authContext.permissions.has("catalog:manage")) {
+    return {
+      success: false,
+      error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
+      code: "FORBIDDEN",
+    };
+  }
+
+  try {
+    const result = await requestCatalogMediaUploadIntent(
+      {
+        productId: input.productId,
+        variantId: input.variantId,
+        mimeType: input.mimeType,
+      },
+      { authContext }
+    );
+
+    return { success: true, data: result };
+  } catch (err) {
+    const uiError = mapDomainErrorToUi(err);
+    return { success: false, ...uiError };
+  }
+}
+
+export interface FinalizeMediaUploadActionInput {
+  productId: string;
+  signedIntentToken: string;
+  mutationRequestId: string;
+}
+
+/**
+ * Server Action: Finalize a staged media upload, normalize to WebP, and commit ProductMedia attachment.
+ */
+export async function finalizeMediaUploadAction(
+  input: FinalizeMediaUploadActionInput
+): Promise<ActionResult<{ productMediaId: string; mediaAssetId: string; replayed: boolean }>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
+    return {
+      success: false,
+      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
+      code: "AUTHENTICATION_REQUIRED",
+    };
+  }
+
+  if (!authContext.permissions.has("catalog:manage")) {
+    return {
+      success: false,
+      error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
+      code: "FORBIDDEN",
+    };
+  }
+
+  try {
+    const result = await finalizeCatalogMediaUpload(
+      {
+        signedIntentToken: input.signedIntentToken,
+        mutationRequestId: input.mutationRequestId,
+      },
+      { authContext }
+    );
+
+    revalidatePath("/admin/products");
+    revalidatePath(`/admin/products/${input.productId}`);
+
+    return {
+      success: true,
+      data: {
+        productMediaId: result.productMedia.id,
+        mediaAssetId: result.mediaAsset.id,
+        replayed: result.replayed,
+      },
+    };
+  } catch (err) {
+    const uiError = mapDomainErrorToUi(err);
+    return { success: false, ...uiError };
+  }
+}
+
+export interface UpdateMediaAltTextActionInput {
+  productId: string;
+  mediaAssetId: string;
+  altText: string | null;
+  mutationRequestId: string;
+}
+
+/**
+ * Server Action: Update alt text on a MediaAsset globally across all references.
+ */
+export async function updateMediaAltTextAction(
+  input: UpdateMediaAltTextActionInput
+): Promise<ActionResult<{ mediaAssetId: string; altText: string | null; replayed: boolean }>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
+    return {
+      success: false,
+      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
+      code: "AUTHENTICATION_REQUIRED",
+    };
+  }
+
+  if (!authContext.permissions.has("catalog:manage")) {
+    return {
+      success: false,
+      error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
+      code: "FORBIDDEN",
+    };
+  }
+
+  try {
+    const result = await updateMediaAssetAltText(
+      {
+        productId: input.productId,
+        mediaAssetId: input.mediaAssetId,
+        altText: input.altText,
+        mutationRequestId: input.mutationRequestId,
+      },
+      { authContext }
+    );
+
+    revalidatePath("/admin/products");
+    revalidatePath(`/admin/products/${input.productId}`);
+
+    return {
+      success: true,
+      data: {
+        mediaAssetId: result.mediaAsset.id,
+        altText: result.mediaAsset.altText,
+        replayed: result.replayed,
+      },
+    };
+  } catch (err) {
+    const uiError = mapDomainErrorToUi(err);
+    return { success: false, ...uiError };
+  }
+}
+
+export interface ReorderProductMediaActionInput {
+  productId: string;
+  orderedProductMediaIds: string[];
+  mutationRequestId: string;
+}
+
+/**
+ * Server Action: Reorder ProductMedia gallery items for a Product.
+ */
+export async function reorderProductMediaAction(
+  input: ReorderProductMediaActionInput
+): Promise<ActionResult<{ success: boolean; replayed: boolean }>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
+    return {
+      success: false,
+      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
+      code: "AUTHENTICATION_REQUIRED",
+    };
+  }
+
+  if (!authContext.permissions.has("catalog:manage")) {
+    return {
+      success: false,
+      error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
+      code: "FORBIDDEN",
+    };
+  }
+
+  try {
+    const result = await reorderProductMedia(
+      {
+        productId: input.productId,
+        orderedProductMediaIds: input.orderedProductMediaIds,
+        mutationRequestId: input.mutationRequestId,
+      },
+      { authContext }
+    );
+
+    revalidatePath(`/admin/products/${input.productId}`);
+
+    return { success: true, data: result };
+  } catch (err) {
+    const uiError = mapDomainErrorToUi(err);
+    return { success: false, ...uiError };
+  }
+}
+
+export interface SetPrimaryMediaActionInput {
+  productId: string;
+  productMediaId: string;
+  expectedUpdatedAt: string;
+  mutationRequestId: string;
+}
+
+/**
+ * Server Action: Set a GLOBAL ProductMedia item as the primary media for a Product.
+ */
+export async function setPrimaryMediaAction(
+  input: SetPrimaryMediaActionInput
+): Promise<ActionResult<{ primaryMediaId: string; replayed: boolean }>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
+    return {
+      success: false,
+      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
+      code: "AUTHENTICATION_REQUIRED",
+    };
+  }
+
+  if (!authContext.permissions.has("catalog:manage")) {
+    return {
+      success: false,
+      error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
+      code: "FORBIDDEN",
+    };
+  }
+
+  try {
+    const result = await setProductPrimaryMedia(
+      {
+        productId: input.productId,
+        productMediaId: input.productMediaId,
+        expectedUpdatedAt: input.expectedUpdatedAt,
+        mutationRequestId: input.mutationRequestId,
+      },
+      { authContext }
+    );
+
+    revalidatePath("/admin/products");
+    revalidatePath(`/admin/products/${input.productId}`);
+
+    return {
+      success: true,
+      data: {
+        primaryMediaId: result.primaryMediaId,
+        replayed: result.replayed,
+      },
+    };
+  } catch (err) {
+    const uiError = mapDomainErrorToUi(err);
+    return { success: false, ...uiError };
+  }
+}
+
+export interface ReassignProductMediaVariantActionInput {
+  productId: string;
+  productMediaId: string;
+  targetVariantId: string | null;
+  mutationRequestId: string;
+}
+
+/**
+ * Server Action: Reassign a ProductMedia item to a variant (or to global).
+ */
+export async function reassignProductMediaVariantAction(
+  input: ReassignProductMediaVariantActionInput
+): Promise<ActionResult<{ productMediaId: string; variantId: string | null; replayed: boolean }>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
+    return {
+      success: false,
+      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
+      code: "AUTHENTICATION_REQUIRED",
+    };
+  }
+
+  if (!authContext.permissions.has("catalog:manage")) {
+    return {
+      success: false,
+      error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
+      code: "FORBIDDEN",
+    };
+  }
+
+  try {
+    const result = await reassignProductMediaVariant(
+      {
+        productId: input.productId,
+        productMediaId: input.productMediaId,
+        targetVariantId: input.targetVariantId,
+        mutationRequestId: input.mutationRequestId,
+      },
+      { authContext }
+    );
+
+    revalidatePath(`/admin/products/${input.productId}`);
+
+    return {
+      success: true,
+      data: {
+        productMediaId: result.productMedia.id,
+        variantId: result.productMedia.variantId,
+        replayed: result.replayed,
+      },
+    };
   } catch (err) {
     const uiError = mapDomainErrorToUi(err);
     return { success: false, ...uiError };

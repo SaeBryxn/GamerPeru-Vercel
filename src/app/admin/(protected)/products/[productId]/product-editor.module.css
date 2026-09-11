@@ -610,3 +610,150 @@
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
+
+/* --------------------------------------------------------------------------
+ * Media Authoring UI (CHK3)
+ * -------------------------------------------------------------------------- */
+.mediaUploadBox {
+  padding: 1.25rem;
+  border: 1px dashed var(--color-border-subtle, #e4e4e7);
+  border-radius: var(--radius-md, 0.5rem);
+  background-color: var(--color-surface-canvas, #fafafa);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.mediaUploadControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.mediaFileInput {
+  font-size: 0.8125rem;
+  color: var(--color-text-primary, #09090b);
+}
+
+.mediaVariantSelect {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md, 0.375rem);
+  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  background-color: #ffffff;
+  font-size: 0.8125rem;
+  color: var(--color-text-primary, #09090b);
+}
+
+.mediaHintText {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #71717a);
+  margin: 0;
+}
+
+.badgeGlobal {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.badgeVariant {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background-color: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+
+.badgePrimary {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  background-color: #fefce8;
+  color: #a16207;
+  border: 1px solid #fef08a;
+}
+
+.mediaCardActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.625rem;
+  border-top: 1px solid var(--color-border-subtle, #e4e4e7);
+  background-color: #ffffff;
+}
+
+.mediaBtnRow {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mediaActionButton {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  background-color: #ffffff;
+  color: var(--color-text-primary, #09090b);
+  cursor: pointer;
+  text-align: center;
+}
+
+.mediaActionButton:hover:not(:disabled) {
+  background-color: #f4f4f5;
+}
+
+.mediaActionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mediaMoveButton {
+  padding: 0.25rem 0.375rem;
+  font-size: 0.6875rem;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  background-color: #ffffff;
+  color: var(--color-text-primary, #09090b);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mediaMoveButton:hover:not(:disabled) {
+  background-color: #f4f4f5;
+}
+
+.mediaMoveButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sharedAltNotice {
+  font-size: 0.75rem;
+  color: #92400e;
+  background-color: #fffbeb;
+  border: 1px solid #fef3c7;
+  border-radius: var(--radius-md, 0.375rem);
+  padding: 0.5rem 0.75rem;
+  line-height: 1.4;
+}
