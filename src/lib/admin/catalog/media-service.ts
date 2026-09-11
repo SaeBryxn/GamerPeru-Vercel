@@ -36,7 +36,11 @@ import {
   computeMediaIntentDigest,
   createCatalogMediaIntentAdvisoryLockKey,
 } from "./media-crypto";
-import { type CatalogStorageAdapter, R2CatalogStorageAdapter } from "./media-storage";
+import {
+  type CatalogStorageAdapter,
+  R2CatalogStorageAdapter,
+  derivePresignedPutLifetime,
+} from "./media-storage";
 import { R2_BUCKETS } from "@/lib/storage/r2";
 import { getCatalogMediaIntentSecret } from "@/config/server-env";
 import { validateAndNormalizeCatalogImage } from "./image-normalizer";
@@ -101,6 +105,21 @@ export interface ReassignProductMediaVariantInput {
   productMediaId: string;
   targetVariantId: string | null;
   mutationRequestId: string;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertReplayMarkerIdentity(
+  auditRow: typeof auditEvents.$inferSelect,
+  expected: { action: string; targetType: string; targetId: string }
+): void {
+  if (
+    auditRow.action !== expected.action ||
+    auditRow.targetType !== expected.targetType ||
+    auditRow.targetId !== expected.targetId
+  ) {
+    throw new CatalogReplayIntegrityError();
+  }
 }
 
 async function assertAuthorizedCaller(
@@ -337,8 +356,11 @@ export async function requestCatalogMediaUploadIntent(
 
   // Derive presigned expiry from remaining intent lifetime: presigned PUT expiry <= signed intent expiresAt
   const currentTime = options?.currentServerTimeSeconds ?? Math.floor(Date.now() / 1000);
-  const remainingSeconds = Math.max(1, expiresAt - currentTime);
-  const presignedExpiresInSeconds = Math.min(expiresInSeconds, remainingSeconds);
+  const presignedExpiresInSeconds = derivePresignedPutLifetime(
+    expiresAt,
+    currentTime,
+    expiresInSeconds
+  );
 
   const adapter = options?.storageAdapter ?? new R2CatalogStorageAdapter();
   const presignedPutUrl = await adapter.generatePresignedPutUrl({
@@ -815,25 +837,6 @@ export async function updateMediaAssetAltText(
     normalizedAltText = trimmed.length > 0 ? trimmed : null;
   }
 
-  // Advisory preflight association check
-  const [pmRef] = await db
-    .select()
-    .from(productMedia)
-    .where(
-      and(
-        eq(productMedia.productId, input.productId),
-        eq(productMedia.mediaAssetId, input.mediaAssetId)
-      )
-    );
-
-  if (!pmRef) {
-    throw new CatalogDomainError(
-      "El activo multimedia no está referenciado por este producto.",
-      "MEDIA_ASSET_NOT_FOUND",
-      404
-    );
-  }
-
   const action = "catalog:media:alt_text";
   const mutationRequestDigest = computeMutationRequestDigest(
     caller.authUserId,
@@ -859,25 +862,32 @@ export async function updateMediaAssetAltText(
       .where(
         and(
           eq(auditEvents.actorId, caller.authUserId),
-          eq(auditEvents.action, action),
           sql`${auditEvents.metadata}->>'mutation_request_digest' = ${mutationRequestDigest}`
         )
       );
 
     if (existingAudit) {
+      assertReplayMarkerIdentity(existingAudit, {
+        action,
+        targetType: "media_asset",
+        targetId: input.mediaAssetId,
+      });
       const storedFp = (existingAudit.metadata as Record<string, unknown>)?.request_fingerprint;
       if (storedFp !== requestFingerprint) {
         throw new CatalogIdempotencyConflictError();
       }
       const [existingAsset] = await tx
-        .select()
+        .select({ asset: mediaAssets })
         .from(mediaAssets)
-        .where(eq(mediaAssets.id, input.mediaAssetId));
+        .innerJoin(productMedia, eq(productMedia.mediaAssetId, mediaAssets.id))
+        .where(
+          and(eq(mediaAssets.id, input.mediaAssetId), eq(productMedia.productId, input.productId))
+        );
 
       if (!existingAsset) {
         throw new CatalogReplayIntegrityError();
       }
-      return { mediaAsset: existingAsset, replayed: true };
+      return { mediaAsset: existingAsset.asset, replayed: true };
     }
 
     // Authoritative transactional association recheck
@@ -985,10 +995,6 @@ export async function reorderProductMedia(
       .where(eq(products.id, input.productId))
       .for("update");
 
-    if (!lockedProduct) {
-      throw new CatalogDomainError("El producto solicitado no existe.", "PRODUCT_NOT_FOUND", 404);
-    }
-
     // 3. Replay Check
     const [existingAudit] = await tx
       .select()
@@ -996,17 +1002,28 @@ export async function reorderProductMedia(
       .where(
         and(
           eq(auditEvents.actorId, caller.authUserId),
-          eq(auditEvents.action, action),
           sql`${auditEvents.metadata}->>'mutation_request_digest' = ${mutationRequestDigest}`
         )
       );
 
     if (existingAudit) {
+      assertReplayMarkerIdentity(existingAudit, {
+        action,
+        targetType: "product",
+        targetId: input.productId,
+      });
+      if (!lockedProduct) {
+        throw new CatalogReplayIntegrityError();
+      }
       const storedFp = (existingAudit.metadata as Record<string, unknown>)?.request_fingerprint;
       if (storedFp !== requestFingerprint) {
         throw new CatalogIdempotencyConflictError();
       }
       return { success: true, replayed: true };
+    }
+
+    if (!lockedProduct) {
+      throw new CatalogDomainError("El producto solicitado no existe.", "PRODUCT_NOT_FOUND", 404);
     }
 
     // 4. Authoritative Membership Verification inside Transaction
@@ -1089,40 +1106,12 @@ export async function setProductPrimaryMedia(
   }
   const normalizedExpectedUpdatedAt = expectedDateObj.toISOString();
 
-  // Advisory preflight read for deriving mediaAssetId for the fingerprint
-  const [pmPreflight] = await db
-    .select({
-      pm: productMedia,
-      asset: mediaAssets,
-    })
-    .from(productMedia)
-    .innerJoin(mediaAssets, eq(productMedia.mediaAssetId, mediaAssets.id))
-    .where(
-      and(eq(productMedia.id, input.productMediaId), eq(productMedia.productId, input.productId))
-    );
-
-  if (!pmPreflight) {
-    throw new CatalogDomainError(
-      "El medio multimedia especificado no pertenece a este producto.",
-      "PRODUCT_MEDIA_NOT_FOUND",
-      404
-    );
-  }
-
   const action = "catalog:media:primary";
   const mutationRequestDigest = computeMutationRequestDigest(
     caller.authUserId,
     action,
     input.mutationRequestId
   );
-
-  const requestFingerprint = computeRequestFingerprint({
-    op: action,
-    productId: input.productId,
-    productMediaId: input.productMediaId,
-    mediaAssetId: pmPreflight.pm.mediaAssetId,
-    expectedUpdatedAt: normalizedExpectedUpdatedAt,
-  });
 
   return await db.transaction(async (tx) => {
     // 1. Advisory Lock
@@ -1136,10 +1125,6 @@ export async function setProductPrimaryMedia(
       .where(eq(products.id, input.productId))
       .for("update");
 
-    if (!lockedProduct) {
-      throw new CatalogDomainError("El producto no existe.", "PRODUCT_NOT_FOUND", 404);
-    }
-
     // 3. Replay Check Under Lock (Prior to Stale-Write Check so Legitimate Retries Replay)
     const [existingAudit] = await tx
       .select()
@@ -1147,23 +1132,61 @@ export async function setProductPrimaryMedia(
       .where(
         and(
           eq(auditEvents.actorId, caller.authUserId),
-          eq(auditEvents.action, action),
           sql`${auditEvents.metadata}->>'mutation_request_digest' = ${mutationRequestDigest}`
         )
       );
 
     if (existingAudit) {
+      assertReplayMarkerIdentity(existingAudit, {
+        action,
+        targetType: "product",
+        targetId: input.productId,
+      });
+      if (!lockedProduct) {
+        throw new CatalogReplayIntegrityError();
+      }
+
+      const metadata = existingAudit.metadata as Record<string, unknown>;
+      const recordedMediaAssetId = metadata.media_asset_id;
+      if (typeof recordedMediaAssetId !== "string" || !UUID_PATTERN.test(recordedMediaAssetId)) {
+        throw new CatalogReplayIntegrityError();
+      }
+
+      const [recordedProductMedia] = await tx
+        .select({ pm: productMedia })
+        .from(productMedia)
+        .innerJoin(mediaAssets, eq(productMedia.mediaAssetId, mediaAssets.id))
+        .where(
+          and(
+            eq(productMedia.id, input.productMediaId),
+            eq(productMedia.productId, input.productId),
+            eq(productMedia.mediaAssetId, recordedMediaAssetId)
+          )
+        );
+      if (!recordedProductMedia) {
+        throw new CatalogReplayIntegrityError();
+      }
+
+      const requestFingerprint = computeRequestFingerprint({
+        op: action,
+        productId: input.productId,
+        productMediaId: input.productMediaId,
+        mediaAssetId: recordedMediaAssetId,
+        expectedUpdatedAt: normalizedExpectedUpdatedAt,
+      });
       const storedFp = (existingAudit.metadata as Record<string, unknown>)?.request_fingerprint;
       if (storedFp !== requestFingerprint) {
         throw new CatalogIdempotencyConflictError();
       }
       return {
         success: true,
-        primaryMediaId:
-          ((existingAudit.metadata as Record<string, unknown>)?.media_asset_id as string) ??
-          pmPreflight.pm.mediaAssetId,
+        primaryMediaId: recordedMediaAssetId,
         replayed: true,
       };
+    }
+
+    if (!lockedProduct) {
+      throw new CatalogDomainError("El producto no existe.", "PRODUCT_NOT_FOUND", 404);
     }
 
     // 4. Optimistic Concurrency Check on Locked Product
@@ -1190,6 +1213,14 @@ export async function setProductPrimaryMedia(
         404
       );
     }
+
+    const requestFingerprint = computeRequestFingerprint({
+      op: action,
+      productId: input.productId,
+      productMediaId: input.productMediaId,
+      mediaAssetId: pmRow.pm.mediaAssetId,
+      expectedUpdatedAt: normalizedExpectedUpdatedAt,
+    });
 
     // Invariant 1: Must be GLOBAL (variant_id IS NULL)
     if (pmRow.pm.variantId !== null) {
@@ -1296,10 +1327,6 @@ export async function reassignProductMediaVariant(
       .where(eq(products.id, input.productId))
       .for("update");
 
-    if (!lockedProduct) {
-      throw new CatalogDomainError("El producto solicitado no existe.", "PRODUCT_NOT_FOUND", 404);
-    }
-
     // 3. Replay Check Under Lock
     const [existingAudit] = await tx
       .select()
@@ -1307,12 +1334,19 @@ export async function reassignProductMediaVariant(
       .where(
         and(
           eq(auditEvents.actorId, caller.authUserId),
-          eq(auditEvents.action, action),
           sql`${auditEvents.metadata}->>'mutation_request_digest' = ${mutationRequestDigest}`
         )
       );
 
     if (existingAudit) {
+      assertReplayMarkerIdentity(existingAudit, {
+        action,
+        targetType: "product_media",
+        targetId: input.productMediaId,
+      });
+      if (!lockedProduct) {
+        throw new CatalogReplayIntegrityError();
+      }
       const storedFp = (existingAudit.metadata as Record<string, unknown>)?.request_fingerprint;
       if (storedFp !== requestFingerprint) {
         throw new CatalogIdempotencyConflictError();
@@ -1320,12 +1354,21 @@ export async function reassignProductMediaVariant(
       const [existingPm] = await tx
         .select()
         .from(productMedia)
-        .where(eq(productMedia.id, input.productMediaId));
+        .where(
+          and(
+            eq(productMedia.id, input.productMediaId),
+            eq(productMedia.productId, input.productId)
+          )
+        );
 
       if (!existingPm) {
         throw new CatalogReplayIntegrityError();
       }
       return { productMedia: existingPm, replayed: true };
+    }
+
+    if (!lockedProduct) {
+      throw new CatalogDomainError("El producto solicitado no existe.", "PRODUCT_NOT_FOUND", 404);
     }
 
     // 4. Re-load and verify target ProductMedia inside Transaction

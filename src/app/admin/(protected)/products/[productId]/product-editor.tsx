@@ -38,6 +38,12 @@ import {
 import type { AllowedMediaUploadMimeType } from "@/lib/admin/catalog/media-crypto";
 import { formatCentsToPenDisplay } from "@/lib/admin/catalog/money";
 import { MutationRequestTracker } from "@/lib/admin/catalog/mutation-request";
+import {
+  buildMediaFinalizationRetryRequest,
+  transitionPendingFinalization,
+  type MediaFinalizationIdentity,
+  type PendingFinalizationState,
+} from "@/lib/admin/catalog/media-finalization-retry";
 import type { AdminProductUiDetail } from "@/lib/admin/catalog/ui-dto";
 import type {
   AdminProductDetailVariant,
@@ -62,14 +68,6 @@ function centsToInputString(cents: number | null | undefined): string {
   const whole = Math.floor(abs / 100);
   const fraction = String(abs % 100).padStart(2, "0");
   return `${sign}${whole}.${fraction}`;
-}
-
-export interface PendingFinalizationState {
-  signedIntentToken: string;
-  mutationRequestId: string;
-  productId: string;
-  targetVariantId: string | null;
-  safeStatus: "ready_to_retry" | "retrying";
 }
 
 export function ProductEditor({
@@ -770,7 +768,9 @@ export function ProductEditor({
     const file = e.target.files?.[0];
     setUploadError(null);
     setUploadSuccess(null);
-    setPendingFinalization(null);
+    setPendingFinalization((current) =>
+      transitionPendingFinalization(current, { type: "new_logical_operation" })
+    );
     if (!file) {
       setSelectedFile(null);
       setClientFileError(null);
@@ -800,6 +800,9 @@ export function ProductEditor({
 
   const handleStartUpload = async () => {
     if (!selectedFile) return;
+    setPendingFinalization((current) =>
+      transitionPendingFinalization(current, { type: "new_logical_operation" })
+    );
     setIsUploadingMedia(true);
     setUploadError(null);
     setUploadSuccess(null);
@@ -861,12 +864,11 @@ export function ProductEditor({
     };
     const mutationRequestId = mediaUploadTracker.current.getRequestId(finalPayload);
 
-    const pendingState: PendingFinalizationState = {
+    const finalizationIdentity: MediaFinalizationIdentity = {
       signedIntentToken: signedToken,
       mutationRequestId,
       productId: product.id,
       targetVariantId: uploadTargetVariantId ? uploadTargetVariantId : null,
-      safeStatus: "ready_to_retry",
     };
 
     try {
@@ -878,7 +880,9 @@ export function ProductEditor({
 
       if (finalRes.success) {
         mediaUploadTracker.current.complete();
-        setPendingFinalization(null);
+        setPendingFinalization((current) =>
+          transitionPendingFinalization(current, { type: "structured_success" })
+        );
         setUploadSuccess("Imagen subida y normalizada a WebP exitosamente.");
         setUploadStage("success");
         setSelectedFile(null);
@@ -888,12 +892,19 @@ export function ProductEditor({
         router.refresh();
       } else {
         mediaUploadTracker.current.complete();
-        setPendingFinalization(null);
+        setPendingFinalization((current) =>
+          transitionPendingFinalization(current, { type: "structured_domain_rejection" })
+        );
         setUploadError(finalRes.error ?? "Error al finalizar el registro del activo multimedia.");
         setUploadStage("error");
       }
     } catch {
-      setPendingFinalization(pendingState);
+      setPendingFinalization((current) =>
+        transitionPendingFinalization(current, {
+          type: "transport_failed",
+          identity: finalizationIdentity,
+        })
+      );
       setUploadError(
         "Error de conexión durante la finalización del activo. Puede reintentar la confirmación sin volver a transferir el archivo."
       );
@@ -905,22 +916,27 @@ export function ProductEditor({
 
   const handleRetryFinalization = async () => {
     if (!pendingFinalization) return;
+    const retryRequest = buildMediaFinalizationRetryRequest(pendingFinalization);
     setIsUploadingMedia(true);
     setUploadError(null);
     setUploadSuccess(null);
     setUploadStage("finalizing");
-    setPendingFinalization((prev) => (prev ? { ...prev, safeStatus: "retrying" } : null));
+    setPendingFinalization((current) =>
+      transitionPendingFinalization(current, { type: "retry_started" })
+    );
 
     try {
       const finalRes = await finalizeMediaUploadAction({
-        productId: pendingFinalization.productId,
-        signedIntentToken: pendingFinalization.signedIntentToken,
-        mutationRequestId: pendingFinalization.mutationRequestId,
+        productId: retryRequest.productId,
+        signedIntentToken: retryRequest.signedIntentToken,
+        mutationRequestId: retryRequest.mutationRequestId,
       });
 
       if (finalRes.success) {
         mediaUploadTracker.current.complete();
-        setPendingFinalization(null);
+        setPendingFinalization((current) =>
+          transitionPendingFinalization(current, { type: "structured_success" })
+        );
         setUploadSuccess("Imagen subida y normalizada a WebP exitosamente.");
         setUploadStage("success");
         setSelectedFile(null);
@@ -930,12 +946,19 @@ export function ProductEditor({
         router.refresh();
       } else {
         mediaUploadTracker.current.complete();
-        setPendingFinalization(null);
+        setPendingFinalization((current) =>
+          transitionPendingFinalization(current, { type: "structured_domain_rejection" })
+        );
         setUploadError(finalRes.error ?? "Error al finalizar el registro del activo multimedia.");
         setUploadStage("error");
       }
     } catch {
-      setPendingFinalization((prev) => (prev ? { ...prev, safeStatus: "ready_to_retry" } : null));
+      setPendingFinalization((current) =>
+        transitionPendingFinalization(current, {
+          type: "transport_failed",
+          identity: retryRequest,
+        })
+      );
       setUploadError(
         "Error de conexión durante el reintento de finalización. Puede volver a intentar."
       );
@@ -1845,7 +1868,9 @@ export function ProductEditor({
               value={uploadTargetVariantId}
               onChange={(e) => {
                 setUploadTargetVariantId(e.target.value);
-                setPendingFinalization(null);
+                setPendingFinalization((current) =>
+                  transitionPendingFinalization(current, { type: "new_logical_operation" })
+                );
               }}
               className={styles.mediaVariantSelect}
               data-testid="select-media-upload-variant"

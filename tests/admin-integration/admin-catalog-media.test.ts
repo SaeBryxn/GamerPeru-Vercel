@@ -17,6 +17,7 @@ import {
 } from "@/lib/admin/catalog/media-crypto";
 import { R2_BUCKETS } from "@/lib/storage/r2";
 import { CatalogIdempotencyConflictError } from "@/lib/admin/catalog/types";
+import { computeMutationRequestDigest } from "@/lib/admin/catalog/crypto";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import { db } from "@/db";
 
@@ -771,6 +772,189 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     ).rejects.toThrow(/respalda la imagen principal actual/i);
   });
 
+  it("fails closed when secondary media replay markers have corrupted identities", async () => {
+    const serviceOpts = {
+      authContext: authCatalogAdmin,
+      storageAdapter: new InMemoryCatalogStorageAdapter(),
+      intentSecret: TEST_HMAC_SECRET,
+    };
+
+    const [mediaRow] = await pgSql`
+      SELECT id, media_asset_id, variant_id
+      FROM product_media
+      WHERE product_id = ${fixtureIds.product}
+      ORDER BY created_at ASC
+      LIMIT 1;
+    `;
+    expect(mediaRow).toBeDefined();
+
+    const altMutationId = "018f0024-br2-replay-alt-000000001";
+    await updateMediaAssetAltText(
+      {
+        productId: fixtureIds.product,
+        mediaAssetId: String(mediaRow!.media_asset_id),
+        altText: "Replay marker integrity",
+        mutationRequestId: altMutationId,
+      },
+      serviceOpts
+    );
+    const altDigest = computeMutationRequestDigest(
+      fixtureIds.adminUser,
+      "catalog:media:alt_text",
+      altMutationId
+    );
+    await pgSql`
+      UPDATE audit_events
+      SET action = 'catalog:media:corrupted'
+      WHERE actor_id = ${fixtureIds.adminUser}
+        AND metadata->>'mutation_request_digest' = ${altDigest};
+    `;
+    await expect(
+      updateMediaAssetAltText(
+        {
+          productId: fixtureIds.product,
+          mediaAssetId: String(mediaRow!.media_asset_id),
+          altText: "Replay marker integrity",
+          mutationRequestId: altMutationId,
+        },
+        serviceOpts
+      )
+    ).rejects.toMatchObject({ code: "CATALOG_REPLAY_INTEGRITY_ERROR" });
+
+    const currentMedia = await pgSql`
+      SELECT id
+      FROM product_media
+      WHERE product_id = ${fixtureIds.product}
+      ORDER BY display_order ASC, id ASC;
+    `;
+    const orderedIds = currentMedia.map((row) => String(row.id));
+    const reorderMutationId = "018f0024-br2-replay-order-0000001";
+    await reorderProductMedia(
+      {
+        productId: fixtureIds.product,
+        orderedProductMediaIds: orderedIds,
+        mutationRequestId: reorderMutationId,
+      },
+      serviceOpts
+    );
+    const reorderDigest = computeMutationRequestDigest(
+      fixtureIds.adminUser,
+      "catalog:media:reorder",
+      reorderMutationId
+    );
+    await pgSql`
+      UPDATE audit_events
+      SET target_type = 'media_asset'
+      WHERE actor_id = ${fixtureIds.adminUser}
+        AND metadata->>'mutation_request_digest' = ${reorderDigest};
+    `;
+    await expect(
+      reorderProductMedia(
+        {
+          productId: fixtureIds.product,
+          orderedProductMediaIds: orderedIds,
+          mutationRequestId: reorderMutationId,
+        },
+        serviceOpts
+      )
+    ).rejects.toMatchObject({ code: "CATALOG_REPLAY_INTEGRITY_ERROR" });
+
+    const [globalMediaRow] = await pgSql`
+      SELECT id
+      FROM product_media
+      WHERE product_id = ${fixtureIds.product} AND variant_id IS NULL
+      ORDER BY created_at ASC
+      LIMIT 1;
+    `;
+    const [productBeforePrimary] = await pgSql`
+      SELECT updated_at
+      FROM products
+      WHERE id = ${fixtureIds.product};
+    `;
+    expect(globalMediaRow).toBeDefined();
+    expect(productBeforePrimary).toBeDefined();
+
+    const primaryMutationId = "018f0024-br2-replay-primary-00001";
+    await setProductPrimaryMedia(
+      {
+        productId: fixtureIds.product,
+        productMediaId: String(globalMediaRow!.id),
+        expectedUpdatedAt: productBeforePrimary!.updated_at.toISOString(),
+        mutationRequestId: primaryMutationId,
+      },
+      serviceOpts
+    );
+    const primaryDigest = computeMutationRequestDigest(
+      fixtureIds.adminUser,
+      "catalog:media:primary",
+      primaryMutationId
+    );
+    await pgSql`
+      UPDATE audit_events
+      SET metadata = jsonb_set(
+        metadata,
+        '{media_asset_id}',
+        to_jsonb('not-a-valid-media-asset-id'::text),
+        true
+      )
+      WHERE actor_id = ${fixtureIds.adminUser}
+        AND metadata->>'mutation_request_digest' = ${primaryDigest};
+    `;
+    await expect(
+      setProductPrimaryMedia(
+        {
+          productId: fixtureIds.product,
+          productMediaId: String(globalMediaRow!.id),
+          expectedUpdatedAt: productBeforePrimary!.updated_at.toISOString(),
+          mutationRequestId: primaryMutationId,
+        },
+        serviceOpts
+      )
+    ).rejects.toMatchObject({ code: "CATALOG_REPLAY_INTEGRITY_ERROR" });
+
+    const variantMutationId = "018f0024-br2-replay-variant-000001";
+    const currentTargetVariantId = mediaRow!.variant_id ? String(mediaRow!.variant_id) : null;
+    await reassignProductMediaVariant(
+      {
+        productId: fixtureIds.product,
+        productMediaId: String(mediaRow!.id),
+        targetVariantId: currentTargetVariantId,
+        mutationRequestId: variantMutationId,
+      },
+      serviceOpts
+    );
+    const variantDigest = computeMutationRequestDigest(
+      fixtureIds.adminUser,
+      "catalog:media:variant",
+      variantMutationId
+    );
+    await pgSql`
+      UPDATE audit_events
+      SET target_id = gen_random_uuid()
+      WHERE actor_id = ${fixtureIds.adminUser}
+        AND metadata->>'mutation_request_digest' = ${variantDigest};
+    `;
+    await expect(
+      reassignProductMediaVariant(
+        {
+          productId: fixtureIds.product,
+          productMediaId: String(mediaRow!.id),
+          targetVariantId: currentTargetVariantId,
+          mutationRequestId: variantMutationId,
+        },
+        serviceOpts
+      )
+    ).rejects.toMatchObject({ code: "CATALOG_REPLAY_INTEGRITY_ERROR" });
+
+    for (const digest of [altDigest, reorderDigest, primaryDigest, variantDigest]) {
+      await pgSql`
+        DELETE FROM audit_events
+        WHERE actor_id = ${fixtureIds.adminUser}
+          AND metadata->>'mutation_request_digest' = ${digest};
+      `;
+    }
+  });
+
   it("fails closed with MEDIA_UPLOAD_INTENT_CONSUMPTION_INTEGRITY_ERROR on corrupted consumed intent markers (Scenarios E & F)", async () => {
     const storage = new InMemoryCatalogStorageAdapter();
     const serviceOpts = {
@@ -1112,65 +1296,134 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     }
   });
 
-  it("enforces transactional serialization so primaryMedia can never lose all global attachments (Section 11)", async () => {
-    const storage = new InMemoryCatalogStorageAdapter();
+  it("serializes a concurrent set-primary / variant-reassignment race and preserves the global-primary invariant", async () => {
     const serviceOpts = {
       authContext: authCatalogAdmin,
-      storageAdapter: storage,
+      storageAdapter: new InMemoryCatalogStorageAdapter(),
       intentSecret: TEST_HMAC_SECRET,
     };
-
-    // Ensure we have a primaryMedia set on fixtureIds.product with exactly ONE global attachment
-    const [prod] = await pgSql`SELECT * FROM products WHERE id = ${fixtureIds.product};`;
-    const globalPms = await pgSql`
-      SELECT * FROM product_media
-      WHERE product_id = ${fixtureIds.product} AND variant_id IS NULL;
-    `;
-    expect(globalPms.length).toBeGreaterThanOrEqual(1);
-
-    const solePrimaryPm = globalPms[0]!;
-    // Set this as primary
-    await setProductPrimaryMedia(
-      {
-        productId: fixtureIds.product,
-        productMediaId: solePrimaryPm.id,
-        expectedUpdatedAt: prod!.updated_at.toISOString(),
-        mutationRequestId: "018f0024-mr-serprimary-00001",
-      },
-      serviceOpts
+    const primaryMutationId = "018f0024-br2-race-primary-000001";
+    const variantMutationId = "018f0024-br2-race-variant-000001";
+    const primaryDigest = computeMutationRequestDigest(
+      fixtureIds.adminUser,
+      "catalog:media:primary",
+      primaryMutationId
+    );
+    const variantDigest = computeMutationRequestDigest(
+      fixtureIds.adminUser,
+      "catalog:media:variant",
+      variantMutationId
     );
 
-    // Ensure any other global PMs are temporarily moved to variantA so solePrimaryPm is the only global one
-    for (let i = 1; i < globalPms.length; i++) {
-      await pgSql`UPDATE product_media SET variant_id = ${fixtureIds.variantA} WHERE id = ${globalPms[i]!.id};`;
-    }
-
-    // Attempting to reassign solePrimaryPm to variantA must fail with PRIMARY_MEDIA_CANNOT_BE_VARIANT_SPECIFIC
-    try {
-      await reassignProductMediaVariant(
-        {
-          productId: fixtureIds.product,
-          productMediaId: solePrimaryPm.id,
-          targetVariantId: fixtureIds.variantA,
-          mutationRequestId: "018f0024-mr-serreassign-00001",
-        },
-        serviceOpts
-      );
-      expect.fail("should have thrown");
-    } catch (err: unknown) {
-      expect((err as { code: string }).code).toBe("PRIMARY_MEDIA_CANNOT_BE_VARIANT_SPECIFIC");
-    }
-
-    // Verify DB state: products.primary_media_id is STILL backed by at least one global ProductMedia!
-    const [finalProd] =
-      await pgSql`SELECT primary_media_id FROM products WHERE id = ${fixtureIds.product};`;
-    const finalGlobalPms = await pgSql`
-      SELECT * FROM product_media
-      WHERE product_id = ${fixtureIds.product}
-        AND media_asset_id = ${finalProd!.primary_media_id}
-        AND variant_id IS NULL;
+    const [asset] = await pgSql`
+      INSERT INTO media_assets (
+        id,
+        object_key,
+        security_class,
+        media_type,
+        mime_type,
+        file_size_bytes,
+        width,
+        height,
+        checksum_sha256,
+        created_at
+      ) VALUES (
+        gen_random_uuid(),
+        'products/concurrency/' || gen_random_uuid()::text || '.webp',
+        'PUBLIC_MEDIA',
+        'IMAGE',
+        'image/webp',
+        128,
+        16,
+        16,
+        'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+        NOW()
+      )
+      RETURNING id;
     `;
-    expect(finalGlobalPms.length).toBeGreaterThanOrEqual(1);
+    const [targetProductMedia] = await pgSql`
+      INSERT INTO product_media (
+        id, product_id, variant_id, media_asset_id, display_order, created_at
+      ) VALUES (
+        gen_random_uuid(), ${fixtureIds.product}, NULL, ${asset!.id}, 999, NOW()
+      )
+      RETURNING id;
+    `;
+    const [beforeRace] = await pgSql`
+      SELECT primary_media_id, updated_at
+      FROM products
+      WHERE id = ${fixtureIds.product};
+    `;
+
+    try {
+      const [primaryResult, reassignmentResult] = await Promise.allSettled([
+        setProductPrimaryMedia(
+          {
+            productId: fixtureIds.product,
+            productMediaId: String(targetProductMedia!.id),
+            expectedUpdatedAt: beforeRace!.updated_at.toISOString(),
+            mutationRequestId: primaryMutationId,
+          },
+          serviceOpts
+        ),
+        reassignProductMediaVariant(
+          {
+            productId: fixtureIds.product,
+            productMediaId: String(targetProductMedia!.id),
+            targetVariantId: fixtureIds.variantA,
+            mutationRequestId: variantMutationId,
+          },
+          serviceOpts
+        ),
+      ]);
+
+      if (primaryResult.status === "fulfilled") {
+        expect(reassignmentResult.status).toBe("rejected");
+        if (reassignmentResult.status === "rejected") {
+          expect((reassignmentResult.reason as { code?: unknown }).code).toBe(
+            "PRIMARY_MEDIA_CANNOT_BE_VARIANT_SPECIFIC"
+          );
+        }
+      } else {
+        expect((primaryResult.reason as { code?: unknown }).code).toBe(
+          "PRIMARY_MEDIA_MUST_BE_GLOBAL"
+        );
+        expect(reassignmentResult.status).toBe("fulfilled");
+      }
+
+      const [invariantProof] = await pgSql`
+        SELECT NOT EXISTS (
+          SELECT 1
+          FROM products p
+          WHERE p.id = ${fixtureIds.product}
+            AND p.primary_media_id IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM product_media pm
+              WHERE pm.product_id = p.id
+                AND pm.media_asset_id = p.primary_media_id
+                AND pm.variant_id IS NULL
+            )
+        ) AS invariant_holds;
+      `;
+      expect(invariantProof!.invariant_holds).toBe(true);
+    } finally {
+      await pgSql`
+        UPDATE products
+        SET primary_media_id = ${beforeRace!.primary_media_id}, updated_at = NOW()
+        WHERE id = ${fixtureIds.product};
+      `;
+      await pgSql`
+        DELETE FROM audit_events
+        WHERE actor_id = ${fixtureIds.adminUser}
+          AND (
+            metadata->>'mutation_request_digest' = ${primaryDigest}
+            OR metadata->>'mutation_request_digest' = ${variantDigest}
+          );
+      `;
+      await pgSql`DELETE FROM product_media WHERE id = ${targetProductMedia!.id};`;
+      await pgSql`DELETE FROM media_assets WHERE id = ${asset!.id};`;
+    }
   });
 
   it("confirms audit event safety: zero raw secrets, tokens, or URLs logged", async () => {

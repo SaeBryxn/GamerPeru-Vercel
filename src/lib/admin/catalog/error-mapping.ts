@@ -199,6 +199,11 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
           error: "No se encontró el archivo temporal en el almacenamiento intermedio.",
           code: "MEDIA_STAGING_NOT_FOUND",
         };
+      case "MEDIA_INTENT_TOKEN_EXPIRED":
+        return {
+          error: "La autorización temporal para subir el archivo ha expirado.",
+          code: "MEDIA_INTENT_TOKEN_EXPIRED",
+        };
       case "MEDIA_PUBLIC_INTEGRITY_MISMATCH":
         return {
           error: "Error de integridad al almacenar la imagen pública.",

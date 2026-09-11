@@ -17,7 +17,10 @@ import {
   KNOWN_INSECURE_EXAMPLE_HMAC_SECRET,
   requireCatalogMediaRuntimeConfig,
 } from "@/config/server-env";
-import { InMemoryCatalogStorageAdapter } from "@/lib/admin/catalog/media-storage";
+import {
+  derivePresignedPutLifetime,
+  InMemoryCatalogStorageAdapter,
+} from "@/lib/admin/catalog/media-storage";
 import { ALLOWED_IMAGE_MIME_TYPES } from "@/lib/admin/catalog/publish-readiness";
 
 const TEST_SECRET = "a1b2c3d4e5f67890123456789abcdef0a1b2c3d4e5f67890123456789abcdef0";
@@ -362,20 +365,28 @@ describe("GP-024 Frozen Domain Authorities & Invariants", () => {
   });
 
   describe("GP-024 Presigned URL Expiry Invariant (Defect E / Section 20)", () => {
-    it("ensures presigned PUT expiry does not outlive intent expiresAt", () => {
-      const nowSec = 1000;
-      const intentLifetime = 600; // 10 minutes
-      const intentExpiresAt = nowSec + intentLifetime;
+    it("caps a presigned PUT at the configured maximum with 600 seconds remaining", () => {
+      expect(derivePresignedPutLifetime(1600, 1000, 600)).toBeLessThanOrEqual(600);
+    });
 
-      // Simulated elapsed time: 150s elapsed before presigning
-      const elapsedSec = 150;
-      const currentNow = nowSec + elapsedSec;
-      const remainingSeconds = Math.max(1, intentExpiresAt - currentNow);
-      const presignedDuration = Math.min(600, remainingSeconds);
+    it("uses exactly 450 seconds when the intent has 450 seconds remaining", () => {
+      expect(derivePresignedPutLifetime(1450, 1000, 600)).toBe(450);
+    });
 
-      const effectivePresignedExpiry = currentNow + presignedDuration;
-      expect(effectivePresignedExpiry).toBeLessThanOrEqual(intentExpiresAt);
-      expect(presignedDuration).toBe(450);
+    it("uses at most 1 second when the intent has 1 second remaining", () => {
+      expect(derivePresignedPutLifetime(1001, 1000, 600)).toBeLessThanOrEqual(1);
+    });
+
+    it("rejects before presigning when the intent has 0 seconds remaining", () => {
+      expect(() => derivePresignedPutLifetime(1000, 1000, 600)).toThrow(
+        expect.objectContaining({ code: "MEDIA_INTENT_TOKEN_EXPIRED" })
+      );
+    });
+
+    it("rejects before presigning when the intent expired 1 second ago", () => {
+      expect(() => derivePresignedPutLifetime(999, 1000, 600)).toThrow(
+        expect.objectContaining({ code: "MEDIA_INTENT_TOKEN_EXPIRED" })
+      );
     });
   });
 });

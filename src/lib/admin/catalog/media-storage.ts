@@ -9,6 +9,24 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createR2Client } from "@/lib/storage/r2";
 import { requireCatalogMediaRuntimeConfig } from "@/config/server-env";
+import { CatalogDomainError } from "./types";
+
+export function derivePresignedPutLifetime(
+  intentExpiresAtSeconds: number,
+  currentServerTimeSeconds: number,
+  maximumSigningDurationSeconds: number
+): number {
+  const remainingSeconds = intentExpiresAtSeconds - currentServerTimeSeconds;
+  if (remainingSeconds <= 0) {
+    throw new CatalogDomainError(
+      "La autorización temporal para subir el archivo ha expirado.",
+      "MEDIA_INTENT_TOKEN_EXPIRED",
+      410
+    );
+  }
+
+  return Math.min(remainingSeconds, maximumSigningDurationSeconds);
+}
 
 export interface StagingHeadResult {
   contentLength: number;
@@ -18,7 +36,11 @@ export interface StagingHeadResult {
 function isNotFoundError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
-  return e.name === "NotFound" || e.name === "NoSuchKey" || e.$metadata?.httpStatusCode === 404;
+  const statusCode = e.$metadata?.httpStatusCode;
+  if (statusCode !== undefined) {
+    return statusCode === 404;
+  }
+  return e.name === "NotFound" || e.name === "NoSuchKey";
 }
 
 function isPreconditionFailedError(err: unknown): boolean {
@@ -98,7 +120,7 @@ export class R2CatalogStorageAdapter implements CatalogStorageAdapter {
         })
       );
       if (res.ContentLength === undefined) {
-        return null;
+        throw new Error("Catalog storage HEAD response omitted ContentLength.");
       }
       return {
         contentLength: res.ContentLength,

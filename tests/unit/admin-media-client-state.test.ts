@@ -1,102 +1,85 @@
-import { describe, it, expect } from "vitest";
-import type { PendingFinalizationState } from "@/app/admin/(protected)/products/[productId]/product-editor";
+import { describe, expect, it } from "vitest";
+import {
+  buildMediaFinalizationRetryRequest,
+  transitionPendingFinalization,
+  type MediaFinalizationIdentity,
+  type PendingFinalizationState,
+} from "@/lib/admin/catalog/media-finalization-retry";
 
-describe("GP-024 Client Finalization Retry State (Defect G / Section 22)", () => {
-  it("initializes without pending finalization", () => {
-    let pendingFinalization: PendingFinalizationState | null = null;
-    expect(pendingFinalization).toBeNull();
+const FIRST_LOGICAL_OPERATION: MediaFinalizationIdentity = {
+  signedIntentToken: "signed-intent-token-T",
+  mutationRequestId: "mutation-request-id-M",
+  productId: "product-123",
+  targetVariantId: "variant-456",
+};
+
+function createReadyToRetryState(): PendingFinalizationState {
+  const pending = transitionPendingFinalization(null, {
+    type: "transport_failed",
+    identity: FIRST_LOGICAL_OPERATION,
+  });
+  if (!pending) {
+    throw new Error("Expected pending finalization state.");
+  }
+  return pending;
+}
+
+describe("GP-024 Client Finalization Retry State", () => {
+  it("creates pending finalization from the first transport failure with exact T, M, product, and variant", () => {
+    const pending = createReadyToRetryState();
+
+    expect(pending).toEqual({
+      ...FIRST_LOGICAL_OPERATION,
+      safeStatus: "ready_to_retry",
+    });
   });
 
-  it("captures pending state on transport error during finalization and retains exact tokens", () => {
-    const signedIntentToken = "valid.signed.intent.token";
-    const mutationRequestId = "mutation-req-uuid-1234";
-    const productId = "product-123";
-    const targetVariantId = "variant-456";
+  it("builds the retry request from pending state without changing the logical operation identity", () => {
+    const retryRequest = buildMediaFinalizationRetryRequest(createReadyToRetryState());
 
-    // When network fails during finalizeMediaUploadAction
-    const pending: PendingFinalizationState = {
-      signedIntentToken,
-      mutationRequestId,
-      productId,
-      targetVariantId,
-      safeStatus: "ready_to_retry",
-    };
-
-    expect(pending.signedIntentToken).toBe(signedIntentToken);
-    expect(pending.mutationRequestId).toBe(mutationRequestId);
-    expect(pending.productId).toBe(productId);
-    expect(pending.targetVariantId).toBe(targetVariantId);
-    expect(pending.safeStatus).toBe("ready_to_retry");
+    expect(retryRequest).toEqual(FIRST_LOGICAL_OPERATION);
+    expect(retryRequest.signedIntentToken).toBe("signed-intent-token-T");
+    expect(retryRequest.mutationRequestId).toBe("mutation-request-id-M");
   });
 
-  it("clears pending finalization state upon structured finalization success", () => {
-    let pendingFinalization: PendingFinalizationState | null = {
-      signedIntentToken: "token",
-      mutationRequestId: "req-1",
-      productId: "prod-1",
-      targetVariantId: null,
-      safeStatus: "ready_to_retry",
-    };
+  it("marks retrying and returns to ready_to_retry after a second transport failure with the same T and M", () => {
+    const ready = createReadyToRetryState();
+    const retrying = transitionPendingFinalization(ready, { type: "retry_started" });
+    expect(retrying?.safeStatus).toBe("retrying");
 
-    // On success:
-    pendingFinalization = null;
-    expect(pendingFinalization).toBeNull();
+    const secondFailure = transitionPendingFinalization(retrying, {
+      type: "transport_failed",
+      identity: {
+        signedIntentToken: "must-not-replace-T",
+        mutationRequestId: "must-not-replace-M",
+        productId: "must-not-replace-product",
+        targetVariantId: null,
+      },
+    });
+
+    expect(secondFailure).toEqual({
+      ...FIRST_LOGICAL_OPERATION,
+      safeStatus: "ready_to_retry",
+    });
   });
 
-  it("clears pending finalization state upon structured domain error rejection", () => {
-    let pendingFinalization: PendingFinalizationState | null = {
-      signedIntentToken: "token",
-      mutationRequestId: "req-1",
-      productId: "prod-1",
-      targetVariantId: null,
-      safeStatus: "ready_to_retry",
-    };
-
-    // Domain error (e.g. invalid format or mismatch) ends logical operation:
-    pendingFinalization = null;
-    expect(pendingFinalization).toBeNull();
+  it("clears pending finalization after structured success", () => {
+    expect(
+      transitionPendingFinalization(createReadyToRetryState(), { type: "structured_success" })
+    ).toBeNull();
   });
 
-  it("clears pending finalization state when user selects a different file", () => {
-    let pendingFinalization: PendingFinalizationState | null = {
-      signedIntentToken: "token",
-      mutationRequestId: "req-1",
-      productId: "prod-1",
-      targetVariantId: null,
-      safeStatus: "ready_to_retry",
-    };
-
-    // User selects new file:
-    pendingFinalization = null;
-    expect(pendingFinalization).toBeNull();
+  it("clears pending finalization after structured domain rejection", () => {
+    expect(
+      transitionPendingFinalization(createReadyToRetryState(), {
+        type: "structured_domain_rejection",
+      })
+    ).toBeNull();
   });
 
-  it("clears pending finalization state when user changes target variant", () => {
-    let pendingFinalization: PendingFinalizationState | null = {
-      signedIntentToken: "token",
-      mutationRequestId: "req-1",
-      productId: "prod-1",
-      targetVariantId: null,
-      safeStatus: "ready_to_retry",
-    };
+  it("clears the old pending operation when a new file or target starts a new logical upload", () => {
+    const pending = createReadyToRetryState();
 
-    // User changes target variant selector:
-    pendingFinalization = null;
-    expect(pendingFinalization).toBeNull();
-  });
-
-  it("never persists signedIntentToken to browser storage", () => {
-    // Verifies that neither window.localStorage nor sessionStorage are touched by client state logic
-    const dummyState: PendingFinalizationState = {
-      signedIntentToken: "sensitive-token-never-in-storage",
-      mutationRequestId: "req-id",
-      productId: "prod",
-      targetVariantId: null,
-      safeStatus: "ready_to_retry",
-    };
-
-    // In-memory state only:
-    expect(typeof dummyState).toBe("object");
-    expect(typeof window).toBe("undefined"); // Not available in Node / not writing to global storage
+    expect(transitionPendingFinalization(pending, { type: "new_logical_operation" })).toBeNull();
   });
 });
