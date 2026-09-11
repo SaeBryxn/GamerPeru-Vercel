@@ -1,14 +1,14 @@
-# GP-025 — AI Product Research & Import Contract (CHK0-BR2)
+# GP-025 — AI Product Research & Import Contract (CHK0-BR3)
 
 ## Status
 
-IN DISCOVERY / CONTRACT REMEDIATION PENDING EXTERNAL APPROVAL (CHK0-BR2)
+IN DISCOVERY / FINAL CONTRACT REMEDIATION PENDING EXTERNAL APPROVAL (CHK0-BR3)
 
 ---
 
 ## 1. Canonical Starting Lineage & Baseline Verification
 
-This document establishes the canonical contract, domain reconciliation, physical schema specifications, recovery architecture, security boundaries, and implementation plan for **GP-025 (AI Product Research & Import)**, incorporating all architectural remediations and findings from CHK0, CHK0-BR1, and CHK0-BR2.
+This document establishes the canonical contract, domain reconciliation, physical schema specifications, recovery architecture, security boundaries, and implementation plan for **GP-025 (AI Product Research & Import)**, incorporating all architectural remediations and findings from CHK0, CHK0-BR1, CHK0-BR2, and CHK0-BR3.
 
 GP-025 delivers the administrative AI Product Assistant, enabling authorized Gamer Perú staff to research, enrich, and prepare gaming hardware products for the catalog from product names, SKUs, or model codes, while strictly enforcing human-in-the-loop review, source provenance, category specification schemas, and credential isolation.
 
@@ -18,15 +18,17 @@ GP-025 delivers the administrative AI Product Assistant, enabling authorized Gam
 - **Starting Canonical Main SHA**: `c5b8c7b72b8b809c7053a5c9bae0a4b5dce5c321`
 - **Rejected CHK0 SHA**: `16d97a6ac775807a7066a38e0ba5a600b55dd589` (Preserved immutably in `audit/gp025-chk0`)
 - **Rejected CHK0-BR1 SHA**: `0ea3cdf78913d2a2c8cfea022a001a05742ab721` (Preserved immutably in `audit/gp025-chk0-br1`)
-- **Remediation Audit Branch**: `audit/gp025-chk0-br2`
+- **Rejected CHK0-BR2 SHA**: `396696d7e61fdb5d656fa41041a8fc8c28580c82` (Preserved immutably in `audit/gp025-chk0-br2`)
+- **Remediation Audit Branch**: `audit/gp025-chk0-br3`
 - **GP-024 Status**: `CLOSED / EXTERNALLY APPROVED / FROZEN / PASS WITH NOTES / MAIN INTEGRATION COMPLETE`
 - **GP-024 Contract Blob**: `0292679a73bd61611eac4f3464f975efb6c91a44` (`docs/roadmap/GP-024-CONTRACT.md`)
+- **Canonical Migration 0012 Path**: `src/db/migrations/0012_canonical_inventory_permission.sql`
 - **Migration 0012 Git Blob**: `e80c30ae9d0f86e14486b0fd5c782eb9ec3f7119` (`src/db/migrations/0012_canonical_inventory_permission.sql`)
-- **Migration Sequence Rule**: At canonical base `c5b8c7b72b8b809c7053a5c9bae0a4b5dce5c321`, the next expected migration sequence number is `0013`. CHK1 must re-fetch `origin/main` immediately before implementation; if another canonical migration has landed, CHK1 must use the next valid sequential number. **CHK0-BR2 creates NO database migration.**
+- **Migration Sequence Rule**: At canonical base `c5b8c7b72b8b809c7053a5c9bae0a4b5dce5c321`, the next expected migration sequence number is `0013`. CHK1 must re-fetch `origin/main` immediately before implementation; if another canonical migration has landed, CHK1 must use the next valid sequential number. **CHK0-BR3 creates NO database migration.**
 - **Hosted Supabase**: 100% Untouched (No hosted access or mutations).
 - **Cloudflare R2**: 100% Untouched (Bucket provisioning remains deferred per GP-024 closure).
 - **Real AI Providers**: 100% Untouched (Zero external API calls; zero provider SDKs installed).
-- **GP-025 Roadmap Status**: `IN DISCOVERY / CONTRACT REMEDIATION PENDING EXTERNAL APPROVAL (CHK0-BR2)`
+- **GP-025 Roadmap Status**: `IN DISCOVERY / FINAL CONTRACT REMEDIATION PENDING EXTERNAL APPROVAL (CHK0-BR3)`
 - **GP-026 Status**: `NOT BEGUN`
 
 ---
@@ -46,10 +48,11 @@ GP-025 delivers the administrative AI Product Assistant, enabling authorized Gam
 9. **Media-Candidate Discovery**: Identifying potential media references with fail-closed usage-rights classification (reference candidates only; no automatic CDN ingestion).
 10. **Human-in-the-Loop Review UI**: Administrative workspace for side-by-side inspection, conflict resolution, staff price entry, field-by-field selection, and approval.
 11. **Provider & Profile Abstraction**: Decoupled internal gateway supporting provider profiles (`PRODUCT_RESEARCH_FAST`, `PRODUCT_RESEARCH_DEEP`, `SEO_COPY`, `BATCH_IMPORT`).
-12. **Hardened Credential Security at Rest**: AES-256-GCM encryption with hex encoding, dynamic server-side AAD computation, active partial unique indexes, and server-runtime master key separation.
-13. **Durable Inngest Jobs & Deterministic Recovery**: Multi-step background workflows with worker lease-claiming, lease expiration recovery, and scheduled reconciliation scanning.
-14. **Provider Invocation Attempts & Sub-Cent Telemetry**: Durable attempt tracking including `UNKNOWN` state handling and integer micro-unit (`cost_micros`) cost accounting with explicit pricing versioning and cost source classification.
-15. **Crash-Safe Canonical Apply Operations**: Stable per-step mutation request identity tracking in `ai_proposal_apply_steps` with actor binding, preventing duplicate mutations across process crashes.
+12. **Immutable Profile Execution Snapshots**: Preserving the exact execution profile settings (`profileKey`, `providerId`, `modelId`, `temperature`, `maxTokens`) at job creation and attempt execution times.
+13. **Hardened Credential Security at Rest**: AES-256-GCM encryption with hex encoding, versioned server master key resolution, dynamic server-side AAD computation, active partial unique indexes, and server-runtime master key separation.
+14. **Durable Inngest Jobs & Dual Recovery Concerns**: Multi-step background workflows with worker lease-fencing, atomic claim eligibility, scheduled dispatch reconciliation, and scheduled expired-item recovery.
+15. **Provider Invocation Attempts & Sub-Cent Telemetry**: Durable attempt tracking including `UNKNOWN` state handling and integer micro-unit (`cost_micros`) cost accounting with explicit pricing versioning and cost source classification.
+16. **Crash-Safe Canonical Apply Operations**: Stable per-step mutation request identity tracking in `ai_proposal_apply_steps` with frozen request payloads, request fingerprints, apply actor binding, and clear separation between CREATE and ENRICH apply capabilities.
 
 ### Explicitly Out of Scope
 
@@ -61,8 +64,10 @@ GP-025 delivers the administrative AI Product Assistant, enabling authorized Gam
 6. **Unbounded Web Crawling**: Scraping entire websites or recursive link following is strictly forbidden.
 7. **Direct Automatic Media Ingestion**: Remote image URLs are never downloaded and uploaded directly to the public CDN. Operators must confirm rights and provide bytes through the GP-024 upload intent pipeline.
 8. **Autonomous Supplier Purchasing**: Purchasing or stock procurement automation is strictly out of scope.
-9. **Product Story Builder (GP-026)**: Visual block-based editorial story authoring remains deferred to GP-026.
-10. **Direct PDF Parsing in v1**: Direct binary PDF parsing is out of scope for GP-025 v1; PDF URLs are retained as reference evidence only.
+9. **ENRICH Existing Variant Modification**: `ENRICH_EXISTING_VARIANT_MUTATION: NO`. GP-025 v1 does not modify an already-existing `ProductVariant` through `updateVariant`. It may update Product fields/specifications (after the `updateProduct` idempotency extension) and create new approved variants via `createVariant` if staff inputs pricing.
+10. **In-Flight Cooperative Cancellation in v1**: `CANCELLATION_SUPPORTED: NO` for GP-025 v1. Jobs do not have a physical `CANCELLED` state.
+11. **Product Story Builder (GP-026)**: Visual block-based editorial story authoring remains deferred to GP-026.
+12. **Direct PDF Parsing in v1**: Direct binary PDF parsing is out of scope for GP-025 v1; PDF URLs are retained as reference evidence only.
 
 ---
 
@@ -110,14 +115,22 @@ An exhaustive audit of the actual repository implementation at commit `c5b8c7b72
 - **Inngest Serving Endpoint**: Physically mounted and operational at `src/app/api/inngest/route.ts` via `serve({ client, functions: [...] })`.
 - **Existing Function**: `inventoryReservationExpirationJob`.
 
-### D. Authoritative GP-024 Catalog Services Truth
+### D. Authoritative GP-024 Catalog Services & Idempotency Reality
 
 The GP-024 catalog authoring domain is implemented under `src/lib/admin/catalog/`:
 
-- `createProduct(input, options)`: Creates canonical product and optional initial variant.
-- `createVariant(input, options)`: Creates canonical sellable variant with mandatory `priceCents`.
+- `createProduct(input, options)`: Creates canonical product and optional initial variant. **Supports durable actor-scoped mutation replay via `catalog:product:create` AuditEvent and transaction advisory locks.**
+- `createVariant(input, options)`: Creates canonical sellable variant with mandatory `priceCents`. **Supports durable actor-scoped mutation replay via `catalog:variant:create` AuditEvent and transaction advisory locks.**
 - `updateProduct(input, options)`: Updates product attributes and dynamic specifications (`specValues`).
-- `updateVariant(input, options)`: Updates variant attributes, price, and status.
+  **CRITICAL CURRENT REPOSITORY REALITY**:
+  `updateProduct` accepts `mutationRequestId` in its TypeScript input type, **BUT** its current implementation:
+  1. Does **NOT** compute `mutationRequestDigest`.
+  2. Does **NOT** compute `requestFingerprint`.
+  3. Does **NOT** acquire an idempotency transaction advisory lock.
+  4. Does **NOT** probe a replay `AuditEvent`.
+  5. Performs `expectedUpdatedAt` optimistic concurrency checking before any replay capability can execute.
+     **Therefore, ENRICH Product updates are NOT currently durable-idempotent across the "catalog commit succeeded / GP-025 apply-step completion write failed" process crash window.**
+- `updateVariant(input, options)`: Updates variant attributes, price, and status. Does not currently support mutation replay.
 - `transitionProductStatus(input, options)`: Authoritative lifecycle transition (`catalog:publish` strictly required for `PUBLISHED`).
 - `requestCatalogMediaUploadIntent(input, options)`: Issues signed upload intent for staging.
 - `finalizeCatalogMediaUpload(input, options)`: Finalizes normalized WebP media from staging.
@@ -143,30 +156,45 @@ Authorization is strictly enforced server-side. AI models and background workers
 
 ---
 
-## 5. Job Creation Idempotency Contract
+## 5. Job Creation Idempotency & Profile Execution Snapshot
 
 The job creation boundary uses the canonical actor- and action-scoped idempotency digest pattern:
 
 1. **Client Request Boundary**: The client provides a high-entropy string `mutationRequestId` when submitting a research job.
 2. **Digest Computation**:
    $$\text{mutationRequestDigest} = \text{SHA256}(\text{actorAuthUserId} \parallel \text{":ai:research-job:create:"} \parallel \text{mutationRequestId})$$
-3. **Request Fingerprinting**:
-   $$\text{requestFingerprint} = \text{SHA256}(\text{normalizedPayload})$$
-   Binding: `jobType`, ordered normalized items (input queries, modes, target product IDs), and selected `profileKey`.
-4. **Persistence & Replay Invariants**:
+3. **Selected Profile Persistence & Snapshot**:
+   - `selected_profile_id uuid NOT NULL REFERENCES ai_profiles(id) ON DELETE RESTRICT` is stored on `ai_research_jobs`.
+   - `profile_snapshot jsonb NOT NULL` stores an immutable, non-secret execution snapshot captured at job creation time containing:
+     - `profileKey`: string
+     - `providerId`: UUID
+     - `modelId`: string
+     - `temperature`: number
+     - `maxTokens`: number
+     - any other material provider-independent execution settings.
+   - Provider credentials and secrets are **NEVER** stored in `profile_snapshot`.
+4. **Request Fingerprinting**:
+   $$\text{requestFingerprint} = \text{SHA256}(\text{canonical\_json}(\{ \text{jobType}, \text{orderedNormalizedItems}, \text{mode}, \text{targetProductId}, \text{profileSnapshot} \}))$$
+5. **Persistence & Replay Invariants**:
    - The raw `mutationRequestId` is accepted at the request boundary only and is **NEVER** persisted in `ai_research_jobs`.
    - `mutation_request_digest varchar(64) NOT NULL UNIQUE` and `request_fingerprint varchar(64) NOT NULL` are stored in `ai_research_jobs`.
    - **Same Actor + Same Request ID + Same Fingerprint**: Returns the committed job replay.
    - **Same Actor + Same Request ID + Different Fingerprint**: Fails closed with `AI_IDEMPOTENCY_CONFLICT`.
    - **Different Request IDs + Identical Payload**: Creates two legitimate distinct jobs.
    - **Different Actors with Same Raw Request ID**: Generates distinct `mutationRequestDigest` values.
-5. **Inngest Event Payload**: The Inngest event payload does not require the raw request ID; it carries only durable `jobId` and deterministic `inngestEventId`.
+6. **Profile Change Retry Semantics**:
+   - If an administrator edits an AI profile in `ai_profiles` after a job was created, the existing job and any subsequent worker executions or retries continue to use the frozen `profile_snapshot`.
+   - A new logical job may use the newly edited profile. A retry of the same job does not silently upgrade models or settings.
+7. **Disabled Provider / Profile at Execution**:
+   - If the selected provider or profile is disabled after job creation but before execution, workers do **NOT** silently switch providers.
+   - The item fails closed with `AI_PROVIDER_DISABLED` or `AI_PROFILE_DISABLED`, preserving the original snapshot for audit.
+8. **Inngest Event Payload**: The Inngest event payload does not require the raw request ID; it carries only durable `jobId` and deterministic `inngestEventId`.
 
 ---
 
-## 6. DB $\to$ Inngest Reliable Dispatch & Worker Lease Model
+## 6. Dual Recovery Concerns: Dispatch Reconciliation & Worker Lease Fencing
 
-### Reliable Dispatch Architecture
+### Concern 1: Reliable Dispatch & Scheduled Reconciliation
 
 To prevent job loss from dual-write failure between the PostgreSQL transaction commit and Inngest event emission:
 
@@ -181,54 +209,139 @@ To prevent job loss from dual-write failure between the PostgreSQL transaction c
    using the operational index `ai_research_jobs_dispatch_recon_idx` and re-emits the event using the exact same deterministic event ID.
 7. **Send Success + Status Update Failure**: If Inngest receives the event but the database status update fails, re-emission is completely safe because the deterministic event ID and worker lease model prevent duplicate executions.
 
-### Worker Lease & Crash Recovery Model
+### Concern 2: Worker Lease Fencing & Scheduled Expired-Item Recovery
 
 To prevent jobs from becoming stranded if a worker crashes after setting `status = 'PROCESSING'`:
 
 1. Each `ai_research_job_items` record tracks:
-   - `processing_lease_token uuid`
-   - `processing_lease_expires_at timestamptz`
-   - `last_heartbeat_at timestamptz`
-2. **Item State Transitions & Claims**:
-   - **Unclaimed Item** (`status = 'PENDING'` or `processing_lease_expires_at < NOW()`):
-     Atomically claimed via conditional update:
-     `UPDATE ai_research_job_items SET status = 'RESEARCHING', processing_lease_token = :workerToken, processing_lease_expires_at = NOW() + INTERVAL '5 minutes', last_heartbeat_at = NOW() WHERE id = :id AND (status = 'PENDING' OR processing_lease_expires_at < NOW())`
-   - **Active Unexpired Lease** (`processing_lease_expires_at > NOW()`):
-     Competing worker delivery skips execution (prevents concurrent duplicate processing).
-   - **Expired Lease Recovery**:
-     If a worker crashes mid-call, its lease expires. A subsequent at-least-once delivery or reconciliation sweep detects `processing_lease_expires_at < NOW()`, reclaims the item, and resumes processing.
-   - **Durable Completed Step Reuse**:
-     If structured results are already persisted in `ai_product_proposals`, resuming workers reuse the persisted record rather than calling the AI provider again.
-   - **No Long-Lived DB Locks**: PostgreSQL transactions or advisory locks are **NEVER** held open across external HTTP/AI provider calls.
-   - **Duplicate Event on Terminal Job**: If `job.status IN ('COMPLETED', 'PARTIALLY_FAILED', 'FAILED')`, duplicate events perform an immediate harmless no-op.
+   - `processing_lease_token uuid`: High-entropy token assigned on successful claim.
+   - `processing_lease_expires_at timestamptz`: Expiration timestamp of the current lease.
+   - `last_heartbeat_at timestamptz`: Timestamp of the last successful worker heartbeat.
+2. **Claim Eligibility**:
+   A worker is eligible to claim an item **ONLY** if:
+   - **Condition A**: `status = 'PENDING'` AND `processing_lease_token IS NULL`; **OR**
+   - **Condition B**: `status = 'RESEARCHING'` AND `processing_lease_expires_at < NOW()`.
+     **Zero other states may be claimed.** Rows in `READY_FOR_REVIEW`, `NEEDS_ATTENTION`, `AMBIGUOUS`, `SOURCE_CONFLICT`, `FAILED`, `APPROVED`, or `APPLIED` are **NEVER** eligible for lease claim merely because an old lease timestamp exists.
+3. **Atomic Conditional Claim Query**:
+   ```sql
+   UPDATE ai_research_job_items
+   SET status = 'RESEARCHING',
+       processing_lease_token = :workerToken,
+       processing_lease_expires_at = NOW() + INTERVAL '5 minutes',
+       last_heartbeat_at = NOW(),
+       updated_at = NOW()
+   WHERE id = :itemId
+     AND (
+       (status = 'PENDING' AND processing_lease_token IS NULL)
+       OR
+       (status = 'RESEARCHING' AND processing_lease_expires_at < NOW())
+     )
+   RETURNING id, processing_lease_token;
+   ```
+4. **Lease Fencing on Every Mutation**:
+   Every worker-owned persistence mutation after claim MUST include:
+   ```sql
+   WHERE id = :itemId
+     AND processing_lease_token = :myLeaseToken
+     AND processing_lease_expires_at > NOW()
+   ```
+   This fencing condition is strictly mandatory for:
+   - Heartbeat updates;
+   - Provider-attempt result association;
+   - Source and provenance finalization;
+   - Proposal publication;
+   - Item status transitions;
+   - Failure completions;
+   - Lease release upon exiting `RESEARCHING`.
+5. **Stale Worker Write Rejection**:
+   If a mutation's affected row count is 0, the worker has lost ownership (`LEASE_LOST`). The worker **MUST NOT** publish its stale results and must abort further processing. A stale Worker A cannot overwrite Worker B after Worker B reclaims an expired lease.
+6. **Heartbeat Semantics**:
+   A worker may extend its lease only if it holds the active token and the lease has not already expired:
+   ```sql
+   UPDATE ai_research_job_items
+   SET processing_lease_expires_at = NOW() + INTERVAL '5 minutes',
+       last_heartbeat_at = NOW(),
+       updated_at = NOW()
+   WHERE id = :itemId
+     AND processing_lease_token = :myLeaseToken
+     AND processing_lease_expires_at > NOW();
+   ```
+   An expired worker cannot resurrect its lease. Heartbeat cadence is implementation configuration (e.g. every 60 seconds).
+7. **Lease Clearing on Exit**:
+   When a worker successfully leaves `RESEARCHING` for a non-processing state (`READY_FOR_REVIEW`, `NEEDS_ATTENTION`, etc.), the lease is explicitly cleared:
+   `processing_lease_token = NULL`, `processing_lease_expires_at = NULL`.
+8. **Scheduled Expired-Item Recovery**:
+   Dispatch reconciliation alone does not recover a worker that consumed an event and died with an item in `RESEARCHING`. CHK2 implements a scheduled worker-recovery scanner:
+   `SELECT id FROM ai_research_job_items WHERE status = 'RESEARCHING' AND processing_lease_expires_at < NOW()`
+   using index `ai_research_job_items_lease_reclaim_idx`. The scanner safely claims and resumes stale items or emits a distinct recovery event with deterministic recovery identity.
+9. **Provider Call Result Fencing**:
+   If an external AI call returns after the caller lost its lease:
+   - The provider attempt row remains recorded in `ai_provider_attempts` for financial and audit truth.
+   - Its result **MUST NOT** become the authoritative product proposal unless the worker still owns the valid lease.
+10. **Terminal State Harmless Replay**:
+    If `job.status IN ('COMPLETED', 'PARTIALLY_FAILED', 'FAILED')`, duplicate events perform an immediate harmless no-op.
 
 ---
 
-## 7. Resumable Canonical Apply Architecture
+## 7. Resumable Canonical Apply Architecture: CREATE vs ENRICH
 
-Applying an approved proposal into the catalog invokes authoritative GP-024 catalog services. To make this crash-safe without distributed transactions:
+Applying an approved proposal into the catalog invokes authoritative GP-024 catalog services. Because GP-024 catalog mutations cannot participate in distributed transactions with background workers, crash-safe apply requires strict per-step durability.
 
-### Normalized Apply Step Tracking (`ai_proposal_apply_steps`)
+### A. Normalized Apply Step Tracking (`ai_proposal_apply_steps`)
+
+To reconstruct the exact same GP-024 retry across process crashes:
 
 1. **Pre-Call Step Persistence**:
    Before each GP-024 mutation, a step row is persisted in `ai_proposal_apply_steps` recording:
    - `apply_operation_id`: UUIDv7 identifying the logical apply operation.
    - `apply_actor_auth_user_id`: Auth ID of the staff member initiating apply.
-   - `step_key`: Unique string identifier (e.g. `'PRODUCT_CREATE'`, `'VARIANT_CREATE:0'`, `'VARIANT_CREATE:1'`).
-   - `mutation_request_id`: The exact, stable `mutationRequestId` passed to GP-024 for that step.
-   - `step_status`: `'PENDING'`.
-2. **Deterministic Step Execution**:
-   - **Step 1 (Product Creation / Update)**: Calls `createProduct(...)` or `updateProduct(...)` with `mutationRequestId`. On success, records `target_id = productId` and `step_status = 'COMMITTED'`.
-   - **Step 2 (Variant Creation)**: For each approved variant with staff-entered prices, calls `createVariant(...)` with its unique `mutationRequestId`. On success, records `target_id = variantId` and `step_status = 'COMMITTED'`.
-   - **Step 3 (Proposal Finalization)**: Transitions `ai_product_proposals.status = 'APPLIED'`.
-3. **Crash Recovery Semantics**:
-   - If the process crashes after a GP-024 mutation commits but before GP-025 records completion, re-running the apply operation re-reads `ai_proposal_apply_steps` and replays GP-024 with the **SAME** `mutationRequestId`.
-   - GP-024's idempotent mutation digest layer detects the replay and returns the existing entity cleanly without creating duplicates.
-4. **Apply Actor Binding & Cross-Actor Rejection**:
-   - GP-024 mutation digests are actor-scoped.
-   - Resuming an apply operation is strictly bound to `apply_actor_auth_user_id`.
-   - If a different actor attempts to resume an incomplete apply operation, the system fails closed with `APPLY_ACTOR_MISMATCH`.
-   - Canonical apply requires verified `catalog:manage` permission on every attempt. No stale session tokens or permissions are persisted.
+   - `step_key`: Stable step identifier (e.g. `'PRODUCT_CREATE'`, `'PRODUCT_UPDATE'`, `'VARIANT_CREATE:0'`).
+   - `step_ordinal`: Execution sequence order (0, 1, 2...).
+   - `mutation_request_id`: Stable mutation request ID passed to GP-024 for that step (e.g. `ai-apply-${applyOperationId}-product`).
+   - `request_payload`: Normalized, non-secret catalog mutation payload frozen before the first GP-024 call.
+   - `request_fingerprint`: SHA-256 hash of `canonical_json(request_payload)`.
+   - `step_status`: `'PREPARED'`.
+2. **Apply Step State Machine**:
+   - `PREPARED`: Step created with frozen payload and stable mutation ID before invocation.
+   - `IN_FLIGHT`: State updated immediately before external/domain call.
+   - `COMMITTED`: GP-024 mutation committed successfully; `target_id` recorded.
+   - `FAILED_RETRYABLE`: Transient failure occurred; eligible for retry with identical stored payload and mutation ID.
+   - `FAILED_TERMINAL`: Permanent failure or domain validation rejection.
+3. **Step Row as Sole Retry Authority**:
+   Retries **MUST** reuse the exact stored `request_payload` and `mutation_request_id`. Workers and retry handlers **MUST NOT** regenerate mutation semantics from a mutable proposal row after a step has been prepared.
+4. **Apply Actor Authority & Cross-Actor Rejection**:
+   - `apply_actor_auth_user_id` binds the logical apply operation.
+   - Every HTTP retry must obtain a **CURRENT** verified auth session with `catalog:manage` permission.
+   - The stored actor ID is identity binding only; it is **NOT** ambient stored authority. No session tokens, cookies, or JWTs are persisted.
+   - Cross-actor retry attempts fail closed with `APPLY_ACTOR_MISMATCH`.
+
+### B. Separate CREATE vs ENRICH Apply Capabilities
+
+#### 1. CREATE Mode (Supported in GP-025 Foundation)
+
+- `createProduct` and `createVariant` support durable actor-scoped mutation replay via `catalog:product:create` and `catalog:variant:create` AuditEvents and transaction advisory locks.
+- If a crash occurs with step state `IN_FLIGHT`, retry re-submits the exact same `mutation_request_id`.
+- GP-024 detects the committed digest, returns the committed entity, and `ai_proposal_apply_steps` advances to `COMMITTED`.
+
+#### 2. ENRICH Mode (Requires Future CHK3 Idempotency Extension)
+
+- As audited in Section 3.D, existing `updateProduct` does **NOT** support mutation replay.
+- **GP-025 CHK3 MUST NOT enable crash-safe ENRICH apply until an externally reviewed backward-compatible idempotency extension is implemented for `updateProduct`.**
+- **Future `updateProduct` Idempotency Extension Specification**:
+  When `mutationRequestId` is supplied to `updateProduct(...)`:
+  1. Derive actor-scoped `mutationRequestDigest` using action `catalog:product:update`.
+  2. Compute `requestFingerprint` over normalized target mutation (`productId`, `expectedUpdatedAt`, normalized mutable Product fields, `specValues`).
+  3. Acquire canonical transaction advisory lock for that digest.
+  4. Perform committed replay lookup in `AuditEvent` **BEFORE** stale-write optimistic concurrency rejection can block a genuine retry after an already-committed update.
+  5. Verify: `action`, `actor`, `target_type`, `target_id`, `requestFingerprint`, and durable target existence.
+  6. If replay exists with same fingerprint: return committed Product.
+  7. If replay exists with different fingerprint: return `CATALOG_IDEMPOTENCY_CONFLICT`.
+  8. If no replay exists: continue existing locked optimistic-concurrency and domain validation behavior unchanged.
+  9. Write `mutation_request_digest` and `request_fingerprint` into transactional `catalog:product:update` AuditEvent.
+  10. Continue to persist zero raw `mutationRequestId` in GP-024 AuditEvent.
+  - Callers omitting `mutationRequestId` preserve current behavior unchanged.
+- **ENRICH Variant Scope**:
+  `ENRICH_EXISTING_VARIANT_MUTATION: NO`. GP-025 v1 does not modify existing variants via `updateVariant`. It may update Product fields/specifications (after the `updateProduct` extension) and create new approved variants via `createVariant` if staff inputs pricing.
 
 ---
 
@@ -259,14 +372,38 @@ A single field proposal may be supported by multiple sources or contradicted by 
 
 ---
 
-## 9. Hardened Credential Security & AES-256-GCM Architecture
+## 9. Hardened Credential Security & Versioned Master Key Resolution
 
 Reconciling with **ADR-007**, all provider API credentials configured via the Admin interface must be encrypted at rest.
+
+### Versioned Server Master Key Resolution
+
+- **Active Version Configuration**:
+  `AI_ENCRYPTION_ACTIVE_KEY_VERSION` specifies the active master key version (positive integer, e.g. `1`).
+- **Versioned Secrets**:
+  Master keys are configured as versioned environment secrets:
+  `AI_ENCRYPTION_KEY_V1`, `AI_ENCRYPTION_KEY_V2`, etc.
+- **Encryption Flow**:
+  - Reads `AI_ENCRYPTION_ACTIVE_KEY_VERSION`.
+  - Resolves `AI_ENCRYPTION_KEY_V{activeVersion}`.
+  - Validates key format (32 bytes / 64 hex characters).
+  - Rejects known repository sentinel/insecure placeholders.
+  - Stores `activeVersion` in `credential.key_version`.
+- **Decryption Flow**:
+  - Reads `credential.key_version`.
+  - Resolves `AI_ENCRYPTION_KEY_V{key_version}`.
+  - If corresponding key secret is missing: fails closed immediately (`MISSING_ENCRYPTION_KEY_VERSION`).
+  - Never silently attempts decryption with other key versions.
+- **Rotation Flow**:
+  - New version configured in environment.
+  - Active version switched under controlled procedure.
+  - Target credential rows decrypted with their recorded `key_version` and re-encrypted with active version and fresh IV/tag/AAD.
+  - Old keys remain available until all eligible rows are migrated and verified.
+  - Master key material is **NEVER** persisted in PostgreSQL.
 
 ### Cryptographic Storage & Format Constraints
 
 - **Cipher**: `aes-256-gcm`.
-- **Master Key**: `AI_ENCRYPTION_KEY_V1` (32 bytes / 64 hex characters) from server environment.
 - **IV Storage**: Hex string, exactly 24 characters: `CHECK (iv ~ '^[0-9a-f]{24}$')`.
 - **Auth Tag Storage**: Hex string, exactly 32 characters: `CHECK (auth_tag ~ '^[0-9a-f]{32}$')`.
 - **Ciphertext Storage**: Hex string, even length, non-empty: `CHECK (ciphertext ~ '^[0-9a-f]+$' AND length(ciphertext) % 2 = 0 AND length(ciphertext) > 0)`.
@@ -282,28 +419,33 @@ To prevent ciphertext-swapping attacks between different provider records:
   where `providerId` is the immutable UUID of the parent provider.
 - Tampering with `providerId`, `credentialId`, or `keyVersion` causes immediate GCM authentication tag failure.
 
-### Credential Active Uniqueness & Replacement Lifecycle
+### Credential Active Uniqueness & Lifecycle
 
+- **Clean Credential Status**:
+  `status`: `CHECK (status IN ('ACTIVE', 'REVOKED'))`.
+  Health check status is decoupled into separate metadata columns:
+  `last_health_status`: `varchar(30) NULL CHECK (last_health_status IS NULL OR last_health_status IN ('HEALTHY', 'UNHEALTHY', 'UNTESTED'))`.
+  `last_tested_at`: `timestamptz NULL`.
+  Transient health check failure does not alter credential lifecycle status or compromise uniqueness invariants.
 - **Active Uniqueness**: Enforced via partial unique index:
   `CREATE UNIQUE INDEX ai_provider_credentials_active_idx ON ai_provider_credentials (provider_id) WHERE status = 'ACTIVE';`
 - **Multiple Historical Records**: Multiple historical rows may exist per provider.
 - **Atomic Replacement**: Configuring a new credential atomically inserts a new row (`status = 'ACTIVE'`) and transitions the existing active row to `status = 'REVOKED'`.
 - **Revoked Ciphertext Policy**: Revoked ciphertext is retained encrypted for audit history and key rotation verification, but is strictly rejected for active AI provider execution.
-- **Key Rotation**: Rotates both `ACTIVE` and historical `REVOKED` records using active master key versions without altering credential logical identity.
-
-### Sentinel Rejection & Non-Blocking Boot
-
-- **CHK1 Mandatory Requirement**: The crypto helper must reject the repository example sentinel key (`0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`).
-- **Non-Blocking Boot**: A missing or unconfigured `AI_ENCRYPTION_KEY_V1` fails closed strictly at credential encrypt/decrypt/health-test boundaries. It must **NOT** cause application boot failure.
 
 ---
 
 ## 10. Provider Attempt & Sub-Cent Telemetry Model
 
-### Telemetry Row Shape & Health Check Separation
+### Telemetry Row Shape & Execution Snapshot
 
 - **Health Check Separation**: Health checks are privileged administrative operations recorded in `AuditEvent` (`AI_HEALTH_CHECK_EXECUTED`). They do not create rows in `ai_provider_attempts`.
 - **Invocation Telemetry**: `ai_provider_attempts` records research and generation calls only. `job_item_id`, `provider_id`, `model_id`, and `profile_id` are strictly `NOT NULL`.
+- **Attempt Execution Snapshot**: In addition to foreign keys, attempts persist the exact execution parameters sent:
+  - `profile_key`: `varchar(50) NOT NULL`
+  - `temperature`: `numeric(3, 2) NOT NULL`
+  - `max_tokens`: `integer NOT NULL`
+    Historical attempt telemetry remains immutable even if profiles are subsequently modified.
 - `operation_type`: `CHECK (operation_type IN ('IDENTITY_RESOLUTION', 'SPEC_EXTRACTION', 'COPY_GENERATION'))`.
 
 ### Nullable / Typed Cost Representation
@@ -356,7 +498,8 @@ Every internal entity uses an application-generated **UUIDv7** primary key (`gen
 - `iv`: `varchar(64) NOT NULL CHECK (iv ~ '^[0-9a-f]{24}$')`
 - `auth_tag`: `varchar(64) NOT NULL CHECK (auth_tag ~ '^[0-9a-f]{32}$')`
 - `masked_key`: `varchar(50) NOT NULL`
-- `status`: `varchar(20) NOT NULL CHECK (status IN ('ACTIVE', 'REVOKED', 'FAILED_HEALTH_CHECK'))`
+- `status`: `varchar(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'REVOKED'))`
+- `last_health_status`: `varchar(30) CHECK (last_health_status IS NULL OR last_health_status IN ('HEALTHY', 'UNHEALTHY', 'UNTESTED'))`
 - `last_tested_at`: `timestamptz`
 - `created_at`: `timestamptz NOT NULL DEFAULT NOW()`
 - `updated_at`: `timestamptz NOT NULL DEFAULT NOW()`
@@ -378,6 +521,8 @@ Every internal entity uses an application-generated **UUIDv7** primary key (`gen
 - `id`: `uuid PRIMARY KEY` (UUIDv7 application-generated)
 - `mutation_request_digest`: `varchar(64) NOT NULL UNIQUE CHECK (mutation_request_digest ~ '^[0-9a-f]{64}$')`
 - `request_fingerprint`: `varchar(64) NOT NULL CHECK (request_fingerprint ~ '^[0-9a-f]{64}$')`
+- `selected_profile_id`: `uuid NOT NULL REFERENCES ai_profiles(id) ON DELETE RESTRICT`
+- `profile_snapshot`: `jsonb NOT NULL`
 - `job_type`: `varchar(20) NOT NULL CHECK (job_type IN ('SINGLE', 'BATCH'))`
 - `status`: `varchar(20) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'PROCESSING', 'COMPLETED', 'PARTIALLY_FAILED', 'FAILED'))`
 - `dispatch_status`: `varchar(20) NOT NULL DEFAULT 'PENDING_DISPATCH' CHECK (dispatch_status IN ('PENDING_DISPATCH', 'DISPATCHED', 'DISPATCH_FAILED'))`
@@ -388,6 +533,7 @@ Every internal entity uses an application-generated **UUIDv7** primary key (`gen
 - `created_by_auth_user_id`: `uuid REFERENCES auth.users(id) ON DELETE SET NULL`
 - `created_at`: `timestamptz NOT NULL DEFAULT NOW()`
 - `updated_at`: `timestamptz NOT NULL DEFAULT NOW()`
+- `CHECK (completed_items + failed_items <= total_items)`
 
 ### Table 5: `ai_research_job_items`
 
@@ -486,11 +632,13 @@ Every internal entity uses an application-generated **UUIDv7** primary key (`gen
 - `proposal_id`: `uuid NOT NULL REFERENCES ai_product_proposals(id) ON DELETE RESTRICT`
 - `apply_operation_id`: `uuid NOT NULL`
 - `apply_actor_auth_user_id`: `uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT`
-- `step_key`: `varchar(50) NOT NULL` (e.g. `'PRODUCT_CREATE'`, `'VARIANT_CREATE:0'`, `'VARIANT_CREATE:1'`)
+- `step_key`: `varchar(50) NOT NULL` (e.g. `'PRODUCT_CREATE'`, `'PRODUCT_UPDATE'`, `'VARIANT_CREATE:0'`)
 - `step_ordinal`: `integer NOT NULL CHECK (step_ordinal >= 0)`
 - `mutation_request_id`: `varchar(128) NOT NULL` (The stable mutation ID sent to GP-024)
-- `step_status`: `varchar(20) NOT NULL DEFAULT 'PENDING' CHECK (step_status IN ('PENDING', 'COMMITTED', 'FAILED'))`
-- `target_id`: `uuid` (Resulting product or variant ID)
+- `request_fingerprint`: `varchar(64) NOT NULL CHECK (request_fingerprint ~ '^[0-9a-f]{64}$')`
+- `request_payload`: `jsonb NOT NULL` (Frozen normalized catalog mutation payload)
+- `step_status`: `varchar(20) NOT NULL DEFAULT 'PREPARED' CHECK (step_status IN ('PREPARED', 'IN_FLIGHT', 'COMMITTED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL'))`
+- `target_id`: `uuid` (Resulting product or variant ID once committed)
 - `error_message`: `text`
 - `created_at`: `timestamptz NOT NULL DEFAULT NOW()`
 - `updated_at`: `timestamptz NOT NULL DEFAULT NOW()`
@@ -504,6 +652,9 @@ Every internal entity uses an application-generated **UUIDv7** primary key (`gen
 - `provider_id`: `uuid NOT NULL REFERENCES ai_providers(id) ON DELETE RESTRICT`
 - `model_id`: `varchar(100) NOT NULL`
 - `profile_id`: `uuid NOT NULL REFERENCES ai_profiles(id) ON DELETE RESTRICT`
+- `profile_key`: `varchar(50) NOT NULL`
+- `temperature`: `numeric(3, 2) NOT NULL`
+- `max_tokens`: `integer NOT NULL`
 - `operation_type`: `varchar(50) NOT NULL CHECK (operation_type IN ('IDENTITY_RESOLUTION', 'SPEC_EXTRACTION', 'COPY_GENERATION'))`
 - `attempt_ordinal`: `integer NOT NULL CHECK (attempt_ordinal >= 1)`
 - `request_digest`: `varchar(64) NOT NULL CHECK (request_digest ~ '^[0-9a-f]{64}$')`
@@ -615,44 +766,57 @@ Zero secrets or raw prompts are recorded in `AuditEvent.metadata`.
 2. **Data API Isolation**: Assert that `anon`, `authenticated`, and `service_role` return permission denied when querying GP-025 tables directly.
 3. **Actor/Action-Scoped Mutation Digest**: Test that raw `mutationRequestId` is not persisted and that different actors using the same request ID generate distinct digests.
 4. **Idempotency Replay vs Conflict**: Verify same actor + same request ID + same fingerprint returns committed replay, while different fingerprint returns `AI_IDEMPOTENCY_CONFLICT`.
-5. **Worker Lease & Crash Recovery**: Test that worker crashes after setting `status = 'PROCESSING'` leave an expiring lease that a subsequent worker safely reclaims.
-6. **Lease Contention Safety**: Verify that a worker ignores an item currently leased by another active worker.
-7. **Scheduled Dispatch Reconciliation**: Test that simulated Inngest dispatch failures transition to `DISPATCH_FAILED` and are picked up by the reconciliation scanner.
-8. **Send-Success / Status-Update Failure Safety**: Assert that duplicate Inngest events with the same deterministic event ID perform a safe no-op on already-processed jobs.
-9. **Resumable Apply Step Crash Safety**: Test that process crash after GP-024 mutation commit but before GP-025 progress update replays with the identical `mutationRequestId` and resumes cleanly.
-10. **Apply Actor Mismatch Rejection**: Assert that attempting to resume an in-progress apply under a different staff auth session fails closed with `APPLY_ACTOR_MISMATCH`.
-11. **Relational Field-to-Source Provenance**: Assert that multiple sources (supporting and conflicting) persist in `ai_proposal_field_sources`.
-12. **Auditable Source Trust**: Assert that an LLM cannot set `VERIFIED_OFFICIAL` and that Tier 1 trust requires canonical `brands.website_url` matching or staff review audit records.
-13. **Provider Citation Without URL**: Assert that opaque provider citations persist safely without requiring `original_url`.
-14. **Dynamic AAD Computation & Swap Rejection**: Test that swapping ciphertext between different credential IDs or provider IDs fails decryption authentication.
-15. **Active Credential Partial Uniqueness**: Assert that attempting to insert two `ACTIVE` credentials for the same provider fails uniqueness constraints.
-16. **Exact Crypto Format Checks**: Assert that invalid IV, auth tag, or ciphertext hex encodings fail database CHECK constraints.
-17. **Provider Health Check Row Separation**: Assert that provider health tests do not violate `ai_provider_attempts` foreign keys and record `AuditEvent` entries.
-18. **Cost Telemetry Nullable Checks**: Assert that unknown costs cannot be stored with `cost_micros = 0` and that estimated costs enforce ISO currency codes.
-19. **ENRICH Mode Physical CHECK**: Assert that `CREATE` mode rejects product ID pointers and `ENRICH` mode mandates both target product ID and version snapshot.
-20. **Operational Indexes**: Test that all 13 operational indexes exist in database schema.
-21. **Price Boundary Verification**: Verify that UI `pricePen` is parsed to integer `priceCents` and that unpriced variants are rejected.
-22. **AuditEvent Coverage**: Assert that all 9 privileged actions record `AuditEvent` entries.
+5. **updateProduct Non-Idempotent Reality Documentation**: Assert that documentation and tests explicitly record existing `updateProduct` does not support replay across crash windows.
+6. **Future updateProduct Replay Extension Requirements**:
+   - Replay-before-stale-concurrency-check.
+   - Same fingerprint returns committed Product.
+   - Different fingerprint returns `CATALOG_IDEMPOTENCY_CONFLICT`.
+   - Actor isolation enforced.
+   - Backward compatibility for callers omitting `mutationRequestId`.
+7. **Apply Request Payload Freeze**: Test that `ai_proposal_apply_steps` stores the normalized `request_payload` and `request_fingerprint` before GP-024 calls.
+8. **Apply Retry After Proposal Mutation**: Test that retries reuse stored `request_payload` rather than regenerating from mutated proposals.
+9. **CREATE Crash Replay**: Test that process crash after GP-024 `createProduct` or `createVariant` replays cleanly using stable step mutation IDs.
+10. **ENRICH Crash Replay Precondition**: Assert that ENRICH canonical apply remains gated until the `updateProduct` idempotency extension is validated.
+11. **Lease Claim Eligibility**: Assert that only `PENDING` items or `RESEARCHING` items with expired leases can be claimed; non-processing states are never reclaimed.
+12. **Lease Fencing Rejections**:
+    - Stale worker cannot heartbeat.
+    - Stale worker cannot publish proposal.
+    - Stale worker cannot complete item.
+    - Token cleared upon exit from `RESEARCHING`.
+13. **Scheduled Expired-Item Recovery**: Test that the scheduled worker scanner reclaims expired items and re-drives processing.
+14. **Selected Profile ID Persistence**: Assert that `selected_profile_id` is persisted on `ai_research_jobs`.
+15. **Immutable Job Profile Snapshot**: Assert that `profile_snapshot` contains all execution parameters and remains immutable across subsequent profile edits.
+16. **Profile / Provider Disabled at Execution**: Assert that if a provider/profile is disabled after job creation, execution fails closed with explicit error rather than silently falling back.
+17. **Attempt Execution Snapshot**: Assert that `ai_provider_attempts` records the exact `profile_key`, `temperature`, and `max_tokens` sent.
+18. **Versioned AI Master-Key Resolver**: Assert that the server-side resolver correctly resolves `AI_ENCRYPTION_KEY_V{activeVersion}` and rejects sentinel keys.
+19. **Missing Historical Key Failure**: Assert that decrypting a credential whose key version is missing in environment fails closed.
+20. **Active Key Rotation**: Assert that rotation re-encrypts rows with fresh IV/tag/AAD under the new version without changing logical credential identity.
+21. **Job Progress Counter Constraints**: Assert that database checks enforce `completed_items >= 0`, `failed_items >= 0`, and `completed_items + failed_items <= total_items`.
+22. **Clean Credential Status**: Assert that credential status is strictly `ACTIVE` or `REVOKED`, with health state tracked in separate metadata.
+23. **Price Boundary Verification**: Verify that UI `pricePen` is parsed to integer `priceCents` and that unpriced variants are rejected.
+24. **AuditEvent Coverage**: Assert that all 9 privileged actions record `AuditEvent` entries.
+25. **Exact State Machine Values**: Assert that job states (`QUEUED`, `PROCESSING`, `COMPLETED`, `PARTIALLY_FAILED`, `FAILED`) and item states (`PENDING`, `RESEARCHING`, `READY_FOR_REVIEW`, `NEEDS_ATTENTION`, `AMBIGUOUS`, `SOURCE_CONFLICT`, `FAILED`, `APPROVED`, `APPLIED`) match physically across schema and runtime.
 
 ---
 
 ## 16. Checkpoint Plan (Decomposition)
 
-- **CHK0-BR2**: Final Contract Remediation (Current gate — doc-only).
+- **CHK0-BR3**: Final Replay, Lease-Fencing & Execution-Snapshot Contract Closure (Current gate — doc-only).
 - **CHK1**: Database Schema & Credential Foundation:
   - Sequence-checked migration implementation (11 tables).
   - Data API privilege revocation verification.
-  - AES-256-GCM helper with sentinel rejection, dynamic AAD, active uniqueness, and key rotation.
+  - AES-256-GCM helper with versioned master-key resolver, sentinel rejection, dynamic AAD, active uniqueness, and key rotation.
   - Core `AIProvider` interface, deterministic mock adapter, and provider profile registry.
   - AuditEvent integration for credentials and provider configuration.
 - **CHK2**: Research Orchestration & Inngest Jobs:
   - Selected research acquisition engine implementation (per owner decision).
-  - Inngest research functions with lease claiming, worker recovery, and dispatch reconciliation.
+  - Inngest research functions with lease claiming, lease fencing, worker recovery, and dispatch reconciliation.
   - Identity resolution, Zod extraction, source normalization, relational provenance, and conflict engine.
   - Provider attempt tracking with `UNKNOWN` state handling and micro-cost telemetry.
 - **CHK3**: Proposal Review & Canonical Catalog Integration:
   - Proposal review service and field-level approval actions.
   - Resumable multi-step catalog apply engine with `ai_proposal_apply_steps` and actor binding.
+  - **CHK3 MUST include the externally reviewed backward-compatible `updateProduct` idempotency extension BEFORE enabling ENRICH canonical Product apply.**
   - Stale-write concurrency checks for existing-product enrichment.
   - Human pricing enforcement for variant authoring.
 - **CHK4**: Admin UI Implementation:
