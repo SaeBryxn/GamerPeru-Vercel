@@ -430,9 +430,9 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
   });
 
   // --------------------------------------------------------------------------
-  // Requirement O: catalog:manage Actor Without catalog:publish Cannot Publish
+  // Requirement O: catalog:manage Actor Without catalog:publish Cannot Publish, Unpublish or Archive
   // --------------------------------------------------------------------------
-  test("Requirement O: catalog:manage actor without catalog:publish cannot publish or unpublish", async ({
+  test("Requirement O (Draft): catalog:manage actor without catalog:publish cannot transition draft to published", async ({
     page,
   }) => {
     // 1. Temporarily revoke catalog:publish from ADMIN_CATALOG role in database
@@ -468,6 +468,69 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       );
     } finally {
       // Restore catalog:publish permission
+      await sql`
+        INSERT INTO role_permissions (role_id, permission_id)
+        SELECT r.id, p.id
+        FROM roles r, permissions p
+        WHERE r.name = 'ADMIN_CATALOG' AND p.name = 'catalog:publish'
+        ON CONFLICT DO NOTHING;
+      `;
+    }
+  });
+
+  test("Requirement O (Published): catalog:manage actor without catalog:publish cannot unpublish or archive published product", async ({
+    page,
+  }) => {
+    // 1. Ensure product is PUBLISHED
+    await sql`
+      UPDATE products SET status = 'PUBLISHED' WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id};
+    `;
+
+    // 2. Temporarily revoke catalog:publish from ADMIN_CATALOG role
+    await sql`
+      DELETE FROM role_permissions
+      WHERE role_id = (SELECT id FROM roles WHERE name = 'ADMIN_CATALOG')
+        AND permission_id = (SELECT id FROM permissions WHERE name = 'catalog:publish');
+    `;
+
+    try {
+      // 3. Login as catalog author with catalog:manage only
+      await loginAndNavigateTo(
+        page,
+        ADMIN_E2E_USERS.catalog.email,
+        `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+      );
+
+      await expect(page.locator('[data-testid="badge-product-status"]')).toContainText("Publicado");
+
+      // 4. Assert Unpublish control is disabled
+      const unpublishBtn = page.locator('[data-testid="btn-transition-unpublish"]');
+      await expect(unpublishBtn).toBeVisible();
+      await expect(unpublishBtn).toBeDisabled();
+      await expect(unpublishBtn).toHaveAttribute(
+        "title",
+        "Despublicar un producto requiere catalog:publish."
+      );
+
+      // 5. Assert Archive control is disabled
+      const archiveBtn = page.locator('[data-testid="btn-transition-archive"]');
+      await expect(archiveBtn).toBeVisible();
+      await expect(archiveBtn).toBeDisabled();
+      await expect(archiveBtn).toHaveAttribute(
+        "title",
+        "Archivar un producto publicado requiere catalog:publish."
+      );
+
+      // 6. Ordinary catalog:manage authoring remains operational
+      await page
+        .locator('[data-testid="input-subtitle"]')
+        .fill("Subtítulo por autor con manage-only en publicado");
+      await page.locator('[data-testid="btn-save-details"]').click();
+      await expect(page.locator('[data-testid="alert-general-success"]')).toContainText(
+        "actualizada exitosamente"
+      );
+    } finally {
+      // 7. Always restore catalog:publish permission
       await sql`
         INSERT INTO role_permissions (role_id, permission_id)
         SELECT r.id, p.id
@@ -543,6 +606,65 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await page.locator('[data-testid="btn-confirm-transition-action"]').click();
 
     await expect(page.locator('[data-testid="badge-product-status"]')).toContainText("Borrador");
+  });
+
+  // --------------------------------------------------------------------------
+  // Defect C Regression: Lifecycle Dialog Focus Containment & Keyboard Navigation
+  // --------------------------------------------------------------------------
+  test("Defect C Regression: Lifecycle confirmation dialog keyboard focus containment (Tab wrap, Shift+Tab wrap, Escape, focus restoration)", async ({
+    page,
+  }) => {
+    // Reset product to DRAFT state
+    await sql`
+      UPDATE products SET status = 'DRAFT' WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id};
+    `;
+
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+    );
+
+    const publishTrigger = page.locator('[data-testid="btn-transition-publish"]');
+    await expect(publishTrigger).toBeVisible();
+
+    // 1. Click trigger to open confirmation dialog
+    await publishTrigger.click();
+
+    const dialog = page.locator('[data-testid="dialog-confirm-transition"]');
+    await expect(dialog).toBeVisible();
+
+    // Wait for initial focus inside dialog (Cancel button)
+    const cancelBtn = page.locator('[data-testid="btn-cancel-transition-action"]');
+    const confirmBtn = page.locator('[data-testid="btn-confirm-transition-action"]');
+    await expect(cancelBtn).toBeFocused();
+
+    // 2. Tab moves forward to Confirm button
+    await page.keyboard.press("Tab");
+    await expect(confirmBtn).toBeFocused();
+
+    // 3. Tab from last focusable element wraps back to first element (Cancel button)
+    await page.keyboard.press("Tab");
+    await expect(cancelBtn).toBeFocused();
+
+    // 4. Shift+Tab from first element wraps to last element (Confirm button)
+    await page.keyboard.press("Shift+Tab");
+    await expect(confirmBtn).toBeFocused();
+
+    // 5. Shift+Tab again moves backwards to Cancel button
+    await page.keyboard.press("Shift+Tab");
+    await expect(cancelBtn).toBeFocused();
+
+    // 6. Escape closes dialog and restores focus to triggering button
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(publishTrigger).toBeFocused();
+
+    // 7. Re-open and verify confirmation still performs the transition successfully
+    await publishTrigger.click();
+    await expect(dialog).toBeVisible();
+    await confirmBtn.click();
+    await expect(page.locator('[data-testid="badge-product-status"]')).toContainText("Publicado");
   });
 
   // --------------------------------------------------------------------------
@@ -658,5 +780,69 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     `;
     expect(specRow[0]!.schema_id).toBe(ADMIN_E2E_PRODUCT_FIXTURES.categoryB.schemaId);
     expect(specRow[0]!.spec_values).toEqual({ layout: "ANSI 75%" });
+  });
+
+  // --------------------------------------------------------------------------
+  // Defect B Regression: Enum with ENUM_MULTI renders single-choice select and persists exact string
+  // --------------------------------------------------------------------------
+  test("Defect B Regression: Enum with ENUM_MULTI renders single-choice select and persists exact string without array or INVALID_ENUM_TYPE", async ({
+    page,
+  }) => {
+    // Reset product specifications for publishableProduct (Category A)
+    await sql`
+      INSERT INTO product_specifications (product_id, schema_id, schema_version, spec_values, updated_at)
+      VALUES (
+        ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id},
+        ${ADMIN_E2E_PRODUCT_FIXTURES.categoryA.schemaId},
+        1,
+        '{"sensor":"PAW3395","dpi_max":26000}'::jsonb,
+        NOW()
+      )
+      ON CONFLICT (product_id) DO UPDATE
+      SET schema_id = ${ADMIN_E2E_PRODUCT_FIXTURES.categoryA.schemaId},
+          spec_values = '{"sensor":"PAW3395","dpi_max":26000}'::jsonb;
+    `;
+
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+    );
+
+    // 1. Verify numeric step advisory attribute on dpi_max
+    const dpiInput = page.locator('[data-testid="spec-input-dpi_max"]');
+    await expect(dpiInput).toBeVisible();
+    await expect(dpiInput).toHaveAttribute("step", "100");
+
+    // 2. Verify connection_type (dataType: "enum", filterKind: "ENUM_MULTI") renders as a single select
+    const connSelect = page.locator('[data-testid="spec-input-connection_type"]');
+    await expect(connSelect).toBeVisible();
+    await expect(connSelect).toHaveRole("combobox");
+
+    // Ensure zero checkboxes exist for connection_type
+    const connCheckboxes = page.locator('input[type="checkbox"][id*="connection_type"]');
+    await expect(connCheckboxes).toHaveCount(0);
+
+    // 3. Select option "wireless"
+    await connSelect.selectOption("wireless");
+
+    // 4. Save specifications
+    await page.locator('[data-testid="btn-save-specs"]').click();
+    await expect(page.locator('[data-testid="alert-general-success"]')).toContainText(
+      "Especificaciones técnicas guardadas exitosamente"
+    );
+
+    // 5. Assert PostgreSQL database persistence:
+    // spec_values.connection_type must equal "wireless" exactly, NOT ["wireless"]
+    const specRow = await sql`
+      SELECT spec_values->>'connection_type' as conn_type,
+             spec_values->'connection_type' as raw_conn
+      FROM product_specifications
+      WHERE product_id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id};
+    `;
+    expect(specRow[0]!.conn_type).toBe("wireless");
+    expect(typeof specRow[0]!.conn_type).toBe("string");
+    // Ensure raw json is not an array
+    expect(Array.isArray(specRow[0]!.raw_conn)).toBe(false);
   });
 });

@@ -131,6 +131,110 @@ export function ProductEditor({
     message: string;
   } | null>(null);
   const lifecycleTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const transitionDialogRef = useRef<HTMLDivElement | null>(null);
+
+  const previousTriggerRef = useRef<HTMLElement | null>(null);
+
+  // Focus trap, containment, and focus restoration for Lifecycle Dialog
+  useEffect(() => {
+    if (pendingTransition) {
+      previousTriggerRef.current =
+        lifecycleTriggerRef.current ?? (document.activeElement as HTMLElement | null);
+    } else if (previousTriggerRef.current) {
+      const target = previousTriggerRef.current;
+      previousTriggerRef.current = null;
+      setTimeout(() => {
+        if (target && document.body.contains(target)) {
+          target.focus();
+        }
+      }, 10);
+    }
+  }, [pendingTransition]);
+
+  useEffect(() => {
+    if (!pendingTransition) return;
+
+    const focusFirst = () => {
+      if (transitionDialogRef.current) {
+        const focusable = transitionDialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length > 0) {
+          focusable[0]?.focus();
+        }
+      }
+    };
+
+    focusFirst();
+    const timer = setTimeout(focusFirst, 10);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!transitionDialogRef.current) return;
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        const trigger = lifecycleTriggerRef.current ?? previousTriggerRef.current;
+        setPendingTransition(null);
+        setTimeout(() => {
+          trigger?.focus();
+        }, 10);
+        return;
+      }
+
+      if (e.key === "Tab") {
+        const focusable = Array.from(
+          transitionDialogRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+
+        if (focusable.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const firstElement = focusable[0];
+        const lastElement = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          // Shift + Tab: moving backwards
+          if (
+            document.activeElement === firstElement ||
+            !transitionDialogRef.current.contains(document.activeElement)
+          ) {
+            e.preventDefault();
+            lastElement?.focus();
+          }
+        } else {
+          // Tab: moving forwards
+          if (
+            document.activeElement === lastElement ||
+            !transitionDialogRef.current.contains(document.activeElement)
+          ) {
+            e.preventDefault();
+            firstElement?.focus();
+          }
+        }
+      }
+    };
+
+    // Keep focus inside dialog if focus moves outside
+    const handleFocusIn = (e: FocusEvent) => {
+      if (transitionDialogRef.current && !transitionDialogRef.current.contains(e.target as Node)) {
+        e.stopPropagation();
+        focusFirst();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("focusin", handleFocusIn);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("focusin", handleFocusIn);
+    };
+  }, [pendingTransition]);
 
   // Stable Mutation Request Trackers
   const detailsTracker = useRef(new MutationRequestTracker());
@@ -962,7 +1066,7 @@ export function ProductEditor({
                         type="number"
                         min={field.min ?? undefined}
                         max={field.max ?? undefined}
-                        step="any"
+                        step={field.step ?? "any"}
                         value={val !== undefined && val !== null ? String(val) : ""}
                         onChange={(e) => {
                           const num = e.target.value === "" ? "" : Number(e.target.value);
@@ -996,12 +1100,12 @@ export function ProductEditor({
                       </select>
                     )}
 
-                    {/* ENUM Single Field */}
-                    {field.dataType === "enum" && field.filterKind !== "ENUM_MULTI" && (
+                    {/* ENUM Field (Always single-choice string selection for all enum specifications) */}
+                    {field.dataType === "enum" && (
                       <select
                         id={`spec-${field.key}`}
                         value={typeof val === "string" ? val : ""}
-                        onChange={(e) => handleSpecFieldChange(field.key, e.target.value)}
+                        onChange={(e) => handleSpecFieldChange(field.key, e.target.value || "")}
                         className={styles.select}
                         data-testid={`spec-input-${field.key}`}
                       >
@@ -1012,55 +1116,6 @@ export function ProductEditor({
                           </option>
                         ))}
                       </select>
-                    )}
-
-                    {/* ENUM Multi Field */}
-                    {field.dataType === "enum" && field.filterKind === "ENUM_MULTI" && (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "0.5rem",
-                          padding: "0.5rem",
-                          border: "1px solid var(--color-border-subtle, #e4e4e7)",
-                          borderRadius: 6,
-                        }}
-                        data-testid={`spec-input-${field.key}`}
-                      >
-                        {field.options?.map((opt) => {
-                          const currentArr = Array.isArray(val) ? (val as string[]) : [];
-                          const isChecked = currentArr.includes(opt.value);
-
-                          return (
-                            <label
-                              key={opt.value}
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "0.375rem",
-                                fontSize: "0.8125rem",
-                                cursor: "pointer",
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    handleSpecFieldChange(field.key, [...currentArr, opt.value]);
-                                  } else {
-                                    handleSpecFieldChange(
-                                      field.key,
-                                      currentArr.filter((item) => item !== opt.value)
-                                    );
-                                  }
-                                }}
-                              />
-                              <span>{opt.label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
                     )}
                   </div>
                 );
@@ -1789,14 +1844,13 @@ export function ProductEditor({
           aria-modal="true"
           aria-labelledby="transition-dialog-title"
           aria-describedby="transition-dialog-desc"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              setPendingTransition(null);
-              lifecycleTriggerRef.current?.focus();
-            }
-          }}
         >
-          <div className={styles.modalContent} data-testid="dialog-confirm-transition">
+          <div
+            ref={transitionDialogRef}
+            className={styles.modalContent}
+            data-testid="dialog-confirm-transition"
+            tabIndex={-1}
+          >
             <div className={styles.modalHeader}>
               <h3 id="transition-dialog-title" className={styles.modalTitle}>
                 {pendingTransition.title}
@@ -1835,7 +1889,6 @@ export function ProductEditor({
                 }}
                 className={styles.primaryButton}
                 data-testid="btn-confirm-transition-action"
-                autoFocus
               >
                 {isTransitioning ? (
                   <>
