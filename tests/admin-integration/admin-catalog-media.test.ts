@@ -10,7 +10,10 @@ import {
   setProductPrimaryMedia,
   reassignProductMediaVariant,
 } from "@/lib/admin/catalog/media-service";
-import { InMemoryCatalogStorageAdapter } from "@/lib/admin/catalog/media-storage";
+import {
+  InMemoryCatalogStorageAdapter,
+  type CatalogStorageAdapter,
+} from "@/lib/admin/catalog/media-storage";
 import {
   verifyAndParseMediaUploadIntent,
   computeMediaIntentDigest,
@@ -20,6 +23,93 @@ import { CatalogIdempotencyConflictError } from "@/lib/admin/catalog/types";
 import { computeMutationRequestDigest } from "@/lib/admin/catalog/crypto";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import { db } from "@/db";
+
+function createBarrier(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function createFreshIntentRaceHarness(
+  storage: InMemoryCatalogStorageAdapter,
+  stagingObjectKey: string,
+  loserFailurePoint: "head" | "get"
+) {
+  const winnerHeadReached = createBarrier();
+  const loserHeadReached = createBarrier();
+  const releaseHeads = createBarrier();
+  const loserSuccessfulHead = createBarrier();
+  const stagingDeleted = createBarrier();
+  const evidence = {
+    loserHeadSucceededBeforeDelete: false,
+    loserHeadRanAfterDelete: false,
+    loserGetRanAfterDelete: false,
+    winnerDeletedStaging: false,
+  };
+
+  const isStagingTarget = (params: { bucket: string; key: string }) =>
+    params.bucket === R2_BUCKETS.CATALOG_STAGING && params.key === stagingObjectKey;
+
+  const createAdapter = (role: "winner" | "loser"): CatalogStorageAdapter => ({
+    generatePresignedPutUrl: (params) => storage.generatePresignedPutUrl(params),
+    headObject: async (params) => {
+      if (!isStagingTarget(params)) return storage.headObject(params);
+
+      if (role === "winner") {
+        winnerHeadReached.resolve();
+      } else {
+        loserHeadReached.resolve();
+      }
+      await releaseHeads.promise;
+
+      if (role === "loser" && loserFailurePoint === "head") {
+        await stagingDeleted.promise;
+        evidence.loserHeadRanAfterDelete = !storage.hasObject(params.bucket, params.key);
+      }
+
+      const result = await storage.headObject(params);
+      if (role === "loser" && loserFailurePoint === "get") {
+        evidence.loserHeadSucceededBeforeDelete =
+          result !== null && storage.hasObject(params.bucket, params.key);
+        loserSuccessfulHead.resolve();
+      }
+      return result;
+    },
+    getObjectBytes: (params) => storage.getObjectBytes(params),
+    getObjectBytesBounded: async (params) => {
+      if (isStagingTarget(params)) {
+        if (role === "winner" && loserFailurePoint === "get") {
+          await loserSuccessfulHead.promise;
+        }
+        if (role === "loser" && loserFailurePoint === "get") {
+          await stagingDeleted.promise;
+          evidence.loserGetRanAfterDelete = !storage.hasObject(params.bucket, params.key);
+        }
+      }
+      return storage.getObjectBytesBounded(params);
+    },
+    putObject: (params) => storage.putObject(params),
+    putObjectIfNotExists: (params) => storage.putObjectIfNotExists(params),
+    deleteObject: async (params) => {
+      await storage.deleteObject(params);
+      if (role === "winner" && isStagingTarget(params)) {
+        evidence.winnerDeletedStaging = !storage.hasObject(params.bucket, params.key);
+        stagingDeleted.resolve();
+      }
+    },
+  });
+
+  return {
+    winnerAdapter: createAdapter("winner"),
+    loserAdapter: createAdapter("loser"),
+    winnerHeadReached: winnerHeadReached.promise,
+    bothInitialProbesReached: Promise.all([winnerHeadReached.promise, loserHeadReached.promise]),
+    releaseHeads: releaseHeads.resolve,
+    evidence,
+  };
+}
 
 describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () => {
   const rawDatabaseUrl =
@@ -121,6 +211,126 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
       await pgSql.end();
     }
   });
+
+  async function runFreshIntentConcurrentReplayRace(
+    loserFailurePoint: "head" | "get"
+  ): Promise<void> {
+    const storage = new InMemoryCatalogStorageAdapter();
+    const baseServiceOptions = {
+      authContext: authCatalogAdmin,
+      storageAdapter: storage,
+      intentSecret: TEST_HMAC_SECRET,
+    };
+    const intent = await requestCatalogMediaUploadIntent(
+      { productId: fixtureIds.product, variantId: null, mimeType: "image/png" },
+      baseServiceOptions
+    );
+    const payload = verifyAndParseMediaUploadIntent(intent.signedIntentToken, TEST_HMAC_SECRET);
+    const mediaIntentDigest = computeMediaIntentDigest(payload);
+    const mutationRequestIdA = `018f0024-br3-${loserFailurePoint}-race-caller-a`;
+    const mutationRequestIdB = `018f0024-br3-${loserFailurePoint}-race-caller-b`;
+    const mutationDigestA = computeMutationRequestDigest(
+      fixtureIds.adminUser,
+      "catalog:media:attach",
+      mutationRequestIdA
+    );
+    const mutationDigestB = computeMutationRequestDigest(
+      fixtureIds.adminUser,
+      "catalog:media:attach",
+      mutationRequestIdB
+    );
+
+    const markerCountsBefore = await pgSql`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE metadata->>'media_intent_digest' = ${mediaIntentDigest}
+        )::int AS intent_count,
+        COUNT(*) FILTER (
+          WHERE metadata->>'mutation_request_digest' IN (${mutationDigestA}, ${mutationDigestB})
+        )::int AS mutation_count
+      FROM audit_events
+      WHERE actor_id = ${fixtureIds.adminUser}
+        AND action = 'catalog:media:attach';
+    `;
+    expect(Number(markerCountsBefore[0]?.intent_count)).toBe(0);
+    expect(Number(markerCountsBefore[0]?.mutation_count)).toBe(0);
+
+    const testPngBuffer = await sharp({
+      create: {
+        width: loserFailurePoint === "head" ? 19 : 23,
+        height: loserFailurePoint === "head" ? 17 : 21,
+        channels: 4,
+        background:
+          loserFailurePoint === "head"
+            ? { r: 24, g: 83, b: 192, alpha: 1 }
+            : { r: 181, g: 62, b: 37, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+    storage.setObject(
+      R2_BUCKETS.CATALOG_STAGING,
+      payload.stagingObjectKey,
+      testPngBuffer,
+      "image/png"
+    );
+
+    const race = createFreshIntentRaceHarness(storage, payload.stagingObjectKey, loserFailurePoint);
+    const callerA = finalizeCatalogMediaUpload(
+      { signedIntentToken: intent.signedIntentToken, mutationRequestId: mutationRequestIdA },
+      { ...baseServiceOptions, storageAdapter: race.winnerAdapter }
+    );
+    await race.winnerHeadReached;
+    const callerB = finalizeCatalogMediaUpload(
+      { signedIntentToken: intent.signedIntentToken, mutationRequestId: mutationRequestIdB },
+      { ...baseServiceOptions, storageAdapter: race.loserAdapter }
+    );
+    await race.bothInitialProbesReached;
+
+    const markerCountsAtBarrier = await pgSql`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE metadata->>'media_intent_digest' = ${mediaIntentDigest}
+        )::int AS intent_count,
+        COUNT(*) FILTER (
+          WHERE metadata->>'mutation_request_digest' IN (${mutationDigestA}, ${mutationDigestB})
+        )::int AS mutation_count
+      FROM audit_events
+      WHERE actor_id = ${fixtureIds.adminUser}
+        AND action = 'catalog:media:attach';
+    `;
+    expect(Number(markerCountsAtBarrier[0]?.intent_count)).toBe(0);
+    expect(Number(markerCountsAtBarrier[0]?.mutation_count)).toBe(0);
+    race.releaseHeads();
+
+    const [resultA, resultB] = await Promise.all([callerA, callerB]);
+    expect(resultA.replayed).toBe(false);
+    expect(resultB.replayed).toBe(true);
+    expect(resultB.productMedia.id).toBe(resultA.productMedia.id);
+    expect(resultB.mediaAsset.id).toBe(resultA.mediaAsset.id);
+
+    const committedCounts = await pgSql`
+      SELECT
+        COUNT(DISTINCT pm.id)::int AS product_media_count,
+        COUNT(DISTINCT ae.id)::int AS audit_event_count
+      FROM audit_events ae
+      LEFT JOIN product_media pm ON pm.id::text = ae.target_id
+      WHERE ae.actor_id = ${fixtureIds.adminUser}
+        AND ae.action = 'catalog:media:attach'
+        AND ae.metadata->>'media_intent_digest' = ${mediaIntentDigest};
+    `;
+    expect(Number(committedCounts[0]?.product_media_count)).toBe(1);
+    expect(Number(committedCounts[0]?.audit_event_count)).toBe(1);
+    expect(storage.hasObject(R2_BUCKETS.CATALOG_STAGING, payload.stagingObjectKey)).toBe(false);
+    expect(race.evidence.winnerDeletedStaging).toBe(true);
+
+    if (loserFailurePoint === "head") {
+      expect(race.evidence.loserHeadRanAfterDelete).toBe(true);
+    } else {
+      expect(race.evidence.loserHeadSucceededBeforeDelete).toBe(true);
+      expect(race.evidence.loserGetRanAfterDelete).toBe(true);
+    }
+  }
 
   it("enforces service-layer RBAC on all media operations", async () => {
     const storage = new InMemoryCatalogStorageAdapter();
@@ -383,6 +593,14 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
         serviceOpts
       )
     ).rejects.toThrow(CatalogIdempotencyConflictError);
+  });
+
+  it("converges a fresh same-intent race when caller B HEAD resumes after caller A commits and deletes staging", async () => {
+    await runFreshIntentConcurrentReplayRace("head");
+  });
+
+  it("converges a fresh same-intent race when caller B GET resumes after a successful HEAD and caller A deletes staging", async () => {
+    await runFreshIntentConcurrentReplayRace("get");
   });
 
   it("handles concurrent finalization with identical bytes safely (race-safe MediaAsset reuse)", async () => {

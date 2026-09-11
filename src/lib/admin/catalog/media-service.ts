@@ -40,6 +40,7 @@ import {
   type CatalogStorageAdapter,
   R2CatalogStorageAdapter,
   derivePresignedPutLifetime,
+  isAuthoritativeStorageNotFoundError,
 } from "./media-storage";
 import { R2_BUCKETS } from "@/lib/storage/r2";
 import { getCatalogMediaIntentSecret } from "@/config/server-env";
@@ -281,6 +282,53 @@ async function resolveCommittedMutationReplay(
   return { productMedia: existingPm, mediaAsset: existingAsset, replayed: true };
 }
 
+async function resolveDurableFinalizationReplay(
+  actorId: string,
+  mutationRequestDigest: string,
+  requestFingerprint: string,
+  mediaIntentDigest: string,
+  payload: CatalogMediaUploadIntentPayload,
+  database: typeof db
+): Promise<FinalizeCatalogMediaUploadResult | null> {
+  const [mutationAudit] = await database
+    .select()
+    .from(auditEvents)
+    .where(
+      and(
+        eq(auditEvents.actorId, actorId),
+        eq(auditEvents.action, "catalog:media:attach"),
+        sql`${auditEvents.metadata}->>'mutation_request_digest' = ${mutationRequestDigest}`
+      )
+    );
+
+  if (mutationAudit) {
+    return resolveCommittedMutationReplay(
+      mutationAudit,
+      requestFingerprint,
+      payload.productId,
+      payload.variantId,
+      database
+    );
+  }
+
+  const [intentAudit] = await database
+    .select()
+    .from(auditEvents)
+    .where(
+      and(
+        eq(auditEvents.actorId, actorId),
+        eq(auditEvents.action, "catalog:media:attach"),
+        sql`${auditEvents.metadata}->>'media_intent_digest' = ${mediaIntentDigest}`
+      )
+    );
+
+  if (intentAudit) {
+    return resolveCommittedMediaIntentReplay(intentAudit, payload, database);
+  }
+
+  return null;
+}
+
 /**
  * Service: Issues a stateless, server-signed media upload intent capability and presigned PUT URL.
  * Binds actor, product, optional variant, staging key, expected MIME, and max bytes.
@@ -503,12 +551,44 @@ export async function finalizeCatalogMediaUpload(
 
   // STAGING OBJECT VERIFICATION & NORMALIZATION
   const adapter = options?.storageAdapter ?? new R2CatalogStorageAdapter();
-  const stagingHead = await adapter.headObject({
-    bucket: R2_BUCKETS.CATALOG_STAGING,
-    key: payload.stagingObjectKey,
-  });
+  let stagingHead;
+  try {
+    stagingHead = await adapter.headObject({
+      bucket: R2_BUCKETS.CATALOG_STAGING,
+      key: payload.stagingObjectKey,
+    });
+  } catch (error: unknown) {
+    const replay = await resolveDurableFinalizationReplay(
+      caller.authUserId,
+      mutationRequestDigest,
+      requestFingerprint,
+      mediaIntentDigest,
+      payload,
+      database
+    );
+    if (replay) return replay;
+    throw error;
+  }
 
-  if (!stagingHead || stagingHead.contentLength === 0) {
+  if (!stagingHead) {
+    const replay = await resolveDurableFinalizationReplay(
+      caller.authUserId,
+      mutationRequestDigest,
+      requestFingerprint,
+      mediaIntentDigest,
+      payload,
+      database
+    );
+    if (replay) return replay;
+
+    throw new CatalogDomainError(
+      "El objeto en staging no existe o está vacío.",
+      "MEDIA_STAGING_NOT_FOUND",
+      400
+    );
+  }
+
+  if (stagingHead.contentLength === 0) {
     throw new CatalogDomainError(
       "El objeto en staging no existe o está vacío.",
       "MEDIA_STAGING_NOT_FOUND",
@@ -537,6 +617,24 @@ export async function finalizeCatalogMediaUpload(
       throw new CatalogDomainError(
         "El archivo excede el tamaño máximo permitido de 10 MiB.",
         "MEDIA_FILE_TOO_LARGE",
+        400
+      );
+    }
+
+    const replay = await resolveDurableFinalizationReplay(
+      caller.authUserId,
+      mutationRequestDigest,
+      requestFingerprint,
+      mediaIntentDigest,
+      payload,
+      database
+    );
+    if (replay) return replay;
+
+    if (isAuthoritativeStorageNotFoundError(err)) {
+      throw new CatalogDomainError(
+        "El objeto en staging no existe o está vacío.",
+        "MEDIA_STAGING_NOT_FOUND",
         400
       );
     }

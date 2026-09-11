@@ -1,6 +1,10 @@
 import type { S3Client } from "@aws-sdk/client-s3";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { R2CatalogStorageAdapter } from "@/lib/admin/catalog/media-storage";
+import {
+  InMemoryCatalogStorageAdapter,
+  R2CatalogStorageAdapter,
+  isAuthoritativeStorageNotFoundError,
+} from "@/lib/admin/catalog/media-storage";
 
 const HEAD_PARAMS = { bucket: "catalog-staging-test", key: "temp/catalog/test-object" };
 
@@ -61,5 +65,35 @@ describe("GP-024 R2 catalog HEAD semantics", () => {
     await expect(createAdapter(send).headObject(HEAD_PARAMS)).rejects.toThrow(
       /omitted ContentLength/
     );
+  });
+
+  it("classifies only authoritative storage not-found errors", () => {
+    expect(isAuthoritativeStorageNotFoundError({ $metadata: { httpStatusCode: 404 } })).toBe(true);
+    expect(isAuthoritativeStorageNotFoundError({ name: "NoSuchKey" })).toBe(true);
+    expect(
+      isAuthoritativeStorageNotFoundError({
+        name: "NotFound",
+        $metadata: { httpStatusCode: 403 },
+      })
+    ).toBe(false);
+    expect(
+      isAuthoritativeStorageNotFoundError({
+        name: "NoSuchKey",
+        $metadata: { httpStatusCode: 500 },
+      })
+    ).toBe(false);
+    expect(isAuthoritativeStorageNotFoundError(new Error("network failure"))).toBe(false);
+  });
+
+  it("emits an authoritative NoSuchKey from bounded in-memory reads", async () => {
+    const storage = new InMemoryCatalogStorageAdapter();
+
+    try {
+      await storage.getObjectBytesBounded({ ...HEAD_PARAMS, maxBytes: 1024 });
+      expect.fail("bounded read should fail for a missing object");
+    } catch (error: unknown) {
+      expect((error as Error).name).toBe("NoSuchKey");
+      expect(isAuthoritativeStorageNotFoundError(error)).toBe(true);
+    }
   });
 });

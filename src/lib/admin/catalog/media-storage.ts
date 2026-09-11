@@ -33,7 +33,7 @@ export interface StagingHeadResult {
   contentType?: string;
 }
 
-function isNotFoundError(err: unknown): boolean {
+export function isAuthoritativeStorageNotFoundError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
   const statusCode = e.$metadata?.httpStatusCode;
@@ -127,7 +127,7 @@ export class R2CatalogStorageAdapter implements CatalogStorageAdapter {
         contentType: res.ContentType,
       };
     } catch (err: unknown) {
-      if (isNotFoundError(err)) {
+      if (isAuthoritativeStorageNotFoundError(err)) {
         return null;
       }
       // Re-throw non-404 storage failures (e.g. auth, network, 5xx) so service fails closed
@@ -302,7 +302,9 @@ export class InMemoryCatalogStorageAdapter implements CatalogStorageAdapter {
   async getObjectBytes(params: { bucket: string; key: string }): Promise<Buffer> {
     const item = this.store.get(this.makeStoreKey(params.bucket, params.key));
     if (!item) {
-      throw new Error(`NoSuchKey: ${params.key} in bucket ${params.bucket}`);
+      const error = new Error(`NoSuchKey: ${params.key} in bucket ${params.bucket}`);
+      error.name = "NoSuchKey";
+      throw error;
     }
     return Buffer.from(item.body);
   }
@@ -314,7 +316,9 @@ export class InMemoryCatalogStorageAdapter implements CatalogStorageAdapter {
   }): Promise<Buffer> {
     const item = this.store.get(this.makeStoreKey(params.bucket, params.key));
     if (!item) {
-      throw new Error(`NoSuchKey: ${params.key} in bucket ${params.bucket}`);
+      const error = new Error(`NoSuchKey: ${params.key} in bucket ${params.bucket}`);
+      error.name = "NoSuchKey";
+      throw error;
     }
     if (item.body.length > params.maxBytes) {
       const err = new Error(
