@@ -11,10 +11,14 @@ import {
   reassignProductMediaVariant,
 } from "@/lib/admin/catalog/media-service";
 import { InMemoryCatalogStorageAdapter } from "@/lib/admin/catalog/media-storage";
-import { verifyAndParseMediaUploadIntent } from "@/lib/admin/catalog/media-crypto";
+import {
+  verifyAndParseMediaUploadIntent,
+  computeMediaIntentDigest,
+} from "@/lib/admin/catalog/media-crypto";
 import { R2_BUCKETS } from "@/lib/storage/r2";
 import { CatalogIdempotencyConflictError } from "@/lib/admin/catalog/types";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
+import { db } from "@/db";
 
 describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () => {
   const rawDatabaseUrl =
@@ -53,7 +57,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     permissions: new Set([]),
   };
 
-  const TEST_HMAC_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  const TEST_HMAC_SECRET = "a1b2c3d4e5f67890123456789abcdef0a1b2c3d4e5f67890123456789abcdef0";
 
   beforeAll(async () => {
     pgSql = postgres(databaseUrl, { max: 10 });
@@ -160,7 +164,12 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
 
     await expect(
       setProductPrimaryMedia(
-        { productId: fixtureIds.product, productMediaId: "pm-1", mutationRequestId: "mr-4" },
+        {
+          productId: fixtureIds.product,
+          productMediaId: "pm-1",
+          expectedUpdatedAt: new Date().toISOString(),
+          mutationRequestId: "mr-4",
+        },
         serviceOpts
       )
     ).rejects.toThrow(/permisos suficientes/i);
@@ -265,7 +274,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     `;
     expect(auditRows.length).toBe(1);
 
-    // 4. Idempotency Replay: same intent + same mutationRequestId
+    // 4. Scenario A: same intent + same mutationRequestId
     const replayResult = await finalizeCatalogMediaUpload(
       {
         signedIntentToken: intent.signedIntentToken,
@@ -275,13 +284,91 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     );
     expect(replayResult.productMedia.id).toBe(result.productMedia.id);
     expect(replayResult.mediaAsset.id).toBe(result.mediaAsset.id);
+    expect(replayResult.replayed).toBe(true);
 
-    // Ensure no duplicate rows were inserted
+    // Ensure zero new ProductMedia and zero new AuditEvent
     const pmRowsAfter =
       await pgSql`SELECT * FROM product_media WHERE id = ${result.productMedia.id};`;
     expect(pmRowsAfter.length).toBe(1);
+    const auditRowsAfter = await pgSql`
+      SELECT * FROM audit_events
+      WHERE target_id = ${result.productMedia.id} AND action = 'catalog:media:attach';
+    `;
+    expect(auditRowsAfter.length).toBe(1);
 
-    // 5. Conflict: different intent + same mutationRequestId
+    // 5. Scenario B: same intent + DIFFERENT mutationRequestId SEQUENTIALLY
+    // Frozen contract: mediaIntentDigest consumption replay succeeds!
+    const seqReplayResult = await finalizeCatalogMediaUpload(
+      {
+        signedIntentToken: intent.signedIntentToken,
+        mutationRequestId: "018f0024-mr-0000-0000-sequential002",
+      },
+      serviceOpts
+    );
+    expect(seqReplayResult.productMedia.id).toBe(result.productMedia.id);
+    expect(seqReplayResult.mediaAsset.id).toBe(result.mediaAsset.id);
+    expect(seqReplayResult.replayed).toBe(true);
+
+    // Verify still exactly 1 ProductMedia and 1 AuditEvent
+    const pmRowsSeq =
+      await pgSql`SELECT * FROM product_media WHERE id = ${result.productMedia.id};`;
+    expect(pmRowsSeq.length).toBe(1);
+    const auditRowsSeq = await pgSql`
+      SELECT * FROM audit_events
+      WHERE target_id = ${result.productMedia.id} AND action = 'catalog:media:attach';
+    `;
+    expect(auditRowsSeq.length).toBe(1);
+
+    // 6. Scenario C: same intent + different mutationRequestId CONCURRENTLY
+    const [concurRes1, concurRes2] = await Promise.all([
+      finalizeCatalogMediaUpload(
+        {
+          signedIntentToken: intent.signedIntentToken,
+          mutationRequestId: "018f0024-mr-0000-0000-concur00001",
+        },
+        serviceOpts
+      ),
+      finalizeCatalogMediaUpload(
+        {
+          signedIntentToken: intent.signedIntentToken,
+          mutationRequestId: "018f0024-mr-0000-0000-concur00002",
+        },
+        serviceOpts
+      ),
+    ]);
+    expect(concurRes1.productMedia.id).toBe(result.productMedia.id);
+    expect(concurRes2.productMedia.id).toBe(result.productMedia.id);
+    expect(concurRes1.replayed).toBe(true);
+    expect(concurRes2.replayed).toBe(true);
+
+    const pmRowsConcur =
+      await pgSql`SELECT * FROM product_media WHERE id = ${result.productMedia.id};`;
+    expect(pmRowsConcur.length).toBe(1);
+    const auditRowsConcur = await pgSql`
+      SELECT * FROM audit_events
+      WHERE target_id = ${result.productMedia.id} AND action = 'catalog:media:attach';
+    `;
+    expect(auditRowsConcur.length).toBe(1);
+
+    // 7. Scenario D: consumed intent after staging object is already deleted, with different request ID
+    // Verify staging object does NOT exist in storage:
+    const stagedCheck = await storage.headObject({
+      bucket: R2_BUCKETS.CATALOG_STAGING,
+      key: payload.stagingObjectKey,
+    });
+    expect(stagedCheck).toBeNull();
+
+    const replayWithoutStaging = await finalizeCatalogMediaUpload(
+      {
+        signedIntentToken: intent.signedIntentToken,
+        mutationRequestId: "018f0024-mr-0000-0000-nostaging0003",
+      },
+      serviceOpts
+    );
+    expect(replayWithoutStaging.productMedia.id).toBe(result.productMedia.id);
+    expect(replayWithoutStaging.replayed).toBe(true);
+
+    // 8. Scenario G: same mutationRequestId + different valid intent => CATALOG_IDEMPOTENCY_CONFLICT
     const intent2 = await requestCatalogMediaUploadIntent(
       { productId: fixtureIds.product, variantId: null, mimeType: "image/png" },
       serviceOpts
@@ -295,17 +382,6 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
         serviceOpts
       )
     ).rejects.toThrow(CatalogIdempotencyConflictError);
-
-    // 6. Already Consumed Intent: same intent + different mutationRequestId
-    await expect(
-      finalizeCatalogMediaUpload(
-        {
-          signedIntentToken: intent.signedIntentToken,
-          mutationRequestId: "018f0024-mr-0000-0000-different0002",
-        },
-        serviceOpts
-      )
-    ).rejects.toThrow(/consumido por otra solicitud/i);
   });
 
   it("handles concurrent finalization with identical bytes safely (race-safe MediaAsset reuse)", async () => {
@@ -451,15 +527,18 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     );
 
     // Must FAIL CLOSED with integrity error!
-    await expect(
-      finalizeCatalogMediaUpload(
+    try {
+      await finalizeCatalogMediaUpload(
         {
           signedIntentToken: intentTampered.signedIntentToken,
           mutationRequestId: "018f0024-mr-integrity-00000000002",
         },
         serviceOpts
-      )
-    ).rejects.toThrow(/Discrepancia de integridad/i);
+      );
+      expect.fail("should have thrown");
+    } catch (err: unknown) {
+      expect((err as { code: string }).code).toBe("MEDIA_PUBLIC_INTEGRITY_MISMATCH");
+    }
   });
 
   it("updates alt text idempotently and audits changes", async () => {
@@ -597,11 +676,14 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     expect(globalPmRows.length).toBeGreaterThan(0);
     const globalPm = globalPmRows[0]!;
 
+    const [prodRow] =
+      await pgSql`SELECT updated_at FROM products WHERE id = ${fixtureIds.product};`;
     const mutationRequestId = "018f0024-mr-primary-00000000001";
     const res = await setProductPrimaryMedia(
       {
         productId: fixtureIds.product,
         productMediaId: globalPm.id,
+        expectedUpdatedAt: prodRow!.updated_at.toISOString(),
         mutationRequestId,
       },
       serviceOpts
@@ -613,6 +695,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
       {
         productId: fixtureIds.product,
         productMediaId: globalPm.id,
+        expectedUpdatedAt: prodRow!.updated_at.toISOString(),
         mutationRequestId,
       },
       serviceOpts
@@ -627,6 +710,8 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     `;
     if (varPm) {
       await pgSql`UPDATE product_media SET variant_id = ${fixtureIds.variantA} WHERE id = ${varPm.id};`;
+      const [freshProd] =
+        await pgSql`SELECT updated_at FROM products WHERE id = ${fixtureIds.product};`;
 
       // Attempting to set variant-scoped media as primary must FAIL
       await expect(
@@ -634,6 +719,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
           {
             productId: fixtureIds.product,
             productMediaId: varPm.id,
+            expectedUpdatedAt: freshProd!.updated_at.toISOString(),
             mutationRequestId: "018f0024-mr-primary-00000000002",
           },
           serviceOpts
@@ -683,6 +769,408 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
         serviceOpts
       )
     ).rejects.toThrow(/respalda la imagen principal actual/i);
+  });
+
+  it("fails closed with MEDIA_UPLOAD_INTENT_CONSUMPTION_INTEGRITY_ERROR on corrupted consumed intent markers (Scenarios E & F)", async () => {
+    const storage = new InMemoryCatalogStorageAdapter();
+    const serviceOpts = {
+      authContext: authCatalogAdmin,
+      storageAdapter: storage,
+      intentSecret: TEST_HMAC_SECRET,
+    };
+
+    // 1. Create a signed intent
+    const intent = await requestCatalogMediaUploadIntent(
+      { productId: fixtureIds.product, variantId: null, mimeType: "image/png" },
+      serviceOpts
+    );
+    const parsed = verifyAndParseMediaUploadIntent(intent.signedIntentToken, TEST_HMAC_SECRET);
+    const intentDigest = computeMediaIntentDigest(parsed);
+
+    // 2. Scenario E: audit event marker points to a non-existent ProductMedia
+    const fakePmId = "018f0024-0000-0000-0000-deadbeef0001";
+    await pgSql`
+      INSERT INTO audit_events (
+        id, actor_type, actor_id, action, target_type, target_id, metadata, timestamp
+      ) VALUES (
+        gen_random_uuid(),
+        'ADMIN',
+        ${fixtureIds.adminUser},
+        'catalog:media:attach',
+        'product_media',
+        ${fakePmId},
+        ${pgSql.json({ media_intent_digest: intentDigest, product_id: fixtureIds.product })},
+        NOW()
+      );
+    `;
+
+    // Must fail closed with canonical replay integrity error
+    try {
+      await finalizeCatalogMediaUpload(
+        {
+          signedIntentToken: intent.signedIntentToken,
+          mutationRequestId: "018f0024-mr-corrupt-000000000001",
+        },
+        serviceOpts
+      );
+      expect.fail("should have thrown");
+    } catch (err: unknown) {
+      expect((err as { code: string }).code).toBe(
+        "MEDIA_UPLOAD_INTENT_CONSUMPTION_INTEGRITY_ERROR"
+      );
+    }
+
+    // Clean up marker
+    await pgSql`DELETE FROM audit_events WHERE target_id = ${fakePmId};`;
+
+    // 3. Scenario F: audit event marker points to ProductMedia belonging to WRONG product
+    // First create a real ProductMedia on otherProduct
+    const [otherAsset] = await pgSql`
+      INSERT INTO media_assets (
+        id, object_key, security_class, media_type, mime_type, file_size_bytes, width, height, checksum_sha256, created_at
+      ) VALUES (
+        gen_random_uuid(), 'products/other/asset.webp', 'PUBLIC_MEDIA', 'IMAGE', 'image/webp', 100, 10, 10, '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', NOW()
+      ) RETURNING id;
+    `;
+    const [otherPm] = await pgSql`
+      INSERT INTO product_media (
+        id, product_id, variant_id, media_asset_id, display_order, created_at
+      ) VALUES (
+        gen_random_uuid(), ${fixtureIds.otherProduct}, NULL, ${otherAsset!.id}, 0, NOW()
+      ) RETURNING id;
+    `;
+
+    await pgSql`
+      INSERT INTO audit_events (
+        id, actor_type, actor_id, action, target_type, target_id, metadata, timestamp
+      ) VALUES (
+        gen_random_uuid(),
+        'ADMIN',
+        ${fixtureIds.adminUser},
+        'catalog:media:attach',
+        'product_media',
+        ${otherPm!.id},
+        ${pgSql.json({ media_intent_digest: intentDigest, product_id: fixtureIds.otherProduct })},
+        NOW()
+      );
+    `;
+
+    try {
+      await finalizeCatalogMediaUpload(
+        {
+          signedIntentToken: intent.signedIntentToken,
+          mutationRequestId: "018f0024-mr-corrupt-000000000002",
+        },
+        serviceOpts
+      );
+      expect.fail("should have thrown");
+    } catch (err: unknown) {
+      expect((err as { code: string }).code).toBe(
+        "MEDIA_UPLOAD_INTENT_CONSUMPTION_INTEGRITY_ERROR"
+      );
+    }
+
+    // Cleanup
+    await pgSql`DELETE FROM audit_events WHERE target_id = ${otherPm!.id};`;
+    await pgSql`DELETE FROM product_media WHERE id = ${otherPm!.id};`;
+    await pgSql`DELETE FROM media_assets WHERE id = ${otherAsset!.id};`;
+  });
+
+  it("handles staging delete failure after commit safely (Section 24 A)", async () => {
+    const storage = new InMemoryCatalogStorageAdapter();
+    const serviceOpts = {
+      authContext: authCatalogAdmin,
+      storageAdapter: storage,
+      intentSecret: TEST_HMAC_SECRET,
+    };
+
+    const intent = await requestCatalogMediaUploadIntent(
+      { productId: fixtureIds.product, variantId: null, mimeType: "image/png" },
+      serviceOpts
+    );
+    const payload = verifyAndParseMediaUploadIntent(intent.signedIntentToken, TEST_HMAC_SECRET);
+
+    const testPngBuffer = await sharp({
+      create: { width: 12, height: 12, channels: 4, background: { r: 1, g: 2, b: 3, alpha: 1 } },
+    })
+      .png()
+      .toBuffer();
+
+    storage.setObject(
+      R2_BUCKETS.CATALOG_STAGING,
+      payload.stagingObjectKey,
+      testPngBuffer,
+      "image/png"
+    );
+
+    // Instruct fake storage to fail deleteObject on staging key
+    storage.deleteFailures.add(payload.stagingObjectKey);
+
+    const res = await finalizeCatalogMediaUpload(
+      {
+        signedIntentToken: intent.signedIntentToken,
+        mutationRequestId: "018f0024-mr-stgfail-000000000001",
+      },
+      serviceOpts
+    );
+
+    // Operation still succeeds!
+    expect(res.productMedia.productId).toBe(fixtureIds.product);
+
+    // DB rows remain committed
+    const pm = await pgSql`SELECT * FROM product_media WHERE id = ${res.productMedia.id};`;
+    expect(pm.length).toBe(1);
+    const audit = await pgSql`SELECT * FROM audit_events WHERE target_id = ${res.productMedia.id};`;
+    expect(audit.length).toBe(1);
+  });
+
+  it("retains public object when database transaction fails (Section 24 B)", async () => {
+    const storage = new InMemoryCatalogStorageAdapter();
+    const serviceOpts = {
+      authContext: authCatalogAdmin,
+      storageAdapter: storage,
+      intentSecret: TEST_HMAC_SECRET,
+    };
+
+    const intent = await requestCatalogMediaUploadIntent(
+      { productId: fixtureIds.product, variantId: null, mimeType: "image/png" },
+      serviceOpts
+    );
+    const payload = verifyAndParseMediaUploadIntent(intent.signedIntentToken, TEST_HMAC_SECRET);
+
+    const testPngBuffer = await sharp({
+      create: { width: 14, height: 14, channels: 4, background: { r: 99, g: 88, b: 77, alpha: 1 } },
+    })
+      .png()
+      .toBuffer();
+
+    storage.setObject(
+      R2_BUCKETS.CATALOG_STAGING,
+      payload.stagingObjectKey,
+      testPngBuffer,
+      "image/png"
+    );
+
+    // Inject failing db that errors inside transaction after public object was written
+    const baseDb = db;
+    const failingDb = new Proxy(baseDb, {
+      get(target, prop, receiver) {
+        if (prop === "transaction") {
+          return async () => {
+            throw new Error("Simulated DB Transaction Failure After Public Write");
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    const failingServiceOpts = {
+      ...serviceOpts,
+      db: failingDb,
+    };
+
+    await expect(
+      finalizeCatalogMediaUpload(
+        {
+          signedIntentToken: intent.signedIntentToken,
+          mutationRequestId: "018f0024-mr-dbfail-000000000001",
+        },
+        failingServiceOpts
+      )
+    ).rejects.toThrow(/Simulated DB Transaction Failure After Public Write/);
+
+    // Verify public storage: the public object was created and RETAINED (no unsafe public delete)
+    const allKeys = Array.from(
+      (storage as unknown as { store: Map<string, unknown> }).store.keys()
+    );
+    const publicObjects = allKeys.filter((k: string) => k.startsWith(R2_BUCKETS.PUBLIC_MEDIA));
+    expect(publicObjects.length).toBeGreaterThan(0);
+  });
+
+  it("rejects cross-product variant assignment with MEDIA_VARIANT_PRODUCT_MISMATCH (Section 24 C)", async () => {
+    const storage = new InMemoryCatalogStorageAdapter();
+    const serviceOpts = {
+      authContext: authCatalogAdmin,
+      storageAdapter: storage,
+      intentSecret: TEST_HMAC_SECRET,
+    };
+
+    // 1. Variant belongs to fixtureIds.product, but request specifies otherProduct
+    try {
+      await requestCatalogMediaUploadIntent(
+        {
+          productId: fixtureIds.otherProduct,
+          variantId: fixtureIds.variantA, // belongs to fixtureIds.product!
+          mimeType: "image/png",
+        },
+        serviceOpts
+      );
+      expect.fail("should have thrown");
+    } catch (err: unknown) {
+      expect((err as { code: string }).code).toBe("MEDIA_VARIANT_PRODUCT_MISMATCH");
+    }
+
+    // 2. In reassignProductMediaVariant
+    const [pm] =
+      await pgSql`SELECT id FROM product_media WHERE product_id = ${fixtureIds.product} LIMIT 1;`;
+    if (pm) {
+      // Create variant on otherProduct
+      const [otherVar] = await pgSql`
+        INSERT INTO product_variants (id, product_id, sku, title, price_cents, status, created_at, updated_at)
+        VALUES (gen_random_uuid(), ${fixtureIds.otherProduct}, 'SKU-OTH-001', 'Other Var', 1000, 'ACTIVE', NOW(), NOW())
+        RETURNING id;
+      `;
+
+      try {
+        await reassignProductMediaVariant(
+          {
+            productId: fixtureIds.product,
+            productMediaId: pm.id,
+            targetVariantId: otherVar!.id,
+            mutationRequestId: "018f0024-mr-varmismatch-000001",
+          },
+          serviceOpts
+        );
+        expect.fail("should have thrown");
+      } catch (err: unknown) {
+        expect((err as { code: string }).code).toBe("MEDIA_VARIANT_PRODUCT_MISMATCH");
+      }
+
+      await pgSql`DELETE FROM product_variants WHERE id = ${otherVar!.id};`;
+    }
+  });
+
+  it("fails closed when existing public object has wrong Content-Type (Section 24 E)", async () => {
+    const storage = new InMemoryCatalogStorageAdapter();
+    const serviceOpts = {
+      authContext: authCatalogAdmin,
+      storageAdapter: storage,
+      intentSecret: TEST_HMAC_SECRET,
+    };
+
+    const intent = await requestCatalogMediaUploadIntent(
+      { productId: fixtureIds.product, variantId: null, mimeType: "image/png" },
+      serviceOpts
+    );
+    const payload = verifyAndParseMediaUploadIntent(intent.signedIntentToken, TEST_HMAC_SECRET);
+
+    const testPngBuffer = await sharp({
+      create: { width: 18, height: 18, channels: 4, background: { r: 40, g: 50, b: 60, alpha: 1 } },
+    })
+      .png()
+      .toBuffer();
+
+    storage.setObject(
+      R2_BUCKETS.CATALOG_STAGING,
+      payload.stagingObjectKey,
+      testPngBuffer,
+      "image/png"
+    );
+
+    // Finalize first time to write public object
+    const res = await finalizeCatalogMediaUpload(
+      {
+        signedIntentToken: intent.signedIntentToken,
+        mutationRequestId: "018f0024-mr-mimecheck-000001",
+      },
+      serviceOpts
+    );
+
+    // Tamper Content-Type of the public object in storage to image/jpeg while keeping bytes
+    const publicStoreKey = `${R2_BUCKETS.PUBLIC_MEDIA}:::${res.mediaAsset.objectKey}`;
+    const publicItem = (
+      storage as unknown as { store: Map<string, { contentType: string }> }
+    ).store.get(publicStoreKey);
+    if (publicItem) {
+      publicItem.contentType = "image/jpeg";
+    }
+
+    // Now attempt a second distinct intent with the identical image bytes
+    const intent2 = await requestCatalogMediaUploadIntent(
+      { productId: fixtureIds.product, variantId: null, mimeType: "image/png" },
+      serviceOpts
+    );
+    const payload2 = verifyAndParseMediaUploadIntent(intent2.signedIntentToken, TEST_HMAC_SECRET);
+    storage.setObject(
+      R2_BUCKETS.CATALOG_STAGING,
+      payload2.stagingObjectKey,
+      testPngBuffer,
+      "image/png"
+    );
+
+    try {
+      await finalizeCatalogMediaUpload(
+        {
+          signedIntentToken: intent2.signedIntentToken,
+          mutationRequestId: "018f0024-mr-mimecheck-000002",
+        },
+        serviceOpts
+      );
+      expect.fail("should have thrown");
+    } catch (err: unknown) {
+      expect((err as { code: string }).code).toBe("MEDIA_PUBLIC_INTEGRITY_MISMATCH");
+    }
+  });
+
+  it("enforces transactional serialization so primaryMedia can never lose all global attachments (Section 11)", async () => {
+    const storage = new InMemoryCatalogStorageAdapter();
+    const serviceOpts = {
+      authContext: authCatalogAdmin,
+      storageAdapter: storage,
+      intentSecret: TEST_HMAC_SECRET,
+    };
+
+    // Ensure we have a primaryMedia set on fixtureIds.product with exactly ONE global attachment
+    const [prod] = await pgSql`SELECT * FROM products WHERE id = ${fixtureIds.product};`;
+    const globalPms = await pgSql`
+      SELECT * FROM product_media
+      WHERE product_id = ${fixtureIds.product} AND variant_id IS NULL;
+    `;
+    expect(globalPms.length).toBeGreaterThanOrEqual(1);
+
+    const solePrimaryPm = globalPms[0]!;
+    // Set this as primary
+    await setProductPrimaryMedia(
+      {
+        productId: fixtureIds.product,
+        productMediaId: solePrimaryPm.id,
+        expectedUpdatedAt: prod!.updated_at.toISOString(),
+        mutationRequestId: "018f0024-mr-serprimary-00001",
+      },
+      serviceOpts
+    );
+
+    // Ensure any other global PMs are temporarily moved to variantA so solePrimaryPm is the only global one
+    for (let i = 1; i < globalPms.length; i++) {
+      await pgSql`UPDATE product_media SET variant_id = ${fixtureIds.variantA} WHERE id = ${globalPms[i]!.id};`;
+    }
+
+    // Attempting to reassign solePrimaryPm to variantA must fail with PRIMARY_MEDIA_CANNOT_BE_VARIANT_SPECIFIC
+    try {
+      await reassignProductMediaVariant(
+        {
+          productId: fixtureIds.product,
+          productMediaId: solePrimaryPm.id,
+          targetVariantId: fixtureIds.variantA,
+          mutationRequestId: "018f0024-mr-serreassign-00001",
+        },
+        serviceOpts
+      );
+      expect.fail("should have thrown");
+    } catch (err: unknown) {
+      expect((err as { code: string }).code).toBe("PRIMARY_MEDIA_CANNOT_BE_VARIANT_SPECIFIC");
+    }
+
+    // Verify DB state: products.primary_media_id is STILL backed by at least one global ProductMedia!
+    const [finalProd] =
+      await pgSql`SELECT primary_media_id FROM products WHERE id = ${fixtureIds.product};`;
+    const finalGlobalPms = await pgSql`
+      SELECT * FROM product_media
+      WHERE product_id = ${fixtureIds.product}
+        AND media_asset_id = ${finalProd!.primary_media_id}
+        AND variant_id IS NULL;
+    `;
+    expect(finalGlobalPms.length).toBeGreaterThanOrEqual(1);
   });
 
   it("confirms audit event safety: zero raw secrets, tokens, or URLs logged", async () => {

@@ -64,6 +64,14 @@ function centsToInputString(cents: number | null | undefined): string {
   return `${sign}${whole}.${fraction}`;
 }
 
+export interface PendingFinalizationState {
+  signedIntentToken: string;
+  mutationRequestId: string;
+  productId: string;
+  targetVariantId: string | null;
+  safeStatus: "ready_to_retry" | "retrying";
+}
+
 export function ProductEditor({
   initialDetail,
   brands,
@@ -147,6 +155,9 @@ export function ProductEditor({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [clientFileError, setClientFileError] = useState<string | null>(null);
+  const [pendingFinalization, setPendingFinalization] = useState<PendingFinalizationState | null>(
+    null
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Media Operation Feedback State
@@ -633,30 +644,133 @@ export function ProductEditor({
     }
   };
 
-  // Focus & Escape management for Alt-Text Modal
+  // Focus, Trap & Escape management for Alt-Text Modal
   useEffect(() => {
     if (!altTextModalMedia) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setAltTextModalMedia(null);
+
+    const focusFirst = () => {
+      if (altTextDialogRef.current) {
+        const input = altTextDialogRef.current.querySelector<HTMLInputElement>("input");
+        input?.focus();
+      }
     };
+    focusFirst();
+    const timer = setTimeout(focusFirst, 10);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!altTextDialogRef.current) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setAltTextModalMedia(null);
+        setTimeout(() => altTextTriggerRef.current?.focus(), 10);
+        return;
+      }
+
+      if (e.key === "Tab") {
+        const focusable = Array.from(
+          altTextDialogRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (focusable.length === 0) {
+          e.preventDefault();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (
+            document.activeElement === first ||
+            !altTextDialogRef.current.contains(document.activeElement)
+          ) {
+            e.preventDefault();
+            last?.focus();
+          }
+        } else {
+          if (
+            document.activeElement === last ||
+            !altTextDialogRef.current.contains(document.activeElement)
+          ) {
+            e.preventDefault();
+            first?.focus();
+          }
+        }
+      }
+    };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [altTextModalMedia]);
 
-  // Focus & Escape management for Variant Reassignment Modal
+  // Focus, Trap & Escape management for Variant Reassignment Modal
   useEffect(() => {
     if (!variantModalMedia) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setVariantModalMedia(null);
+
+    const focusFirst = () => {
+      if (variantDialogRef.current) {
+        const select = variantDialogRef.current.querySelector<HTMLSelectElement>("select");
+        select?.focus();
+      }
     };
+    focusFirst();
+    const timer = setTimeout(focusFirst, 10);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!variantDialogRef.current) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setVariantModalMedia(null);
+        setTimeout(() => variantTriggerRef.current?.focus(), 10);
+        return;
+      }
+
+      if (e.key === "Tab") {
+        const focusable = Array.from(
+          variantDialogRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (focusable.length === 0) {
+          e.preventDefault();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (
+            document.activeElement === first ||
+            !variantDialogRef.current.contains(document.activeElement)
+          ) {
+            e.preventDefault();
+            last?.focus();
+          }
+        } else {
+          if (
+            document.activeElement === last ||
+            !variantDialogRef.current.contains(document.activeElement)
+          ) {
+            e.preventDefault();
+            first?.focus();
+          }
+        }
+      }
+    };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [variantModalMedia]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     setUploadError(null);
     setUploadSuccess(null);
+    setPendingFinalization(null);
     if (!file) {
       setSelectedFile(null);
       setClientFileError(null);
@@ -691,6 +805,10 @@ export function ProductEditor({
     setUploadSuccess(null);
     setUploadStage("requesting_intent");
 
+    let signedToken = "";
+    let putUrl = "";
+    let reqHeaders: Record<string, string> = {};
+
     try {
       const intentRes = await requestMediaUploadIntentAction({
         productId: product.id,
@@ -705,12 +823,21 @@ export function ProductEditor({
         return;
       }
 
-      const { signedIntentToken, presignedPutUrl, requiredHeaders } = intentRes.data;
+      signedToken = intentRes.data.signedIntentToken;
+      putUrl = intentRes.data.presignedPutUrl;
+      reqHeaders = intentRes.data.requiredHeaders;
+    } catch {
+      setUploadError("Error al solicitar autorización de subida.");
+      setUploadStage("error");
+      setIsUploadingMedia(false);
+      return;
+    }
 
+    try {
       setUploadStage("uploading_staging");
-      const putRes = await fetch(presignedPutUrl, {
+      const putRes = await fetch(putUrl, {
         method: "PUT",
-        headers: requiredHeaders,
+        headers: reqHeaders,
         body: selectedFile,
       });
 
@@ -720,23 +847,38 @@ export function ProductEditor({
         setIsUploadingMedia(false);
         return;
       }
+    } catch {
+      setUploadError("Error de conexión durante la transferencia al almacenamiento temporal.");
+      setUploadStage("error");
+      setIsUploadingMedia(false);
+      return;
+    }
 
-      setUploadStage("finalizing");
-      const finalPayload = {
-        productId: product.id,
-        signedIntentToken,
-      };
-      const mutationRequestId = mediaUploadTracker.current.getRequestId(finalPayload);
+    setUploadStage("finalizing");
+    const finalPayload = {
+      productId: product.id,
+      signedIntentToken: signedToken,
+    };
+    const mutationRequestId = mediaUploadTracker.current.getRequestId(finalPayload);
 
+    const pendingState: PendingFinalizationState = {
+      signedIntentToken: signedToken,
+      mutationRequestId,
+      productId: product.id,
+      targetVariantId: uploadTargetVariantId ? uploadTargetVariantId : null,
+      safeStatus: "ready_to_retry",
+    };
+
+    try {
       const finalRes = await finalizeMediaUploadAction({
         productId: product.id,
-        signedIntentToken,
+        signedIntentToken: signedToken,
         mutationRequestId,
       });
 
-      mediaUploadTracker.current.complete();
-
       if (finalRes.success) {
+        mediaUploadTracker.current.complete();
+        setPendingFinalization(null);
         setUploadSuccess("Imagen subida y normalizada a WebP exitosamente.");
         setUploadStage("success");
         setSelectedFile(null);
@@ -745,11 +887,58 @@ export function ProductEditor({
         }
         router.refresh();
       } else {
+        mediaUploadTracker.current.complete();
+        setPendingFinalization(null);
         setUploadError(finalRes.error ?? "Error al finalizar el registro del activo multimedia.");
         setUploadStage("error");
       }
     } catch {
-      setUploadError("Error de conexión durante el proceso de subida.");
+      setPendingFinalization(pendingState);
+      setUploadError(
+        "Error de conexión durante la finalización del activo. Puede reintentar la confirmación sin volver a transferir el archivo."
+      );
+      setUploadStage("error");
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
+  const handleRetryFinalization = async () => {
+    if (!pendingFinalization) return;
+    setIsUploadingMedia(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+    setUploadStage("finalizing");
+    setPendingFinalization((prev) => (prev ? { ...prev, safeStatus: "retrying" } : null));
+
+    try {
+      const finalRes = await finalizeMediaUploadAction({
+        productId: pendingFinalization.productId,
+        signedIntentToken: pendingFinalization.signedIntentToken,
+        mutationRequestId: pendingFinalization.mutationRequestId,
+      });
+
+      if (finalRes.success) {
+        mediaUploadTracker.current.complete();
+        setPendingFinalization(null);
+        setUploadSuccess("Imagen subida y normalizada a WebP exitosamente.");
+        setUploadStage("success");
+        setSelectedFile(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        router.refresh();
+      } else {
+        mediaUploadTracker.current.complete();
+        setPendingFinalization(null);
+        setUploadError(finalRes.error ?? "Error al finalizar el registro del activo multimedia.");
+        setUploadStage("error");
+      }
+    } catch {
+      setPendingFinalization((prev) => (prev ? { ...prev, safeStatus: "ready_to_retry" } : null));
+      setUploadError(
+        "Error de conexión durante el reintento de finalización. Puede volver a intentar."
+      );
       setUploadStage("error");
     } finally {
       setIsUploadingMedia(false);
@@ -863,6 +1052,7 @@ export function ProductEditor({
       mediaReorderTracker.current.complete();
 
       if (res.success) {
+        setMediaOpSuccess("Orden de medios actualizado exitosamente.");
         router.refresh();
       } else {
         setMediaOpError(res.error ?? "No se pudo reordenar los medios multimedia.");
@@ -1653,7 +1843,10 @@ export function ProductEditor({
             <select
               id="media-upload-variant"
               value={uploadTargetVariantId}
-              onChange={(e) => setUploadTargetVariantId(e.target.value)}
+              onChange={(e) => {
+                setUploadTargetVariantId(e.target.value);
+                setPendingFinalization(null);
+              }}
               className={styles.mediaVariantSelect}
               data-testid="select-media-upload-variant"
               disabled={isUploadingMedia}
@@ -1695,20 +1888,56 @@ export function ProductEditor({
             </button>
           </div>
 
+          {pendingFinalization && (
+            <div style={{ marginTop: "0.5rem" }}>
+              <button
+                type="button"
+                onClick={handleRetryFinalization}
+                disabled={isUploadingMedia}
+                className={styles.secondaryButton}
+                data-testid="btn-retry-finalization"
+              >
+                {isUploadingMedia && uploadStage === "finalizing" ? (
+                  <>
+                    <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                    <span>Reintentando finalización...</span>
+                  </>
+                ) : (
+                  <span>Reintentar Finalización</span>
+                )}
+              </button>
+            </div>
+          )}
+
           {clientFileError && (
-            <div className={styles.mediaUploadError} data-testid="media-client-error">
+            <div
+              className={styles.mediaUploadError}
+              data-testid="media-client-error"
+              role="alert"
+              aria-live="assertive"
+            >
               {clientFileError}
             </div>
           )}
 
           {uploadError && (
-            <div className={styles.mediaUploadError} data-testid="media-upload-error">
+            <div
+              className={styles.mediaUploadError}
+              data-testid="media-upload-error"
+              role="alert"
+              aria-live="assertive"
+            >
               {uploadError}
             </div>
           )}
 
           {uploadSuccess && (
-            <div className={styles.mediaUploadSuccess} data-testid="media-upload-success">
+            <div
+              className={styles.mediaUploadSuccess}
+              data-testid="media-upload-success"
+              role="status"
+              aria-live="polite"
+            >
               {uploadSuccess}
             </div>
           )}
@@ -1719,6 +1948,8 @@ export function ProductEditor({
           <div
             className={styles.mediaUploadError}
             data-testid="media-op-error"
+            role="alert"
+            aria-live="assertive"
             style={{ marginTop: "1rem" }}
           >
             {mediaOpError}
@@ -1728,6 +1959,8 @@ export function ProductEditor({
           <div
             className={styles.mediaUploadSuccess}
             data-testid="media-op-success"
+            role="status"
+            aria-live="polite"
             style={{ marginTop: "1rem" }}
           >
             {mediaOpSuccess}

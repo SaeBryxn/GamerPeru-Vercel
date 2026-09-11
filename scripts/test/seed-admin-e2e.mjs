@@ -211,7 +211,13 @@ export const ADMIN_E2E_PRODUCT_FIXTURES = {
     name: "Producto E2E Listo Publicar",
     slug: "prod-e2e-ready-publish",
     sku: "E2E-PUB-SKU-001",
+    variantId: "018f0000-0000-7000-8000-000000007a01",
     mediaAssetId: "018f0000-0000-7000-8000-000000006a01",
+    mediaAsset2Id: "018f0000-0000-7000-8000-000000006a03",
+    mediaAsset3Id: "018f0000-0000-7000-8000-000000006a04",
+    productMediaId1: "018f0000-0000-7000-8000-000000002a01",
+    productMediaId2: "018f0000-0000-7000-8000-000000002a03",
+    productMediaId3: "018f0000-0000-7000-8000-000000002a04",
   },
   sentinelProduct: {
     id: "018f0000-0000-7000-8000-000000001a02",
@@ -382,22 +388,53 @@ export async function seedAdminProductFixtures(clientSql) {
       WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.categoryB.id};
     `;
 
-    // Public Media Asset
+    // Public Media Assets for Publishable Product
     await tx`
-      INSERT INTO media_assets (id, object_key, security_class, media_type, mime_type, file_size_bytes, width, height, checksum_sha256, created_at)
-      VALUES (
-        ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAssetId},
-        'products/test-e2e-public-asset.webp',
-        'PUBLIC_MEDIA',
-        'IMAGE',
-        'image/webp',
-        10240,
-        800,
-        800,
-        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-        NOW()
-      )
-      ON CONFLICT (id) DO UPDATE SET security_class = 'PUBLIC_MEDIA', object_key = EXCLUDED.object_key;
+      INSERT INTO media_assets (id, object_key, security_class, media_type, mime_type, file_size_bytes, width, height, checksum_sha256, alt_text, created_at)
+      VALUES
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAssetId},
+          'products/test-e2e-public-asset.webp',
+          'PUBLIC_MEDIA',
+          'IMAGE',
+          'image/webp',
+          10240,
+          800,
+          800,
+          '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          'Mouse Blanco Principal',
+          NOW()
+        ),
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAsset2Id},
+          'products/test-e2e-public-asset-2.webp',
+          'PUBLIC_MEDIA',
+          'IMAGE',
+          'image/webp',
+          12288,
+          800,
+          800,
+          '123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0',
+          'Mouse Blanco Lateral',
+          NOW()
+        ),
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAsset3Id},
+          'products/test-e2e-public-asset-3.webp',
+          'PUBLIC_MEDIA',
+          'IMAGE',
+          'image/webp',
+          14336,
+          800,
+          800,
+          '23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01',
+          'Mouse Blanco Sensor',
+          NOW()
+        )
+      ON CONFLICT (id) DO UPDATE SET
+        security_class = 'PUBLIC_MEDIA',
+        object_key = EXCLUDED.object_key,
+        alt_text = EXCLUDED.alt_text;
     `;
 
     // Sentinel Private Media Asset
@@ -453,17 +490,39 @@ export async function seedAdminProductFixtures(clientSql) {
       ON CONFLICT (id) DO UPDATE SET sku = EXCLUDED.sku, price_cents = EXCLUDED.price_cents, status = 'ACTIVE';
     `;
 
+    // Clean any prior product_media rows for publishableProduct to ensure deterministic display order
+    await tx`
+      DELETE FROM product_media
+      WHERE product_id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id};
+    `;
+
     await tx`
       INSERT INTO product_media (id, product_id, media_asset_id, variant_id, display_order, created_at)
-      VALUES (
-        '018f0000-0000-7000-8000-000000002a01',
-        ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id},
-        ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAssetId},
-        NULL,
-        0,
-        NOW()
-      )
-      ON CONFLICT (id) DO NOTHING;
+      VALUES
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAssetId},
+          NULL,
+          0,
+          NOW()
+        ),
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId2},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAsset2Id},
+          NULL,
+          1,
+          NOW()
+        ),
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId3},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAsset3Id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.variantId},
+          2,
+          NOW()
+        );
     `;
 
     await tx`

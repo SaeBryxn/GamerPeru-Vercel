@@ -115,6 +115,9 @@ export interface CatalogMediaRuntimeConfig {
   catalogMediaIntentHmacSecret: string;
 }
 
+export const KNOWN_INSECURE_EXAMPLE_HMAC_SECRET =
+  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 /**
  * Validates and returns full real-runtime configuration for Cloudflare R2 catalog media operations.
  * Fails closed if any credential, bucket, or secret is absent or uses placeholder values.
@@ -154,10 +157,17 @@ export function requireCatalogMediaRuntimeConfig(): CatalogMediaRuntimeConfig {
     throw new Error("CATALOG_MEDIA_INTENT_HMAC_SECRET is required for catalog media operations.");
   }
 
-  const isHex64 = /^[0-9a-fA-F]{64}$/.test(secret.trim());
+  const trimmedSecret = secret.trim();
+  const isHex64 = /^[0-9a-fA-F]{64}$/.test(trimmedSecret);
   if (!isHex64) {
     throw new Error(
       "CATALOG_MEDIA_INTENT_HMAC_SECRET must be a 64-character hexadecimal string representing 32 bytes of high entropy."
+    );
+  }
+
+  if (trimmedSecret.toLowerCase() === KNOWN_INSECURE_EXAMPLE_HMAC_SECRET.toLowerCase()) {
+    throw new Error(
+      "CATALOG_MEDIA_INTENT_HMAC_SECRET cannot use the insecure repository example placeholder."
     );
   }
 
@@ -167,7 +177,7 @@ export function requireCatalogMediaRuntimeConfig(): CatalogMediaRuntimeConfig {
     r2SecretAccessKey: secretAccessKey.trim(),
     r2PublicMediaBucket: publicMediaBucket.trim(),
     r2CatalogStagingBucket: catalogStagingBucket.trim(),
-    catalogMediaIntentHmacSecret: secret.trim(),
+    catalogMediaIntentHmacSecret: trimmedSecret,
   };
 }
 
@@ -185,6 +195,14 @@ export function getCatalogMediaIntentSecret(overrideSecret?: string): string {
   if (!isHex64) {
     throw new Error(
       "CATALOG_MEDIA_INTENT_HMAC_SECRET must be a 64-character hexadecimal string representing 32 bytes of high entropy."
+    );
+  }
+  if (
+    !overrideSecret &&
+    trimmed.toLowerCase() === KNOWN_INSECURE_EXAMPLE_HMAC_SECRET.toLowerCase()
+  ) {
+    throw new Error(
+      "CATALOG_MEDIA_INTENT_HMAC_SECRET cannot use the insecure repository example placeholder."
     );
   }
   return trimmed;

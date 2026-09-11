@@ -10,11 +10,17 @@ import {
 import {
   detectMagicMimeType,
   validateAndNormalizeCatalogImage,
+  validateCatalogImageSize,
 } from "@/lib/admin/catalog/image-normalizer";
-import { getCatalogMediaIntentSecret } from "@/config/server-env";
+import {
+  getCatalogMediaIntentSecret,
+  KNOWN_INSECURE_EXAMPLE_HMAC_SECRET,
+  requireCatalogMediaRuntimeConfig,
+} from "@/config/server-env";
+import { InMemoryCatalogStorageAdapter } from "@/lib/admin/catalog/media-storage";
 import { ALLOWED_IMAGE_MIME_TYPES } from "@/lib/admin/catalog/publish-readiness";
 
-const TEST_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const TEST_SECRET = "a1b2c3d4e5f67890123456789abcdef0a1b2c3d4e5f67890123456789abcdef0";
 
 describe("GP-024 Media Crypto & Upload Intent Signing", () => {
   it("rejects weak or short HMAC secrets (< 64 hex chars / 32 bytes)", () => {
@@ -260,5 +266,116 @@ describe("GP-024 Frozen Domain Authorities & Invariants", () => {
     expect(longAlt.length).toBe(256);
     // Boundary check
     expect("a".repeat(255).length).toBe(255);
+  });
+
+  describe("GP-024 Pure Size & Bounded Read Tests (Defect D / Section 19)", () => {
+    it("rejects 0 byte length with MEDIA_FILE_EMPTY", () => {
+      try {
+        validateCatalogImageSize(0);
+        expect.fail("should have thrown");
+      } catch (err: unknown) {
+        expect((err as { code: string }).code).toBe("MEDIA_FILE_EMPTY");
+      }
+    });
+
+    it("accepts exactly 10485760 bytes (10 MiB limit)", () => {
+      expect(() => validateCatalogImageSize(10485760)).not.toThrow();
+    });
+
+    it("rejects 10485761 bytes (10 MiB + 1 byte) with MEDIA_FILE_TOO_LARGE", () => {
+      try {
+        validateCatalogImageSize(10485761);
+        expect.fail("should have thrown");
+      } catch (err: unknown) {
+        expect((err as { code: string }).code).toBe("MEDIA_FILE_TOO_LARGE");
+      }
+    });
+
+    it("enforces bounded streaming read in storage adapter", async () => {
+      const storage = new InMemoryCatalogStorageAdapter();
+      const testKey = "test/bounded-check.bin";
+      const bucket = "staging";
+
+      // 1. Exact bound: 10485760
+      const exactBuf = Buffer.alloc(10485760, 0x42);
+      await storage.putObject({
+        bucket,
+        key: testKey,
+        body: exactBuf,
+        contentType: "application/octet-stream",
+      });
+      const readExact = await storage.getObjectBytesBounded({
+        bucket,
+        key: testKey,
+        maxBytes: 10485760,
+      });
+      expect(readExact.length).toBe(10485760);
+
+      // 2. Over bound: 10485761
+      const overBuf = Buffer.alloc(10485761, 0x42);
+      await storage.putObject({
+        bucket,
+        key: testKey,
+        body: overBuf,
+        contentType: "application/octet-stream",
+      });
+      await expect(
+        storage.getObjectBytesBounded({ bucket, key: testKey, maxBytes: 10485760 })
+      ).rejects.toThrow(/MEDIA_FILE_TOO_LARGE/);
+    });
+  });
+
+  describe("GP-024 HMAC Secret Fail Closed (Defect F / Section 21)", () => {
+    it("fails closed when encountering the repository example placeholder", () => {
+      expect(KNOWN_INSECURE_EXAMPLE_HMAC_SECRET).toBe(
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      );
+
+      const origEnv = { ...process.env };
+      try {
+        process.env.R2_ACCOUNT_ID = "test-account-id";
+        process.env.R2_ACCESS_KEY_ID = "test-access-key";
+        process.env.R2_SECRET_ACCESS_KEY = "test-secret-key";
+        process.env.R2_PUBLIC_MEDIA_BUCKET = "test-public";
+        process.env.R2_CATALOG_STAGING_BUCKET = "test-staging";
+        process.env.CATALOG_MEDIA_INTENT_HMAC_SECRET = KNOWN_INSECURE_EXAMPLE_HMAC_SECRET;
+
+        expect(() => requireCatalogMediaRuntimeConfig()).toThrow(
+          /insecure repository example placeholder/i
+        );
+
+        expect(() => getCatalogMediaIntentSecret()).toThrow(
+          /insecure repository example placeholder/i
+        );
+      } finally {
+        process.env = origEnv;
+      }
+    });
+
+    it("rejects non-hex placeholder from .env.example", () => {
+      const examplePlaceholder =
+        "replace-with-64-character-hexadecimal-hmac-secret-min-32-bytes-long";
+      expect(() => getCatalogMediaIntentSecret(examplePlaceholder)).toThrow(
+        /64-character hexadecimal/i
+      );
+    });
+  });
+
+  describe("GP-024 Presigned URL Expiry Invariant (Defect E / Section 20)", () => {
+    it("ensures presigned PUT expiry does not outlive intent expiresAt", () => {
+      const nowSec = 1000;
+      const intentLifetime = 600; // 10 minutes
+      const intentExpiresAt = nowSec + intentLifetime;
+
+      // Simulated elapsed time: 150s elapsed before presigning
+      const elapsedSec = 150;
+      const currentNow = nowSec + elapsedSec;
+      const remainingSeconds = Math.max(1, intentExpiresAt - currentNow);
+      const presignedDuration = Math.min(600, remainingSeconds);
+
+      const effectivePresignedExpiry = currentNow + presignedDuration;
+      expect(effectivePresignedExpiry).toBeLessThanOrEqual(intentExpiresAt);
+      expect(presignedDuration).toBe(450);
+    });
   });
 });

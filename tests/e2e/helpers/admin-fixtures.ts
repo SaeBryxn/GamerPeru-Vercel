@@ -56,7 +56,13 @@ export const ADMIN_E2E_PRODUCT_FIXTURES = {
     name: "Producto E2E Listo Publicar",
     slug: "prod-e2e-ready-publish",
     sku: "E2E-PUB-SKU-001",
+    variantId: "018f0000-0000-7000-8000-000000007a01",
     mediaAssetId: "018f0000-0000-7000-8000-000000006a01",
+    mediaAsset2Id: "018f0000-0000-7000-8000-000000006a03",
+    mediaAsset3Id: "018f0000-0000-7000-8000-000000006a04",
+    productMediaId1: "018f0000-0000-7000-8000-000000002a01",
+    productMediaId2: "018f0000-0000-7000-8000-000000002a03",
+    productMediaId3: "018f0000-0000-7000-8000-000000002a04",
   },
   sentinelProduct: {
     id: "018f0000-0000-7000-8000-000000001a02",

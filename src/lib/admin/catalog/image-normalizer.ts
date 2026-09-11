@@ -89,22 +89,30 @@ export function detectMagicMimeType(buffer: Buffer): AllowedMediaUploadMimeType 
  * - Derives authoritative width and height from normalized WebP
  * - Derives SHA-256 content hash from final WebP bytes
  */
+/**
+ * Authoritative pure byte length boundary validation.
+ * Verifies byte length > 0 and <= 10485760 (10 MiB).
+ */
+export function validateCatalogImageSize(byteLength: number): void {
+  if (byteLength === 0) {
+    throw new CatalogDomainError("El archivo de imagen está vacío.", "MEDIA_FILE_EMPTY", 400);
+  }
+
+  if (byteLength > MAX_MEDIA_FILE_SIZE_BYTES) {
+    throw new CatalogDomainError(
+      `El tamaño de la imagen (${byteLength} bytes) excede el límite máximo de 10 MiB (10485760 bytes).`,
+      "MEDIA_FILE_TOO_LARGE",
+      400
+    );
+  }
+}
+
 export async function validateAndNormalizeCatalogImage(
   buffer: Buffer,
   expectedMime: AllowedMediaUploadMimeType
 ): Promise<NormalizedImageResult> {
   // 1. Exact byte length boundary
-  if (buffer.length === 0) {
-    throw new CatalogDomainError("El archivo de imagen está vacío.", "MEDIA_FILE_EMPTY", 400);
-  }
-
-  if (buffer.length > MAX_MEDIA_FILE_SIZE_BYTES) {
-    throw new CatalogDomainError(
-      `El tamaño de la imagen (${buffer.length} bytes) excede el límite máximo de 10 MiB (10485760 bytes).`,
-      "MEDIA_FILE_OVERSIZE",
-      400
-    );
-  }
+  validateCatalogImageSize(buffer.length);
 
   // 2. Magic bytes inspection
   const magicMime = detectMagicMimeType(buffer);

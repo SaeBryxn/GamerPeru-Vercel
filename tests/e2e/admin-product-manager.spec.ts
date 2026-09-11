@@ -693,9 +693,58 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
   });
 
   // --------------------------------------------------------------------------
-  // Requirement S: Media Security Boundary & Product Media Authoring (CHK3)
+  // Requirement S: Media Security Boundary, Gallery, Operations & Accessibility (CHK3-BR1)
   // --------------------------------------------------------------------------
-  test("Requirement S: Media authoring UI exists, private sentinel keys are never exposed, and zero deletion control is present", async ({
+  async function resetPublishableProductMedia() {
+    await sql`
+      UPDATE products
+      SET primary_media_id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAssetId},
+          updated_at = NOW()
+      WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id};
+    `;
+
+    await sql`
+      UPDATE media_assets
+      SET alt_text = 'Mouse Blanco Principal'
+      WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAssetId};
+    `;
+
+    await sql`
+      DELETE FROM product_media
+      WHERE product_id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id};
+    `;
+
+    await sql`
+      INSERT INTO product_media (id, product_id, media_asset_id, variant_id, display_order, created_at)
+      VALUES
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAssetId},
+          NULL,
+          0,
+          NOW()
+        ),
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId2},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAsset2Id},
+          NULL,
+          1,
+          NOW()
+        ),
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId3},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAsset3Id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.variantId},
+          2,
+          NOW()
+        );
+    `;
+  }
+
+  test("Requirement S1: Media Security Boundary — private sentinel keys are never exposed and private assets render safe placeholders", async ({
     page,
   }) => {
     await loginAndNavigateTo(
@@ -712,33 +761,409 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await expect(page.locator('[data-testid="select-media-upload-variant"]')).toBeVisible();
     await expect(page.locator('[data-testid="btn-upload-media"]')).toBeVisible();
 
-    // 2. Private sentinel objectKey must NEVER appear in the client DOM or page source
+    // 2. Private sentinel objectKey must NEVER appear in client DOM or page source
     const pageContent = await page.content();
     expect(pageContent).not.toContain(ADMIN_E2E_PRODUCT_FIXTURES.sentinelProduct.sentinelKey);
 
     // 3. Shows safe metadata / placeholder for non-public media
     await expect(page.locator("text=[Privado]").first()).toBeVisible();
 
-    // 4. Modals and action buttons
-    const altBtn = page.locator('[data-testid^="btn-edit-alt-"]').first();
-    if (await altBtn.isVisible()) {
-      await altBtn.click();
-      await expect(page.locator('[data-testid="modal-alt-text"]')).toBeVisible();
-      await expect(page.locator('[data-testid="notice-shared-alt-text"]')).toBeVisible();
-      await page.locator('[data-testid="btn-cancel-alt-text"]').click();
-      await expect(page.locator('[data-testid="modal-alt-text"]')).not.toBeVisible();
-    }
-
-    const varBtn = page.locator('[data-testid^="btn-reassign-variant-"]').first();
-    if (await varBtn.isVisible()) {
-      await varBtn.click();
-      await expect(page.locator('[data-testid="modal-reassign-variant"]')).toBeVisible();
-      await page.locator('[data-testid="btn-cancel-reassign-variant"]').click();
-      await expect(page.locator('[data-testid="modal-reassign-variant"]')).not.toBeVisible();
-    }
-
-    // 5. Zero permanent deletion controls exist across the entire media section
+    // 4. Zero permanent deletion controls exist across the entire media section
     await expect(page.locator('[data-testid^="btn-delete-media"]')).toHaveCount(0);
+  });
+
+  test("Requirement S2: Media Gallery UI — renders PUBLIC_MEDIA previews, Global badge, Variant badge, and Primary badge", async ({
+    page,
+  }) => {
+    await resetPublishableProductMedia();
+
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+    );
+
+    const card1 = page.locator(
+      `[data-testid="media-card-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
+    );
+    const card2 = page.locator(
+      `[data-testid="media-card-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId2}"]`
+    );
+    const card3 = page.locator(
+      `[data-testid="media-card-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId3}"]`
+    );
+
+    await expect(card1).toBeVisible();
+    await expect(card2).toBeVisible();
+    await expect(card3).toBeVisible();
+
+    // PUBLIC_MEDIA previews render img elements
+    await expect(card1.locator("img")).toBeVisible();
+    await expect(card2.locator("img")).toBeVisible();
+    await expect(card3.locator("img")).toBeVisible();
+
+    // Card 1: Primary + Global
+    await expect(
+      page.locator(
+        `[data-testid="badge-primary-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
+      )
+    ).toContainText("Principal");
+    await expect(
+      page.locator(
+        `[data-testid="badge-global-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
+      )
+    ).toContainText("Global");
+
+    // Card 2: Global (non-primary)
+    await expect(
+      page.locator(
+        `[data-testid="badge-global-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId2}"]`
+      )
+    ).toContainText("Global");
+    await expect(
+      page.locator(
+        `[data-testid="badge-primary-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId2}"]`
+      )
+    ).toHaveCount(0);
+
+    // Card 3: Variant-scoped
+    await expect(
+      page.locator(
+        `[data-testid="badge-variant-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId3}"]`
+      )
+    ).toContainText("Variante");
+    await expect(
+      page.locator(
+        `[data-testid="badge-primary-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId3}"]`
+      )
+    ).toHaveCount(0);
+  });
+
+  test("Requirement S3: Set Primary Media — disabled for Variant media, enabled for Global media, and mutates authoritative state", async ({
+    page,
+  }) => {
+    await resetPublishableProductMedia();
+
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+    );
+
+    // 1. Variant-specific media button is disabled
+    const varSetPrimaryBtn = page.locator(
+      `[data-testid="btn-set-primary-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId3}"]`
+    );
+    await expect(varSetPrimaryBtn).toBeDisabled();
+    await expect(varSetPrimaryBtn).toHaveAttribute(
+      "title",
+      "Las imágenes de variante no pueden ser asignadas como principal global"
+    );
+
+    // 2. Global secondary media button is enabled
+    const globalSetPrimaryBtn = page.locator(
+      `[data-testid="btn-set-primary-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId2}"]`
+    );
+    await expect(globalSetPrimaryBtn).toBeEnabled();
+    await expect(globalSetPrimaryBtn).toContainText("Hacer Principal");
+
+    // 3. Click Set Primary and verify authoritative persistence
+    await globalSetPrimaryBtn.click();
+    await expect(page.locator('[data-testid="media-op-success"]')).toContainText(
+      "Imagen principal actualizada exitosamente"
+    );
+
+    // Database verification: primary_media_id is now mediaAsset2Id
+    const productRow = await sql`
+      SELECT primary_media_id
+      FROM products
+      WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id};
+    `;
+    expect(productRow[0]!.primary_media_id).toBe(
+      ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAsset2Id
+    );
+
+    // UI verification: Card 2 now shows Primary badge
+    await expect(
+      page.locator(
+        `[data-testid="badge-primary-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId2}"]`
+      )
+    ).toBeVisible();
+  });
+
+  test("Requirement S4: Alt-Text Editor — opens modal with disclosure and updates authoritative MediaAsset alt_text", async ({
+    page,
+  }) => {
+    await resetPublishableProductMedia();
+
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+    );
+
+    // 1. Open Alt-Text modal
+    const altBtn = page.locator(
+      `[data-testid="btn-edit-alt-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
+    );
+    await altBtn.click();
+
+    const modal = page.locator('[data-testid="modal-alt-text"]');
+    await expect(modal).toBeVisible();
+    await expect(page.locator("#modal-alt-title")).toContainText("Editar Texto Alternativo");
+
+    // 2. Global-impact disclosure notice is visible
+    const notice = page.locator('[data-testid="notice-shared-alt-text"]');
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText("Al actualizarse a nivel de MediaAsset, se comparte");
+
+    // 3. Fill and save new alt text
+    const newAltText = "Mouse Gamer Ergonomico Blanco E2E";
+    const altInput = page.locator('[data-testid="input-media-alt-text"]');
+    await altInput.fill(newAltText);
+    await page.locator('[data-testid="btn-save-alt-text"]').click();
+
+    // Modal closes and success notification appears
+    await expect(modal).not.toBeVisible();
+    await expect(page.locator('[data-testid="media-op-success"]')).toContainText(
+      "Texto alternativo actualizado exitosamente"
+    );
+
+    // Database verification: MediaAsset authoritative alt_text updated
+    const assetRow = await sql`
+      SELECT alt_text
+      FROM media_assets
+      WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.mediaAssetId};
+    `;
+    expect(assetRow[0]!.alt_text).toBe(newAltText);
+  });
+
+  test("Requirement S5: Media Reordering — accessible controls update display_order and persist authoritatively", async ({
+    page,
+  }) => {
+    await resetPublishableProductMedia();
+
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+    );
+
+    // 1. Verify accessible names on reorder buttons
+    const moveDownBtn1 = page.locator(
+      `[data-testid="btn-move-down-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
+    );
+    const moveUpBtn1 = page.locator(
+      `[data-testid="btn-move-up-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
+    );
+    await expect(moveDownBtn1).toHaveAttribute("aria-label", "Mover hacia abajo");
+    await expect(moveUpBtn1).toHaveAttribute("aria-label", "Mover hacia arriba");
+    await expect(moveUpBtn1).toBeDisabled(); // First item cannot move up
+
+    // 2. Move item 1 down
+    await moveDownBtn1.click();
+    await expect(page.locator('[data-testid="media-op-success"]')).toContainText(
+      "Orden de medios actualizado exitosamente"
+    );
+
+    // 3. Database verification: display_order updated atomically
+    const orderRows = await sql`
+      SELECT id, display_order
+      FROM product_media
+      WHERE product_id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}
+      ORDER BY display_order ASC;
+    `;
+    expect(orderRows[0]!.id).toBe(ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId2);
+    expect(orderRows[0]!.display_order).toBe(0);
+    expect(orderRows[1]!.id).toBe(ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1);
+    expect(orderRows[1]!.display_order).toBe(1);
+  });
+
+  test("Requirement S6: Variant Reassignment — Global to Variant, Variant to Global, and primary-invalid blocked", async ({
+    page,
+  }) => {
+    await resetPublishableProductMedia();
+
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+    );
+
+    // --- Sub-case A: Global -> Variant succeeds ---
+    const reassignBtn2 = page.locator(
+      `[data-testid="btn-reassign-variant-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId2}"]`
+    );
+    await reassignBtn2.click();
+
+    const varModal = page.locator('[data-testid="modal-reassign-variant"]');
+    await expect(varModal).toBeVisible();
+
+    const selectVar = page.locator('[data-testid="select-media-variant"]');
+    await selectVar.selectOption(ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.variantId);
+    await page.locator('[data-testid="btn-save-reassign-variant"]').click();
+
+    await expect(varModal).not.toBeVisible();
+    await expect(page.locator('[data-testid="media-op-success"]')).toContainText(
+      "Asociación de variante actualizada exitosamente"
+    );
+
+    const pm2Row = await sql`
+      SELECT variant_id
+      FROM product_media
+      WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId2};
+    `;
+    expect(pm2Row[0]!.variant_id).toBe(ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.variantId);
+
+    // --- Sub-case B: Variant -> Global succeeds ---
+    const reassignBtn3 = page.locator(
+      `[data-testid="btn-reassign-variant-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId3}"]`
+    );
+    await reassignBtn3.click();
+    await expect(varModal).toBeVisible();
+
+    await selectVar.selectOption("");
+    await page.locator('[data-testid="btn-save-reassign-variant"]').click();
+
+    await expect(varModal).not.toBeVisible();
+    await expect(page.locator('[data-testid="media-op-success"]')).toContainText(
+      "Asociación de variante actualizada exitosamente"
+    );
+
+    const pm3Row = await sql`
+      SELECT variant_id
+      FROM product_media
+      WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId3};
+    `;
+    expect(pm3Row[0]!.variant_id).toBeNull();
+
+    // --- Sub-case C: Primary-invalid reassignment is blocked ---
+    const reassignBtn1 = page.locator(
+      `[data-testid="btn-reassign-variant-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
+    );
+    await reassignBtn1.click();
+    await expect(varModal).toBeVisible();
+
+    await selectVar.selectOption(ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.variantId);
+
+    // Warning is visible inside modal
+    const warningNotice = page.locator('[data-testid="variant-primary-warning"]');
+    await expect(warningNotice).toBeVisible();
+    await expect(warningNotice).toContainText(
+      "Esta imagen es la imagen principal actual del producto"
+    );
+
+    await page.locator('[data-testid="btn-save-reassign-variant"]').click();
+
+    // Invariant check rejects and shows error
+    await expect(page.locator('[data-testid="reassign-variant-error"]')).toBeVisible();
+
+    // Database check: variant_id remains NULL (unchanged)
+    const pm1Row = await sql`
+      SELECT variant_id
+      FROM product_media
+      WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1};
+    `;
+    expect(pm1Row[0]!.variant_id).toBeNull();
+
+    // Cancel to close modal
+    await page.locator('[data-testid="btn-cancel-reassign-variant"]').click();
+    await expect(varModal).not.toBeVisible();
+  });
+
+  test("Requirement S7: Authorization — unauthorized actor without catalog:manage cannot access Product media manager", async ({
+    page,
+  }) => {
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.norole.email,
+      `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+    );
+
+    // Forbidden surface displayed
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(/Acceso no autorizado/i);
+
+    // Media section is completely absent
+    await expect(page.locator('[data-testid="section-media"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="media-upload-area"]')).toHaveCount(0);
+  });
+
+  test("Requirement S8: Upload advisory, accept attribute, client-side >10 MiB rejection, and zero deletion controls", async ({
+    page,
+  }) => {
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+    );
+
+    // 1. Input accept attribute contains exactly intended MIME types
+    const fileInput = page.locator('input[data-testid="input-media-file"]');
+    await expect(fileInput).toHaveAttribute("accept", "image/jpeg,image/png,image/webp,image/avif");
+
+    // 2. Client-side rejection of > 10 MiB file (10,485,761 bytes)
+    const oversizedBuffer = Buffer.alloc(10485761);
+    await fileInput.setInputFiles({
+      name: "oversized.png",
+      mimeType: "image/png",
+      buffer: oversizedBuffer,
+    });
+
+    // Advisory error is visible and has role="alert" / aria-live="assertive"
+    const clientError = page.locator('[data-testid="media-client-error"]');
+    await expect(clientError).toBeVisible();
+    await expect(clientError).toContainText("10 MiB");
+    await expect(clientError).toHaveAttribute("role", "alert");
+    await expect(clientError).toHaveAttribute("aria-live", "assertive");
+
+    // Upload button remains disabled
+    const uploadBtn = page.locator('[data-testid="btn-upload-media"]');
+    await expect(uploadBtn).toBeDisabled();
+
+    // 3. Zero permanent deletion controls across entire page
+    await expect(page.locator('[data-testid^="btn-delete-media"]')).toHaveCount(0);
+    await expect(page.locator('button:has-text("Eliminar Imagen")')).toHaveCount(0);
+    await expect(page.locator('button:has-text("Delete Image")')).toHaveCount(0);
+  });
+
+  test("Requirement S9: Modal Accessibility — Accessible titles, focus containment, and Escape key dismissal", async ({
+    page,
+  }) => {
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
+    );
+
+    // --- Alt-Text Modal Accessibility ---
+    const altBtn = page.locator(
+      `[data-testid="btn-edit-alt-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
+    );
+    await altBtn.click();
+
+    const altModal = page.locator('[data-testid="modal-alt-text"]');
+    await expect(altModal).toBeVisible();
+    await expect(page.locator("#modal-alt-title")).toBeVisible();
+
+    // Escape closes modal and restores focus
+    await page.keyboard.press("Escape");
+    await expect(altModal).not.toBeVisible();
+    await expect(altBtn).toBeFocused();
+
+    // --- Variant Reassignment Modal Accessibility ---
+    const varBtn = page.locator(
+      `[data-testid="btn-reassign-variant-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
+    );
+    await varBtn.click();
+
+    const varModal = page.locator('[data-testid="modal-reassign-variant"]');
+    await expect(varModal).toBeVisible();
+    await expect(page.locator("#modal-variant-title")).toBeVisible();
+
+    // Escape closes modal and restores focus
+    await page.keyboard.press("Escape");
+    await expect(varModal).not.toBeVisible();
+    await expect(varBtn).toBeFocused();
   });
 
   // --------------------------------------------------------------------------
