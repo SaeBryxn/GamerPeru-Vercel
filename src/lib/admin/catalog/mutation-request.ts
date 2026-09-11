@@ -9,16 +9,19 @@
  * 5. If the payload is materially modified after a transport error, detects the change and assigns a new ID.
  * 6. Never displays or persists raw request IDs.
  */
+import { isPlainRecord } from "./record";
+
 /**
  * Canonical JSON serializer for deterministic client-side mutation request fingerprinting.
  *
  * Rules:
- * - Recursively sorts plain-object keys.
+ * - Recursively sorts plain-object keys for objects satisfying isPlainRecord.
+ * - Supports null-prototype objects (Object.create(null)).
  * - Preserves arrays in original element order.
  * - Preserves JSON primitives (numbers, booleans, strings).
  * - Distinguishes null from undefined/empty.
- * - Does not collapse nested objects or fallback to lossy String(object).
- * - Rejects non-JSON primitives (functions, symbols, bigints).
+ * - Rejects non-plain object instances (Date, Map, Set, RegExp, custom classes) with TypeError.
+ * - Rejects non-JSON primitives (functions, symbols, bigints) with TypeError.
  */
 export function canonicalJsonStringify(value: unknown): string {
   if (value === null) {
@@ -47,17 +50,21 @@ export function canonicalJsonStringify(value: unknown): string {
     const elements = value.map((item) => canonicalJsonStringify(item === undefined ? null : item));
     return `[${elements.join(",")}]`;
   }
-  if (typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    const keys = Object.keys(obj).sort();
+  if (isPlainRecord(value)) {
+    const keys = Object.keys(value).sort();
     const entries: string[] = [];
     for (const key of keys) {
-      const val = obj[key];
+      const val = value[key];
       if (val !== undefined) {
         entries.push(`${JSON.stringify(key)}:${canonicalJsonStringify(val)}`);
       }
     }
     return `{${entries.join(",")}}`;
+  }
+  if (typeof value === "object") {
+    throw new TypeError(
+      `Unsupported non-plain object in canonical JSON: ${Object.prototype.toString.call(value)}`
+    );
   }
   throw new TypeError(`Unsupported non-JSON value: ${String(value)}`);
 }

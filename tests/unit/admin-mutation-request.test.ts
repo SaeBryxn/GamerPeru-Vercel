@@ -4,7 +4,7 @@ import {
   canonicalJsonStringify,
 } from "@/lib/admin/catalog/mutation-request";
 
-describe("GP-024 / CHK2-BR2 — Mutation Request Identity Lifecycle & Deep Fingerprint Tests", () => {
+describe("GP-024 / CHK2-BR3 — Mutation Request Identity Lifecycle & Canonical Serializer Tests", () => {
   it("generates a high-entropy ID before first attempt and reuses it on retry with identical payload", () => {
     const tracker = new MutationRequestTracker();
     const payload = { name: "Mouse Pro", slug: "mouse-pro", pricePen: "299.90" };
@@ -164,5 +164,69 @@ describe("GP-024 / CHK2-BR2 — Mutation Request Identity Lifecycle & Deep Finge
     expect(() => canonicalJsonStringify({ fn: () => {} })).toThrow(TypeError);
     expect(() => canonicalJsonStringify({ sym: Symbol("test") })).toThrow(TypeError);
     expect(() => canonicalJsonStringify({ big: 10n })).toThrow(TypeError);
+  });
+
+  it("rejects Date instance with TypeError", () => {
+    const now = new Date();
+    expect(() => canonicalJsonStringify(now)).toThrow(TypeError);
+    expect(() => canonicalJsonStringify({ createdAt: now })).toThrow(TypeError);
+  });
+
+  it("rejects Map instance with TypeError", () => {
+    const map = new Map([["key", "val"]]);
+    expect(() => canonicalJsonStringify(map)).toThrow(TypeError);
+    expect(() => canonicalJsonStringify({ options: map })).toThrow(TypeError);
+  });
+
+  it("rejects Set instance with TypeError", () => {
+    const set = new Set([1, 2, 3]);
+    expect(() => canonicalJsonStringify(set)).toThrow(TypeError);
+    expect(() => canonicalJsonStringify({ tags: set })).toThrow(TypeError);
+  });
+
+  it("rejects RegExp instance with TypeError", () => {
+    const regex = /^[a-z0-9-]+$/i;
+    expect(() => canonicalJsonStringify(regex)).toThrow(TypeError);
+    expect(() => canonicalJsonStringify({ pattern: regex })).toThrow(TypeError);
+  });
+
+  it("rejects custom class instance with TypeError", () => {
+    class CustomPayload {
+      id = "custom-1";
+      name = "Custom";
+    }
+    const instance = new CustomPayload();
+    expect(() => canonicalJsonStringify(instance)).toThrow(TypeError);
+    expect(() => canonicalJsonStringify({ payload: instance })).toThrow(TypeError);
+  });
+
+  it("serializes null-prototype plain records (Object.create(null)) with nested JSON-compatible properties deterministically", () => {
+    const nullProtoNested = Object.create(null);
+    nullProtoNested.z = 100;
+    nullProtoNested.a = "first";
+
+    const nullProtoRoot = Object.create(null);
+    nullProtoRoot.nested = nullProtoNested;
+    nullProtoRoot.id = "root-1";
+
+    const json = canonicalJsonStringify(nullProtoRoot);
+    expect(json).toBe('{"id":"root-1","nested":{"a":"first","z":100}}');
+
+    const tracker = new MutationRequestTracker();
+    const id1 = tracker.getRequestId(nullProtoRoot);
+    const id2 = tracker.getRequestId(nullProtoRoot);
+    expect(id2).toBe(id1);
+  });
+
+  it("proves distinct unsupported object types cannot silently collapse to the same accepted '{}' fingerprint because both throw TypeError", () => {
+    const setObj = new Set([1, 2]);
+    const mapObj = new Map([["a", 1]]);
+
+    expect(() => canonicalJsonStringify(setObj)).toThrow(TypeError);
+    expect(() => canonicalJsonStringify(mapObj)).toThrow(TypeError);
+
+    const tracker = new MutationRequestTracker();
+    expect(() => tracker.getRequestId(setObj)).toThrow(TypeError);
+    expect(() => tracker.getRequestId(mapObj)).toThrow(TypeError);
   });
 });
