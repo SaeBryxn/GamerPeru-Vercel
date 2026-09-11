@@ -6,3 +6,5 @@ export * from "./crypto";
 export * from "./readers";
 export * from "./service";
 export * from "./record";
+export * from "./error-mapping";
+export * from "./actions";

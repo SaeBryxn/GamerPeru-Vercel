@@ -16,6 +16,14 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     iconName: "LayoutDashboard",
     description: "Panel principal de administración",
   },
+  {
+    id: "products",
+    label: "Productos",
+    href: "/admin/products",
+    iconName: "Package",
+    requiredPermission: "catalog:manage",
+    description: "Gestión de catálogo y productos",
+  },
 ];
 
 /**

@@ -7,6 +7,7 @@ export default defineConfig({
     "**/checkout-storefront.spec.ts",
     "**/payment-storefront.spec.ts",
     "**/admin-foundation.spec.ts",
+    "**/admin-product-manager.spec.ts",
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

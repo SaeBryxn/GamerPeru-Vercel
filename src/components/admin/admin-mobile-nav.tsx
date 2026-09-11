@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import Link from "next/link";
-import { LayoutDashboard, X } from "lucide-react";
+import { LayoutDashboard, Package, X } from "lucide-react";
 import type { AdminNavItem, AdminStaffProfile } from "@/lib/admin/types";
 import styles from "./admin-shell.module.css";
 
@@ -114,6 +114,7 @@ export function AdminMobileNav({
             <ul className={styles.navList}>
               {navItems.map((item) => {
                 const isActive = currentPath === item.href;
+                const IconComponent = item.iconName === "Package" ? Package : LayoutDashboard;
                 return (
                   <li key={item.id} className={styles.navItem}>
                     <Link
@@ -125,7 +126,7 @@ export function AdminMobileNav({
                       className={`${styles.navLink} ${isActive ? styles.navLinkActive : ""}`}
                       aria-current={isActive ? "page" : undefined}
                     >
-                      <LayoutDashboard className={styles.navIcon} aria-hidden="true" />
+                      <IconComponent className={styles.navIcon} aria-hidden="true" />
                       <span>{item.label}</span>
                     </Link>
                   </li>
