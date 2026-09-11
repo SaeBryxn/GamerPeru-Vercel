@@ -64,7 +64,9 @@ jobs:
         run: pnpm lint
 
       - name: Run Unit Tests (Light - No DB)
-        run: pnpm test
+        run: unset DATABASE_URL; pnpm test
+        env:
+          DATABASE_URL: ""
 
       - name: Run Next.js Build
         run: pnpm build
@@ -100,17 +102,29 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Start Local Supabase
-        run: pnpm supabase:start
+        run: |
+          START_LOG="${RUNNER_TEMP:-/tmp}/supabase_start.log"
+          if ! pnpm supabase:start > "$START_LOG" 2>&1; then
+            echo "ERROR: Local Supabase failed to start." >&2
+            exit 1
+          fi
+          echo "Local Supabase started successfully."
 
       - name: Configure Local Environment & Deterministic Test Configuration
         run: |
-          pnpm supabase:status
           STATUS_ENV=$(pnpm exec supabase status -o env)
-          ANON_KEY=$(echo "$STATUS_ENV" | grep 'ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
-          SERVICE_KEY=$(echo "$STATUS_ENV" | grep 'SERVICE_ROLE_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
-          API_URL=$(echo "$STATUS_ENV" | grep 'API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          ANON_KEY=$(echo "$STATUS_ENV" | grep '^ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          SERVICE_KEY=$(echo "$STATUS_ENV" | grep '^SERVICE_ROLE_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          API_URL=$(echo "$STATUS_ENV" | grep '^API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+
+          if [ -z "$ANON_KEY" ] || [ -z "$SERVICE_KEY" ] || [ -z "$API_URL" ]; then
+            echo "ERROR: Failed to extract required local Supabase credentials from status." >&2
+            exit 1
+          fi
+
           echo "::add-mask::$ANON_KEY"
           echo "::add-mask::$SERVICE_KEY"
+
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> $GITHUB_ENV
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL:-http://127.0.0.1:54321}" >> $GITHUB_ENV
@@ -204,17 +218,29 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Start Local Supabase
-        run: pnpm supabase:start
+        run: |
+          START_LOG="${RUNNER_TEMP:-/tmp}/supabase_start.log"
+          if ! pnpm supabase:start > "$START_LOG" 2>&1; then
+            echo "ERROR: Local Supabase failed to start." >&2
+            exit 1
+          fi
+          echo "Local Supabase started successfully."
 
       - name: Configure Local Environment & Deterministic Test Configuration
         run: |
-          pnpm supabase:status
           STATUS_ENV=$(pnpm exec supabase status -o env)
-          ANON_KEY=$(echo "$STATUS_ENV" | grep 'ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
-          SERVICE_KEY=$(echo "$STATUS_ENV" | grep 'SERVICE_ROLE_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
-          API_URL=$(echo "$STATUS_ENV" | grep 'API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          ANON_KEY=$(echo "$STATUS_ENV" | grep '^ANON_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          SERVICE_KEY=$(echo "$STATUS_ENV" | grep '^SERVICE_ROLE_KEY=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+          API_URL=$(echo "$STATUS_ENV" | grep '^API_URL=' | cut -d '=' -f2- | tr -d '"' | tr -d '\r')
+
+          if [ -z "$ANON_KEY" ] || [ -z "$SERVICE_KEY" ] || [ -z "$API_URL" ]; then
+            echo "ERROR: Failed to extract required local Supabase credentials from status." >&2
+            exit 1
+          fi
+
           echo "::add-mask::$ANON_KEY"
           echo "::add-mask::$SERVICE_KEY"
+
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> $GITHUB_ENV
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_URL=${API_URL:-http://127.0.0.1:54321}" >> $GITHUB_ENV

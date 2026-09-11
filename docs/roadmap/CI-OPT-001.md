@@ -1,15 +1,31 @@
 # CI-OPT-001: Cost-Controlled GitHub Actions Architecture & Local Emulation Gate
 
-## 1. Context & Motivation
+## 1. Context & Historical Baseline
 
-During development of Gamer Perú (specifically GP-024 / CHK1), GitHub-hosted Actions minutes were exhausted under the legacy workflow topology. The legacy architecture executed four independent hosted runners on every push to `main`:
+During development of Gamer Perú (specifically GP-024 / CHK1), GitHub-hosted Actions runner allowances were exhausted under the legacy workflow topology.
 
-1. `verify`: Format, Typecheck, Lint, Unit Test, Build, and Storefront E2E (10 min).
-2. `cart-e2e`: Supabase boot, migrations, Playwright Chromium install, Cart E2E (20 min).
-3. `checkout-e2e`: Supabase boot, migrations, Playwright Chromium install, Checkout/Payment/Admin E2E (20 min).
-4. `checkout-live`: Supabase boot, migrations, Checkout/Payment/Order/Inventory/Admin Live integration suites (15 min).
+The legacy architecture executed four independent hosted runners on every push to `main`:
 
-This resulted in ~65 runner-minutes per push, quadrupled dependency installations, triplicated Supabase container boots, and triplicated Playwright Chromium downloads. Furthermore, documentation-only commits (`docs/**`, `**/*.md`) triggered all four runners unnecessarily.
+1. `verify`: Format, Typecheck, Lint, Unit Test, Build, and Storefront E2E (configured timeout ceiling: 10 min).
+2. `cart-e2e`: Supabase boot, migrations, Playwright Chromium install, Cart E2E (configured timeout ceiling: 20 min).
+3. `checkout-e2e`: Supabase boot, migrations, Playwright Chromium install, Checkout/Payment/Admin E2E (configured timeout ceiling: 20 min).
+4. `checkout-live`: Supabase boot, migrations, Checkout/Payment/Order/Inventory/Admin Live integration suites (configured timeout ceiling: 15 min).
+
+The 65-minute total was the sum of configured runner timeout ceilings rather than observed per-push consumption.
+
+### Observed Historical Sample (Run 33730381788)
+
+As an empirical baseline, historical GitHub Actions Run `33730381788` recorded the following actual job wall times:
+
+- `Real Local PostgreSQL / Supabase Checkout Runtime`: ~3m26s
+- `Real Local Supabase Checkout E2E`: ~7m08s
+- `Format, Typecheck, Lint, Test, Build & E2E`: ~8m02s
+- `Real Local Supabase Cart E2E`: ~5m05s
+- **Aggregate observed runner wall time**: ~23m41s across four concurrent runners.
+
+_(Note: GitHub billing rounds job runtimes up to the nearest whole minute and accounts per runner separately. Observed runtimes vary depending on runner virtualization contention.)_
+
+Under this legacy design, every push—including documentation-only changes—triggered four parallel runner allocations, quadrupled dependency installations, triplicated Supabase container boots, and duplicated Playwright browser downloads.
 
 ## 2. Target Architecture
 
@@ -25,14 +41,14 @@ paths-ignore:
   - "**/*.md"
 ```
 
-Commits touching exclusively markdown files or documentation consume **0 runner-minutes**.
+Commits touching exclusively markdown files or documentation consume **0 runner-minutes** (structural 100% elimination of hosted jobs for doc changes).
 
 ### B. Automatic Light CI (Single Runner)
 
 For routine code pushes and pull requests:
 
 - **Runner**: 1 `ubuntu-latest` job (`Light CI`).
-- **Timeout**: 10 minutes.
+- **Timeout**: 10 minutes (local execution estimate: ~5 minutes).
 - **Trigger**: `push` or `pull_request` only (never runs on `workflow_dispatch`).
 - **Execution**:
   1. `actions/checkout@v7`
@@ -42,9 +58,9 @@ For routine code pushes and pull requests:
   5. `pnpm format:check`
   6. `pnpm typecheck`
   7. `pnpm lint`
-  8. `pnpm test` (with `DATABASE_URL` absent so guarded DB-runtime tests safely skip)
+  8. `pnpm test` (with `DATABASE_URL` explicitly cleared so guarded PostgreSQL runtime smoke tests skip deterministically)
   9. `pnpm build` (with deterministic local placeholders)
-- **Prohibitions**: No Supabase boot, no migrations, no Playwright install, no live database suites, no browser E2E.
+- **Prohibitions**: Zero Supabase container boots, zero database migrations, zero Playwright installations, zero live database integration suites, zero browser E2E suites.
 
 ### C. Manual Catalog Gate (Single Runner)
 
@@ -52,21 +68,22 @@ Targeted validation for admin catalog work:
 
 - **Trigger**: `workflow_dispatch` with input `suite: catalog`.
 - **Runner**: 1 `ubuntu-latest` job (`Catalog Gate`).
-- **Timeout**: 15 minutes.
+- **Timeout**: 15 minutes (local execution estimate: ~8 minutes).
 - **Execution**:
-  1. Boot Local Supabase ONCE (`pnpm supabase:start`).
-  2. Extract and mask local credentials (`::add-mask::`).
-  3. Run migrations ONCE (`pnpm db:migrate`).
-  4. Quality gates: `pnpm format:check`, `pnpm typecheck`, `pnpm lint`.
-  5. Catalog unit tests: `pnpm vitest run tests/unit/admin-catalog-*.test.ts`.
-  6. Admin live integration tests: `pnpm test:admin:live`.
-  7. Production build: `pnpm build`.
-  8. Install Chromium ONCE: `pnpm exec playwright install --with-deps chromium`.
-  9. Seed admin fixtures: `node scripts/test/seed-admin-e2e.mjs`.
-  10. Admin E2E tests: `pnpm test:admin:e2e`.
-  11. Failure artifacts upload (`actions/upload-artifact@v4`).
-  12. Scoped cleanup: `node scripts/test/cleanup-admin-e2e.mjs` (`if: always()`).
-  13. Supabase shutdown: `pnpm supabase:stop` (`if: always()`).
+  1. Boot Local Supabase ONCE using a credential-safe bootstrap pattern (raw start stdout/stderr captured to temporary file and suppressed from logs).
+  2. Extract local credentials silently via `pnpm exec supabase status -o env` without plain log emission.
+  3. Validate extracted values are non-empty and immediately mask keys (`::add-mask::`) before exporting to `$GITHUB_ENV`.
+  4. Run migrations ONCE (`pnpm db:migrate`).
+  5. Quality gates: `pnpm format:check`, `pnpm typecheck`, `pnpm lint`.
+  6. Catalog unit tests via dynamic discovery: `pnpm vitest run tests/unit/admin-catalog-*.test.ts`.
+  7. Admin live integration tests: `pnpm test:admin:live`.
+  8. Production build: `pnpm build`.
+  9. Install Playwright Chromium ONCE: `pnpm exec playwright install --with-deps chromium`.
+  10. Seed admin fixtures: `node scripts/test/seed-admin-e2e.mjs`.
+  11. Admin E2E tests: `pnpm test:admin:e2e`.
+  12. Failure diagnostics capture (`actions/upload-artifact@v4`, `if: failure()`, retention 7 days).
+  13. Scoped cleanup: `node scripts/test/cleanup-admin-e2e.mjs` (`if: always()`).
+  14. Supabase shutdown: `pnpm supabase:stop` (`if: always()`).
 
 ### D. Manual Full Gate (Consolidated Single Runner)
 
@@ -74,12 +91,12 @@ Formal external audit and release gate:
 
 - **Trigger**: `workflow_dispatch` with input `suite: full`.
 - **Runner**: 1 consolidated `ubuntu-latest` runner (`Full Gate`).
-- **Timeout**: 30 minutes.
+- **Timeout**: 30 minutes (local execution estimate: ~15 minutes).
 - **Consolidation**:
-  - Starts Local Supabase ONCE.
-  - Extracts credentials and masks keys ONCE.
+  - Starts Local Supabase ONCE with credential-safe output suppression.
+  - Extracts and masks local credentials ONCE before export.
   - Executes database migrations ONCE.
-  - Runs full unit tests (including real PostgreSQL runtime tests).
+  - Runs full unit tests (including real PostgreSQL runtime tests against live local DB).
   - Runs production build.
   - Runs all 5 live integration suites against the shared database lifecycle:
     `test:checkout:live`, `test:payment:live`, `test:order:live`, `test:inventory:live`, `test:admin:live`.
@@ -90,13 +107,23 @@ Formal external audit and release gate:
   - Captures diagnostics on failure (`actions/upload-artifact@v4`).
   - Safely tears down fixtures and stops Supabase in `always()` blocks.
 
-## 3. Cost Topology Comparison
+## 3. Execution & Cost Topology Comparison
 
-| Surface                | Legacy CI               | CI-OPT-001                       | Reduction |
-| :--------------------- | :---------------------- | :------------------------------- | :-------- |
-| Docs-only push         | 4 hosted jobs (~65 min) | **0 hosted jobs (0 min)**        | **100%**  |
-| Routine code push / PR | 4 hosted jobs (~65 min) | **1 Light CI job (~5 min)**      | **~92%**  |
-| Manual Catalog check   | N/A (ran all 4 jobs)    | **1 Catalog Gate job (~8 min)**  | **~88%**  |
-| Manual Full Gate       | 4 hosted jobs (~65 min) | **1 Consolidated job (~15 min)** | **~77%**  |
+| Workflow Mode            | Legacy Workflow Architecture  | Legacy Observed Sample (Run 33730381788) | CI-OPT-001 Architecture   | New Local Estimate | Hosted CI-OPT Measurement |
+| :----------------------- | :---------------------------- | :--------------------------------------- | :------------------------ | :----------------- | :------------------------ |
+| **Docs-only push**       | 4 parallel jobs (65m ceiling) | ~23m41s aggregate runner wall time       | **0 hosted jobs**         | 0 min              | **PENDING**               |
+| **Routine push / PR**    | 4 parallel jobs (65m ceiling) | ~23m41s aggregate runner wall time       | **1 Light CI runner**     | ~5 min             | **PENDING**               |
+| **Manual Catalog check** | 4 parallel jobs (65m ceiling) | ~23m41s aggregate runner wall time       | **1 Catalog Gate runner** | ~8 min             | **PENDING**               |
+| **Manual Full Gate**     | 4 parallel jobs (65m ceiling) | ~23m41s aggregate runner wall time       | **1 Consolidated runner** | ~15 min            | **PENDING**               |
 
-Zero regression test coverage was removed or weakened.
+### Projected Cost Reductions (Derived from Local Estimates vs Observed Sample)
+
+- **Documentation-only changes**: 100% reduction (0 hosted jobs triggered).
+- **Routine push / PR**: Single runner (~5 min local estimate) vs 4 concurrent legacy runners (~23m41s observed aggregate wall time).
+- **Consolidated Full Gate**: Single runner (~15 min local estimate) vs 4 separate legacy runners, eliminating 3 redundant dependency installs, 2 redundant Supabase boots, 2 redundant migration passes, and 1 redundant browser install.
+
+_All hosted runtime measurements remain marked as PENDING until GitHub-hosted Actions runner minutes are renewed._
+
+## 4. Conclusion
+
+CI-OPT-001 structurally eliminates wasteful GitHub Actions consumption by replacing four automatic, heavyweight runners with a single lightweight check for routine commits, completely bypassing CI for documentation updates, and consolidating full regression testing into a single unified runner. Zero tests were removed, disabled, or weakened.
