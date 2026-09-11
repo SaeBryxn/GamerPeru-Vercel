@@ -36,6 +36,7 @@ import {
 } from "./specifications";
 import { PRODUCT_SLUG_REGEX } from "./publish-readiness";
 import { loadInternalProductDetail } from "./readers";
+import { isPlainRecord } from "./record";
 
 export interface ServiceOptions {
   authContext?: VerifiedAuthContextReady;
@@ -268,7 +269,7 @@ export function validateProductVariantInput(
 
   let attributes: Record<string, string> = {};
   if (raw.attributes !== null && raw.attributes !== undefined) {
-    if (!isPlainObject(raw.attributes)) {
+    if (!isPlainRecord(raw.attributes)) {
       throw new CatalogDomainError(
         "Los atributos de la variante deben ser un objeto plano clave-valor.",
         "INVALID_VARIANT_ATTRIBUTES",
@@ -300,14 +301,6 @@ export function validateProductVariantInput(
     status,
     attributes,
   };
-}
-
-function isPlainObject(val: unknown): val is Record<string, unknown> {
-  if (val === null || typeof val !== "object" || Array.isArray(val)) {
-    return false;
-  }
-  const proto = Object.getPrototypeOf(val);
-  return proto === null || proto === Object.prototype;
 }
 
 function handleDatabaseError(err: unknown): never {

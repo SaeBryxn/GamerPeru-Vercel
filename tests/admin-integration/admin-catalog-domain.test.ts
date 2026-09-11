@@ -2054,4 +2054,91 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
       ).rejects.toThrow(CatalogReplayIntegrityError);
     });
   });
+
+  describe("Publish Readiness Persisted Attributes Fail-Closed (Defect B / BR3)", () => {
+    it("fails closed with VARIANT_ATTRIBUTES_INVALID when stored JSONB attributes are malformed", async () => {
+      // 1. Create an owned DRAFT Product through normal GP-024 services
+      const p = await createProduct(
+        {
+          name: "Publish Stored Corrupt Mouse",
+          slug: "gp024-stored-corrupt-mouse",
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+          initialVariant: {
+            sku: "GP024-CORRUPT-ATTR-01",
+            title: "Corrupt Attributes V1",
+            priceCents: 19900,
+          },
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // 2. Make it otherwise publish-ready:
+      // - valid specifications
+      await updateProduct(
+        {
+          productId: p.id,
+          expectedUpdatedAt: p.updatedAt,
+          specValues: { sensor: "paw3950", polling_rate_hz: 8000, wireless: true },
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      // - valid same-Product global PUBLIC_MEDIA image
+      const mediaId = `${PFX}000000000302`;
+      await pgSql`
+        INSERT INTO product_media (id, product_id, media_asset_id, variant_id, display_order, created_at)
+        VALUES (${mediaId}, ${p.id}, ${fixtureIds.mediaAssetPublic1}, NULL, 0, NOW())
+        ON CONFLICT (id) DO NOTHING;
+      `;
+      await pgSql`
+        UPDATE products SET primary_media_id = ${fixtureIds.mediaAssetPublic1} WHERE id = ${p.id};
+      `;
+
+      // 3. Using scoped TEST-ONLY SQL, deliberately corrupt the owned ACTIVE Variant JSONB attributes to: {"color": 123}
+      const [variantRow] = (await pgSql`
+        SELECT id FROM product_variants WHERE product_id = ${p.id} LIMIT 1;
+      `) as { id: string }[];
+      expect(variantRow).toBeDefined();
+
+      await pgSql`
+        UPDATE product_variants
+        SET attributes = '{"color": 123}'::jsonb
+        WHERE id = ${variantRow!.id}::uuid;
+      `;
+
+      const [freshProd] = (await pgSql`
+        SELECT updated_at FROM products WHERE id = ${p.id};
+      `) as { updated_at: Date }[];
+
+      // 4. Attempt transitionProductStatus(targetStatus: "PUBLISHED") using proper catalog:publish authority
+      try {
+        await transitionProductStatus(
+          {
+            productId: p.id,
+            expectedUpdatedAt: freshProd!.updated_at,
+            targetStatus: "PUBLISHED",
+          },
+          { authContext: authAdminCatalog }
+        );
+        expect.unreachable(
+          "Publication should have been rejected due to malformed persisted attributes"
+        );
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(CatalogDomainError);
+        const domainErr = err as CatalogDomainError;
+        expect(domainErr.code).toBe("VARIANT_ATTRIBUTES_INVALID");
+        expect(domainErr.httpStatus).toBe(422);
+        expect(domainErr.message).not.toContain("123");
+        expect(domainErr.message).not.toContain("jsonb");
+        expect(domainErr.message).not.toContain("SELECT");
+      }
+
+      // 5. Verify Product remains DRAFT
+      const [finalProduct] = (await pgSql`
+        SELECT status FROM products WHERE id = ${p.id};
+      `) as { status: string }[];
+      expect(finalProduct!.status).toBe("DRAFT");
+    });
+  });
 });

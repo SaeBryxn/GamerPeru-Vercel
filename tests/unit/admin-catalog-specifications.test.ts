@@ -178,5 +178,72 @@ describe("Admin Catalog Specifications Contract", () => {
       );
       expect(validateProductSpecificationValues(mockSchemaFields, [1, 2, 3]).success).toBe(false);
     });
+
+    describe("True Plain JSON Object Enforcement (Defect A / BR3)", () => {
+      it("accepts empty plain object {} where empty/partial specs are allowed", () => {
+        const res = validateProductSpecificationValues(mockSchemaFields, {});
+        expect(res.success).toBe(true);
+        expect(res.specValues).toEqual({});
+      });
+
+      it("accepts ordinary plain object subject to field validation", () => {
+        const res = validateProductSpecificationValues(mockSchemaFields, {
+          sensor_type: "optical",
+        });
+        expect(res.success).toBe(true);
+        expect(res.specValues).toEqual({ sensor_type: "optical" });
+      });
+
+      it("accepts Object.create(null) subject to field validation (canonical null-prototype policy)", () => {
+        const nullProto = Object.create(null);
+        nullProto.sensor_type = "optical";
+        const res = validateProductSpecificationValues(mockSchemaFields, nullProto);
+        expect(res.success).toBe(true);
+        expect(res.specValues).toEqual({ sensor_type: "optical" });
+      });
+
+      it("rejects Array []", () => {
+        const res = validateProductSpecificationValues(mockSchemaFields, []);
+        expect(res.success).toBe(false);
+        expect(res.code).toBe("INVALID_SPEC_VALUES_TYPE");
+      });
+
+      it("rejects new Date() and does not interpret zero-entry Date as {}", () => {
+        const res = validateProductSpecificationValues(mockSchemaFields, new Date());
+        expect(res.success).toBe(false);
+        expect(res.code).toBe("INVALID_SPEC_VALUES_TYPE");
+      });
+
+      it("rejects new Map() and does not interpret zero-entry Map as {}", () => {
+        const res = validateProductSpecificationValues(mockSchemaFields, new Map());
+        expect(res.success).toBe(false);
+        expect(res.code).toBe("INVALID_SPEC_VALUES_TYPE");
+      });
+
+      it("rejects new Set() and does not interpret zero-entry Set as {}", () => {
+        const res = validateProductSpecificationValues(mockSchemaFields, new Set());
+        expect(res.success).toBe(false);
+        expect(res.code).toBe("INVALID_SPEC_VALUES_TYPE");
+      });
+
+      it("rejects RegExp /regex/ and does not interpret it as {}", () => {
+        const res = validateProductSpecificationValues(mockSchemaFields, /test_regex/i);
+        expect(res.success).toBe(false);
+        expect(res.code).toBe("INVALID_SPEC_VALUES_TYPE");
+      });
+
+      it("rejects custom class instance and does not interpret zero-entry instance as {}", () => {
+        class CustomSpecPayload {}
+        const res = validateProductSpecificationValues(mockSchemaFields, new CustomSpecPayload());
+        expect(res.success).toBe(false);
+        expect(res.code).toBe("INVALID_SPEC_VALUES_TYPE");
+      });
+
+      it("rejects null", () => {
+        const res = validateProductSpecificationValues(mockSchemaFields, null);
+        expect(res.success).toBe(false);
+        expect(res.code).toBe("INVALID_SPEC_VALUES_TYPE");
+      });
+    });
   });
 });
