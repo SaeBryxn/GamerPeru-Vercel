@@ -11,22 +11,30 @@ export interface ProfileExecutionSnapshot {
   profileKey: string;
   providerId: string;
   modelId: string;
-  temperature: string;
+  temperature: number;
   maxTokens: number;
 }
 
 /**
  * Builds an immutable execution snapshot from a profile entity.
  * Frozen into research jobs and provider attempt records.
+ * Temperature is converted to a validated finite number between 0 and 2.
  */
 export function createProfileSnapshot(
   profile: typeof aiProfiles.$inferSelect
 ): ProfileExecutionSnapshot {
+  const parsedTemperature = Number(profile.temperature);
+  if (!Number.isFinite(parsedTemperature) || parsedTemperature < 0 || parsedTemperature > 2) {
+    throw new Error(
+      `INVALID_PROFILE_TEMPERATURE: Profile temperature "${profile.temperature}" must be a finite number between 0.00 and 2.00.`
+    );
+  }
+
   return {
     profileKey: profile.profileKey,
     providerId: profile.providerId,
     modelId: profile.modelId,
-    temperature: profile.temperature,
+    temperature: parsedTemperature,
     maxTokens: profile.maxTokens,
   };
 }

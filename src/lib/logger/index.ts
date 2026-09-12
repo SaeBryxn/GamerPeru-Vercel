@@ -58,11 +58,49 @@ export const CANONICAL_REDACT_PATHS = [
   "*.SENTRY_AUTH_TOKEN",
 ];
 
-export const DYNAMIC_SENSITIVE_KEY_REGEX =
-  /^(ai_encryption_key_v\d+|password|authorization|token|access_token|refresh_token|secret|apikey|api_key|credential|credentials|privatekey|private_key)$/i;
+export const NORMALIZED_SENSITIVE_KEYS = new Set([
+  "ciphertext",
+  "iv",
+  "authtag",
+  "apikey",
+  "accesstoken",
+  "refreshtoken",
+  "authtoken",
+  "bearertoken",
+  "token",
+  "secret",
+  "password",
+  "credential",
+  "credentials",
+  "privatekey",
+  "authorization",
+  "cookie",
+  "setcookie",
+  "voucherurl",
+  "proofurl",
+  "operationcode",
+  "databaseurl",
+  "supabasesecretkey",
+  "resendapikey",
+  "r2accesskeyid",
+  "r2secretaccesskey",
+  "inngesteventkey",
+  "inngestsigningkey",
+  "sentryauthtoken",
+  "email",
+  "phone",
+  "phonenumber",
+  "address",
+  "street",
+  "q",
+]);
 
 export function isDynamicSensitiveKey(key: string): boolean {
-  return DYNAMIC_SENSITIVE_KEY_REGEX.test(key);
+  const normalized = key.toLowerCase().replace(/[-_]/g, "");
+  if (/^aiencryptionkeyv\d+$/.test(normalized)) {
+    return true;
+  }
+  return NORMALIZED_SENSITIVE_KEYS.has(normalized);
 }
 
 export function sanitizeDynamicLogData<T>(val: T): T {
@@ -75,7 +113,11 @@ export function sanitizeDynamicLogData<T>(val: T): T {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(val as Record<string, unknown>)) {
     if (isDynamicSensitiveKey(key)) {
-      out[key] = "[REDACTED]";
+      if (typeof value === "object" && value !== null) {
+        out[key] = sanitizeDynamicLogData(value);
+      } else {
+        out[key] = "[REDACTED]";
+      }
     } else if (typeof value === "object" && value !== null) {
       out[key] = sanitizeDynamicLogData(value);
     } else {

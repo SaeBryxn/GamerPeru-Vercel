@@ -8,7 +8,8 @@ import {
   maskApiKey,
   resolveAiEncryptionKey,
 } from "@/lib/ai/credential-crypto";
-import { toSafeCredentialDto } from "@/lib/ai/credential-service";
+import { getActiveCredentialSafe, toSafeCredentialDto } from "@/lib/ai/credential-service";
+import { ForbiddenError, type VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import { serverEnv } from "@/config/server-env";
 
 const TEST_KEY_HEX_1 = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
@@ -297,6 +298,24 @@ describe("AI Credential Crypto & Master Key Security", () => {
       expect(unsafeDto.ciphertext).toBeUndefined();
       expect(unsafeDto.iv).toBeUndefined();
       expect(unsafeDto.authTag).toBeUndefined();
+    });
+  });
+
+  describe("Privileged Credential Access RBAC Invariants", () => {
+    it("fails closed with ForbiddenError when caller lacks ai:manage_credentials", async () => {
+      const unauthorizedContext: VerifiedAuthContextReady = {
+        status: "READY",
+        authUserId: "018f3a5e-9999-7000-8000-000000000099",
+        email: "staff@gamerperu.pe",
+        roles: ["ADMIN_CATALOG"],
+        permissions: new Set(["catalog:manage"]),
+      };
+
+      await expect(
+        getActiveCredentialSafe("018f3a5e-2222-7000-8000-000000000002", {
+          authContext: unauthorizedContext,
+        })
+      ).rejects.toThrow(ForbiddenError);
     });
   });
 });

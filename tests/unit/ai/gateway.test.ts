@@ -91,7 +91,7 @@ describe("Strict AI Gateway & Deterministic Mock Adapter", () => {
   });
 
   describe("Profile Execution Snapshot", () => {
-    it("constructs immutable execution snapshot preserving all profile settings", () => {
+    it("constructs immutable execution snapshot preserving all profile settings with numeric temperature", () => {
       const now = new Date();
       const mockProfile = {
         id: "018f3a5e-3333-7000-8000-000000000003",
@@ -111,9 +111,36 @@ describe("Strict AI Gateway & Deterministic Mock Adapter", () => {
         profileKey: "PRODUCT_RESEARCH_FAST",
         providerId: "018f3a5e-2222-7000-8000-000000000002",
         modelId: "gemini-1.5-flash",
-        temperature: "0.20",
+        temperature: 0.2,
         maxTokens: 4096,
       });
+      expect(typeof snapshot.temperature).toBe("number");
+    });
+
+    it("rejects malformed, out-of-range, or non-finite temperature values", () => {
+      const base = {
+        id: "018f3a5e-3333-7000-8000-000000000003",
+        profileKey: "PRODUCT_RESEARCH_FAST",
+        providerId: "018f3a5e-2222-7000-8000-000000000002",
+        modelId: "gemini-1.5-flash",
+        maxTokens: 4096,
+        isEnabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      expect(() => createProfileSnapshot({ ...base, temperature: "abc" })).toThrow(
+        "INVALID_PROFILE_TEMPERATURE"
+      );
+      expect(() => createProfileSnapshot({ ...base, temperature: "-0.01" })).toThrow(
+        "INVALID_PROFILE_TEMPERATURE"
+      );
+      expect(() => createProfileSnapshot({ ...base, temperature: "2.01" })).toThrow(
+        "INVALID_PROFILE_TEMPERATURE"
+      );
+      expect(() => createProfileSnapshot({ ...base, temperature: "NaN" })).toThrow(
+        "INVALID_PROFILE_TEMPERATURE"
+      );
     });
   });
 });

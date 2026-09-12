@@ -161,13 +161,142 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
         ORDER BY tc.table_name, tc.constraint_name;
       `;
 
-      // Check ON DELETE RESTRICT on core entity relationships
-      const restrictRefs = rows.filter((r) => r.delete_rule === "RESTRICT");
-      expect(restrictRefs.length).toBeGreaterThanOrEqual(10);
+      expect(rows).toHaveLength(23);
 
-      // Check ON DELETE SET NULL on optional staff attribution / soft targets
-      const setNullRefs = rows.filter((r) => r.delete_rule === "SET NULL");
-      expect(setNullRefs.length).toBeGreaterThanOrEqual(5);
+      const EXPECTED_FKS = [
+        {
+          constraint: "ai_provider_credentials_provider_id_ai_providers_id_fk",
+          table: "ai_provider_credentials",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_profiles_provider_id_ai_providers_id_fk",
+          table: "ai_profiles",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_research_jobs_selected_profile_id_ai_profiles_id_fk",
+          table: "ai_research_jobs",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_research_jobs_created_by_auth_user_id_users_id_fk",
+          table: "ai_research_jobs",
+          rule: "SET NULL",
+        },
+        {
+          constraint: "ai_research_job_items_job_id_ai_research_jobs_id_fk",
+          table: "ai_research_job_items",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_research_job_items_target_product_id_products_id_fk",
+          table: "ai_research_job_items",
+          rule: "SET NULL",
+        },
+        {
+          constraint: "ai_sources_job_item_id_ai_research_job_items_id_fk",
+          table: "ai_sources",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_sources_trust_reviewed_by_auth_user_id_users_id_fk",
+          table: "ai_sources",
+          rule: "SET NULL",
+        },
+        {
+          constraint: "ai_product_proposals_job_item_id_ai_research_job_items_id_fk",
+          table: "ai_product_proposals",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_product_proposals_brand_id_brands_id_fk",
+          table: "ai_product_proposals",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_product_proposals_category_id_categories_id_fk",
+          table: "ai_product_proposals",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_product_proposals_applied_product_id_products_id_fk",
+          table: "ai_product_proposals",
+          rule: "SET NULL",
+        },
+        {
+          constraint: "ai_product_proposals_reviewed_by_auth_user_id_users_id_fk",
+          table: "ai_product_proposals",
+          rule: "SET NULL",
+        },
+        {
+          constraint: "ai_proposal_field_reviews_proposal_id_ai_product_proposals_id_fk",
+          table: "ai_proposal_field_reviews",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_proposal_field_reviews_preferred_source_id_ai_sources_id_fk",
+          table: "ai_proposal_field_reviews",
+          rule: "SET NULL",
+        },
+        {
+          constraint: "ai_proposal_field_reviews_reviewed_by_auth_user_id_users_id_fk",
+          table: "ai_proposal_field_reviews",
+          rule: "SET NULL",
+        },
+        {
+          constraint: "ai_proposal_field_sources_field_review_id_ai_proposal_field_reviews_id_fk",
+          table: "ai_proposal_field_sources",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_proposal_field_sources_source_id_ai_sources_id_fk",
+          table: "ai_proposal_field_sources",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_proposal_apply_steps_proposal_id_ai_product_proposals_id_fk",
+          table: "ai_proposal_apply_steps",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_proposal_apply_steps_apply_actor_auth_user_id_users_id_fk",
+          table: "ai_proposal_apply_steps",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_provider_attempts_job_item_id_ai_research_job_items_id_fk",
+          table: "ai_provider_attempts",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_provider_attempts_provider_id_ai_providers_id_fk",
+          table: "ai_provider_attempts",
+          rule: "RESTRICT",
+        },
+        {
+          constraint: "ai_provider_attempts_profile_id_ai_profiles_id_fk",
+          table: "ai_provider_attempts",
+          rule: "RESTRICT",
+        },
+      ];
+
+      const foundNames = rows.map((r) => r.constraint_name);
+      for (const expected of EXPECTED_FKS) {
+        const found = rows.find(
+          (r) =>
+            r.constraint_name === expected.constraint ||
+            r.constraint_name === expected.constraint.slice(0, 63)
+        );
+        if (!found) {
+          throw new Error(
+            `Missing expected FK: ${expected.constraint}. Available: ${foundNames.join(", ")}`
+          );
+        }
+        expect(found).toBeDefined();
+        expect(found.table_name).toBe(expected.table);
+        expect(found.delete_rule).toBe(expected.rule);
+      }
     });
 
     it("verifies frozen CHECK constraints on all 11 tables", async () => {
@@ -242,23 +371,34 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
       expect(indexNames).not.toContain("ai_research_jobs_status_idx");
     });
 
-    it("verifies Data API privilege isolation for anon, authenticated, and service_role", async () => {
+    it("verifies Data API privilege isolation for anon, authenticated, and service_role across all operations", async () => {
+      const PRIVILEGES = [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "TRUNCATE",
+        "REFERENCES",
+        "TRIGGER",
+      ];
       for (const table of EXPECTED_TABLES) {
-        const [priv] = await pgSql<
-          {
-            anon_has_priv: boolean;
-            auth_has_priv: boolean;
-            serv_has_priv: boolean;
-          }[]
-        >`
-          SELECT
-            has_table_privilege('anon', ${table}, 'SELECT') AS anon_has_priv,
-            has_table_privilege('authenticated', ${table}, 'SELECT') AS auth_has_priv,
-            has_table_privilege('service_role', ${table}, 'SELECT') AS serv_has_priv;
-        `;
-        expect(priv!.anon_has_priv).toBe(false);
-        expect(priv!.auth_has_priv).toBe(false);
-        expect(priv!.serv_has_priv).toBe(false);
+        for (const priv of PRIVILEGES) {
+          const [row] = await pgSql<
+            {
+              anon_has_priv: boolean;
+              auth_has_priv: boolean;
+              serv_has_priv: boolean;
+            }[]
+          >`
+            SELECT
+              has_table_privilege('anon', ${table}, ${priv}) AS anon_has_priv,
+              has_table_privilege('authenticated', ${table}, ${priv}) AS auth_has_priv,
+              has_table_privilege('service_role', ${table}, ${priv}) AS serv_has_priv;
+          `;
+          expect(row!.anon_has_priv).toBe(false);
+          expect(row!.auth_has_priv).toBe(false);
+          expect(row!.serv_has_priv).toBe(false);
+        }
       }
     });
   });
@@ -399,8 +539,23 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
 
       expect(revoked.status).toBe("REVOKED");
 
-      const active = await getActiveCredentialSafe(mockProviderId);
+      const active = await getActiveCredentialSafe(mockProviderId, {
+        authContext: superAdminContext,
+      });
       expect(active).toBeNull();
+
+      // Verify safe read fails closed without ai:manage_credentials
+      await expect(
+        getActiveCredentialSafe(mockProviderId, {
+          authContext: {
+            status: "READY",
+            authUserId: fixtureIds.superAdminUser,
+            email: "unauth@gamerperu.pe",
+            roles: ["ADMIN_CATALOG"],
+            permissions: new Set(["catalog:manage"]),
+          },
+        })
+      ).rejects.toThrow("Missing required permission: ai:manage_credentials");
 
       const [audit] = await db
         .select()
@@ -416,45 +571,53 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
       });
     });
 
-    it("rotates encryption key from V1 to V2, emitting AI_CREDENTIAL_UPDATED", async () => {
+    it("rotates encryption key to active key version (V1 -> V2), emitting AI_CREDENTIAL_UPDATED", async () => {
       const cred = await saveCredential(
         {
           providerId: mockProviderId,
           plaintextApiKey: "sk-key-to-rotate-secret-999",
-          keyVersion: 1,
         },
         { authContext: superAdminContext }
       );
 
       expect(cred.keyVersion).toBe(1);
 
-      const rotated = await rotateCredentialKey(
-        {
-          credentialId: cred.id,
-          targetKeyVersion: 2,
-        },
-        { authContext: superAdminContext }
-      );
+      process.env.AI_ENCRYPTION_ACTIVE_KEY_VERSION = "2";
+      try {
+        const rotated = await rotateCredentialKey(
+          { credentialId: cred.id },
+          { authContext: superAdminContext }
+        );
 
-      expect(rotated.id).toBe(cred.id);
-      expect(rotated.keyVersion).toBe(2);
-      expect(rotated.status).toBe("ACTIVE");
+        expect(rotated.id).toBe(cred.id);
+        expect(rotated.keyVersion).toBe(2);
+        expect(rotated.status).toBe("ACTIVE");
 
-      const [audit] = await db
-        .select()
-        .from(auditEvents)
-        .where(eq(auditEvents.action, AI_AUDIT_ACTIONS.AI_CREDENTIAL_UPDATED))
-        .orderBy(desc(auditEvents.timestamp))
-        .limit(1);
+        // Safe no-op verification: rotating when already on active key version
+        const noopRotated = await rotateCredentialKey(
+          { credentialId: cred.id },
+          { authContext: superAdminContext }
+        );
+        expect(noopRotated.keyVersion).toBe(2);
 
-      expect(audit).toBeDefined();
-      expect(audit!.metadata).toEqual({
-        operation: "KEY_ROTATION",
-        credential_id: cred.id,
-        provider_id: mockProviderId,
-        old_key_version: 1,
-        new_key_version: 2,
-      });
+        const [audit] = await db
+          .select()
+          .from(auditEvents)
+          .where(eq(auditEvents.action, AI_AUDIT_ACTIONS.AI_CREDENTIAL_UPDATED))
+          .orderBy(desc(auditEvents.timestamp))
+          .limit(1);
+
+        expect(audit).toBeDefined();
+        expect(audit!.metadata).toEqual({
+          operation: "KEY_ROTATION",
+          credential_id: cred.id,
+          provider_id: mockProviderId,
+          old_key_version: 1,
+          new_key_version: 2,
+        });
+      } finally {
+        process.env.AI_ENCRYPTION_ACTIVE_KEY_VERSION = "1";
+      }
     });
   });
 
@@ -529,7 +692,7 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
         profileKey: "PRODUCT_RESEARCH_FAST",
         providerId: provider.id,
         modelId: "mock-fast-v1",
-        temperature: "0.25",
+        temperature: 0.25,
         maxTokens: 2048,
       });
 
@@ -581,6 +744,8 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
 
       expect(result.ok).toBe(true);
       expect(result.status).toBe("HEALTHY");
+      expect(result.code).toBe("AI_PROVIDER_HEALTH_CHECK_OK");
+      expect(result.message).toBe("Provider health check passed.");
 
       const [cred] = await db
         .select()
@@ -613,8 +778,11 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
       });
     });
 
-    it("executes failed health check, persists UNHEALTHY status, emits AI_HEALTH_CHECK_EXECUTED, and writes 0 provider attempts", async () => {
-      mockAiAdapter.setHealthFailure(true, "Simulated upstream 503 service unavailable");
+    it("executes failed health check, normalizes error to safe generic message, persists UNHEALTHY status, emits AI_HEALTH_CHECK_EXECUTED, and writes 0 provider attempts", async () => {
+      mockAiAdapter.setHealthFailure(
+        true,
+        "Simulated upstream 503 service unavailable with sensitive payload"
+      );
 
       const result = await executeCredentialHealthCheck(mockProviderId, {
         authContext: superAdminContext,
@@ -622,6 +790,10 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
 
       expect(result.ok).toBe(false);
       expect(result.status).toBe("UNHEALTHY");
+      expect(result.code).toBe("AI_PROVIDER_HEALTH_CHECK_FAILED");
+      expect(result.message).toBe("Provider health check failed.");
+      // Strictly verify raw adapter error message did not leak to caller
+      expect(result.message).not.toContain("sensitive payload");
 
       const [cred] = await db
         .select()
@@ -638,6 +810,30 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
 
       // Reset mock failure flag
       mockAiAdapter.setHealthFailure(false);
+    });
+
+    it("handles concurrent credential revocation during health check without corrupting state", async () => {
+      // Intentionally revoke the active credential in DB right before health check post-call transaction commits
+      // by intercepting adapter healthCheck
+      const originalHealthCheck = mockAiAdapter.healthCheck.bind(mockAiAdapter);
+      mockAiAdapter.healthCheck = async (key) => {
+        // While check is in-flight, mark credential REVOKED
+        await pgSql`UPDATE ai_provider_credentials SET status = 'REVOKED' WHERE provider_id = ${mockProviderId}`;
+        return originalHealthCheck(key);
+      };
+
+      try {
+        const result = await executeCredentialHealthCheck(mockProviderId, {
+          authContext: superAdminContext,
+        });
+
+        expect(result.ok).toBe(false);
+        expect(result.status).toBe("UNHEALTHY");
+        expect(result.code).toBe("CREDENTIAL_CHANGED_DURING_HEALTH_CHECK");
+        expect(result.message).toContain("Credential was modified or revoked during health check.");
+      } finally {
+        mockAiAdapter.healthCheck = originalHealthCheck;
+      }
     });
   });
 

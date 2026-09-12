@@ -1,7 +1,49 @@
 import type { ErrorEvent, EventHint } from "@sentry/nextjs";
 
-const SENSITIVE_KEY_REGEX =
-  /^(password|authorization|cookie|set-cookie|token|access_token|refresh_token|secret|apikey|api_key|voucher_url|proof_url|operation_code|database_url|supabase_secret_key|resend_api_key|r2_access_key_id|r2_secret_access_key|inngest_event_key|inngest_signing_key|ai_encryption_key_v\d+|sentry_auth_token|email|phone|phone_number|address|street|q)$/i;
+export const NORMALIZED_SENSITIVE_KEYS = new Set([
+  "ciphertext",
+  "iv",
+  "authtag",
+  "apikey",
+  "accesstoken",
+  "refreshtoken",
+  "authtoken",
+  "bearertoken",
+  "token",
+  "secret",
+  "password",
+  "credential",
+  "credentials",
+  "privatekey",
+  "authorization",
+  "cookie",
+  "setcookie",
+  "voucherurl",
+  "proofurl",
+  "operationcode",
+  "databaseurl",
+  "supabasesecretkey",
+  "resendapikey",
+  "r2accesskeyid",
+  "r2secretaccesskey",
+  "inngesteventkey",
+  "inngestsigningkey",
+  "sentryauthtoken",
+  "email",
+  "phone",
+  "phonenumber",
+  "address",
+  "street",
+  "q",
+]);
+
+export function isSensitiveKey(key: string): boolean {
+  const normalized = key.toLowerCase().replace(/[-_]/g, "");
+  if (/^aiencryptionkeyv\d+$/.test(normalized)) {
+    return true;
+  }
+  return NORMALIZED_SENSITIVE_KEYS.has(normalized);
+}
 
 const STRING_PATTERNS: Array<{
   regex: RegExp;
@@ -66,8 +108,12 @@ export function sanitizeObject<T>(obj: T): T {
 
   const result: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
-    if (SENSITIVE_KEY_REGEX.test(key)) {
-      result[key] = "[REDACTED]";
+    if (isSensitiveKey(key)) {
+      if (typeof val === "object" && val !== null) {
+        result[key] = sanitizeObject(val);
+      } else {
+        result[key] = "[REDACTED]";
+      }
     } else if (typeof val === "string") {
       result[key] = sanitizeString(val);
     } else if (typeof val === "object" && val !== null) {

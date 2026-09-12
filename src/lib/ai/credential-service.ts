@@ -65,11 +65,11 @@ export interface CredentialServiceOptions {
 export interface SaveCredentialInput {
   providerId: string;
   plaintextApiKey: string;
-  keyVersion?: number;
 }
 
 /**
  * Saves a credential for an AI provider.
+ * Always resolves and encrypts with the active AI encryption key version.
  * If provider already has an ACTIVE credential:
  * - atomically revokes existing ACTIVE credential
  * - inserts new ACTIVE credential
@@ -109,12 +109,13 @@ export async function saveCredential(
       )
       .for("update");
 
+    const activeKeyVersion = getActiveAiEncryptionKeyVersion();
     const newCredentialId = generateUuidV7();
     const encrypted = encryptCredential({
       credentialId: newCredentialId,
       providerId: input.providerId,
       plaintext: input.plaintextApiKey,
-      keyVersion: input.keyVersion,
+      keyVersion: activeKeyVersion,
     });
 
     if (existingActive) {
@@ -264,11 +265,12 @@ export async function revokeCredential(
 
 export interface RotateCredentialKeyInput {
   credentialId: string;
-  targetKeyVersion?: number;
 }
 
 /**
  * Rotates the encryption master key of an active credential.
+ * Re-encrypts strictly with the active AI encryption key version.
+ * If already on the active key version, returns a safe no-op to avoid unnecessary ciphertext churn.
  * Emits AI_CREDENTIAL_UPDATED with non-secret rotation metadata.
  */
 export async function rotateCredentialKey(
@@ -294,7 +296,12 @@ export async function rotateCredentialKey(
     }
 
     const oldKeyVersion = credential.keyVersion;
-    const newKeyVersion = input.targetKeyVersion ?? getActiveAiEncryptionKeyVersion();
+    const activeKeyVersion = getActiveAiEncryptionKeyVersion();
+
+    if (oldKeyVersion === activeKeyVersion) {
+      // Safe no-op: already on active key version, avoid unnecessary ciphertext churn
+      return toSafeCredentialDto(credential);
+    }
 
     // Decrypt old payload server-side
     const decrypted = decryptCredential({
@@ -306,12 +313,12 @@ export async function rotateCredentialKey(
       authTag: credential.authTag,
     });
 
-    // Re-encrypt with target key version and fresh IV + auth tag
+    // Re-encrypt with target active version and fresh IV + auth tag
     const reencrypted = encryptCredential({
       credentialId: credential.id,
       providerId: credential.providerId,
       plaintext: decrypted,
-      keyVersion: newKeyVersion,
+      keyVersion: activeKeyVersion,
     });
 
     const [updated] = await tx
@@ -341,7 +348,7 @@ export async function rotateCredentialKey(
         credential_id: updated.id,
         provider_id: updated.providerId,
         old_key_version: oldKeyVersion,
-        new_key_version: newKeyVersion,
+        new_key_version: activeKeyVersion,
       },
       requestId: options?.requestId,
     });
@@ -351,13 +358,12 @@ export async function rotateCredentialKey(
 }
 
 /**
- * Returns safe DTO for the currently ACTIVE credential of a provider, or null.
+ * Internal helper for unguarded server-side lookup of an active credential row.
  */
-export async function getActiveCredentialSafe(
+async function getActiveCredentialRow(
   providerId: string,
-  options?: { dbClient?: typeof db }
-): Promise<SafeCredentialDto | null> {
-  const client = options?.dbClient ?? db;
+  client: typeof db = db
+): Promise<typeof aiProviderCredentials.$inferSelect | null> {
   const [credential] = await client
     .select()
     .from(aiProviderCredentials)
@@ -369,12 +375,31 @@ export async function getActiveCredentialSafe(
     )
     .limit(1);
 
+  return credential ?? null;
+}
+
+/**
+ * Returns safe DTO for the currently ACTIVE credential of a provider, or null.
+ * Strictly asserts ai:manage_credentials permission on caller.
+ */
+export async function getActiveCredentialSafe(
+  providerId: string,
+  options?: CredentialServiceOptions
+): Promise<SafeCredentialDto | null> {
+  await assertAiCredentialPermission(options?.authContext);
+  const client = options?.dbClient ?? db;
+  const credential = await getActiveCredentialRow(providerId, client);
+
   return credential ? toSafeCredentialDto(credential) : null;
 }
 
 export interface HealthCheckExecutionResult {
   ok: boolean;
   status: "HEALTHY" | "UNHEALTHY";
+  code:
+    | "AI_PROVIDER_HEALTH_CHECK_OK"
+    | "AI_PROVIDER_HEALTH_CHECK_FAILED"
+    | "CREDENTIAL_CHANGED_DURING_HEALTH_CHECK";
   message: string;
 }
 
@@ -382,9 +407,10 @@ export interface HealthCheckExecutionResult {
  * Executes a privileged health check against the active provider credential.
  * - Resolves exact provider adapter (fails closed if unsupported)
  * - Decrypts credential server-side only
- * - Executes adapter health check
- * - Persists safe health status without logging or exposing secrets
- * - Emits AI_HEALTH_CHECK_EXECUTED
+ * - Executes adapter health check outside DB transaction
+ * - Discards raw provider/adapter errors to prevent credential or network payload leaks
+ * - Persists safe health status and AI_HEALTH_CHECK_EXECUTED atomically in short post-call transaction
+ * - Protects against concurrent replacement/revocation (CREDENTIAL_CHANGED_DURING_HEALTH_CHECK)
  * - Creates ZERO ai_provider_attempts rows
  */
 export async function executeCredentialHealthCheck(
@@ -405,17 +431,8 @@ export async function executeCredentialHealthCheck(
     throw new Error(`PROVIDER_NOT_FOUND: Provider "${providerId}" does not exist.`);
   }
 
-  // Load ACTIVE credential
-  const [credential] = await client
-    .select()
-    .from(aiProviderCredentials)
-    .where(
-      and(
-        eq(aiProviderCredentials.providerId, providerId),
-        eq(aiProviderCredentials.status, "ACTIVE")
-      )
-    )
-    .limit(1);
+  // Load ACTIVE credential row initially
+  const credential = await getActiveCredentialRow(providerId, client);
 
   if (!credential) {
     throw new Error(
@@ -436,53 +453,72 @@ export async function executeCredentialHealthCheck(
     authTag: credential.authTag,
   });
 
-  let healthResult: { ok: boolean; status: "HEALTHY" | "UNHEALTHY"; message?: string };
+  let healthCheckPassed = false;
 
   try {
-    healthResult = await adapter.healthCheck(decryptedApiKey);
-  } catch (error) {
-    healthResult = {
-      ok: false,
-      status: "UNHEALTHY",
-      message: error instanceof Error ? error.message : "Unknown error during health check",
-    };
+    const healthResult = await adapter.healthCheck(decryptedApiKey);
+    healthCheckPassed = Boolean(healthResult.ok);
+  } catch {
+    // Deliberately discard raw exception to prevent leaking sensitive provider payloads
+    healthCheckPassed = false;
   }
 
-  const status = healthResult.ok ? "HEALTHY" : "UNHEALTHY";
-  const message =
-    healthResult.message ?? (healthResult.ok ? "Health check passed" : "Health check failed");
+  const finalStatus: "HEALTHY" | "UNHEALTHY" = healthCheckPassed ? "HEALTHY" : "UNHEALTHY";
   const now = new Date();
 
-  // Persist safe health status
-  await client
-    .update(aiProviderCredentials)
-    .set({
-      lastHealthStatus: status,
-      lastTestedAt: now,
-      updatedAt: now,
-    })
-    .where(eq(aiProviderCredentials.id, credential.id));
+  // Commit health status and AuditEvent atomically in a short post-call transaction
+  return await client.transaction(async (tx) => {
+    // Lock and verify the tested credential is still the relevant ACTIVE credential
+    const [currentCred] = await tx
+      .select()
+      .from(aiProviderCredentials)
+      .where(eq(aiProviderCredentials.id, credential.id))
+      .for("update");
 
-  // Emit exact AuditEvent with non-secret metadata
-  await client.insert(auditEvents).values({
-    actorType: "ADMIN",
-    actorId: caller.authUserId,
-    action: AI_AUDIT_ACTIONS.AI_HEALTH_CHECK_EXECUTED,
-    targetType: "ai_credential",
-    targetId: credential.id,
-    metadata: {
-      provider_id: provider.id,
-      provider_key: provider.providerKey,
-      credential_id: credential.id,
-      status,
-      ok: healthResult.ok,
-    },
-    requestId: options?.requestId,
+    if (!currentCred || currentCred.status !== "ACTIVE") {
+      // Credential was replaced or revoked while the external check was running
+      return {
+        ok: false,
+        status: "UNHEALTHY" as const,
+        code: "CREDENTIAL_CHANGED_DURING_HEALTH_CHECK" as const,
+        message: "Credential was modified or revoked during health check.",
+      };
+    }
+
+    await tx
+      .update(aiProviderCredentials)
+      .set({
+        lastHealthStatus: finalStatus,
+        lastTestedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(aiProviderCredentials.id, currentCred.id));
+
+    await tx.insert(auditEvents).values({
+      actorType: "ADMIN",
+      actorId: caller.authUserId,
+      action: AI_AUDIT_ACTIONS.AI_HEALTH_CHECK_EXECUTED,
+      targetType: "ai_credential",
+      targetId: currentCred.id,
+      metadata: {
+        provider_id: provider.id,
+        provider_key: provider.providerKey,
+        credential_id: currentCred.id,
+        status: finalStatus,
+        ok: healthCheckPassed,
+      },
+      requestId: options?.requestId,
+    });
+
+    return {
+      ok: healthCheckPassed,
+      status: finalStatus,
+      code: healthCheckPassed
+        ? ("AI_PROVIDER_HEALTH_CHECK_OK" as const)
+        : ("AI_PROVIDER_HEALTH_CHECK_FAILED" as const),
+      message: healthCheckPassed
+        ? "Provider health check passed."
+        : "Provider health check failed.",
+    };
   });
-
-  return {
-    ok: healthResult.ok,
-    status,
-    message,
-  };
 }
