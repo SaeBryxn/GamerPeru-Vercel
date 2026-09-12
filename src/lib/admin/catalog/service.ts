@@ -891,7 +891,7 @@ export async function updateProduct(
               updated_at = NOW();
           `);
         }
-      } else if (normalizedInput.specValues !== undefined) {
+      } else if (normalizedInput.specValues !== undefined && normalizedInput.specValues !== null) {
         // Specification update without category change
         const { hasSchema, schema: activeSchema } =
           await resolveAuthoritativeCategorySpecificationSchema(current.categoryId, tx);

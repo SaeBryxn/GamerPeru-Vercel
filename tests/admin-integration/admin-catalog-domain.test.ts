@@ -2179,6 +2179,208 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
       return { input, mutationRequestId, product, updated };
     }
 
+    async function seedSpecifications(productId: string) {
+      await pgSql`
+        INSERT INTO product_specifications (
+          product_id, schema_id, schema_version, spec_values, updated_at
+        ) VALUES (
+          ${productId},
+          ${fixtureIds.schemaForCat},
+          1,
+          ${pgSql.json({
+            sensor: "paw3395",
+            polling_rate_hz: 1000,
+            wireless: true,
+          })},
+          NOW() - INTERVAL '1 minute'
+        )
+        ON CONFLICT (product_id) DO UPDATE SET
+          schema_id = EXCLUDED.schema_id,
+          schema_version = EXCLUDED.schema_version,
+          spec_values = EXCLUDED.spec_values,
+          updated_at = EXCLUDED.updated_at;
+      `;
+    }
+
+    async function readSpecifications(productId: string) {
+      const [row] = (await pgSql`
+        SELECT schema_id, schema_version, spec_values, updated_at
+        FROM product_specifications
+        WHERE product_id = ${productId};
+      `) as {
+        schema_id: string;
+        schema_version: number;
+        spec_values: Record<string, unknown>;
+        updated_at: Date;
+      }[];
+      return row;
+    }
+
+    it("preserves omitted-ID specValues:null as a specification no-op", async () => {
+      const product = await createUpdateReplayProduct("Legacy null omitted ID");
+      await seedSpecifications(product.id);
+      const before = await readSpecifications(product.id);
+      if (!before) throw new Error("Expected seeded Product specifications.");
+
+      const updated = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          name: "Legacy null omitted ID updated",
+          specValues: null,
+        },
+        { authContext: authAdminCatalog }
+      );
+      const after = await readSpecifications(product.id);
+
+      expect(updated.name).toBe("Legacy null omitted ID updated");
+      expect(after?.schema_id).toBe(before.schema_id);
+      expect(after?.schema_version).toBe(before.schema_version);
+      expect(after?.spec_values).toEqual(before.spec_values);
+      expect(after?.updated_at.getTime()).toBe(before.updated_at.getTime());
+    });
+
+    it("preserves blank-ID specValues:null as a specification no-op", async () => {
+      const product = await createUpdateReplayProduct("Legacy null blank ID");
+      await seedSpecifications(product.id);
+      const before = await readSpecifications(product.id);
+      if (!before) throw new Error("Expected seeded Product specifications.");
+
+      const updated = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          description: "Legacy blank-ID null update",
+          specValues: null,
+          mutationRequestId: "   ",
+        },
+        { authContext: authAdminCatalog }
+      );
+      const after = await readSpecifications(product.id);
+
+      expect(updated.description).toBe("Legacy blank-ID null update");
+      expect(after?.spec_values).toEqual(before.spec_values);
+      expect(after?.updated_at.getTime()).toBe(before.updated_at.getTime());
+    });
+
+    it("normalizes idempotent specValues:null and omission to the same no-op intent", async () => {
+      const product = await createUpdateReplayProduct("Idempotent null specs");
+      await seedSpecifications(product.id);
+      const before = await readSpecifications(product.id);
+      if (!before) throw new Error("Expected seeded Product specifications.");
+      const mutationRequestId = `gp025-null-spec-replay-${productSequence}`;
+
+      const first = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          name: "Idempotent null specs updated",
+          specValues: null,
+          mutationRequestId,
+        },
+        { authContext: authAdminCatalog }
+      );
+      const replay = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          name: "Idempotent null specs updated",
+          mutationRequestId,
+        },
+        { authContext: authAdminCatalog }
+      );
+      const after = await readSpecifications(product.id);
+
+      expect(replay.id).toBe(first.id);
+      expect(replay.updatedAt.getTime()).toBe(first.updatedAt.getTime());
+      expect(after?.spec_values).toEqual(before.spec_values);
+      expect(after?.updated_at.getTime()).toBe(before.updated_at.getTime());
+      const [auditCount] = (await pgSql`
+        SELECT COUNT(*)::int AS count
+        FROM audit_events
+        WHERE target_id = ${product.id}
+          AND action = 'catalog:product:update'
+          AND metadata ? 'mutation_request_digest';
+      `) as { count: number }[];
+      expect(auditCount?.count).toBe(1);
+    });
+
+    it("keeps specValues:{} distinct when it performs a specification update", async () => {
+      const product = await createUpdateReplayProduct("Empty specification object");
+      await seedSpecifications(product.id);
+      const mutationRequestId = `gp025-null-vs-empty-spec-${productSequence}`;
+      const first = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          name: "Empty specification object updated",
+          specValues: null,
+          mutationRequestId,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            name: "Empty specification object updated",
+            specValues: {},
+            mutationRequestId,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(CatalogIdempotencyConflictError);
+
+      await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: first.updatedAt,
+          specValues: {},
+          mutationRequestId: `gp025-empty-spec-commit-${productSequence}`,
+        },
+        { authContext: authAdminCatalog }
+      );
+      const after = await readSpecifications(product.id);
+      expect(after?.spec_values).toEqual({});
+    });
+
+    it("preserves category-change reconciliation when specValues is null", async () => {
+      const product = await createUpdateReplayProduct("Category change null specs");
+      await seedSpecifications(product.id);
+      const updated = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          categoryId: fixtureIds.catNoSchema,
+          specValues: null,
+          mutationRequestId: `gp025-category-change-null-${productSequence}`,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      expect(updated.categoryId).toBe(fixtureIds.catNoSchema);
+      expect(await readSpecifications(product.id)).toBeUndefined();
+    });
+
+    it("preserves category-change reconciliation when specValues is omitted", async () => {
+      const product = await createUpdateReplayProduct("Category change omitted specs");
+      await seedSpecifications(product.id);
+      const updated = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          categoryId: fixtureIds.catNoSchema,
+          mutationRequestId: `gp025-category-change-omitted-${productSequence}`,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      expect(updated.categoryId).toBe(fixtureIds.catNoSchema);
+      expect(await readSpecifications(product.id)).toBeUndefined();
+    });
+
     it("preserves legacy behavior when mutationRequestId is omitted", async () => {
       const product = await createUpdateReplayProduct("Legacy omitted");
       const updated = await updateProduct(
