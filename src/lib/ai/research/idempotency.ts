@@ -24,13 +24,27 @@ export function createResearchMutationDigest(
     .digest("hex");
 }
 
-export function createResearchRequestFingerprint(input: {
+export interface ResearchRequestFingerprintInput {
   jobType: "SINGLE" | "BATCH";
   items: NormalizedResearchItem[];
-  selectedProfileId: string;
   profileSnapshot: ResearchProfileSnapshot;
-}): string {
-  return createHash("sha256").update(stableSerialize(input), "utf8").digest("hex");
+}
+
+export function createCanonicalResearchRequestSemantics(input: ResearchRequestFingerprintInput) {
+  const firstItem = input.jobType === "SINGLE" ? input.items[0] : undefined;
+  return {
+    jobType: input.jobType,
+    orderedNormalizedItems: input.items,
+    mode: firstItem?.mode ?? "CREATE",
+    targetProductId: firstItem?.targetProductId ?? null,
+    profileSnapshot: input.profileSnapshot,
+  };
+}
+
+export function createResearchRequestFingerprint(input: ResearchRequestFingerprintInput): string {
+  return createHash("sha256")
+    .update(stableSerialize(createCanonicalResearchRequestSemantics(input)), "utf8")
+    .digest("hex");
 }
 
 export function createProviderRequestDigest(input: unknown): string {

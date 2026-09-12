@@ -1,9 +1,12 @@
+import { createHash } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import postgres from "postgres";
 import { assertLocalDatabaseTarget } from "@/lib/admin/test-target-guard";
 import {
+  AI_RESEARCH_SYSTEM_INSTRUCTION,
   claimResearchItem,
   createProviderAttempt,
+  createProviderRequestDigest,
   createResearchJob,
   failResearchItem,
   heartbeatResearchItem,
@@ -11,6 +14,7 @@ import {
   persistEvidenceSourceSet,
   processClaimedResearchItem,
   publishDraftProposal,
+  refreshResearchJobCounters,
   reconcileResearchDispatches,
   recoverExpiredResearchWork,
   runProviderAttempt,
@@ -37,7 +41,11 @@ describe("GP-025 / CHK2 — Research orchestration live PostgreSQL verification"
     actorTwo: "018f0025-2000-7000-8000-000000000002",
     provider: "018f0025-2000-7000-8000-000000000010",
     profile: "018f0025-2000-7000-8000-000000000020",
+    brand: "018f0025-2000-7000-8000-000000000030",
+    category: "018f0025-2000-7000-8000-000000000031",
+    product: "018f0025-2000-7000-8000-000000000032",
   };
+  const initialProductVersion = new Date("2026-01-15T12:00:00.000Z");
   const snapshot: ResearchProfileSnapshot = {
     profileKey: "CHK2_RESEARCH_TEST",
     providerId: ids.provider,
@@ -108,10 +116,32 @@ describe("GP-025 / CHK2 — Research orchestration live PostgreSQL verification"
       VALUES (${ids.profile}, 'CHK2_RESEARCH_TEST', ${ids.provider}, 'gemini-test', 0.20, 1024, true)
       ON CONFLICT (id) DO UPDATE SET is_enabled = true
     `;
+    await sql`
+      INSERT INTO brands (id, name, slug, status, created_at, updated_at)
+      VALUES (${ids.brand}, 'GP025 BR1 Brand', 'gp025-br1-brand', 'PUBLISHED', NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+    `;
+    await sql`
+      INSERT INTO categories (id, name, slug, display_order, status, created_at, updated_at)
+      VALUES (${ids.category}, 'GP025 BR1 Category', 'gp025-br1-category', 25025, 'PUBLISHED', NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+    `;
+    await sql`
+      INSERT INTO products (id, brand_id, category_id, name, slug, status, created_at, updated_at)
+      VALUES (${ids.product}, ${ids.brand}, ${ids.category}, 'GP025 BR1 Product', 'gp025-br1-product', 'DRAFT', NOW(), ${initialProductVersion})
+      ON CONFLICT (id) DO UPDATE SET updated_at = EXCLUDED.updated_at
+    `;
   });
 
   beforeEach(async () => {
     await cleanResearchFixtures();
+    await sql`
+      UPDATE ai_profiles
+      SET model_id = 'gemini-test', temperature = 0.20, max_tokens = 1024, is_enabled = true
+      WHERE id = ${ids.profile}
+    `;
+    await sql`UPDATE ai_providers SET is_enabled = true WHERE id = ${ids.provider}`;
+    await sql`UPDATE products SET updated_at = ${initialProductVersion} WHERE id = ${ids.product}`;
   });
 
   afterAll(async () => {
@@ -120,6 +150,9 @@ describe("GP-025 / CHK2 — Research orchestration live PostgreSQL verification"
     await sql`DELETE FROM ai_profiles WHERE id = ${ids.profile}`;
     await sql`DELETE FROM ai_provider_credentials WHERE provider_id = ${ids.provider}`;
     await sql`DELETE FROM ai_providers WHERE id = ${ids.provider}`;
+    await sql`DELETE FROM products WHERE id = ${ids.product}`;
+    await sql`DELETE FROM categories WHERE id = ${ids.category}`;
+    await sql`DELETE FROM brands WHERE id = ${ids.brand}`;
     await sql`DELETE FROM auth.users WHERE id IN (${ids.actorOne}, ${ids.actorTwo})`;
     await sql.end();
     vi.unstubAllEnvs();
@@ -129,6 +162,12 @@ describe("GP-025 / CHK2 — Research orchestration live PostgreSQL verification"
     mutationRequestId,
     selectedProfileId: ids.profile,
     items: queries.map((query) => ({ query, mode: "CREATE" as const })),
+  });
+
+  const enrichInput = (mutationRequestId: string) => ({
+    mutationRequestId,
+    selectedProfileId: ids.profile,
+    items: [{ query: "GP025 BR1 Product", mode: "ENRICH" as const, targetProductId: ids.product }],
   });
 
   const evidence = (suffix: string): ExternalProductEvidence => ({
@@ -206,24 +245,82 @@ describe("GP-025 / CHK2 — Research orchestration live PostgreSQL verification"
     expect(auditCountRows[0]!.count).toBe(1);
   });
 
-  it("keeps an existing job snapshot immutable after later profile changes", async () => {
+  it("replays from the committed snapshot after current profile settings change", async () => {
+    const input = createInput("snapshot-M", ["Mouse A"]);
     const result = await createResearchJob(createInput("snapshot-M", ["Mouse A"]), {
       authContext: actor(ids.actorOne),
     });
-    try {
-      await sql`
-        UPDATE ai_profiles SET model_id = 'changed-model', temperature = 0.90, max_tokens = 2048
-        WHERE id = ${ids.profile}
-      `;
-      const [job] =
-        await sql`SELECT profile_snapshot FROM ai_research_jobs WHERE id = ${result.jobId}`;
-      expect(job!.profile_snapshot).toEqual(snapshot);
-    } finally {
-      await sql`
-        UPDATE ai_profiles SET model_id = 'gemini-test', temperature = 0.20, max_tokens = 1024
-        WHERE id = ${ids.profile}
-      `;
-    }
+    await sql`
+      UPDATE ai_profiles SET model_id = 'changed-model', temperature = 0.90, max_tokens = 2048
+      WHERE id = ${ids.profile}
+    `;
+    const replay = await createResearchJob(input, { authContext: actor(ids.actorOne) });
+    expect(replay).toMatchObject({ jobId: result.jobId, replayed: true });
+    const [job] = await sql`
+      SELECT profile_snapshot,
+        (SELECT count(*)::int FROM ai_research_jobs) AS job_count
+      FROM ai_research_jobs WHERE id = ${result.jobId}
+    `;
+    expect(job).toEqual({ profile_snapshot: snapshot, job_count: 1 });
+  });
+
+  it("resolves a committed replay even after its current profile and provider are disabled", async () => {
+    const input = createInput("disabled-replay-M", ["Mouse A"]);
+    const result = await createResearchJob(input, { authContext: actor(ids.actorOne) });
+    await sql`UPDATE ai_profiles SET is_enabled = false WHERE id = ${ids.profile}`;
+    await sql`UPDATE ai_providers SET is_enabled = false WHERE id = ${ids.provider}`;
+
+    const replay = await createResearchJob(input, { authContext: actor(ids.actorOne) });
+    expect(replay).toMatchObject({ jobId: result.jobId, replayed: true });
+    expect(Number((await sql`SELECT count(*) FROM ai_research_jobs`)[0]!.count)).toBe(1);
+    const [job] = await sql`
+      SELECT profile_snapshot FROM ai_research_jobs WHERE id = ${result.jobId}
+    `;
+    expect(job!.profile_snapshot).toEqual(snapshot);
+  });
+
+  it("derives ENRICH updatedAt server-side and preserves it across product changes and replay", async () => {
+    const input = enrichInput("enrich-snapshot-M");
+    const result = await createResearchJob(input, { authContext: actor(ids.actorOne) });
+    const [created] = await sql`
+      SELECT target_product_id, target_product_version_snapshot
+      FROM ai_research_job_items WHERE job_id = ${result.jobId}
+    `;
+    expect(created).toEqual({
+      target_product_id: ids.product,
+      target_product_version_snapshot: initialProductVersion,
+    });
+
+    const laterVersion = new Date("2026-02-20T18:30:00.000Z");
+    await sql`UPDATE products SET updated_at = ${laterVersion} WHERE id = ${ids.product}`;
+    const replay = await createResearchJob(input, { authContext: actor(ids.actorOne) });
+    expect(replay).toMatchObject({ jobId: result.jobId, replayed: true });
+    const [replayedItem] = await sql`
+      SELECT target_product_version_snapshot
+      FROM ai_research_job_items WHERE job_id = ${result.jobId}
+    `;
+    expect(replayedItem!.target_product_version_snapshot).toEqual(initialProductVersion);
+  });
+
+  it("fails closed when the canonical ENRICH target does not exist", async () => {
+    const missingProduct = "018f0025-2000-7000-8000-000000000099";
+    await expect(
+      createResearchJob(
+        {
+          mutationRequestId: "missing-enrich-M",
+          selectedProfileId: ids.profile,
+          items: [
+            {
+              query: "Missing Product",
+              mode: "ENRICH",
+              targetProductId: missingProduct,
+            },
+          ],
+        },
+        { authContext: actor(ids.actorOne) }
+      )
+    ).rejects.toThrow("AI_TARGET_PRODUCT_NOT_FOUND");
+    expect(Number((await sql`SELECT count(*) FROM ai_research_jobs`)[0]!.count)).toBe(0);
   });
 
   it("fails closed with exact codes when the frozen profile or provider is later disabled", async () => {
@@ -326,9 +423,10 @@ describe("GP-025 / CHK2 — Research orchestration live PostgreSQL verification"
       error_code: "AI_SEARCH_OUTCOME_UNKNOWN",
       processing_lease_token: null,
     });
-    const [job] =
-      await sql`SELECT status, failed_items FROM ai_research_jobs WHERE id = ${result.jobId}`;
-    expect(job).toEqual({ status: "FAILED", failed_items: 1 });
+    const [job] = await sql`
+      SELECT status, completed_items, failed_items FROM ai_research_jobs WHERE id = ${result.jobId}
+    `;
+    expect(job).toEqual({ status: "COMPLETED", completed_items: 1, failed_items: 0 });
   });
 
   it("commits the normalized source set transactionally and clears the search marker", async () => {
@@ -340,12 +438,18 @@ describe("GP-025 / CHK2 — Research orchestration live PostgreSQL verification"
     const sources = await persistEvidenceSourceSet(item.id, item.leaseToken, [evidence("source")]);
     expect(sources).toHaveLength(1);
     const [stored] = await sql`
-      SELECT retrieval_method, provider_citation_id, snippet FROM ai_sources WHERE job_item_id = ${item.id}
+      SELECT original_url, resolved_url, retrieval_method, provider_citation_id, snippet, content_sha256
+      FROM ai_sources WHERE job_item_id = ${item.id}
     `;
     expect(stored).toEqual({
+      original_url: "https://example.com/source",
+      resolved_url: "https://example.com/source",
       retrieval_method: "SEARCH_API",
       provider_citation_id: null,
       snippet: "Normalized external product evidence source",
+      content_sha256: createHash("sha256")
+        .update("Normalized external product evidence source", "utf8")
+        .digest("hex"),
     });
     const [state] = await sql`SELECT error_code FROM ai_research_job_items WHERE id = ${item.id}`;
     expect(state!.error_code).toBeNull();
@@ -653,6 +757,197 @@ describe("GP-025 / CHK2 — Research orchestration live PostgreSQL verification"
     });
   });
 
+  it("rehydrates persisted evidence without Tavily and sends only matching full evidence to Gemini", async () => {
+    const fullEvidenceText = `Stable recovered product evidence ${"x".repeat(2_000)}`;
+    const acquired = {
+      ...evidence("rehydrate"),
+      text: fullEvidenceText,
+      snippet: fullEvidenceText.slice(0, 1_000),
+    };
+    const result = await createResearchJob(createInput("rehydrate-M", ["Mouse Recovery"]), {
+      authContext: actor(ids.actorOne),
+    });
+    const first = (await claimResearchItem(result.jobId))!;
+    await persistEvidenceSourceSet(first.id, first.leaseToken, [acquired]);
+    await sql`
+      UPDATE ai_research_job_items SET processing_lease_expires_at = NOW() - INTERVAL '1 second'
+      WHERE id = ${first.id}
+    `;
+    const reclaimed = (await claimResearchItem(result.jobId))!;
+    const responses = [
+      {
+        status: "EXACT_MATCH",
+        brandName: "Brand",
+        modelName: "Mouse Recovery",
+        rationale: "Recovered evidence supports the identity.",
+      },
+      {
+        specifications: [],
+        unmappedSpecifications: {},
+        variants: [],
+        mediaCandidates: [],
+      },
+      {
+        name: "Mouse Recovery",
+        subtitle: null,
+        description: "An original product draft prepared from verified evidence.",
+        seoTitle: null,
+        seoDescription: null,
+      },
+    ];
+    const generateStructured = vi.fn(
+      async (
+        _apiKey: string,
+        _input: AiGenerationInput,
+        _jsonSchema: Record<string, unknown>,
+        _options: AiExecutionOptions
+      ) => ({
+        data: responses.shift(),
+        providerRequestId: "rehydrated-interaction",
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          totalTokens: 2,
+          costMicros: null,
+          currency: null,
+          costSource: "UNAVAILABLE" as const,
+        },
+      })
+    );
+    const adapter: AiProviderAdapter = {
+      providerKey: "google",
+      healthCheck: async () => ({ ok: true, status: "HEALTHY" }),
+      generateText: async () => {
+        throw new Error("Unexpected text generation call");
+      },
+      generateStructured,
+    };
+    const acquireSearch = vi.fn(async () => [evidence("must-not-run")]);
+    const rehydrateDestination = vi.fn(async () => ({
+      originalUrl: acquired.resolvedUrl,
+      resolvedUrl: acquired.resolvedUrl,
+      title: acquired.title,
+      text: fullEvidenceText,
+      snippet: fullEvidenceText.slice(0, 1_000),
+      contentSha256: createHash("sha256").update(fullEvidenceText, "utf8").digest("hex"),
+      fetchedAt: new Date(),
+    }));
+
+    await processClaimedResearchItem(reclaimed, {
+      acquireSearch,
+      rehydrateDestination,
+      resolveAdapter: () => adapter,
+      withCredential: async (_providerId, operation) => await operation("fake-gemini-key"),
+    });
+
+    expect(acquireSearch).not.toHaveBeenCalled();
+    expect(rehydrateDestination).toHaveBeenCalledWith(
+      expect.objectContaining({ url: acquired.resolvedUrl })
+    );
+    const firstProviderInput = JSON.parse(generateStructured.mock.calls[0]![1].input);
+    expect(firstProviderInput.external_product_evidence[0].text).toBe(fullEvidenceText);
+    expect(firstProviderInput.external_product_evidence[0].text).not.toBe(
+      fullEvidenceText.slice(0, 1_000)
+    );
+    const [stored] = await sql`
+      SELECT snippet, content_sha256 FROM ai_sources WHERE job_item_id = ${first.id}
+    `;
+    expect(stored).toEqual({
+      snippet: fullEvidenceText.slice(0, 1_000),
+      content_sha256: createHash("sha256").update(fullEvidenceText, "utf8").digest("hex"),
+    });
+    const [attempt] = await sql`
+      SELECT request_digest FROM ai_provider_attempts
+      WHERE job_item_id = ${first.id} AND operation_type = 'IDENTITY_RESOLUTION'
+    `;
+    const identityCall = generateStructured.mock.calls[0]!;
+    expect(attempt!.request_digest).toBe(
+      createProviderRequestDigest({
+        operationType: "IDENTITY_RESOLUTION",
+        modelId: snapshot.modelId,
+        temperature: snapshot.temperature,
+        maxTokens: snapshot.maxTokens,
+        systemInstruction: AI_RESEARCH_SYSTEM_INSTRUCTION,
+        input: identityCall[1].input,
+        jsonSchema: identityCall[2],
+      })
+    );
+  });
+
+  it("moves changed persisted evidence to NEEDS_ATTENTION without Tavily or Gemini", async () => {
+    const result = await createResearchJob(createInput("evidence-changed-M", ["Mouse A"]), {
+      authContext: actor(ids.actorOne),
+    });
+    const first = (await claimResearchItem(result.jobId))!;
+    await persistEvidenceSourceSet(first.id, first.leaseToken, [evidence("changed")]);
+    await sql`
+      UPDATE ai_research_job_items SET processing_lease_expires_at = NOW() - INTERVAL '1 second'
+      WHERE id = ${first.id}
+    `;
+    const reclaimed = (await claimResearchItem(result.jobId))!;
+    const acquireSearch = vi.fn(async () => [evidence("must-not-run")]);
+    const resolveAdapter = vi.fn(() => {
+      throw new Error("Gemini must not run");
+    });
+
+    await processClaimedResearchItem(reclaimed, {
+      acquireSearch,
+      resolveAdapter,
+      rehydrateDestination: async () => ({
+        originalUrl: "https://example.com/changed",
+        resolvedUrl: "https://example.com/changed",
+        title: "Changed",
+        text: "Different evidence",
+        snippet: "Different evidence",
+        contentSha256: createHash("sha256").update("Different evidence", "utf8").digest("hex"),
+        fetchedAt: new Date(),
+      }),
+    });
+
+    expect(acquireSearch).not.toHaveBeenCalled();
+    expect(resolveAdapter).not.toHaveBeenCalled();
+    const [state] = await sql`
+      SELECT status, error_code FROM ai_research_job_items WHERE id = ${first.id}
+    `;
+    expect(state).toEqual({ status: "NEEDS_ATTENTION", error_code: "AI_EVIDENCE_CHANGED" });
+  });
+
+  it("does not substitute a persisted snippet when evidence rehydration fails", async () => {
+    const result = await createResearchJob(createInput("evidence-refetch-M", ["Mouse A"]), {
+      authContext: actor(ids.actorOne),
+    });
+    const first = (await claimResearchItem(result.jobId))!;
+    await persistEvidenceSourceSet(first.id, first.leaseToken, [evidence("refetch")]);
+    await sql`
+      UPDATE ai_research_job_items SET processing_lease_expires_at = NOW() - INTERVAL '1 second'
+      WHERE id = ${first.id}
+    `;
+    const reclaimed = (await claimResearchItem(result.jobId))!;
+    const acquireSearch = vi.fn(async () => [evidence("must-not-run")]);
+    const resolveAdapter = vi.fn(() => {
+      throw new Error("Gemini must not run");
+    });
+
+    await processClaimedResearchItem(reclaimed, {
+      acquireSearch,
+      resolveAdapter,
+      rehydrateDestination: async () => {
+        throw new Error("Publisher policy block");
+      },
+    });
+
+    expect(acquireSearch).not.toHaveBeenCalled();
+    expect(resolveAdapter).not.toHaveBeenCalled();
+    const [state] = await sql`
+      SELECT status, error_code FROM ai_research_job_items WHERE id = ${first.id}
+    `;
+    expect(state).toEqual({
+      status: "NEEDS_ATTENTION",
+      error_code: "AI_EVIDENCE_REHYDRATION_FAILED",
+    });
+    expect(Number((await sql`SELECT count(*) FROM ai_provider_attempts`)[0]!.count)).toBe(0);
+  });
+
   it("publishes only DRAFT proposals with conflict provenance and clears the lease", async () => {
     const result = await createResearchJob(createInput("proposal-M", ["Mouse A"]), {
       authContext: actor(ids.actorOne),
@@ -717,6 +1012,62 @@ describe("GP-025 / CHK2 — Research orchestration live PostgreSQL verification"
       WHERE actor_id = ${ids.actorOne} AND action LIKE 'catalog:%'
     `;
     expect(catalogMutations!.count).toBe(0);
+  });
+
+  it("counts every research-settled and future review state as completed, not failed", async () => {
+    const settledStatuses = [
+      "READY_FOR_REVIEW",
+      "NEEDS_ATTENTION",
+      "AMBIGUOUS",
+      "SOURCE_CONFLICT",
+      "APPROVED",
+      "APPLIED",
+    ] as const;
+    for (const [index, status] of settledStatuses.entries()) {
+      const result = await createResearchJob(
+        createInput(`settled-counter-${index}`, [`Mouse ${index}`]),
+        { authContext: actor(ids.actorOne) }
+      );
+      await sql`UPDATE ai_research_job_items SET status = ${status} WHERE job_id = ${result.jobId}`;
+      await refreshResearchJobCounters(result.jobId);
+      const [job] = await sql`
+        SELECT status, completed_items, failed_items FROM ai_research_jobs WHERE id = ${result.jobId}
+      `;
+      expect(job, status).toEqual({
+        status: "COMPLETED",
+        completed_items: 1,
+        failed_items: 0,
+      });
+    }
+  });
+
+  it("counts only FAILED as technical failure", async () => {
+    const result = await createResearchJob(createInput("failed-counter-M", ["Mouse A"]), {
+      authContext: actor(ids.actorOne),
+    });
+    await sql`UPDATE ai_research_job_items SET status = 'FAILED' WHERE job_id = ${result.jobId}`;
+    await refreshResearchJobCounters(result.jobId);
+    const [job] = await sql`
+      SELECT status, completed_items, failed_items FROM ai_research_jobs WHERE id = ${result.jobId}
+    `;
+    expect(job).toEqual({ status: "FAILED", completed_items: 0, failed_items: 1 });
+  });
+
+  it("classifies NEEDS_ATTENTION plus FAILED as PARTIALLY_FAILED", async () => {
+    const result = await createResearchJob(
+      createInput("attention-partial-M", ["Mouse A", "Mouse B"]),
+      { authContext: actor(ids.actorOne) }
+    );
+    const items = await sql`
+      SELECT id FROM ai_research_job_items WHERE job_id = ${result.jobId} ORDER BY item_index
+    `;
+    await sql`UPDATE ai_research_job_items SET status = 'NEEDS_ATTENTION' WHERE id = ${items[0]!.id}`;
+    await sql`UPDATE ai_research_job_items SET status = 'FAILED' WHERE id = ${items[1]!.id}`;
+    await refreshResearchJobCounters(result.jobId);
+    const [job] = await sql`
+      SELECT status, completed_items, failed_items FROM ai_research_jobs WHERE id = ${result.jobId}
+    `;
+    expect(job).toEqual({ status: "PARTIALLY_FAILED", completed_items: 1, failed_items: 1 });
   });
 
   it("rolls back proposal publication on invalid provenance and classifies batch partial failure", async () => {

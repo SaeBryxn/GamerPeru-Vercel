@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createCanonicalResearchRequestSemantics,
   createProviderRequestDigest,
   createResearchMutationDigest,
   createResearchRequestFingerprint,
@@ -58,7 +59,6 @@ describe("Research validation and idempotency contracts", () => {
   it("fingerprints ordered normalized semantics and the complete immutable snapshot", () => {
     const base = {
       jobType: "BATCH" as const,
-      selectedProfileId: "018f0025-0000-7000-8000-000000000020",
       profileSnapshot: snapshot,
       items: [
         {
@@ -76,6 +76,13 @@ describe("Research validation and idempotency contracts", () => {
       ],
     };
     const fingerprint = createResearchRequestFingerprint(base);
+    expect(createCanonicalResearchRequestSemantics(base)).toEqual({
+      jobType: "BATCH",
+      orderedNormalizedItems: base.items,
+      mode: "CREATE",
+      targetProductId: null,
+      profileSnapshot: snapshot,
+    });
     expect(fingerprint).toBe(createResearchRequestFingerprint(base));
     expect(fingerprint).not.toBe(
       createResearchRequestFingerprint({ ...base, items: [...base.items].reverse() })
@@ -84,6 +91,46 @@ describe("Research validation and idempotency contracts", () => {
       createResearchRequestFingerprint({
         ...base,
         profileSnapshot: { ...snapshot, temperature: 0.3 },
+      })
+    );
+    expect(
+      createCanonicalResearchRequestSemantics({
+        jobType: "SINGLE",
+        profileSnapshot: snapshot,
+        items: [
+          {
+            query: "Mouse A",
+            mode: "ENRICH",
+            targetProductId: "018f0025-0000-7000-8000-000000000030",
+            targetProductVersionSnapshot: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      })
+    ).toMatchObject({
+      mode: "ENRICH",
+      targetProductId: "018f0025-0000-7000-8000-000000000030",
+      orderedNormalizedItems: [
+        expect.objectContaining({ targetProductVersionSnapshot: "2026-01-01T00:00:00.000Z" }),
+      ],
+    });
+    expect(fingerprint).toBe(
+      createResearchRequestFingerprint({
+        ...base,
+        selectedProfileId: "018f0025-0000-7000-8000-000000000099",
+      } as typeof base & { selectedProfileId: string })
+    );
+    expect(fingerprint).not.toBe(
+      createResearchRequestFingerprint({
+        jobType: "SINGLE",
+        profileSnapshot: snapshot,
+        items: [
+          {
+            query: "Mouse A",
+            mode: "ENRICH",
+            targetProductId: "018f0025-0000-7000-8000-000000000030",
+            targetProductVersionSnapshot: "2026-01-01T00:00:00.000Z",
+          },
+        ],
       })
     );
     expect(createProviderRequestDigest({ b: 2, a: 1 })).toBe(
@@ -100,11 +147,20 @@ describe("Research validation and idempotency contracts", () => {
     expect(singleCreate.items[0]!.query).toBe("Logitech G Pro X");
     expect(singleCreate.items[0]!.mode).toBe("CREATE");
 
+    const singleEnrich = createResearchJobInputSchema.parse({
+      mutationRequestId: "M",
+      selectedProfileId: snapshot.providerId,
+      items: [{ query: "Mouse", mode: "ENRICH", targetProductId: snapshot.providerId }],
+    });
+    expect(singleEnrich.items[0]).toEqual({
+      query: "Mouse",
+      mode: "ENRICH",
+      targetProductId: snapshot.providerId,
+    });
+
     for (const invalidItem of [
       { query: "A", mode: "CREATE", targetProductId: snapshot.providerId },
-      { query: "A", mode: "CREATE", targetProductVersionSnapshot: new Date() },
-      { query: "A", mode: "ENRICH", targetProductId: snapshot.providerId },
-      { query: "A", mode: "ENRICH", targetProductVersionSnapshot: new Date() },
+      { query: "A", mode: "ENRICH" },
     ]) {
       expect(() =>
         createResearchJobInputSchema.parse({
@@ -112,7 +168,7 @@ describe("Research validation and idempotency contracts", () => {
           selectedProfileId: snapshot.providerId,
           items: [invalidItem],
         })
-      ).toThrow("CREATE must not have a target; ENRICH requires a target and version snapshot");
+      ).toThrow("CREATE must not have a target; ENRICH requires a target product");
     }
 
     expect(() =>
@@ -125,6 +181,20 @@ describe("Research validation and idempotency contracts", () => {
             mode: "ENRICH",
             targetProductId: snapshot.providerId,
             targetProductVersionSnapshot: new Date(),
+          },
+        ],
+      })
+    ).toThrow();
+
+    expect(() =>
+      createResearchJobInputSchema.parse({
+        mutationRequestId: "M",
+        selectedProfileId: snapshot.providerId,
+        items: [
+          {
+            query: "A",
+            mode: "ENRICH",
+            targetProductId: snapshot.providerId,
           },
           { query: "B" },
         ],

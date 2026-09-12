@@ -5,6 +5,7 @@ export * from "./destination-fetcher";
 export * from "./direct-url-acquisition";
 export * from "./dispatch-service";
 export * from "./domain-rate-limiter";
+export * from "./evidence-recovery";
 export * from "./idempotency";
 export * from "./identity-service";
 export * from "./job-service";

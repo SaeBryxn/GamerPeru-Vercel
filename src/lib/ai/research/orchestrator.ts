@@ -11,7 +11,9 @@ import {
 import { getAiAdapter } from "../gateway/registry";
 import { AiGatewayError } from "../gateway/types";
 import type { AiProviderAdapter, AiStructuredGenerationResult } from "../gateway/types";
+import type { fetchDestination } from "./destination-fetcher";
 import { acquireDirectUrlEvidence } from "./direct-url-acquisition";
+import { rehydratePersistedEvidence } from "./evidence-recovery";
 import { createProviderRequestDigest } from "./idempotency";
 import { resolveLocalIdentityContext } from "./identity-service";
 import {
@@ -30,7 +32,7 @@ import {
 } from "./schemas";
 import type { CopyGeneration, IdentityResolution, SpecificationExtraction } from "./schemas";
 import { acquireSearchEvidence } from "./search-evidence";
-import { persistEvidenceSourceSet, readPersistedEvidence } from "./source-service";
+import { persistEvidenceSourceSet, readPersistedSourceLedger } from "./source-service";
 import { runProviderAttempt } from "./attempt-service";
 import type { AiOperationType } from "./attempt-service";
 import { AI_RESEARCH_LIMITS, requireResearchFetchUserAgent } from "./config";
@@ -50,6 +52,7 @@ export interface ResearchOrchestratorDependencies {
   withCredential?: typeof withActiveProviderCredential;
   acquireSearch?: typeof acquireSearchEvidence;
   acquireDirect?: typeof acquireDirectUrlEvidence;
+  rehydrateDestination?: typeof fetchDestination;
 }
 
 function providerJsonSchema(
@@ -180,9 +183,16 @@ async function acquireEvidence(
   dependencies: ResearchOrchestratorDependencies,
   signal: AbortSignal
 ): Promise<ExternalProductEvidence[]> {
-  const persisted = await readPersistedEvidence(item.id);
-  if (persisted.length > 0) return persisted;
+  const persisted = await readPersistedSourceLedger(item.id);
   const fetchUserAgent = requireResearchFetchUserAgent();
+  if (persisted.length > 0) {
+    return await rehydratePersistedEvidence({
+      sources: persisted,
+      userAgent: fetchUserAgent,
+      signal,
+      ...(dependencies.rehydrateDestination ? { fetcher: dependencies.rehydrateDestination } : {}),
+    });
+  }
   if (looksLikeDirectUrl(item.query)) {
     return [
       await (dependencies.acquireDirect ?? acquireDirectUrlEvidence)({
@@ -398,7 +408,9 @@ export async function processClaimedResearchItem(
             : "AI_PROVIDER_RESPONSE_INVALID";
     const needsAttention =
       (error instanceof ResearchExecutionError && error.outcomeAmbiguous) ||
-      (error instanceof AiGatewayError && error.outcomeAmbiguous);
+      (error instanceof AiGatewayError && error.outcomeAmbiguous) ||
+      code === "AI_EVIDENCE_CHANGED" ||
+      code === "AI_EVIDENCE_REHYDRATION_FAILED";
     try {
       await failResearchItem(item.id, item.leaseToken, code, needsAttention);
     } catch (failureError) {

@@ -208,8 +208,8 @@ export function researchJobCounterUpdate(jobId: string) {
   return sql`
     WITH counts AS (
       SELECT
-        count(*) FILTER (WHERE status = 'READY_FOR_REVIEW')::int AS completed,
-        count(*) FILTER (WHERE status IN ('FAILED', 'NEEDS_ATTENTION', 'AMBIGUOUS', 'SOURCE_CONFLICT'))::int AS failed,
+        count(*) FILTER (WHERE status IN ('READY_FOR_REVIEW', 'NEEDS_ATTENTION', 'AMBIGUOUS', 'SOURCE_CONFLICT', 'APPROVED', 'APPLIED'))::int AS completed,
+        count(*) FILTER (WHERE status = 'FAILED')::int AS failed,
         count(*) FILTER (WHERE status IN ('PENDING', 'RESEARCHING'))::int AS active
       FROM ai_research_job_items
       WHERE job_id = ${jobId}::uuid
@@ -219,8 +219,9 @@ export function researchJobCounterUpdate(jobId: string) {
         failed_items = counts.failed,
         status = CASE
           WHEN counts.active > 0 THEN 'PROCESSING'
-          WHEN counts.completed > 0 AND counts.failed > 0 THEN 'PARTIALLY_FAILED'
-          WHEN counts.completed > 0 THEN 'COMPLETED'
+          WHEN counts.failed > 0 AND counts.completed > 0 THEN 'PARTIALLY_FAILED'
+          WHEN counts.failed > 0 AND counts.completed = 0 THEN 'FAILED'
+          WHEN counts.completed > 0 AND counts.failed = 0 THEN 'COMPLETED'
           ELSE 'FAILED'
         END,
         updated_at = NOW()

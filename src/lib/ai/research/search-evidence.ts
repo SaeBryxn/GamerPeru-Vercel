@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { AI_RESEARCH_LIMITS } from "./config";
 import { researchDomainRateLimiter } from "./domain-rate-limiter";
 import type { DomainRateLimiter } from "./domain-rate-limiter";
@@ -34,11 +35,11 @@ async function fetchCandidates(options: {
       });
       const remaining = AI_RESEARCH_LIMITS.maxTotalEvidenceCharacters - totalCharacters;
       if (remaining <= 0) break;
-      const text = page.text.slice(0, remaining);
-      totalCharacters += text.length;
+      if (page.text.length > remaining) break;
+      totalCharacters += page.text.length;
       evidence.push({
         ...page,
-        text,
+        contentSha256: createHash("sha256").update(page.text, "utf8").digest("hex"),
         retrievalMethod: "SEARCH_API",
         ...assignSourceTrust(page.resolvedUrl, options.canonicalBrandHostname),
       });

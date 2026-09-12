@@ -71,19 +71,14 @@ export const researchItemInputSchema = z
     query: boundedText(500).transform((value) => value.replace(/\s+/g, " ")),
     mode: z.enum(["CREATE", "ENRICH"]).default("CREATE"),
     targetProductId: z.string().uuid().nullable().optional(),
-    targetProductVersionSnapshot: z.coerce.date().nullable().optional(),
   })
   .strict()
   .superRefine((value, context) => {
     const hasTargetId = value.targetProductId != null;
-    const hasTargetVersion = value.targetProductVersionSnapshot != null;
-    if (
-      (value.mode === "CREATE" && (hasTargetId || hasTargetVersion)) ||
-      (value.mode === "ENRICH" && (!hasTargetId || !hasTargetVersion))
-    ) {
+    if ((value.mode === "CREATE" && hasTargetId) || (value.mode === "ENRICH" && !hasTargetId)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "CREATE must not have a target; ENRICH requires a target and version snapshot.",
+        message: "CREATE must not have a target; ENRICH requires a target product.",
       });
     }
   });

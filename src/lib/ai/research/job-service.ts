@@ -10,13 +10,14 @@ import {
   aiResearchJobItems,
   aiResearchJobs,
   auditEvents,
+  products,
 } from "@/db/schema";
 import { ForbiddenError, requirePermission } from "@/lib/auth/rbac";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import { AI_AUDIT_ACTIONS } from "../audit-actions";
 import { createProfileSnapshot } from "../profile-service";
 import { createResearchMutationDigest, createResearchRequestFingerprint } from "./idempotency";
-import { createResearchJobInputSchema } from "./schemas";
+import { createResearchJobInputSchema, profileSnapshotSchema } from "./schemas";
 import type { CreateResearchJobInput } from "./schemas";
 import type { NormalizedResearchItem } from "./types";
 
@@ -45,15 +46,83 @@ async function resolveResearchActor(
   return actor;
 }
 
-function normalizeItems(
-  items: z.infer<typeof createResearchJobInputSchema>["items"]
-): NormalizedResearchItem[] {
+type ParsedResearchItem = z.infer<typeof createResearchJobInputSchema>["items"][number];
+
+interface CommittedResearchItem {
+  id: string;
+  query: string;
+  mode: "CREATE" | "ENRICH";
+  targetProductId: string | null;
+  targetProductVersionSnapshot: Date | null;
+}
+
+function parseCommittedMode(value: string): "CREATE" | "ENRICH" {
+  if (value === "CREATE" || value === "ENRICH") return value;
+  throw new ResearchIdempotencyConflictError();
+}
+
+function parseCommittedJobType(value: string): "SINGLE" | "BATCH" {
+  if (value === "SINGLE" || value === "BATCH") return value;
+  throw new ResearchIdempotencyConflictError();
+}
+
+function normalizeCommittedItems(items: CommittedResearchItem[]): NormalizedResearchItem[] {
   return items.map((item) => ({
     query: item.query,
     mode: item.mode,
-    targetProductId: item.targetProductId ?? null,
+    targetProductId: item.targetProductId,
     targetProductVersionSnapshot: item.targetProductVersionSnapshot?.toISOString() ?? null,
   }));
+}
+
+function normalizeReplayItems(
+  items: ParsedResearchItem[],
+  committedItems: CommittedResearchItem[]
+): NormalizedResearchItem[] {
+  return items.map((item, index) => ({
+    query: item.query,
+    mode: item.mode,
+    targetProductId: item.targetProductId ?? null,
+    targetProductVersionSnapshot:
+      item.mode === "ENRICH"
+        ? (committedItems[index]?.targetProductVersionSnapshot?.toISOString() ?? null)
+        : null,
+  }));
+}
+
+async function normalizeNewItems(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  items: ParsedResearchItem[]
+): Promise<NormalizedResearchItem[]> {
+  const normalized: NormalizedResearchItem[] = [];
+  for (const item of items) {
+    if (item.mode === "CREATE") {
+      normalized.push({
+        query: item.query,
+        mode: item.mode,
+        targetProductId: null,
+        targetProductVersionSnapshot: null,
+      });
+      continue;
+    }
+
+    const [product] = await tx
+      .select({ id: products.id, updatedAt: products.updatedAt })
+      .from(products)
+      .where(eq(products.id, item.targetProductId!))
+      .limit(1)
+      .for("share");
+    if (!product) {
+      throw new Error("AI_TARGET_PRODUCT_NOT_FOUND: ENRICH target product does not exist.");
+    }
+    normalized.push({
+      query: item.query,
+      mode: item.mode,
+      targetProductId: product.id,
+      targetProductVersionSnapshot: product.updatedAt.toISOString(),
+    });
+  }
+  return normalized;
 }
 
 export async function createResearchJob(
@@ -63,7 +132,6 @@ export async function createResearchJob(
   const actor = await resolveResearchActor(options?.authContext);
   const input = createResearchJobInputSchema.parse(rawInput);
   const mutationDigest = createResearchMutationDigest(actor.authUserId, rawInput.mutationRequestId);
-  const normalizedItems = normalizeItems(input.items);
 
   return await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${mutationDigest}))`);
@@ -72,6 +140,51 @@ export async function createResearchJob(
       .from(aiResearchJobs)
       .where(eq(aiResearchJobs.mutationRequestDigest, mutationDigest))
       .limit(1);
+
+    if (existing) {
+      const existingItems = await tx
+        .select({
+          id: aiResearchJobItems.id,
+          query: aiResearchJobItems.inputQuery,
+          mode: aiResearchJobItems.mode,
+          targetProductId: aiResearchJobItems.targetProductId,
+          targetProductVersionSnapshot: aiResearchJobItems.targetProductVersionSnapshot,
+        })
+        .from(aiResearchJobItems)
+        .where(eq(aiResearchJobItems.jobId, existing.id))
+        .orderBy(asc(aiResearchJobItems.itemIndex));
+      const profileSnapshot = profileSnapshotSchema.parse(existing.profileSnapshot);
+      const jobType = input.items.length === 1 ? "SINGLE" : "BATCH";
+      const committedNormalizedItems = normalizeCommittedItems(
+        existingItems.map((item) => ({ ...item, mode: parseCommittedMode(item.mode) }))
+      );
+      const committedFingerprint = createResearchRequestFingerprint({
+        jobType: parseCommittedJobType(existing.jobType),
+        items: committedNormalizedItems,
+        profileSnapshot,
+      });
+      const replayFingerprint = createResearchRequestFingerprint({
+        jobType,
+        items: normalizeReplayItems(
+          input.items,
+          existingItems.map((item) => ({ ...item, mode: parseCommittedMode(item.mode) }))
+        ),
+        profileSnapshot,
+      });
+      if (
+        input.selectedProfileId !== existing.selectedProfileId ||
+        existing.requestFingerprint !== committedFingerprint ||
+        existing.requestFingerprint !== replayFingerprint
+      ) {
+        throw new ResearchIdempotencyConflictError();
+      }
+      return {
+        jobId: existing.id,
+        itemIds: existingItems.map((item) => item.id),
+        inngestEventId: existing.inngestEventId,
+        replayed: true,
+      };
+    }
 
     const [profile] = await tx
       .select()
@@ -91,30 +204,13 @@ export async function createResearchJob(
     }
 
     const profileSnapshot = createProfileSnapshot(profile);
+    const normalizedItems = await normalizeNewItems(tx, input.items);
     const jobType = normalizedItems.length === 1 ? "SINGLE" : "BATCH";
     const requestFingerprint = createResearchRequestFingerprint({
       jobType,
       items: normalizedItems,
-      selectedProfileId: input.selectedProfileId,
       profileSnapshot,
     });
-
-    if (existing) {
-      if (existing.requestFingerprint !== requestFingerprint) {
-        throw new ResearchIdempotencyConflictError();
-      }
-      const existingItems = await tx
-        .select({ id: aiResearchJobItems.id })
-        .from(aiResearchJobItems)
-        .where(eq(aiResearchJobItems.jobId, existing.id))
-        .orderBy(asc(aiResearchJobItems.itemIndex));
-      return {
-        jobId: existing.id,
-        itemIds: existingItems.map((item) => item.id),
-        inngestEventId: existing.inngestEventId,
-        replayed: true,
-      };
-    }
 
     const jobId = generateUuidV7();
     const inngestEventId = `gp-ai-job-${jobId}`;
