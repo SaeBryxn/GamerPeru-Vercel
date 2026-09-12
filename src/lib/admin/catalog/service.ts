@@ -616,17 +616,146 @@ export async function createProduct(
  * Updates an existing Product.
  * Handles optimistic concurrency, Brand/Category validation, and Category-change specification reconciliation.
  */
+interface NormalizedUpdateProductInput {
+  productId: string;
+  expectedUpdatedAt: string;
+  name?: string;
+  slug?: string;
+  brandId?: string;
+  categoryId?: string;
+  subtitle?: string | null;
+  description?: string | null;
+  isFeatured?: boolean;
+  specValues?: Record<string, unknown>;
+}
+
+function normalizeUpdateProductInput(input: UpdateProductInput): NormalizedUpdateProductInput {
+  const expectedTime = new Date(input.expectedUpdatedAt).getTime();
+  if (Number.isNaN(expectedTime)) {
+    throw new CatalogDomainError(
+      "El timestamp expectedUpdatedAt es inválido.",
+      "INVALID_TIMESTAMP",
+      400
+    );
+  }
+
+  const normalized: NormalizedUpdateProductInput = {
+    productId: input.productId.trim().toLowerCase(),
+    expectedUpdatedAt: new Date(expectedTime).toISOString(),
+  };
+
+  if (input.name !== undefined) normalized.name = input.name.trim();
+  if (input.slug !== undefined) normalized.slug = input.slug.trim().toLowerCase();
+  if (input.brandId !== undefined) normalized.brandId = input.brandId.trim().toLowerCase();
+  if (input.categoryId !== undefined) {
+    normalized.categoryId = input.categoryId.trim().toLowerCase();
+  }
+  if (input.subtitle !== undefined) {
+    normalized.subtitle = input.subtitle === null ? null : input.subtitle.trim();
+  }
+  if (input.description !== undefined) {
+    normalized.description = input.description === null ? null : input.description.trim();
+  }
+  if (input.isFeatured !== undefined) normalized.isFeatured = Boolean(input.isFeatured);
+
+  if (input.specValues !== undefined && input.specValues !== null) {
+    if (!isPlainRecord(input.specValues)) {
+      throw new CatalogDomainError(
+        "Las especificaciones técnicas deben ser un objeto JSON.",
+        "INVALID_SPEC_VALUES_TYPE"
+      );
+    }
+    normalized.specValues = Object.fromEntries(
+      Object.entries(input.specValues).filter(([, value]) => value !== null && value !== undefined)
+    );
+  }
+
+  return normalized;
+}
+
 export async function updateProduct(
   input: UpdateProductInput,
   options?: ServiceOptions
 ): Promise<Product> {
   const { authUserId } = await resolveActorAndAssertPermission("catalog:manage", options);
+  const normalizedMutationRequestId = input.mutationRequestId?.trim() ?? "";
+  const normalizedInput = normalizedMutationRequestId ? normalizeUpdateProductInput(input) : input;
+  const mutationRequestDigest = normalizedMutationRequestId
+    ? computeMutationRequestDigest(
+        authUserId,
+        "catalog:product:update",
+        normalizedMutationRequestId
+      )
+    : null;
+  const requestFingerprint = mutationRequestDigest
+    ? computeRequestFingerprint(normalizedInput)
+    : null;
+  const lockKey = mutationRequestDigest
+    ? createCatalogAdvisoryLockKey(mutationRequestDigest)
+    : null;
 
   try {
     return await db.transaction(async (tx): Promise<Product> => {
+      if (lockKey !== null && mutationRequestDigest && requestFingerprint) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey}::bigint)`);
+
+        const existingAuditRows = (await tx.execute(sql`
+          SELECT actor_type, actor_id, action, target_type, target_id, metadata
+          FROM audit_events
+          WHERE actor_type = 'ADMIN'
+            AND actor_id = ${authUserId}
+            AND action = 'catalog:product:update'
+            AND metadata->>'mutation_request_digest' = ${mutationRequestDigest}
+          ORDER BY timestamp DESC
+          LIMIT 2;
+        `)) as unknown as {
+          actor_type: unknown;
+          actor_id: unknown;
+          action: unknown;
+          target_type: unknown;
+          target_id: unknown;
+          metadata: unknown;
+        }[];
+
+        if (existingAuditRows.length > 1) {
+          throw new CatalogReplayIntegrityError();
+        }
+
+        const replayAudit = existingAuditRows[0];
+        if (replayAudit) {
+          if (
+            replayAudit.actor_type !== "ADMIN" ||
+            replayAudit.actor_id !== authUserId ||
+            replayAudit.action !== "catalog:product:update" ||
+            replayAudit.target_type !== "product" ||
+            replayAudit.target_id !== normalizedInput.productId ||
+            !isPlainRecord(replayAudit.metadata)
+          ) {
+            throw new CatalogReplayIntegrityError();
+          }
+
+          const storedFingerprint = replayAudit.metadata.request_fingerprint;
+          if (typeof storedFingerprint !== "string" || !/^[0-9a-f]{64}$/.test(storedFingerprint)) {
+            throw new CatalogReplayIntegrityError();
+          }
+          if (storedFingerprint !== requestFingerprint) {
+            throw new CatalogIdempotencyConflictError();
+          }
+
+          const [durableProduct] = (await tx.execute(sql`
+            SELECT * FROM products WHERE id = ${normalizedInput.productId}::uuid LIMIT 1;
+          `)) as unknown as Record<string, unknown>[];
+          if (!durableProduct) {
+            throw new CatalogReplayIntegrityError();
+          }
+
+          return mapProductRow(durableProduct);
+        }
+      }
+
       // 1. Load current product under lock
       const currentRows = (await tx.execute(sql`
-        SELECT * FROM products WHERE id = ${input.productId}::uuid FOR UPDATE LIMIT 1;
+        SELECT * FROM products WHERE id = ${normalizedInput.productId}::uuid FOR UPDATE LIMIT 1;
       `)) as unknown as Record<string, unknown>[];
 
       if (!currentRows[0]) {
@@ -636,7 +765,7 @@ export async function updateProduct(
       const current = mapProductRow(currentRows[0]);
 
       // 2. Exact Optimistic Concurrency Check (no 1000ms window)
-      const expectedTime = new Date(input.expectedUpdatedAt).getTime();
+      const expectedTime = new Date(normalizedInput.expectedUpdatedAt).getTime();
       const actualTime = new Date(current.updatedAt).getTime();
       if (Number.isNaN(expectedTime)) {
         throw new CatalogDomainError(
@@ -651,8 +780,8 @@ export async function updateProduct(
 
       // 3. Prepare updated values
       let targetName = current.name;
-      if (input.name !== undefined) {
-        const trimmedName = input.name.trim();
+      if (normalizedInput.name !== undefined) {
+        const trimmedName = normalizedInput.name.trim();
         if (!trimmedName || trimmedName.length > 200) {
           throw new CatalogDomainError(
             "El nombre del producto no puede estar vacío ni exceder 200 caracteres.",
@@ -663,8 +792,8 @@ export async function updateProduct(
       }
 
       let targetSlug = current.slug;
-      if (input.slug !== undefined) {
-        const trimmedSlug = input.slug.trim().toLowerCase();
+      if (normalizedInput.slug !== undefined) {
+        const trimmedSlug = normalizedInput.slug.trim().toLowerCase();
         if (!trimmedSlug || !PRODUCT_SLUG_REGEX.test(trimmedSlug) || trimmedSlug.length > 200) {
           throw new CatalogDomainError(
             "El slug del producto contiene caracteres inválidos.",
@@ -687,9 +816,9 @@ export async function updateProduct(
       }
 
       let targetBrandId = current.brandId;
-      if (input.brandId !== undefined && input.brandId !== current.brandId) {
+      if (normalizedInput.brandId !== undefined && normalizedInput.brandId !== current.brandId) {
         const bRows = (await tx.execute(sql`
-          SELECT status FROM brands WHERE id = ${input.brandId}::uuid LIMIT 1;
+          SELECT status FROM brands WHERE id = ${normalizedInput.brandId}::uuid LIMIT 1;
         `)) as unknown as { status: string }[];
         if (!bRows[0] || bRows[0].status !== "PUBLISHED") {
           throw new CatalogDomainError(
@@ -697,16 +826,17 @@ export async function updateProduct(
             "INVALID_BRAND"
           );
         }
-        targetBrandId = input.brandId;
+        targetBrandId = normalizedInput.brandId;
       }
 
       let targetCategoryId = current.categoryId;
-      const categoryChanged =
-        input.categoryId !== undefined && input.categoryId !== current.categoryId;
-
-      if (categoryChanged) {
+      if (
+        normalizedInput.categoryId !== undefined &&
+        normalizedInput.categoryId !== current.categoryId
+      ) {
+        const requestedCategoryId = normalizedInput.categoryId;
         const cRows = (await tx.execute(sql`
-          SELECT status, current_spec_schema_id FROM categories WHERE id = ${input.categoryId}::uuid LIMIT 1;
+          SELECT status, current_spec_schema_id FROM categories WHERE id = ${requestedCategoryId}::uuid LIMIT 1;
         `)) as unknown as { status: string; current_spec_schema_id: string | null }[];
 
         if (!cRows[0] || cRows[0].status !== "PUBLISHED") {
@@ -715,7 +845,7 @@ export async function updateProduct(
             "INVALID_CATEGORY"
           );
         }
-        targetCategoryId = input.categoryId!;
+        targetCategoryId = requestedCategoryId;
 
         // CATEGORY-CHANGE SPECIFICATION RECONCILIATION
         // Authoritative resolver: if pointer is NULL -> clear specs; if pointer non-null but invalid -> throws and aborts transaction!
@@ -730,10 +860,10 @@ export async function updateProduct(
         } else {
           let valuesToPersist: Record<string, unknown> = {};
 
-          if (input.specValues) {
+          if (normalizedInput.specValues) {
             const validation = validateProductSpecificationValues(
               newSchema!.fieldDefinitions,
-              input.specValues
+              normalizedInput.specValues
             );
             if (!validation.success) {
               throw new CatalogDomainError(
@@ -761,7 +891,7 @@ export async function updateProduct(
               updated_at = NOW();
           `);
         }
-      } else if (input.specValues !== undefined && input.specValues !== null) {
+      } else if (normalizedInput.specValues !== undefined) {
         // Specification update without category change
         const { hasSchema, schema: activeSchema } =
           await resolveAuthoritativeCategorySpecificationSchema(current.categoryId, tx);
@@ -776,7 +906,7 @@ export async function updateProduct(
 
         const validation = validateProductSpecificationValues(
           activeSchema!.fieldDefinitions,
-          input.specValues
+          normalizedInput.specValues
         );
         if (!validation.success) {
           throw new CatalogDomainError(
@@ -804,11 +934,17 @@ export async function updateProduct(
       }
 
       const targetSubtitle =
-        input.subtitle !== undefined ? (input.subtitle?.trim() ?? null) : current.subtitle;
+        normalizedInput.subtitle !== undefined
+          ? (normalizedInput.subtitle?.trim() ?? null)
+          : current.subtitle;
       const targetDescription =
-        input.description !== undefined ? (input.description?.trim() ?? null) : current.description;
+        normalizedInput.description !== undefined
+          ? (normalizedInput.description?.trim() ?? null)
+          : current.description;
       const targetIsFeatured =
-        input.isFeatured !== undefined ? Boolean(input.isFeatured) : current.isFeatured;
+        normalizedInput.isFeatured !== undefined
+          ? Boolean(normalizedInput.isFeatured)
+          : current.isFeatured;
 
       // Update Product
       const [rawUpdated] = (await tx.execute(sql`
@@ -831,6 +967,27 @@ export async function updateProduct(
 
       const updatedProduct = mapProductRow(rawUpdated);
 
+      const auditMetadata: Record<string, unknown> = {
+        before: {
+          name: current.name,
+          slug: current.slug,
+          brandId: current.brandId,
+          categoryId: current.categoryId,
+        },
+        after: {
+          name: targetName,
+          slug: targetSlug,
+          brandId: targetBrandId,
+          categoryId: targetCategoryId,
+        },
+      };
+      if (mutationRequestDigest) {
+        auditMetadata.mutation_request_digest = mutationRequestDigest;
+      }
+      if (requestFingerprint) {
+        auditMetadata.request_fingerprint = requestFingerprint;
+      }
+
       // Insert AuditEvent: request_id is NULL (raw mutationRequestId is NOT persisted)
       await tx.execute(sql`
         INSERT INTO audit_events (
@@ -843,20 +1000,7 @@ export async function updateProduct(
           'catalog:product:update',
           'product',
           ${current.id},
-          ${JSON.stringify({
-            before: {
-              name: current.name,
-              slug: current.slug,
-              brandId: current.brandId,
-              categoryId: current.categoryId,
-            },
-            after: {
-              name: targetName,
-              slug: targetSlug,
-              brandId: targetBrandId,
-              categoryId: targetCategoryId,
-            },
-          })}::jsonb,
+          ${JSON.stringify(auditMetadata)}::jsonb,
           NULL
         );
       `);

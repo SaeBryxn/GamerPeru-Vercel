@@ -78,6 +78,14 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
     permissions: new Set(["catalog:manage", "catalog:publish"]),
   };
 
+  const authSuperAdmin: VerifiedAuthContextReady = {
+    status: "READY",
+    authUserId: fixtureIds.superAdminUser,
+    email: "superadmin.gp024@gamerperu.pe",
+    roles: ["SUPER_ADMIN"],
+    permissions: new Set(["catalog:manage", "catalog:publish"]),
+  };
+
   const authAdminManageOnly: VerifiedAuthContextReady = {
     status: "READY",
     authUserId: fixtureIds.adminCatalogUser,
@@ -2139,6 +2147,474 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
         SELECT status FROM products WHERE id = ${p.id};
       `) as { status: string }[];
       expect(finalProduct!.status).toBe("DRAFT");
+    });
+  });
+
+  describe("GP-025 / CHK3-A — updateProduct Durable Idempotency", () => {
+    let productSequence = 0;
+
+    async function createUpdateReplayProduct(label: string) {
+      productSequence += 1;
+      return await createProduct(
+        {
+          name: `${label} ${productSequence}`,
+          slug: `gp024-update-replay-${productSequence}`,
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+    }
+
+    async function commitReplayFixture(label: string) {
+      const product = await createUpdateReplayProduct(label);
+      const mutationRequestId = `gp025-update-${label}-${productSequence}`;
+      const input = {
+        productId: product.id,
+        expectedUpdatedAt: product.updatedAt,
+        name: `${label} committed`,
+        mutationRequestId,
+      };
+      const updated = await updateProduct(input, { authContext: authAdminCatalog });
+      return { input, mutationRequestId, product, updated };
+    }
+
+    it("preserves legacy behavior when mutationRequestId is omitted", async () => {
+      const product = await createUpdateReplayProduct("Legacy omitted");
+      const updated = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          name: "Legacy omitted updated",
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const [audit] = (await pgSql`
+        SELECT metadata, request_id
+        FROM audit_events
+        WHERE target_id = ${product.id} AND action = 'catalog:product:update';
+      `) as { metadata: Record<string, unknown>; request_id: string | null }[];
+      expect(audit?.request_id).toBeNull();
+      expect(audit?.metadata).not.toHaveProperty("mutation_request_digest");
+      expect(audit?.metadata).not.toHaveProperty("request_fingerprint");
+
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: new Date(updated.updatedAt.getTime() - 1),
+            name: "Legacy stale update",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(StaleWriteConflictError);
+    });
+
+    it("treats blank mutationRequestId as the legacy path", async () => {
+      const product = await createUpdateReplayProduct("Legacy blank");
+      const updated = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          description: "Legacy blank update",
+          mutationRequestId: "   ",
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const [audit] = (await pgSql`
+        SELECT metadata
+        FROM audit_events
+        WHERE target_id = ${product.id} AND action = 'catalog:product:update';
+      `) as { metadata: Record<string, unknown> }[];
+      expect(audit?.metadata).not.toHaveProperty("mutation_request_digest");
+      expect(audit?.metadata).not.toHaveProperty("request_fingerprint");
+
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: new Date(updated.updatedAt.getTime() - 1),
+            description: "Legacy blank retry",
+            mutationRequestId: "\t",
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(StaleWriteConflictError);
+    });
+
+    it("replays normalized equivalent intent before stale validation and persists no raw ID", async () => {
+      const product = await createUpdateReplayProduct("Normalized replay");
+      const rawMutationRequestId = "GP025-RAW-UPDATE-REPLAY-001";
+      await pgSql`
+        UPDATE products SET updated_at = NOW() - INTERVAL '1 minute' WHERE id = ${product.id};
+      `;
+      const [baseline] = (await pgSql`
+        SELECT updated_at FROM products WHERE id = ${product.id};
+      `) as { updated_at: Date }[];
+      if (!baseline) throw new Error("Expected update replay baseline Product.");
+      const expectedWithOffset = baseline.updated_at.toISOString().replace("Z", "+00:00");
+      const first = await updateProduct(
+        {
+          productId: product.id.toUpperCase(),
+          expectedUpdatedAt: expectedWithOffset,
+          name: "  Normalized Product Name  ",
+          slug: `  GP024-UPDATE-NORMALIZED-${productSequence}  `,
+          brandId: fixtureIds.brandPublished.toUpperCase(),
+          categoryId: fixtureIds.catWithSchema.toUpperCase(),
+          subtitle: "  Normalized subtitle  ",
+          description: null,
+          isFeatured: true,
+          specValues: {
+            wireless: true,
+            ignored_unset: null,
+            polling_rate_hz: 1000,
+            sensor: "paw3395",
+          },
+          mutationRequestId: `  ${rawMutationRequestId}  `,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const replay = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: baseline.updated_at,
+          name: "Normalized Product Name",
+          slug: `gp024-update-normalized-${productSequence}`,
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catWithSchema,
+          subtitle: "Normalized subtitle",
+          description: null,
+          isFeatured: true,
+          specValues: {
+            sensor: "paw3395",
+            polling_rate_hz: 1000,
+            wireless: true,
+          },
+          mutationRequestId: rawMutationRequestId,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      expect(first.updatedAt.getTime()).toBeGreaterThan(baseline.updated_at.getTime());
+      expect(replay.id).toBe(first.id);
+      expect(replay.updatedAt.getTime()).toBe(first.updatedAt.getTime());
+      const auditRows = (await pgSql`
+        SELECT metadata, request_id
+        FROM audit_events
+        WHERE target_id = ${product.id}
+          AND action = 'catalog:product:update'
+          AND metadata ? 'mutation_request_digest';
+      `) as { metadata: Record<string, unknown>; request_id: string | null }[];
+      expect(auditRows).toHaveLength(1);
+      expect(auditRows[0]?.metadata.mutation_request_digest).toMatch(/^[0-9a-f]{64}$/);
+      expect(auditRows[0]?.metadata.request_fingerprint).toMatch(/^[0-9a-f]{64}$/);
+      expect(auditRows[0]?.request_id).toBeNull();
+      expect(JSON.stringify(auditRows[0]?.metadata)).not.toContain(rawMutationRequestId);
+    });
+
+    it("keeps omitted and explicit-null optional fields semantically distinct", async () => {
+      const product = await createUpdateReplayProduct("Null distinction");
+      const mutationRequestId = `gp025-null-distinction-${productSequence}`;
+      await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          description: null,
+          mutationRequestId,
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            mutationRequestId,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(CatalogIdempotencyConflictError);
+    });
+
+    it("serializes concurrent identical requests into one mutation and one audit", async () => {
+      const product = await createUpdateReplayProduct("Concurrent identical");
+      const payload = {
+        productId: product.id,
+        expectedUpdatedAt: product.updatedAt,
+        name: "Concurrent identical committed",
+        mutationRequestId: `gp025-concurrent-identical-${productSequence}`,
+      };
+
+      const [first, second] = await Promise.all([
+        updateProduct(payload, { authContext: authAdminCatalog }),
+        updateProduct(payload, { authContext: authAdminCatalog }),
+      ]);
+      expect(first.id).toBe(second.id);
+      expect(first.updatedAt.getTime()).toBe(second.updatedAt.getTime());
+
+      const [auditCount] = (await pgSql`
+        SELECT COUNT(*)::int AS count
+        FROM audit_events
+        WHERE target_id = ${product.id}
+          AND action = 'catalog:product:update'
+          AND metadata ? 'mutation_request_digest';
+      `) as { count: number }[];
+      expect(auditCount?.count).toBe(1);
+    });
+
+    it("serializes concurrent changed payloads and rejects the incompatible request", async () => {
+      const product = await createUpdateReplayProduct("Concurrent conflict");
+      const mutationRequestId = `gp025-concurrent-conflict-${productSequence}`;
+      const results = await Promise.allSettled([
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            name: "Concurrent conflict A",
+            mutationRequestId,
+          },
+          { authContext: authAdminCatalog }
+        ),
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            name: "Concurrent conflict B",
+            mutationRequestId,
+          },
+          { authContext: authAdminCatalog }
+        ),
+      ]);
+
+      const fulfilled = results.filter((result) => result.status === "fulfilled");
+      const rejected = results.filter((result) => result.status === "rejected");
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0]?.reason).toBeInstanceOf(CatalogIdempotencyConflictError);
+
+      const [auditCount] = (await pgSql`
+        SELECT COUNT(*)::int AS count
+        FROM audit_events
+        WHERE target_id = ${product.id}
+          AND action = 'catalog:product:update'
+          AND metadata ? 'mutation_request_digest';
+      `) as { count: number }[];
+      expect(auditCount?.count).toBe(1);
+    });
+
+    it("isolates the same raw mutation ID across actor namespaces", async () => {
+      const product = await createUpdateReplayProduct("Actor namespace");
+      const mutationRequestId = `gp025-shared-actor-id-${productSequence}`;
+      const first = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          name: "Actor one update",
+          mutationRequestId,
+        },
+        { authContext: authAdminCatalog }
+      );
+      const second = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: first.updatedAt,
+          name: "Actor two update",
+          mutationRequestId,
+        },
+        { authContext: authSuperAdmin }
+      );
+      expect(second.name).toBe("Actor two update");
+
+      const auditRows = (await pgSql`
+        SELECT actor_id, metadata->>'mutation_request_digest' AS digest
+        FROM audit_events
+        WHERE target_id = ${product.id}
+          AND action = 'catalog:product:update'
+          AND metadata ? 'mutation_request_digest'
+        ORDER BY timestamp;
+      `) as { actor_id: string; digest: string }[];
+      expect(auditRows).toHaveLength(2);
+      expect(new Set(auditRows.map((row) => row.actor_id))).toEqual(
+        new Set([fixtureIds.adminCatalogUser, fixtureIds.superAdminUser])
+      );
+      expect(new Set(auditRows.map((row) => row.digest)).size).toBe(2);
+    });
+
+    it("returns the durable current Product when replayed after an unrelated later edit", async () => {
+      const fixture = await commitReplayFixture("Later edit");
+      const later = await updateProduct(
+        {
+          productId: fixture.product.id,
+          expectedUpdatedAt: fixture.updated.updatedAt,
+          name: "Later unrelated product edit",
+        },
+        { authContext: authAdminCatalog }
+      );
+
+      const replay = await updateProduct(fixture.input, { authContext: authAdminCatalog });
+      expect(replay.name).toBe(later.name);
+      expect(replay.updatedAt.getTime()).toBe(later.updatedAt.getTime());
+    });
+
+    it("keeps a new idempotent request subject to stale-write validation", async () => {
+      const product = await createUpdateReplayProduct("New stale request");
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: new Date(product.updatedAt.getTime() - 1),
+            name: "Must remain stale",
+            mutationRequestId: `gp025-new-stale-${productSequence}`,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toThrow(StaleWriteConflictError);
+    });
+
+    it("fails replay closed when target_type is corrupted", async () => {
+      const fixture = await commitReplayFixture("Wrong target type");
+      await pgSql`
+        UPDATE audit_events
+        SET target_type = 'order'
+        WHERE target_id = ${fixture.product.id}
+          AND action = 'catalog:product:update'
+          AND metadata ? 'mutation_request_digest';
+      `;
+      await expect(updateProduct(fixture.input, { authContext: authAdminCatalog })).rejects.toThrow(
+        CatalogReplayIntegrityError
+      );
+    });
+
+    it("fails replay closed when target_id differs from the request", async () => {
+      const fixture = await commitReplayFixture("Wrong target id");
+      const otherProduct = await createUpdateReplayProduct("Wrong target id other");
+      await pgSql`
+        UPDATE audit_events
+        SET target_id = ${otherProduct.id}
+        WHERE target_id = ${fixture.product.id}
+          AND action = 'catalog:product:update'
+          AND metadata ? 'mutation_request_digest';
+      `;
+      await expect(updateProduct(fixture.input, { authContext: authAdminCatalog })).rejects.toThrow(
+        CatalogReplayIntegrityError
+      );
+    });
+
+    it("fails replay closed when the durable Product target is missing", async () => {
+      const fixture = await commitReplayFixture("Missing target");
+      await pgSql`DELETE FROM products WHERE id = ${fixture.product.id};`;
+      await expect(updateProduct(fixture.input, { authContext: authAdminCatalog })).rejects.toThrow(
+        CatalogReplayIntegrityError
+      );
+    });
+
+    it("fails replay closed when request_fingerprint is missing or malformed", async () => {
+      const missing = await commitReplayFixture("Missing fingerprint");
+      await pgSql`
+        UPDATE audit_events
+        SET metadata = metadata - 'request_fingerprint'
+        WHERE target_id = ${missing.product.id}
+          AND action = 'catalog:product:update'
+          AND metadata ? 'mutation_request_digest';
+      `;
+      await expect(updateProduct(missing.input, { authContext: authAdminCatalog })).rejects.toThrow(
+        CatalogReplayIntegrityError
+      );
+
+      const malformed = await commitReplayFixture("Malformed fingerprint");
+      await pgSql`
+        UPDATE audit_events
+        SET metadata = jsonb_set(metadata, '{request_fingerprint}', '"bad"'::jsonb)
+        WHERE target_id = ${malformed.product.id}
+          AND action = 'catalog:product:update'
+          AND metadata ? 'mutation_request_digest';
+      `;
+      await expect(
+        updateProduct(malformed.input, { authContext: authAdminCatalog })
+      ).rejects.toThrow(CatalogReplayIntegrityError);
+    });
+
+    it("preserves category, specification, slug, and reference validation", async () => {
+      const product = await createUpdateReplayProduct("Domain regression");
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            specValues: [] as unknown as Record<string, unknown>,
+            mutationRequestId: `gp025-invalid-spec-shape-${productSequence}`,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toMatchObject({ code: "INVALID_SPEC_VALUES_TYPE" });
+
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            specValues: { unknown_key: "invalid" },
+            mutationRequestId: `gp025-invalid-spec-${productSequence}`,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toMatchObject({ code: "UNKNOWN_SPECIFICATION_KEY" });
+
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            brandId: fixtureIds.brandDraft,
+            mutationRequestId: `gp025-invalid-brand-${productSequence}`,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toMatchObject({ code: "INVALID_BRAND" });
+
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            categoryId: fixtureIds.catDraft,
+            mutationRequestId: `gp025-invalid-category-${productSequence}`,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toMatchObject({ code: "INVALID_CATEGORY" });
+
+      const conflictingProduct = await createUpdateReplayProduct("Slug conflict target");
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            slug: conflictingProduct.slug,
+            mutationRequestId: `gp025-slug-conflict-${productSequence}`,
+          },
+          { authContext: authAdminCatalog }
+        )
+      ).rejects.toMatchObject({ code: "SLUG_CONFLICT" });
+    });
+
+    it("preserves catalog:manage authorization on the idempotent path", async () => {
+      const product = await createUpdateReplayProduct("Authorization");
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            name: "Unauthorized update",
+            mutationRequestId: `gp025-unauthorized-${productSequence}`,
+          },
+          { authContext: authAiResearchOnly }
+        )
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
     });
   });
 });
