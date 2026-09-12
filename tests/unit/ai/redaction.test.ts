@@ -25,6 +25,21 @@ function captureLog(fn: (logger: ReturnType<typeof createLogger>) => void): {
 
 describe("Dynamic AI Secret Redaction (Logger & Sentry)", () => {
   describe("Dynamic Logger Redaction", () => {
+    it("redacts Tavily key fields, tvly-* values, and Authorization bearer values", () => {
+      const { parsed: log, raw } = captureLog((l) => {
+        l.info({
+          TAVILY_API_KEY: "tvly-field-secret",
+          nested: { tavilyApiKey: "tvly-nested-secret" },
+          query: "operator supplied product text",
+          diagnostic: "Authorization: Bearer tvly-inline-secret",
+        });
+      });
+      expect(log.TAVILY_API_KEY).toBe("[REDACTED]");
+      expect((log.nested as Record<string, unknown>).tavilyApiKey).toBe("[REDACTED]");
+      expect(log.query).toBe("[REDACTED]");
+      expect(log.diagnostic).toBe("Authorization: Bearer [REDACTED]");
+      expect(raw).not.toMatch(/tvly-(?:field|nested|inline)-secret/);
+    });
     it("redacts dynamic AI encryption keys V1, V2, and V37 at top level", () => {
       const { parsed: log, raw } = captureLog((l) => {
         l.info({
@@ -263,6 +278,15 @@ describe("Dynamic AI Secret Redaction (Logger & Sentry)", () => {
   });
 
   describe("Dynamic Sentry Redaction", () => {
+    it("redacts Tavily and bearer values in Sentry strings and containers", () => {
+      const sanitized = sanitizeObject({
+        TAVILY_API_KEY: "tvly-field-secret",
+        diagnostic: "Bearer tvly-inline-secret",
+      });
+      expect(sanitized.TAVILY_API_KEY).toBe("[REDACTED]");
+      expect(sanitized.diagnostic).toBe("Bearer [REDACTED]");
+      expect(JSON.stringify(sanitized)).not.toContain("tvly-");
+    });
     it("redacts dynamic AI encryption keys and credential material in Sentry sanitized objects", () => {
       const sensitiveData = {
         AI_ENCRYPTION_KEY_V1: "secret_sentry_v1",

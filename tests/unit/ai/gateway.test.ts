@@ -15,9 +15,9 @@ describe("Strict AI Gateway & Deterministic Mock Adapter", () => {
       expect(adapter.providerKey).toBe("mock");
     });
 
-    it("registers ONLY mock in CHK1", () => {
+    it("registers the CHK2 Google adapter and deterministic mock explicitly", () => {
       const keys = getRegisteredProviderKeys();
-      expect(keys).toEqual(["mock"]);
+      expect(keys).toEqual(["mock", "google"]);
     });
 
     it("fails closed for unknown or arbitrary provider keys", () => {
@@ -26,7 +26,7 @@ describe("Strict AI Gateway & Deterministic Mock Adapter", () => {
     });
 
     it("fails closed with NO mock fallback for commercial providers", () => {
-      const commercialProviders = ["google", "openai", "anthropic"];
+      const commercialProviders = ["openai", "anthropic"];
       for (const provider of commercialProviders) {
         expect(() => getAiAdapter(provider)).toThrow(UnsupportedAiProviderError);
         expect(() => getAiAdapter(provider)).toThrow("UNSUPPORTED_AI_PROVIDER");
@@ -37,7 +37,11 @@ describe("Strict AI Gateway & Deterministic Mock Adapter", () => {
   describe("Deterministic Mock Capabilities", () => {
     it("returns deterministic text response with exact integer micro-cent cost accounting", async () => {
       const prompt = "Wireless gaming mouse with 8K polling rate";
-      const result = await mockAiAdapter.generateText("dummy-key", prompt);
+      const result = await mockAiAdapter.generateText(
+        "dummy-key",
+        { systemInstruction: "Test", input: prompt },
+        { modelId: "mock-v1", temperature: 0.2, maxTokens: 512 }
+      );
 
       expect(result.text).toContain("[MOCK_OUTPUT]");
       expect(result.text).toContain("Wireless gaming mouse");
@@ -54,13 +58,16 @@ describe("Strict AI Gateway & Deterministic Mock Adapter", () => {
 
     it("returns deterministic structured response with exact integer micro-cent cost accounting", async () => {
       const prompt = "Extract technical specifications for WLMouse Beast X";
-      const result = await mockAiAdapter.generateStructured<{
-        mock: boolean;
-        promptPreview: string;
-      }>("dummy-key", prompt);
+      const result = await mockAiAdapter.generateStructured(
+        "dummy-key",
+        { systemInstruction: "Test", input: prompt },
+        { type: "object" },
+        { modelId: "mock-v1", temperature: 0.2, maxTokens: 512 }
+      );
+      const data = result.data as { mock: boolean; promptPreview: string };
 
-      expect(result.data.mock).toBe(true);
-      expect(result.data.promptPreview).toContain("Extract technical");
+      expect(data.mock).toBe(true);
+      expect(data.promptPreview).toContain("Extract technical");
 
       // Verify exact integer micro-units (bigint)
       expect(typeof result.usage.costMicros).toBe("bigint");

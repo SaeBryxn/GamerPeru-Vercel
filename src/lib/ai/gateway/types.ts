@@ -19,23 +19,60 @@ export interface AiHealthCheckResult {
   message?: string;
 }
 
+export interface AiGenerationInput {
+  systemInstruction: string;
+  input: string;
+}
+
+export interface AiExecutionOptions {
+  modelId: string;
+  temperature: number;
+  maxTokens: number;
+  signal?: AbortSignal;
+}
+
 export interface AiTextGenerationResult {
   text: string;
+  providerRequestId: string | null;
   usage: AiUsageMetadata;
 }
 
-export interface AiStructuredGenerationResult<T = unknown> {
-  data: T;
+export interface AiStructuredGenerationResult {
+  data: unknown;
+  providerRequestId: string | null;
   usage: AiUsageMetadata;
+}
+
+export type AiGatewayErrorCode =
+  | "AI_PROVIDER_AUTH_FAILED"
+  | "AI_PROVIDER_RATE_LIMITED"
+  | "AI_PROVIDER_UNAVAILABLE"
+  | "AI_PROVIDER_RESPONSE_INVALID"
+  | "AI_PROVIDER_OUTCOME_UNKNOWN";
+
+export class AiGatewayError extends Error {
+  constructor(
+    readonly code: AiGatewayErrorCode,
+    message: string,
+    readonly outcomeAmbiguous = false
+  ) {
+    super(message);
+    this.name = "AiGatewayError";
+  }
 }
 
 export interface AiProviderAdapter {
   readonly providerKey: string;
   healthCheck(apiKey: string): Promise<AiHealthCheckResult>;
-  generateText(apiKey: string, prompt: string): Promise<AiTextGenerationResult>;
-  generateStructured<T = unknown>(
+  generateText(
     apiKey: string,
-    prompt: string,
-    schema?: unknown
-  ): Promise<AiStructuredGenerationResult<T>>;
+    request: AiGenerationInput,
+    options: AiExecutionOptions
+  ): Promise<AiTextGenerationResult>;
+  generateStructured(
+    apiKey: string,
+    request: AiGenerationInput,
+    jsonSchema: Record<string, unknown>,
+    options: AiExecutionOptions
+  ): Promise<AiStructuredGenerationResult>;
 }

@@ -29,12 +29,16 @@ export const NORMALIZED_SENSITIVE_KEYS = new Set([
   "inngesteventkey",
   "inngestsigningkey",
   "sentryauthtoken",
+  "tavilyapikey",
   "email",
   "phone",
   "phonenumber",
   "address",
   "street",
   "q",
+  "query",
+  "inputquery",
+  "searchquery",
 ]);
 
 export function isSensitiveKey(key: string): boolean {
@@ -74,6 +78,14 @@ const STRING_PATTERNS: Array<{
   {
     regex: /\b(?:re_|sb_secret_|sntrys_)[A-Za-z0-9_-]+\b/gi,
     replacement: "[REDACTED_API_KEY]",
+  },
+  {
+    regex: /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi,
+    replacement: "Bearer [REDACTED]",
+  },
+  {
+    regex: /\btvly-[A-Za-z0-9_-]+\b/gi,
+    replacement: "[REDACTED_TAVILY_KEY]",
   },
   // Conservative email addresses in diagnostic messages/breadcrumbs
   {

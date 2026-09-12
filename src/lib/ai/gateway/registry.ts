@@ -1,3 +1,4 @@
+import { googleGeminiAdapter } from "./google-gemini-adapter";
 import { mockAiAdapter } from "./mock-adapter";
 import type { AiProviderAdapter } from "./types";
 
@@ -19,8 +20,8 @@ export class UnsupportedAiProviderError extends Error {
  */
 const registry = new Map<string, AiProviderAdapter>();
 
-// Explicit registration of CHK1 mock adapter
 registry.set("mock", mockAiAdapter);
+registry.set("google", googleGeminiAdapter);
 
 /**
  * Resolves an AI provider adapter by providerKey.

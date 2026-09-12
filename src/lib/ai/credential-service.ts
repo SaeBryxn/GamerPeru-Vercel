@@ -378,6 +378,33 @@ async function getActiveCredentialRow(
   return credential ?? null;
 }
 
+export class NoActiveProviderCredentialError extends Error {
+  constructor() {
+    super("Provider has no active credential.");
+    this.name = "NoActiveProviderCredentialError";
+  }
+}
+
+export async function withActiveProviderCredential<T>(
+  providerId: string,
+  operation: (apiKey: string) => Promise<T>,
+  client: typeof db = db
+): Promise<T> {
+  const credential = await getActiveCredentialRow(providerId, client);
+  if (!credential) {
+    throw new NoActiveProviderCredentialError();
+  }
+  const apiKey = decryptCredential({
+    credentialId: credential.id,
+    providerId: credential.providerId,
+    keyVersion: credential.keyVersion,
+    ciphertext: credential.ciphertext,
+    iv: credential.iv,
+    authTag: credential.authTag,
+  });
+  return await operation(apiKey);
+}
+
 /**
  * Returns safe DTO for the currently ACTIVE credential of a provider, or null.
  * Strictly asserts ai:manage_credentials permission on caller.

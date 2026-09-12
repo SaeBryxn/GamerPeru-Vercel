@@ -1,4 +1,6 @@
 import type {
+  AiExecutionOptions,
+  AiGenerationInput,
   AiHealthCheckResult,
   AiProviderAdapter,
   AiStructuredGenerationResult,
@@ -47,36 +49,49 @@ export class MockAiAdapter implements AiProviderAdapter {
     };
   }
 
-  async generateText(apiKey: string, prompt: string): Promise<AiTextGenerationResult> {
-    if (!apiKey) {
-      throw new Error("MOCK_ADAPTER_ERROR: API key is required.");
-    }
-    const preview = prompt.slice(0, 40).trim();
+  async generateText(
+    apiKey: string,
+    request: AiGenerationInput,
+    options: AiExecutionOptions
+  ): Promise<AiTextGenerationResult> {
+    this.assertInput(apiKey, options);
+    const preview = request.input.slice(0, 40).trim();
     return {
-      text: `[MOCK_OUTPUT] Synthesized response for prompt: "${preview}"`,
+      text: `[MOCK_OUTPUT] Synthesized response for input: "${preview}"`,
+      providerRequestId: "mock-interaction-text",
       usage: this.getDeterministicUsage(),
     };
   }
 
-  async generateStructured<T = unknown>(
+  async generateStructured(
     apiKey: string,
-    prompt: string,
-    _schema?: unknown
-  ): Promise<AiStructuredGenerationResult<T>> {
-    if (!apiKey) {
-      throw new Error("MOCK_ADAPTER_ERROR: API key is required.");
-    }
-    const preview = prompt.slice(0, 40).trim();
+    request: AiGenerationInput,
+    _jsonSchema: Record<string, unknown>,
+    options: AiExecutionOptions
+  ): Promise<AiStructuredGenerationResult> {
+    this.assertInput(apiKey, options);
+    const preview = request.input.slice(0, 40).trim();
     const data = {
       mock: true,
       promptPreview: preview,
       synthesizedAt: "2026-09-11T00:00:00.000Z",
-    } as unknown as T;
+    };
 
     return {
       data,
+      providerRequestId: "mock-interaction-structured",
       usage: this.getDeterministicUsage(),
     };
+  }
+
+  private assertInput(apiKey: string, options: AiExecutionOptions): void {
+    if (!apiKey) {
+      throw new Error("MOCK_ADAPTER_ERROR: API key is required.");
+    }
+    if (!options.modelId || !Number.isFinite(options.temperature) || options.maxTokens < 1) {
+      throw new Error("MOCK_ADAPTER_ERROR: Invalid execution options.");
+    }
+    options.signal?.throwIfAborted();
   }
 
   private getDeterministicUsage(): AiUsageMetadata {
@@ -84,7 +99,7 @@ export class MockAiAdapter implements AiProviderAdapter {
       inputTokens: 120,
       outputTokens: 65,
       totalTokens: 185,
-      costMicros: 2500n, // Exact integer micro-units ($0.0025)
+      costMicros: 2500n,
       currency: "USD",
       costSource: "ESTIMATED",
       pricingVersion: "mock-v1",

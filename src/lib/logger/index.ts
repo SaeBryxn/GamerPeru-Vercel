@@ -60,6 +60,8 @@ export const CANONICAL_REDACT_PATHS = [
   "*.INNGEST_SIGNING_KEY",
   "AI_ENCRYPTION_KEY_V1",
   "*.AI_ENCRYPTION_KEY_V1",
+  "TAVILY_API_KEY",
+  "*.TAVILY_API_KEY",
   "SENTRY_AUTH_TOKEN",
   "*.SENTRY_AUTH_TOKEN",
 ];
@@ -93,13 +95,23 @@ export const NORMALIZED_SENSITIVE_KEYS = new Set([
   "inngesteventkey",
   "inngestsigningkey",
   "sentryauthtoken",
+  "tavilyapikey",
   "email",
   "phone",
   "phonenumber",
   "address",
   "street",
   "q",
+  "query",
+  "inputquery",
+  "searchquery",
 ]);
+
+export function sanitizeLogString(value: string): string {
+  return value
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, "Bearer [REDACTED]")
+    .replace(/\btvly-[A-Za-z0-9_-]+\b/gi, "[REDACTED_TAVILY_KEY]");
+}
 
 export function isDynamicSensitiveKey(key: string): boolean {
   const normalized = key.toLowerCase().replace(/[-_]/g, "");
@@ -111,7 +123,7 @@ export function isDynamicSensitiveKey(key: string): boolean {
 
 export function sanitizeDynamicLogData<T>(val: T): T {
   if (val === null || val === undefined || typeof val !== "object") {
-    return val;
+    return (typeof val === "string" ? sanitizeLogString(val) : val) as T;
   }
   if (Array.isArray(val)) {
     return val.map((item) => sanitizeDynamicLogData(item)) as unknown as T;
@@ -123,7 +135,7 @@ export function sanitizeDynamicLogData<T>(val: T): T {
     } else if (typeof value === "object" && value !== null) {
       out[key] = sanitizeDynamicLogData(value);
     } else {
-      out[key] = value;
+      out[key] = typeof value === "string" ? sanitizeLogString(value) : value;
     }
   }
   return out as T;
@@ -165,7 +177,11 @@ export function createLogger(
     hooks: {
       logMethod(inputArgs: Parameters<pino.LogFn>, method: pino.LogFn) {
         const sanitizedArgs = inputArgs.map((arg) =>
-          typeof arg === "object" && arg !== null ? sanitizeDynamicLogData(arg) : arg
+          typeof arg === "object" && arg !== null
+            ? sanitizeDynamicLogData(arg)
+            : typeof arg === "string"
+              ? sanitizeLogString(arg)
+              : arg
         ) as Parameters<pino.LogFn>;
         return method.apply(this, sanitizedArgs);
       },
