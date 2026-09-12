@@ -109,11 +109,7 @@ export function sanitizeObject<T>(obj: T): T {
   const result: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
     if (isSensitiveKey(key)) {
-      if (typeof val === "object" && val !== null) {
-        result[key] = sanitizeObject(val);
-      } else {
-        result[key] = "[REDACTED]";
-      }
+      result[key] = "[REDACTED]";
     } else if (typeof val === "string") {
       result[key] = sanitizeString(val);
     } else if (typeof val === "object" && val !== null) {

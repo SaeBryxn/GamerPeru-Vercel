@@ -155,6 +155,111 @@ describe("Dynamic AI Secret Redaction (Logger & Sentry)", () => {
       expect(raw).not.toContain("child_logged_refresh_token");
       expect(raw).not.toContain("child_logged_bearer_token");
     });
+
+    it("redacts sensitive container objects and arrays at root level in Logger, replacing container with [REDACTED]", () => {
+      const { parsed: log, raw } = captureLog((l) => {
+        l.info({
+          credential: {
+            value: "credential-object-secret",
+          },
+          credentials: [{ value: "credential-array-secret" }],
+          authorization: {
+            raw: "Bearer authorization-object-secret",
+          },
+          apiKey: {
+            value: "api-key-object-secret",
+          },
+          AI_ENCRYPTION_KEY_V37: {
+            raw: "master-key-object-secret",
+          },
+          safeField: "safe-data-field",
+        });
+      });
+
+      expect(log.credential).toBe("[REDACTED]");
+      expect(log.credentials).toBe("[REDACTED]");
+      expect(log.authorization).toBe("[REDACTED]");
+      expect(log.apiKey).toBe("[REDACTED]");
+      expect(log.AI_ENCRYPTION_KEY_V37).toBe("[REDACTED]");
+      expect(log.safeField).toBe("safe-data-field");
+
+      expect(raw).not.toContain("credential-object-secret");
+      expect(raw).not.toContain("credential-array-secret");
+      expect(raw).not.toContain("authorization-object-secret");
+      expect(raw).not.toContain("Bearer authorization-object-secret");
+      expect(raw).not.toContain("api-key-object-secret");
+      expect(raw).not.toContain("master-key-object-secret");
+    });
+
+    it("redacts sensitive container objects and arrays in child logger bindings and child payloads", () => {
+      const chunks: Buffer[] = [];
+      const stream = new Writable({
+        write(chunk, _encoding, callback) {
+          chunks.push(Buffer.from(chunk));
+          callback();
+        },
+      });
+
+      const rootLogger = createLogger({ level: "debug" }, stream);
+      const childLogger = rootLogger.child({
+        subsystem: "ai-orchestrator",
+        credential: {
+          value: "child-binding-credential-secret",
+        },
+        credentials: [{ value: "child-binding-credentials-secret" }],
+        authorization: {
+          raw: "Bearer child-binding-auth-secret",
+        },
+        apiKey: {
+          value: "child-binding-api-key-secret",
+        },
+        AI_ENCRYPTION_KEY_V37: {
+          raw: "child-binding-master-key-secret",
+        },
+      });
+
+      childLogger.info(
+        {
+          credential: {
+            value: "child-payload-credential-secret",
+          },
+          credentials: [{ value: "child-payload-credentials-secret" }],
+          authorization: {
+            raw: "Bearer child-payload-auth-secret",
+          },
+          apiKey: {
+            value: "child-payload-api-key-secret",
+          },
+          AI_ENCRYPTION_KEY_V37: {
+            raw: "child-payload-master-key-secret",
+          },
+          safeContext: "child-safe",
+        },
+        "Child container log"
+      );
+
+      const raw = Buffer.concat(chunks).toString("utf8").trim();
+      const log = JSON.parse(raw) as Record<string, unknown>;
+
+      expect(log.credential).toBe("[REDACTED]");
+      expect(log.credentials).toBe("[REDACTED]");
+      expect(log.authorization).toBe("[REDACTED]");
+      expect(log.apiKey).toBe("[REDACTED]");
+      expect(log.AI_ENCRYPTION_KEY_V37).toBe("[REDACTED]");
+      expect(log.subsystem).toBe("ai-orchestrator");
+      expect(log.safeContext).toBe("child-safe");
+
+      expect(raw).not.toContain("child-binding-credential-secret");
+      expect(raw).not.toContain("child-binding-credentials-secret");
+      expect(raw).not.toContain("child-binding-auth-secret");
+      expect(raw).not.toContain("child-binding-api-key-secret");
+      expect(raw).not.toContain("child-binding-master-key-secret");
+      expect(raw).not.toContain("child-payload-credential-secret");
+      expect(raw).not.toContain("child-payload-credentials-secret");
+      expect(raw).not.toContain("child-payload-auth-secret");
+      expect(raw).not.toContain("child-payload-api-key-secret");
+      expect(raw).not.toContain("child-payload-master-key-secret");
+    });
   });
 
   describe("Dynamic Sentry Redaction", () => {
@@ -195,6 +300,42 @@ describe("Dynamic AI Secret Redaction (Logger & Sentry)", () => {
       expect(serialized).not.toContain("sentry_auth_tag_value");
       expect(serialized).not.toContain("sentry_access_token");
       expect(serialized).not.toContain("sentry_refresh_token");
+    });
+
+    it("redacts sensitive container objects and arrays in Sentry sanitizeObject", () => {
+      const sensitiveContainers = {
+        credential: {
+          value: "credential-object-secret",
+        },
+        credentials: [{ value: "credential-array-secret" }],
+        authorization: {
+          raw: "Bearer authorization-object-secret",
+        },
+        apiKey: {
+          value: "api-key-object-secret",
+        },
+        AI_ENCRYPTION_KEY_V37: {
+          raw: "master-key-object-secret",
+        },
+        safeMeta: "safe-sentry-info",
+      };
+
+      const sanitized = sanitizeObject(sensitiveContainers);
+
+      expect(sanitized.credential).toBe("[REDACTED]");
+      expect(sanitized.credentials).toBe("[REDACTED]");
+      expect(sanitized.authorization).toBe("[REDACTED]");
+      expect(sanitized.apiKey).toBe("[REDACTED]");
+      expect(sanitized.AI_ENCRYPTION_KEY_V37).toBe("[REDACTED]");
+      expect(sanitized.safeMeta).toBe("safe-sentry-info");
+
+      const serialized = JSON.stringify(sanitized);
+      expect(serialized).not.toContain("credential-object-secret");
+      expect(serialized).not.toContain("credential-array-secret");
+      expect(serialized).not.toContain("authorization-object-secret");
+      expect(serialized).not.toContain("Bearer authorization-object-secret");
+      expect(serialized).not.toContain("api-key-object-secret");
+      expect(serialized).not.toContain("master-key-object-secret");
     });
 
     it("redacts dynamic AI keys and credential material at arbitrary depth in Sentry error events", () => {
@@ -238,6 +379,141 @@ describe("Dynamic AI Secret Redaction (Logger & Sentry)", () => {
       expect(serialized).not.toContain("nested_sentry_auth_tag");
       expect(serialized).not.toContain("nested_sentry_access_token");
       expect(serialized).not.toContain("nested_sentry_refresh_token");
+    });
+
+    it("redacts sensitive container objects and arrays across Sentry ErrorEvent extra, contexts, breadcrumbs, and request", () => {
+      const dummyEvent = {
+        event_id: "test-container-event-456",
+        extra: {
+          credential: {
+            value: "extra-credential-secret",
+          },
+          credentials: [{ value: "extra-credentials-secret" }],
+          authorization: {
+            raw: "Bearer extra-auth-secret",
+          },
+          apiKey: {
+            value: "extra-apikey-secret",
+          },
+          AI_ENCRYPTION_KEY_V37: {
+            raw: "extra-v37-secret",
+          },
+        },
+        contexts: {
+          secretsContainer: {
+            credential: {
+              value: "context-credential-secret",
+            },
+            credentials: [{ value: "context-credentials-secret" }],
+            authorization: {
+              raw: "Bearer context-auth-secret",
+            },
+            apiKey: {
+              value: "context-apikey-secret",
+            },
+            AI_ENCRYPTION_KEY_V37: {
+              raw: "context-v37-secret",
+            },
+          },
+        },
+        breadcrumbs: [
+          {
+            message: "Processing AI provider credential",
+            data: {
+              credential: {
+                value: "breadcrumb-credential-secret",
+              },
+              credentials: [{ value: "breadcrumb-credentials-secret" }],
+              authorization: {
+                raw: "Bearer breadcrumb-auth-secret",
+              },
+              apiKey: {
+                value: "breadcrumb-apikey-secret",
+              },
+              AI_ENCRYPTION_KEY_V37: {
+                raw: "breadcrumb-v37-secret",
+              },
+            },
+          },
+        ],
+        request: {
+          headers: {
+            authorization: {
+              raw: "Bearer request-header-auth-secret",
+            },
+            apiKey: {
+              value: "request-header-apikey-secret",
+            },
+            "content-type": "application/json",
+          },
+          data: {
+            credential: {
+              value: "request-body-credential-secret",
+            },
+            credentials: [{ value: "request-body-credentials-secret" }],
+            AI_ENCRYPTION_KEY_V37: {
+              raw: "request-body-v37-secret",
+            },
+          },
+        },
+      } as unknown as ErrorEvent;
+
+      const result = sentryBeforeSend(dummyEvent);
+      expect(result).not.toBeNull();
+
+      const extra = result?.extra as Record<string, unknown>;
+      expect(extra.credential).toBe("[REDACTED]");
+      expect(extra.credentials).toBe("[REDACTED]");
+      expect(extra.authorization).toBe("[REDACTED]");
+      expect(extra.apiKey).toBe("[REDACTED]");
+      expect(extra.AI_ENCRYPTION_KEY_V37).toBe("[REDACTED]");
+
+      const contexts = result?.contexts as Record<string, Record<string, unknown>>;
+      const secretsContainer = contexts.secretsContainer!;
+      expect(secretsContainer.credential).toBe("[REDACTED]");
+      expect(secretsContainer.credentials).toBe("[REDACTED]");
+      expect(secretsContainer.authorization).toBe("[REDACTED]");
+      expect(secretsContainer.apiKey).toBe("[REDACTED]");
+      expect(secretsContainer.AI_ENCRYPTION_KEY_V37).toBe("[REDACTED]");
+
+      const breadcrumbData = result?.breadcrumbs?.[0]?.data as Record<string, unknown>;
+      expect(breadcrumbData.credential).toBe("[REDACTED]");
+      expect(breadcrumbData.credentials).toBe("[REDACTED]");
+      expect(breadcrumbData.authorization).toBe("[REDACTED]");
+      expect(breadcrumbData.apiKey).toBe("[REDACTED]");
+      expect(breadcrumbData.AI_ENCRYPTION_KEY_V37).toBe("[REDACTED]");
+
+      const headers = result?.request?.headers as Record<string, unknown>;
+      expect(headers.authorization).toBe("[REDACTED]");
+      expect(headers.apiKey).toBe("[REDACTED]");
+      expect(headers["content-type"]).toBe("application/json");
+
+      const reqData = result?.request?.data as Record<string, unknown>;
+      expect(reqData.credential).toBe("[REDACTED]");
+      expect(reqData.credentials).toBe("[REDACTED]");
+      expect(reqData.AI_ENCRYPTION_KEY_V37).toBe("[REDACTED]");
+
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain("extra-credential-secret");
+      expect(serialized).not.toContain("extra-credentials-secret");
+      expect(serialized).not.toContain("extra-auth-secret");
+      expect(serialized).not.toContain("extra-apikey-secret");
+      expect(serialized).not.toContain("extra-v37-secret");
+      expect(serialized).not.toContain("context-credential-secret");
+      expect(serialized).not.toContain("context-credentials-secret");
+      expect(serialized).not.toContain("context-auth-secret");
+      expect(serialized).not.toContain("context-apikey-secret");
+      expect(serialized).not.toContain("context-v37-secret");
+      expect(serialized).not.toContain("breadcrumb-credential-secret");
+      expect(serialized).not.toContain("breadcrumb-credentials-secret");
+      expect(serialized).not.toContain("breadcrumb-auth-secret");
+      expect(serialized).not.toContain("breadcrumb-apikey-secret");
+      expect(serialized).not.toContain("breadcrumb-v37-secret");
+      expect(serialized).not.toContain("request-header-auth-secret");
+      expect(serialized).not.toContain("request-header-apikey-secret");
+      expect(serialized).not.toContain("request-body-credential-secret");
+      expect(serialized).not.toContain("request-body-credentials-secret");
+      expect(serialized).not.toContain("request-body-v37-secret");
     });
   });
 });

@@ -476,7 +476,27 @@ export async function executeCredentialHealthCheck(
       .for("update");
 
     if (!currentCred || currentCred.status !== "ACTIVE") {
-      // Credential was replaced or revoked while the external check was running
+      // Credential was replaced or revoked while the external check was running.
+      // Record privileged health attempt in audit trail targeting tested credential
+      // without mutating health status on tested or replacement credential.
+      await tx.insert(auditEvents).values({
+        actorType: "ADMIN",
+        actorId: caller.authUserId,
+        action: AI_AUDIT_ACTIONS.AI_HEALTH_CHECK_EXECUTED,
+        targetType: "ai_credential",
+        targetId: credential.id,
+        metadata: {
+          provider_id: provider.id,
+          provider_key: provider.providerKey,
+          credential_id: credential.id,
+          status: "UNHEALTHY",
+          ok: false,
+          result_code: "CREDENTIAL_CHANGED_DURING_HEALTH_CHECK",
+          state_write_applied: false,
+        },
+        requestId: options?.requestId,
+      });
+
       return {
         ok: false,
         status: "UNHEALTHY" as const,

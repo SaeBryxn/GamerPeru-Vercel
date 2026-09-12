@@ -28,6 +28,12 @@ export const CANONICAL_REDACT_PATHS = [
   "*.apiKey",
   "api_key",
   "*.api_key",
+  "credential",
+  "*.credential",
+  "*.*.credential",
+  "credentials",
+  "*.credentials",
+  "*.*.credentials",
 
   // Payment proofs & verification references
   "voucher_url",
@@ -113,11 +119,7 @@ export function sanitizeDynamicLogData<T>(val: T): T {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(val as Record<string, unknown>)) {
     if (isDynamicSensitiveKey(key)) {
-      if (typeof value === "object" && value !== null) {
-        out[key] = sanitizeDynamicLogData(value);
-      } else {
-        out[key] = "[REDACTED]";
-      }
+      out[key] = "[REDACTED]";
     } else if (typeof value === "object" && value !== null) {
       out[key] = sanitizeDynamicLogData(value);
     } else {

@@ -300,7 +300,7 @@ describe("Application Foundation — Sentry Event Sanitization Boundary", () => 
       email: "real_customer@test.com",
       phone: "+51999888777",
       address: "Av. Larco 123, Miraflores",
-      credentials: {
+      authContext: {
         password: "raw_password",
         DATABASE_URL: "postgres://user:pass@localhost:5432/db",
       },
@@ -315,14 +315,14 @@ describe("Application Foundation — Sentry Event Sanitization Boundary", () => 
     expect(sanitized.email).toBe("[REDACTED]");
     expect(sanitized.phone).toBe("[REDACTED]");
     expect(sanitized.address).toBe("[REDACTED]");
-    expect(sanitized.credentials.password).toBe("[REDACTED]");
-    expect(sanitized.credentials.DATABASE_URL).toBe("[REDACTED]");
+    expect(sanitized.authContext.password).toBe("[REDACTED]");
+    expect(sanitized.authContext.DATABASE_URL).toBe("[REDACTED]");
     expect(sanitized.headers.authorization).toBe("[REDACTED]");
     expect(sanitized.headers["user-agent"]).toBe("Mozilla/5.0");
     expect(sanitized.user).toBe("customer_1");
 
     // Source object remained unmutated
-    expect(source.credentials.password).toBe("raw_password");
+    expect(source.authContext.password).toBe("raw_password");
     expect(source.email).toBe("real_customer@test.com");
   });
 

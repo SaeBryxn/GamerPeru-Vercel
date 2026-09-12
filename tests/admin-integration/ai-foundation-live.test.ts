@@ -15,7 +15,7 @@ import {
   AI_AUDIT_ACTIONS,
   mockAiAdapter,
 } from "@/lib/ai";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import { generateUuidV7 } from "@/db/utils/uuid";
 
@@ -144,158 +144,300 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
     it("verifies exact Foreign Key constraints and ON DELETE rules", async () => {
       const rows = await pgSql<
         {
+          local_schema: string;
+          local_table: string;
+          local_column: string;
           constraint_name: string;
-          table_name: string;
+          referenced_schema: string;
+          referenced_table: string;
+          referenced_column: string;
           delete_rule: string;
         }[]
       >`
         SELECT
-          tc.constraint_name,
-          tc.table_name,
-          rc.delete_rule
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.referential_constraints rc
-          ON tc.constraint_name = rc.constraint_name
-        WHERE tc.table_schema = 'public'
-          AND tc.table_name = ANY(${EXPECTED_TABLES})
-        ORDER BY tc.table_name, tc.constraint_name;
+          n1.nspname AS local_schema,
+          t1.relname AS local_table,
+          a1.attname AS local_column,
+          c.conname AS constraint_name,
+          n2.nspname AS referenced_schema,
+          t2.relname AS referenced_table,
+          a2.attname AS referenced_column,
+          CASE c.confdeltype
+            WHEN 'a' THEN 'NO ACTION'
+            WHEN 'r' THEN 'RESTRICT'
+            WHEN 'c' THEN 'CASCADE'
+            WHEN 'n' THEN 'SET NULL'
+            WHEN 'd' THEN 'SET DEFAULT'
+          END AS delete_rule
+        FROM pg_constraint c
+        JOIN pg_class t1 ON c.conrelid = t1.oid
+        JOIN pg_namespace n1 ON t1.relnamespace = n1.oid
+        JOIN pg_class t2 ON c.confrelid = t2.oid
+        JOIN pg_namespace n2 ON t2.relnamespace = n2.oid
+        JOIN pg_attribute a1 ON a1.attrelid = t1.oid AND a1.attnum = ANY(c.conkey)
+        JOIN pg_attribute a2 ON a2.attrelid = t2.oid AND a2.attnum = ANY(c.confkey)
+        WHERE c.contype = 'f'
+          AND n1.nspname = 'public'
+          AND t1.relname = ANY(${EXPECTED_TABLES})
+        ORDER BY t1.relname, a1.attname, c.conname;
       `;
 
       expect(rows).toHaveLength(23);
 
       const EXPECTED_FKS = [
         {
-          constraint: "ai_provider_credentials_provider_id_ai_providers_id_fk",
-          table: "ai_provider_credentials",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_provider_credentials",
+          local_column: "provider_id",
+          constraint_name: "ai_provider_credentials_provider_id_ai_providers_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_providers",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_profiles_provider_id_ai_providers_id_fk",
-          table: "ai_profiles",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_profiles",
+          local_column: "provider_id",
+          constraint_name: "ai_profiles_provider_id_ai_providers_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_providers",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_research_jobs_selected_profile_id_ai_profiles_id_fk",
-          table: "ai_research_jobs",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_research_jobs",
+          local_column: "selected_profile_id",
+          constraint_name: "ai_research_jobs_selected_profile_id_ai_profiles_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_profiles",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_research_jobs_created_by_auth_user_id_users_id_fk",
-          table: "ai_research_jobs",
-          rule: "SET NULL",
+          local_schema: "public",
+          local_table: "ai_research_jobs",
+          local_column: "created_by_auth_user_id",
+          constraint_name: "ai_research_jobs_created_by_auth_user_id_users_id_fk",
+          referenced_schema: "auth",
+          referenced_table: "users",
+          referenced_column: "id",
+          delete_rule: "SET NULL",
         },
         {
-          constraint: "ai_research_job_items_job_id_ai_research_jobs_id_fk",
-          table: "ai_research_job_items",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_research_job_items",
+          local_column: "job_id",
+          constraint_name: "ai_research_job_items_job_id_ai_research_jobs_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_research_jobs",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_research_job_items_target_product_id_products_id_fk",
-          table: "ai_research_job_items",
-          rule: "SET NULL",
+          local_schema: "public",
+          local_table: "ai_research_job_items",
+          local_column: "target_product_id",
+          constraint_name: "ai_research_job_items_target_product_id_products_id_fk",
+          referenced_schema: "public",
+          referenced_table: "products",
+          referenced_column: "id",
+          delete_rule: "SET NULL",
         },
         {
-          constraint: "ai_sources_job_item_id_ai_research_job_items_id_fk",
-          table: "ai_sources",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_sources",
+          local_column: "job_item_id",
+          constraint_name: "ai_sources_job_item_id_ai_research_job_items_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_research_job_items",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_sources_trust_reviewed_by_auth_user_id_users_id_fk",
-          table: "ai_sources",
-          rule: "SET NULL",
+          local_schema: "public",
+          local_table: "ai_sources",
+          local_column: "trust_reviewed_by_auth_user_id",
+          constraint_name: "ai_sources_trust_reviewed_by_auth_user_id_users_id_fk",
+          referenced_schema: "auth",
+          referenced_table: "users",
+          referenced_column: "id",
+          delete_rule: "SET NULL",
         },
         {
-          constraint: "ai_product_proposals_job_item_id_ai_research_job_items_id_fk",
-          table: "ai_product_proposals",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_product_proposals",
+          local_column: "job_item_id",
+          constraint_name: "ai_product_proposals_job_item_id_ai_research_job_items_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_research_job_items",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_product_proposals_brand_id_brands_id_fk",
-          table: "ai_product_proposals",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_product_proposals",
+          local_column: "brand_id",
+          constraint_name: "ai_product_proposals_brand_id_brands_id_fk",
+          referenced_schema: "public",
+          referenced_table: "brands",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_product_proposals_category_id_categories_id_fk",
-          table: "ai_product_proposals",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_product_proposals",
+          local_column: "category_id",
+          constraint_name: "ai_product_proposals_category_id_categories_id_fk",
+          referenced_schema: "public",
+          referenced_table: "categories",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_product_proposals_applied_product_id_products_id_fk",
-          table: "ai_product_proposals",
-          rule: "SET NULL",
+          local_schema: "public",
+          local_table: "ai_product_proposals",
+          local_column: "applied_product_id",
+          constraint_name: "ai_product_proposals_applied_product_id_products_id_fk",
+          referenced_schema: "public",
+          referenced_table: "products",
+          referenced_column: "id",
+          delete_rule: "SET NULL",
         },
         {
-          constraint: "ai_product_proposals_reviewed_by_auth_user_id_users_id_fk",
-          table: "ai_product_proposals",
-          rule: "SET NULL",
+          local_schema: "public",
+          local_table: "ai_product_proposals",
+          local_column: "reviewed_by_auth_user_id",
+          constraint_name: "ai_product_proposals_reviewed_by_auth_user_id_users_id_fk",
+          referenced_schema: "auth",
+          referenced_table: "users",
+          referenced_column: "id",
+          delete_rule: "SET NULL",
         },
         {
-          constraint: "ai_proposal_field_reviews_proposal_id_ai_product_proposals_id_fk",
-          table: "ai_proposal_field_reviews",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_proposal_field_reviews",
+          local_column: "proposal_id",
+          constraint_name: "ai_proposal_field_reviews_proposal_id_ai_product_proposals_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_product_proposals",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_proposal_field_reviews_preferred_source_id_ai_sources_id_fk",
-          table: "ai_proposal_field_reviews",
-          rule: "SET NULL",
+          local_schema: "public",
+          local_table: "ai_proposal_field_reviews",
+          local_column: "preferred_source_id",
+          constraint_name: "ai_proposal_field_reviews_preferred_source_id_ai_sources_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_sources",
+          referenced_column: "id",
+          delete_rule: "SET NULL",
         },
         {
-          constraint: "ai_proposal_field_reviews_reviewed_by_auth_user_id_users_id_fk",
-          table: "ai_proposal_field_reviews",
-          rule: "SET NULL",
+          local_schema: "public",
+          local_table: "ai_proposal_field_reviews",
+          local_column: "reviewed_by_auth_user_id",
+          constraint_name: "ai_proposal_field_reviews_reviewed_by_auth_user_id_users_id_fk",
+          referenced_schema: "auth",
+          referenced_table: "users",
+          referenced_column: "id",
+          delete_rule: "SET NULL",
         },
         {
-          constraint: "ai_proposal_field_sources_field_review_id_ai_proposal_field_reviews_id_fk",
-          table: "ai_proposal_field_sources",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_proposal_field_sources",
+          local_column: "field_review_id",
+          constraint_name:
+            "ai_proposal_field_sources_field_review_id_ai_proposal_field_reviews_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_proposal_field_reviews",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_proposal_field_sources_source_id_ai_sources_id_fk",
-          table: "ai_proposal_field_sources",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_proposal_field_sources",
+          local_column: "source_id",
+          constraint_name: "ai_proposal_field_sources_source_id_ai_sources_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_sources",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_proposal_apply_steps_proposal_id_ai_product_proposals_id_fk",
-          table: "ai_proposal_apply_steps",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_proposal_apply_steps",
+          local_column: "proposal_id",
+          constraint_name: "ai_proposal_apply_steps_proposal_id_ai_product_proposals_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_product_proposals",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_proposal_apply_steps_apply_actor_auth_user_id_users_id_fk",
-          table: "ai_proposal_apply_steps",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_proposal_apply_steps",
+          local_column: "apply_actor_auth_user_id",
+          constraint_name: "ai_proposal_apply_steps_apply_actor_auth_user_id_users_id_fk",
+          referenced_schema: "auth",
+          referenced_table: "users",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_provider_attempts_job_item_id_ai_research_job_items_id_fk",
-          table: "ai_provider_attempts",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_provider_attempts",
+          local_column: "job_item_id",
+          constraint_name: "ai_provider_attempts_job_item_id_ai_research_job_items_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_research_job_items",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_provider_attempts_provider_id_ai_providers_id_fk",
-          table: "ai_provider_attempts",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_provider_attempts",
+          local_column: "provider_id",
+          constraint_name: "ai_provider_attempts_provider_id_ai_providers_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_providers",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
         {
-          constraint: "ai_provider_attempts_profile_id_ai_profiles_id_fk",
-          table: "ai_provider_attempts",
-          rule: "RESTRICT",
+          local_schema: "public",
+          local_table: "ai_provider_attempts",
+          local_column: "profile_id",
+          constraint_name: "ai_provider_attempts_profile_id_ai_profiles_id_fk",
+          referenced_schema: "public",
+          referenced_table: "ai_profiles",
+          referenced_column: "id",
+          delete_rule: "RESTRICT",
         },
       ];
 
-      const foundNames = rows.map((r) => r.constraint_name);
       for (const expected of EXPECTED_FKS) {
         const found = rows.find(
           (r) =>
-            r.constraint_name === expected.constraint ||
-            r.constraint_name === expected.constraint.slice(0, 63)
+            r.local_table === expected.local_table &&
+            r.local_column === expected.local_column &&
+            (r.constraint_name === expected.constraint_name ||
+              r.constraint_name === expected.constraint_name.slice(0, 63))
         );
         if (!found) {
           throw new Error(
-            `Missing expected FK: ${expected.constraint}. Available: ${foundNames.join(", ")}`
+            `Missing expected FK on ${expected.local_table}.${expected.local_column} (${expected.constraint_name})`
           );
         }
-        expect(found).toBeDefined();
-        expect(found.table_name).toBe(expected.table);
-        expect(found.delete_rule).toBe(expected.rule);
+        expect(found.local_schema).toBe(expected.local_schema);
+        expect(found.local_table).toBe(expected.local_table);
+        expect(found.local_column).toBe(expected.local_column);
+        expect(found.referenced_schema).toBe(expected.referenced_schema);
+        expect(found.referenced_table).toBe(expected.referenced_table);
+        expect(found.referenced_column).toBe(expected.referenced_column);
+        expect(found.delete_rule).toBe(expected.delete_rule);
       }
     });
 
@@ -812,14 +954,37 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
       mockAiAdapter.setHealthFailure(false);
     });
 
-    it("handles concurrent credential revocation during health check without corrupting state", async () => {
-      // Intentionally revoke the active credential in DB right before health check post-call transaction commits
-      // by intercepting adapter healthCheck
+    it("handles concurrent credential revocation and replacement during health check without corrupting state and emitting auditable event", async () => {
+      // Create initial active credential
+      const initialCred = await getActiveCredentialSafe(mockProviderId, {
+        authContext: superAdminContext,
+      });
+      expect(initialCred).not.toBeNull();
+
+      // Clear any prior audit events for mockProviderId
+      await pgSql`DELETE FROM audit_events WHERE target_id = ${initialCred!.id}`;
+
+      let replacementCredId: string | null = null;
+
+      // Intercept adapter healthCheck to simulate concurrent revocation and replacement in-flight
       const originalHealthCheck = mockAiAdapter.healthCheck.bind(mockAiAdapter);
-      mockAiAdapter.healthCheck = async (key) => {
-        // While check is in-flight, mark credential REVOKED
-        await pgSql`UPDATE ai_provider_credentials SET status = 'REVOKED' WHERE provider_id = ${mockProviderId}`;
-        return originalHealthCheck(key);
+      mockAiAdapter.healthCheck = async (_key) => {
+        // Revoke the tested credential and insert replacement credential concurrently
+        await pgSql`UPDATE ai_provider_credentials SET status = 'REVOKED' WHERE id = ${initialCred!.id}`;
+
+        const replacement = await saveCredential(
+          {
+            providerId: mockProviderId,
+            plaintextApiKey: "sk-mock-replacement-key-555",
+          },
+          { authContext: superAdminContext }
+        );
+        replacementCredId = replacement.id;
+
+        // Return error with sensitive message to verify error suppression
+        throw new Error(
+          "Simulated upstream failure with raw sensitive token sk-upstream-secret-999"
+        );
       };
 
       try {
@@ -827,10 +992,70 @@ describe("GP-025 / CHK1 — AI Database Schema, Credential Crypto & Provider Fou
           authContext: superAdminContext,
         });
 
+        // 1. Outward code = CREDENTIAL_CHANGED_DURING_HEALTH_CHECK
         expect(result.ok).toBe(false);
         expect(result.status).toBe("UNHEALTHY");
         expect(result.code).toBe("CREDENTIAL_CHANGED_DURING_HEALTH_CHECK");
         expect(result.message).toContain("Credential was modified or revoked during health check.");
+        expect(result.message).not.toContain("sk-upstream-secret-999");
+
+        // 2. Tested stale credential health metadata was NOT overwritten
+        const [testedRow] = await db
+          .select()
+          .from(aiProviderCredentials)
+          .where(eq(aiProviderCredentials.id, initialCred!.id));
+        expect(testedRow!.status).toBe("REVOKED");
+        expect(testedRow!.lastHealthStatus).toBe("UNTESTED");
+        expect(testedRow!.lastTestedAt).toBeNull();
+
+        // 3. Replacement/current credential health metadata was NOT overwritten
+        const [replacementRow] = await db
+          .select()
+          .from(aiProviderCredentials)
+          .where(eq(aiProviderCredentials.id, replacementCredId!));
+        expect(replacementRow!.status).toBe("ACTIVE");
+        expect(replacementRow!.lastHealthStatus).toBe("UNTESTED");
+        expect(replacementRow!.lastTestedAt).toBeNull();
+
+        // 4. Exactly one relevant AI_HEALTH_CHECK_EXECUTED AuditEvent exists for that attempt
+        const auditRows = await db
+          .select()
+          .from(auditEvents)
+          .where(
+            and(
+              eq(auditEvents.action, AI_AUDIT_ACTIONS.AI_HEALTH_CHECK_EXECUTED),
+              eq(auditEvents.targetId, initialCred!.id)
+            )
+          );
+        expect(auditRows).toHaveLength(1);
+
+        // 5. AuditEvent references the credential that was actually tested
+        const audit = auditRows[0]!;
+        expect(audit.targetId).toBe(initialCred!.id);
+        expect(audit.actorId).toBe(fixtureIds.superAdminUser);
+
+        // 6. AuditEvent metadata includes safe stale/race result code
+        expect(audit.metadata).toEqual({
+          provider_id: mockProviderId,
+          provider_key: "mock",
+          credential_id: initialCred!.id,
+          status: "UNHEALTHY",
+          ok: false,
+          result_code: "CREDENTIAL_CHANGED_DURING_HEALTH_CHECK",
+          state_write_applied: false,
+        });
+
+        // 7. AuditEvent metadata contains no raw provider error or credential material
+        const metadataStr = JSON.stringify(audit.metadata);
+        expect(metadataStr).not.toContain("sk-upstream-secret-999");
+        expect(metadataStr).not.toContain("ciphertext");
+        expect(metadataStr).not.toContain("iv");
+        expect(metadataStr).not.toContain("auth_tag");
+
+        // 8. Zero ai_provider_attempts rows are created
+        const attemptsCount =
+          await pgSql`SELECT count(*) FROM ai_provider_attempts WHERE provider_id = ${mockProviderId}`;
+        expect(Number(attemptsCount[0]!.count)).toBe(0);
       } finally {
         mockAiAdapter.healthCheck = originalHealthCheck;
       }
