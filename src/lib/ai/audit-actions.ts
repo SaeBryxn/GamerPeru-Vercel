@@ -1,0 +1,16 @@
+/**
+ * GP-025 Canonical AuditEvent Action Strings
+ *
+ * Persisted in public.audit_events.action.
+ * Must match the frozen uppercase action identities exactly.
+ */
+export const AI_AUDIT_ACTIONS = {
+  AI_CREDENTIAL_CREATED: "AI_CREDENTIAL_CREATED",
+  AI_CREDENTIAL_UPDATED: "AI_CREDENTIAL_UPDATED",
+  AI_CREDENTIAL_REVOKED: "AI_CREDENTIAL_REVOKED",
+  AI_PROVIDER_CONFIG_UPDATED: "AI_PROVIDER_CONFIG_UPDATED",
+  AI_PROFILE_UPDATED: "AI_PROFILE_UPDATED",
+  AI_HEALTH_CHECK_EXECUTED: "AI_HEALTH_CHECK_EXECUTED",
+} as const;
+
+export type AiAuditAction = (typeof AI_AUDIT_ACTIONS)[keyof typeof AI_AUDIT_ACTIONS];

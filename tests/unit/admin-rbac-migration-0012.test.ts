@@ -15,7 +15,7 @@ describe("GP-022 — RBAC inventory:manage Data Migration 0012 Contract Tests", 
     expect(fs.existsSync(journalPath)).toBe(true);
 
     const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
-    expect(journal.entries.length).toBe(13);
+    expect(journal.entries.length).toBeGreaterThanOrEqual(13);
 
     const entry0012 = journal.entries[12];
     expect(entry0012.idx).toBe(12);

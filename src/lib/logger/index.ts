@@ -58,6 +58,43 @@ export const CANONICAL_REDACT_PATHS = [
   "*.SENTRY_AUTH_TOKEN",
 ];
 
+export const DYNAMIC_SENSITIVE_KEY_REGEX =
+  /^(ai_encryption_key_v\d+|password|authorization|token|access_token|refresh_token|secret|apikey|api_key|credential|credentials|privatekey|private_key)$/i;
+
+export function isDynamicSensitiveKey(key: string): boolean {
+  return DYNAMIC_SENSITIVE_KEY_REGEX.test(key);
+}
+
+export function sanitizeDynamicLogData<T>(val: T): T {
+  if (val === null || val === undefined || typeof val !== "object") {
+    return val;
+  }
+  if (Array.isArray(val)) {
+    return val.map((item) => sanitizeDynamicLogData(item)) as unknown as T;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(val as Record<string, unknown>)) {
+    if (isDynamicSensitiveKey(key)) {
+      out[key] = "[REDACTED]";
+    } else if (typeof value === "object" && value !== null) {
+      out[key] = sanitizeDynamicLogData(value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out as T;
+}
+
+function wrapLoggerInstance(instance: pino.Logger): pino.Logger {
+  const originalChild = instance.child.bind(instance);
+  instance.child = ((bindings: pino.Bindings, childOptions?: pino.ChildLoggerOptions<never>) => {
+    const sanitizedBindings = sanitizeDynamicLogData(bindings);
+    const child = originalChild(sanitizedBindings, childOptions as never);
+    return wrapLoggerInstance(child);
+  }) as unknown as typeof instance.child;
+  return instance;
+}
+
 export function createLogger(
   options?: pino.LoggerOptions,
   destination?: pino.DestinationStream
@@ -81,9 +118,18 @@ export function createLogger(
       paths: combinedRedactPaths,
       censor: "[REDACTED]",
     },
+    hooks: {
+      logMethod(inputArgs: Parameters<pino.LogFn>, method: pino.LogFn) {
+        const sanitizedArgs = inputArgs.map((arg) =>
+          typeof arg === "object" && arg !== null ? sanitizeDynamicLogData(arg) : arg
+        ) as Parameters<pino.LogFn>;
+        return method.apply(this, sanitizedArgs);
+      },
+    },
   };
 
-  return destination ? pino(baseOptions, destination) : pino(baseOptions);
+  const baseLogger = destination ? pino(baseOptions, destination) : pino(baseOptions);
+  return wrapLoggerInstance(baseLogger);
 }
 
 export const logger = createLogger();
@@ -96,5 +142,5 @@ export interface LogContext {
 }
 
 export function createChildLogger(context: LogContext): pino.Logger {
-  return logger.child(context);
+  return logger.child(sanitizeDynamicLogData(context));
 }

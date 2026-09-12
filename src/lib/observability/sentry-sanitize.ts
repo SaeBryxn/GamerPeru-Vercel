@@ -1,7 +1,7 @@
 import type { ErrorEvent, EventHint } from "@sentry/nextjs";
 
 const SENSITIVE_KEY_REGEX =
-  /^(password|authorization|cookie|set-cookie|token|access_token|refresh_token|secret|apikey|api_key|voucher_url|proof_url|operation_code|database_url|supabase_secret_key|resend_api_key|r2_access_key_id|r2_secret_access_key|inngest_event_key|inngest_signing_key|ai_encryption_key_v1|sentry_auth_token|email|phone|phone_number|address|street|q)$/i;
+  /^(password|authorization|cookie|set-cookie|token|access_token|refresh_token|secret|apikey|api_key|voucher_url|proof_url|operation_code|database_url|supabase_secret_key|resend_api_key|r2_access_key_id|r2_secret_access_key|inngest_event_key|inngest_signing_key|ai_encryption_key_v\d+|sentry_auth_token|email|phone|phone_number|address|street|q)$/i;
 
 const STRING_PATTERNS: Array<{
   regex: RegExp;

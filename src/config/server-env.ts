@@ -27,11 +27,6 @@ export const serverEnvSchema = z
     CATALOG_MEDIA_INTENT_HMAC_SECRET: z.string().optional(),
     INNGEST_EVENT_KEY: z.string().optional(),
     INNGEST_SIGNING_KEY: z.string().optional(),
-    AI_ENCRYPTION_KEY_V1: z
-      .string()
-      .length(64, "Must be exactly 64 hexadecimal characters")
-      .regex(/^[0-9a-fA-F]+$/, "Must be a valid 64-character hexadecimal string")
-      .optional(),
     SENTRY_AUTH_TOKEN: z.string().optional(),
     SENTRY_ORG: z.string().optional(),
     SENTRY_PROJECT: z.string().optional(),
@@ -89,7 +84,6 @@ function parseServerEnv(): ServerEnv {
     CATALOG_MEDIA_INTENT_HMAC_SECRET: process.env.CATALOG_MEDIA_INTENT_HMAC_SECRET,
     INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
     INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
-    AI_ENCRYPTION_KEY_V1: process.env.AI_ENCRYPTION_KEY_V1,
     SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN,
     SENTRY_ORG: process.env.SENTRY_ORG,
     SENTRY_PROJECT: process.env.SENTRY_PROJECT,

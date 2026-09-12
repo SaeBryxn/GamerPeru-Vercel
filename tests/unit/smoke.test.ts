@@ -28,28 +28,22 @@ describe("GP-005 Smoke Tests", () => {
     ).toThrow();
   });
 
-  it("validates real server environment parser against master key invariants and production constraints", () => {
-    // Valid development payload with 64-character hex master key
-    const validDev = validateServerEnv({
+  it("validates real server environment parser succeeds with AI config absent or with placeholders and enforces production constraints", () => {
+    // Valid development payload with AI config absent
+    const validDevNoAi = validateServerEnv({
       NODE_ENV: "development",
       DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:54322/postgres",
-      AI_ENCRYPTION_KEY_V1: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     });
-    expect(validDev.AI_ENCRYPTION_KEY_V1).toHaveLength(64);
+    expect(validDevNoAi.NODE_ENV).toBe("development");
 
-    // Rejects non-64-character hex string
-    expect(() =>
-      validateServerEnv({
-        AI_ENCRYPTION_KEY_V1: "too_short",
-      })
-    ).toThrow();
-
-    // Rejects non-hex characters
-    expect(() =>
-      validateServerEnv({
-        AI_ENCRYPTION_KEY_V1: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-      })
-    ).toThrow();
+    // Valid development payload even with AI placeholder values present in env
+    const validDevWithPlaceholders = validateServerEnv({
+      NODE_ENV: "development",
+      DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:54322/postgres",
+      AI_ENCRYPTION_ACTIVE_KEY_VERSION: "1",
+      AI_ENCRYPTION_KEY_V1: "replace_with_real_64_hex_secret",
+    });
+    expect(validDevWithPlaceholders.NODE_ENV).toBe("development");
 
     // Rejects default localhost DATABASE_URL in production environment
     expect(() =>
