@@ -464,31 +464,9 @@ async function recordStepFailure(
   );
 }
 
-async function recordFinalizationFailure(
-  proposalId: string,
-  actorId: string,
-  error: unknown
-): Promise<never> {
+function recordFinalizationFailure(error: unknown): never {
   if (error instanceof ProposalApplyError && error.code === "APPLY_ACTOR_MISMATCH") throw error;
   const failure = classifyApplyFailure(error);
-  if (failure.status === "FAILED_TERMINAL") {
-    await db.transaction(async (tx) => {
-      const proposal = await loadApplyProposal(tx, proposalId, true);
-      if (proposal.status !== "APPLYING" || proposal.item_status !== "APPROVED") return;
-      const rawSteps = await loadApplySteps(tx, proposal.id, true);
-      const actorIds = new Set(rawSteps.map((step) => step.apply_actor_auth_user_id));
-      if (actorIds.size !== 1 || rawSteps[0]?.apply_actor_auth_user_id !== actorId) return;
-      if (!rawSteps.every((step) => step.step_status === "COMMITTED")) return;
-      const failedStep = [...rawSteps].reverse().find((step) => step.step_status === "COMMITTED");
-      if (!failedStep) return;
-      await tx.execute(sql`
-        UPDATE ai_proposal_apply_steps
-        SET step_status = 'FAILED_TERMINAL', target_id = NULL,
-            error_message = ${failure.message}, updated_at = NOW()
-        WHERE proposal_id = ${proposal.id}::uuid AND step_key = ${failedStep.step_key}
-      `);
-    });
-  }
   throw new ProposalApplyError(
     failure.status === "FAILED_TERMINAL"
       ? "AI_PROPOSAL_APPLY_FAILED_TERMINAL"
@@ -923,7 +901,7 @@ export async function applyProposal(
       try {
         return await finalizeApply(input.proposalId, actor.authUserId);
       } catch (error) {
-        return await recordFinalizationFailure(input.proposalId, actor.authUserId, error);
+        return recordFinalizationFailure(error);
       }
     }
     try {

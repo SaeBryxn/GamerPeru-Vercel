@@ -340,6 +340,32 @@ describe("GP-025 / CHK3-C — crash-safe canonical catalog apply live PostgreSQL
     await pg`UPDATE ai_product_proposals SET status = 'APPLYING' WHERE id = ${seed.proposalId}`;
   }
 
+  async function loadImmutableApplyLedger(proposalId: string) {
+    return await pg`
+      SELECT step_status, target_id::text AS target_id,
+        apply_operation_id::text AS apply_operation_id,
+        apply_actor_auth_user_id::text AS apply_actor_auth_user_id,
+        step_key, step_ordinal, mutation_request_id, request_fingerprint,
+        request_payload::text AS request_payload
+      FROM ai_proposal_apply_steps
+      WHERE proposal_id = ${proposalId}
+      ORDER BY step_ordinal, step_key
+    `;
+  }
+
+  async function loadFinalizationState(proposalId: string) {
+    const [state] = await pg`
+      SELECT proposal.status, item.status AS item_status,
+        (SELECT count(*)::int FROM audit_events
+          WHERE action = 'AI_PROPOSAL_APPLIED' AND target_id = proposal.id::text
+        ) AS applied_events
+      FROM ai_product_proposals proposal
+      JOIN ai_research_job_items item ON item.id = proposal.job_item_id
+      WHERE proposal.id = ${proposalId}
+    `;
+    return state;
+  }
+
   beforeAll(async () => {
     pg = postgres(databaseUrl, { max: 12 });
     await pg`
@@ -905,13 +931,18 @@ describe("GP-025 / CHK3-C — crash-safe canonical catalog apply live PostgreSQL
     `;
     expect(variants).toEqual([{ sku: "CHK3C-PARTIAL-OK" }]);
     const states = await pg`
-      SELECT step_key, step_status FROM ai_proposal_apply_steps
+      SELECT step_key, step_status, target_id::text AS target_id
+      FROM ai_proposal_apply_steps
       WHERE proposal_id = ${seed.proposalId} ORDER BY step_ordinal
     `;
     expect(states).toEqual([
-      { step_key: "PRODUCT_CREATE", step_status: "COMMITTED" },
-      { step_key: "VARIANT_CREATE:0", step_status: "COMMITTED" },
-      { step_key: "VARIANT_CREATE:1", step_status: "FAILED_TERMINAL" },
+      { step_key: "PRODUCT_CREATE", step_status: "COMMITTED", target_id: product!.id },
+      {
+        step_key: "VARIANT_CREATE:0",
+        step_status: "COMMITTED",
+        target_id: expect.any(String),
+      },
+      { step_key: "VARIANT_CREATE:1", step_status: "FAILED_TERMINAL", target_id: null },
     ]);
     const [terminal] = await pg`
       SELECT proposal.status, item.status AS item_status,
@@ -1180,7 +1211,7 @@ describe("GP-025 / CHK3-C — crash-safe canonical catalog apply live PostgreSQL
     const seed = await seedApprovedProposal();
     const operationId = generateUuidV7();
     const payload = productPayload(seed);
-    await createProduct(
+    const durableProduct = await createProduct(
       {
         ...payload,
         mutationRequestId: deriveApplyMutationRequestId(operationId, "PRODUCT_CREATE"),
@@ -1205,9 +1236,26 @@ describe("GP-025 / CHK3-C — crash-safe canonical catalog apply live PostgreSQL
       status: "COMMITTED",
       targetId: wrongProduct.id,
     });
+    const ledgerBefore = await loadImmutableApplyLedger(seed.proposalId);
+    expect(ledgerBefore).toHaveLength(1);
+    expect(ledgerBefore[0]).toMatchObject({
+      step_status: "COMMITTED",
+      target_id: wrongProduct.id,
+    });
     await expect(
       applyProposal({ proposalId: seed.proposalId }, { authContext: actor(ids.actorOne) })
     ).rejects.toMatchObject({ code: "AI_PROPOSAL_APPLY_FAILED_TERMINAL" });
+    expect(await loadImmutableApplyLedger(seed.proposalId)).toEqual(ledgerBefore);
+    expect(await loadFinalizationState(seed.proposalId)).toEqual({
+      status: "APPLYING",
+      item_status: "APPROVED",
+      applied_events: 0,
+    });
+    const products = await pg`
+      SELECT id::text AS id FROM products
+      WHERE id IN (${durableProduct.id}, ${wrongProduct.id}) ORDER BY id
+    `;
+    expect(products).toHaveLength(2);
   });
 
   it("rejects a committed Variant target belonging to another Product", async () => {
@@ -1271,9 +1319,122 @@ describe("GP-025 / CHK3-C — crash-safe canonical catalog apply live PostgreSQL
       status: "COMMITTED",
       targetId: foreignVariant.id,
     });
+    const ledgerBefore = await loadImmutableApplyLedger(seed.proposalId);
+    expect(ledgerBefore).toHaveLength(2);
     await expect(
       applyProposal({ proposalId: seed.proposalId }, { authContext: actor(ids.actorOne) })
     ).rejects.toMatchObject({ code: "AI_PROPOSAL_APPLY_FAILED_TERMINAL" });
+    expect(await loadImmutableApplyLedger(seed.proposalId)).toEqual(ledgerBefore);
+    expect(await loadFinalizationState(seed.proposalId)).toEqual({
+      status: "APPLYING",
+      item_status: "APPROVED",
+      applied_events: 0,
+    });
+  });
+
+  it("preserves the complete COMMITTED ledger across repeated finalization evidence failure", async () => {
+    const seed = await seedApprovedProposal();
+    const operationId = generateUuidV7();
+    const payload = productPayload(seed);
+    const product = await createProduct(
+      {
+        ...payload,
+        mutationRequestId: deriveApplyMutationRequestId(operationId, "PRODUCT_CREATE"),
+      },
+      { authContext: actor(ids.actorOne) }
+    );
+    await markApplying(seed);
+    await insertApplyStep({
+      seed,
+      operationId,
+      stepKey: "PRODUCT_CREATE",
+      stepOrdinal: 0,
+      payload,
+      status: "COMMITTED",
+      targetId: product.id,
+    });
+    await pg`
+      INSERT INTO audit_events (
+        id, timestamp, actor_type, actor_id, action, target_type, target_id,
+        metadata, request_id
+      )
+      SELECT ${generateUuidV7()}, timestamp, actor_type, actor_id, action, target_type,
+        target_id, metadata, request_id
+      FROM audit_events
+      WHERE actor_id = ${ids.actorOne} AND action = 'catalog:product:create'
+        AND target_id = ${product.id}
+      ORDER BY timestamp, id
+      LIMIT 1
+    `;
+
+    const ledgerBefore = await loadImmutableApplyLedger(seed.proposalId);
+    const [catalogBefore] = await pg`
+      SELECT
+        (SELECT count(*)::int FROM products WHERE slug = ${seed.slug}) AS products,
+        (SELECT count(*)::int FROM product_variants WHERE product_id = ${product.id}) AS variants,
+        (SELECT count(*)::int FROM audit_events
+          WHERE actor_id = ${ids.actorOne} AND action LIKE 'catalog:%') AS catalog_events
+    `;
+    expect(catalogBefore).toEqual({ products: 1, variants: 0, catalog_events: 2 });
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(
+        applyProposal({ proposalId: seed.proposalId }, { authContext: actor(ids.actorOne) })
+      ).rejects.toMatchObject({ code: "AI_PROPOSAL_APPLY_FAILED_TERMINAL" });
+      expect(await loadImmutableApplyLedger(seed.proposalId)).toEqual(ledgerBefore);
+      expect(await loadFinalizationState(seed.proposalId)).toEqual({
+        status: "APPLYING",
+        item_status: "APPROVED",
+        applied_events: 0,
+      });
+      const [catalogAfter] = await pg`
+        SELECT
+          (SELECT count(*)::int FROM products WHERE slug = ${seed.slug}) AS products,
+          (SELECT count(*)::int FROM product_variants WHERE product_id = ${product.id}) AS variants,
+          (SELECT count(*)::int FROM audit_events
+            WHERE actor_id = ${ids.actorOne} AND action LIKE 'catalog:%') AS catalog_events
+      `;
+      expect(catalogAfter).toEqual(catalogBefore);
+    }
+  });
+
+  it("finalizes a valid all-COMMITTED operation without changing its durable step", async () => {
+    const seed = await seedApprovedProposal();
+    const operationId = generateUuidV7();
+    const payload = productPayload(seed);
+    const product = await createProduct(
+      {
+        ...payload,
+        mutationRequestId: deriveApplyMutationRequestId(operationId, "PRODUCT_CREATE"),
+      },
+      { authContext: actor(ids.actorOne) }
+    );
+    await markApplying(seed);
+    await insertApplyStep({
+      seed,
+      operationId,
+      stepKey: "PRODUCT_CREATE",
+      stepOrdinal: 0,
+      payload,
+      status: "COMMITTED",
+      targetId: product.id,
+    });
+    const ledgerBefore = await loadImmutableApplyLedger(seed.proposalId);
+
+    await expect(
+      applyProposal({ proposalId: seed.proposalId }, { authContext: actor(ids.actorOne) })
+    ).resolves.toMatchObject({
+      status: "APPLIED",
+      canonicalProductId: product.id,
+      applyOperationId: operationId,
+      replayed: false,
+    });
+    expect(await loadImmutableApplyLedger(seed.proposalId)).toEqual(ledgerBefore);
+    expect(await loadFinalizationState(seed.proposalId)).toEqual({
+      status: "APPLIED",
+      item_status: "APPLIED",
+      applied_events: 1,
+    });
   });
 
   it("fails closed when terminal APPLIED audit evidence is malformed", async () => {
