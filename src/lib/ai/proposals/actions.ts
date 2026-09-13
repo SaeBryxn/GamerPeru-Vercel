@@ -6,6 +6,8 @@ import {
   proposalReadInputSchema,
   proposalVersionInputSchema,
 } from "./schemas";
+import { proposalApplyInputSchema } from "./apply-schemas";
+import { applyProposal, getProposalApplyStatus } from "./apply-service";
 import {
   approveProposal,
   getProposalReviewDetail,
@@ -38,4 +40,13 @@ export async function approveProposalAction(input: unknown) {
 
 export async function rejectProposalAction(input: unknown) {
   return await rejectProposal(proposalVersionInputSchema.parse(input));
+}
+
+export async function applyProposalAction(input: unknown) {
+  return await applyProposal(proposalApplyInputSchema.parse(input));
+}
+
+export async function getProposalApplyStatusAction(input: unknown) {
+  const parsed = proposalApplyInputSchema.parse(input);
+  return await getProposalApplyStatus(parsed.proposalId);
 }

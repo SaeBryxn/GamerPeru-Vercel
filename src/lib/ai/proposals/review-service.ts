@@ -31,6 +31,7 @@ import {
 } from "./schemas";
 import {
   ProposalReviewError,
+  type ApprovedProposalApplyProjection,
   type ProposalFieldReviewDto,
   type ProposalMutationResult,
   type ProposalReviewDecision,
@@ -936,7 +937,7 @@ async function validateEffectiveSpecifications(
   proposal: ProposalRow,
   reviews: ReviewRow[],
   categoryId: string
-): Promise<void> {
+): Promise<Record<string, unknown>> {
   if (!isPlainRecord(proposal.proposed_specifications)) {
     throw new ProposalReviewError("AI_PROPOSAL_INTEGRITY_ERROR");
   }
@@ -973,13 +974,14 @@ async function validateEffectiveSpecifications(
     if (Object.keys(effectiveSpecs).length > 0) {
       throw new ProposalReviewError("AI_PROPOSAL_INTEGRITY_ERROR");
     }
-    return;
+    return effectiveSpecs;
   }
   const validation = validateProductSpecificationValues(
     authoritative.schema!.fieldDefinitions,
     effectiveSpecs
   );
   if (!validation.success) throw new ProposalReviewError("AI_PROPOSAL_INTEGRITY_ERROR");
+  return validation.specValues ?? {};
 }
 
 function assertContextualMirrors(proposal: ProposalRow, mapped: Map<string, ReviewRow>): void {
@@ -1057,6 +1059,118 @@ function validateVariantReview(reviews: Map<string, ReviewRow>): void {
   ) {
     throw new ProposalReviewError("AI_PROPOSAL_INVALID_VARIANT_PLAN");
   }
+}
+
+function effectiveOptionalCopy(
+  mapped: Map<string, ReviewRow>,
+  fieldPath: "copy.subtitle" | "copy.description",
+  maxLength: number
+): string | null {
+  const row = mapped.get(fieldPath);
+  if (!row || row.decision === "REJECTED") return null;
+  if (row.decision !== "ACCEPTED" && row.decision !== "MANUALLY_EDITED") {
+    throw new ProposalReviewError("AI_PROPOSAL_INTEGRITY_ERROR");
+  }
+  return normalizeOptionalCopy(row.selected_value, maxLength);
+}
+
+export async function deriveApprovedProposalApplyProjection(
+  tx: Transaction,
+  proposalId: string,
+  expectedStatus: "APPROVED" | "APPLYING" | "APPLIED"
+): Promise<ApprovedProposalApplyProjection> {
+  const proposal = await loadProposal(tx, proposalId, true);
+  await lockAndRefreshItem(tx, proposal);
+  if (proposal.status !== expectedStatus) {
+    throw new ProposalReviewError("AI_PROPOSAL_INTEGRITY_ERROR");
+  }
+  const expectedItemStatus = expectedStatus === "APPLIED" ? "APPLIED" : "APPROVED";
+  if (proposal.item_status !== expectedItemStatus) {
+    throw new ProposalReviewError("AI_PROPOSAL_INVALID_ITEM_LIFECYCLE");
+  }
+  if (!proposal.reviewed_by_auth_user_id || !proposal.reviewed_at) {
+    throw new ProposalReviewError("AI_PROPOSAL_INTEGRITY_ERROR");
+  }
+  assertItemModeInvariant(proposal);
+  if (normalizeProposalSlug(proposal.proposed_slug) !== proposal.proposed_slug) {
+    throw new ProposalReviewError("AI_PROPOSAL_INVALID_SLUG");
+  }
+
+  const reviews = await loadReviews(tx, proposal.id, true);
+  assertCopyNameMirror(proposal, reviews);
+  const mapped = assertCatalogLedger(proposal, reviews);
+  assertContextualMirrors(proposal, mapped);
+  await assertAllReviewIntegrity(tx, proposal, reviews);
+  const brandId = effectiveCatalogId(mapped.get("catalog.brandId")!);
+  const categoryId = effectiveCatalogId(mapped.get("catalog.categoryId")!);
+  if (!brandId) throw new ProposalReviewError("AI_PROPOSAL_INVALID_BRAND");
+  if (!categoryId) throw new ProposalReviewError("AI_PROPOSAL_INVALID_CATEGORY");
+  await assertPublishedRecord(tx, "brands", brandId, "AI_PROPOSAL_INVALID_BRAND");
+  await assertPublishedRecord(tx, "categories", categoryId, "AI_PROPOSAL_INVALID_CATEGORY");
+  const slug = effectiveRequiredString(mapped.get("catalog.slug"), "slug");
+  const name = effectiveRequiredString(mapped.get("copy.name"), "name");
+  validateEffectiveContextualValues(mapped);
+  validateVariantReview(mapped);
+  const specifications = await validateEffectiveSpecifications(tx, proposal, reviews, categoryId);
+
+  const reviewAuditRows = rows<Record<string, unknown>>(
+    await tx.execute(sql`
+      SELECT actor_type, actor_id, target_type, target_id, metadata
+      FROM audit_events
+      WHERE action = ${AI_AUDIT_ACTIONS.AI_PROPOSAL_REVIEWED}
+        AND target_id = ${proposal.id}
+      ORDER BY timestamp, id
+    `)
+  );
+  const expectedReviewMetadata = {
+    proposalId: proposal.id,
+    ...computeProposalReviewCounts(reviews),
+  };
+  const reviewAudit = reviewAuditRows[0];
+  if (
+    reviewAuditRows.length !== 1 ||
+    !reviewAudit ||
+    reviewAudit.actor_type !== "ADMIN" ||
+    reviewAudit.actor_id !== proposal.reviewed_by_auth_user_id ||
+    reviewAudit.target_type !== "ai_product_proposal" ||
+    reviewAudit.target_id !== proposal.id ||
+    !jsonEqual(reviewAudit.metadata, expectedReviewMetadata)
+  ) {
+    throw new ProposalReviewError("AI_PROPOSAL_INTEGRITY_ERROR");
+  }
+
+  const variantReview = mapped.get("research.variants");
+  const variants =
+    variantReview?.decision === "MANUALLY_EDITED" &&
+    isCanonicalVariantPlan(variantReview.selected_value)
+      ? variantReview.selected_value
+      : [];
+  const subtitle = effectiveOptionalCopy(mapped, "copy.subtitle", 255);
+  const description = effectiveOptionalCopy(mapped, "copy.description", 8_000);
+  const product: ApprovedProposalApplyProjection["product"] = {
+    brandId,
+    categoryId,
+    slug,
+    name,
+  };
+  if (proposal.item_mode === "CREATE") {
+    product.subtitle = subtitle;
+    product.description = description;
+  } else {
+    if (subtitle !== null) product.subtitle = subtitle;
+    if (description !== null) product.description = description;
+  }
+
+  return {
+    proposalId: proposal.id,
+    itemId: proposal.job_item_id,
+    mode: proposal.item_mode as "CREATE" | "ENRICH",
+    targetProductId: proposal.target_product_id,
+    targetProductVersionSnapshot: toIso(proposal.target_product_version_snapshot),
+    product,
+    specifications,
+    variants,
+  };
 }
 
 async function assertTerminalReplay(

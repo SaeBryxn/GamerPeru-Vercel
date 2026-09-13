@@ -2819,4 +2819,267 @@ describe("GP-024 / CHK1 — Admin Catalog Domain & Mutation Engine Live Integrat
       ).rejects.toMatchObject({ code: "FORBIDDEN" });
     });
   });
+
+  describe("GP-025 / CHK3-C — DRAFT execution guards", () => {
+    let guardSequence = 0;
+
+    async function createGuardProduct(label: string) {
+      guardSequence += 1;
+      return await createProduct(
+        {
+          name: `${label} ${guardSequence}`,
+          slug: `gp024-draft-guard-${guardSequence}`,
+          brandId: fixtureIds.brandPublished,
+          categoryId: fixtureIds.catNoSchema,
+        },
+        { authContext: authAdminCatalog }
+      );
+    }
+
+    function variantInput(productId: string, suffix: string, mutationRequestId?: string) {
+      return {
+        productId,
+        sku: `GP025-GUARD-${guardSequence}-${suffix}`,
+        title: `Guarded ${suffix}`,
+        priceCents: 12_500,
+        mutationRequestId,
+      };
+    }
+
+    async function waitForLock(query: string): Promise<void> {
+      for (let attempt = 0; attempt < 80; attempt += 1) {
+        const [row] = (await pgSql.unsafe(query)) as { count: number }[];
+        if (row && row.count > 0) return;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error("Expected PostgreSQL mutation to be waiting on a lock.");
+    }
+
+    it("preserves omitted-option behavior and permits fresh DRAFT updates", async () => {
+      const product = await createGuardProduct("Compatible update");
+      const ordinary = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: product.updatedAt,
+          name: "Ordinary caller remains compatible",
+        },
+        { authContext: authAdminCatalog }
+      );
+      const guarded = await updateProduct(
+        {
+          productId: product.id,
+          expectedUpdatedAt: ordinary.updatedAt,
+          name: "Fresh guarded DRAFT update",
+        },
+        { authContext: authAdminCatalog, requiredProductStatus: "DRAFT" }
+      );
+      expect(guarded).toMatchObject({ name: "Fresh guarded DRAFT update", status: "DRAFT" });
+    });
+
+    it("rejects fresh non-DRAFT updates before stale validation", async () => {
+      const product = await createGuardProduct("Published update rejection");
+      await pgSql`
+        UPDATE products SET status = 'PUBLISHED', updated_at = NOW() WHERE id = ${product.id}
+      `;
+      await expect(
+        updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            name: "Must not apply",
+            mutationRequestId: `gp025-guard-update-reject-${guardSequence}`,
+          },
+          { authContext: authAdminCatalog, requiredProductStatus: "DRAFT" }
+        )
+      ).rejects.toMatchObject({ code: "PRODUCT_STATUS_GUARD_FAILED", httpStatus: 409 });
+    });
+
+    it("recovers a committed update replay after Product status changes", async () => {
+      const product = await createGuardProduct("Update replay");
+      const input = {
+        productId: product.id,
+        expectedUpdatedAt: product.updatedAt,
+        name: "Durably committed update",
+        mutationRequestId: `gp025-guard-update-replay-${guardSequence}`,
+      };
+      const committed = await updateProduct(input, {
+        authContext: authAdminCatalog,
+        requiredProductStatus: "DRAFT",
+      });
+      await pgSql`
+        UPDATE products SET status = 'PUBLISHED', updated_at = NOW() WHERE id = ${product.id}
+      `;
+      const replayed = await updateProduct(input, {
+        authContext: authAdminCatalog,
+        requiredProductStatus: "DRAFT",
+      });
+      expect(replayed).toMatchObject({
+        id: committed.id,
+        name: committed.name,
+        status: "PUBLISHED",
+      });
+    });
+
+    it("guards fresh Variant creation while preserving durable replay", async () => {
+      const product = await createGuardProduct("Variant guard");
+      const committedInput = variantInput(
+        product.id,
+        "REPLAY",
+        `gp025-guard-variant-replay-${guardSequence}`
+      );
+      const committed = await createVariant(committedInput, {
+        authContext: authAdminCatalog,
+        requiredProductStatus: "DRAFT",
+      });
+      await pgSql`
+        UPDATE products SET status = 'PUBLISHED', updated_at = NOW() WHERE id = ${product.id}
+      `;
+      await expect(
+        createVariant(
+          variantInput(product.id, "FRESH", `gp025-guard-variant-fresh-${guardSequence}`),
+          { authContext: authAdminCatalog, requiredProductStatus: "DRAFT" }
+        )
+      ).rejects.toMatchObject({ code: "PRODUCT_STATUS_GUARD_FAILED", httpStatus: 409 });
+      const replayed = await createVariant(committedInput, {
+        authContext: authAdminCatalog,
+        requiredProductStatus: "DRAFT",
+      });
+      expect(replayed.id).toBe(committed.id);
+    });
+
+    it("fails fresh update and Variant mutations when publication owns the Product lock first", async () => {
+      const product = await createGuardProduct("Publication first");
+      const publisher = postgres(databaseUrl, { max: 1 });
+      let releasePublisher!: () => void;
+      const mayPublish = new Promise<void>((resolve) => {
+        releasePublisher = resolve;
+      });
+      let publishedUnderLock!: () => void;
+      const publicationLocked = new Promise<void>((resolve) => {
+        publishedUnderLock = resolve;
+      });
+      try {
+        const publication = publisher.begin(async (tx) => {
+          await tx`SELECT id FROM products WHERE id = ${product.id}::uuid FOR UPDATE`;
+          await tx`
+            UPDATE products SET status = 'PUBLISHED', updated_at = NOW()
+            WHERE id = ${product.id}::uuid
+          `;
+          publishedUnderLock();
+          await mayPublish;
+        });
+        await publicationLocked;
+
+        const updateAttempt = updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            name: "Blocked update",
+            mutationRequestId: `gp025-guard-publish-first-update-${guardSequence}`,
+          },
+          { authContext: authAdminCatalog, requiredProductStatus: "DRAFT" }
+        );
+        const variantAttempt = createVariant(
+          variantInput(
+            product.id,
+            "PUBLISH-FIRST",
+            `gp025-guard-publish-first-variant-${guardSequence}`
+          ),
+          { authContext: authAdminCatalog, requiredProductStatus: "DRAFT" }
+        );
+
+        await waitForLock(`
+          SELECT count(*)::int AS count
+          FROM pg_locks
+          WHERE granted = false
+        `);
+        releasePublisher();
+        await publication;
+        const outcomes = await Promise.allSettled([updateAttempt, variantAttempt]);
+        expect(outcomes).toHaveLength(2);
+        for (const outcome of outcomes) {
+          expect(outcome).toMatchObject({
+            status: "rejected",
+            reason: { code: "PRODUCT_STATUS_GUARD_FAILED" },
+          });
+        }
+        const [variantCount] = await pgSql`
+          SELECT count(*)::int AS count FROM product_variants
+          WHERE product_id = ${product.id}
+        `;
+        expect(variantCount!.count).toBe(0);
+      } finally {
+        releasePublisher();
+        await publisher.end();
+      }
+    });
+
+    it("lets a guarded update commit before a waiting publication", async () => {
+      const product = await createGuardProduct("Apply first");
+      const auditBlocker = postgres(databaseUrl, { max: 1 });
+      const publisher = postgres(databaseUrl, { max: 1 });
+      let releaseAudit!: () => void;
+      const auditMayCommit = new Promise<void>((resolve) => {
+        releaseAudit = resolve;
+      });
+      let auditLocked!: () => void;
+      const auditLockReady = new Promise<void>((resolve) => {
+        auditLocked = resolve;
+      });
+      try {
+        const blocker = auditBlocker.begin(async (tx) => {
+          await tx`LOCK TABLE audit_events IN ACCESS EXCLUSIVE MODE`;
+          auditLocked();
+          await auditMayCommit;
+        });
+        await auditLockReady;
+        const guardedUpdate = updateProduct(
+          {
+            productId: product.id,
+            expectedUpdatedAt: product.updatedAt,
+            name: "Guarded mutation committed first",
+          },
+          { authContext: authAdminCatalog, requiredProductStatus: "DRAFT" }
+        );
+        await waitForLock(`
+          SELECT count(*)::int AS count
+          FROM pg_locks lock
+          JOIN pg_class relation ON relation.oid = lock.relation
+          WHERE relation.relname = 'audit_events' AND lock.granted = false
+        `);
+
+        const publication = publisher.begin(async (tx) => {
+          await tx.unsafe(`
+            UPDATE products SET status = 'PUBLISHED', updated_at = NOW()
+            WHERE id = '${product.id}'::uuid /* gp025_guard_publish_after */
+          `);
+        });
+        await waitForLock(`
+          SELECT count(*)::int AS count
+          FROM pg_stat_activity
+          WHERE query LIKE '%gp025_guard_publish_after%'
+            AND wait_event_type = 'Lock'
+        `);
+        releaseAudit();
+        await blocker;
+        const updated = await guardedUpdate;
+        await publication;
+        expect(updated).toMatchObject({
+          name: "Guarded mutation committed first",
+          status: "DRAFT",
+        });
+        const [finalProduct] = await pgSql`
+          SELECT name, status FROM products WHERE id = ${product.id}
+        `;
+        expect(finalProduct).toEqual({
+          name: "Guarded mutation committed first",
+          status: "PUBLISHED",
+        });
+      } finally {
+        releaseAudit();
+        await auditBlocker.end();
+        await publisher.end();
+      }
+    });
+  });
 });

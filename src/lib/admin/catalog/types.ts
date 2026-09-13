@@ -234,6 +234,15 @@ export class StaleWriteConflictError extends CatalogDomainError {
   }
 }
 
+export class ProductStatusGuardError extends CatalogDomainError {
+  constructor(
+    message = "El producto ya no se encuentra en el estado requerido para esta operación."
+  ) {
+    super(message, "PRODUCT_STATUS_GUARD_FAILED", 409);
+    this.name = "ProductStatusGuardError";
+  }
+}
+
 export class SkuImmutableError extends CatalogDomainError {
   constructor(
     message = "Este SKU está vinculado a registros de inventario o pedidos históricos y no puede modificarse."

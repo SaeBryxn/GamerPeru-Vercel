@@ -22,6 +22,7 @@ import {
   CatalogDomainError,
   CatalogIdempotencyConflictError,
   CatalogReplayIntegrityError,
+  ProductStatusGuardError,
   SkuImmutableError,
   StaleWriteConflictError,
 } from "./types";
@@ -40,6 +41,7 @@ import { isPlainRecord } from "./record";
 
 export interface ServiceOptions {
   authContext?: VerifiedAuthContextReady;
+  requiredProductStatus?: "DRAFT";
 }
 
 function mapProductRow(raw: Record<string, unknown>): Product {
@@ -764,6 +766,13 @@ export async function updateProduct(
 
       const current = mapProductRow(currentRows[0]);
 
+      if (
+        options?.requiredProductStatus !== undefined &&
+        current.status !== options.requiredProductStatus
+      ) {
+        throw new ProductStatusGuardError();
+      }
+
       // 2. Exact Optimistic Concurrency Check (no 1000ms window)
       const expectedTime = new Date(normalizedInput.expectedUpdatedAt).getTime();
       const actualTime = new Date(current.updatedAt).getTime();
@@ -1093,13 +1102,19 @@ export async function createVariant(
         }
       }
 
-      // Verify Product exists
+      // Lock and verify the parent Product before any fresh Variant mutation.
       const prodRows = (await tx.execute(sql`
-        SELECT id FROM products WHERE id = ${input.productId}::uuid LIMIT 1;
-      `)) as unknown as { id: string }[];
+        SELECT id, status FROM products WHERE id = ${input.productId}::uuid FOR UPDATE LIMIT 1;
+      `)) as unknown as { id: string; status: string }[];
 
       if (!prodRows[0]) {
         throw new CatalogDomainError("El producto asignado no existe.", "PRODUCT_NOT_FOUND", 404);
+      }
+      if (
+        options?.requiredProductStatus !== undefined &&
+        prodRows[0].status !== options.requiredProductStatus
+      ) {
+        throw new ProductStatusGuardError();
       }
 
       // Check SKU uniqueness

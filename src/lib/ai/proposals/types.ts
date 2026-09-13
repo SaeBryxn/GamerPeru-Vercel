@@ -158,3 +158,97 @@ export interface ProposalMutationResult {
   proposalUpdatedAt: string;
   replayed: boolean;
 }
+
+export const PROPOSAL_APPLY_STEP_STATUSES = [
+  "PREPARED",
+  "IN_FLIGHT",
+  "COMMITTED",
+  "FAILED_RETRYABLE",
+  "FAILED_TERMINAL",
+] as const;
+
+export type ProposalApplyStepStatus = (typeof PROPOSAL_APPLY_STEP_STATUSES)[number];
+export type ProposalApplyMode = "CREATE" | "ENRICH";
+
+export const PROPOSAL_APPLY_ERROR_CODES = [
+  "AI_PROPOSAL_APPLY_NOT_FOUND",
+  "AI_PROPOSAL_NOT_APPLICABLE",
+  "AI_PROPOSAL_APPLY_INTEGRITY_ERROR",
+  "AI_PROPOSAL_APPLY_FAILED_RETRYABLE",
+  "AI_PROPOSAL_APPLY_FAILED_TERMINAL",
+  "APPLY_ACTOR_MISMATCH",
+] as const;
+
+export type ProposalApplyErrorCode = (typeof PROPOSAL_APPLY_ERROR_CODES)[number];
+
+const APPLY_ERROR_MESSAGES: Record<ProposalApplyErrorCode, string> = {
+  AI_PROPOSAL_APPLY_NOT_FOUND: "La propuesta solicitada no existe.",
+  AI_PROPOSAL_NOT_APPLICABLE: "La propuesta no se encuentra en un estado aplicable.",
+  AI_PROPOSAL_APPLY_INTEGRITY_ERROR: "El ledger de aplicación no es íntegro.",
+  AI_PROPOSAL_APPLY_FAILED_RETRYABLE:
+    "La aplicación se interrumpió de forma transitoria y puede reanudarse.",
+  AI_PROPOSAL_APPLY_FAILED_TERMINAL:
+    "La aplicación se detuvo por un error permanente y no puede reintentarse.",
+  APPLY_ACTOR_MISMATCH: "La operación pertenece a otro actor autorizado.",
+};
+
+export class ProposalApplyError extends Error {
+  constructor(
+    readonly code: ProposalApplyErrorCode,
+    message = APPLY_ERROR_MESSAGES[code],
+    readonly httpStatus = 409
+  ) {
+    super(message);
+    this.name = "ProposalApplyError";
+  }
+}
+
+export interface ProposalApplyServiceOptions {
+  authContext?: VerifiedAuthContextReady;
+}
+
+export interface ApprovedProposalApplyProjection {
+  proposalId: string;
+  itemId: string;
+  mode: ProposalApplyMode;
+  targetProductId: string | null;
+  targetProductVersionSnapshot: string | null;
+  product: {
+    brandId: string;
+    categoryId: string;
+    slug: string;
+    name: string;
+    subtitle?: string | null;
+    description?: string | null;
+  };
+  specifications: Record<string, unknown>;
+  variants: NormalizedVariantPlanEntry[];
+}
+
+export interface ProposalApplyStepDto {
+  stepKey: string;
+  stepOrdinal: number;
+  stepStatus: ProposalApplyStepStatus;
+  targetId: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProposalApplyStatusDto {
+  proposalId: string;
+  proposalStatus: "APPROVED" | "APPLYING" | "APPLIED";
+  itemStatus: "APPROVED" | "APPLIED";
+  mode: ProposalApplyMode;
+  canonicalProductId: string | null;
+  applyOperationId: string | null;
+  steps: ProposalApplyStepDto[];
+}
+
+export interface ProposalApplyResult {
+  proposalId: string;
+  status: "APPLYING" | "APPLIED";
+  canonicalProductId: string | null;
+  applyOperationId: string;
+  replayed: boolean;
+}
