@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { LayoutDashboard, Package } from "lucide-react";
+import { Bot, LayoutDashboard, Package, Settings2 } from "lucide-react";
 import type { AdminNavItem, AdminStaffProfile } from "@/lib/admin/types";
 import styles from "./admin-shell.module.css";
 
@@ -11,6 +11,7 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ navItems, staff, currentPath = "/admin" }: AdminSidebarProps) {
+  const iconMap = { LayoutDashboard, Package, Bot, Settings2 };
   return (
     <aside className={styles.sidebar} aria-label="Navegación administrativa">
       <div>
@@ -24,8 +25,18 @@ export function AdminSidebar({ navItems, staff, currentPath = "/admin" }: AdminS
           <nav aria-label="Secciones del panel">
             <ul className={styles.navList}>
               {navItems.map((item) => {
-                const isActive = currentPath === item.href;
-                const IconComponent = item.iconName === "Package" ? Package : LayoutDashboard;
+                const isActive =
+                  currentPath === item.href ||
+                  (item.href !== "/admin" &&
+                    currentPath.startsWith(`${item.href}/`) &&
+                    !navItems.some(
+                      (candidate) =>
+                        candidate.href.length > item.href.length &&
+                        (currentPath === candidate.href ||
+                          currentPath.startsWith(`${candidate.href}/`))
+                    ));
+                const IconComponent =
+                  iconMap[item.iconName as keyof typeof iconMap] ?? LayoutDashboard;
                 return (
                   <li key={item.id} className={styles.navItem}>
                     <Link

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import Link from "next/link";
-import { LayoutDashboard, Package, X } from "lucide-react";
+import { Bot, LayoutDashboard, Package, Settings2, X } from "lucide-react";
 import type { AdminNavItem, AdminStaffProfile } from "@/lib/admin/types";
 import styles from "./admin-shell.module.css";
 
@@ -23,6 +23,7 @@ export function AdminMobileNav({
   currentPath = "/admin",
   triggerRef,
 }: AdminMobileNavProps) {
+  const iconMap = { LayoutDashboard, Package, Bot, Settings2 };
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -113,8 +114,18 @@ export function AdminMobileNav({
           <nav aria-label="Secciones del panel móvil">
             <ul className={styles.navList}>
               {navItems.map((item) => {
-                const isActive = currentPath === item.href;
-                const IconComponent = item.iconName === "Package" ? Package : LayoutDashboard;
+                const isActive =
+                  currentPath === item.href ||
+                  (item.href !== "/admin" &&
+                    currentPath.startsWith(`${item.href}/`) &&
+                    !navItems.some(
+                      (candidate) =>
+                        candidate.href.length > item.href.length &&
+                        (currentPath === candidate.href ||
+                          currentPath.startsWith(`${candidate.href}/`))
+                    ));
+                const IconComponent =
+                  iconMap[item.iconName as keyof typeof iconMap] ?? LayoutDashboard;
                 return (
                   <li key={item.id} className={styles.navItem}>
                     <Link

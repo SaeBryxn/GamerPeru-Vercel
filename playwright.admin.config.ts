@@ -38,7 +38,11 @@ if (!supabasePublishableKey) {
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: ["**/admin-foundation.spec.ts", "**/admin-product-manager.spec.ts"],
+  testMatch: [
+    "**/admin-foundation.spec.ts",
+    "**/admin-product-manager.spec.ts",
+    "**/admin-ai-product-assistant.spec.ts",
+  ],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

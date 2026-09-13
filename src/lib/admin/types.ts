@@ -12,7 +12,9 @@ export interface AdminNavItem {
     | "Boxes"
     | "Users"
     | "LifeBuoy"
-    | "Settings";
+    | "Settings"
+    | "Bot"
+    | "Settings2";
   requiredPermission?: PermissionName;
   description?: string;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import { usePathname } from "next/navigation";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import { getAdminNavigation } from "@/lib/admin/navigation";
 import { AdminSidebar } from "./admin-sidebar";
@@ -14,6 +15,7 @@ interface AdminShellProps {
 }
 
 export function AdminShell({ authContext, children }: AdminShellProps) {
+  const currentPath = usePathname();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -39,7 +41,7 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
       />
 
       <div className={styles.layoutContainer}>
-        <AdminSidebar navItems={navItems} staff={staff} />
+        <AdminSidebar navItems={navItems} staff={staff} currentPath={currentPath} />
 
         <div className={styles.mainWrapper}>
           <main id="admin-main-content" className={styles.mainContent} tabIndex={-1}>
@@ -53,6 +55,7 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
         onClose={() => setIsMobileNavOpen(false)}
         navItems={navItems}
         staff={staff}
+        currentPath={currentPath}
         triggerRef={menuButtonRef}
       />
     </div>

@@ -24,6 +24,22 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     requiredPermission: "catalog:manage",
     description: "Gestión de catálogo y productos",
   },
+  {
+    id: "ai-product-assistant",
+    label: "Asistente IA",
+    href: "/admin/products/ai-import",
+    iconName: "Bot",
+    requiredPermission: "catalog:ai_research",
+    description: "Investigación y revisión asistida de productos",
+  },
+  {
+    id: "ai-settings",
+    label: "Configuración IA",
+    href: "/admin/settings/ai",
+    iconName: "Settings2",
+    requiredPermission: "ai:manage_credentials",
+    description: "Proveedores, credenciales y perfiles de IA",
+  },
 ];
 
 /**

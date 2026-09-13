@@ -260,6 +260,39 @@
   gap: 1rem;
 }
 
+@media (max-width: 639px) {
+  .header {
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+
+  .headerLeft,
+  .headerRight {
+    gap: 0.5rem;
+  }
+
+  .headerLeft {
+    min-width: 0;
+  }
+
+  .breadcrumbs > span:first-child,
+  .breadcrumbs > span:nth-child(2),
+  .storefrontLink > span {
+    display: none;
+  }
+
+  .headerRight form {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  .storefrontLink {
+    justify-content: center;
+    width: 44px;
+    padding-inline: 0;
+  }
+}
+
 .storefrontLink {
   display: inline-flex;
   align-items: center;
