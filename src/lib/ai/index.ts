@@ -8,3 +8,4 @@ export * from "./gateway/google-gemini-adapter";
 export * from "./gateway/mock-adapter";
 export * from "./gateway/registry";
 export * from "./research";
+export * from "./proposals";

@@ -7,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     environment: "node",
+    fileParallelism: false,
     include: ["tests/admin-integration/**/*.test.{ts,tsx}"],
     globals: true,
   },
