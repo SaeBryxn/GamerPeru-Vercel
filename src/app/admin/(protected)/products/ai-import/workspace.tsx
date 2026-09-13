@@ -74,7 +74,7 @@ export function AiImportWorkspace({
   canManageAiSettings,
 }: AiImportWorkspaceProps) {
   const enabledProfiles = profiles.filter(
-    (profile) => profile.isEnabled && profile.providerEnabled
+    (profile) => profile.isEnabled && profile.providerEnabled && profile.researchExecutionSupported
   );
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("SINGLE");
   const [researchMode, setResearchMode] = useState<ResearchMode>("CREATE");
@@ -192,6 +192,7 @@ export function AiImportWorkspace({
     !selectedProfileId ||
     !selectedProfile?.isEnabled ||
     !selectedProfile.providerEnabled ||
+    !selectedProfile.researchExecutionSupported ||
     requestItems.length === 0 ||
     (workspaceMode === "SINGLE" && researchMode === "ENRICH" && !targetProductId);
 
@@ -260,10 +261,18 @@ export function AiImportWorkspace({
                   <option
                     key={profile.id}
                     value={profile.id}
-                    disabled={!profile.isEnabled || !profile.providerEnabled}
+                    disabled={
+                      !profile.isEnabled ||
+                      !profile.providerEnabled ||
+                      !profile.researchExecutionSupported
+                    }
                   >
                     {profile.profileKey} · {profile.providerDisplayName} · {profile.modelId}
-                    {!profile.isEnabled || !profile.providerEnabled ? " (no disponible)" : ""}
+                    {!profile.researchExecutionSupported
+                      ? " (sin adaptador de ejecución)"
+                      : !profile.isEnabled || !profile.providerEnabled
+                        ? " (no disponible)"
+                        : ""}
                   </option>
                 ))}
               </select>
@@ -273,6 +282,12 @@ export function AiImportWorkspace({
               <div className={styles.inlineEmpty} role="note">
                 No hay perfiles configurados. Solicita a una persona con acceso a Configuración IA
                 que prepare uno.
+              </div>
+            )}
+            {profiles.length > 0 && enabledProfiles.length === 0 && (
+              <div className={styles.inlineEmpty} role="note">
+                No hay perfiles ejecutables. Actualmente la investigación GP-025 requiere un perfil
+                habilitado con proveedor Google.
               </div>
             )}
 
@@ -303,7 +318,7 @@ export function AiImportWorkspace({
                     />
                     <span>
                       <strong>Enriquecer borrador</strong>
-                      <small>Investiga un producto canónico existente.</small>
+                      <small>Investiga un producto canónico que aún permanece DRAFT.</small>
                     </span>
                   </label>
                 </fieldset>
@@ -318,11 +333,14 @@ export function AiImportWorkspace({
                       <option value="">Selecciona un producto</option>
                       {products.map((product) => (
                         <option key={product.id} value={product.id}>
-                          {product.name} · {product.slug} · {product.status}
+                          {product.name} · {product.slug} · DRAFT
                         </option>
                       ))}
                     </select>
                     {selectedProduct && <small>Identificador: {selectedProduct.id}</small>}
+                    {products.length === 0 && (
+                      <small>No hay productos DRAFT elegibles para enriquecimiento.</small>
+                    )}
                   </label>
                 )}
 

@@ -24,7 +24,12 @@ import {
   type SafeCredentialDto,
 } from "@/lib/ai/credential-service";
 import { mapAdminAiError } from "./error-mapping";
-import { getResearchJobDetail } from "./readers";
+import {
+  assertAdminProfileRuntimeCompatibility,
+  assertAdminProviderHealthCheckSupported,
+  assertAdminResearchSubmissionEligibility,
+  getResearchJobDetail,
+} from "./readers";
 import {
   adminCredentialMutationSchema,
   adminCredentialSaveSchema,
@@ -144,8 +149,11 @@ async function runAction<T>(operation: () => Promise<T>): Promise<AdminAiActionR
 export async function submitResearchJobAdminAction(
   rawInput: unknown
 ): Promise<AdminAiActionResult<{ jobId: string; replayed: boolean }>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") return unauthenticated();
   return await runAction(async () => {
     const input = adminResearchSubmissionSchema.parse(rawInput);
+    await assertAdminResearchSubmissionEligibility(input, { authContext });
     const result = await createResearchJobAction(input);
     revalidatePath("/admin/products/ai-import");
     return { jobId: result.jobId, replayed: result.replayed };
@@ -336,6 +344,7 @@ export async function testCredentialAdminAction(rawInput: unknown): Promise<
   if (authContext.status !== "READY") return unauthenticated();
   return await runAction(async () => {
     const input = adminProviderOperationSchema.parse(rawInput);
+    await assertAdminProviderHealthCheckSupported(input.providerId, { authContext });
     const result = await executeCredentialHealthCheck(input.providerId, { authContext });
     revalidatePath("/admin/settings/ai");
     return {
@@ -354,6 +363,7 @@ export async function configureProfileAdminAction(
   if (authContext.status !== "READY") return unauthenticated();
   return await runAction(async () => {
     const input = adminProfileConfigurationSchema.parse(rawInput);
+    await assertAdminProfileRuntimeCompatibility(input, { authContext });
     const profile = await configureProfile(input, { authContext });
     revalidatePath("/admin/settings/ai");
     return { profileId: profile.id };

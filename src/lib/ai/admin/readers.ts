@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   aiProductProposals,
@@ -24,6 +24,7 @@ import {
   ADMIN_AI_PROVIDER_KEYS,
   RESEARCH_ITEM_STATUSES,
   type AdminAiProfileDto,
+  type AdminAiProviderCapabilityDto,
   type AdminAiProviderDto,
   type AdminAiSettingsDto,
   type AdminAiCredentialDto,
@@ -39,6 +40,14 @@ interface AdminAiReaderOptions {
   authContext?: VerifiedAuthContextReady;
 }
 
+interface AdminResearchEligibilityInput {
+  selectedProfileId: string;
+  items: Array<{
+    mode: "CREATE" | "ENRICH";
+    targetProductId?: string | null;
+  }>;
+}
+
 async function requireReaderPermission(
   permission: PermissionName,
   options?: AdminAiReaderOptions
@@ -52,6 +61,117 @@ async function requireReaderPermission(
 
 function toIso(value: Date): string {
   return value.toISOString();
+}
+
+function getProviderRuntimeCapability(
+  providerKey: string
+): Omit<AdminAiProviderCapabilityDto, "providerKey"> {
+  const supported = providerKey === "google";
+  return {
+    researchExecutionSupported: supported,
+    healthCheckSupported: supported,
+  };
+}
+
+async function getProviderRuntimeRow(providerId: string): Promise<{
+  providerKey: string;
+  isEnabled: boolean;
+} | null> {
+  const [provider] = await db
+    .select({ providerKey: aiProviders.providerKey, isEnabled: aiProviders.isEnabled })
+    .from(aiProviders)
+    .where(eq(aiProviders.id, providerId))
+    .limit(1);
+  return provider ?? null;
+}
+
+export async function assertAdminResearchSubmissionEligibility(
+  input: AdminResearchEligibilityInput,
+  options?: AdminAiReaderOptions
+): Promise<void> {
+  await requireReaderPermission("catalog:ai_research", options);
+  const [profile] = await db
+    .select({
+      isEnabled: aiProfiles.isEnabled,
+      providerEnabled: aiProviders.isEnabled,
+      providerKey: aiProviders.providerKey,
+    })
+    .from(aiProfiles)
+    .innerJoin(aiProviders, eq(aiProfiles.providerId, aiProviders.id))
+    .where(eq(aiProfiles.id, input.selectedProfileId))
+    .limit(1);
+
+  if (!profile?.isEnabled) {
+    throw new Error("AI_PROFILE_DISABLED: Selected AI profile is unavailable.");
+  }
+  if (!profile.providerEnabled) {
+    throw new Error("AI_PROVIDER_DISABLED: Selected AI provider is unavailable.");
+  }
+  if (!getProviderRuntimeCapability(profile.providerKey).researchExecutionSupported) {
+    throw new Error(
+      "AI_RESEARCH_PROVIDER_UNSUPPORTED: Selected provider has no GP-025 research adapter."
+    );
+  }
+
+  const targetIds = [
+    ...new Set(
+      input.items
+        .filter((item) => item.mode === "ENRICH")
+        .map((item) => item.targetProductId)
+        .filter((value): value is string => Boolean(value))
+    ),
+  ];
+  if (targetIds.length === 0) return;
+
+  const targetRows = await db
+    .select({ id: products.id, status: products.status })
+    .from(products)
+    .where(inArray(products.id, targetIds));
+  const targetById = new Map(targetRows.map((target) => [target.id, target.status]));
+  for (const targetId of targetIds) {
+    const status = targetById.get(targetId);
+    if (!status) {
+      throw new Error("AI_TARGET_PRODUCT_NOT_FOUND: ENRICH target product does not exist.");
+    }
+    if (status !== "DRAFT") {
+      throw new Error(
+        "AI_ENRICH_TARGET_NOT_DRAFT: ENRICH target must currently be a DRAFT Product."
+      );
+    }
+  }
+}
+
+export async function assertAdminProfileRuntimeCompatibility(
+  input: { providerId: string; isEnabled: boolean },
+  options?: AdminAiReaderOptions
+): Promise<void> {
+  await requireReaderPermission("ai:manage_credentials", options);
+  if (!input.isEnabled) return;
+  const provider = await getProviderRuntimeRow(input.providerId);
+  if (!provider) {
+    throw new Error("PROVIDER_NOT_FOUND: Selected provider does not exist.");
+  }
+  if (!getProviderRuntimeCapability(provider.providerKey).researchExecutionSupported) {
+    throw new Error(
+      "AI_PROFILE_PROVIDER_UNSUPPORTED: Enabled GP-025 profiles require a research adapter."
+    );
+  }
+}
+
+export async function assertAdminProviderHealthCheckSupported(
+  providerId: string,
+  options?: AdminAiReaderOptions
+): Promise<void> {
+  await requireReaderPermission("ai:manage_credentials", options);
+  const provider = await getProviderRuntimeRow(providerId);
+  if (!provider) {
+    throw new Error("PROVIDER_NOT_FOUND: Selected provider does not exist.");
+  }
+  if (!getProviderRuntimeCapability(provider.providerKey).healthCheckSupported) {
+    throw new Error(
+      "AI_PROVIDER_HEALTH_CHECK_UNSUPPORTED: Provider has no production health-check adapter."
+    );
+  }
 }
 
 function safeResearchError(code: string | null): string | null {
@@ -112,6 +232,7 @@ export async function getResearchWorkspaceBootstrap(options?: AdminAiReaderOptio
         isEnabled: aiProfiles.isEnabled,
         providerDisplayName: aiProviders.displayName,
         providerEnabled: aiProviders.isEnabled,
+        providerKey: aiProviders.providerKey,
       })
       .from(aiProfiles)
       .innerJoin(aiProviders, eq(aiProfiles.providerId, aiProviders.id))
@@ -125,17 +246,27 @@ export async function getResearchWorkspaceBootstrap(options?: AdminAiReaderOptio
         status: products.status,
       })
       .from(products)
+      .where(eq(products.status, "DRAFT"))
       .orderBy(asc(products.name), asc(products.id))
       .limit(100),
     getRecentResearchJobs(20, options),
   ]);
   return {
-    profiles: profiles.map((profile) => ({ ...profile })),
+    profiles: profiles.map((profile) => ({
+      id: profile.id,
+      profileKey: profile.profileKey,
+      modelId: profile.modelId,
+      isEnabled: profile.isEnabled,
+      providerDisplayName: profile.providerDisplayName,
+      providerEnabled: profile.providerEnabled,
+      researchExecutionSupported: getProviderRuntimeCapability(profile.providerKey)
+        .researchExecutionSupported,
+    })),
     products: productRows.map((product) => ({
       id: product.id,
       name: product.name,
       slug: product.slug,
-      status: product.status,
+      status: "DRAFT" as const,
     })),
     recentJobs,
   };
@@ -332,7 +463,13 @@ export async function getAdminAiSettings(
         updatedAt: aiProviderCredentials.updatedAt,
       })
       .from(aiProviderCredentials)
-      .where(eq(aiProviderCredentials.status, "ACTIVE"))
+      .innerJoin(aiProviders, eq(aiProviderCredentials.providerId, aiProviders.id))
+      .where(
+        and(
+          eq(aiProviderCredentials.status, "ACTIVE"),
+          inArray(aiProviders.providerKey, [...ADMIN_AI_PROVIDER_KEYS])
+        )
+      )
       .orderBy(desc(aiProviderCredentials.updatedAt))
       .limit(3),
     db
@@ -341,6 +478,7 @@ export async function getAdminAiSettings(
         profileKey: aiProfiles.profileKey,
         providerId: aiProfiles.providerId,
         providerDisplayName: aiProviders.displayName,
+        providerKey: aiProviders.providerKey,
         modelId: aiProfiles.modelId,
         temperature: aiProfiles.temperature,
         maxTokens: aiProfiles.maxTokens,
@@ -376,6 +514,7 @@ export async function getAdminAiSettings(
     isEnabled: provider.isEnabled,
     isDefault: provider.isDefault,
     settings: isRecord(provider.settings) ? provider.settings : {},
+    ...getProviderRuntimeCapability(provider.providerKey),
     updatedAt: toIso(provider.updatedAt),
     credential: credentialByProvider.get(provider.id) ?? null,
   }));
@@ -388,7 +527,15 @@ export async function getAdminAiSettings(
     temperature: profile.temperature,
     maxTokens: profile.maxTokens,
     isEnabled: profile.isEnabled,
+    researchExecutionSupported: getProviderRuntimeCapability(profile.providerKey)
+      .researchExecutionSupported,
     updatedAt: toIso(profile.updatedAt),
   }));
-  return { providers, profiles };
+  const providerCapabilities: AdminAiProviderCapabilityDto[] = ADMIN_AI_PROVIDER_KEYS.map(
+    (providerKey) => ({
+      providerKey,
+      ...getProviderRuntimeCapability(providerKey),
+    })
+  );
+  return { providers, profiles, providerCapabilities };
 }

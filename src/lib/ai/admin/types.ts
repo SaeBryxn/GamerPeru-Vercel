@@ -38,13 +38,14 @@ export interface ResearchProfileOptionDto {
   modelId: string;
   isEnabled: boolean;
   providerEnabled: boolean;
+  researchExecutionSupported: boolean;
 }
 
 export interface ResearchProductOptionDto {
   id: string;
   name: string;
   slug: string;
-  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  status: "DRAFT";
 }
 
 export interface ResearchJobSummaryDto {
@@ -184,8 +185,16 @@ export interface AdminAiProviderDto {
   isEnabled: boolean;
   isDefault: boolean;
   settings: Record<string, unknown>;
+  researchExecutionSupported: boolean;
+  healthCheckSupported: boolean;
   updatedAt: string;
   credential: AdminAiCredentialDto | null;
+}
+
+export interface AdminAiProviderCapabilityDto {
+  providerKey: AdminAiProviderKey;
+  researchExecutionSupported: boolean;
+  healthCheckSupported: boolean;
 }
 
 export interface AdminAiCredentialDto {
@@ -209,10 +218,12 @@ export interface AdminAiProfileDto {
   temperature: string;
   maxTokens: number;
   isEnabled: boolean;
+  researchExecutionSupported: boolean;
   updatedAt: string;
 }
 
 export interface AdminAiSettingsDto {
   providers: AdminAiProviderDto[];
   profiles: AdminAiProfileDto[];
+  providerCapabilities: AdminAiProviderCapabilityDto[];
 }

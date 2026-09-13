@@ -30,6 +30,15 @@ const ids = {
   specReview: "018f0025-4000-7000-8000-000000000209",
   variantReview: "018f0025-4000-7000-8000-000000000210",
   sourceLink: "018f0025-4000-7000-8000-000000000211",
+  openAiProvider: "018f0025-4000-7000-8000-000000000212",
+  anthropicProvider: "018f0025-4000-7000-8000-000000000213",
+  openAiProfile: "018f0025-4000-7000-8000-000000000214",
+  anthropicProfile: "018f0025-4000-7000-8000-000000000215",
+  openAiCredential: "018f0025-4000-7000-8000-000000000216",
+  anthropicCredential: "018f0025-4000-7000-8000-000000000217",
+  draftProduct: "018f0025-4000-7000-8000-000000000218",
+  publishedProduct: "018f0025-4000-7000-8000-000000000219",
+  archivedProduct: "018f0025-4000-7000-8000-000000000220",
 };
 
 const proposedName = "Mouse CHK4 E2E Review";
@@ -66,10 +75,11 @@ async function cleanupAiFixtures() {
   await sql`DELETE FROM ai_sources WHERE id = ${ids.source}`;
   await sql`DELETE FROM ai_research_job_items WHERE id = ${ids.item}`;
   await sql`DELETE FROM ai_research_jobs WHERE id = ${ids.job}`;
-  await sql`DELETE FROM ai_provider_credentials WHERE id = ${ids.credential}`;
-  await sql`DELETE FROM ai_profiles WHERE id = ${ids.profile}`;
-  await sql`DELETE FROM ai_providers WHERE id = ${ids.provider}`;
-  await sql`DELETE FROM audit_events WHERE target_id IN (${ids.proposal}, ${ids.job}, ${ids.credential}, ${ids.provider}, ${ids.profile})`;
+  await sql`DELETE FROM products WHERE id IN (${ids.draftProduct}, ${ids.publishedProduct}, ${ids.archivedProduct})`;
+  await sql`DELETE FROM ai_provider_credentials WHERE id IN (${ids.credential}, ${ids.openAiCredential}, ${ids.anthropicCredential})`;
+  await sql`DELETE FROM ai_profiles WHERE id IN (${ids.profile}, ${ids.openAiProfile}, ${ids.anthropicProfile})`;
+  await sql`DELETE FROM ai_providers WHERE id IN (${ids.provider}, ${ids.openAiProvider}, ${ids.anthropicProvider})`;
+  await sql`DELETE FROM audit_events WHERE target_id IN (${ids.proposal}, ${ids.job}, ${ids.credential}, ${ids.openAiCredential}, ${ids.anthropicCredential}, ${ids.provider}, ${ids.openAiProvider}, ${ids.anthropicProvider}, ${ids.profile}, ${ids.openAiProfile}, ${ids.anthropicProfile})`;
 }
 
 test.beforeAll(async () => {
@@ -78,20 +88,33 @@ test.beforeAll(async () => {
   const now = new Date("2026-09-13T15:00:00.000Z");
   await sql`
     INSERT INTO ai_providers (id, provider_key, display_name, is_enabled, is_default, settings, created_at, updated_at)
-    VALUES (${ids.provider}, 'google', 'Gemini local E2E', true, true, '{}', ${now}, ${now})
+    VALUES
+      (${ids.provider}, 'google', 'Gemini local E2E', true, true, '{}', ${now}, ${now}),
+      (${ids.openAiProvider}, 'openai', 'OpenAI futuro E2E', true, false, '{}', ${now}, ${now}),
+      (${ids.anthropicProvider}, 'anthropic', 'Anthropic futuro E2E', true, false, '{}', ${now}, ${now})
   `;
   await sql`
     INSERT INTO ai_profiles (id, profile_key, provider_id, model_id, temperature, max_tokens, is_enabled, created_at, updated_at)
-    VALUES (${ids.profile}, 'PRODUCT_RESEARCH_FAST', ${ids.provider}, 'gemini-fixture-no-network', '0.20', 1024, true, ${now}, ${now})
+    VALUES
+      (${ids.profile}, 'PRODUCT_RESEARCH_FAST', ${ids.provider}, 'gemini-fixture-no-network', '0.20', 1024, true, ${now}, ${now}),
+      (${ids.openAiProfile}, 'PRODUCT_RESEARCH_DEEP', ${ids.openAiProvider}, 'openai-future-no-adapter', '0.20', 1024, true, ${now}, ${now}),
+      (${ids.anthropicProfile}, 'SEO_COPY', ${ids.anthropicProvider}, 'anthropic-future-no-adapter', '0.20', 1024, true, ${now}, ${now})
   `;
   await sql`
     INSERT INTO ai_provider_credentials (
       id, provider_id, key_version, ciphertext, iv, auth_tag, masked_key, status,
       last_health_status, last_tested_at, created_at, updated_at
-    ) VALUES (
-      ${ids.credential}, ${ids.provider}, 1, ${"12".repeat(16)}, ${"34".repeat(12)},
-      ${"56".repeat(16)}, '••••••e2e4', 'ACTIVE', 'UNTESTED', NULL, ${now}, ${now}
-    )
+    ) VALUES
+      (${ids.credential}, ${ids.provider}, 1, ${"12".repeat(16)}, ${"34".repeat(12)}, ${"56".repeat(16)}, '••••••e2e4', 'ACTIVE', 'UNTESTED', NULL, ${now}, ${now}),
+      (${ids.openAiCredential}, ${ids.openAiProvider}, 1, ${"21".repeat(16)}, ${"43".repeat(12)}, ${"65".repeat(16)}, '••••••oai4', 'ACTIVE', 'UNTESTED', NULL, ${now}, ${now}),
+      (${ids.anthropicCredential}, ${ids.anthropicProvider}, 1, ${"31".repeat(16)}, ${"53".repeat(12)}, ${"75".repeat(16)}, '••••••ant4', 'ACTIVE', 'UNTESTED', NULL, ${now}, ${now})
+  `;
+  await sql`
+    INSERT INTO products (id, brand_id, category_id, name, slug, status, is_featured, created_at, updated_at)
+    VALUES
+      (${ids.draftProduct}, ${ADMIN_E2E_PRODUCT_FIXTURES.brand.id}, ${ADMIN_E2E_PRODUCT_FIXTURES.categoryA.id}, 'Elegible CHK4 BR1 DRAFT', 'elegible-chk4-br1-draft', 'DRAFT', false, ${now}, ${now}),
+      (${ids.publishedProduct}, ${ADMIN_E2E_PRODUCT_FIXTURES.brand.id}, ${ADMIN_E2E_PRODUCT_FIXTURES.categoryA.id}, 'No elegible CHK4 BR1 PUBLISHED', 'no-elegible-chk4-br1-published', 'PUBLISHED', false, ${now}, ${now}),
+      (${ids.archivedProduct}, ${ADMIN_E2E_PRODUCT_FIXTURES.brand.id}, ${ADMIN_E2E_PRODUCT_FIXTURES.categoryA.id}, 'No elegible CHK4 BR1 ARCHIVED', 'no-elegible-chk4-br1-archived', 'ARCHIVED', false, ${now}, ${now})
   `;
   await sql`
     INSERT INTO ai_research_jobs (
@@ -176,9 +199,67 @@ test.describe("GP-025 / CHK4 — Admin AI Product Assistant", () => {
     await loginAndNavigate(page, ADMIN_E2E_USERS.superadmin.email, "/admin/settings/ai");
     await expect(page.getByRole("heading", { name: "Configuración IA" })).toBeVisible();
     await expect(page.getByText("••••••e2e4")).toBeVisible();
+
+    const googleProvider = page.getByTestId("provider-google");
+    await expect(googleProvider).toContainText(
+      "Adaptador de ejecución disponible para investigación GP-025."
+    );
+    await expect(googleProvider.getByRole("button", { name: "Probar conexión" })).toBeEnabled();
+
+    for (const providerKey of ["openai", "anthropic"] as const) {
+      const provider = page.getByTestId(`provider-${providerKey}`);
+      await expect(provider).toContainText("Adaptador de ejecución aún no disponible.");
+      await expect(provider).toContainText(
+        "Prueba de conexión no disponible hasta incorporar el adaptador de ejecución."
+      );
+      await expect(provider.getByRole("button", { name: "Probar conexión" })).toHaveCount(0);
+    }
+
+    for (const profileKey of ["PRODUCT_RESEARCH_DEEP", "SEO_COPY"] as const) {
+      const profile = page.getByTestId(`profile-${profileKey}`);
+      await expect(profile).toContainText("sin adaptador de ejecución");
+      await expect(profile.getByRole("button", { name: "Guardar perfil" })).toBeDisabled();
+    }
+
     const text = await page.locator("body").innerText();
     expect(text).not.toContain("1212121212121212");
+    expect(text).not.toContain("2121212121212121");
+    expect(text).not.toContain("3131313131313131");
     expect(text).not.toMatch(/ciphertext|auth tag|master key/i);
+  });
+
+  test("exposes only executable profiles and DRAFT products in the research form", async ({
+    page,
+  }) => {
+    await loginAndNavigate(page, ADMIN_E2E_USERS.catalog.email, "/admin/products/ai-import");
+
+    const profileSelect = page.getByLabel("Perfil de ejecución");
+    await expect(profileSelect.locator(`option[value="${ids.profile}"]`)).toBeEnabled();
+    await expect(profileSelect.locator(`option[value="${ids.openAiProfile}"]`)).toHaveAttribute(
+      "disabled",
+      ""
+    );
+    await expect(profileSelect.locator(`option[value="${ids.anthropicProfile}"]`)).toHaveAttribute(
+      "disabled",
+      ""
+    );
+    await expect(profileSelect).toContainText("sin adaptador de ejecución");
+
+    await page.getByRole("radio", { name: /Enriquecer borrador/ }).check();
+    const productSelect = page.getByRole("combobox", { name: /^Producto canónico/ });
+    await expect(productSelect).toContainText("Elegible CHK4 BR1 DRAFT");
+    await expect(productSelect).not.toContainText("No elegible CHK4 BR1 PUBLISHED");
+    await expect(productSelect).not.toContainText("No elegible CHK4 BR1 ARCHIVED");
+    const selectableProductIds = await productSelect
+      .locator('option:not([value=""])')
+      .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+    const selectableStatuses = await sql<{ id: string; status: string }[]>`
+      SELECT id, status FROM products WHERE id IN ${sql(selectableProductIds)}
+    `;
+    expect(selectableStatuses).toHaveLength(selectableProductIds.length);
+    expect(new Set(selectableStatuses.map((product) => product.status))).toEqual(
+      new Set(["DRAFT"])
+    );
   });
 
   test("reviews, prices, approves and applies a deterministic proposal into a canonical DRAFT Product", async ({

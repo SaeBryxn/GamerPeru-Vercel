@@ -30,6 +30,7 @@ import {
   ADMIN_AI_PROVIDER_KEYS,
   type AdminAiActionResult,
   type AdminAiProfileDto,
+  type AdminAiProviderCapabilityDto,
   type AdminAiProviderDto,
   type AdminAiProviderKey,
   type AdminAiSettingsDto,
@@ -58,10 +59,12 @@ function formatDate(value: string | null): string {
 function ProviderCard({
   providerKey,
   provider,
+  capability,
   onNotice,
 }: {
   providerKey: AdminAiProviderKey;
   provider?: AdminAiProviderDto;
+  capability: AdminAiProviderCapabilityDto;
   onNotice: (notice: Notice) => void;
 }) {
   const router = useRouter();
@@ -168,6 +171,12 @@ function ProviderCard({
         </span>
       </header>
 
+      <div className={styles.inlineEmpty} role="note">
+        {capability.researchExecutionSupported
+          ? "Adaptador de ejecución disponible para investigación GP-025."
+          : "Adaptador de ejecución aún no disponible. La configuración y las credenciales pueden guardarse para uso futuro."}
+      </div>
+
       <fieldset className={styles.settingsFieldset} disabled={pending}>
         <legend>Proveedor</legend>
         <div className={styles.formGrid}>
@@ -271,32 +280,41 @@ function ProviderCard({
           </div>
         )}
         {provider?.credential && (
-          <div className={styles.compactActions}>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={testConnection}
-              disabled={pending}
-            >
-              <RefreshCw size={15} aria-hidden="true" /> Probar conexión
-            </button>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={rotate}
-              disabled={pending}
-            >
-              <RotateCw size={15} aria-hidden="true" /> Rotar cifrado
-            </button>
-            <button
-              type="button"
-              className={styles.dangerSecondaryButton}
-              onClick={() => setConfirmation("revoke")}
-              disabled={pending}
-            >
-              <Trash2 size={15} aria-hidden="true" /> Revocar
-            </button>
-          </div>
+          <>
+            {!capability.healthCheckSupported && (
+              <div className={styles.inlineEmpty} role="note">
+                Prueba de conexión no disponible hasta incorporar el adaptador de ejecución.
+              </div>
+            )}
+            <div className={styles.compactActions}>
+              {capability.healthCheckSupported && (
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={testConnection}
+                  disabled={pending}
+                >
+                  <RefreshCw size={15} aria-hidden="true" /> Probar conexión
+                </button>
+              )}
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={rotate}
+                disabled={pending}
+              >
+                <RotateCw size={15} aria-hidden="true" /> Rotar cifrado
+              </button>
+              <button
+                type="button"
+                className={styles.dangerSecondaryButton}
+                onClick={() => setConfirmation("revoke")}
+                disabled={pending}
+              >
+                <Trash2 size={15} aria-hidden="true" /> Revocar
+              </button>
+            </div>
+          </>
         )}
       </section>
 
@@ -335,12 +353,15 @@ function ProfileCard({
   onNotice: (notice: Notice) => void;
 }) {
   const router = useRouter();
-  const [providerId, setProviderId] = useState(profile?.providerId ?? providers[0]?.id ?? "");
+  const defaultProviderId =
+    providers.find((provider) => provider.researchExecutionSupported)?.id ?? providers[0]?.id ?? "";
+  const [providerId, setProviderId] = useState(profile?.providerId ?? defaultProviderId);
   const [modelId, setModelId] = useState(profile?.modelId ?? "");
   const [temperature, setTemperature] = useState(profile?.temperature ?? "0.20");
   const [maxTokens, setMaxTokens] = useState(profile?.maxTokens ?? 4096);
   const [enabled, setEnabled] = useState(profile?.isEnabled ?? true);
   const [pending, startTransition] = useTransition();
+  const selectedProvider = providers.find((provider) => provider.id === providerId);
   function save() {
     startTransition(async () => {
       const result = await configureProfileAdminAction({
@@ -360,7 +381,7 @@ function ProfileCard({
     });
   }
   return (
-    <article className={styles.profileCard}>
+    <article className={styles.profileCard} data-testid={`profile-${profileKey}`}>
       <header>
         <div>
           <h3>{profileKey.replaceAll("_", " ")}</h3>
@@ -388,9 +409,16 @@ function ProfileCard({
             {providers.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.displayName} · {item.providerKey}
+                {!item.researchExecutionSupported ? " · sin adaptador de ejecución" : ""}
               </option>
             ))}
           </select>
+          {selectedProvider && !selectedProvider.researchExecutionSupported && (
+            <small>
+              Este proveedor sólo puede guardarse en un perfil deshabilitado hasta que exista un
+              adaptador de ejecución.
+            </small>
+          )}
         </label>
         <label className={styles.field}>
           <span>Modelo</span>
@@ -426,7 +454,13 @@ function ProfileCard({
         type="button"
         className={styles.secondaryButton}
         onClick={save}
-        disabled={pending || !providerId || !modelId.trim() || !Number.isFinite(maxTokens)}
+        disabled={
+          pending ||
+          !providerId ||
+          !modelId.trim() ||
+          !Number.isFinite(maxTokens) ||
+          (enabled && !selectedProvider?.researchExecutionSupported)
+        }
       >
         {pending ? (
           <LoaderCircle className={styles.spinner} aria-hidden="true" />
@@ -443,6 +477,9 @@ export function AiSettingsWorkspace({ initialSettings }: AiSettingsWorkspaceProp
   const [notice, setNotice] = useState<Notice | null>(null);
   const providersByKey = new Map(
     initialSettings.providers.map((provider) => [provider.providerKey, provider])
+  );
+  const capabilitiesByKey = new Map(
+    initialSettings.providerCapabilities.map((capability) => [capability.providerKey, capability])
   );
   const profilesByKey = new Map(
     initialSettings.profiles.map((profile) => [profile.profileKey, profile])
@@ -499,6 +536,7 @@ export function AiSettingsWorkspace({ initialSettings }: AiSettingsWorkspaceProp
               key={key}
               providerKey={key}
               provider={providersByKey.get(key)}
+              capability={capabilitiesByKey.get(key)!}
               onNotice={setNotice}
             />
           ))}

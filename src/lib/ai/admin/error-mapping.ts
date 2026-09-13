@@ -22,7 +22,15 @@ const SAFE_MESSAGES: Record<string, string> = {
     "La aplicación terminó con un error permanente. Requiere recuperación operativa o una nueva propuesta.",
   AI_PROFILE_DISABLED: "El perfil seleccionado está deshabilitado o no está disponible.",
   AI_PROVIDER_DISABLED: "El proveedor seleccionado está deshabilitado o no está disponible.",
+  AI_RESEARCH_PROVIDER_UNSUPPORTED:
+    "El proveedor seleccionado aún no tiene un adaptador de ejecución para investigación.",
+  AI_PROFILE_PROVIDER_UNSUPPORTED:
+    "Un perfil habilitado de GP-025 requiere un proveedor con adaptador de ejecución.",
+  AI_PROVIDER_HEALTH_CHECK_UNSUPPORTED:
+    "Este proveedor aún no tiene un adaptador disponible para probar la conexión.",
   AI_TARGET_PRODUCT_NOT_FOUND: "El producto seleccionado para enriquecer ya no existe.",
+  AI_ENRICH_TARGET_NOT_DRAFT:
+    "El producto seleccionado ya no es un borrador DRAFT y no puede enriquecerse.",
   REJECTED_SECRET_SETTINGS_KEY:
     "La configuración no secreta contiene una clave reservada para credenciales.",
   PROVIDER_NOT_FOUND: "El proveedor seleccionado no existe.",
