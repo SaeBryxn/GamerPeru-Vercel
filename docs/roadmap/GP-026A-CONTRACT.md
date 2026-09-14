@@ -1,3 +1,12 @@
+# STATUS: SUPERSEDED / HISTORICAL ONLY / NOT IMPLEMENTATION AUTHORITY
+
+> This contract was previously externally approved and frozen. It was subsequently
+> superseded by an explicit project-owner decision on 2026-09-14 and must not be used to
+> authorize or guide future storefront implementation. The WLMOUSE high-fidelity convergence
+> mandate is cancelled. The historical text below is retained for auditability only. No agent
+> may execute CHK1 through CHK6 from this contract unless the owner explicitly reauthorizes
+> GP-026A in a future reviewed decision.
+
 # GP-026A Contract --- WLMOUSE Storefront Visual Convergence
 
 ## 1. Status
