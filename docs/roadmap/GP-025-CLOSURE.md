@@ -2,11 +2,11 @@
 
 ## Status
 
-FINAL CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL
+CLOSED / EXTERNALLY APPROVED / FROZEN
 
 ## Closure Verdict
 
-PENDING EXTERNAL REVIEW
+PASS WITH NOTES
 
 ## Closure Metadata
 
@@ -19,6 +19,20 @@ PENDING EXTERNAL REVIEW
 - **Production-code delta**: ZERO
 - **Test-code delta**: ZERO
 - **Expected candidate files**: `docs/roadmap/GP-025.md` and `docs/roadmap/GP-025-CLOSURE.md`
+
+## Final External Approval Record
+
+- **Externally approved CHK5 candidate**: `96129578d45d0dc815778073d4bb8c42ec6ebc9e`
+- **Candidate baseline**: `99ec5f655217484cc156d7cda1d08cbaa0a248c1`
+- **Frozen contract**: `08165cfc0e0eeccb0887d5514eeb5654413f0c52`
+- **Frozen migration 0013**: `7c29de159250ef7fc043f758a966364370534cac`
+- **Migration 0014**: absent.
+- **Repository freeze**: AI schema unchanged; production and test code unchanged by CHK5.
+- **Regression acceptance**: the full integrated regression is externally accepted, including local PostgreSQL and Playwright results as local evidence.
+- **GitHub Actions for baseline `99ec5f655217484cc156d7cda1d08cbaa0a248c1`**: Zero runs exist.
+- **GitHub Actions for CHK5 candidate `96129578d45d0dc815778073d4bb8c42ec6ebc9e`**: Zero runs exist.
+- **Production boundary**: activation prerequisites remain UNVERIFIED and mandatory before real AI production activation.
+- **Next gate**: GP-026 has not begun and is not authorized by this closure operation.
 
 ## 1. Objective & Delivered Scope
 
@@ -41,7 +55,7 @@ The following lineage was derived from the repository history and the canonical 
 | CHK3-C | `ab2f3110b43da3fdaaf480aa7a7d782725efedb0` (CHK3-C-BR1) | `ec90b1229dc69220d96bc9907db98efb45137ce7` |
 | CHK4   | `a129565378785af94927d9fa2d3cd01b354e4aa2` (CHK4-BR1)   | `99ec5f655217484cc156d7cda1d08cbaa0a248c1` |
 
-The exact integrated sequence from the first CHK1 candidate through the CHK4 closure is linear. CHK5 starts directly from `99ec5f655217484cc156d7cda1d08cbaa0a248c1`; it is not merged and is not externally approved by this report.
+The exact integrated sequence from the first CHK1 candidate through the CHK4 closure is linear. CHK5 starts directly from `99ec5f655217484cc156d7cda1d08cbaa0a248c1`; candidate `96129578d45d0dc815778073d4bb8c42ec6ebc9e` was externally approved and fast-forwarded into `main` before this final closure.
 
 ## 3. Rejected/Remediated Checkpoints
 
@@ -226,7 +240,7 @@ Checkpoint-specific regression classification:
 ## 23. GitHub Actions Classification
 
 - Baseline `99ec5f655217484cc156d7cda1d08cbaa0a248c1`: Zero runs exist.
-- CHK5 candidate: its exact post-push Actions inspection is recorded in the external CHK5 implementation report because a commit cannot contain its own SHA.
+- CHK5 candidate `96129578d45d0dc815778073d4bb8c42ec6ebc9e`: Zero runs exist.
 - `workflow_dispatch` was not used.
 - Local `pnpm check`, live suites, and Playwright results are local evidence and are not presented as GitHub CI.
 
@@ -250,7 +264,7 @@ Code closure and production environment activation are distinct.
 | Database availability                     | Explicit production database configuration is required; production availability UNVERIFIED.                     |
 | Admin RBAC provisioning                   | Canonical permissions and guards are implemented; production user/role provisioning UNVERIFIED.                 |
 
-These deferred external checks do not block the code closure candidate under the frozen contract, but they must pass before real production AI execution is activated.
+These deferred external checks do not block GP-025 code closure under the frozen contract, but they must pass before real production AI execution is activated.
 
 ## 26. Explicit Out-of-Scope Items
 
@@ -273,14 +287,14 @@ These are frozen scope exclusions, not CHK5 defects.
 
 ## 28. GP-026 Boundary
 
-GP-026 has not begun and is not authorized by this candidate. Product Story suggestions may exist as draft research material, but the Product Story Builder and its implementation belong to a later, separately authorized gate.
+GP-026 has not begun and is not authorized by this closure operation. Product Story suggestions may exist as draft research material, but the Product Story Builder and its implementation belong to a later, separately authorized gate.
 
 ## 29. Final Closure Readiness Assessment
 
-Functional, security, accessibility, responsive, build, local PostgreSQL, and Playwright evidence passed on the exact CHK4-approved baseline. The final candidate changes documentation only; production code, test code, schema, migrations, migration metadata, and frozen GP-025 backend behavior remain unchanged.
+Functional, security, accessibility, responsive, build, local PostgreSQL, and Playwright evidence passed on the exact externally approved CHK5 candidate. CHK5 changes documentation only; production code, test code, schema, migrations, migration metadata, and frozen GP-025 backend behavior remain unchanged.
 
 Acceptance criteria for single/batch research, structured validation, visible provenance/conflicts, provider/profile selection, DRAFT-only human review, credential isolation, partial batch failure, and consistent canonical apply are covered by the passing regression matrix. No material code blocker remains.
 
-The remaining gate is independent external review. This document does not declare GP-025 closed, CHK5 closed, or GP-025 externally approved.
+Independent external review approved CHK5 and the final integrated regression evidence. No material code blocker remains; only the explicitly UNVERIFIED production activation prerequisites remain mandatory before real AI production activation.
 
-**Readiness classification**: GP-025 CHK5 IMPLEMENTED / FULL INTEGRATED REGRESSION PASSED / FINAL CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL / READY FOR EXTERNAL VERIFICATION
+**Readiness classification**: GP-025 CLOSED / EXTERNALLY APPROVED / FROZEN / MAIN INTEGRATION COMPLETE / PASS WITH NOTES / PRODUCTION ACTIVATION PREREQUISITES PENDING / GP-026 PENDING EXTERNAL AUTHORIZATION
