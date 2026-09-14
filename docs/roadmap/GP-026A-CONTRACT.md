@@ -8,8 +8,9 @@ IN DISCOVERY / CONTRACT CANDIDATE / PENDING EXTERNAL APPROVAL
 
 - **Repository**: `latamcreativa/GamerPeru`
 - **Baseline Commit (origin/main)**: `03598514ffced3ee854bc5a7a715362683383100` (`docs(roadmap): close GP-025 with external approval [skip ci]`)
-- **Working Branch**: `audit/gp026a-chk0`
-- **Branch Lineage**: Branched strictly and directly from commit `03598514ffced3ee854bc5a7a715362683383100`.
+- **Original CHK0 Candidate Commit**: `5744d331e2b0f8f2f98a4dc57b05099e9474d8ad`
+- **Remediation Working Branch**: `audit/gp026a-chk0-br1`
+- **Branch Lineage**: Branched strictly and directly from candidate `5744d331e2b0f8f2f98a4dc57b05099e9474d8ad`.
 - **Zero-Candidate Isolation**: Completely isolated from unmerged GP-026 candidate `e239298b01e6b0eb409118dc6b5e31c1ce75b9ae` and experimental branches `audit/gp026-chk0` / `audit/gp026-chk0-br1`.
 
 ## 3. Owner Intent
@@ -44,6 +45,8 @@ GP-001 (_WLMOUSE Visual & UX Reference_, August 2026) served as the initial expl
 
 GP-026A supersedes visual assumptions for future storefront work. Historical documents [GP-001.md](./GP-001.md), [GP-001-CLOSURE.md](./GP-001-CLOSURE.md), and [WLMOUSE_REFERENCE_SPEC.md](../design/WLMOUSE_REFERENCE_SPEC.md) remain untouched as historical records; this contract governs all subsequent execution.
 
+Crucially, GP-001 established that commercial carrier integrations, specific delivery SLAs, warranty duration terms, and support channels remain TBD business decisions. This contract strictly adheres to those boundaries.
+
 ## 6. Relationship to GP-002
 
 GP-002 established Gamer Perú's canonical design language ("Machinery Obsidian & Signal Crimson"). GP-026A retains this core identity:
@@ -66,7 +69,8 @@ These previously completed gates established canonical domain foundations:
 - **GP-014**: Product Detail Page (PDP) routing, metadata generation, and JSON-LD structured data.
 - **GP-017**: Cart state management, drawer container, item mutations, and session persistence.
 
-GP-026A preserves 100% of the underlying state, queries, and business logic of these gates, while replacing their visual presentation components with WLMOUSE-converged implementations.
+**Domain and Read-Model Boundary**:
+Domain write semantics, checkout sessions, orders, authentication, and RBAC remain 100% authoritative and unchanged. However, the existing catalog read queries (`ProductDiscoveryItem`, `ProductDetailEntity`) do not currently expose the secondary media, card specification highlights, or available-to-sell inventory required for visual parity. Therefore, additive public read projections are authorized to fulfill visual convergence without mutating backend business logic or database schemas.
 
 ## 8. Relationship to GP-026
 
@@ -79,9 +83,9 @@ GP-026A preserves 100% of the underlying state, queries, and business logic of t
 
 A comprehensive code audit of `src/app/(storefront)` and `src/components/*` reveals the following divergence from WLMOUSE:
 
-1. **Homepage Dominance**: Current homepage (`src/components/home/*`) relies on abstract geometric wireframes (`media: { kind: "abstract" }`) and generic textual callouts rather than real hardware photography, video loops, and purchasable product sections.
-2. **Product Card Anatomy**: Current `ProductCard` (`src/components/catalog/product-card/product-card.tsx`) renders a static 4:5 image without hover flip, lacking technical specification highlight carousels, sale badges, and quick-action buttons.
-3. **PDP Commerce Anatomy**: Current `ProductCommercePanel` renders basic radio buttons without visual image-swatches for colors, lacks top-of-panel spec highlight pills, lacks an inline quantity counter, lacks a sticky purchase bar on scroll, and lacks add-ons/accessories modules.
+1. **Homepage Dominance**: Current homepage (`src/components/home/*`) relies on abstract geometric wireframes (`media: { kind: "abstract" }`) and textual descriptions rather than real hardware photography, video loops, and purchasable product sections.
+2. **Product Card Read Model**: Current `ProductDiscoveryItem` only contains basic fields (`id`, `name`, `slug`, `subtitle`, `brand`, `category`, `primaryMedia`, `startingPriceCents`). It lacks secondary media and specification highlights, forcing the card to render a static image without hover flip or spec carousels.
+3. **PDP Inventory & Commerce Anatomy**: Current `ProductDetailEntity` / `ProductVariantDetail` does not expose authoritative available-to-sell inventory counts. Current `ProductCommercePanel` renders radio text buttons without visual image-swatches for colors, lacks top-of-panel spec highlight pills, hardcodes quantity to 1, and lacks a sticky buy bar on scroll.
 4. **Gallery Architecture**: Current `ProductMediaGallery` uses standard thumbnail strips without fluid adaptive ratios, swipe-dot indicators, or full-bleed lightbox magnification.
 5. **Global Navigation**: Header lacks the high-contrast minimalist balance of WLMOUSE, drawer menus lack smooth spring animations, and announcement bars lack fluid multi-message rotation.
 6. **Product Story Presentation**: Current `src/components/product-story/blocks/*` renders blocks with standard card layouts rather than bold, full-bleed high-contrast editorial spreads.
@@ -106,7 +110,7 @@ A comprehensive code audit of `src/app/(storefront)` and `src/components/*` reve
 
 The live WLMOUSE homepage exhibits a deliberate 16-stage editorial rhythm:
 
-1. **Announcement Bar**: Multi-message ticker/slide with announcement text, shipping notes, and links.
+1. **Announcement Bar**: Multi-message ticker/slide with announcement text and links.
 2. **Minimalist Header**: Centered logo, left-aligned search link and hamburger menu, right-aligned currency, account, and slide-out cart icon.
 3. **Slideshow Hero**: Full-bleed campaign hero showcasing flagship hardware in high resolution, large headline, material subtitle, and primary button.
 4. **Collection Family Doors (`collection-list`)**: Visual card doors for each hardware series (_HUAN_, _Beast G_, _Beast X_, _Ying_, _Sword_, _Strider_, _HE Keyboards_, _Mousepads_, _IEMs_, _Skates_, _Grip Tape_).
@@ -120,7 +124,7 @@ The live WLMOUSE homepage exhibits a deliberate 16-stage editorial rhythm:
 12. **Curated Collage Section (`collage`)**: Asymmetric 3-tile editorial grid highlighting accessories and skates.
 13. **Featured Mousepads Shelf (`featured_collection`)**: Grid showcasing mousepad surfaces and textures.
 14. **Community Showcase (`image_with_text_overlay`)**: Discord / social community call to action.
-15. **Trust Strip (`multicolumn-with-icons`)**: 4-item horizontal value proposition strip (Shipping, Authenticity, Guarantee, Direct Support).
+15. **Trust Strip (`multicolumn-with-icons`)**: 4-item horizontal value proposition strip.
 16. **Minimalist Footer (`footer` + `footer-copyright`)**: Clean multi-column directory, newsletter input, and copyright notice.
 
 ## 12. Current WLMOUSE Navigation Inventory
@@ -131,7 +135,7 @@ The live WLMOUSE homepage exhibits a deliberate 16-stage editorial rhythm:
 - **Desktop Navigation**: Horizontal product-family links with subtle hover underlines and dropdown mega-menus containing product family cards with images.
 - **Right Utilities**: Country/Currency selector (`USD $`), Account login link, and slide-out Cart Drawer button with live badge counter.
 - **Search Drawer**: Slide-down or slide-in drawer with live predictive search, showing query results grouped by Products, Collections, and Articles with live pricing and thumbnails.
-- **Cart Drawer**: Slide-out right panel (`cart-drawer`), free shipping threshold progress bar, line items with image, variant subtitle, quantity counter, remove button, discount code accordion, order notes, and checkout CTA.
+- **Cart Drawer**: Slide-out right panel (`cart-drawer`), line items with image, variant subtitle, quantity counter, remove button, order notes, and checkout CTA.
 
 ## 13. Current WLMOUSE Collection & Card Inventory
 
@@ -144,10 +148,7 @@ The live WLMOUSE homepage exhibits a deliberate 16-stage editorial rhythm:
   - **Quick View Button**: Discrete eye icon button top-right, fades in on hover.
   - **Quick Action Button**: Bottom-anchored button ("Choose options" or "Add to cart") sliding up on hover.
   - **Card Header**: Product title in medium typography, price row (with sale price in accent red/rose and strikethrough compare-at price).
-  - **Spec Highlight Carousel (`scroll-shadow` + `icons-carousel`)**: Horizontal scrollable container below title/price displaying 3–5 key technical attributes:
-    - SVG icon (24x24) + Category attribute name (`Polling Rate`, `MCU`, `Material`, `Switch`, `Sensor`).
-    - Attribute value (`8K Wireless`, `Nordic 54L15`, `Magnesium Alloy`, `Omron Optical`).
-    - Horizontal scroll with left/right fade masks (`scroll-shadow`).
+  - **Spec Highlight Carousel (`scroll-shadow` + `icons-carousel`)**: Horizontal scrollable container below title/price displaying 3–5 key technical attributes with 24x24 SVG icons and two-line labels.
 
 ## 14. Current WLMOUSE PDP Inventory
 
@@ -161,16 +162,14 @@ The live WLMOUSE homepage exhibits a deliberate 16-stage editorial rhythm:
 - **Top Commerce Section (`product-info`)**:
   - **Brand & Series**: Subtle uppercase category/brand eyebrow.
   - **Product Title**: Large, high-contrast heading (`split-words` reveal animation).
-  - **Price Cluster**: Strikethrough regular price, prominent sale price, installment text.
+  - **Price Cluster**: Strikethrough regular price, prominent sale price.
   - **Spec Highlight Badges**: Category-specific hardware pill badges (e.g. `39g Ultra-light`, `PAW3950HS`, `8000Hz Polling`, `Nordic 54L15`).
   - **Color Selector**: Circular thumbnail swatches (`swatches--round`) with active ring outline, tooltip on hover, and selected color name displayed in the label (`Color: Black Gold`).
   - **Switch / Technical Option Selector**: Pill buttons (e.g. `OMRON Opticals`, `TTC Mechanicals`) with active solid background.
   - **Side Style / Size Selector**: Pill buttons (e.g. `Side Slits`, `Solid Sides`).
   - **Quantity Selector**: Compact inline counter with minus, numeric input, and plus buttons.
-  - **Primary CTA**: Full-width high-contrast button (`Add to cart` / `Sold Out` / `Notify me when it’s available`).
-  - **Express Checkout**: Secondary button for accelerated checkout.
+  - **Primary CTA**: Full-width high-contrast button (`Add to cart` / `Sold Out`).
   - **Sticky Purchase Bar (`product-sticky-form`)**: Floats at the top or bottom of the viewport when scrolling past the main buy button, displaying product thumbnail, title, price, and instant Add to Cart.
-  - **Trust & Assurance**: Secure checkout badges, local delivery estimates, and authenticity guarantee.
 - **Below-the-Fold Product Story**:
   - Exploded mechanical schematics.
   - Stat highlight callouts (`39g`, `8K`, `0.005mm RT`).
@@ -184,7 +183,7 @@ The live WLMOUSE homepage exhibits a deliberate 16-stage editorial rhythm:
 - **Mobile Header**: Compact 56px height, hamburger menu left, centered logo, cart icon right with quantity badge.
 - **Navigation Drawer**: Full-screen off-canvas drawer with smooth slide-in, categorizing product families with expandable nested links and high-contrast social links at the bottom.
 - **Homepage Mobile Layout**: Hero adjusts to vertical aspect ratio (4:5 or 9:16), single-column collection lists, horizontal swipeable product shelves with touch snap.
-- **Mobile Product Card**: Quick-action button is permanently accessible or simplified to an icon, spec highlight strip scrolls horizontally via touch with subtle edge fade.
+- **Mobile Product Card**: Quick-action button is touch accessible, spec highlight strip scrolls horizontally via touch with subtle edge fade.
 - **Mobile PDP Commerce**:
   - Gallery becomes a 100vw horizontal touch carousel with pagination dots.
   - Commerce panel stacks directly beneath gallery with comfortable touch targets (minimum 44x44px).
@@ -194,58 +193,62 @@ The live WLMOUSE homepage exhibits a deliberate 16-stage editorial rhythm:
 
 ## 16. ADOPT / ADAPT / REJECT Matrix
 
-| Category              | Reference Feature (WLMOUSE)                  | Gamer Perú Decision | Architectural Justification                                                                                                       |
-| :-------------------- | :------------------------------------------- | :------------------ | :-------------------------------------------------------------------------------------------------------------------------------- |
-| **Branding**          | Single-brand manufacturer identity           | **REJECT**          | Gamer Perú is a multi-brand retailer representing WLMOUSE, Lamzu, Ninjutso, Pulsar, etc. Brand labeling must remain clear.        |
-| **Color System**      | Monochrome base with rose/amber accents      | **ADAPT**           | Adopt monochrome black/white base (`#09090b` / `#ffffff`), but use Gamer Perú Signal Crimson (`#e11d48`) for action/sale accents. |
-| **Typography**        | Inter with tight heading tracking            | **ADOPT**           | Adopt clean geometric grotesque (`Inter` / `Plus Jakarta Sans`), -0.03em tracking on headings, 1.0–1.2 line heights.              |
-| **Product Dominance** | Large-scale hardware media as primary visual | **ADOPT**           | Eliminate abstract SVG wireframes; use real high-resolution hardware photography and video for all key stages.                    |
-| **Product Card V2**   | Spec carousel + hover flip + quick options   | **ADOPT**           | Full adoption of WLMOUSE card structure adapted to multi-brand data and Soles currency.                                           |
-| **PDP Commerce**      | Sticky buy panel + swatches + spec pills     | **ADOPT**           | Full adoption of WLMOUSE top commerce anatomy, integrating existing Gamer Perú cart state.                                        |
-| **Sticky Buy Bar**    | Floating purchase bar on scroll              | **ADOPT**           | Essential conversion feature for long PDPs on desktop and mobile.                                                                 |
-| **Homepage Commerce** | Purchasable product on homepage              | **ADOPT**           | Embed fully functional featured product commerce block on homepage.                                                               |
-| **Currency / Pay**    | USD / Klarna / AfterPay / Shopify Pay        | **REJECT**          | Gamer Perú operates in Peruvian Soles (`PEN`) with manual Yape/Plin verification.                                                 |
-| **Shipping Policy**   | Global 103-country international courier     | **REJECT**          | Gamer Perú operates Lima same-day/next-day and Olva/Shalom national province shipping.                                            |
-| **Navigation**        | Brand product-family hierarchy               | **ADAPT**           | Adapt single-brand family menus into multi-brand category + curated brand showcase menus.                                         |
-| **Story Blocks**      | Concept theme proprietary liquid sections    | **ADAPT**           | Rebuild presentation of Gamer Perú's 13 canonical Story block types to match WLMOUSE editorial impact.                            |
-| **Search / Cart**     | Slide-out drawers with instant search/cart   | **ADOPT**           | Adopt slide-out drawer pattern for both search and cart.                                                                          |
+| Category                | Reference Feature (WLMOUSE)                  | Gamer Perú Decision | Architectural Justification                                                                                                       |
+| :---------------------- | :------------------------------------------- | :------------------ | :-------------------------------------------------------------------------------------------------------------------------------- |
+| **Branding**            | Single-brand manufacturer identity           | **REJECT**          | Gamer Perú is a multi-brand retailer representing WLMOUSE, Lamzu, Ninjutso, Pulsar, etc. Brand labeling must remain clear.        |
+| **Color System**        | Monochrome base with rose/amber accents      | **ADAPT**           | Adopt monochrome black/white base (`#09090b` / `#ffffff`), but use Gamer Perú Signal Crimson (`#e11d48`) for action/sale accents. |
+| **Typography**          | Inter with tight heading tracking            | **ADOPT**           | Adopt clean geometric grotesque (`Inter` / `Plus Jakarta Sans`), -0.03em tracking on headings, 1.0–1.2 line heights.              |
+| **Product Dominance**   | Large-scale hardware media as primary visual | **ADOPT**           | Eliminate abstract SVG wireframes; use real high-resolution hardware photography and video for all key stages.                    |
+| **Product Card V2**     | Spec carousel + hover flip + quick options   | **ADOPT**           | Full adoption of WLMOUSE card structure backed by additive public read projection (`secondaryMedia`, `specHighlights`).           |
+| **PDP Commerce**        | Sticky buy panel + swatches + spec pills     | **ADOPT**           | Full adoption of WLMOUSE top commerce anatomy, integrating existing Gamer Perú cart state.                                        |
+| **Sticky Buy Bar**      | Floating purchase bar on scroll              | **ADOPT**           | Essential conversion feature for long PDPs on desktop and mobile.                                                                 |
+| **Homepage Commerce**   | Purchasable product on homepage              | **ADOPT**           | Embed functional featured product commerce block driven by deterministic server-side presentation config.                         |
+| **Add-Ons Cross-Sell**  | Automated accessory bundle checkout          | **ADAPT**           | Model-specific curated mapping in server config; sequential cart mutations with partial failure reporting.                        |
+| **Back-In-Stock Form**  | Email/phone collection drawer                | **REJECT (V1)**     | DEFERRED. Non-functional data collection without authorized backend destination is prohibited.                                    |
+| **Commercial Promises** | 12-month store warranty, global shipping     | **REJECT**          | Strict Policy-Source Rule. Unapproved couriers (Olva/Shalom), 24h delivery, and warranty terms remain TBD.                        |
+| **Currency / Pay**      | USD / Klarna / AfterPay / Shopify Pay        | **REJECT**          | Gamer Perú operates in Peruvian Soles (`PEN`) with manual Yape/Plin verification.                                                 |
+| **Navigation**          | Brand product-family hierarchy               | **ADAPT**           | Adapt single-brand family menus into multi-brand category + curated brand showcase menus.                                         |
+| **Story Blocks**        | Concept theme proprietary liquid sections    | **ADAPT**           | Rebuild presentation of Gamer Perú's 13 canonical Story block types to match WLMOUSE editorial impact.                            |
+| **Search / Cart**       | Slide-out drawers with instant search/cart   | **ADOPT**           | Adopt slide-out drawer pattern for both search and cart.                                                                          |
 
 ## 17. Component Parity Matrix
 
-| WLMOUSE Component           | Gamer Perú Current     | Action       | Domain Logic Source                | Visual Target                                                     | Responsive Target                                   | Accessibility Req                  | Data Requirement          | Implementation Gate | Notes                       |
-| :-------------------------- | :--------------------- | :----------- | :--------------------------------- | :---------------------------------------------------------------- | :-------------------------------------------------- | :--------------------------------- | :------------------------ | :------------------ | :-------------------------- |
-| `announcement-bar`          | `AnnouncementBar`      | **REFACTOR** | `NAVIGATION_CONFIG`                | Slim 36px high-contrast bar, multi-message rotation               | Auto-fit text, hide secondary links on small mobile | ARIA live region for ticker        | String array or config    | CHK1                | Preserves existing links    |
-| `sticky-header`             | `SiteHeader`           | **REFACTOR** | `NAVIGATION_CONFIG`                | 64px height, minimalist layout, 1.5px stroke icons                | 56px height, compact utilities                      | Semantic `<header>`, focus-visible | Navigation config         | CHK1                | Preserves skip-link         |
-| `menu-drawer`               | `MobileDrawer`         | **REFACTOR** | `NAVIGATION_CONFIG`                | Full-height slide-in, clean typography, category accordions       | Full viewport width mobile                          | Focus trap, `Escape` key close     | Navigation config         | CHK1                | Touch ergonomics            |
-| `slideshow_hero`            | `HomeHero`             | **REPLACE**  | `HOMEPAGE_DATA`                    | Full-bleed real hardware hero, bold typography, high-contrast CTA | 4:5 vertical framing on mobile                      | Accessible heading hierarchy       | Flagship product media    | CHK1                | Eliminates abstract media   |
-| `collection-list`           | `CategoryShowcase`     | **REFACTOR** | `HOMEPAGE_DATA`                    | Visual hardware category tiles with real hardware photography     | 2-column mobile grid                                | Semantic list `<nav>`              | Category catalog          | CHK1                | Real category imagery       |
-| `featured_product`          | None                   | **CREATE**   | Catalog query / `getCachedProduct` | Purchasable featured product on home (swatches, quantity, CTA)    | Stacked layout, touch swatches                      | Full keyboard form controls        | Flagship product ID       | CHK1                | Crucial WLMOUSE pattern     |
-| `image-comparison`          | None (in home)         | **CREATE**   | Presentation seed / story          | Interactive before/after split slider                             | Touch-drag handle                                   | Slider ARIA role, keyboard arrows  | Dual media URLs           | CHK1                | Visual hardware proof       |
-| `featured_collection`       | `CuratedGear`          | **REFACTOR** | Catalog queries                    | 4-column product shelf with ProductCard V2                        | 2-column or touch swipe shelf                       | Carousel ARIA controls             | Curated product slugs     | CHK1                | Hardware-first              |
-| `images_with_text`          | `TechnicalEditorial`   | **REFACTOR** | Presentation seed                  | "Built with..." high-contrast dark section, exploded frame media  | Single-column stacked                               | Semantic text & image alt          | Technical copy & media    | CHK1                | Engineering focus           |
-| `multicolumn-with-icons`    | `HomeDiscoveryFooter`  | **REFACTOR** | Static trust config                | 4-column horizontal trust strip with 1.5px stroke icons           | 2x2 grid on mobile                                  | Semantic icons + text              | Peruvian trust facts      | CHK1                | Yape/Plin, Olva, Garantía   |
-| `footer`                    | `SiteFooter`           | **REFACTOR** | `NAVIGATION_CONFIG`                | Minimalist dark footer, structured columns, copyright bar         | Collapsible accordions on mobile                    | Semantic links                     | Footer config             | CHK1                | Clean multi-brand links     |
-| `product-card`              | `ProductCard`          | **REPLACE**  | `ProductDiscoveryItem`             | Aspect-adapt image, hover flip, quick options button, price row   | Compact card, mobile-optimized                      | Accessible links, proper heading   | Primary + secondary media | CHK2                | Clean industrial design     |
-| `icons-carousel`            | None                   | **CREATE**   | `product.specifications`           | Horizontal spec highlight strip (polling, MCU, switch, weight)    | Horizontal touch scroll with fade masks             | Accessible text descriptions       | Category spec fields      | CHK2                | Distinctive WLMOUSE feature |
-| `facets-topbar`             | `DiscoveryToolbar`     | **REFACTOR** | Catalog URL params                 | Sticky minimal bar with filter count and sort dropdown            | Compact sticky header                               | ARIA menu / listbox                | Filter state              | CHK2                | Minimal clutter             |
-| `drawer-element` (filter)   | `FilterDrawer`         | **REFACTOR** | Catalog facets                     | Slide-out filter drawer with clean check pills and price range    | Full-screen drawer                                  | Focus trap, accessible inputs      | Active facet counts       | CHK2                | Seamless filtering          |
-| `search-drawer`             | Basic search           | **CREATE**   | `useSearch` / API                  | Slide-out instant predictive search with thumbnail results        | Full-screen mobile search                           | Search landmark, aria-expanded     | Product index search      | CHK2 / CHK5         | Instant feedback            |
-| `media-gallery`             | `ProductMediaGallery`  | **REFACTOR** | `ProductMedia[]`                   | Large adaptive gallery, thumbnail strip, zoom modal               | 100vw touch slider with dots                        | Full keyboard navigation           | High-res media assets     | CHK3                | Visual hardware dominance   |
-| `product-info`              | `ProductCommercePanel` | **REFACTOR** | `ProductDetailView` + `useCart`    | Sticky commerce column, bold title, pricing cluster, spec pills   | Standard flow above story                           | Semantic form, live regions        | Product + variant data    | CHK3                | Core commerce engine        |
-| `variant-picker` (swatches) | `VariantSelector`      | **REFACTOR** | `ProductVariantDetail[]`           | Circular image swatches with tooltips and active rings            | Touch-friendly swatches (44px)                      | Radio group ARIA semantics         | Variant media objects     | CHK3                | Real color previews         |
-| `variant-picker` (pills)    | `VariantSelector`      | **REFACTOR** | `ProductVariantDetail[]`           | Tactile option pills for switches, side styles, layouts           | Wrap pills                                          | Radio group ARIA semantics         | Variant option values     | CHK3                | Clean tactile selection     |
-| `quantity-input`            | None (fixed 1)         | **CREATE**   | `useCart.addItem`                  | Inline counter with `-`, numeric input, `+`                       | 44px touch targets                                  | `aria-label`, numeric constraints  | Item quantity state       | CHK3                | Customer purchase control   |
-| `product-sticky-form`       | None                   | **CREATE**   | Active variant + `useCart`         | Floating bar on scroll with thumbnail, price, Add to Cart         | Fixed bottom mobile dock                            | Focus management                   | Active variant state      | CHK3                | Conversion recovery         |
-| `share-drawer` / modal      | None                   | **CREATE**   | Web Share API / fallback           | Minimal share popover/drawer with copy link                       | Native mobile share sheet                           | Dialog ARIA semantics              | Page canonical URL        | CHK3                | Viral social sharing        |
-| `cart-drawer`               | `CartDrawer`           | **REFACTOR** | `useCart`                          | Slide-out drawer, free shipping bar, item cards, checkout CTA     | Full mobile drawer                                  | Focus trap, live announcements     | Cart session items        | CHK5                | Instant frictionless cart   |
-| Story Block Renderers (13)  | `ProductStoryRenderer` | **REFACTOR** | `ProductStory` JSON                | High-contrast editorial spreads, large typography, stat counters  | Responsive stacked layouts                          | Accessible semantic headings       | Story JSON payloads       | CHK4                | Full public convergence     |
+| WLMOUSE Component           | Gamer Perú Current     | Action       | Domain Logic Source                   | Visual Target                                                     | Responsive Target                             | Accessibility Req                  | Data Requirement             | Implementation Gate | Notes                             |
+| :-------------------------- | :--------------------- | :----------- | :------------------------------------ | :---------------------------------------------------------------- | :-------------------------------------------- | :--------------------------------- | :--------------------------- | :------------------ | :-------------------------------- |
+| `announcement-bar`          | `AnnouncementBar`      | **REFACTOR** | `NAVIGATION_CONFIG` + Policy Rule     | Slim 36px high-contrast bar, rotating verified facts              | Auto-fit text, hide secondary links on mobile | ARIA live region for ticker        | Verified policy strings only | CHK1                | No unapproved couriers/SLAs       |
+| `sticky-header`             | `SiteHeader`           | **REFACTOR** | `NAVIGATION_CONFIG`                   | 64px height, minimalist layout, 1.5px stroke icons                | 56px height, compact utilities                | Semantic `<header>`, focus-visible | Navigation config            | CHK1                | Preserves skip-link               |
+| `menu-drawer`               | `MobileDrawer`         | **REFACTOR** | `NAVIGATION_CONFIG`                   | Full-height slide-in, clean typography, category accordions       | Full viewport width mobile                    | Focus trap, `Escape` key close     | Navigation config            | CHK1                | Touch ergonomics                  |
+| `slideshow_hero`            | `HomeHero`             | **REPLACE**  | Server presentation config            | Full-bleed real hardware hero, bold typography, high-contrast CTA | 4:5 vertical framing on mobile                | Accessible heading hierarchy       | Campaign media keys          | CHK1                | Eliminates abstract media         |
+| `collection-list`           | `CategoryShowcase`     | **REFACTOR** | Server presentation config            | Visual hardware category tiles with real hardware photography     | 2-column mobile grid                          | Semantic list `<nav>`              | Category catalog             | CHK1                | Real category imagery             |
+| `featured_product`          | None                   | **CREATE**   | Server config + `getCachedProduct`    | Purchasable featured product on home (swatches, quantity, CTA)    | Stacked layout, touch swatches                | Full keyboard form controls        | Explicit product slug        | CHK1                | Deterministic config; no fallback |
+| `image-comparison`          | None (in home)         | **CREATE**   | Server presentation config            | Interactive before/after split slider                             | Touch-drag handle                             | Slider ARIA role, keyboard arrows  | Dual media keys              | CHK1                | Visual hardware proof             |
+| `featured_collection`       | `CuratedGear`          | **REFACTOR** | Server config + Additive Projection   | 4-column product shelf with ProductCard V2                        | 2-column or touch swipe shelf                 | Carousel ARIA controls             | Explicit product slug lists  | CHK1                | Hardware-first                    |
+| `images_with_text`          | `TechnicalEditorial`   | **REFACTOR** | Server presentation config            | "Built with..." high-contrast dark section, exploded frame media  | Single-column stacked                         | Semantic text & image alt          | Technical copy & media       | CHK1                | Engineering focus                 |
+| `multicolumn-with-icons`    | `HomeDiscoveryFooter`  | **REFACTOR** | Approved business facts only          | 4-column horizontal trust strip with 1.5px stroke icons           | 2x2 grid on mobile                            | Semantic icons + text              | Verified policy config       | CHK1                | Policy-Source Rule enforced       |
+| `footer`                    | `SiteFooter`           | **REFACTOR** | `NAVIGATION_CONFIG` + Policy Rule     | Minimalist dark footer, structured columns, copyright bar         | Collapsible accordions on mobile              | Semantic links                     | Footer config                | CHK1                | Clean multi-brand links           |
+| `product-card`              | `ProductCard`          | **REPLACE**  | Additive `ProductDiscoveryProjection` | Aspect-adapt image, hover flip, quick options button, price row   | Compact card, mobile-optimized                | Accessible links, proper heading   | Primary + secondary media    | CHK2                | Additive read projection          |
+| `icons-carousel`            | None                   | **CREATE**   | Validated category spec schema        | Horizontal spec highlight strip (polling, MCU, switch, weight)    | Horizontal touch scroll with fade masks       | Accessible text descriptions       | Category spec values         | CHK2                | Omitted if specs absent           |
+| `facets-topbar`             | `DiscoveryToolbar`     | **REFACTOR** | Catalog URL params                    | Sticky minimal bar with filter count and sort dropdown            | Compact sticky header                         | ARIA menu / listbox                | Filter state                 | CHK2                | Minimal clutter                   |
+| `drawer-element` (filter)   | `FilterDrawer`         | **REFACTOR** | Catalog facets                        | Slide-out filter drawer with clean check pills and price range    | Full-screen drawer                            | Focus trap, accessible inputs      | Active facet counts          | CHK2                | Seamless filtering                |
+| `search-drawer`             | Basic search           | **CREATE**   | `useSearch` / API                     | Slide-out instant predictive search with thumbnail results        | Full-screen mobile search                     | Search landmark, aria-expanded     | Product index search         | CHK2 / CHK5         | Instant feedback                  |
+| `media-gallery`             | `ProductMediaGallery`  | **REFACTOR** | `ProductMedia[]`                      | Large adaptive gallery, thumbnail strip, zoom modal               | 100vw touch slider with dots                  | Full keyboard navigation           | High-res media assets        | CHK3                | Visual hardware dominance         |
+| `product-info`              | `ProductCommercePanel` | **REFACTOR** | `ProductDetailView` + `useCart`       | Sticky commerce column, bold title, pricing cluster, spec pills   | Standard flow above story                     | Semantic form, live regions        | Product + variant data       | CHK3                | Core commerce engine              |
+| `variant-picker` (swatches) | `VariantSelector`      | **REFACTOR** | `ProductVariantDetail[]`              | Circular image swatches (`colorway`/`color`) with tooltips        | Touch-friendly swatches (44px)                | Radio group ARIA semantics         | Variant media objects        | CHK3                | Real color previews               |
+| `variant-picker` (pills)    | `VariantSelector`      | **REFACTOR** | `ProductVariantDetail[]`              | Tactile option pills for generic dynamic attributes               | Wrap pills                                    | Radio group ARIA semantics         | Generic attribute keys       | CHK3                | Dynamic dimension support         |
+| `quantity-input`            | None (fixed 1)         | **CREATE**   | `useCart.addItem`                     | Inline counter with `-`, numeric input, `+`                       | 44px touch targets                            | `aria-label`, numeric constraints  | Item quantity state          | CHK3                | Customer purchase control         |
+| `product-sticky-form`       | None                   | **CREATE**   | Active variant + `useCart`            | Floating bar on scroll with thumbnail, price, Add to Cart         | Fixed bottom mobile dock                      | Focus management                   | Active variant state         | CHK3                | Conversion recovery               |
+| `product-add-ons`           | None                   | **CREATE**   | Curated product mapping config        | Model-specific add-ons checkbox module                            | Stacked checkbox pills                        | Accessible checkboxes              | Explicit add-on slugs        | CHK3                | Sequential cart mutations         |
+| `share-drawer` / modal      | None                   | **CREATE**   | Web Share API / fallback              | Minimal share popover/drawer with copy link                       | Native mobile share sheet                     | Dialog ARIA semantics              | Page canonical URL           | CHK3                | Viral social sharing              |
+| `cart-drawer`               | `CartDrawer`           | **REFACTOR** | `useCart`                             | Slide-out drawer, line items, inline quantity, checkout CTA       | Full mobile drawer                            | Focus trap, live announcements     | Cart session items           | CHK5                | Instant frictionless cart         |
+| Story Block Renderers (13)  | `ProductStoryRenderer` | **REFACTOR** | `ProductStory` JSON                   | High-contrast editorial spreads, large typography, stat counters  | Responsive stacked layouts                    | Accessible semantic headings       | Story JSON payloads          | CHK4                | Full public convergence           |
 
 ## 18. Global Shell Contract
 
+- **Policy-Source Rule**: All announcement and header messaging must derive strictly from an approved business policy configuration. Unapproved delivery promises ("24h"), carrier names ("Olva Courier", "Shalom"), and warranty durations ("12 meses") are strictly excluded.
 - **Announcement Bar**:
   - Height: 36px fixed.
   - Colors: Dark Obsidian background (`#09090b`), White text (`#ffffff`), Crimson link hover (`#e11d48`).
-  - Content: 2–3 rotating announcements (e.g. "Envíos a todo el Perú vía Olva y Shalom", "Pagos seguros con Yape y Plin", "Garantía local y soporte técnico en Lima").
+  - Permitted Content: Verified facts only (e.g. "Pagos seguros mediante verificación manual Yape y Plin", "Envíos a todo el Perú según políticas vigentes", "Periféricos gaming de alto rendimiento").
 - **Header**:
   - Height: 64px desktop / 56px mobile.
   - Background: Semi-transparent blur (`backdrop-filter: blur(12px)`) over hero; solid white (`#ffffff`) on page scroll with subtle bottom border (`#e4e4e7`).
@@ -253,49 +256,55 @@ The live WLMOUSE homepage exhibits a deliberate 16-stage editorial rhythm:
   - Iconography: Restrained 1.5px stroke geometry (Lucide icons standardized to 20px / 1.5px stroke).
 - **Navigation Architecture**:
   - Primary Categories: _Mouses_, _Teclados_, _Mousepads_, _Audio_, _Accesorios_.
-  - Curated Brands dropdown: _WLMOUSE_, _Lamzu_, _Pulsar_, _Ninjutso_, _ATK_, _VXE_.
+  - Curated Brands dropdown: Curated list of authorized brands.
   - Visual Mega-Menu: Multi-column panel showing category links alongside a featured product image card.
 - **Footer**:
   - Background: Dark Obsidian (`#09090b`), text in muted slate (`#a1a1aa`), headings in crisp white (`#f4f4f5`).
   - Columns: Navegación, Marcas, Soporte y Garantía, Gamer Perú (Libro de Reclamaciones, Términos).
-  - Bottom Bar: Copyright notice, RUC declaration, Peru payment method logos (Yape, Plin, Transferencias).
+  - Bottom Bar: Copyright notice, RUC declaration, Peru payment method logos (Yape, Plin). Unapproved courier logos or warranty claims are omitted.
 
 ## 19. Homepage Contract
 
-The homepage must be restructured to eliminate abstract wireframe placeholders and adopt the WLMOUSE editorial rhythm:
+The homepage eliminates abstract wireframe placeholders and implements WLMOUSE's product-first structure driven by server-side static presentation configuration:
 
 1. **Hero Stage (`HomeHero`)**:
-   - High-contrast visual stage with real product photography/video.
+   - Real hardware photography/video configured by object key.
    - Headline: Max font-size `clamp(2.5rem, 5vw, 4.5rem)`, -0.035em tracking.
-   - Dual CTAs: Primary solid button (`Explorar Mouses`) + Secondary outline button (`Ver Lanzamientos`).
+   - Dual CTAs: Primary solid button (`Explorar Mouses`) + Secondary outline button (`Ver Catálogo`).
 2. **Visual Category Doors (`CategoryShowcase`)**:
-   - 5 hardware category cards displaying high-detail hardware cutouts on neutral tinted cards (`#f4f4f5` / `#121215`).
+   - Hardware category cards displaying high-detail hardware cutouts on neutral tinted cards (`#f4f4f5` / `#121215`).
 3. **Purchasable Featured Product (`FeaturedProductSection`)**:
-   - Embeds a flagship peripheral directly on the homepage.
+   - **Deterministic Source**: Configured strictly via an explicit published product slug in server-side presentation configuration.
+   - **No Silently Substituted Fallback**: If the configured product is unavailable or unpublished, the commerce section is omitted safely, and a server-side diagnostic warning is emitted. Never substitute an arbitrary product.
    - Allows users to select colors via image swatches, inspect specs, and click `Añadir al Carrito`.
 4. **Interactive Comparison Slider (`ProductComparisonSection`)**:
-   - Interactive split-slider showcasing hardware engineering (e.g. solid shell vs. honeycomb magnesium cutouts).
+   - Interactive split-slider showcasing hardware engineering (e.g. solid shell vs. honeycomb magnesium cutouts) driven by configured dual media keys.
 5. **Curated Product Shelves (`ProductShelf`)**:
-   - 3 curated shelves: _Mouses Competitivos_, _Teclados Rapid Trigger_, _Superficies & Mousepads_.
-   - Rendered using `ProductCard` V2.
+   - Shelves for _Mouses_, _Teclados_, _Mousepads_ driven by explicit lists of product slugs in configuration.
+   - Rendered using `ProductCard` V2 backed by the additive discovery projection.
 6. **Technical Engineering Band (`TechnicalEditorial`)**:
-   - Full-width dark section (`#09090b`) detailing lightweight alloy structures, sensor precision (PAW3950), and 8K polling rate.
+   - Full-width dark section (`#09090b`) detailing lightweight alloy structures, sensor precision, and high polling rates.
 7. **Multi-Brand Showcase (`BrandDiscovery`)**:
    - Clean grid of authorized boutique brands.
 8. **Trust Strip (`TrustStrip`)**:
-   - 4-column value propositions: _Envíos Seguros a Todo el Perú_, _Garantía Local Gamer Perú_, _Verificación Manual Yape/Plin_, _Soporte Competitivo Dedicado_.
+   - Displays approved business facts only: _Pagos Seguros en Soles (Yape y Plin)_, _Envíos a Todo el Perú (cobertura nacional)_, _Garantía Oficial Gamer Perú (contra defectos de fabricación)_, _Atención y Soporte Técnico Especializado_.
 
 ## 20. Product Card V2 Contract
 
-The `ProductCard` component will be completely rebuilt to match the live WLMOUSE card anatomy:
+The `ProductCard` component will be completely rebuilt to match the live WLMOUSE card anatomy, backed by an **additive public read projection**:
 
+- **Additive Discovery Projection**:
+  - `ProductDiscoveryItem` will be extended with optional read-only fields:
+    - `secondaryMedia`: Deterministic second active image resolved by `displayOrder ASC` (nullable).
+    - `specHighlights`: Array of `{ label: string; value: string; iconKey?: string }` extracted strictly from validated category specification schema and `specValues` (nullable).
+    - `compareAtPriceCents`: Regular price for discount badge rendering (nullable).
 - **Geometry & Aspect Ratio**: Adaptive 1:1 or 4:5 image container with neutral light gray background (`#f8f8f8`).
 - **Media Behavior**:
   - Primary image: High-res hardware silhouette.
-  - Secondary image: Alternate angle (bottom plate, side view, or sensor detail) fading in smoothly on hover (`transition: opacity 300ms ease`).
+  - Secondary image: Alternate angle fading in smoothly on hover (`transition: opacity 300ms ease`).
 - **Quick-Action Hover Button**:
   - Floating button at bottom of image ("Ver opciones" / "Añadir al carrito"), sliding up on hover (`transform: translateY(0)`).
-  - On mobile: Touch-accessible action or persistent minimal cart icon.
+  - On mobile: Touch-accessible action button.
 - **Quick View Eye Button**:
   - Discrete icon button top-right, fading in on desktop hover, opening quick-view modal.
 - **Card Content Row**:
@@ -305,6 +314,7 @@ The `ProductCard` component will be completely rebuilt to match the live WLMOUSE
 - **Horizontal Spec Highlight Carousel (`scroll-shadow` + `icons-carousel`)**:
   - Positioned directly below title/price block.
   - Horizontal scrollable row displaying 3–5 category-specific technical attributes with 20px SVG icons.
+  - Omitted if specifications are absent or invalid. Never fabricate a spec value.
   - Gradient fade masks on left and right edges indicating scrollability.
 
 ## 21. Category & Brand Collection Contract
@@ -317,14 +327,11 @@ The `ProductCard` component will be completely rebuilt to match the live WLMOUSE
   - Mobile (< 768px): 2 columns.
 - **Filter Drawer**:
   - Slide-out right drawer with accordions for:
-    - _Disponibilidad_: En stock / Por encargo.
+    - _Disponibilidad_: En catálogo / Activo.
     - _Rango de Precio_: Dual range slider in Soles.
     - _Marca_: Checkbox list for multi-brand catalog.
-    - _Switches_: Ópticos / Mecánicos / Magnéticos Hall Effect.
-    - _Peso_: Ultraligero (<40g, 40-50g, >50g).
-    - _Conectividad_: Inalámbrico 8K / Cableado.
 - **Brand Pages (`/marcas/[slug]`)**:
-  - Hero banner with brand logo, brand origin, and brand manifesto.
+  - Hero banner with brand logo and narrative.
   - Filtered grid of brand products using ProductCard V2.
 
 ## 22. Search Surface Contract
@@ -347,6 +354,7 @@ The Product Detail Page top section will be completely restructured into two syn
 - **Column Behavior**:
   - Gallery column scrolls naturally or presents high-impact hardware media.
   - Commerce panel remains sticky (`position: sticky; top: 80px; align-self: start;`) so buy actions remain in view.
+- **Policy-Source Rule**: Payment trust box displays approved Yape/Plin manual verification in Soles. All unapproved delivery SLAs, courier names, and warranty duration terms are omitted.
 
 ## 24. Gallery Contract
 
@@ -359,41 +367,51 @@ The Product Detail Page top section will be completely restructured into two syn
 ## 25. Spec-Highlight Contract
 
 - **Position**: Located directly below the product title/price cluster at the top of the commerce panel.
-- **Visual Design**: Horizontal row or 2x2 grid of compact hardware spec badges (e.g. `⚡ 39g Ultraligero`, `🎯 PAW3950 30K DPI`, `📶 8000Hz Polling Rate`, `🕹️ Omron Ópticos`).
+- **Extraction Rule**: Must derive strictly from validated category specification schema + `specValues`. Do NOT refer to fictional direct object paths. If a spec value is missing, the corresponding badge is omitted.
 - **Category-Aware Mapping**:
-  - _Mouses_: Peso (g), Sensor, Polling Rate, Switches, Conectividad.
-  - _Teclados_: Switches (Magnéticos/Mecánicos), Rapid Trigger, Material (Carbono/Aluminio), Layout.
-  - _Mousepads_: Superficie (Control/Speed), Base (Poron), Grosor, Dimensiones.
-  - _Audio_: Drivers (Híbrido DD+BA), Impedancia, Conexión.
-  - _Accesorios_: Compatibilidad, Material.
+  - _Mouses_: Peso (g), Sensor, Polling Rate, Switches (if present in `specValues`).
+  - _Teclados_: Switches, Rapid Trigger, Material, Layout (if present in `specValues`).
+  - _Mousepads_: Superficie, Base, Grosor, Dimensiones (if present in `specValues`).
+  - _Audio_: Drivers, Impedancia, Conexión (if present in `specValues`).
 
 ## 26. Variant / Option-Selector Contract
 
-- **Color Swatches (`swatches--round`)**:
-  - Circular buttons (36px desktop / 44px mobile) with high-resolution image thumbnail background.
-  - Active state: Distinctive double-ring outline (`ring-2 ring-offset-2 ring-black`).
-  - Label: Displays selected color name dynamically (e.g. `Color: Negro Obsidiana`).
-  - Hover tooltip: Tooltip displaying the color variant name.
-- **Technical Option Selectors (Switches / Side Style / Size)**:
-  - Tactile pill buttons (`padding: 8px 16px; border-radius: 6px; font-size: 0.875rem;`).
-  - Active state: Solid black background with white text (`bg-black text-white`).
-  - Inactive state: Bordered button (`border border-zinc-300 text-zinc-900 hover:border-black`).
-  - Disabled/Out-of-Stock state: Strikethrough diagonal line with subtle opacity.
+- **Generic Attribute Resolution**: `ProductVariant.attributes` is a generic `Record<string, string>`. Multidimensional option resolution must dynamically parse actual attribute keys present on the variants.
+- **Color Aliases**: Color swatches recognize the canonical aliases `colorway` and `color`. Rendered as circular buttons (36px desktop / 44px mobile) with image thumbnail background, active double-ring outline, tooltip on hover, and selected color name displayed in the label (`Color: [Nombre]`).
+- **Other Dimensions**: Tactile pill buttons dynamically generated from attribute keys (e.g. switches, side styles, layout). Active state: solid black background with white text. Inactive state: subtle border.
+- **Fallback Rule**: Unknown, inconsistent, or incomplete dimensions fall back safely to full variant title selection as currently implemented.
 
 ## 27. Add-Ons Contract
 
-- **Cross-Sell Module**: Located directly above or below the primary Add to Cart button.
-- **Items**: 1–2 essential accessories (e.g. _Skates de Vidrio / PTFE para Beast X_, _Grip Tape Oficial_, _Dongle 8K Cat LCD_).
-- **Interaction**: Checkbox with thumbnail, accessory title, and price (`+ S/ 49.00`). Checking the box bundles the accessory into the cart addition.
+- **Anti-Inference Rule**: Add-on compatibility must **NEVER** be inferred solely from category, brand, or generic product type (e.g. mouse skates and grip tapes are model-specific).
+- **Preferred V1 Configuration**: Explicit server-side curated product -> add-on product slug mapping in presentation configuration.
+- **Validation Rules**:
+  - Mappings are manual, explicit, and model-specific.
+  - Each referenced add-on must resolve to an active, published sellable product/variant.
+  - Missing or invalid add-ons are silently omitted from the UI.
+- **Cart Mutation Semantics**:
+  - The existing cart API is single-variant mutation oriented (`addItem(variantId, quantity)`).
+  - Main product addition occurs first using authoritative cart logic.
+  - Selected add-ons are added sequentially through subsequent existing cart mutations.
+  - Partial add-on failure is surfaced clearly to the user (e.g. "Producto principal añadido al carrito. El accesorio no pudo ser agregado: [motivo]").
+  - The already-added main product is never falsely reported as rolled back.
+  - No false claim of atomic multi-item bundle transactions.
 
 ## 28. Quantity & Purchase Contract
 
 - **Quantity Selector**:
   - Inline component: Minus button (`-`), numeric input, Plus button (`+`).
-  - Minimum 1, maximum matching available inventory.
-  - Height matched to primary Add to Cart button (48px).
+  - Minimum 1.
+- **Stock & Inventory Reality**:
+  - **CRITICAL**: `ProductVariant.status = 'ACTIVE'` does NOT equal "in stock". Active merely denotes sellable catalog status.
+  - The existing public `ProductVariantDetail` read model does not currently expose authoritative available-to-sell counts.
+  - **V1 Fallback Rule**:
+    - Do NOT display numeric low-stock claims or exact remaining quantities.
+    - Do NOT claim "Envío inmediato".
+    - Quantity selector operates with a safe UI ceiling (e.g. 10) unless a canonical public inventory read projection is introduced in CHK3.
+    - Server-side cart addition (`addItem`) remains the authoritative purchase validator.
 - **Primary Action Button (`Add to Cart`)**:
-  - High-contrast solid black button (`bg-black text-white hover:bg-zinc-800`), 48px height, 6px border radius, bold typography.
+  - High-contrast solid black button, 48px height, 6px border radius, bold typography.
   - Loading state: Subtle spinner with "Añadiendo...".
   - Success state: Automatically opens Cart Drawer with added item highlighted.
 - **Profile Required Box**:
@@ -401,20 +419,22 @@ The Product Detail Page top section will be completely restructured into two syn
 
 ## 29. Availability & Notify Contract
 
-- **Active Stock**: Add to Cart button enabled with clear stock indicator ("En stock en Lima — Envío inmediato").
-- **Low Stock**: Alert badge when stock <= 3 ("¡Últimas unidades disponibles!").
-- **Sold Out State**:
-  - Add to Cart button disabled and replaced with "Agotado".
-  - "Notificarme cuando esté disponible" button opens back-in-stock notification drawer/modal.
-  - Collects customer email/phone for notification when restocked.
+- **Sold Out Visual State**:
+  - When inventory is confirmed unavailable or variant status is inactive, Add to Cart button is disabled and displays "Agotado".
+- **Back-in-Stock Subscription (DEFERRED)**:
+  - **Strict Rule**: GP-026A MUST NOT ship a non-functional form that collects customer email/phone without a durable, authorized backend destination.
+  - The "Notify Me" drawer is removed from mandatory CHK3 implementation.
+  - Documented as **DEFERRED FUTURE CAPABILITY** pending an authorized backend gate defining storage, privacy, consent, and delivery.
 
 ## 30. Size-Guide & Dimensions Contract
 
-- **Trigger Link**: "Guía de tamaños y dimensiones" link near the variant selectors.
-- **Modal / Drawer**:
-  - Visual 3D silhouette schematic showing Length, Width, Height in millimeters.
-  - Grip style compatibility guide: Palm Grip, Claw Grip, Fingertip Grip suitability indicators.
-  - Hand size recommendations (Small: <17cm, Medium: 17–19cm, Large: >19cm).
+- **Authoritative Data Rule**: Do NOT globally hardcode hand-size recommendations (e.g. Small <17cm, Medium 17–19cm, Large >19cm).
+- **Presentation Rules**:
+  - Exact physical dimensions render **ONLY** if available in validated product data or canonical `dimensions` Story payload.
+  - Grip recommendations render **ONLY** if explicitly authored for that specific product.
+  - Hand-size recommendations render **ONLY** if explicitly authored for that specific model.
+  - If any subsection lacks product-authoritative data, that subsection is omitted.
+  - The visual modal matches WLMOUSE's clean schematic anatomy without inventing advice.
 
 ## 31. Product Story Renderer Contract
 
@@ -438,33 +458,34 @@ The public rendering of all 13 canonical Story block types will be redesigned fo
 
 - **Surface**: Rendered on Homepage, PDP, and Cart Drawer.
 - **Layout**: 4-column horizontal layout on desktop, 2x2 grid on mobile.
-- **Items Adapted to Gamer Perú**:
-  1. _Envíos Rápidos a Todo el Perú_: Lima en 24h / Provincias vía Olva Courier y Shalom con seguimiento.
-  2. _Garantía Oficial Gamer Perú_: 12 meses de garantía directa contra defectos de fabricación.
-  3. _Pagos Seguros en Soles_: Verificación manual transparente vía Yape y Plin sin recargos.
-  4. _Soporte Competitivo Especializado_: Atención personalizada por entusiastas de hardware en Lima.
+- **Policy-Source Rule**: All claims must be verified facts. Unapproved courier names (Olva/Shalom/Moto Express), delivery SLAs (24h), and warranty duration (12 months) are strictly removed.
+- **Permitted Items**:
+  1. _Cobertura Nacional_: Envíos a Lima y provincias según políticas de transporte vigentes.
+  2. _Garantía Oficial Gamer Perú_: Cobertura contra defectos de fabricación según términos vigentes.
+  3. _Pagos Seguros en Soles_: Verificación manual transparente mediante Yape y Plin.
+  4. _Atención Especializada_: Soporte técnico dedicado en Perú para periféricos competitivos.
 
 ## 33. Footer Contract
 
 - **Structure**: 4 clean columns + bottom legal/payment strip.
 - **Design**: Dark Obsidian background (`#09090b`), high-contrast hierarchy, restrained padding (`clamp(48px, 6vw, 80px)`).
 - **Columns**:
-  - _Catálogo_: Mouses, Teclados, Mousepads, Audio, Accesorios, Nuevos Lanzamientos.
-  - _Marcas_: WLMOUSE, Lamzu, Pulsar, Ninjutso, ATK, VXE.
+  - _Catálogo_: Mouses, Teclados, Mousepads, Audio, Accesorios.
+  - _Marcas_: Marcas autorizadas disponibles en catálogo.
   - _Soporte_: Seguimiento de Pedidos, Políticas de Envío, Garantía y Devoluciones, FAQ.
   - _Gamer Perú_: Nosotros, Libro de Reclamaciones, Términos y Condiciones, Privacidad.
-- **Bottom Bar**: Copyright text, RUC registration, Peru payment method logos (Yape, Plin).
+- **Bottom Bar**: Copyright text, RUC registration, Peru payment method logos (Yape, Plin). Unapproved third-party courier or credit-card logos are omitted.
 
 ## 34. Cart & Supporting Surfaces Contract
 
 - **Slide-Out Cart Drawer (`CartDrawer`)**:
   - Triggered immediately upon Add to Cart or clicking cart icon.
-  - Free shipping progress bar adapted to Peru order thresholds.
   - Line items: Product image, title, variant subtitle (color/switch), price, inline quantity updater, and remove button.
   - Order Note accordion for delivery instructions.
   - Subtotal in Soles (`S/`).
   - Checkout Button: High-contrast button directing to `/checkout`.
-  - Payment reminder: "Tu pedido se confirmará mediante verificación Yape o Plin".
+  - Payment reminder: "Tu pedido se confirmará mediante verificación manual Yape o Plin".
+  - Free shipping progress bar: Omitted unless an explicitly approved threshold policy is configured.
 
 ## 35. Multi-Brand Adaptation
 
@@ -473,44 +494,45 @@ Unlike WLMOUSE (which sells only its own products), Gamer Perú must balance sin
 - **Brand Badges**: Subtle brand link displayed above product titles on cards and PDPs.
 - **Brand Pages**: Dedicated `/marcas/[slug]` landing pages with brand narrative and filtered product catalog.
 - **Brand Filters**: Instant brand faceted filtering across all category and collection views.
-- **Related Products**: Cross-brand compatibility (e.g. recommending a Pulsar mousepad on a WLMOUSE mouse PDP).
+- **Related Products**: Cross-brand compatibility (e.g. recommending a compatible mousepad on a mouse PDP).
 
 ## 36. Peru-First Adaptation
 
 - **Currency**: Strictly Peruvian Soles (`PEN`), formatted canonically as `S/ 549.00`.
 - **Payment Verification**: Prominent notice of manual Yape/Plin verification workflow; no misleading automated credit card icons.
-- **Shipping Logistics**: Local courier realities (Olva Courier, Shalom, Moto Express en Lima Metropolitana).
-- **Customer Support**: WhatsApp support link with localized Peruvian hours and Lima phone prefix (`+51`).
+- **Policy Adherence**: Courier, delivery SLA, warranty, and customer support claims derive strictly from approved policy configuration.
 
 ## 37. Data Gap Matrix
 
-| Data Item                          | Purpose                      | Classification            | Resolution Strategy                                                                             |
-| :--------------------------------- | :--------------------------- | :------------------------ | :---------------------------------------------------------------------------------------------- |
-| **Secondary Product Media**        | Card hover flip              | **ALREADY AVAILABLE**     | Derived from `ProductMedia` table order (second active image).                                  |
-| **Card Spec Highlights**           | Polling, MCU, Switch, Weight | **DERIVABLE SAFELY**      | Extracted safely from `product.specifications` JSONB by category.                               |
-| **Homepage Featured Product ID**   | Purchasable home product     | **NEEDS ADMIN AUTHORING** | Stored in homepage configuration or selected via flagship flag. Fallback to top active product. |
-| **Homepage Campaign Media**        | Hero video/photography       | **ALREADY AVAILABLE**     | High-res media assets uploaded to R2, referenced by object key.                                 |
-| **Color Swatch Thumbnail**         | Circular variant preview     | **DERIVABLE SAFELY**      | Derived from `ProductVariant.media` or primary variant image. Fallback to CSS color swatch.     |
-| **Switch Option Type**             | Tactile option pills         | **ALREADY AVAILABLE**     | Present in `ProductVariant.attributes` (`switch_type`, `side_style`).                           |
-| **Product Dimensions (L x W x H)** | Size guide modal             | **ALREADY AVAILABLE**     | Extracted from `product.specifications.dimensions`.                                             |
-| **Box Contents List**              | Packaging contents           | **ALREADY AVAILABLE**     | Extracted from `product.specifications.box_contents` or Story block.                            |
-| **Back-in-Stock Notification**     | Sold out notify drawer       | **DERIVABLE SAFELY**      | Client-side modal; logs notification intent in database (future gate).                          |
-| **Product Add-Ons / Bundles**      | PDP cross-sell               | **DERIVABLE SAFELY**      | Derived from category accessories (e.g. Skates for Mouse).                                      |
+| Data Item                       | Purpose                      | Classification        | Resolution Strategy                                                                     |
+| :------------------------------ | :--------------------------- | :-------------------- | :-------------------------------------------------------------------------------------- |
+| **Secondary Product Media**     | Card hover flip              | **DERIVABLE SAFELY**  | Additive read projection resolving second active media by `displayOrder ASC`.           |
+| **Card Spec Highlights**        | Polling, MCU, Switch, Weight | **DERIVABLE SAFELY**  | Additive read projection extracting validated category schema + `specValues`.           |
+| **Homepage Featured Product**   | Purchasable home product     | **ALREADY AVAILABLE** | Explicit slug in server-side static presentation config. Omitted if unpublished.        |
+| **Homepage Shelf Products**     | Curated home shelves         | **ALREADY AVAILABLE** | Explicit slug arrays in server-side static presentation config.                         |
+| **Add-On Compatibility**        | Model-specific cross-sell    | **ALREADY AVAILABLE** | Explicit curated product-to-addon slug mapping in server config. No category inference. |
+| **Back-in-Stock Subscription**  | Restock notification form    | **DEFER**             | Deferred future capability. Non-functional data collection prohibited in GP-026A.       |
+| **Color Swatch Thumbnail**      | Circular variant preview     | **DERIVABLE SAFELY**  | Derived from variant media or primary image using `colorway`/`color` aliases.           |
+| **Generic Option Attributes**   | Dynamic switch/style pills   | **ALREADY AVAILABLE** | Resolved dynamically from `ProductVariant.attributes` generic record.                   |
+| **Exact Physical Dimensions**   | Size guide schematic         | **ALREADY AVAILABLE** | Rendered only if present in product specifications or dimensions Story payload.         |
+| **Grip / Hand Recommendations** | Size guide recommendations   | **ALREADY AVAILABLE** | Rendered only if explicitly authored for that product/model; otherwise omitted.         |
+| **Approved Commercial Claims**  | Trust strip & announcements  | **ALREADY AVAILABLE** | Derived strictly from approved business policy config. Unapproved claims omitted.       |
 
-_Note: Zero schema changes or migrations are required for CHK0. All visual parity data can be derived from existing tables (`Product`, `ProductVariant`, `ProductMedia`, `specifications` JSONB)._
+_Note: Zero database schema changes or migrations are required for CHK0 or subsequent convergence checkpoints. All data requirements are resolved via server-side static configuration or additive read-only projections._
 
 ## 38. Domain Logic Preservation Matrix
 
-The visual redesign must strictly preserve validated domain behavior:
+The visual redesign preserves validated domain write behavior while authorizing additive read models:
 
-- **Catalog Queries**: `getCachedProduct`, `getCachedCatalogPage`, `getCachedStoryRelatedProducts` remain unchanged.
+- **Catalog Write Semantics**: Catalog mutations, admin actions, and database writes remain untouched.
+- **Additive Public Read Projections**: Authorized for `ProductDiscoveryItem` (secondary media, spec highlights, compare-at price) and PDP inventory under strict non-N+1 bounded query constraints.
 - **Database Schema**: PostgreSQL schema and Supabase tables remain 100% untouched.
-- **Cart Engine**: `CartProvider`, `useCart`, `addItem`, `updateQuantity`, `removeItem` remain the exact state machine.
+- **Cart Engine**: `CartProvider`, `useCart`, `addItem`, `updateQuantity`, `removeItem` remain the exact state machine. Sequential cart mutations defined for add-ons.
 - **Checkout & Orders**: Checkout session validation, order creation, and Yape/Plin payment verification flows remain intact.
 - **Authentication & RBAC**: Supabase Auth session checks and admin role guards remain active.
-- **Public Media Resolver**: `resolvePublicMediaUrl` continues to sign and resolve secure Cloudflare R2 URLs.
+- **Safe Public Media Resolver**: `resolvePublicMediaUrl` validates object keys, rejects directory traversal, rejects absolute URL injection, and resolves against configured public CDN/site origins. It does **NOT** generate signed URLs; GP-026A consumes only authorized `PUBLIC_MEDIA`.
 - **SEO & JSON-LD**: `ProductJsonLd`, `BreadcrumbList`, and dynamic metadata generation remain intact.
-- **Story Persistence**: The safe JSON validation schema for Product Story blocks remains the canonical standard.
+- **Story Persistence**: Safe JSON validation schema for Product Story blocks remains the canonical standard.
 
 ## 39. Responsive & Mobile Contract
 
@@ -531,7 +553,7 @@ The visual redesign must strictly preserve validated domain behavior:
 - **Headings**: Single `<h1>` per page (Product Title on PDP, Brand Name on Homepage), strictly hierarchical `<h2>` and `<h3>`.
 - **Keyboard Navigation**: All interactive elements (swatches, tabs, drawers, sliders) accessible via `Tab`, `Enter`, `Space`, and Arrow keys.
 - **Focus Indicators**: High-contrast focus rings (`outline: 2px solid #09090b; outline-offset: 2px`).
-- **Color Independence**: Color variant selections never rely on color alone; selected color name is explicitly rendered as text in the label (`Color: Negro`).
+- **Color Independence**: Color variant selections never rely on color alone; selected color name is explicitly rendered as text in the label (`Color: [Nombre]`).
 - **Screen Reader Support**: Hidden `<span class="sr-only">` labels on icon buttons (Search, Menu, Cart, Close).
 - **Reduced Motion**: All animations wrapped in `@media (prefers-reduced-motion: reduce)` disabling non-essential motion.
 
@@ -590,13 +612,13 @@ During implementation checkpoints (CHK1–CHK6), visual verification will follow
 ## 47. Security Boundaries
 
 - Server-side authorization, price verification, and cart integrity remain strictly enforced.
-- Cloudflare R2 signed media URLs prevent hotlinking and protect private assets.
+- The public media resolver validates object keys, rejects directory traversal, and rejects absolute/query injection against configured public origins. No private assets are exposed.
 - Sanitized HTML rendering for any user-supplied or rich-text story content.
 
 ## 48. Testing Strategy
 
 - **Automated Validation**:
-  - Unit tests for new components (`ProductCardV2`, `VariantSelectorV2`, `StickyBuyBar`).
+  - Unit tests for new components (`ProductCardV2`, `VariantSelectorV2`, `StickyBuyBar`, additive read projections).
   - End-to-end Playwright tests (`pnpm test:e2e`) verifying cart addition, variant switching, drawer opening, and checkout navigation.
   - Lint and type checks (`pnpm check`).
 - **Manual Verification**:
@@ -607,17 +629,20 @@ During implementation checkpoints (CHK1–CHK6), visual verification will follow
 
 - **CHK0 (Current)**: Discovery, WLMOUSE Reference Audit, Existing Codebase Audit, Visual Convergence Contract Freeze. (Documentation only, zero runtime delta).
 - **CHK1**: Global Shell & Homepage Convergence:
-  - Refactor `SiteHeader`, `AnnouncementBar`, `MobileDrawer`, and `SiteFooter`.
-  - Rebuild `HomePage` with real hardware hero, collection doors, purchasable featured product, comparison slider, product shelves, and trust strip.
+  - Refactor `SiteHeader`, `AnnouncementBar` (Policy-Source Rule), `MobileDrawer`, and `SiteFooter`.
+  - Rebuild `HomePage` with real hardware hero, collection doors, purchasable featured product (deterministic server config), comparison slider, product shelves, and trust strip.
 - **CHK2**: Product Card V2 & Discovery Surfaces:
+  - Implement additive `ProductDiscoveryProjection` for secondary media and spec highlights.
   - Implement `ProductCard` V2 with hover flip, spec carousel, quick options.
   - Refactor Category (`/categorias/[slug]`), Brand (`/marcas/[slug]`), and Search (`/buscar`) grids.
 - **CHK3**: PDP V2 Commerce Shell Convergence:
-  - Rebuild PDP top section: full-width adaptive gallery, sticky commerce panel, visual thumbnail swatches, switch options, quantity counter, sticky buy bar, trust box.
+  - Rebuild PDP top section: full-width adaptive gallery, sticky commerce panel, visual thumbnail swatches, generic option pills, quantity counter, sticky buy bar, trust box.
+  - Implement curated model-specific Add-ons module with sequential cart mutations.
+  - Implement Sold Out state (Back-in-Stock subscription deferred).
 - **CHK4**: Public Product Story Renderer Convergence:
   - Redesign public renderers for all 13 canonical Story block types for high-impact editorial presentation.
 - **CHK5**: Cart Drawer, Supporting Surfaces & Mobile Touch Ergonomics:
-  - Refine `CartDrawer` with shipping progress and instant line-item controls.
+  - Refine `CartDrawer` with instant line-item controls.
   - Implement `SearchDrawer` with predictive search.
   - Complete mobile touch ergonomics (sticky mobile buy bar, drawer transitions).
 - **CHK6**: Cross-Surface Visual Regression, Performance, Accessibility, SEO & Closure:
@@ -626,20 +651,21 @@ During implementation checkpoints (CHK1–CHK6), visual verification will follow
 ## 50. Freeze Rules
 
 - **Zero Runtime Delta in CHK0**: No production code, no test modifications, no CSS changes, no database migrations.
-- **Zero Schema Change**: Existing PostgreSQL schema is frozen; all visual convergence data is derived safely from existing tables.
-- **Domain Logic Preservation**: Cart calculations, variant resolution, auth sessions, and order management logic must remain unmodified during presentation refactoring.
+- **Zero Schema Change**: Existing PostgreSQL schema is frozen; all visual convergence data is derived safely from server configuration or additive read projections.
+- **Domain Write Preservation**: Cart calculations, variant resolution, auth sessions, and order management logic must remain unmodified during presentation refactoring.
 
 ## 51. Explicit Non-Goals
 
 - Admin UI redesign (Admin is internal and functional).
 - Direct pixel-for-pixel copyright clone of WLMOUSE proprietary assets.
 - Automated third-party payment gateway integrations.
-- Modifying historical completed roadmap documents (GP-001, GP-002, etc.).
+- Non-functional Back-in-Stock contact collection forms without durable authorized backend destination.
+- Hardcoding unapproved commercial policies, couriers, SLAs, or warranty durations.
 
 ## 52. Open Owner Decisions
 
-1. **Homepage Featured Product Selection**: Decision on whether the homepage featured purchasable product is hardcoded to a flagship item (e.g. _Beast X Pro_) or driven by an Admin "Featured on Home" toggle. (Default for CHK1: Display top active flagship peripheral).
-2. **Back-in-Stock Notification Storage**: Decision on whether notification requests are stored in a new database table or queued via email service. (Deferred to post-convergence gate).
+1. **Approved Business Policies**: When commercial policies for shipping carriers, delivery SLAs, warranty duration terms, and customer support channels are officially authorized by the owner, they will be supplied to the Policy-Source configuration. Until then, the storefront strictly omits them.
+2. **Back-in-Stock System Architecture**: Authorized backend gate defining database storage, customer consent, privacy, and email/SMS notification dispatch for restocked items (deferred to a future roadmap gate).
 
 ## 53. Acceptance Criteria
 
@@ -648,7 +674,15 @@ During implementation checkpoints (CHK1–CHK6), visual verification will follow
 - [x] Audit of existing Gamer Perú storefront code conducted with detailed divergence analysis.
 - [x] ROADMAP.md updated to insert GP-026A between GP-025 and GP-026 without renumbering later gates.
 - [x] GP-026.md updated to paused status pending GP-026A.
-- [x] GP-026A.md roadmap specification created.
-- [x] GP-026A-CONTRACT.md created with all 53 mandatory sections.
+- [x] All unapproved commercial/policy promises (couriers, 24h SLA, 12-month warranty, free shipping progress bar, WhatsApp support hours) removed under the strict Policy-Source Rule.
+- [x] Read-model reality addressed: "queries unchanged" claim removed; additive public read projections authorized for secondary media and spec highlights under bounded query constraints.
+- [x] `ProductVariant.status = 'ACTIVE'` explicitly decoupled from available-to-sell stock; v1 inventory fallback frozen.
+- [x] Generic multidimensional variant resolution preserved (`colorway`/`color` aliases handled; dynamic attribute parsing; fallback to variant title).
+- [x] Specification extraction frozen as validated category schema + `specValues`; fictional direct paths removed.
+- [x] Homepage merchandising frozen as server-side static presentation configuration; undefined flagship fallbacks removed.
+- [x] Add-ons compatibility frozen as explicit curated server mapping with sequential cart mutations; generic category inference removed.
+- [x] Back-in-stock notification form deferred; non-functional contact data collection prohibited.
+- [x] Size-guide hand-size and grip recommendations frozen as product-authoritative only; global hardcoded hand tiers removed.
+- [x] Public media resolver corrected to reflect actual validation behavior; false signed-URL security claims removed.
 - [x] Zero production code delta, zero test code delta, zero CSS delta, zero schema delta, zero migration delta.
 - [x] Code formatting passes (`pnpm format:check`) and git diff is clean.
