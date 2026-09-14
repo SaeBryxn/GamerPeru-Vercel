@@ -9,6 +9,7 @@ Report before dependent work is authorized.
 ## Important v1.2 additions
 
 - GP-025 --- AI Product Research & Import.
+- GP-026A --- Storefront Visual Convergence (exceptional gate inserted before GP-026).
 - GP-035 --- AI Customer Assistant.
 - Shared provider-agnostic AI architecture with configurable
   providers, models and AI Profiles.
@@ -44,6 +45,7 @@ Report before dependent work is authorized.
 - [GP-023](./GP-023.md) --- Admin Dashboard
 - [GP-024](./GP-024.md) --- Admin Product Manager
 - [GP-025](./GP-025.md) --- AI Product Research & Import
+- [GP-026A](./GP-026A.md) --- Storefront Visual Convergence
 - [GP-026](./GP-026.md) --- Product Story Builder
 - [GP-027](./GP-027.md) --- Orders Admin
 - [GP-028](./GP-028.md) --- Payment Verification Admin
