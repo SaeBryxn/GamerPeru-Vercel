@@ -2,11 +2,11 @@
 
 ## Contract Status
 
-`CHK0 CONTRACT CANDIDATE / PENDING EXTERNAL APPROVAL`
+`CHK0 CONTRACT FROZEN / EXTERNALLY APPROVED`
 
-This document is the fresh, current-main discovery candidate for GP-026. It is not frozen
-implementation authority until it is externally approved and integrated. GP-026 runtime work must
-not start from this candidate alone.
+This document is the externally approved and integrated implementation authority for GP-026. Its
+decisions are binding for later GP-026 checkpoints. Freeze means approved implementation authority,
+not completed implementation; GP-026 CHK1 still requires explicit separate authorization.
 
 ## 1. Canonical Baseline
 
@@ -894,9 +894,9 @@ None of these gaps is repaired in CHK0.
   implementation authority.
 - No branch, commit, assumption, contract, or code from those candidates may be merged,
   cherry-picked, copied blindly, or used to bypass current-main verification.
-- This fresh candidate was derived directly from baseline
-  `672222b098aff8713be902ef2173f9c13e761e35` and must itself receive external approval before
-  becoming binding.
+- This fresh contract lineage was derived directly from baseline
+  `672222b098aff8713be902ef2173f9c13e761e35`, externally approved, and integrated unchanged before
+  being frozen as binding authority.
 
 ## 34. GP-026A Supersession Boundary
 
@@ -910,9 +910,9 @@ presentation remain authoritative.
 GP-026 stays a manual Admin Product Story Builder. AI Story generation remains out of scope unless
 the owner authorizes it in a future independent gate.
 
-## 35. Contract Freeze Conditions
+## 35. Contract Freeze
 
-This candidate can be frozen only after external review confirms:
+External review confirmed:
 
 - the exact baseline and current-code evidence;
 - the 13-block payload and renderer matrices;
@@ -921,5 +921,6 @@ This candidate can be frozen only after external review confirms:
 - permission, media, preview, SEO, accessibility, and checkpoint boundaries;
 - every risk and explicit exclusion above.
 
-External approval freezes decisions, not completion. It authorizes only the next separately assigned
-checkpoint and does not close GP-026.
+The decisions above are frozen implementation authority, not a claim that GP-026 is implemented or
+complete. Future checkpoints may not change them silently. A material architectural change requires
+a separately reviewed amendment. This freeze closes CHK0 only and does not authorize or start CHK1.
