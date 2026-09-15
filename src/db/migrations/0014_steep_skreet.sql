@@ -63,6 +63,20 @@ BEGIN
 			ERRCODE = '23514',
 			MESSAGE = 'GP026_CHK1_PREFLIGHT_MULTIPLE_PUBLISHED: a Product has more than one PUBLISHED revision';
 	END IF;
+
+	IF EXISTS (
+		SELECT 1
+		FROM "product_story_revisions" AS revisions
+		LEFT JOIN "product_stories" AS stories
+			ON stories."product_id" = revisions."product_id"
+			AND stories."published_revision_id" = revisions."id"
+		WHERE revisions."status" = 'PUBLISHED'
+			AND stories."product_id" IS NULL
+	) THEN
+		RAISE EXCEPTION USING
+			ERRCODE = '23514',
+			MESSAGE = 'GP026_CHK1_PREFLIGHT_ORPHAN_PUBLISHED_REVISION: every PUBLISHED revision must be the authoritative published pointer for its Product';
+	END IF;
 END $$;
 --> statement-breakpoint
 ALTER TABLE "product_stories" ADD COLUMN "draft_revision_id" uuid;

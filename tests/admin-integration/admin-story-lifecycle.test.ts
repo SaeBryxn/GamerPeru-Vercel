@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   CatalogIdempotencyConflictError,
   CatalogReplayIntegrityError,
+  StoryLifecycleIntegrityError,
   StoryStaleWriteError,
   StoryValidationError,
   discardProductStoryDraft,
@@ -804,6 +805,78 @@ describe("GP-026 CHK1 Story lifecycle live integration", () => {
       draft_revision_id: newer.revisionId,
       published_revision_id: null,
     });
+  });
+
+  it("fails closed before promotion when an active PUBLISHED revision is unpointed", async () => {
+    const productId = await createProduct();
+    const firstDraftResult = await firstDraft(productId);
+    const originalPublishInput = {
+      productId,
+      expectedDraftRevisionId: firstDraftResult.revisionId,
+      expectedPublishedRevisionId: null,
+      mutationRequestId: randomUUID(),
+    };
+    const orphanPublished = await publishProductStory(originalPublishInput, {
+      authContext: authorized,
+    });
+    await pgSql`
+      UPDATE product_stories
+      SET published_revision_id = NULL
+      WHERE product_id = ${productId}
+    `;
+    const currentDraft = await saveProductStoryDraft(
+      {
+        productId,
+        expectedDraftRevisionId: null,
+        expectedPublishedRevisionId: null,
+        document: heroDocument("No debe promoverse"),
+        mutationRequestId: randomUUID(),
+      },
+      { authContext: authorized }
+    );
+    const auditBefore = await pgSql`
+      SELECT COUNT(*)::int AS count
+      FROM audit_events
+      WHERE actor_id = ${fixture.actorId} AND action = 'catalog:story:publish'
+    `;
+    await expect(
+      publishProductStory(originalPublishInput, { authContext: authorized })
+    ).resolves.toMatchObject({ revisionId: orphanPublished.revisionId, replayed: true });
+
+    await expect(
+      publishProductStory(
+        {
+          productId,
+          expectedDraftRevisionId: currentDraft.revisionId,
+          expectedPublishedRevisionId: null,
+          mutationRequestId: randomUUID(),
+        },
+        { authContext: authorized }
+      )
+    ).rejects.toBeInstanceOf(StoryLifecycleIntegrityError);
+
+    const revisions = await pgSql`
+      SELECT id, status FROM product_story_revisions
+      WHERE product_id = ${productId} ORDER BY revision_number
+    `;
+    const aggregate = await pgSql`
+      SELECT draft_revision_id, published_revision_id
+      FROM product_stories WHERE product_id = ${productId}
+    `;
+    const auditAfter = await pgSql`
+      SELECT COUNT(*)::int AS count
+      FROM audit_events
+      WHERE actor_id = ${fixture.actorId} AND action = 'catalog:story:publish'
+    `;
+    expect(revisions).toEqual([
+      { id: orphanPublished.revisionId, status: "PUBLISHED" },
+      { id: currentDraft.revisionId, status: "DRAFT" },
+    ]);
+    expect(aggregate[0]).toEqual({
+      draft_revision_id: currentDraft.revisionId,
+      published_revision_id: null,
+    });
+    expect(auditAfter[0]?.count).toBe(auditBefore[0]?.count);
   });
 
   it("unpublishes atomically while preserving an independent current draft", async () => {

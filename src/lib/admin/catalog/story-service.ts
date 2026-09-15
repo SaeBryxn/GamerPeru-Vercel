@@ -337,6 +337,29 @@ function assertExpectedPointers(
   }
 }
 
+async function assertPublishedRevisionAuthority(
+  tx: StoryTransaction,
+  aggregate: StoryAggregateRow
+): Promise<void> {
+  const publishedRows = (await tx.execute(sql`
+    SELECT id
+    FROM product_story_revisions
+    WHERE product_id = ${aggregate.product_id}::uuid
+      AND status = 'PUBLISHED'
+    ORDER BY id
+    FOR UPDATE;
+  `)) as unknown as { id: string }[];
+
+  const authoritativePublishedId = aggregate.published_revision_id;
+  if (
+    (authoritativePublishedId === null && publishedRows.length !== 0) ||
+    (authoritativePublishedId !== null &&
+      (publishedRows.length !== 1 || publishedRows[0]?.id !== authoritativePublishedId))
+  ) {
+    throw new StoryLifecycleIntegrityError();
+  }
+}
+
 function parseReplayMetadata(metadata: unknown): ReplayMetadata {
   const result = ReplayMetadataSchema.safeParse(metadata);
   if (!result.success) {
@@ -811,6 +834,7 @@ export async function publishProductStory(
     if (replay) {
       return replay;
     }
+    await assertPublishedRevisionAuthority(tx, aggregate);
     assertExpectedPointers(
       aggregate,
       input.expectedDraftRevisionId,

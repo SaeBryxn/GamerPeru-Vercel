@@ -337,6 +337,45 @@ describe("GP-026 CHK1 migration live integration", () => {
     }, "GP026_CHK1_PREFLIGHT_MULTIPLE_PUBLISHED");
   });
 
+  it("fails before DDL for a lone PUBLISHED revision without a Story aggregate", async () => {
+    await expectPreflightFailure(async (fixture) => {
+      await insertRevision(fixture, {
+        status: "PUBLISHED",
+        publishedAt: new Date(),
+      });
+    }, "GP026_CHK1_PREFLIGHT_ORPHAN_PUBLISHED_REVISION");
+  });
+
+  it("fails before DDL for a lone PUBLISHED revision with a null authoritative pointer", async () => {
+    await expectPreflightFailure(async (fixture) => {
+      await insertRevision(fixture, {
+        status: "PUBLISHED",
+        publishedAt: new Date(),
+      });
+      await insertStory(fixture, fixture.productA, null);
+    }, "GP026_CHK1_PREFLIGHT_ORPHAN_PUBLISHED_REVISION");
+  });
+
+  it("preserves an exact authoritative PUBLISHED pointer", async () => {
+    const fixture = await createLegacyFixture();
+    const publishedId = await insertRevision(fixture, {
+      status: "PUBLISHED",
+      publishedAt: new Date(),
+    });
+    await insertStory(fixture, fixture.productA, publishedId);
+    try {
+      await runMigration(fixture.schema);
+      const stories = await pgSql.unsafe(
+        `SELECT "published_revision_id", "draft_revision_id"
+         FROM "${fixture.schema}"."product_stories" WHERE "product_id" = $1`,
+        [fixture.productA]
+      );
+      expect(stories).toEqual([{ published_revision_id: publishedId, draft_revision_id: null }]);
+    } finally {
+      await dropFixture(fixture.schema);
+    }
+  });
+
   it("enforces ownership, distinct pointers, partial uniqueness, and Product cascade", async () => {
     const fixture = await createLegacyFixture();
     try {

@@ -64,6 +64,7 @@ describe("GP-026 CHK1 Story lifecycle schema and migration", () => {
       "GP026_CHK1_PREFLIGHT_PUBLISHED_POINTER_TIMESTAMP",
       "GP026_CHK1_PREFLIGHT_MULTIPLE_DRAFTS",
       "GP026_CHK1_PREFLIGHT_MULTIPLE_PUBLISHED",
+      "GP026_CHK1_PREFLIGHT_ORPHAN_PUBLISHED_REVISION",
     ];
     for (const code of preflightCodes) {
       expect(migrationSql).toContain(code);
