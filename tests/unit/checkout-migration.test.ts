@@ -8,8 +8,8 @@ describe("GP-018 CHK2-BR1 — Migration Candidate 0009 Static Audit", () => {
     (f) => f.endsWith(".sql") && !f.startsWith("meta")
   );
 
-  it("verifies exact migration count is now 14 (0000 to 0013)", () => {
-    expect(migrationFiles).toHaveLength(14);
+  it("verifies exact migration count is now 15 (0000 to 0014)", () => {
+    expect(migrationFiles).toHaveLength(15);
     const ordinals = migrationFiles.map((f) => f.slice(0, 4));
     expect(ordinals).toContain("0000");
     expect(ordinals).toContain("0001");
@@ -25,6 +25,7 @@ describe("GP-018 CHK2-BR1 — Migration Candidate 0009 Static Audit", () => {
     expect(ordinals).toContain("0011");
     expect(ordinals).toContain("0012");
     expect(ordinals).toContain("0013");
+    expect(ordinals).toContain("0014");
   });
 
   it("verifies the 0009 migration candidate file exists and contains expected DDL statements", () => {

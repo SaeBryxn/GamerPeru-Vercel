@@ -9,6 +9,7 @@ import {
   pgTable,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { generateUuidV7 } from "../../utils/uuid";
@@ -69,7 +70,14 @@ export const productStoryRevisions = pgTable(
       table.productId,
       table.revisionNumber
     ),
+    unique("product_story_revisions_product_id_id_unique").on(table.productId, table.id),
     index("product_story_revisions_product_status_idx").on(table.productId, table.status),
+    uniqueIndex("product_story_revisions_one_draft_per_product_idx")
+      .on(table.productId)
+      .where(sql`${table.status} = 'DRAFT'`),
+    uniqueIndex("product_story_revisions_one_published_per_product_idx")
+      .on(table.productId)
+      .where(sql`${table.status} = 'PUBLISHED'`),
     check("product_story_revisions_revision_positive", sql`${table.revisionNumber} > 0`),
     check("product_story_revisions_blocks_array", sql`jsonb_typeof(${table.blocks}) = 'array'`),
     check(
@@ -89,6 +97,7 @@ export const productStories = pgTable(
   {
     productId: uuid("product_id").primaryKey(),
     publishedRevisionId: uuid("published_revision_id"),
+    draftRevisionId: uuid("draft_revision_id"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow()
@@ -105,6 +114,25 @@ export const productStories = pgTable(
       columns: [table.publishedRevisionId],
       foreignColumns: [productStoryRevisions.id],
     }).onDelete("set null"),
+    foreignKey({
+      name: "product_stories_draft_revision_fk",
+      columns: [table.draftRevisionId],
+      foreignColumns: [productStoryRevisions.id],
+    }).onDelete("set null"),
+    foreignKey({
+      name: "product_stories_published_revision_product_fk",
+      columns: [table.productId, table.publishedRevisionId],
+      foreignColumns: [productStoryRevisions.productId, productStoryRevisions.id],
+    }).onDelete("no action"),
+    foreignKey({
+      name: "product_stories_draft_revision_product_fk",
+      columns: [table.productId, table.draftRevisionId],
+      foreignColumns: [productStoryRevisions.productId, productStoryRevisions.id],
+    }).onDelete("no action"),
+    check(
+      "product_stories_distinct_revision_pointers",
+      sql`${table.publishedRevisionId} IS NULL OR ${table.draftRevisionId} IS NULL OR ${table.publishedRevisionId} <> ${table.draftRevisionId}`
+    ),
   ]
 );
 

@@ -8,3 +8,7 @@ export * from "./service";
 export * from "./record";
 export * from "./error-mapping";
 export * from "./actions";
+export * from "./story-validation";
+export * from "./story-reader";
+export * from "./story-service";
+export * from "./story-actions";
