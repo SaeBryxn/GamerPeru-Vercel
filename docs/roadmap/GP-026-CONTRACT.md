@@ -327,14 +327,27 @@ must not be updated in place.
 
 Every successful Save Draft:
 
-1. locks the Product and Story aggregate;
-2. proves the caller's expected draft and published identities still match;
-3. validates and canonicalizes the complete document;
-4. allocates `max(revision_number) + 1` under the lock;
-5. inserts a new `DRAFT` revision;
-6. archives the previously active draft, if any;
-7. swaps the aggregate draft pointer and updates aggregate `updated_at`;
-8. appends one audit event in the same transaction.
+1. acquires the mutation-digest advisory lock;
+2. locks the Product row;
+3. creates the Story aggregate deterministically when absent and locks the aggregate row;
+4. locks the currently referenced draft and published revisions, when present;
+5. checks for a durable replay marker under the advisory lock and returns or rejects the replay
+   before optimistic-pointer validation or any lifecycle mutation;
+6. for a fresh request, proves the caller's expected draft and published identities still match;
+7. validates and canonicalizes the complete document;
+8. allocates `max(revision_number) + 1` under the transaction lock;
+9. transitions the exact previously active revision from `DRAFT` to `ARCHIVED`, when one exists;
+10. inserts the replacement revision with status `DRAFT`;
+11. sets `product_stories.draft_revision_id` to the new revision and updates aggregate `updated_at`;
+12. appends one durable audit/idempotency event;
+13. commits the complete transaction.
+
+Archiving the prior draft before inserting its replacement is mandatory while
+`product_story_revisions_one_draft_per_product_idx` is active. Both operations remain in the same
+transaction. PostgreSQL rollback restores the prior revision to `DRAFT` and preserves the original
+pointer if validation, insertion, pointer update, audit insertion, or any later step fails. There
+is therefore no committed or externally visible state with two `DRAFT` revisions, and no committed
+state where `draft_revision_id` targets an `ARCHIVED` revision.
 
 The browser receives only the identities and revision numbers required for optimistic concurrency.
 Revision IDs are opaque concurrency tokens, not authorization evidence. The server re-derives
@@ -385,6 +398,14 @@ the first-draft race because two editors may both load `null`, but only the firs
 draft pointer; the second sees a mismatch and receives `STORY_STALE_WRITE` (HTTP 409). It also
 prevents an older draft from being published after a newer save.
 
+For the first-draft path, `expectedDraftRevisionId` must be `null`. After locking the Product, the
+service creates the missing aggregate with an idempotent insert and then locks/reads the canonical
+aggregate row. The first fresh request inserts the first `DRAFT`, sets `draft_revision_id`, writes
+the audit marker, and commits. A concurrent request that also began from `null` waits on the same
+Product/aggregate serialization boundary, then observes the installed pointer and returns
+`STORY_STALE_WRITE` without creating another revision. A committed retry of the winner is instead
+resolved by the replay fast path before this pointer comparison.
+
 Rules:
 
 - no tolerance windows and no client clock comparisons;
@@ -400,7 +421,11 @@ Rules:
 
 - Save, discard, publish, and unpublish each use one direct PostgreSQL transaction.
 - Lock order is deterministic: request-digest advisory lock, Product row, Story aggregate row, then
-  revision rows. Initial aggregate creation is serialized by the Product row lock.
+  revision rows. Initial aggregate creation is serialized by the Product row lock and uses
+  insert-if-absent followed by a canonical `FOR UPDATE` read.
+- For a replacement save, the exact active draft is archived before the new `DRAFT` insert so the
+  partial unique index remains enforceable. The archive, insert, pointer swap, aggregate timestamp,
+  and audit marker are one atomic unit.
 - Block order and payload are one JSONB document insert; no partial block commit exists.
 - Media is referenced only after relational validation; Story save performs no R2 write or network
   side effect.
@@ -440,6 +465,14 @@ Replay rules:
 | Marker target missing or owned by another Product | `CATALOG_REPLAY_INTEGRITY_ERROR`; fail closed and alert operations.                                   |
 | Different request ID against stale pointers       | `STORY_STALE_WRITE` (409); zero mutation.                                                             |
 | Concurrent identical submissions                  | Advisory lock serializes them; exactly one mutation and audit event.                                  |
+
+After the advisory lock and authoritative row locks are acquired, the replay lookup precedes the
+fresh-request expected-pointer check and every archive, insert, pointer, or status mutation. A
+committed same-digest/same-fingerprint Save Draft therefore returns its exact committed revision
+even though the aggregate pointer has advanced beyond the request's original expected draft. It
+performs zero archive operations, zero inserts, zero pointer/status changes, and zero new audit
+events. A same-digest/different-fingerprint attempt returns `CATALOG_IDEMPOTENCY_CONFLICT` before
+any mutation.
 
 Audit metadata includes sanitized Product ID, revision numbers/IDs needed for integrity, prior and
 new lifecycle state, block count, mutation digest, and fingerprint. It excludes auth/session data,
@@ -738,7 +771,16 @@ There are no current tests for Admin Story authoring, draft selection, Story wri
 - clean and upgrade migration, draft/published uniqueness, same-Product composite pointers, and
   Product cascade behavior;
 - first save, successive immutable saves, discard, publish, republish, and unpublish;
-- two-editor concurrent first save and concurrent later saves: exactly one winner;
+- replacement save with the partial unique index active: the exact old `DRAFT` becomes `ARCHIVED`,
+  exactly one new `DRAFT` commits, and `draft_revision_id` targets that new revision;
+- fault after old-draft archival but before commit: rollback restores the old `DRAFT`, preserves the
+  prior pointer, and persists no replacement revision or audit marker;
+- two-editor concurrent first save and concurrent saves from the same expected draft: exactly one
+  winner and one replacement revision; the loser returns `STORY_STALE_WRITE`;
+- idempotent retry of the winning save: no additional revision, lifecycle transition, pointer
+  mutation, or audit event;
+- every replacement, rollback, concurrency, and replay scenario must execute with
+  `product_story_revisions_one_draft_per_product_idx` physically present and verified, not mocked;
 - stale draft publish after a newer save: zero lifecycle change;
 - same-request sequential/concurrent replay: one revision and one audit event;
 - same ID/different payload conflict and broken replay marker integrity failure;
