@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StoryBuilder } from "@/app/admin/(protected)/products/[productId]/story/story-builder";
 import {
+  classifyStoryActionResult,
   createBuilderDocument,
   createIncompleteBuilderBlock,
   duplicateBuilderBlock,
@@ -148,6 +149,51 @@ describe("GP-026 CHK2 Story Builder model", () => {
     const initial = createBuilderDocument(validDocument);
     expect(getBuilderBlockId(moveBuilderBlock(initial, 0, 1)[0]!)).toBe(SECOND_BLOCK_ID);
     expect(getBuilderBlockId(moveBuilderBlock(initial, 0, -1)[0]!)).toBe(FIRST_BLOCK_ID);
+  });
+
+  it("classifies structured responses deterministically into SUCCESS, DEFINITIVE_FAILURE, and AMBIGUOUS_FAILURE", () => {
+    expect(classifyStoryActionResult({ success: true, data: { ok: true } })).toBe("SUCCESS");
+    expect(classifyStoryActionResult({ success: true, data: null })).toBe("AMBIGUOUS_FAILURE");
+    expect(classifyStoryActionResult({ success: true })).toBe("AMBIGUOUS_FAILURE");
+
+    expect(
+      classifyStoryActionResult({
+        success: false,
+        code: "STORY_VALIDATION_ERROR",
+        error: "Validation error",
+      })
+    ).toBe("DEFINITIVE_FAILURE");
+    expect(
+      classifyStoryActionResult({
+        success: false,
+        code: "STORY_STALE_WRITE",
+        error: "Stale write",
+      })
+    ).toBe("DEFINITIVE_FAILURE");
+    expect(
+      classifyStoryActionResult({
+        success: false,
+        code: "FORBIDDEN",
+        error: "Forbidden",
+      })
+    ).toBe("DEFINITIVE_FAILURE");
+
+    expect(
+      classifyStoryActionResult({
+        success: false,
+        code: "UNKNOWN_ERROR",
+        error: "Unexpected error",
+      })
+    ).toBe("AMBIGUOUS_FAILURE");
+    expect(
+      classifyStoryActionResult({
+        success: false,
+        code: "UNRECOGNIZED_CODE",
+      })
+    ).toBe("AMBIGUOUS_FAILURE");
+    expect(classifyStoryActionResult(null)).toBe("AMBIGUOUS_FAILURE");
+    expect(classifyStoryActionResult(undefined)).toBe("AMBIGUOUS_FAILURE");
+    expect(classifyStoryActionResult("error")).toBe("AMBIGUOUS_FAILURE");
   });
 });
 
@@ -367,13 +413,157 @@ describe("GP-026 CHK2 Story Builder component", () => {
     );
   });
 
-  it("confirms durable discard and resets after authoritative props refresh", async () => {
+  it("reuses mutationRequestId for an exact unchanged retry after structured UNKNOWN_ERROR", async () => {
+    const user = userEvent.setup();
+    mocks.saveDraft
+      .mockResolvedValueOnce({
+        success: false,
+        code: "UNKNOWN_ERROR",
+        error: "Ocurrió un error inesperado al procesar la historia.",
+      })
+      .mockResolvedValueOnce({
+        ...successfulSave(3, DRAFT_ID),
+        data: {
+          ...successfulSave(3, DRAFT_ID).data,
+          replayed: true,
+        },
+      });
+
+    render(<StoryBuilder initialStory={makeStory()} />);
+    await user.click(screen.getAllByRole("button", { name: /Duplicar/i })[0]!);
+    expect(screen.getAllByTestId(/^story-block-(?!list$)/)).toHaveLength(3);
+
+    await user.click(screen.getByTestId("story-save-draft"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Reintentar guardado" })).toBeTruthy()
+    );
+
+    expect(screen.getAllByTestId(/^story-block-(?!list$)/)).toHaveLength(3);
+    expect(screen.getByTestId("story-dirty-state").textContent).toBe("Cambios sin guardar");
+    expect(screen.getByTestId("story-error").textContent).toContain(
+      "No se pudo confirmar el resultado en el servidor"
+    );
+
+    await user.click(screen.getByRole("button", { name: "Reintentar guardado" }));
+    await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(2));
+
+    expect(mocks.saveDraft.mock.calls[0]?.[0].mutationRequestId).toBe(
+      mocks.saveDraft.mock.calls[1]?.[0].mutationRequestId
+    );
+    expect(screen.getByTestId("story-dirty-state").textContent).toBe(
+      "Todos los cambios están guardados"
+    );
+    expect(screen.getByTestId("story-success").textContent).toContain(
+      "confirmado sin crear otra revisión"
+    );
+  });
+
+  it("generates a new mutationRequestId when payload changes after structured UNKNOWN_ERROR", async () => {
+    const user = userEvent.setup();
+    mocks.saveDraft
+      .mockResolvedValueOnce({
+        success: false,
+        code: "UNKNOWN_ERROR",
+        error: "Ocurrió un error inesperado al procesar la historia.",
+      })
+      .mockResolvedValueOnce(successfulSave());
+
+    render(<StoryBuilder initialStory={makeStory()} />);
+    await user.click(screen.getAllByRole("button", { name: /Duplicar/i })[0]!);
+    await user.click(screen.getByTestId("story-save-draft"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Reintentar guardado" })).toBeTruthy()
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /hacia arriba/i })[1]!);
+    await user.click(screen.getByTestId("story-save-draft"));
+    await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(2));
+
+    expect(mocks.saveDraft.mock.calls[0]?.[0].mutationRequestId).not.toBe(
+      mocks.saveDraft.mock.calls[1]?.[0].mutationRequestId
+    );
+  });
+
+  it("treats definitive domain rejection as completed and does not mark save ambiguous", async () => {
+    const user = userEvent.setup();
+    mocks.saveDraft
+      .mockResolvedValueOnce({
+        success: false,
+        code: "STORY_VALIDATION_ERROR",
+        error: "Revisa los campos señalados antes de continuar.",
+        fieldErrors: [{ code: "INVALID", path: "blocks[0]", message: "Contenido inválido." }],
+      })
+      .mockResolvedValueOnce(successfulSave());
+
+    render(<StoryBuilder initialStory={makeStory()} />);
+    await user.click(screen.getAllByRole("button", { name: /Duplicar/i })[0]!);
+    await user.click(screen.getByTestId("story-save-draft"));
+
+    await waitFor(() => expect(screen.getByTestId("story-error")).toBeTruthy());
+    expect(screen.getByTestId("story-save-draft").textContent).toBe("Guardar borrador");
+    expect(screen.queryByRole("button", { name: "Reintentar guardado" })).toBeNull();
+    expect(screen.getAllByTestId(/^story-block-(?!list$)/)).toHaveLength(3);
+    expect(screen.getByTestId("story-dirty-state").textContent).toBe("Cambios sin guardar");
+
+    await user.click(screen.getByTestId("story-save-draft"));
+    await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(2));
+
+    expect(mocks.saveDraft.mock.calls[0]?.[0].mutationRequestId).not.toBe(
+      mocks.saveDraft.mock.calls[1]?.[0].mutationRequestId
+    );
+  });
+
+  it("reuses mutationRequestId for an exact unchanged retry after structured UNKNOWN_ERROR discard", async () => {
+    const user = userEvent.setup();
+    mocks.discardDraft
+      .mockResolvedValueOnce({
+        success: false,
+        code: "UNKNOWN_ERROR",
+        error: "Ocurrió un error inesperado al procesar la historia.",
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          productId: PRODUCT_ID,
+          productSlug: "mouse-gamer-e2e",
+          revisionId: DRAFT_ID,
+          revisionNumber: 2,
+          draftRevisionId: null,
+          publishedRevisionId: null,
+          publishedAt: null,
+          replayed: true,
+        },
+      });
+
+    render(<StoryBuilder initialStory={makeStory()} />);
+    await user.click(screen.getByTestId("story-discard-draft"));
+    await user.click(screen.getByRole("button", { name: "Descartar borrador" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("story-error").textContent).toContain(
+        "No se pudo confirmar si el descarte concluyó en el servidor"
+      )
+    );
+
+    await user.click(screen.getByTestId("story-discard-draft"));
+    await user.click(screen.getByRole("button", { name: "Descartar borrador" }));
+    await waitFor(() => expect(mocks.discardDraft).toHaveBeenCalledTimes(2));
+
+    expect(mocks.discardDraft.mock.calls[0]?.[0].mutationRequestId).toBe(
+      mocks.discardDraft.mock.calls[1]?.[0].mutationRequestId
+    );
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("confirms durable discard, completes tracker, and resets after authoritative props refresh", async () => {
     const user = userEvent.setup();
     const { rerender } = render(<StoryBuilder initialStory={makeStory()} />);
     await user.click(screen.getByTestId("story-discard-draft"));
     await user.click(screen.getByRole("button", { name: "Descartar borrador" }));
     await waitFor(() => expect(mocks.discardDraft).toHaveBeenCalledTimes(1));
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("story-success").textContent).toContain(
+      "Borrador descartado. Recargando la versión autorizada del servidor."
+    );
 
     rerender(<StoryBuilder initialStory={makeStory("NO_STORY")} />);
     await waitFor(() => expect(screen.getByTestId("story-empty-state")).toBeTruthy());

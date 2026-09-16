@@ -24,6 +24,7 @@ import {
   saveProductStoryDraftAction,
 } from "@/lib/admin/catalog/story-actions";
 import {
+  classifyStoryActionResult,
   createBuilderDocument,
   createIncompleteBuilderBlock,
   duplicateBuilderBlock,
@@ -374,44 +375,57 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
 
     try {
       const result = await saveProductStoryDraftAction({ ...payload, mutationRequestId });
-      saveTracker.current.complete();
+      const disposition = classifyStoryActionResult(result);
 
-      if (!result.success || !result.data) {
+      if (disposition === "SUCCESS") {
+        const committed = result.data!;
+        saveTracker.current.complete();
+        const baseline = structuredClone(completeDocument);
+        setDocument(createBuilderDocument(baseline));
+        setSavedBaseline(baseline);
+        setDurableStory((current) => {
+          const publishedRevisionNumber =
+            committed.publishedRevisionId === current.publishedRevisionId
+              ? current.publishedRevisionNumber
+              : null;
+          const publishedAt =
+            committed.publishedRevisionId === current.publishedRevisionId
+              ? current.publishedAt
+              : committed.publishedAt;
+          return {
+            lifecycle: deriveLifecycle(committed.draftRevisionId, committed.publishedRevisionId),
+            draftRevisionId: committed.draftRevisionId,
+            draftRevisionNumber: committed.revisionNumber,
+            publishedRevisionId: committed.publishedRevisionId,
+            publishedRevisionNumber,
+            publishedAt,
+          };
+        });
+        setAmbiguousSave(false);
+        setSuccessMessage(
+          committed.replayed
+            ? `Borrador r${committed.revisionNumber} confirmado sin crear otra revisión.`
+            : `Borrador r${committed.revisionNumber} guardado correctamente.`
+        );
+        announce(`Borrador r${committed.revisionNumber} guardado correctamente.`);
+        return;
+      }
+
+      if (disposition === "DEFINITIVE_FAILURE") {
+        saveTracker.current.complete();
+        setAmbiguousSave(false);
         setErrorMessage(result.error ?? "No se pudo guardar el borrador.");
         setFieldErrors(result.fieldErrors?.map((issue) => `${issue.path}: ${issue.message}`) ?? []);
         setStaleConflict(result.code === "STORY_STALE_WRITE");
         return;
       }
 
-      const committed = result.data;
-      const baseline = structuredClone(completeDocument);
-      setDocument(createBuilderDocument(baseline));
-      setSavedBaseline(baseline);
-      setDurableStory((current) => {
-        const publishedRevisionNumber =
-          committed.publishedRevisionId === current.publishedRevisionId
-            ? current.publishedRevisionNumber
-            : null;
-        const publishedAt =
-          committed.publishedRevisionId === current.publishedRevisionId
-            ? current.publishedAt
-            : committed.publishedAt;
-        return {
-          lifecycle: deriveLifecycle(committed.draftRevisionId, committed.publishedRevisionId),
-          draftRevisionId: committed.draftRevisionId,
-          draftRevisionNumber: committed.revisionNumber,
-          publishedRevisionId: committed.publishedRevisionId,
-          publishedRevisionNumber,
-          publishedAt,
-        };
-      });
-      setAmbiguousSave(false);
-      setSuccessMessage(
-        committed.replayed
-          ? `Borrador r${committed.revisionNumber} confirmado sin crear otra revisión.`
-          : `Borrador r${committed.revisionNumber} guardado correctamente.`
+      setAmbiguousSave(true);
+      setErrorMessage(
+        result.error
+          ? `${result.error} No se pudo confirmar el resultado en el servidor. Reintenta sin modificar el documento para conservar la misma identidad de operación.`
+          : "No se pudo confirmar el resultado en el servidor. Reintenta sin modificar el documento para conservar la misma identidad de operación."
       );
-      announce(`Borrador r${committed.revisionNumber} guardado correctamente.`);
     } catch {
       setAmbiguousSave(true);
       setErrorMessage(
@@ -438,8 +452,19 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
 
     try {
       const result = await discardProductStoryDraftAction({ ...payload, mutationRequestId });
-      discardTracker.current.complete();
-      if (!result.success || !result.data) {
+      const disposition = classifyStoryActionResult(result);
+
+      if (disposition === "SUCCESS") {
+        discardTracker.current.complete();
+        setPendingConfirmation(null);
+        setSuccessMessage("Borrador descartado. Recargando la versión autorizada del servidor.");
+        announce("Borrador descartado correctamente.");
+        router.refresh();
+        return;
+      }
+
+      if (disposition === "DEFINITIVE_FAILURE") {
+        discardTracker.current.complete();
         setPendingConfirmation(null);
         setErrorMessage(result.error ?? "No se pudo descartar el borrador guardado.");
         setStaleConflict(result.code === "STORY_STALE_WRITE");
@@ -448,9 +473,12 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
       }
 
       setPendingConfirmation(null);
-      setSuccessMessage("Borrador descartado. Recargando la versión autorizada del servidor.");
-      announce("Borrador descartado correctamente.");
-      router.refresh();
+      setErrorMessage(
+        result.error
+          ? `${result.error} No se pudo confirmar si el descarte concluyó en el servidor. Puedes reintentar la misma operación.`
+          : "No se pudo confirmar si el descarte concluyó en el servidor. Puedes reintentar la misma operación."
+      );
+      window.setTimeout(() => confirmationTriggerRef.current?.focus(), 10);
     } catch {
       setPendingConfirmation(null);
       setErrorMessage(

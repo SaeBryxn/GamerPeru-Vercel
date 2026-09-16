@@ -224,3 +224,51 @@ export function removeBuilderBlock(
 ): BuilderStoryBlock[] {
   return document.filter((block) => getBuilderBlockId(block) !== blockId);
 }
+
+export type StoryActionResultDisposition = "SUCCESS" | "DEFINITIVE_FAILURE" | "AMBIGUOUS_FAILURE";
+
+export const DEFINITIVE_STORY_ERROR_CODES = [
+  "STORY_VALIDATION_ERROR",
+  "STORY_STALE_WRITE",
+  "CATALOG_IDEMPOTENCY_CONFLICT",
+  "CATALOG_REPLAY_INTEGRITY_ERROR",
+  "STORY_LIFECYCLE_INTEGRITY",
+  "STORY_LIFECYCLE_INTEGRITY_ERROR",
+  "PRODUCT_NOT_FOUND",
+  "PRODUCT_STORY_NOT_FOUND",
+  "STORY_DRAFT_NOT_FOUND",
+  "STORY_PUBLISHED_REVISION_NOT_FOUND",
+  "STORY_INVALID_REQUEST",
+  "STORY_NOT_RENDERABLE",
+  "FORBIDDEN",
+  "AUTHENTICATION_REQUIRED",
+  "AUTHORIZATION_UNAVAILABLE",
+] as const;
+
+export type DefinitiveStoryErrorCode = (typeof DEFINITIVE_STORY_ERROR_CODES)[number];
+
+export function classifyStoryActionResult(result: unknown): StoryActionResultDisposition {
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "success" in result &&
+    result.success === true &&
+    "data" in result &&
+    result.data !== null &&
+    result.data !== undefined
+  ) {
+    return "SUCCESS";
+  }
+
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "code" in result &&
+    typeof result.code === "string" &&
+    (DEFINITIVE_STORY_ERROR_CODES as readonly string[]).includes(result.code)
+  ) {
+    return "DEFINITIVE_FAILURE";
+  }
+
+  return "AMBIGUOUS_FAILURE";
+}
