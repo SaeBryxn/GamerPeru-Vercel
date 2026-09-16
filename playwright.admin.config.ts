@@ -71,7 +71,7 @@ export default defineConfig({
     timeout: 120000,
     env: {
       ...process.env,
-      E2E_CATALOG_FIXTURES: "1",
+      E2E_CATALOG_FIXTURES: "0",
       PLAYWRIGHT_TEST: "1",
       DEV_CATALOG_PREVIEW: "0",
     },

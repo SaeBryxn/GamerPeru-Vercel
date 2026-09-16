@@ -6,9 +6,15 @@ import { db } from "@/db";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import { requirePermission, type VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import { CatalogDomainError } from "./types";
-import { convertPersistedStoryToAuthoring } from "./story-references";
+import {
+  convertPersistedStoryToAuthoring,
+  validatePersistedStoryReferences,
+} from "./story-references";
 import { StoryLifecycleIntegrityError } from "./story-service";
 import { validatePersistedStoryDocument, type AuthoringStoryDocument } from "./story-validation";
+import { validateStoryBlocks, type ValidatedStoryBlock } from "@/lib/catalog/story-validation";
+import { getCachedStoryRelatedProducts } from "@/lib/catalog/cached-queries";
+import type { ProductDiscoveryItem } from "@/lib/catalog/types";
 
 export interface StoryReaderOptions {
   authContext?: VerifiedAuthContextReady;
@@ -393,4 +399,163 @@ export async function searchStoryRelatedProducts(
     status: row.status,
     isPublicEligible: isPublicEligible(row),
   }));
+}
+
+export interface AdminProductStoryPreviewDto {
+  product: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  draft: {
+    revisionId: string;
+    revisionNumber: number;
+  };
+  isEmpty: boolean;
+  validatedBlocks: ValidatedStoryBlock[];
+  relatedProductsMap: Map<string, ProductDiscoveryItem>;
+}
+
+export async function getAdminProductStoryPreview(
+  productId: string,
+  revisionId?: string | null,
+  options?: StoryReaderOptions
+): Promise<AdminProductStoryPreviewDto> {
+  await assertManagePermission(options);
+
+  if (
+    !z.string().uuid().safeParse(productId).success ||
+    (revisionId && !z.string().uuid().safeParse(revisionId).success)
+  ) {
+    throw new CatalogDomainError(
+      "La identidad del producto o de la revisión no tiene una estructura válida.",
+      "STORY_INVALID_REQUEST",
+      422
+    );
+  }
+
+  const productRows = (await db.execute(sql`
+    SELECT id, name, slug
+    FROM products
+    WHERE id = ${productId}::uuid
+    LIMIT 1;
+  `)) as unknown as { id: string; name: string; slug: string }[];
+  const product = productRows[0];
+  if (!product) {
+    throw new CatalogDomainError("El producto solicitado no existe.", "PRODUCT_NOT_FOUND", 404);
+  }
+
+  const aggregateRows = (await db.execute(sql`
+    SELECT product_id, draft_revision_id, published_revision_id
+    FROM product_stories
+    WHERE product_id = ${productId}::uuid
+    LIMIT 1;
+  `)) as unknown as {
+    product_id: string;
+    draft_revision_id: string | null;
+    published_revision_id: string | null;
+  }[];
+  const aggregate = aggregateRows[0] ?? null;
+
+  if (!aggregate || aggregate.draft_revision_id === null) {
+    throw new CatalogDomainError(
+      "La revisión solicitada no corresponde al borrador actual del producto.",
+      "STORY_REVISION_NOT_CURRENT_DRAFT",
+      404
+    );
+  }
+
+  const effectiveRevisionId = revisionId ?? aggregate.draft_revision_id;
+
+  if (effectiveRevisionId !== aggregate.draft_revision_id) {
+    throw new CatalogDomainError(
+      "La revisión solicitada no corresponde al borrador actual del producto.",
+      "STORY_REVISION_NOT_CURRENT_DRAFT",
+      404
+    );
+  }
+
+  const revisionRows = (await db.execute(sql`
+    SELECT id, product_id, revision_number, status, blocks, published_at, created_at
+    FROM product_story_revisions
+    WHERE id = ${effectiveRevisionId}::uuid
+    LIMIT 1;
+  `)) as unknown as StoryRevisionReadRow[];
+  const revision = revisionRows[0];
+
+  if (!revision || revision.product_id !== productId || revision.status !== "DRAFT") {
+    throw new CatalogDomainError(
+      "La revisión solicitada no es un borrador válido de este producto.",
+      "STORY_REVISION_INVALID",
+      404
+    );
+  }
+
+  const persistedDocument = validatePersistedStoryDocument(revision.blocks, { allowEmpty: true });
+
+  if (persistedDocument.length === 0) {
+    return {
+      product: {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+      },
+      draft: {
+        revisionId: revision.id,
+        revisionNumber: Number(revision.revision_number),
+      },
+      isEmpty: true,
+      validatedBlocks: [],
+      relatedProductsMap: new Map(),
+    };
+  }
+
+  await validatePersistedStoryReferences(db, productId, persistedDocument, {
+    requirePublicRelatedProducts: false,
+  });
+
+  const validatedBlocks = validateStoryBlocks(persistedDocument, {
+    productId,
+    revisionId: effectiveRevisionId,
+  });
+
+  if (!validatedBlocks || validatedBlocks.length !== persistedDocument.length) {
+    throw new CatalogDomainError(
+      "La historia contiene bloques que no se pueden proyectar para visualización.",
+      "STORY_PROJECTION_FAILED",
+      422
+    );
+  }
+
+  const rawSlugs: string[] = [];
+  for (const block of validatedBlocks) {
+    if (block.type === "related_products" && block.payload.productSlugs) {
+      rawSlugs.push(...block.payload.productSlugs);
+    }
+  }
+
+  const uniqueSlugs = Array.from(
+    new Set(rawSlugs.map((s) => s.trim()).filter((s) => Boolean(s) && s !== product.slug))
+  );
+
+  let relatedProductsMap = new Map<string, ProductDiscoveryItem>();
+  if (uniqueSlugs.length > 0) {
+    const hydrated = await getCachedStoryRelatedProducts(uniqueSlugs, product.id);
+    relatedProductsMap = new Map(hydrated.map((p) => [p.slug, p]));
+  }
+
+  return {
+    product: {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+    },
+    draft: {
+      revisionId: revision.id,
+      revisionNumber: Number(revision.revision_number),
+    },
+    isEmpty: false,
+    validatedBlocks,
+    relatedProductsMap,
+  };
 }

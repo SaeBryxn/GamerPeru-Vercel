@@ -33,5 +33,7 @@ export default async function ProductStoryPage({ params }: ProductStoryPageProps
     throw error;
   }
 
-  return <StoryBuilder initialStory={story} />;
+  const canPublish = authContext.permissions.has("catalog:publish");
+
+  return <StoryBuilder initialStory={story} canPublish={canPublish} />;
 }

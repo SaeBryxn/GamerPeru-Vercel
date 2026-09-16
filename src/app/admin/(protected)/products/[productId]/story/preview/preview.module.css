@@ -1,0 +1,200 @@
+.previewContainer {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+  color: #09090b;
+}
+
+.adminBar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background-color: #0f172a;
+  border-bottom: 1px solid #334155;
+  padding: 0.75rem 1rem;
+  color: #f8fafc;
+}
+
+.adminBarInner {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.adminBarLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  text-decoration: none;
+  min-height: 44px;
+  min-width: 44px;
+  transition: color 0.15s ease;
+}
+
+.backLink:hover,
+.backLink:focus-visible {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.badgeRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.privateBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: #1e3a8a;
+  color: #bfdbfe;
+  border: 1px solid #3b82f6;
+  border-radius: 9999px;
+}
+
+.unpublishedBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: #78350f;
+  color: #fde68a;
+  border: 1px solid #d97706;
+  border-radius: 9999px;
+}
+
+.adminBarRight {
+  text-align: right;
+}
+
+.productTitle {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.productSlug {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: #cbd5e1;
+}
+
+.revisionInfo {
+  font-size: 0.8125rem;
+  color: #cbd5e1;
+  margin: 0.25rem 0 0 0;
+}
+
+.revisionInfo strong {
+  color: #ffffff;
+}
+
+.contentRegion {
+  flex: 1;
+  width: 100%;
+  background-color: #ffffff;
+  color: #09090b;
+}
+
+.rendererWrapper {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+  background-color: #ffffff;
+  color: #09090b;
+}
+
+.emptyState {
+  max-width: 480px;
+  margin: 4rem auto;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  background-color: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.emptyState h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.emptyState p {
+  font-size: 0.875rem;
+  color: #475569;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.editorLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  background-color: #0f172a;
+  color: #ffffff;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.editorLink:hover,
+.editorLink:focus-visible {
+  background-color: #1e293b;
+}
+
+@media (max-width: 640px) {
+  .adminBarInner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .adminBarRight {
+    text-align: left;
+    width: 100%;
+  }
+
+  .productTitle {
+    justify-content: flex-start;
+  }
+}

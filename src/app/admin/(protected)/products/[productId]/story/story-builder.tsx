@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
+  Eye,
+  EyeOff,
   FileText,
   Loader2,
   Plus,
@@ -19,13 +21,17 @@ import {
   RotateCcw,
   Save,
   Trash2,
+  UploadCloud,
   X,
 } from "lucide-react";
 import {
   discardProductStoryDraftAction,
+  publishProductStoryAction,
   saveProductStoryDraftAction,
+  unpublishProductStoryAction,
 } from "@/lib/admin/catalog/story-actions";
 import {
+  adaptPersistedValidationIssueToAuthoring,
   classifyStoryActionResult,
   createEditorDocument,
   createInitialEditorBlock,
@@ -76,6 +82,7 @@ const FOCUSABLE_SELECTOR =
 
 interface StoryBuilderProps {
   initialStory: AdminProductStoryDto;
+  canPublish?: boolean;
 }
 
 interface DurableStoryView extends StoryLifecycleSummary {
@@ -87,6 +94,8 @@ type PendingConfirmation =
   | { kind: "DELETE_BLOCK"; blockId: string; label: string }
   | { kind: "RESET_LOCAL" }
   | { kind: "DISCARD_DRAFT" }
+  | { kind: "PUBLISH" }
+  | { kind: "UNPUBLISH" }
   | { kind: "NAVIGATE"; href: string }
   | { kind: "RELOAD_SERVER" };
 
@@ -140,7 +149,8 @@ function useDialogFocus(
   isOpen: boolean,
   dialogRef: React.RefObject<HTMLDivElement | null>,
   triggerRef: React.RefObject<HTMLElement | null>,
-  onClose: () => void
+  onClose: () => void,
+  canClose: boolean = true
 ) {
   useEffect(() => {
     if (!isOpen) return;
@@ -160,6 +170,7 @@ function useDialogFocus(
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (!canClose) return;
         event.preventDefault();
         onClose();
         window.setTimeout(() => triggerRef.current?.focus(), 10);
@@ -200,10 +211,10 @@ function useDialogFocus(
       window.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("focusin", handleFocusIn);
     };
-  }, [dialogRef, isOpen, onClose, triggerRef]);
+  }, [canClose, dialogRef, isOpen, onClose, triggerRef]);
 }
 
-export function StoryBuilder({ initialStory }: StoryBuilderProps) {
+export function StoryBuilder({ initialStory, canPublish = true }: StoryBuilderProps) {
   const router = useRouter();
 
   // Unified canonical rehydration
@@ -238,11 +249,15 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
   // Status & feedback
   const [isSaving, setIsSaving] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [staleConflict, setStaleConflict] = useState(false);
   const [ambiguousSave, setAmbiguousSave] = useState(false);
+  const [ambiguousPublish, setAmbiguousPublish] = useState(false);
+  const [ambiguousUnpublish, setAmbiguousUnpublish] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null);
   const [validationActive, setValidationActive] = useState(false);
@@ -250,11 +265,16 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
   // Trackers and refs
   const saveTracker = useRef(new MutationRequestTracker());
   const discardTracker = useRef(new MutationRequestTracker());
+  const publishTracker = useRef(new MutationRequestTracker());
+  const unpublishTracker = useRef(new MutationRequestTracker());
   const blockRefs = useRef(new Map<string, HTMLElement>());
   const addBlockTriggerRef = useRef<HTMLButtonElement | null>(null);
   const libraryDialogRef = useRef<HTMLDivElement | null>(null);
   const confirmationDialogRef = useRef<HTMLDivElement | null>(null);
   const confirmationTriggerRef = useRef<HTMLElement | null>(null);
+  const preservedUnpublishDocumentRef = useRef<EditorStoryBlock[] | null>(null);
+  const allowAuthoritativeReloadRef = useRef(false);
+  const lastProductIdRef = useRef(initialStory.product.id);
 
   const dirty = useMemo(
     () => isStoryBuilderDirty(document, savedBaseline),
@@ -275,27 +295,137 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     return ids;
   }, [document, normResult]);
   const incompleteCount = incompleteBlockIds.size;
+
+  const isAnyMutationPending = isSaving || isDiscarding || isPublishing || isUnpublishing;
+  const isAnyAmbiguityActive = ambiguousSave || ambiguousPublish || ambiguousUnpublish;
+
+  const hasDurableDraft = durableStory.draftRevisionId !== null;
+  const hasBlocksToPublish = savedBaseline.length > 0 && document.length > 0;
+
+  const previewDisabled = !hasDurableDraft || dirty;
+  const previewDisabledReason = !hasDurableDraft
+    ? "Guarda un borrador antes de previsualizar."
+    : dirty
+      ? "Guarda los cambios antes de previsualizar."
+      : null;
+
+  const publishEligible =
+    canPublish &&
+    hasDurableDraft &&
+    !dirty &&
+    hasBlocksToPublish &&
+    normResult.success &&
+    !staleConflict &&
+    !isAnyMutationPending &&
+    !isAnyAmbiguityActive;
+
+  const publishDisabled =
+    !canPublish ||
+    isAnyMutationPending ||
+    ambiguousSave ||
+    ambiguousUnpublish ||
+    (!ambiguousPublish && !publishEligible);
+
+  const unpublishEligible =
+    canPublish &&
+    durableStory.publishedRevisionId !== null &&
+    !staleConflict &&
+    !isAnyMutationPending &&
+    !isAnyAmbiguityActive;
+
+  const unpublishDisabled =
+    !canPublish ||
+    isAnyMutationPending ||
+    ambiguousSave ||
+    ambiguousPublish ||
+    (!ambiguousUnpublish && !unpublishEligible);
+
   const canSaveWithoutChanges = durableStory.draftRevisionId === null;
   const saveDisabled =
-    isSaving ||
-    isDiscarding ||
+    isAnyMutationPending ||
+    ambiguousPublish ||
+    ambiguousUnpublish ||
     document.length > STORY_BUILDER_MAX_BLOCKS ||
     (!dirty && !canSaveWithoutChanges);
 
+  const discardDisabled =
+    isAnyMutationPending || ambiguousPublish || ambiguousUnpublish || !hasDurableDraft;
+
   useEffect(() => {
-    setDocument(createEditorDocument(initialStory.initialDocument));
-    setSavedBaseline(structuredClone(initialStory.initialDocument));
-    setDurableStory(durableViewFromStory(initialStory));
-    setKnownProductOptions(
-      new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p]))
-    );
-    setExpandedBlockIds(new Set(initialStory.initialDocument.map((b) => b.blockId)));
-    setStaleConflict(false);
-    setAmbiguousSave(false);
-    setErrorMessage(null);
-    setFieldErrors([]);
-    setValidationIssues([]);
-    setValidationActive(false);
+    // 1. If product ID changed, this is a navigation to a different product
+    if (initialStory.product.id !== lastProductIdRef.current) {
+      lastProductIdRef.current = initialStory.product.id;
+      preservedUnpublishDocumentRef.current = null;
+      allowAuthoritativeReloadRef.current = false;
+      setDocument(createEditorDocument(initialStory.initialDocument));
+      setSavedBaseline(structuredClone(initialStory.initialDocument));
+      setDurableStory(durableViewFromStory(initialStory));
+      setKnownProductOptions(
+        new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p]))
+      );
+      setExpandedBlockIds(new Set(initialStory.initialDocument.map((b) => b.blockId)));
+      setStaleConflict(false);
+      setAmbiguousSave(false);
+      setAmbiguousPublish(false);
+      setAmbiguousUnpublish(false);
+      setErrorMessage(null);
+      setFieldErrors([]);
+      setValidationIssues([]);
+      setValidationActive(false);
+      return;
+    }
+
+    // 2. If explicit reload was requested (via reload button or draft discard)
+    if (allowAuthoritativeReloadRef.current) {
+      allowAuthoritativeReloadRef.current = false;
+      preservedUnpublishDocumentRef.current = null;
+      setDocument(createEditorDocument(initialStory.initialDocument));
+      setSavedBaseline(structuredClone(initialStory.initialDocument));
+      setDurableStory(durableViewFromStory(initialStory));
+      setKnownProductOptions(
+        new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p]))
+      );
+      setExpandedBlockIds(new Set(initialStory.initialDocument.map((b) => b.blockId)));
+      setStaleConflict(false);
+      setAmbiguousSave(false);
+      setAmbiguousPublish(false);
+      setAmbiguousUnpublish(false);
+      setErrorMessage(null);
+      setFieldErrors([]);
+      setValidationIssues([]);
+      setValidationActive(false);
+      return;
+    }
+
+    // 3. If unpublish preservation is active (Case B: published-only unpublish)
+    if (preservedUnpublishDocumentRef.current !== null) {
+      // Server returned empty document because story was unpublished
+      // Preserve local editor document and keep baseline empty ([]), dirty = true
+      setDurableStory({
+        lifecycle: "NO_STORY",
+        draftRevisionId: null,
+        draftRevisionNumber: null,
+        publishedRevisionId: null,
+        publishedRevisionNumber: null,
+        publishedAt: null,
+      });
+      setSavedBaseline([]);
+      return;
+    }
+
+    // 4. Default: If not dirty, sync cleanly from incoming initialStory
+    if (!isStoryBuilderDirty(document, savedBaseline)) {
+      setDocument(createEditorDocument(initialStory.initialDocument));
+      setSavedBaseline(structuredClone(initialStory.initialDocument));
+      setDurableStory(durableViewFromStory(initialStory));
+      setKnownProductOptions(
+        new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p]))
+      );
+      setExpandedBlockIds(new Set(initialStory.initialDocument.map((b) => b.blockId)));
+    } else {
+      // Local document has dirty unsaved edits; update only background durableStory metadata
+      setDurableStory(durableViewFromStory(initialStory));
+    }
   }, [initialStory]);
 
   useEffect(() => {
@@ -360,8 +490,8 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
 
   const closeBlockLibrary = useCallback(() => setIsBlockLibraryOpen(false), []);
   const closeConfirmation = useCallback(() => {
-    if (!isDiscarding) setPendingConfirmation(null);
-  }, [isDiscarding]);
+    if (!isAnyMutationPending) setPendingConfirmation(null);
+  }, [isAnyMutationPending]);
   const handleOpenMediaPicker = useCallback((options: Omit<MediaPickerState, "isOpen">) => {
     setMediaPickerState({ isOpen: true, ...options });
   }, []);
@@ -371,7 +501,8 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     pendingConfirmation !== null,
     confirmationDialogRef,
     confirmationTriggerRef,
-    closeConfirmation
+    closeConfirmation,
+    !isAnyMutationPending
   );
 
   function clearFeedbackForEdit() {
@@ -379,6 +510,14 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     setFieldErrors([]);
     setSuccessMessage(null);
     setAmbiguousSave(false);
+    setAmbiguousPublish(false);
+    setAmbiguousUnpublish(false);
+  }
+
+  function openPreview() {
+    if (previewDisabled || !durableStory.draftRevisionId) return;
+    const previewUrl = `/admin/products/${initialStory.product.id}/story/preview?revision=${durableStory.draftRevisionId}`;
+    window.open(previewUrl, "_blank", "noopener,noreferrer");
   }
 
   function announce(message: string) {
@@ -539,6 +678,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
 
       if (disposition === "SUCCESS") {
         const committed = result.data!;
+        preservedUnpublishDocumentRef.current = null;
         saveTracker.current.complete();
         const baseline = structuredClone(validDocument);
         setDocument(createEditorDocument(baseline));
@@ -622,6 +762,8 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
 
       if (disposition === "SUCCESS") {
         discardTracker.current.complete();
+        preservedUnpublishDocumentRef.current = null;
+        allowAuthoritativeReloadRef.current = true;
         setPendingConfirmation(null);
         setSuccessMessage("Borrador descartado. Recargando la versión autorizada del servidor.");
         announce("Borrador descartado correctamente.");
@@ -656,6 +798,181 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     }
   }
 
+  async function executePublish() {
+    if (durableStory.draftRevisionId === null) return;
+
+    const payload = {
+      productId: initialStory.product.id,
+      expectedDraftRevisionId: durableStory.draftRevisionId,
+      expectedPublishedRevisionId: durableStory.publishedRevisionId,
+    };
+    const mutationRequestId = publishTracker.current.getRequestId(payload);
+    setIsPublishing(true);
+    setErrorMessage(null);
+    setFieldErrors([]);
+    setValidationIssues([]);
+    setSuccessMessage(null);
+
+    try {
+      const result = await publishProductStoryAction({ ...payload, mutationRequestId });
+      const disposition = classifyStoryActionResult(result);
+
+      if (disposition === "SUCCESS") {
+        const committed = result.data!;
+        preservedUnpublishDocumentRef.current = null;
+        publishTracker.current.complete();
+        setPendingConfirmation(null);
+        setAmbiguousPublish(false);
+        setDurableStory({
+          lifecycle: "PUBLISHED_ONLY",
+          draftRevisionId: null,
+          draftRevisionNumber: null,
+          publishedRevisionId: committed.publishedRevisionId ?? committed.revisionId,
+          publishedRevisionNumber: committed.revisionNumber,
+          publishedAt: committed.publishedAt,
+        });
+        setSuccessMessage(
+          committed.replayed
+            ? `Historia r${committed.revisionNumber} confirmada sin nueva publicación.`
+            : `Historia r${committed.revisionNumber} publicada correctamente en la tienda pública.`
+        );
+        announce(`Historia r${committed.revisionNumber} publicada correctamente.`);
+        return;
+      }
+
+      if (disposition === "DEFINITIVE_FAILURE") {
+        publishTracker.current.complete();
+        setPendingConfirmation(null);
+        setAmbiguousPublish(false);
+        setErrorMessage(result.error ?? "No se pudo publicar la historia.");
+        setStaleConflict(result.code === "STORY_STALE_WRITE");
+        if (result.fieldErrors && result.fieldErrors.length > 0) {
+          const adaptedIssues = result.fieldErrors.map(adaptPersistedValidationIssueToAuthoring);
+          setValidationIssues(adaptedIssues);
+          setFieldErrors(adaptedIssues.map((issue) => `${issue.path}: ${issue.message}`));
+          const firstIssue = adaptedIssues[0];
+          if (firstIssue) {
+            const { blockId, targetId } = resolveTargetFromIssuePath(firstIssue.path, document);
+            if (blockId) {
+              setExpandedBlockIds((prev) => new Set(prev).add(blockId));
+            }
+            setTimeout(() => {
+              const el =
+                window.document.getElementById(targetId) ??
+                (blockId ? window.document.getElementById(`story-block-${blockId}`) : null);
+              el?.focus();
+              el?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+            }, 30);
+          }
+        } else {
+          setFieldErrors([]);
+        }
+        window.setTimeout(() => confirmationTriggerRef.current?.focus(), 10);
+        return;
+      }
+
+      setPendingConfirmation(null);
+      setAmbiguousPublish(true);
+      setErrorMessage(
+        result.error
+          ? `${result.error} No se pudo confirmar el resultado de la publicación. Puedes reintentar la publicación o recargar la versión autorizada.`
+          : "No se pudo confirmar el resultado de la publicación. Puedes reintentar la publicación o recargar la versión autorizada."
+      );
+      window.setTimeout(() => confirmationTriggerRef.current?.focus(), 10);
+    } catch {
+      setPendingConfirmation(null);
+      setAmbiguousPublish(true);
+      setErrorMessage(
+        "La conexión se interrumpió antes de confirmar la publicación. Puedes reintentar la publicación o recargar la versión autorizada."
+      );
+      window.setTimeout(() => confirmationTriggerRef.current?.focus(), 10);
+    } finally {
+      setIsPublishing(false);
+    }
+  }
+
+  async function executeUnpublish() {
+    if (durableStory.publishedRevisionId === null) return;
+
+    const payload = {
+      productId: initialStory.product.id,
+      expectedDraftRevisionId: durableStory.draftRevisionId,
+      expectedPublishedRevisionId: durableStory.publishedRevisionId,
+    };
+    const mutationRequestId = unpublishTracker.current.getRequestId(payload);
+    setIsUnpublishing(true);
+    setErrorMessage(null);
+    setFieldErrors([]);
+    setValidationIssues([]);
+    setSuccessMessage(null);
+
+    try {
+      const result = await unpublishProductStoryAction({ ...payload, mutationRequestId });
+      const disposition = classifyStoryActionResult(result);
+
+      if (disposition === "SUCCESS") {
+        unpublishTracker.current.complete();
+        setPendingConfirmation(null);
+        setAmbiguousUnpublish(false);
+
+        if (durableStory.draftRevisionId !== null) {
+          setDurableStory((current) => ({
+            ...current,
+            lifecycle: "DRAFT_ONLY",
+            publishedRevisionId: null,
+            publishedRevisionNumber: null,
+            publishedAt: null,
+          }));
+        } else {
+          preservedUnpublishDocumentRef.current = [...document];
+          setDurableStory({
+            lifecycle: "NO_STORY",
+            draftRevisionId: null,
+            draftRevisionNumber: null,
+            publishedRevisionId: null,
+            publishedRevisionNumber: null,
+            publishedAt: null,
+          });
+          setSavedBaseline([]);
+        }
+
+        setSuccessMessage(
+          "Historia despublicada correctamente. Ya no es visible en la tienda pública."
+        );
+        announce("Historia despublicada correctamente.");
+        return;
+      }
+
+      if (disposition === "DEFINITIVE_FAILURE") {
+        unpublishTracker.current.complete();
+        setPendingConfirmation(null);
+        setAmbiguousUnpublish(false);
+        setErrorMessage(result.error ?? "No se pudo despublicar la historia.");
+        setStaleConflict(result.code === "STORY_STALE_WRITE");
+        window.setTimeout(() => confirmationTriggerRef.current?.focus(), 10);
+        return;
+      }
+
+      setPendingConfirmation(null);
+      setAmbiguousUnpublish(true);
+      setErrorMessage(
+        result.error
+          ? `${result.error} No se pudo confirmar el resultado de la despublicación. Puedes reintentar la despublicación o recargar la versión autorizada.`
+          : "No se pudo confirmar el resultado de la despublicación. Puedes reintentar la despublicación o recargar la versión autorizada."
+      );
+      window.setTimeout(() => confirmationTriggerRef.current?.focus(), 10);
+    } catch {
+      setPendingConfirmation(null);
+      setAmbiguousUnpublish(true);
+      setErrorMessage(
+        "La conexión se interrumpió antes de confirmar la despublicación. Puedes reintentar la despublicación o recargar la versión autorizada."
+      );
+      window.setTimeout(() => confirmationTriggerRef.current?.focus(), 10);
+    } finally {
+      setIsUnpublishing(false);
+    }
+  }
+
   async function confirmPendingAction() {
     const confirmation = pendingConfirmation;
     if (!confirmation) return;
@@ -677,22 +994,39 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
       case "DISCARD_DRAFT":
         await discardDurableDraft();
         return;
+      case "PUBLISH":
+        await executePublish();
+        return;
+      case "UNPUBLISH":
+        await executeUnpublish();
+        return;
       case "NAVIGATE":
         setPendingConfirmation(null);
         router.push(confirmation.href);
         return;
       case "RELOAD_SERVER":
+        saveTracker.current.complete();
+        discardTracker.current.complete();
+        publishTracker.current.complete();
+        unpublishTracker.current.complete();
+        setAmbiguousSave(false);
+        setAmbiguousPublish(false);
+        setAmbiguousUnpublish(false);
         setPendingConfirmation(null);
+        preservedUnpublishDocumentRef.current = null;
+        allowAuthoritativeReloadRef.current = true;
         router.refresh();
         return;
     }
   }
 
   function requestServerReload(event: React.MouseEvent<HTMLButtonElement>) {
-    if (dirty) {
+    if (dirty || isAnyAmbiguityActive) {
       openConfirmation(event, { kind: "RELOAD_SERVER" });
       return;
     }
+    preservedUnpublishDocumentRef.current = null;
+    allowAuthoritativeReloadRef.current = true;
     router.refresh();
   }
 
@@ -723,6 +1057,26 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
           description:
             "Se archivará el borrador durable actual. La versión publicada no cambiará. También se perderán los cambios locales sin guardar.",
           action: "Descartar borrador",
+          danger: true,
+        };
+      case "PUBLISH":
+        return {
+          title: "Publicar historia",
+          description:
+            durableStory.publishedRevisionId !== null
+              ? `Se publicará el borrador r${durableStory.draftRevisionNumber} de ${initialStory.product.name}. Esta acción reemplazará la versión publicada r${durableStory.publishedRevisionNumber} actual en la tienda pública.`
+              : `Se publicará el borrador r${durableStory.draftRevisionNumber} de ${initialStory.product.name} en la tienda pública.`,
+          action: "Publicar historia",
+          danger: false,
+        };
+      case "UNPUBLISH":
+        return {
+          title: "Despublicar historia",
+          description:
+            durableStory.draftRevisionId !== null
+              ? "La historia del producto dejará de ser visible en la tienda pública. El historial de revisiones se conservará y el borrador guardado actual permanecerá intacto."
+              : "La historia del producto dejará de ser visible en la tienda pública. El historial de revisiones se conservará y el contenido actual se mantendrá en el editor como trabajo local sin guardar.",
+          action: "Despublicar historia",
           danger: true,
         };
       case "NAVIGATE":
@@ -1205,6 +1559,82 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
             {isSaving ? "Guardando…" : ambiguousSave ? "Reintentar guardado" : "Guardar borrador"}
           </button>
 
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            disabled={previewDisabled}
+            onClick={openPreview}
+            aria-describedby={previewDisabledReason ? "story-preview-reason" : undefined}
+            data-testid="story-preview-button"
+          >
+            <Eye size={16} aria-hidden="true" />
+            Vista previa
+          </button>
+          {previewDisabledReason && (
+            <span id="story-preview-reason" className={styles.actionSubtext}>
+              {previewDisabledReason}
+            </span>
+          )}
+
+          <button
+            type="button"
+            className={styles.primaryButton}
+            disabled={publishDisabled}
+            onClick={(event) => {
+              if (ambiguousPublish) {
+                void executePublish();
+              } else {
+                openConfirmation(event, { kind: "PUBLISH" });
+              }
+            }}
+            data-testid="story-publish-button"
+          >
+            {isPublishing ? (
+              <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
+            ) : (
+              <UploadCloud size={16} aria-hidden="true" />
+            )}
+            {isPublishing
+              ? "Publicando…"
+              : ambiguousPublish
+                ? "Reintentar publicación"
+                : "Publicar historia"}
+          </button>
+
+          {durableStory.publishedRevisionId !== null && (
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              disabled={unpublishDisabled}
+              onClick={(event) => {
+                if (ambiguousUnpublish) {
+                  void executeUnpublish();
+                } else {
+                  openConfirmation(event, { kind: "UNPUBLISH" });
+                }
+              }}
+              data-testid="story-unpublish-button"
+            >
+              {isUnpublishing ? (
+                <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
+              ) : (
+                <EyeOff size={16} aria-hidden="true" />
+              )}
+              {isUnpublishing
+                ? "Despublicando…"
+                : ambiguousUnpublish
+                  ? "Reintentar despublicación"
+                  : "Despublicar historia"}
+            </button>
+          )}
+
+          {!canPublish && (
+            <p className={styles.permissionWarning} data-testid="story-publish-permission-warning">
+              Se requiere el permiso <code>catalog:publish</code> para publicar o despublicar la
+              historia.
+            </p>
+          )}
+
           {dirty && (
             <button
               type="button"
@@ -1220,11 +1650,15 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
             <button
               type="button"
               className={styles.dangerButton}
-              disabled={isDiscarding || isSaving}
+              disabled={discardDisabled}
               onClick={(event) => openConfirmation(event, { kind: "DISCARD_DRAFT" })}
               data-testid="story-discard-draft"
             >
-              <Trash2 size={16} aria-hidden="true" />
+              {isDiscarding ? (
+                <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
+              ) : (
+                <Trash2 size={16} aria-hidden="true" />
+              )}
               Descartar borrador guardado
             </button>
           )}
@@ -1235,8 +1669,8 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
           </button>
 
           <p className={styles.actionHelp}>
-            Guardar crea una revisión inmutable. Descartar actúa sobre el borrador durable; nunca se
-            ejecuta al salir de la página.
+            Guardar crea una revisión inmutable. Publicar promociona el borrador a la tienda
+            pública. Descartar archiva el borrador actual sin afectar la versión publicada.
           </p>
         </aside>
       </div>
@@ -1356,7 +1790,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
               <button
                 type="button"
                 className={styles.secondaryButton}
-                disabled={isDiscarding}
+                disabled={isAnyMutationPending}
                 onClick={() => {
                   setPendingConfirmation(null);
                   window.setTimeout(() => confirmationTriggerRef.current?.focus(), 10);
@@ -1367,10 +1801,12 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
               <button
                 type="button"
                 className={confirmationCopy.danger ? styles.dangerButton : styles.primaryButton}
-                disabled={isDiscarding}
+                disabled={isAnyMutationPending}
                 onClick={() => void confirmPendingAction()}
               >
-                {isDiscarding && pendingConfirmation.kind === "DISCARD_DRAFT" && (
+                {((isDiscarding && pendingConfirmation.kind === "DISCARD_DRAFT") ||
+                  (isPublishing && pendingConfirmation.kind === "PUBLISH") ||
+                  (isUnpublishing && pendingConfirmation.kind === "UNPUBLISH")) && (
                   <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
                 )}
                 {confirmationCopy.action}

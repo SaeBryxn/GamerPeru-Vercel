@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StoryBuilder } from "@/app/admin/(protected)/products/[productId]/story/story-builder";
 import {
+  adaptPersistedValidationIssueToAuthoring,
   classifyStoryActionResult,
   createBuilderDocument,
   createIncompleteBuilderBlock,
@@ -24,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   saveDraft: vi.fn(),
   discardDraft: vi.fn(),
+  publishStory: vi.fn(),
+  unpublishStory: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -33,6 +36,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/admin/catalog/story-actions", () => ({
   saveProductStoryDraftAction: (...args: unknown[]) => mocks.saveDraft(...args),
   discardProductStoryDraftAction: (...args: unknown[]) => mocks.discardDraft(...args),
+  publishProductStoryAction: (...args: unknown[]) => mocks.publishStory(...args),
+  unpublishProductStoryAction: (...args: unknown[]) => mocks.unpublishStory(...args),
 }));
 
 const PRODUCT_ID = "018f0026-0000-7000-8000-000000000001";
@@ -109,6 +114,41 @@ function successfulSave(revisionNumber = 3, draftRevisionId = DRAFT_ID) {
       revisionId: draftRevisionId,
       revisionNumber,
       draftRevisionId,
+      publishedRevisionId: null,
+      publishedAt: null,
+      replayed: false,
+    },
+  };
+}
+
+function successfulPublish(
+  revisionNumber = 5,
+  publishedRevisionId = "018f0026-0000-7000-8000-000000000099"
+) {
+  return {
+    success: true,
+    data: {
+      productId: PRODUCT_ID,
+      productSlug: "mouse-gamer-e2e",
+      revisionId: publishedRevisionId,
+      revisionNumber,
+      draftRevisionId: null,
+      publishedRevisionId,
+      publishedAt: "2026-09-16T10:00:00.000Z",
+      replayed: false,
+    },
+  };
+}
+
+function successfulUnpublish(revisionNumber = 3) {
+  return {
+    success: true,
+    data: {
+      productId: PRODUCT_ID,
+      productSlug: "mouse-gamer-e2e",
+      revisionId: "018f0026-0000-7000-8000-000000000088",
+      revisionNumber,
+      draftRevisionId: null,
       publishedRevisionId: null,
       publishedAt: null,
       replayed: false,
@@ -198,28 +238,32 @@ describe("GP-026 CHK2 Story Builder model", () => {
   });
 });
 
-describe("GP-026 CHK2 Story Builder component", () => {
-  beforeEach(() => {
-    mocks.refresh.mockReset();
-    mocks.push.mockReset();
-    mocks.saveDraft.mockReset();
-    mocks.discardDraft.mockReset();
-    mocks.saveDraft.mockResolvedValue(successfulSave());
-    mocks.discardDraft.mockResolvedValue({
-      success: true,
-      data: {
-        productId: PRODUCT_ID,
-        productSlug: "mouse-gamer-e2e",
-        revisionId: DRAFT_ID,
-        revisionNumber: 2,
-        draftRevisionId: null,
-        publishedRevisionId: null,
-        publishedAt: null,
-        replayed: false,
-      },
-    });
+beforeEach(() => {
+  mocks.refresh.mockReset();
+  mocks.push.mockReset();
+  mocks.saveDraft.mockReset();
+  mocks.discardDraft.mockReset();
+  mocks.publishStory.mockReset();
+  mocks.unpublishStory.mockReset();
+  mocks.saveDraft.mockResolvedValue(successfulSave());
+  mocks.discardDraft.mockResolvedValue({
+    success: true,
+    data: {
+      productId: PRODUCT_ID,
+      productSlug: "mouse-gamer-e2e",
+      revisionId: DRAFT_ID,
+      revisionNumber: 2,
+      draftRevisionId: null,
+      publishedRevisionId: null,
+      publishedAt: null,
+      replayed: false,
+    },
   });
+  mocks.publishStory.mockResolvedValue(successfulPublish());
+  mocks.unpublishStory.mockResolvedValue(successfulUnpublish());
+});
 
+describe("GP-026 CHK2 Story Builder component", () => {
   it.each([
     ["NO_STORY", "Sin historia"],
     ["DRAFT_ONLY", "Borrador r2"],
@@ -759,5 +803,411 @@ describe("GP-026 CHK2 Story Builder component", () => {
     expect(screen.getAllByTestId(/^story-block-(?!list$)/)[0]!.getAttribute("data-block-id")).toBe(
       FIRST_BLOCK_ID
     );
+  });
+});
+
+describe("GP-026 CHK4 Story Builder model & path adapter", () => {
+  it("translates token-exact canonical persisted leaves without loose substring matches (Amendment 12)", () => {
+    expect(
+      adaptPersistedValidationIssueToAuthoring({
+        path: "blocks.0.mediaKey",
+        code: "invalid_string",
+        message: "Media key invalid",
+      })
+    ).toEqual({
+      path: "blocks.0.mediaId",
+      code: "invalid_string",
+      message: "Media key invalid",
+    });
+
+    expect(
+      adaptPersistedValidationIssueToAuthoring({
+        path: "blocks.1.posterKey",
+        code: "invalid_string",
+        message: "Poster invalid",
+      })
+    ).toEqual({
+      path: "blocks.1.posterMediaId",
+      code: "invalid_string",
+      message: "Poster invalid",
+    });
+
+    expect(
+      adaptPersistedValidationIssueToAuthoring({
+        path: "blocks.2.videoKey",
+        code: "invalid_string",
+        message: "Video invalid",
+      })
+    ).toEqual({
+      path: "blocks.2.videoMediaId",
+      code: "invalid_string",
+      message: "Video invalid",
+    });
+
+    expect(
+      adaptPersistedValidationIssueToAuthoring({
+        path: "blocks.3.blueprintMediaKey",
+        code: "invalid_string",
+        message: "Blueprint invalid",
+      })
+    ).toEqual({
+      path: "blocks.3.blueprintMediaId",
+      code: "invalid_string",
+      message: "Blueprint invalid",
+    });
+
+    expect(
+      adaptPersistedValidationIssueToAuthoring({
+        path: "blocks.4.productSlugs",
+        code: "too_small",
+        message: "Product slugs invalid",
+      })
+    ).toEqual({
+      path: "blocks.4.productIds",
+      code: "too_small",
+      message: "Product slugs invalid",
+    });
+
+    expect(
+      adaptPersistedValidationIssueToAuthoring({
+        path: "blocks.0.items.1.mediaKey",
+        code: "invalid_string",
+        message: "Item media key invalid",
+      })
+    ).toEqual({
+      path: "blocks.0.items.1.mediaId",
+      code: "invalid_string",
+      message: "Item media key invalid",
+    });
+
+    expect(
+      adaptPersistedValidationIssueToAuthoring({
+        path: "blocks.0.multimediaKey",
+        code: "custom",
+        message: "Custom issue",
+      })
+    ).toEqual({
+      path: "blocks.0.multimediaKey",
+      code: "custom",
+      message: "Custom issue",
+    });
+
+    expect(
+      adaptPersistedValidationIssueToAuthoring({
+        path: "blocks.0.mediaKeyDescription",
+        code: "custom",
+        message: "Custom issue",
+      })
+    ).toEqual({
+      path: "blocks.0.mediaKeyDescription",
+      code: "custom",
+      message: "Custom issue",
+    });
+  });
+});
+
+describe("GP-026 CHK4 Preview button eligibility", () => {
+  it("disables preview button when no durable draft exists", () => {
+    render(<StoryBuilder initialStory={makeStory("NO_STORY")} />);
+    const previewBtn = screen.getByTestId("story-preview-button");
+    expect(previewBtn.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("Guarda un borrador antes de previsualizar.")).toBeTruthy();
+  });
+
+  it("disables preview button in PUBLISHED_ONLY when no separate draft exists", () => {
+    render(<StoryBuilder initialStory={makeStory("PUBLISHED_ONLY")} />);
+    const previewBtn = screen.getByTestId("story-preview-button");
+    expect(previewBtn.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("Guarda un borrador antes de previsualizar.")).toBeTruthy();
+  });
+
+  it("disables preview button when durable draft exists but local editor is dirty", async () => {
+    const user = userEvent.setup();
+    render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} />);
+    const previewBtn = screen.getByTestId("story-preview-button");
+    expect(previewBtn.hasAttribute("disabled")).toBe(false);
+
+    await user.click(screen.getAllByRole("button", { name: /Duplicar/i })[0]!);
+    expect(previewBtn.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("Guarda los cambios antes de previsualizar.")).toBeTruthy();
+  });
+
+  it("opens preview in a new window when clean durable draft exists", async () => {
+    const user = userEvent.setup();
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} />);
+    const previewBtn = screen.getByTestId("story-preview-button");
+    expect(previewBtn.hasAttribute("disabled")).toBe(false);
+
+    await user.click(previewBtn);
+    expect(openSpy).toHaveBeenCalledWith(
+      `/admin/products/${PRODUCT_ID}/story/preview?revision=${DRAFT_ID}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+    openSpy.mockRestore();
+  });
+});
+
+describe("GP-026 CHK4 Permission UX", () => {
+  it("displays restriction banner and disables publish/unpublish when canPublish is false", () => {
+    render(<StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} canPublish={false} />);
+    expect(screen.getByTestId("story-publish-permission-warning")).toBeTruthy();
+    expect(screen.getByText(/catalog:publish/i)).toBeTruthy();
+
+    const publishBtn = screen.getByTestId("story-publish-button");
+    expect(publishBtn.hasAttribute("disabled")).toBe(true);
+
+    const unpublishBtn = screen.getByTestId("story-unpublish-button");
+    expect(unpublishBtn.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("does not display restriction banner when canPublish is true", () => {
+    render(<StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} canPublish={true} />);
+    expect(screen.queryByTestId("story-publish-permission-warning")).toBeNull();
+  });
+});
+
+describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
+  it("publishes clean durable draft, preserves canonical baseline, sets lifecycle to PUBLISHED_ONLY, and tracks dirty on subsequent edit (Amendments 2 & 15)", async () => {
+    const user = userEvent.setup();
+    render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} />);
+
+    const publishBtn = screen.getByTestId("story-publish-button");
+    expect(publishBtn.hasAttribute("disabled")).toBe(false);
+
+    await user.click(publishBtn);
+
+    const dialog = screen.getByRole("dialog", { name: "Publicar historia" });
+    expect(dialog).toBeTruthy();
+
+    const confirmBtn = within(dialog).getByRole("button", { name: "Publicar historia" });
+    await user.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(mocks.publishStory).toHaveBeenCalledWith({
+        productId: PRODUCT_ID,
+        expectedDraftRevisionId: DRAFT_ID,
+        expectedPublishedRevisionId: null,
+        mutationRequestId: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        ),
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("story-lifecycle-status").textContent).toContain("Publicada r5");
+    });
+
+    expect(screen.getAllByTestId(/^story-block-(?!list$)/)).toHaveLength(2);
+    expect(screen.getByTestId("story-dirty-state").textContent).toContain(
+      "Todos los cambios están guardados"
+    );
+
+    await user.click(screen.getAllByRole("button", { name: /Duplicar/i })[0]!);
+    expect(screen.getByTestId("story-dirty-state").textContent).toContain("Cambios sin guardar");
+
+    await user.click(screen.getByTestId("story-save-draft"));
+    await waitFor(() => {
+      expect(mocks.saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expectedDraftRevisionId: null,
+          expectedPublishedRevisionId: "018f0026-0000-7000-8000-000000000099",
+        })
+      );
+    });
+  });
+
+  it("reuses mutationRequestId on exact ambiguous retry and resets tracker identity on authoritative reload (Amendment 10)", async () => {
+    const user = userEvent.setup();
+    mocks.publishStory.mockResolvedValueOnce({
+      success: false,
+      code: "UNKNOWN_ERROR",
+      error: "Timeout while publishing",
+    });
+
+    const { rerender } = render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} />);
+    await user.click(screen.getByTestId("story-publish-button"));
+    const dialog = screen.getByRole("dialog", { name: "Publicar historia" });
+    await user.click(within(dialog).getByRole("button", { name: "Publicar historia" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/No se pudo confirmar el resultado de la publicación/i)).toBeTruthy();
+    });
+
+    const firstRequestId = mocks.publishStory.mock.calls[0]![0].mutationRequestId;
+
+    // Retry exact publish reuses request ID
+    mocks.publishStory.mockResolvedValueOnce({
+      success: false,
+      code: "UNKNOWN_ERROR",
+      error: "Second timeout",
+    });
+    await user.click(screen.getByRole("button", { name: "Reintentar publicación" }));
+
+    await waitFor(() => {
+      expect(mocks.publishStory).toHaveBeenCalledTimes(2);
+    });
+    expect(mocks.publishStory.mock.calls[1]![0].mutationRequestId).toBe(firstRequestId);
+
+    // Operator triggers authoritative reload
+    await user.click(screen.getByRole("button", { name: /Recargar desde servidor/i }));
+    const reloadDialog = screen.getByRole("dialog", { name: "Recargar versión del servidor" });
+    await user.click(within(reloadDialog).getByRole("button", { name: "Recargar servidor" }));
+
+    expect(mocks.refresh).toHaveBeenCalled();
+
+    // Rerender accepts authoritative state from server
+    rerender(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} />);
+
+    // Tracker identity was reset; subsequent publish generates a fresh mutationRequestId
+    mocks.publishStory.mockResolvedValueOnce(successfulPublish());
+    await user.click(screen.getByTestId("story-publish-button"));
+    const nextDialog = screen.getByRole("dialog", { name: "Publicar historia" });
+    await user.click(within(nextDialog).getByRole("button", { name: "Publicar historia" }));
+
+    await waitFor(() => {
+      expect(mocks.publishStory).toHaveBeenCalledTimes(3);
+    });
+    expect(mocks.publishStory.mock.calls[2]![0].mutationRequestId).not.toBe(firstRequestId);
+  });
+});
+
+describe("GP-026 CHK4 Unpublish state preservation (Amendments 1, 3, 14)", () => {
+  it("CASE A: DRAFT_OVER_PUBLISHED preserves draft, baseline, local document, and dirty state exactly (Amendment 14A)", async () => {
+    const user = userEvent.setup();
+    render(<StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} />);
+
+    await user.click(screen.getAllByRole("button", { name: /Duplicar/i })[0]!);
+    expect(screen.getByTestId("story-dirty-state").textContent).toContain("Cambios sin guardar");
+    expect(screen.getAllByTestId(/^story-block-(?!list$)/)).toHaveLength(3);
+
+    const unpublishBtn = screen.getByTestId("story-unpublish-button");
+    await user.click(unpublishBtn);
+
+    const dialog = screen.getByRole("dialog", { name: "Despublicar historia" });
+    expect(dialog).toBeTruthy();
+    await user.click(within(dialog).getByRole("button", { name: "Despublicar historia" }));
+
+    await waitFor(() => {
+      expect(mocks.unpublishStory).toHaveBeenCalledWith({
+        productId: PRODUCT_ID,
+        expectedDraftRevisionId: DRAFT_ID,
+        expectedPublishedRevisionId: PUBLISHED_ID,
+        mutationRequestId: expect.any(String),
+      });
+    });
+
+    expect(mocks.refresh).not.toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("story-lifecycle-status").textContent).toContain("Borrador r4");
+    });
+
+    expect(screen.getAllByTestId(/^story-block-(?!list$)/)).toHaveLength(3);
+    expect(screen.getByTestId("story-dirty-state").textContent).toContain("Cambios sin guardar");
+    expect(screen.queryByTestId("story-unpublish-button")).toBeNull();
+  });
+
+  it("CASE B: PUBLISHED_ONLY preserves document, clears baseline to empty, sets dirty = true, and subsequent Save creates a new draft (Amendment 14B)", async () => {
+    const user = userEvent.setup();
+    render(<StoryBuilder initialStory={makeStory("PUBLISHED_ONLY")} />);
+
+    expect(screen.getByTestId("story-lifecycle-status").textContent).toContain("Publicada r3");
+    expect(screen.getByTestId("story-dirty-state").textContent).toContain(
+      "Todos los cambios están guardados"
+    );
+    expect(screen.getAllByTestId(/^story-block-(?!list$)/)).toHaveLength(2);
+
+    await user.click(screen.getByTestId("story-unpublish-button"));
+    const dialog = screen.getByRole("dialog", { name: "Despublicar historia" });
+    await user.click(within(dialog).getByRole("button", { name: "Despublicar historia" }));
+
+    await waitFor(() => {
+      expect(mocks.unpublishStory).toHaveBeenCalledWith({
+        productId: PRODUCT_ID,
+        expectedDraftRevisionId: null,
+        expectedPublishedRevisionId: PUBLISHED_ID,
+        mutationRequestId: expect.any(String),
+      });
+    });
+
+    expect(mocks.refresh).not.toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("story-lifecycle-status").textContent).toContain("Sin historia");
+    });
+
+    expect(screen.getAllByTestId(/^story-block-(?!list$)/)).toHaveLength(2);
+    expect(screen.getByTestId("story-dirty-state").textContent).toContain("Cambios sin guardar");
+
+    await user.click(screen.getByTestId("story-save-draft"));
+
+    await waitFor(() => {
+      expect(mocks.saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expectedDraftRevisionId: null,
+          expectedPublishedRevisionId: null,
+        })
+      );
+    });
+  });
+});
+
+describe("GP-026 CHK4 Confirmation dialog in-flight safety (Amendment 9)", () => {
+  it("blocks Escape and Cancel while publish is in-flight", async () => {
+    const user = userEvent.setup();
+    let resolvePublish!: (val: unknown) => void;
+    mocks.publishStory.mockReturnValueOnce(
+      new Promise((res) => {
+        resolvePublish = res;
+      })
+    );
+
+    render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} />);
+    await user.click(screen.getByTestId("story-publish-button"));
+    const dialog = screen.getByRole("dialog", { name: "Publicar historia" });
+    const confirmBtn = within(dialog).getByRole("button", { name: "Publicar historia" });
+    const cancelBtn = within(dialog).getByRole("button", { name: "Cancelar" });
+
+    await user.click(confirmBtn);
+
+    expect(cancelBtn.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "Publicar historia" })).toBeTruthy();
+
+    resolvePublish(successfulPublish());
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Publicar historia" })).toBeNull();
+    });
+  });
+
+  it("blocks Escape and Cancel while unpublish is in-flight", async () => {
+    const user = userEvent.setup();
+    let resolveUnpublish!: (val: unknown) => void;
+    mocks.unpublishStory.mockReturnValueOnce(
+      new Promise((res) => {
+        resolveUnpublish = res;
+      })
+    );
+
+    render(<StoryBuilder initialStory={makeStory("PUBLISHED_ONLY")} />);
+    await user.click(screen.getByTestId("story-unpublish-button"));
+    const dialog = screen.getByRole("dialog", { name: "Despublicar historia" });
+    const confirmBtn = within(dialog).getByRole("button", { name: "Despublicar historia" });
+    const cancelBtn = within(dialog).getByRole("button", { name: "Cancelar" });
+
+    await user.click(confirmBtn);
+
+    expect(cancelBtn.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "Despublicar historia" })).toBeTruthy();
+
+    resolveUnpublish(successfulUnpublish());
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Despublicar historia" })).toBeNull();
+    });
   });
 });

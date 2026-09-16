@@ -81,6 +81,24 @@ async function resetDraft() {
   `;
 }
 
+const publishedRevisionId = "018f0026-2000-7000-8000-000000000202";
+
+async function resetPublishedStory() {
+  await clearStory();
+  await sql`
+    INSERT INTO product_story_revisions (
+      id, product_id, revision_number, status, blocks, created_by_auth_user_id, published_at, created_at
+    ) VALUES (
+      ${publishedRevisionId}, ${product.id}, 1, 'PUBLISHED', ${sql.json(validBlocks)},
+      ${ADMIN_E2E_USERS.superadmin.id}, NOW(), NOW()
+    );
+  `;
+  await sql`
+    INSERT INTO product_stories (product_id, draft_revision_id, published_revision_id, updated_at)
+    VALUES (${product.id}, NULL, ${publishedRevisionId}, NOW());
+  `;
+}
+
 async function loginAndNavigateTo(page: Page, email: string, targetPath: string) {
   await page.context().clearCookies();
   await installGp014MediaFixtures(page);
@@ -129,6 +147,7 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
   });
 
   test.afterAll(async () => {
+    await sql`UPDATE products SET status = 'DRAFT' WHERE id = ${product.id};`;
     await clearStory();
     await removeVideoFixture();
     await sql.end();
@@ -151,9 +170,9 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
     await expect(page.getByText(product.name, { exact: true })).toBeVisible();
     await expect(page.getByText(`/${product.slug}`, { exact: true })).toBeVisible();
     await expect(page.getByTestId("story-lifecycle-status")).toHaveText("Sin historia");
-    await expect(page.getByRole("button", { name: /Preview|Publicar|Despublicar/i })).toHaveCount(
-      0
-    );
+    await expect(page.getByTestId("story-publish-button")).toBeDisabled();
+    await expect(page.getByTestId("story-preview-button")).toBeDisabled();
+    await expect(page.getByTestId("story-unpublish-button")).toHaveCount(0);
 
     await loginAndNavigateTo(page, ADMIN_E2E_USERS.customer.email, storyPath);
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/Acceso no autorizado/i);
@@ -771,5 +790,187 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
 
     await relatedDialog.getByRole("button", { name: /Cerrar/i }).click();
     await expect(relatedDialog).toBeHidden();
+  });
+
+  test("enforces private preview protection, cache privacy, noindex robots and no Product/FAQ JSON-LD (Amendment 4, 5, 7)", async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+
+    // 1. Unauthenticated request redirects to login
+    await page.context().clearCookies();
+    await page.goto(`/admin/products/${product.id}/story/preview`);
+    await page.waitForURL((url) => url.pathname.includes("/auth/login"), { timeout: 15000 });
+
+    // 2. Authenticated preview with valid draft
+    await resetDraft();
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.catalog.email,
+      `/admin/products/${product.id}/story/preview`
+    );
+
+    await expect(page.getByTestId("preview-banner")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
+    await expect(page.getByText("¿Incluye cable?")).toBeVisible();
+
+    // Verify robots metadata
+    const robotsMeta = await page.locator('meta[name="robots"]').getAttribute("content");
+    expect(robotsMeta).toContain("noindex");
+    expect(robotsMeta).toContain("nofollow");
+
+    // Verify NO ProductJsonLd or FAQPage JSON-LD on preview
+    const jsonLdElements = await page.locator('script[type="application/ld+json"]').allInnerTexts();
+    for (const raw of jsonLdElements) {
+      expect(raw).not.toContain('"@type":"Product"');
+      expect(raw).not.toContain('"@type":"FAQPage"');
+    }
+
+    // 3. Authenticated preview with empty draft renders explicit empty preview state
+    await clearStory();
+    await sql`
+      INSERT INTO product_story_revisions (
+        id, product_id, revision_number, status, blocks, created_by_auth_user_id, created_at
+      ) VALUES (
+        ${draftRevisionId}, ${product.id}, 1, 'DRAFT', '[]'::jsonb,
+        ${ADMIN_E2E_USERS.superadmin.id}, NOW()
+      );
+    `;
+    await sql`
+      INSERT INTO product_stories (product_id, draft_revision_id, published_revision_id, updated_at)
+      VALUES (${product.id}, ${draftRevisionId}, NULL, NOW());
+    `;
+
+    await page.goto(`/admin/products/${product.id}/story/preview`);
+    await expect(page.getByTestId("preview-empty-state")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /borrador.*vacío/i })).toBeVisible();
+  });
+
+  test("publishes draft story, updates PDP, revalidates cache, and verifies FAQ JSON-LD parity (Amendment 2 & 15)", async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    await sql`UPDATE products SET status = 'PUBLISHED' WHERE id = ${product.id};`;
+    await resetDraft();
+
+    // 1. Check public PDP before publish
+    await page.goto(`/productos/${product.slug}`);
+    await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeHidden();
+    const pdpJsonLdBefore = await page
+      .locator('script[type="application/ld+json"]')
+      .allInnerTexts();
+    expect(pdpJsonLdBefore.some((raw) => raw.includes('"@type":"FAQPage"'))).toBe(false);
+
+    // 2. Publish from Story Builder
+    await loginAndNavigateTo(page, ADMIN_E2E_USERS.superadmin.email, storyPath);
+
+    const previewBtn = page.getByTestId("story-preview-button");
+    await expect(previewBtn).toBeEnabled();
+
+    const publishBtn = page.getByTestId("story-publish-button");
+    await expect(publishBtn).toBeEnabled();
+    await publishBtn.click();
+
+    const dialog = page.getByRole("dialog", { name: "Publicar historia" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Publicar historia" }).click();
+    await expect(dialog).toBeHidden();
+
+    await expect(page.getByTestId("story-success")).toBeVisible();
+    await expect(page.getByTestId("story-lifecycle-status")).toContainText("Publicada");
+
+    // 3. Public PDP after publish shows story and FAQ JSON-LD
+    await page.goto(`/productos/${product.slug}`);
+    await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
+    await expect(page.getByText("¿Incluye cable?")).toBeVisible();
+
+    const pdpJsonLdAfter = await page.locator('script[type="application/ld+json"]').allInnerTexts();
+    const faqLd = pdpJsonLdAfter.find((raw) => raw.includes('"@type":"FAQPage"'));
+    expect(faqLd).toBeDefined();
+    expect(faqLd).toContain("¿Incluye cable?");
+  });
+
+  test("unpublishes story, removes from public PDP, and preserves local editor document (Amendments 1, 3, 14)", async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    await sql`UPDATE products SET status = 'PUBLISHED' WHERE id = ${product.id};`;
+    await resetPublishedStory();
+
+    // 1. Story Builder shows Published
+    await loginAndNavigateTo(page, ADMIN_E2E_USERS.superadmin.email, storyPath);
+    await expect(page.getByTestId("story-lifecycle-status")).toContainText("Publicada r1");
+    await expect(page.getByTestId("story-dirty-state")).toContainText(
+      "Todos los cambios están guardados"
+    );
+
+    // 2. Unpublish
+    const unpublishBtn = page.getByTestId("story-unpublish-button");
+    await expect(unpublishBtn).toBeEnabled();
+    await unpublishBtn.click();
+
+    const dialog = page.getByRole("dialog", { name: "Despublicar historia" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Despublicar historia" }).click();
+    await expect(dialog).toBeHidden();
+
+    // Preserves local document as unsaved work with dirty = true
+    await expect(page.getByTestId("story-lifecycle-status")).toContainText("Sin historia");
+    await expect(page.getByTestId("story-dirty-state")).toContainText("Cambios sin guardar");
+    expect(await page.locator('[data-testid^="story-block-"]').count()).toBeGreaterThanOrEqual(2);
+
+    // 3. Public PDP no longer displays story or FAQ JSON-LD (using a second page so builder state isn't unloaded)
+    const pdpPage = await page.context().newPage();
+    await pdpPage.goto(`/productos/${product.slug}`);
+    await expect(pdpPage.getByRole("heading", { name: "Rendimiento" })).toBeHidden();
+    const pdpJsonLd = await pdpPage.locator('script[type="application/ld+json"]').allInnerTexts();
+    expect(pdpJsonLd.some((raw) => raw.includes('"@type":"FAQPage"'))).toBe(false);
+    await pdpPage.close();
+
+    // 4. In builder, save preserved local work as a new draft
+    await page.getByTestId("story-save-draft").click();
+    await expect(page.getByTestId("story-success")).toBeVisible();
+    await expect(page.getByTestId("story-lifecycle-status")).toContainText("Borrador");
+  });
+
+  test("passes WCAG 2.1 A/AA Axe audit on preview page and confirmation dialogs and validates 360px viewport", async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    await resetDraft();
+
+    // 1. Axe on preview page
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.catalog.email,
+      `/admin/products/${product.id}/story/preview`
+    );
+    const previewAxe = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(previewAxe.violations).toEqual([]);
+
+    // 2. 360px responsive check on preview page
+    await page.setViewportSize({ width: 360, height: 640 });
+    await expect(page.getByTestId("preview-banner")).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 2
+    );
+    expect(overflow).toBe(true);
+
+    // 3. Axe on publish confirmation dialog
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(storyPath);
+    await page.getByTestId("story-publish-button").click();
+    const dialog = page.getByRole("dialog", { name: "Publicar historia" });
+    await expect(dialog).toBeVisible();
+
+    const dialogAxe = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(dialogAxe.violations).toEqual([]);
+
+    await dialog.getByRole("button", { name: "Cancelar" }).click();
+    await expect(dialog).toBeHidden();
   });
 });

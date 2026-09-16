@@ -1,5 +1,5 @@
 export { ProductStoryRenderer } from "./product-story-renderer";
-export type { ProductStoryRendererProps } from "./types";
+export type { ProductStoryRendererProps, RenderableProductStory } from "./types";
 export { resolveStoryAlt } from "./helpers/resolve-story-alt";
 export { sanitizeComparisonRows } from "./helpers/comparison-matrix";
 export { shouldAutoplayStoryVideo } from "./helpers/should-autoplay-story-video";

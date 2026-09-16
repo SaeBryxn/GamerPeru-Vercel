@@ -1228,3 +1228,25 @@ export function getExactFieldIssue(
 
   return undefined;
 }
+
+export function adaptPersistedValidationIssueToAuthoring(
+  issue: StoryValidationIssue
+): StoryValidationIssue {
+  const tokenMap: Record<string, string> = {
+    mediaKey: "mediaId",
+    posterKey: "posterMediaId",
+    videoKey: "videoMediaId",
+    blueprintMediaKey: "blueprintMediaId",
+    productSlugs: "productIds",
+  };
+
+  const adaptedPath = issue.path.replace(
+    /(^|[.\[])(mediaKey|posterKey|videoKey|blueprintMediaKey|productSlugs)($|[.\[\]])/g,
+    (_match, prefix, token, suffix) => `${prefix}${tokenMap[token]}${suffix}`
+  );
+
+  return {
+    ...issue,
+    path: adaptedPath,
+  };
+}
