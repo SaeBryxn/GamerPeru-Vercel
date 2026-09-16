@@ -258,6 +258,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
   const [ambiguousSave, setAmbiguousSave] = useState(false);
   const [ambiguousPublish, setAmbiguousPublish] = useState(false);
   const [ambiguousUnpublish, setAmbiguousUnpublish] = useState(false);
+  const [isAuthoritativeReloadPending, setIsAuthoritativeReloadPending] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null);
   const [validationActive, setValidationActive] = useState(false);
@@ -361,6 +362,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
       lastProductIdRef.current = initialStory.product.id;
       preservedUnpublishDocumentRef.current = null;
       allowAuthoritativeReloadRef.current = false;
+      setIsAuthoritativeReloadPending(false);
       setDocument(createEditorDocument(initialStory.initialDocument));
       setSavedBaseline(structuredClone(initialStory.initialDocument));
       setDurableStory(durableViewFromStory(initialStory));
@@ -369,6 +371,10 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
       );
       setExpandedBlockIds(new Set(initialStory.initialDocument.map((b) => b.blockId)));
       setStaleConflict(false);
+      saveTracker.current.complete();
+      discardTracker.current.complete();
+      publishTracker.current.complete();
+      unpublishTracker.current.complete();
       setAmbiguousSave(false);
       setAmbiguousPublish(false);
       setAmbiguousUnpublish(false);
@@ -382,6 +388,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
     // 2. If explicit reload was requested (via reload button or draft discard)
     if (allowAuthoritativeReloadRef.current) {
       allowAuthoritativeReloadRef.current = false;
+      setIsAuthoritativeReloadPending(false);
       preservedUnpublishDocumentRef.current = null;
       setDocument(createEditorDocument(initialStory.initialDocument));
       setSavedBaseline(structuredClone(initialStory.initialDocument));
@@ -391,6 +398,10 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
       );
       setExpandedBlockIds(new Set(initialStory.initialDocument.map((b) => b.blockId)));
       setStaleConflict(false);
+      saveTracker.current.complete();
+      discardTracker.current.complete();
+      publishTracker.current.complete();
+      unpublishTracker.current.complete();
       setAmbiguousSave(false);
       setAmbiguousPublish(false);
       setAmbiguousUnpublish(false);
@@ -1009,17 +1020,15 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
         router.push(confirmation.href);
         return;
       case "RELOAD_SERVER":
-        saveTracker.current.complete();
-        discardTracker.current.complete();
-        publishTracker.current.complete();
-        unpublishTracker.current.complete();
-        setAmbiguousSave(false);
-        setAmbiguousPublish(false);
-        setAmbiguousUnpublish(false);
         setPendingConfirmation(null);
         preservedUnpublishDocumentRef.current = null;
         allowAuthoritativeReloadRef.current = true;
-        router.refresh();
+        setIsAuthoritativeReloadPending(true);
+        try {
+          router.refresh();
+        } catch {
+          // Keep pending/ambiguity flags intact on refresh failure
+        }
         return;
     }
   }
@@ -1031,7 +1040,12 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
     }
     preservedUnpublishDocumentRef.current = null;
     allowAuthoritativeReloadRef.current = true;
-    router.refresh();
+    setIsAuthoritativeReloadPending(true);
+    try {
+      router.refresh();
+    } catch {
+      // Keep pending/ambiguity flags intact on refresh failure
+    }
   }
 
   const lifecycleText = getStoryLifecycleText(durableStory);
@@ -1263,7 +1277,11 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
   }
 
   return (
-    <div className={styles.container} data-testid="story-builder">
+    <div
+      className={styles.container}
+      data-testid="story-builder"
+      data-reload-pending={isAuthoritativeReloadPending ? "true" : undefined}
+    >
       <div aria-live="polite" className={styles.srOnly} data-testid="story-announcement">
         {announcement}
       </div>

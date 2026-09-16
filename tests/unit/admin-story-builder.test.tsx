@@ -1018,7 +1018,7 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
     });
   });
 
-  it("persists ambiguousPublish across local edits, blocks competing durable mutations, reuses exact mutationRequestId on retry, and resolves on authoritative reload (Blocker A & Section 4)", async () => {
+  it("persists ambiguousPublish across local edits, blocks competing durable mutations, proves reload ordering, reuses exact mutationRequestId on retry, and resolves only on authoritative reload (BR2 Sections 7 & 10)", async () => {
     const user = userEvent.setup();
     mocks.publishStory.mockResolvedValueOnce({
       success: false,
@@ -1040,14 +1040,15 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
     await user.click(within(dialog).getByRole("button", { name: "Publicar historia" }));
 
     // 1. Publish returns UNKNOWN_ERROR.
-    // 2. ambiguousPublish becomes active.
+    // 2. Capture original mutationRequestId.
+    // 3. ambiguousPublish is active.
     await waitFor(() => {
       expect(screen.getByText(/No se pudo confirmar el resultado de la publicación/i)).toBeTruthy();
     });
-
     const firstRequestId = mocks.publishStory.mock.calls[0]![0].mutationRequestId;
+    expect(firstRequestId).toBeTruthy();
 
-    // 3. Save/Discard/new Unpublish remain blocked.
+    // 3b. Save/Discard/new Unpublish remain blocked.
     expect(saveBtn.hasAttribute("disabled")).toBe(true);
     expect(discardBtn.hasAttribute("disabled")).toBe(true);
     expect(unpublishBtn.hasAttribute("disabled")).toBe(true);
@@ -1064,34 +1065,51 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
     expect(discardBtn.hasAttribute("disabled")).toBe(true);
     expect(unpublishBtn.hasAttribute("disabled")).toBe(true);
 
-    // 7. "Reintentar publicación" remains available.
+    // 4 & 5. Operator clicks "Recargar desde servidor" and confirms reload.
+    await user.click(screen.getByRole("button", { name: /Recargar desde servidor/i }));
+    const reloadDialog = screen.getByRole("dialog", { name: "Recargar versión del servidor" });
+    await user.click(within(reloadDialog).getByRole("button", { name: "Recargar servidor" }));
+
+    // 6. Assert router.refresh() was requested.
+    expect(mocks.refresh).toHaveBeenCalled();
+
+    // 7. BEFORE rerendering with authoritative initialStory, assert:
+    // - ambiguity is STILL visible/active;
+    // - Save is blocked;
+    // - Discard is blocked;
+    // - competing Unpublish is blocked;
+    // - Publish retry remains available;
+    // - original publish MutationRequestTracker has NOT been completed/reset.
+    expect(screen.getByText(/No se pudo confirmar el resultado de la publicación/i)).toBeTruthy();
+    expect(saveBtn.hasAttribute("disabled")).toBe(true);
+    expect(discardBtn.hasAttribute("disabled")).toBe(true);
+    expect(unpublishBtn.hasAttribute("disabled")).toBe(true);
     expect(publishBtn.hasAttribute("disabled")).toBe(false);
     expect(publishBtn.textContent).toContain("Reintentar publicación");
 
-    // 8. Retry uses EXACT SAME mutationRequestId.
+    // 8. Retry Publish BEFORE authoritative props arrive.
     mocks.publishStory.mockResolvedValueOnce({
       success: false,
       code: "UNKNOWN_ERROR",
-      error: "Second timeout",
+      error: "Second timeout before reload props arrive",
     });
     await user.click(publishBtn);
 
+    // 9. Assert retry still uses the SAME original mutationRequestId.
     await waitFor(() => {
       expect(mocks.publishStory).toHaveBeenCalledTimes(2);
     });
     expect(mocks.publishStory.mock.calls[1]![0].mutationRequestId).toBe(firstRequestId);
 
-    // 9. Authoritative reload clears ambiguity and resets tracker identity only after accepting server state.
-    await user.click(screen.getByRole("button", { name: /Recargar desde servidor/i }));
-    const reloadDialog = screen.getByRole("dialog", { name: "Recargar versión del servidor" });
-    await user.click(within(reloadDialog).getByRole("button", { name: "Recargar servidor" }));
-
-    expect(mocks.refresh).toHaveBeenCalled();
-
-    // Rerender accepts authoritative state from server
+    // 10. Then rerender with authoritative refreshed initialStory.
     rerender(<StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} canPublish={true} />);
 
-    // Tracker identity was reset; subsequent publish generates a fresh mutationRequestId
+    // 11. Assert:
+    // - ambiguity clears;
+    // - tracker identity is now reset;
+    // - subsequent new Publish uses a NEW mutationRequestId.
+    expect(screen.queryByText(/No se pudo confirmar el resultado de la publicación/i)).toBeNull();
+
     mocks.publishStory.mockResolvedValueOnce(successfulPublish());
     await user.click(screen.getByTestId("story-publish-button"));
     const nextDialog = screen.getByRole("dialog", { name: "Publicar historia" });
@@ -1103,7 +1121,7 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
     expect(mocks.publishStory.mock.calls[2]![0].mutationRequestId).not.toBe(firstRequestId);
   });
 
-  it("persists ambiguousUnpublish across local edits, blocks competing durable mutations, reuses exact mutationRequestId on retry, and resolves on authoritative reload (Blocker A & Section 4)", async () => {
+  it("persists ambiguousUnpublish across local edits, blocks competing durable mutations, proves reload ordering, reuses exact mutationRequestId on retry, and resolves only on authoritative reload (BR2 Section 8)", async () => {
     const user = userEvent.setup();
     mocks.unpublishStory.mockResolvedValueOnce({
       success: false,
@@ -1125,16 +1143,17 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
     await user.click(within(dialog).getByRole("button", { name: "Despublicar historia" }));
 
     // 1. Unpublish returns UNKNOWN_ERROR.
-    // 2. ambiguousUnpublish becomes active.
+    // 2. Capture original mutationRequestId.
+    // 3. ambiguousUnpublish becomes active.
     await waitFor(() => {
       expect(
         screen.getByText(/No se pudo confirmar el resultado de la despublicación/i)
       ).toBeTruthy();
     });
-
     const firstRequestId = mocks.unpublishStory.mock.calls[0]![0].mutationRequestId;
+    expect(firstRequestId).toBeTruthy();
 
-    // 3. Save/Discard/new Publish remain blocked.
+    // 3b. Save/Discard/new Publish remain blocked.
     expect(saveBtn.hasAttribute("disabled")).toBe(true);
     expect(discardBtn.hasAttribute("disabled")).toBe(true);
     expect(publishBtn.hasAttribute("disabled")).toBe(true);
@@ -1153,11 +1172,29 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
     expect(discardBtn.hasAttribute("disabled")).toBe(true);
     expect(publishBtn.hasAttribute("disabled")).toBe(true);
 
-    // 7. "Reintentar despublicación" remains available.
+    // Request authoritative reload and confirm.
+    await user.click(screen.getByRole("button", { name: /Recargar desde servidor/i }));
+    const reloadDialog = screen.getByRole("dialog", { name: "Recargar versión del servidor" });
+    await user.click(within(reloadDialog).getByRole("button", { name: "Recargar servidor" }));
+
+    // Assert router.refresh() called.
+    expect(mocks.refresh).toHaveBeenCalled();
+
+    // 7. BEFORE refreshed props arrive:
+    // - ambiguity remains active;
+    // - Save/Discard/Publish remain blocked;
+    // - exact Unpublish retry remains available;
+    // - original unpublish tracker has not been completed.
+    expect(
+      screen.getByText(/No se pudo confirmar el resultado de la despublicación/i)
+    ).toBeTruthy();
+    expect(saveBtn.hasAttribute("disabled")).toBe(true);
+    expect(discardBtn.hasAttribute("disabled")).toBe(true);
+    expect(publishBtn.hasAttribute("disabled")).toBe(true);
     expect(unpublishBtn.hasAttribute("disabled")).toBe(false);
     expect(unpublishBtn.textContent).toContain("Reintentar despublicación");
 
-    // 8. Retry uses EXACT SAME mutationRequestId.
+    // 8. Retry Unpublish BEFORE authoritative props arrive.
     mocks.unpublishStory.mockResolvedValueOnce({
       success: false,
       code: "UNKNOWN_ERROR",
@@ -1165,22 +1202,23 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
     });
     await user.click(unpublishBtn);
 
+    // 9. Assert retry still uses the SAME original mutationRequestId.
     await waitFor(() => {
       expect(mocks.unpublishStory).toHaveBeenCalledTimes(2);
     });
     expect(mocks.unpublishStory.mock.calls[1]![0].mutationRequestId).toBe(firstRequestId);
 
-    // 9. Authoritative reload clears ambiguity and resets tracker identity only after accepting server state.
-    await user.click(screen.getByRole("button", { name: /Recargar desde servidor/i }));
-    const reloadDialog = screen.getByRole("dialog", { name: "Recargar versión del servidor" });
-    await user.click(within(reloadDialog).getByRole("button", { name: "Recargar servidor" }));
-
-    expect(mocks.refresh).toHaveBeenCalled();
-
-    // Rerender accepts authoritative state from server
+    // 10. Then rerender with authoritative refreshed initialStory.
     rerender(<StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} canPublish={true} />);
 
-    // Tracker identity was reset; subsequent unpublish generates a fresh mutationRequestId
+    // 11. Assert:
+    // - ambiguity clears;
+    // - tracker resets;
+    // - later new Unpublish receives fresh mutationRequestId.
+    expect(
+      screen.queryByText(/No se pudo confirmar el resultado de la despublicación/i)
+    ).toBeNull();
+
     mocks.unpublishStory.mockResolvedValueOnce(successfulUnpublish());
     await user.click(screen.getByTestId("story-unpublish-button"));
     const nextDialog = screen.getByRole("dialog", { name: "Despublicar historia" });
@@ -1190,6 +1228,134 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
       expect(mocks.unpublishStory).toHaveBeenCalledTimes(3);
     });
     expect(mocks.unpublishStory.mock.calls[2]![0].mutationRequestId).not.toBe(firstRequestId);
+  });
+
+  it("keeps ambiguity active and preserves original mutationRequestId when router.refresh throws or does not arrive (BR2 Section 9)", async () => {
+    const user = userEvent.setup();
+    mocks.publishStory.mockResolvedValueOnce({
+      success: false,
+      code: "UNKNOWN_ERROR",
+      error: "Initial timeout",
+    });
+
+    // Make router.refresh throw synchronously to test failure path
+    mocks.refresh.mockImplementationOnce(() => {
+      throw new Error("Network disconnection during refresh");
+    });
+
+    render(<StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} canPublish={true} />);
+
+    const publishBtn = screen.getByTestId("story-publish-button");
+    const saveBtn = screen.getByTestId("story-save-draft");
+    const discardBtn = screen.getByTestId("story-discard-draft");
+
+    await user.click(publishBtn);
+    const dialog = screen.getByRole("dialog", { name: "Publicar historia" });
+    await user.click(within(dialog).getByRole("button", { name: "Publicar historia" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/No se pudo confirmar el resultado de la publicación/i)).toBeTruthy();
+    });
+    const originalRequestId = mocks.publishStory.mock.calls[0]![0].mutationRequestId;
+
+    // Operator requests authoritative reload
+    await user.click(screen.getByRole("button", { name: /Recargar desde servidor/i }));
+    const reloadDialog = screen.getByRole("dialog", { name: "Recargar versión del servidor" });
+    await user.click(within(reloadDialog).getByRole("button", { name: "Recargar servidor" }));
+
+    // router.refresh was called (and threw safely handled error)
+    expect(mocks.refresh).toHaveBeenCalled();
+
+    // No new authoritative props arrived:
+    // Ambiguity MUST NOT be cleared
+    expect(screen.getByText(/No se pudo confirmar el resultado de la publicación/i)).toBeTruthy();
+    expect(saveBtn.hasAttribute("disabled")).toBe(true);
+    expect(discardBtn.hasAttribute("disabled")).toBe(true);
+    expect(publishBtn.hasAttribute("disabled")).toBe(false);
+
+    // Operator retries exact ambiguous operation
+    mocks.publishStory.mockResolvedValueOnce({
+      success: false,
+      code: "UNKNOWN_ERROR",
+      error: "Still timeout",
+    });
+    await user.click(publishBtn);
+
+    await waitFor(() => {
+      expect(mocks.publishStory).toHaveBeenCalledTimes(2);
+    });
+    // Still uses the original mutationRequestId!
+    expect(mocks.publishStory.mock.calls[1]![0].mutationRequestId).toBe(originalRequestId);
+
+    // Operator can also retry authoritative reload
+    await user.click(screen.getByRole("button", { name: /Recargar desde servidor/i }));
+    expect(screen.getByRole("dialog", { name: "Recargar versión del servidor" })).toBeTruthy();
+  });
+
+  it("enforces authoritative reload ordering for ambiguousSave, keeping tracker and ambiguity until server state is accepted (BR2 Section 10)", async () => {
+    const user = userEvent.setup();
+    mocks.saveDraft.mockResolvedValueOnce({
+      success: false,
+      code: "UNKNOWN_ERROR",
+      error: "Save timeout",
+    });
+
+    const { rerender } = render(
+      <StoryBuilder initialStory={makeStory("DRAFT_ONLY")} canPublish={true} />
+    );
+
+    const titleInput = screen.getByDisplayValue("Rendimiento");
+    await user.type(titleInput, " Modificado");
+
+    const saveBtn = screen.getByTestId("story-save-draft");
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/No se pudo confirmar el resultado en el servidor/i)).toBeTruthy();
+    });
+    const saveRequestId = mocks.saveDraft.mock.calls[0]![0].mutationRequestId;
+    expect(saveRequestId).toBeTruthy();
+
+    // Request reload
+    await user.click(screen.getByRole("button", { name: /Recargar desde servidor/i }));
+    const reloadDialog = screen.getByRole("dialog", { name: "Recargar versión del servidor" });
+    await user.click(within(reloadDialog).getByRole("button", { name: "Recargar servidor" }));
+
+    expect(mocks.refresh).toHaveBeenCalled();
+
+    // BEFORE authoritative props arrive:
+    // ambiguousSave is STILL active, retry save is available and reuses same mutationRequestId
+    expect(screen.getByText(/No se pudo confirmar el resultado en el servidor/i)).toBeTruthy();
+    expect(saveBtn.textContent).toContain("Reintentar guardado");
+
+    mocks.saveDraft.mockResolvedValueOnce({
+      success: false,
+      code: "UNKNOWN_ERROR",
+      error: "Second save timeout",
+    });
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mocks.saveDraft).toHaveBeenCalledTimes(2);
+    });
+    expect(mocks.saveDraft.mock.calls[1]![0].mutationRequestId).toBe(saveRequestId);
+
+    // After authoritative props arrive:
+    rerender(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} canPublish={true} />);
+
+    // ambiguousSave clears and tracker resets
+    expect(screen.queryByText(/No se pudo confirmar el resultado en el servidor/i)).toBeNull();
+
+    // Next edit + save uses a NEW mutationRequestId
+    const freshInput = screen.getByDisplayValue("Rendimiento");
+    await user.type(freshInput, " Otra Vez");
+    mocks.saveDraft.mockResolvedValueOnce(successfulSave(5));
+    await user.click(screen.getByTestId("story-save-draft"));
+
+    await waitFor(() => {
+      expect(mocks.saveDraft).toHaveBeenCalledTimes(3);
+    });
+    expect(mocks.saveDraft.mock.calls[2]![0].mutationRequestId).not.toBe(saveRequestId);
   });
 });
 
