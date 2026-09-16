@@ -8,6 +8,7 @@ export default defineConfig({
     "**/payment-storefront.spec.ts",
     "**/admin-foundation.spec.ts",
     "**/admin-product-manager.spec.ts",
+    "**/admin-story-builder.spec.ts",
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

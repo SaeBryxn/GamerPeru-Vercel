@@ -7,6 +7,7 @@ import {
   getPublishedBrands,
   getPublishedCategories,
 } from "@/lib/admin/catalog/readers";
+import { getAdminProductStory } from "@/lib/admin/catalog/story-reader";
 import { sanitizeProductDetailForUi } from "@/lib/admin/catalog/ui-dto";
 import { ProductEditor } from "./product-editor";
 
@@ -40,6 +41,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     notFound();
   }
 
+  const story = await getAdminProductStory(productId, { authContext });
   const sanitizedDetail = sanitizeProductDetailForUi(detail);
 
   return (
@@ -49,6 +51,12 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
       brands={brands}
       categories={categories}
       actorPermissions={Array.from(authContext.permissions)}
+      storySummary={{
+        lifecycle: story.lifecycle,
+        draftRevisionNumber: story.draft?.revisionNumber ?? null,
+        publishedRevisionNumber: story.published?.revisionNumber ?? null,
+        publishedAt: story.published?.publishedAt ?? null,
+      }}
     />
   );
 }

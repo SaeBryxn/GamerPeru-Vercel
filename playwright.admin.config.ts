@@ -42,6 +42,7 @@ export default defineConfig({
     "**/admin-foundation.spec.ts",
     "**/admin-product-manager.spec.ts",
     "**/admin-ai-product-assistant.spec.ts",
+    "**/admin-story-builder.spec.ts",
   ],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

@@ -21,6 +21,8 @@ import {
   Star,
   Tag,
   Globe,
+  BookOpen,
+  ChevronRight,
 } from "lucide-react";
 import {
   updateProductAction,
@@ -38,6 +40,10 @@ import {
 import type { AllowedMediaUploadMimeType } from "@/lib/admin/catalog/media-crypto";
 import { formatCentsToPenDisplay } from "@/lib/admin/catalog/money";
 import { MutationRequestTracker } from "@/lib/admin/catalog/mutation-request";
+import {
+  getStoryLifecycleText,
+  type StoryLifecycleSummary,
+} from "@/lib/admin/catalog/story-builder-model";
 import {
   buildMediaFinalizationRetryRequest,
   transitionPendingFinalization,
@@ -59,6 +65,7 @@ interface ProductEditorProps {
   brands: BrandReference[];
   categories: CategoryReference[];
   actorPermissions: string[];
+  storySummary: StoryLifecycleSummary;
 }
 
 function centsToInputString(cents: number | null | undefined): string {
@@ -75,6 +82,7 @@ export function ProductEditor({
   brands,
   categories,
   actorPermissions,
+  storySummary,
 }: ProductEditorProps) {
   const router = useRouter();
 
@@ -1342,6 +1350,37 @@ export function ProductEditor({
           <p style={{ margin: 0 }}>{generalSuccess}</p>
         </div>
       )}
+
+      <section
+        className={`${styles.card} ${styles.storyEntryCard}`}
+        aria-labelledby="product-story-entry-title"
+        data-testid="product-story-entry"
+      >
+        <div className={styles.storyEntryContent}>
+          <div className={styles.storyEntryIcon} aria-hidden="true">
+            <BookOpen size={22} />
+          </div>
+          <div className={styles.storyEntryCopy}>
+            <h2 id="product-story-entry-title" className={styles.cardTitle}>
+              Historia del producto
+            </h2>
+            <p className={styles.cardDescription}>
+              Organiza el relato editorial del producto en un espacio de trabajo dedicado.
+            </p>
+            <span className={styles.storyLifecycleText} data-testid="product-story-status">
+              Estado: {getStoryLifecycleText(storySummary)}
+            </span>
+          </div>
+        </div>
+        <Link
+          href={`/admin/products/${product.id}/story`}
+          className={styles.storyEntryLink}
+          data-testid="product-story-link"
+        >
+          Editar historia
+          <ChevronRight size={16} aria-hidden="true" />
+        </Link>
+      </section>
 
       {/* Section: Publish Readiness */}
       <section

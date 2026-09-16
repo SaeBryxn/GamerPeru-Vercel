@@ -224,6 +224,81 @@
   margin: 0;
 }
 
+.storyEntryCard {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.storyEntryContent {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+}
+
+.storyEntryIcon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md, 0.5rem);
+  color: var(--color-brand-active, #9f1239);
+  background-color: var(--color-brand-subtle-light, #fff1f2);
+}
+
+.storyEntryCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.storyLifecycleText {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-primary, #09090b);
+}
+
+.storyEntryLink {
+  min-height: 44px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--color-border-subtle, #d4d4d8);
+  border-radius: var(--radius-md, 0.5rem);
+  color: var(--color-text-primary, #09090b);
+  background-color: var(--color-surface-card, #ffffff);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.storyEntryLink:hover {
+  background-color: var(--color-surface-hover, #f4f4f5);
+}
+
+.storyEntryLink:focus-visible {
+  outline: 2px solid var(--color-brand-primary, #e11d48);
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  .storyEntryCard {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .storyEntryLink {
+    width: 100%;
+  }
+}
+
 /* --------------------------------------------------------------------------
  * Readiness Section
  * -------------------------------------------------------------------------- */
