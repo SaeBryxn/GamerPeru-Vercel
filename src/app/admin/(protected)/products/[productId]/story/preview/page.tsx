@@ -51,13 +51,13 @@ export default async function ProductStoryPreviewPage({
     notFound();
   }
 
-  if (revision && !z.string().uuid().safeParse(revision).success) {
+  if (!revision || !z.string().uuid().safeParse(revision).success) {
     notFound();
   }
 
   let preview;
   try {
-    preview = await getAdminProductStoryPreview(productId, revision ?? null, { authContext });
+    preview = await getAdminProductStoryPreview(productId, revision, { authContext });
   } catch (error) {
     if (error instanceof CatalogDomainError) {
       notFound();

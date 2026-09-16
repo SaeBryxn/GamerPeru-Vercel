@@ -91,6 +91,17 @@ describe("getAdminProductStoryPreview", () => {
     ).rejects.toThrowError(CatalogDomainError);
   });
 
+  it("fails closed on missing revisionId (Blocker B)", async () => {
+    await expect(
+      getAdminProductStoryPreview(PRODUCT_ID, "", {
+        authContext: validManageAuth,
+      })
+    ).rejects.toMatchObject({
+      code: "STORY_INVALID_REQUEST",
+      httpStatus: 422,
+    });
+  });
+
   it("fails closed on malformed productId or revisionId UUID", async () => {
     await expect(
       getAdminProductStoryPreview("invalid-uuid", DRAFT_REVISION_ID, {
@@ -189,6 +200,38 @@ describe("getAdminProductStoryPreview", () => {
           status: "PUBLISHED", // not DRAFT
           blocks: [],
           published_at: new Date(),
+          created_at: new Date(),
+        },
+      ]);
+
+    await expect(
+      getAdminProductStoryPreview(PRODUCT_ID, DRAFT_REVISION_ID, {
+        authContext: validManageAuth,
+      })
+    ).rejects.toMatchObject({
+      code: "STORY_REVISION_INVALID",
+      httpStatus: 404,
+    });
+  });
+
+  it("fails closed with 404 when revision status is ARCHIVED", async () => {
+    mocks.execute
+      .mockResolvedValueOnce([{ id: PRODUCT_ID, name: "Mouse Pro", slug: "mouse-pro" }])
+      .mockResolvedValueOnce([
+        {
+          product_id: PRODUCT_ID,
+          draft_revision_id: DRAFT_REVISION_ID,
+          published_revision_id: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: DRAFT_REVISION_ID,
+          product_id: PRODUCT_ID,
+          revision_number: 1,
+          status: "ARCHIVED", // explicitly ARCHIVED
+          blocks: [],
+          published_at: null,
           created_at: new Date(),
         },
       ]);

@@ -799,7 +799,7 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
 
     // 1. Unauthenticated request redirects to login
     await page.context().clearCookies();
-    await page.goto(`/admin/products/${product.id}/story/preview`);
+    await page.goto(`/admin/products/${product.id}/story/preview?revision=${draftRevisionId}`);
     await page.waitForURL((url) => url.pathname.includes("/auth/login"), { timeout: 15000 });
 
     // 2. Authenticated preview with valid draft
@@ -807,7 +807,7 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
     await loginAndNavigateTo(
       page,
       ADMIN_E2E_USERS.catalog.email,
-      `/admin/products/${product.id}/story/preview`
+      `/admin/products/${product.id}/story/preview?revision=${draftRevisionId}`
     );
 
     await expect(page.getByTestId("preview-banner")).toBeVisible();
@@ -841,7 +841,7 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
       VALUES (${product.id}, ${draftRevisionId}, NULL, NOW());
     `;
 
-    await page.goto(`/admin/products/${product.id}/story/preview`);
+    await page.goto(`/admin/products/${product.id}/story/preview?revision=${draftRevisionId}`);
     await expect(page.getByTestId("preview-empty-state")).toBeVisible();
     await expect(page.getByRole("heading", { name: /borrador.*vacío/i })).toBeVisible();
   });
@@ -933,6 +933,388 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
     await expect(page.getByTestId("story-lifecycle-status")).toContainText("Borrador");
   });
 
+  test("enforces exact revision parameter contract on preview route (Blocker B & Section 6)", async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    await resetDraft();
+    await loginAndNavigateTo(page, ADMIN_E2E_USERS.catalog.email, storyPath);
+
+    const oldSupersededRevisionId = "018f0026-2000-7000-8000-000000000991";
+    const publishedRevId = "018f0026-2000-7000-8000-000000000992";
+    const archivedRevId = "018f0026-2000-7000-8000-000000000993";
+    const crossProductRevisionId = "018f0026-2000-7000-8000-000000000994";
+    const otherProductId = ADMIN_E2E_PRODUCT_FIXTURES.sentinelProduct.id;
+
+    // Seed revisions in database
+    await sql`
+      INSERT INTO product_story_revisions (id, product_id, revision_number, status, blocks, created_by_auth_user_id, published_at, created_at)
+      VALUES
+        (${oldSupersededRevisionId}, ${product.id}, 90, 'ARCHIVED', '[]'::jsonb, ${ADMIN_E2E_USERS.superadmin.id}, NULL, NOW()),
+        (${publishedRevId}, ${product.id}, 91, 'PUBLISHED', '[]'::jsonb, ${ADMIN_E2E_USERS.superadmin.id}, NOW(), NOW()),
+        (${archivedRevId}, ${product.id}, 92, 'ARCHIVED', '[]'::jsonb, ${ADMIN_E2E_USERS.superadmin.id}, NULL, NOW()),
+        (${crossProductRevisionId}, ${otherProductId}, 1, 'DRAFT', '[]'::jsonb, ${ADMIN_E2E_USERS.superadmin.id}, NULL, NOW())
+      ON CONFLICT (id) DO NOTHING;
+    `;
+
+    // 1. /preview with NO revision query -> fail closed (notFound)
+    await page.goto(`/admin/products/${product.id}/story/preview`);
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByTestId("preview-banner")).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeHidden();
+    await expect(page.getByRole("heading", { name: /404|página no encontrada/i })).toBeVisible();
+
+    // 2. malformed revision UUID -> fail closed (notFound)
+    await page.goto(`/admin/products/${product.id}/story/preview?revision=not-a-valid-uuid`);
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByTestId("preview-banner")).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeHidden();
+    await expect(page.getByRole("heading", { name: /404|página no encontrada/i })).toBeVisible();
+
+    // 3. old/superseded draft revision -> fail closed (notFound)
+    await page.goto(
+      `/admin/products/${product.id}/story/preview?revision=${oldSupersededRevisionId}`
+    );
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByTestId("preview-banner")).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeHidden();
+    await expect(page.getByRole("heading", { name: /404|página no encontrada/i })).toBeVisible();
+
+    // 4. published revision -> fail closed (notFound)
+    await page.goto(`/admin/products/${product.id}/story/preview?revision=${publishedRevId}`);
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByTestId("preview-banner")).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeHidden();
+    await expect(page.getByRole("heading", { name: /404|página no encontrada/i })).toBeVisible();
+
+    // 5. archived revision -> fail closed (notFound)
+    await page.goto(`/admin/products/${product.id}/story/preview?revision=${archivedRevId}`);
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByTestId("preview-banner")).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeHidden();
+    await expect(page.getByRole("heading", { name: /404|página no encontrada/i })).toBeVisible();
+
+    // 6. cross-Product revision -> fail closed (notFound)
+    await page.goto(
+      `/admin/products/${product.id}/story/preview?revision=${crossProductRevisionId}`
+    );
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByTestId("preview-banner")).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeHidden();
+    await expect(page.getByRole("heading", { name: /404|página no encontrada/i })).toBeVisible();
+
+    // 7. exact current draft revision -> succeeds (200, preview renders)
+    const resExact = await page.goto(
+      `/admin/products/${product.id}/story/preview?revision=${draftRevisionId}`
+    );
+    expect(resExact?.status()).toBe(200);
+    await expect(page.getByTestId("preview-banner")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Rendimiento" })).toBeVisible();
+
+    // Cleanup seeded revisions
+    await sql`
+      DELETE FROM product_story_revisions
+      WHERE id IN (${oldSupersededRevisionId}, ${publishedRevId}, ${archivedRevId}, ${crossProductRevisionId});
+    `;
+  });
+
+  test("separates old public PDP and new private saved-draft preview, then promotes draft cleanly (Blocker C)", async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    await sql`UPDATE products SET status = 'PUBLISHED' WHERE id = ${product.id};`;
+    await clearStory();
+
+    const oldPubRevId = "018f0026-2000-7000-8000-000000000c01";
+    const newDraftRevId = "018f0026-2000-7000-8000-000000000c02";
+
+    const oldPublicBlocks = [
+      {
+        block_id: "018f0026-2000-7000-8000-000000000c11",
+        type: "stat_highlight",
+        order: 1,
+        payload: { title: "OLD PUBLIC STORY", stats: [{ value: "10K", label: "DPI" }] },
+      },
+    ];
+
+    const newDraftBlocks = [
+      {
+        block_id: "018f0026-2000-7000-8000-000000000c12",
+        type: "stat_highlight",
+        order: 1,
+        payload: { title: "NEW PRIVATE DRAFT STORY", stats: [{ value: "30K", label: "DPI" }] },
+      },
+    ];
+
+    // Seed P as PUBLISHED and D as DRAFT
+    await sql`
+      INSERT INTO product_story_revisions (
+        id, product_id, revision_number, status, blocks, created_by_auth_user_id, published_at, created_at
+      ) VALUES (
+        ${oldPubRevId}, ${product.id}, 1, 'PUBLISHED', ${sql.json(oldPublicBlocks)},
+        ${ADMIN_E2E_USERS.superadmin.id}, NOW(), NOW()
+      );
+    `;
+    await sql`
+      INSERT INTO product_story_revisions (
+        id, product_id, revision_number, status, blocks, created_by_auth_user_id, created_at
+      ) VALUES (
+        ${newDraftRevId}, ${product.id}, 2, 'DRAFT', ${sql.json(newDraftBlocks)},
+        ${ADMIN_E2E_USERS.superadmin.id}, NOW()
+      );
+    `;
+    await sql`
+      INSERT INTO product_stories (product_id, draft_revision_id, published_revision_id, updated_at)
+      VALUES (${product.id}, ${newDraftRevId}, ${oldPubRevId}, NOW());
+    `;
+
+    // Before publication prove simultaneously:
+    // 1. PUBLIC PDP shows OLD PUBLIC STORY and does NOT show NEW PRIVATE DRAFT STORY
+    await page.goto(`/productos/${product.slug}`);
+    await expect(page.getByRole("heading", { name: "OLD PUBLIC STORY" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "NEW PRIVATE DRAFT STORY" })).toBeHidden();
+
+    // 2. ADMIN PREVIEW for exact revision D shows NEW PRIVATE DRAFT STORY and does NOT substitute OLD PUBLIC STORY
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.catalog.email,
+      `/admin/products/${product.id}/story/preview?revision=${newDraftRevId}`
+    );
+    await expect(page.getByTestId("preview-banner")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "NEW PRIVATE DRAFT STORY" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "OLD PUBLIC STORY" })).toBeHidden();
+
+    // 3. Publish D through the real Story Builder UI
+    await page.goto(storyPath);
+    await expect(page.getByTestId("story-lifecycle-status")).toContainText(
+      "Borrador r2 sobre Publicada r1"
+    );
+
+    const publishBtn = page.getByTestId("story-publish-button");
+    await expect(publishBtn).toBeEnabled();
+    await publishBtn.click();
+
+    const dialog = page.getByRole("dialog", { name: "Publicar historia" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Publicar historia" }).click();
+    await expect(dialog).toBeHidden();
+
+    await expect(page.getByTestId("story-success")).toBeVisible();
+    await expect(page.getByTestId("story-lifecycle-status")).toContainText("Publicada r2");
+
+    // After publication prove:
+    // 4. PUBLIC PDP shows NEW PRIVATE DRAFT STORY; OLD PUBLIC STORY is absent
+    await page.goto(`/productos/${product.slug}`);
+    await expect(page.getByRole("heading", { name: "NEW PRIVATE DRAFT STORY" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "OLD PUBLIC STORY" })).toBeHidden();
+
+    // 5. Verify database directly:
+    // - published pointer now targets D (newDraftRevId)
+    // - draft pointer is null
+    // - old published revision is ARCHIVED
+    // - promoted draft is PUBLISHED
+    const storyRow = (await sql`
+      SELECT draft_revision_id, published_revision_id
+      FROM product_stories
+      WHERE product_id = ${product.id};
+    `) as unknown as Array<{
+      draft_revision_id: string | null;
+      published_revision_id: string | null;
+    }>;
+    expect(storyRow[0]!.published_revision_id).toBe(newDraftRevId);
+    expect(storyRow[0]!.draft_revision_id).toBeNull();
+
+    const revRows = (await sql`
+      SELECT id, status
+      FROM product_story_revisions
+      WHERE product_id = ${product.id}
+      ORDER BY revision_number ASC;
+    `) as unknown as Array<{ id: string; status: string }>;
+    const oldRev = revRows.find((r) => r.id === oldPubRevId);
+    const newRev = revRows.find((r) => r.id === newDraftRevId);
+    expect(oldRev?.status).toBe("ARCHIVED");
+    expect(newRev?.status).toBe("PUBLISHED");
+  });
+
+  test("handles stale Publish concurrency across two browser contexts cleanly (Blocker D)", async ({
+    browser,
+  }) => {
+    test.setTimeout(90000);
+    await resetDraft(); // current draft = X (draftRevisionId), published pointer = null
+
+    const draftXId = draftRevisionId;
+
+    // Context A opens Story Builder while X is current
+    const contextA = await browser.newContext();
+    const pageA = await contextA.newPage();
+    await loginAndNavigateTo(pageA, ADMIN_E2E_USERS.catalog.email, storyPath);
+    await expect(pageA.getByTestId("story-lifecycle-status")).toContainText("Borrador r1");
+
+    // Context B opens same Product, makes a valid edit, and saves replacement draft Y
+    const contextB = await browser.newContext();
+    const pageB = await contextB.newPage();
+    await loginAndNavigateTo(pageB, ADMIN_E2E_USERS.superadmin.email, storyPath);
+    await expect(pageB.getByTestId("story-lifecycle-status")).toContainText("Borrador r1");
+
+    // Context B edits a field and saves draft Y
+    const titleInputB = pageB.locator('input[value="Rendimiento"]');
+    await titleInputB.fill("Rendimiento Por Contexto B");
+    await pageB.getByTestId("story-save-draft").click();
+    await expect(pageB.getByTestId("story-success")).toContainText("Borrador r2 guardado");
+
+    // Prove database now has draft_revision_id = Y and X is no longer current draft
+    const dbStories = (await sql`
+      SELECT draft_revision_id, published_revision_id
+      FROM product_stories
+      WHERE product_id = ${product.id};
+    `) as unknown as Array<{
+      draft_revision_id: string | null;
+      published_revision_id: string | null;
+    }>;
+    const draftYId = dbStories[0]!.draft_revision_id;
+    expect(draftYId).not.toBe(draftXId);
+    expect(dbStories[0]!.published_revision_id).toBeNull();
+
+    // Now Context A attempts to Publish X through the UI
+    const publishBtnA = pageA.getByTestId("story-publish-button");
+    await expect(publishBtnA).toBeEnabled();
+    await publishBtnA.click();
+
+    const dialogA = pageA.getByRole("dialog", { name: "Publicar historia" });
+    await expect(dialogA).toBeVisible();
+    await dialogA.getByRole("button", { name: "Publicar historia" }).click();
+    await expect(dialogA).toBeHidden();
+
+    // Expected:
+    // - publication fails with stale conflict UX
+    await expect(pageA.getByTestId("story-stale-alert")).toBeVisible();
+    await expect(pageA.getByTestId("story-stale-alert")).toContainText(
+      "La historia cambió en el servidor"
+    );
+    // - Context A local Story content remains visible
+    await expect(pageA.locator('input[value="Rendimiento"]')).toBeVisible();
+    // - authoritative reload action is offered
+    await expect(
+      pageA.getByRole("button", { name: "Recargar versión del servidor" })
+    ).toBeVisible();
+
+    // Verify persisted state directly:
+    // - X is NOT published
+    // - Y remains current draft
+    // - public pointer remains unchanged (null)
+    // - no automatic publication of Y
+    const dbAfterStale = (await sql`
+      SELECT draft_revision_id, published_revision_id
+      FROM product_stories
+      WHERE product_id = ${product.id};
+    `) as unknown as Array<{
+      draft_revision_id: string | null;
+      published_revision_id: string | null;
+    }>;
+    expect(dbAfterStale[0]!.draft_revision_id).toBe(draftYId);
+    expect(dbAfterStale[0]!.published_revision_id).toBeNull();
+
+    const revStatusX = (await sql`
+      SELECT status FROM product_story_revisions WHERE id = ${draftXId};
+    `) as unknown as Array<{ status: string }>;
+    expect(revStatusX[0]!.status).toBe("ARCHIVED"); // X was superseded by Y when B saved draft Y
+
+    const revStatusY = (await sql`
+      SELECT status FROM product_story_revisions WHERE id = ${draftYId};
+    `) as unknown as Array<{ status: string }>;
+    expect(revStatusY[0]!.status).toBe("DRAFT"); // Y was NOT published
+
+    await contextA.close();
+    await contextB.close();
+  });
+
+  test("unpublishes P from DRAFT_OVER_PUBLISHED, preserves draft D, local document, and dirty state (Section 10)", async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    await clearStory();
+
+    const revDId = "018f0026-2000-7000-8000-000000000d01";
+    const revPId = "018f0026-2000-7000-8000-000000000d02";
+
+    await sql`
+      INSERT INTO product_story_revisions (
+        id, product_id, revision_number, status, blocks, created_by_auth_user_id, published_at, created_at
+      ) VALUES (
+        ${revPId}, ${product.id}, 1, 'PUBLISHED', ${sql.json(validBlocks)},
+        ${ADMIN_E2E_USERS.superadmin.id}, NOW(), NOW()
+      );
+    `;
+    await sql`
+      INSERT INTO product_story_revisions (
+        id, product_id, revision_number, status, blocks, created_by_auth_user_id, created_at
+      ) VALUES (
+        ${revDId}, ${product.id}, 2, 'DRAFT', ${sql.json(validBlocks)},
+        ${ADMIN_E2E_USERS.superadmin.id}, NOW()
+      );
+    `;
+    await sql`
+      INSERT INTO product_stories (product_id, draft_revision_id, published_revision_id, updated_at)
+      VALUES (${product.id}, ${revDId}, ${revPId}, NOW());
+    `;
+
+    await loginAndNavigateTo(page, ADMIN_E2E_USERS.superadmin.email, storyPath);
+    await expect(page.getByTestId("story-lifecycle-status")).toContainText(
+      "Borrador r2 sobre Publicada r1"
+    );
+
+    // Make local unsaved edit
+    const titleInput = page.locator('input[value="Rendimiento"]');
+    await titleInput.fill("Rendimiento Local Unsaved");
+    await expect(page.getByTestId("story-dirty-state")).toContainText("Cambios sin guardar");
+
+    // Unpublish P through UI
+    const unpublishBtn = page.getByTestId("story-unpublish-button");
+    await expect(unpublishBtn).toBeEnabled();
+    await unpublishBtn.click();
+
+    const dialog = page.getByRole("dialog", { name: "Despublicar historia" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Despublicar historia" }).click();
+    await expect(dialog).toBeHidden();
+
+    // Prove:
+    // - lifecycle becomes DRAFT_ONLY ("Borrador r2")
+    await expect(page.getByTestId("story-lifecycle-status")).toHaveText("Borrador r2");
+    // - local document preserved
+    await expect(page.locator('input[value="Rendimiento Local Unsaved"]')).toBeVisible();
+    // - dirty state preserved exactly
+    await expect(page.getByTestId("story-dirty-state")).toContainText("Cambios sin guardar");
+
+    // - Verify database:
+    // - draft pointer remains D
+    // - published pointer becomes null
+    // - no automatic replacement draft created
+    const dbStory = (await sql`
+      SELECT draft_revision_id, published_revision_id
+      FROM product_stories
+      WHERE product_id = ${product.id};
+    `) as unknown as Array<{
+      draft_revision_id: string | null;
+      published_revision_id: string | null;
+    }>;
+    expect(dbStory[0]!.draft_revision_id).toBe(revDId);
+    expect(dbStory[0]!.published_revision_id).toBeNull();
+
+    const dbRevisions = (await sql`
+      SELECT id, revision_number, status
+      FROM product_story_revisions
+      WHERE product_id = ${product.id}
+      ORDER BY revision_number ASC;
+    `) as unknown as Array<{ id: string; revision_number: number; status: string }>;
+    expect(dbRevisions).toHaveLength(2); // Only D and P, no extra replacement draft!
+    expect(dbRevisions[0]!.id).toBe(revPId);
+    expect(dbRevisions[0]!.status).toBe("ARCHIVED");
+    expect(dbRevisions[1]!.id).toBe(revDId);
+    expect(dbRevisions[1]!.revision_number).toBe(2);
+    expect(dbRevisions[1]!.status).toBe("DRAFT");
+  });
+
   test("passes WCAG 2.1 A/AA Axe audit on preview page and confirmation dialogs and validates 360px viewport", async ({
     page,
   }) => {
@@ -943,7 +1325,7 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
     await loginAndNavigateTo(
       page,
       ADMIN_E2E_USERS.catalog.email,
-      `/admin/products/${product.id}/story/preview`
+      `/admin/products/${product.id}/story/preview?revision=${draftRevisionId}`
     );
     const previewAxe = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -961,16 +1343,38 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
     // 3. Axe on publish confirmation dialog
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(storyPath);
-    await page.getByTestId("story-publish-button").click();
-    const dialog = page.getByRole("dialog", { name: "Publicar historia" });
-    await expect(dialog).toBeVisible();
+    const publishBtn = page.getByTestId("story-publish-button");
+    await publishBtn.click();
+    const pubDialog = page.getByRole("dialog", { name: "Publicar historia" });
+    await expect(pubDialog).toBeVisible();
 
-    const dialogAxe = await new AxeBuilder({ page })
+    const publishDialogAxe = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();
-    expect(dialogAxe.violations).toEqual([]);
+    expect(publishDialogAxe.violations).toEqual([]);
 
-    await dialog.getByRole("button", { name: "Cancelar" }).click();
-    await expect(dialog).toBeHidden();
+    // Escape/cancel focus restoration when no mutation is pending
+    await page.keyboard.press("Escape");
+    await expect(pubDialog).toBeHidden();
+    await expect(publishBtn).toBeFocused();
+
+    // 4. Axe on unpublish confirmation dialog (Section 11)
+    await resetPublishedStory();
+    await page.goto(storyPath);
+    const unpublishBtn = page.getByTestId("story-unpublish-button");
+    await expect(unpublishBtn).toBeVisible();
+    await unpublishBtn.click();
+    const unpubDialog = page.getByRole("dialog", { name: "Despublicar historia" });
+    await expect(unpubDialog).toBeVisible();
+
+    const unpublishDialogAxe = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(unpublishDialogAxe.violations).toEqual([]);
+
+    // Escape/cancel focus restoration when no mutation is pending
+    await page.keyboard.press("Escape");
+    await expect(unpubDialog).toBeHidden();
+    await expect(unpublishBtn).toBeFocused();
   });
 });

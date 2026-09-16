@@ -418,14 +418,15 @@ export interface AdminProductStoryPreviewDto {
 
 export async function getAdminProductStoryPreview(
   productId: string,
-  revisionId?: string | null,
+  revisionId: string,
   options?: StoryReaderOptions
 ): Promise<AdminProductStoryPreviewDto> {
   await assertManagePermission(options);
 
   if (
     !z.string().uuid().safeParse(productId).success ||
-    (revisionId && !z.string().uuid().safeParse(revisionId).success)
+    !revisionId ||
+    !z.string().uuid().safeParse(revisionId).success
   ) {
     throw new CatalogDomainError(
       "La identidad del producto o de la revisión no tiene una estructura válida.",
@@ -465,9 +466,7 @@ export async function getAdminProductStoryPreview(
     );
   }
 
-  const effectiveRevisionId = revisionId ?? aggregate.draft_revision_id;
-
-  if (effectiveRevisionId !== aggregate.draft_revision_id) {
+  if (revisionId !== aggregate.draft_revision_id) {
     throw new CatalogDomainError(
       "La revisión solicitada no corresponde al borrador actual del producto.",
       "STORY_REVISION_NOT_CURRENT_DRAFT",
@@ -478,7 +477,7 @@ export async function getAdminProductStoryPreview(
   const revisionRows = (await db.execute(sql`
     SELECT id, product_id, revision_number, status, blocks, published_at, created_at
     FROM product_story_revisions
-    WHERE id = ${effectiveRevisionId}::uuid
+    WHERE id = ${revisionId}::uuid
     LIMIT 1;
   `)) as unknown as StoryRevisionReadRow[];
   const revision = revisionRows[0];
@@ -516,7 +515,7 @@ export async function getAdminProductStoryPreview(
 
   const validatedBlocks = validateStoryBlocks(persistedDocument, {
     productId,
-    revisionId: effectiveRevisionId,
+    revisionId,
   });
 
   if (!validatedBlocks || validatedBlocks.length !== persistedDocument.length) {

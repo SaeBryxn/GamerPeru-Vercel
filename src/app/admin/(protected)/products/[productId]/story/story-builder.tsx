@@ -214,7 +214,7 @@ function useDialogFocus(
   }, [canClose, dialogRef, isOpen, onClose, triggerRef]);
 }
 
-export function StoryBuilder({ initialStory, canPublish = true }: StoryBuilderProps) {
+export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderProps) {
   const router = useRouter();
 
   // Unified canonical rehydration
@@ -349,7 +349,11 @@ export function StoryBuilder({ initialStory, canPublish = true }: StoryBuilderPr
     (!dirty && !canSaveWithoutChanges);
 
   const discardDisabled =
-    isAnyMutationPending || ambiguousPublish || ambiguousUnpublish || !hasDurableDraft;
+    isAnyMutationPending ||
+    ambiguousSave ||
+    ambiguousPublish ||
+    ambiguousUnpublish ||
+    !hasDurableDraft;
 
   useEffect(() => {
     // 1. If product ID changed, this is a navigation to a different product
@@ -506,12 +510,12 @@ export function StoryBuilder({ initialStory, canPublish = true }: StoryBuilderPr
   );
 
   function clearFeedbackForEdit() {
-    setErrorMessage(null);
+    if (!ambiguousPublish && !ambiguousUnpublish) {
+      setErrorMessage(null);
+    }
     setFieldErrors([]);
     setSuccessMessage(null);
     setAmbiguousSave(false);
-    setAmbiguousPublish(false);
-    setAmbiguousUnpublish(false);
   }
 
   function openPreview() {

@@ -971,7 +971,7 @@ describe("GP-026 CHK4 Permission UX", () => {
 describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
   it("publishes clean durable draft, preserves canonical baseline, sets lifecycle to PUBLISHED_ONLY, and tracks dirty on subsequent edit (Amendments 2 & 15)", async () => {
     const user = userEvent.setup();
-    render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} />);
+    render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} canPublish={true} />);
 
     const publishBtn = screen.getByTestId("story-publish-button");
     expect(publishBtn.hasAttribute("disabled")).toBe(false);
@@ -1018,7 +1018,7 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
     });
   });
 
-  it("reuses mutationRequestId on exact ambiguous retry and resets tracker identity on authoritative reload (Amendment 10)", async () => {
+  it("persists ambiguousPublish across local edits, blocks competing durable mutations, reuses exact mutationRequestId on retry, and resolves on authoritative reload (Blocker A & Section 4)", async () => {
     const user = userEvent.setup();
     mocks.publishStory.mockResolvedValueOnce({
       success: false,
@@ -1026,31 +1026,62 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
       error: "Timeout while publishing",
     });
 
-    const { rerender } = render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} />);
-    await user.click(screen.getByTestId("story-publish-button"));
+    const { rerender } = render(
+      <StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} canPublish={true} />
+    );
+
+    const publishBtn = screen.getByTestId("story-publish-button");
+    const saveBtn = screen.getByTestId("story-save-draft");
+    const discardBtn = screen.getByTestId("story-discard-draft");
+    const unpublishBtn = screen.getByTestId("story-unpublish-button");
+
+    await user.click(publishBtn);
     const dialog = screen.getByRole("dialog", { name: "Publicar historia" });
     await user.click(within(dialog).getByRole("button", { name: "Publicar historia" }));
 
+    // 1. Publish returns UNKNOWN_ERROR.
+    // 2. ambiguousPublish becomes active.
     await waitFor(() => {
       expect(screen.getByText(/No se pudo confirmar el resultado de la publicación/i)).toBeTruthy();
     });
 
     const firstRequestId = mocks.publishStory.mock.calls[0]![0].mutationRequestId;
 
-    // Retry exact publish reuses request ID
+    // 3. Save/Discard/new Unpublish remain blocked.
+    expect(saveBtn.hasAttribute("disabled")).toBe(true);
+    expect(discardBtn.hasAttribute("disabled")).toBe(true);
+    expect(unpublishBtn.hasAttribute("disabled")).toBe(true);
+
+    // 4. Edit a Story field.
+    const titleInput = screen.getByDisplayValue("Rendimiento");
+    await user.type(titleInput, " Actualizado");
+
+    // 5. ambiguousPublish REMAINS active.
+    expect(screen.getByText(/No se pudo confirmar el resultado de la publicación/i)).toBeTruthy();
+
+    // 6. Save/Discard/new competing publication remain blocked.
+    expect(saveBtn.hasAttribute("disabled")).toBe(true);
+    expect(discardBtn.hasAttribute("disabled")).toBe(true);
+    expect(unpublishBtn.hasAttribute("disabled")).toBe(true);
+
+    // 7. "Reintentar publicación" remains available.
+    expect(publishBtn.hasAttribute("disabled")).toBe(false);
+    expect(publishBtn.textContent).toContain("Reintentar publicación");
+
+    // 8. Retry uses EXACT SAME mutationRequestId.
     mocks.publishStory.mockResolvedValueOnce({
       success: false,
       code: "UNKNOWN_ERROR",
       error: "Second timeout",
     });
-    await user.click(screen.getByRole("button", { name: "Reintentar publicación" }));
+    await user.click(publishBtn);
 
     await waitFor(() => {
       expect(mocks.publishStory).toHaveBeenCalledTimes(2);
     });
     expect(mocks.publishStory.mock.calls[1]![0].mutationRequestId).toBe(firstRequestId);
 
-    // Operator triggers authoritative reload
+    // 9. Authoritative reload clears ambiguity and resets tracker identity only after accepting server state.
     await user.click(screen.getByRole("button", { name: /Recargar desde servidor/i }));
     const reloadDialog = screen.getByRole("dialog", { name: "Recargar versión del servidor" });
     await user.click(within(reloadDialog).getByRole("button", { name: "Recargar servidor" }));
@@ -1058,7 +1089,7 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
     expect(mocks.refresh).toHaveBeenCalled();
 
     // Rerender accepts authoritative state from server
-    rerender(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} />);
+    rerender(<StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} canPublish={true} />);
 
     // Tracker identity was reset; subsequent publish generates a fresh mutationRequestId
     mocks.publishStory.mockResolvedValueOnce(successfulPublish());
@@ -1071,12 +1102,101 @@ describe("GP-026 CHK4 Publish baseline & mutation safety", () => {
     });
     expect(mocks.publishStory.mock.calls[2]![0].mutationRequestId).not.toBe(firstRequestId);
   });
+
+  it("persists ambiguousUnpublish across local edits, blocks competing durable mutations, reuses exact mutationRequestId on retry, and resolves on authoritative reload (Blocker A & Section 4)", async () => {
+    const user = userEvent.setup();
+    mocks.unpublishStory.mockResolvedValueOnce({
+      success: false,
+      code: "UNKNOWN_ERROR",
+      error: "Timeout while unpublishing",
+    });
+
+    const { rerender } = render(
+      <StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} canPublish={true} />
+    );
+
+    const publishBtn = screen.getByTestId("story-publish-button");
+    const saveBtn = screen.getByTestId("story-save-draft");
+    const discardBtn = screen.getByTestId("story-discard-draft");
+    const unpublishBtn = screen.getByTestId("story-unpublish-button");
+
+    await user.click(unpublishBtn);
+    const dialog = screen.getByRole("dialog", { name: "Despublicar historia" });
+    await user.click(within(dialog).getByRole("button", { name: "Despublicar historia" }));
+
+    // 1. Unpublish returns UNKNOWN_ERROR.
+    // 2. ambiguousUnpublish becomes active.
+    await waitFor(() => {
+      expect(
+        screen.getByText(/No se pudo confirmar el resultado de la despublicación/i)
+      ).toBeTruthy();
+    });
+
+    const firstRequestId = mocks.unpublishStory.mock.calls[0]![0].mutationRequestId;
+
+    // 3. Save/Discard/new Publish remain blocked.
+    expect(saveBtn.hasAttribute("disabled")).toBe(true);
+    expect(discardBtn.hasAttribute("disabled")).toBe(true);
+    expect(publishBtn.hasAttribute("disabled")).toBe(true);
+
+    // 4. Edit a Story field.
+    const titleInput = screen.getByDisplayValue("Rendimiento");
+    await user.type(titleInput, " Actualizado");
+
+    // 5. ambiguousUnpublish REMAINS active.
+    expect(
+      screen.getByText(/No se pudo confirmar el resultado de la despublicación/i)
+    ).toBeTruthy();
+
+    // 6. Save/Discard/new competing publication remain blocked.
+    expect(saveBtn.hasAttribute("disabled")).toBe(true);
+    expect(discardBtn.hasAttribute("disabled")).toBe(true);
+    expect(publishBtn.hasAttribute("disabled")).toBe(true);
+
+    // 7. "Reintentar despublicación" remains available.
+    expect(unpublishBtn.hasAttribute("disabled")).toBe(false);
+    expect(unpublishBtn.textContent).toContain("Reintentar despublicación");
+
+    // 8. Retry uses EXACT SAME mutationRequestId.
+    mocks.unpublishStory.mockResolvedValueOnce({
+      success: false,
+      code: "UNKNOWN_ERROR",
+      error: "Second timeout",
+    });
+    await user.click(unpublishBtn);
+
+    await waitFor(() => {
+      expect(mocks.unpublishStory).toHaveBeenCalledTimes(2);
+    });
+    expect(mocks.unpublishStory.mock.calls[1]![0].mutationRequestId).toBe(firstRequestId);
+
+    // 9. Authoritative reload clears ambiguity and resets tracker identity only after accepting server state.
+    await user.click(screen.getByRole("button", { name: /Recargar desde servidor/i }));
+    const reloadDialog = screen.getByRole("dialog", { name: "Recargar versión del servidor" });
+    await user.click(within(reloadDialog).getByRole("button", { name: "Recargar servidor" }));
+
+    expect(mocks.refresh).toHaveBeenCalled();
+
+    // Rerender accepts authoritative state from server
+    rerender(<StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} canPublish={true} />);
+
+    // Tracker identity was reset; subsequent unpublish generates a fresh mutationRequestId
+    mocks.unpublishStory.mockResolvedValueOnce(successfulUnpublish());
+    await user.click(screen.getByTestId("story-unpublish-button"));
+    const nextDialog = screen.getByRole("dialog", { name: "Despublicar historia" });
+    await user.click(within(nextDialog).getByRole("button", { name: "Despublicar historia" }));
+
+    await waitFor(() => {
+      expect(mocks.unpublishStory).toHaveBeenCalledTimes(3);
+    });
+    expect(mocks.unpublishStory.mock.calls[2]![0].mutationRequestId).not.toBe(firstRequestId);
+  });
 });
 
 describe("GP-026 CHK4 Unpublish state preservation (Amendments 1, 3, 14)", () => {
   it("CASE A: DRAFT_OVER_PUBLISHED preserves draft, baseline, local document, and dirty state exactly (Amendment 14A)", async () => {
     const user = userEvent.setup();
-    render(<StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} />);
+    render(<StoryBuilder initialStory={makeStory("DRAFT_OVER_PUBLISHED")} canPublish={true} />);
 
     await user.click(screen.getAllByRole("button", { name: /Duplicar/i })[0]!);
     expect(screen.getByTestId("story-dirty-state").textContent).toContain("Cambios sin guardar");
@@ -1111,7 +1231,7 @@ describe("GP-026 CHK4 Unpublish state preservation (Amendments 1, 3, 14)", () =>
 
   it("CASE B: PUBLISHED_ONLY preserves document, clears baseline to empty, sets dirty = true, and subsequent Save creates a new draft (Amendment 14B)", async () => {
     const user = userEvent.setup();
-    render(<StoryBuilder initialStory={makeStory("PUBLISHED_ONLY")} />);
+    render(<StoryBuilder initialStory={makeStory("PUBLISHED_ONLY")} canPublish={true} />);
 
     expect(screen.getByTestId("story-lifecycle-status").textContent).toContain("Publicada r3");
     expect(screen.getByTestId("story-dirty-state").textContent).toContain(
@@ -1164,7 +1284,7 @@ describe("GP-026 CHK4 Confirmation dialog in-flight safety (Amendment 9)", () =>
       })
     );
 
-    render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} />);
+    render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY")} canPublish={true} />);
     await user.click(screen.getByTestId("story-publish-button"));
     const dialog = screen.getByRole("dialog", { name: "Publicar historia" });
     const confirmBtn = within(dialog).getByRole("button", { name: "Publicar historia" });
@@ -1192,7 +1312,7 @@ describe("GP-026 CHK4 Confirmation dialog in-flight safety (Amendment 9)", () =>
       })
     );
 
-    render(<StoryBuilder initialStory={makeStory("PUBLISHED_ONLY")} />);
+    render(<StoryBuilder initialStory={makeStory("PUBLISHED_ONLY")} canPublish={true} />);
     await user.click(screen.getByTestId("story-unpublish-button"));
     const dialog = screen.getByRole("dialog", { name: "Despublicar historia" });
     const confirmBtn = within(dialog).getByRole("button", { name: "Despublicar historia" });
