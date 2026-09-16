@@ -41,12 +41,12 @@ CHK3 delivered:
   - client-only helper IDs stripped before canonical validation and persistence.
 - Media picker dialog (`MediaPickerDialog`):
   - accessible modal dialog with focus trapping and return-focus;
-  - search filter by asset file name or alt text;
-  - strict media type filtering (`IMAGE` excludes videos, `VIDEO` excludes images);
+  - search/filter by alt text or variant title;
+  - strict media-type filtering remains authoritative (`IMAGE` excludes videos, `VIDEO` excludes images);
   - variant attribution context rendered truthfully;
   - `ProductMedia.id` used strictly as browser authoring identity.
 - Related products picker dialog (`RelatedProductPickerDialog`):
-  - accessible modal dialog with server search via `searchAdminRelatedProductsAction`;
+  - accessible modal dialog with server search via `searchStoryRelatedProductsAction`;
   - active product excluded (no self-reference);
   - already-selected products disabled (`ya está seleccionado`);
   - public eligibility badge rendered truthfully.
