@@ -1192,3 +1192,39 @@ export function classifyStoryActionResult(result: unknown): StoryActionResultDis
 
   return "AMBIGUOUS_FAILURE";
 }
+
+/**
+ * Resolves exact field validation error for a block from canonical StoryValidationIssue[].
+ * Prevents broad substring matching leaks (e.g. items[0].title matching top-level title).
+ */
+export function getExactFieldIssue(
+  issues: readonly StoryValidationIssue[] | undefined,
+  relativePayloadPath: string
+): string | undefined {
+  if (!issues || issues.length === 0) return undefined;
+
+  let normalizedPath: string;
+  const trimmed = relativePayloadPath.trim();
+  if (trimmed === "" || trimmed === "payload") {
+    normalizedPath = ".payload";
+  } else if (trimmed.startsWith(".payload.")) {
+    normalizedPath = trimmed;
+  } else if (trimmed.startsWith("payload.")) {
+    normalizedPath = `.${trimmed}`;
+  } else if (trimmed.startsWith(".")) {
+    normalizedPath = `.payload${trimmed}`;
+  } else {
+    normalizedPath = `.payload.${trimmed}`;
+  }
+
+  for (const issue of issues) {
+    if (issue.path.endsWith(normalizedPath)) {
+      const prefix = issue.path.slice(0, -normalizedPath.length);
+      if (prefix === "" || /^blocks\[\d+\]$/.test(prefix)) {
+        return issue.message;
+      }
+    }
+  }
+
+  return undefined;
+}

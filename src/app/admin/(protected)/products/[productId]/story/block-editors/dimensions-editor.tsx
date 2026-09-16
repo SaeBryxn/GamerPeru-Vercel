@@ -2,7 +2,10 @@
 
 import React, { useRef } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import type { EditorDimensionsPayload } from "@/lib/admin/catalog/story-builder-model";
+import {
+  getExactFieldIssue,
+  type EditorDimensionsPayload,
+} from "@/lib/admin/catalog/story-builder-model";
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
 import type { StoryValidationIssue } from "@/lib/admin/catalog/story-validation";
 import { EditorField, MediaField } from "./editor-field";
@@ -36,7 +39,7 @@ export function DimensionsEditor({
 }: DimensionsEditorProps) {
   const addGripButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const getIssue = (fieldPath: string) => issues.find((i) => i.path.includes(fieldPath))?.message;
+  const getIssue = (fieldPath: string) => getExactFieldIssue(issues, fieldPath);
 
   function addGripType() {
     if (payload.gripTypes.length >= 10) return;
@@ -83,13 +86,13 @@ export function DimensionsEditor({
         Este bloque requiere al menos un plano, una medida numérica o un tipo de agarre.
       </p>
 
-      {getIssue("blocks[") &&
+      {getIssue("payload") &&
         !getIssue("lengthMm") &&
         !getIssue("widthMm") &&
         !getIssue("heightMm") &&
         !getIssue("blueprintMediaId") && (
           <p className={styles.fieldError} role="alert">
-            {getIssue("blocks[")}
+            {getIssue("payload")}
           </p>
         )}
 

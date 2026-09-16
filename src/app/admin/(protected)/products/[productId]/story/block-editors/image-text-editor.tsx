@@ -1,7 +1,10 @@
 "use client";
 
 import React from "react";
-import type { EditorImageTextPayload } from "@/lib/admin/catalog/story-builder-model";
+import {
+  getExactFieldIssue,
+  type EditorImageTextPayload,
+} from "@/lib/admin/catalog/story-builder-model";
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
 import type { StoryValidationIssue } from "@/lib/admin/catalog/story-validation";
 import { EditorField, MediaField } from "./editor-field";
@@ -31,8 +34,7 @@ export function ImageTextEditor({
   onChange,
   onOpenMediaPicker,
 }: ImageTextEditorProps) {
-  const getIssue = (field: string) =>
-    issues.find((i) => i.path.endsWith(`.${field}`) || i.path.endsWith(`[${field}]`))?.message;
+  const getIssue = (field: string) => getExactFieldIssue(issues, field);
 
   return (
     <div className={styles.editorFieldsStack} data-testid={`editor-image-text-${blockId}`}>

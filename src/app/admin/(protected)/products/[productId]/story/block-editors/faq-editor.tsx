@@ -2,7 +2,7 @@
 
 import React, { useRef } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import type { EditorFaqPayload } from "@/lib/admin/catalog/story-builder-model";
+import { getExactFieldIssue, type EditorFaqPayload } from "@/lib/admin/catalog/story-builder-model";
 import type { StoryValidationIssue } from "@/lib/admin/catalog/story-validation";
 import { EditorField } from "./editor-field";
 import styles from "../story-builder.module.css";
@@ -24,7 +24,7 @@ export function FaqEditor({
 }: FaqEditorProps) {
   const addButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const getIssue = (fieldPath: string) => issues.find((i) => i.path.includes(fieldPath))?.message;
+  const getIssue = (fieldPath: string) => getExactFieldIssue(issues, fieldPath);
 
   function addItem() {
     if (payload.items.length >= 15) return;

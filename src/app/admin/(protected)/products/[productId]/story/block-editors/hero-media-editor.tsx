@@ -1,7 +1,10 @@
 "use client";
 
 import React from "react";
-import type { EditorHeroMediaPayload } from "@/lib/admin/catalog/story-builder-model";
+import {
+  getExactFieldIssue,
+  type EditorHeroMediaPayload,
+} from "@/lib/admin/catalog/story-builder-model";
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
 import type { StoryValidationIssue } from "@/lib/admin/catalog/story-validation";
 import { EditorField, MediaField } from "./editor-field";
@@ -31,8 +34,7 @@ export function HeroMediaEditor({
   onChange,
   onOpenMediaPicker,
 }: HeroMediaEditorProps) {
-  const getIssue = (field: string) =>
-    issues.find((i) => i.path.endsWith(`.${field}`) || i.path.endsWith(`[${field}]`))?.message;
+  const getIssue = (field: string) => getExactFieldIssue(issues, field);
 
   return (
     <div className={styles.editorFieldsStack} data-testid={`editor-hero-media-${blockId}`}>

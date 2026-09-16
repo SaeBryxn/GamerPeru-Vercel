@@ -762,3 +762,204 @@ describe("GP-026 CHK3 Individual Structured Block Editors", () => {
     );
   });
 });
+
+describe("GP-026 CHK3-BR1 Exact Field-Error Path Matching", () => {
+  it("BOX CONTENTS: maps items[0].title error only to item 1 title and not to optional block title", () => {
+    const issues = [
+      {
+        code: "invalid_string",
+        path: "blocks[0].payload.items[0].title",
+        message: "El nombre del accesorio no puede quedar vacío.",
+      },
+    ];
+
+    render(
+      <BoxContentsEditor
+        blockId="box-1"
+        payload={{
+          title: "",
+          items: [
+            { clientId: "item-0", title: "", mediaId: undefined, count: "" },
+            { clientId: "item-1", title: "Manual", mediaId: undefined, count: "" },
+          ],
+        }}
+        issues={issues}
+        selectableMedia={selectableMediaFixture}
+        onChange={vi.fn()}
+        onOpenMediaPicker={vi.fn()}
+      />
+    );
+
+    // Item 1 title displays the error
+    const item1Row = screen.getByTestId("box-item-row-box-1-0");
+    expect(
+      within(item1Row).getByText("El nombre del accesorio no puede quedar vacío.")
+    ).toBeTruthy();
+
+    // Block-level optional title does NOT display that error
+    const titleField = screen.getByLabelText(/Título del bloque/i);
+    expect(titleField.getAttribute("aria-invalid")).toBe("false");
+  });
+
+  it("TECHNICAL SPECS: maps groups[0].specs[0].value error only to that exact spec value, not group name or title", () => {
+    const issues = [
+      {
+        code: "invalid_string",
+        path: "blocks[0].payload.groups[0].specs[0].value",
+        message: "El valor de la especificación es obligatorio.",
+      },
+    ];
+
+    render(
+      <TechnicalSpecsEditor
+        blockId="tech-1"
+        payload={{
+          title: "Especificaciones Técnicas",
+          groups: [
+            {
+              clientId: "grp-0",
+              groupName: "Sensor",
+              specs: [{ clientId: "spec-0", label: "DPI", value: "" }],
+            },
+          ],
+        }}
+        issues={issues}
+        onChange={vi.fn()}
+      />
+    );
+
+    // Exact spec value shows error
+    const specRow = screen.getByTestId("spec-item-tech-1-0-0");
+    expect(within(specRow).getByText("El valor de la especificación es obligatorio.")).toBeTruthy();
+
+    // Group name and block title do not
+    const groupNameInput = screen.getByLabelText(/Nombre del grupo 1/i);
+    expect(groupNameInput.getAttribute("aria-invalid")).toBe("false");
+    const titleInput = screen.getByLabelText(/Título del bloque/i);
+    expect(titleInput.getAttribute("aria-invalid")).toBe("false");
+  });
+
+  it("FAQ: maps items[1].answer error only to FAQ item 2 answer", () => {
+    const issues = [
+      {
+        code: "invalid_string",
+        path: "blocks[0].payload.items[1].answer",
+        message: "La respuesta es obligatoria.",
+      },
+    ];
+
+    render(
+      <FaqEditor
+        blockId="faq-1"
+        payload={{
+          title: "Preguntas Frecuentes",
+          items: [
+            { clientId: "faq-0", question: "¿Tiene garantía?", answer: "Sí, 12 meses." },
+            { clientId: "faq-1", question: "¿Es compatible con Mac?", answer: "" },
+          ],
+        }}
+        issues={issues}
+        onChange={vi.fn()}
+      />
+    );
+
+    const faqRow0 = screen.getByTestId("faq-item-row-faq-1-0");
+    const faqRow1 = screen.getByTestId("faq-item-row-faq-1-1");
+
+    // Only item 2 answer is invalid
+    expect(within(faqRow0).queryByText("La respuesta es obligatoria.")).toBeNull();
+    expect(within(faqRow1).getByText("La respuesta es obligatoria.")).toBeTruthy();
+  });
+
+  it("MEDIA: maps gallery items[2].mediaId error only to gallery item 3 media field", () => {
+    const issues = [
+      {
+        code: "invalid_string",
+        path: "blocks[0].payload.items[2].mediaId",
+        message: "Debes seleccionar una imagen para este elemento de galería.",
+      },
+    ];
+
+    render(
+      <GalleryEditor
+        blockId="gal-1"
+        payload={{
+          title: "Galería de fotos",
+          items: [
+            { clientId: "g-0", mediaId: MEDIA_IMAGE_ID, altText: "", caption: "" },
+            { clientId: "g-1", mediaId: MEDIA_IMAGE_ID, altText: "", caption: "" },
+            { clientId: "g-2", mediaId: undefined, altText: "", caption: "" },
+          ],
+        }}
+        issues={issues}
+        selectableMedia={selectableMediaFixture}
+        onChange={vi.fn()}
+        onOpenMediaPicker={vi.fn()}
+      />
+    );
+
+    const row0 = screen.getByTestId("gallery-row-gal-1-0");
+    const row1 = screen.getByTestId("gallery-row-gal-1-1");
+    const row2 = screen.getByTestId("gallery-row-gal-1-2");
+
+    expect(
+      within(row0).queryByText("Debes seleccionar una imagen para este elemento de galería.")
+    ).toBeNull();
+    expect(
+      within(row1).queryByText("Debes seleccionar una imagen para este elemento de galería.")
+    ).toBeNull();
+    expect(
+      within(row2).getByText("Debes seleccionar una imagen para este elemento de galería.")
+    ).toBeTruthy();
+  });
+
+  it("COMPARISON: targets headers, cells, and row errors deterministically", () => {
+    const issues = [
+      {
+        code: "custom",
+        path: "blocks[0].payload.headers[1]",
+        message: "El encabezado de la columna 2 no puede estar vacío.",
+      },
+      {
+        code: "custom",
+        path: "blocks[0].payload.rows[0][0]",
+        message: "La celda [0, 0] no puede estar vacía.",
+      },
+      {
+        code: "custom",
+        path: "blocks[0].payload.rows[1]",
+        message: "La fila 2 tiene un error de cantidad de celdas.",
+      },
+    ];
+
+    render(
+      <ComparisonEditor
+        blockId="comp-1"
+        payload={{
+          title: "Comparativa",
+          headers: ["Modelo A", ""],
+          rows: [
+            { clientId: "r-0", cells: ["", "Valor B1"] },
+            { clientId: "r-1", cells: ["Valor A2", "Valor B2"] },
+          ],
+        }}
+        issues={issues}
+        onChange={vi.fn()}
+      />
+    );
+
+    // Header 1 has no error, Header 2 has error
+    const headerInput1 = screen.getByLabelText(/^Columna 1\s*\*/i);
+    const headerInput2 = screen.getByLabelText(/^Columna 2\s*\*/i);
+    expect(headerInput1.getAttribute("aria-invalid")).toBe("false");
+    expect(headerInput2.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByText("El encabezado de la columna 2 no puede estar vacío.")).toBeTruthy();
+
+    // Cell [0, 0] has error
+    expect(screen.getByText("La celda [0, 0] no puede estar vacía.")).toBeTruthy();
+
+    // Row 1 has row-level error
+    const row1 = screen.getByTestId("comparison-row-comp-1-1");
+    expect(within(row1).getByText("La fila 2 tiene un error de cantidad de celdas.")).toBeTruthy();
+  });
+});

@@ -2,7 +2,10 @@
 
 import React from "react";
 import { AlertCircle } from "lucide-react";
-import type { EditorVideoPayload } from "@/lib/admin/catalog/story-builder-model";
+import {
+  getExactFieldIssue,
+  type EditorVideoPayload,
+} from "@/lib/admin/catalog/story-builder-model";
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
 import type { StoryValidationIssue } from "@/lib/admin/catalog/story-validation";
 import { EditorField, MediaField } from "./editor-field";
@@ -32,8 +35,7 @@ export function VideoEditor({
   onChange,
   onOpenMediaPicker,
 }: VideoEditorProps) {
-  const getIssue = (field: string) =>
-    issues.find((i) => i.path.endsWith(`.${field}`) || i.path.endsWith(`[${field}]`))?.message;
+  const getIssue = (field: string) => getExactFieldIssue(issues, field);
 
   const hasAttachedVideos = selectableMedia.some((m) => m.mediaType === "VIDEO");
 

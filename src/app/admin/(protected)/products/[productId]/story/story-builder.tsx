@@ -245,6 +245,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
   const [ambiguousSave, setAmbiguousSave] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null);
+  const [validationActive, setValidationActive] = useState(false);
 
   // Trackers and refs
   const saveTracker = useRef(new MutationRequestTracker());
@@ -279,8 +280,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     isSaving ||
     isDiscarding ||
     document.length > STORY_BUILDER_MAX_BLOCKS ||
-    (!dirty && !canSaveWithoutChanges) ||
-    incompleteCount > 0;
+    (!dirty && !canSaveWithoutChanges);
 
   useEffect(() => {
     setDocument(createEditorDocument(initialStory.initialDocument));
@@ -295,6 +295,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     setErrorMessage(null);
     setFieldErrors([]);
     setValidationIssues([]);
+    setValidationActive(false);
   }, [initialStory]);
 
   useEffect(() => {
@@ -407,7 +408,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
         window.document.getElementById(targetId) ??
         (blockId ? window.document.getElementById(`story-block-${blockId}`) : null);
       el?.focus();
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.scrollIntoView?.({ behavior: "smooth", block: "center" });
     }, 30);
   }
 
@@ -479,9 +480,15 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     clearFeedbackForEdit();
 
     // If validation summary is currently active, update errors live
-    if (validationIssues.length > 0) {
+    if (validationActive || validationIssues.length > 0) {
       const res = normalizeEditorStoryDocument(next);
-      setValidationIssues(res.issues);
+      if (res.success) {
+        setValidationActive(false);
+        setValidationIssues([]);
+        setErrorMessage(null);
+      } else {
+        setValidationIssues(res.issues);
+      }
     }
   }
 
@@ -489,6 +496,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     // 1. Convert local editable state to canonical candidate and validate
     const normResult = normalizeEditorStoryDocument(document);
     if (!normResult.success || normResult.document === null) {
+      setValidationActive(true);
       setValidationIssues(normResult.issues);
       setErrorMessage("Corrige los errores señalados en la historia antes de guardar.");
       if (normResult.issues.length > 0) {
@@ -502,13 +510,14 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
             window.document.getElementById(targetId) ??
             (blockId ? window.document.getElementById(`story-block-${blockId}`) : null);
           el?.focus();
-          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          el?.scrollIntoView?.({ behavior: "smooth", block: "center" });
         }, 30);
       }
       return;
     }
 
     // 2. Canonical normalized document
+    setValidationActive(false);
     setValidationIssues([]);
     const validDocument = normResult.document;
     const payload = {
@@ -658,6 +667,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
       case "RESET_LOCAL":
         setDocument(createEditorDocument(savedBaseline));
         setValidationIssues([]);
+        setValidationActive(false);
         clearFeedbackForEdit();
         setStaleConflict(false);
         setPendingConfirmation(null);

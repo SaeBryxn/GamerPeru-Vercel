@@ -2,7 +2,10 @@
 
 import React, { useRef } from "react";
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, Plus, Trash2 } from "lucide-react";
-import type { EditorRelatedProductsPayload } from "@/lib/admin/catalog/story-builder-model";
+import {
+  getExactFieldIssue,
+  type EditorRelatedProductsPayload,
+} from "@/lib/admin/catalog/story-builder-model";
 import type { AdminStoryRelatedProductOption } from "@/lib/admin/catalog/story-reader";
 import type { StoryValidationIssue } from "@/lib/admin/catalog/story-validation";
 import { EditorField } from "./editor-field";
@@ -29,7 +32,7 @@ export function RelatedProductsEditor({
 }: RelatedProductsEditorProps) {
   const addProductTriggerRef = useRef<HTMLButtonElement | null>(null);
 
-  const getIssue = (fieldPath: string) => issues.find((i) => i.path.includes(fieldPath))?.message;
+  const getIssue = (fieldPath: string) => getExactFieldIssue(issues, fieldPath);
 
   function removeProduct(index: number) {
     const nextIds = payload.productIds.filter((_, i) => i !== index);

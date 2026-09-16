@@ -230,7 +230,7 @@ describe("GP-026 CHK2 Story Builder component", () => {
     expect(screen.getByTestId("story-lifecycle-status").textContent).toBe(expected);
   });
 
-  it("adds an incomplete shell, marks dirty, blocks save, and focuses the new card", async () => {
+  it("adds an incomplete shell, marks dirty, keeps save operable, and focuses the new card", async () => {
     render(<StoryBuilder initialStory={makeStory("NO_STORY")} />);
     await addIncompleteBlock();
 
@@ -239,7 +239,123 @@ describe("GP-026 CHK2 Story Builder component", () => {
     expect(document.activeElement).toBe(card);
     expect(screen.getByText("Configuración pendiente")).toBeTruthy();
     expect(screen.getByTestId("story-dirty-state").textContent).toBe("Cambios sin guardar");
+    expect(screen.getByTestId("story-save-draft").hasAttribute("disabled")).toBe(false);
+  });
+
+  it("A. INVALID NEW BLOCK: keeps Save operable, performs local validation without Server Action, shows ValidationSummary and inline error, and focuses the first invalid field", async () => {
+    const user = userEvent.setup();
+    render(<StoryBuilder initialStory={makeStory("NO_STORY")} />);
+    await addIncompleteBlock("Portada multimedia");
+
+    // Save button remains operable
+    const saveBtn = screen.getByTestId("story-save-draft");
+    expect(saveBtn.hasAttribute("disabled")).toBe(false);
+
+    // Clicking Save calls ZERO Server Actions
+    await user.click(saveBtn);
+    expect(mocks.saveDraft).not.toHaveBeenCalled();
+
+    // ValidationSummary appears
+    expect(screen.getByTestId("story-validation-summary")).toBeTruthy();
+
+    // Inline field error appears
+    expect(screen.getByText("El texto no puede quedar vacío.")).toBeTruthy();
+
+    // First invalid field receives focus
+    const headlineInput = screen.getByLabelText(/Encabezado/i);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(headlineInput);
+    });
+  });
+
+  it("B. CORRECTING THE BLOCK: clears errors live and allows valid normalized submission", async () => {
+    const user = userEvent.setup();
+    render(<StoryBuilder initialStory={makeStory("NO_STORY")} />);
+    await addIncompleteBlock("Portada multimedia");
+
+    // Click save while invalid -> validation issues activated
+    await user.click(screen.getByTestId("story-save-draft"));
+    expect(screen.getByTestId("story-validation-summary")).toBeTruthy();
+    expect(screen.getByText("El texto no puede quedar vacío.")).toBeTruthy();
+
+    // Correct the invalid field
+    const headlineInput = screen.getByLabelText(/Encabezado/i);
+    fireEvent.change(headlineInput, { target: { value: "Pro Wireless Precision" } });
+
+    // Errors update/clear live
+    expect(screen.queryByTestId("story-validation-summary")).toBeNull();
+    expect(screen.queryByText("El texto no puede quedar vacío.")).toBeNull();
+
+    // Save becomes capable of submitting
+    await user.click(screen.getByTestId("story-save-draft"));
+    await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(1));
+
+    // Normalized valid document reaches saveProductStoryDraftAction
+    const saveCall = mocks.saveDraft.mock.calls[0]?.[0];
+    expect(saveCall.document[0].type).toBe("hero_media");
+    expect(saveCall.document[0].payload.headline).toBe("Pro Wireless Precision");
+  });
+
+  it("C. INVALID EXISTING BLOCK: marks dirty, retains invalid value, blocks save until valid value restored", async () => {
+    const user = userEvent.setup();
+    render(<StoryBuilder initialStory={makeStory("DRAFT_ONLY", validDocument)} />);
+
+    // Initially clean
     expect(screen.getByTestId("story-save-draft").hasAttribute("disabled")).toBe(true);
+
+    // Make one required field invalid: clear stat value
+    const statValueInput = screen.getByDisplayValue("26K");
+    fireEvent.change(statValueInput, { target: { value: "" } });
+
+    // Dirty true
+    expect(screen.getByTestId("story-dirty-state").textContent).toBe("Cambios sin guardar");
+
+    // Raw invalid local value remains visible
+    expect((statValueInput as HTMLInputElement).value).toBe("");
+
+    // Save button is operable (not disabled merely because invalid)
+    expect(screen.getByTestId("story-save-draft").hasAttribute("disabled")).toBe(false);
+
+    // Save performs local validation only, durable action is not called
+    await user.click(screen.getByTestId("story-save-draft"));
+    expect(mocks.saveDraft).not.toHaveBeenCalled();
+    expect(screen.getByTestId("story-validation-summary")).toBeTruthy();
+
+    // Restoring a valid value clears error and allows Save
+    fireEvent.change(statValueInput, { target: { value: "32K" } });
+    expect(screen.queryByTestId("story-validation-summary")).toBeNull();
+
+    await user.click(screen.getByTestId("story-save-draft"));
+    await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(1));
+    expect(mocks.saveDraft.mock.calls[0]?.[0].document[0].payload.stats[0].value).toBe("32K");
+  });
+
+  it("D. COLLAPSED INVALID BLOCK: expanding from ValidationSummary entry focuses the exact invalid field", async () => {
+    const user = userEvent.setup();
+    render(<StoryBuilder initialStory={makeStory("NO_STORY")} />);
+    await addIncompleteBlock("Portada multimedia");
+
+    // Block is currently expanded; collapse it
+    const collapseBtn = screen.getByRole("button", { name: /Colapsar bloque 1/i });
+    await user.click(collapseBtn);
+    expect(collapseBtn.getAttribute("aria-expanded")).toBe("false");
+
+    // Activate Save to trigger validation
+    await user.click(screen.getByTestId("story-save-draft"));
+    expect(screen.getByTestId("story-validation-summary")).toBeTruthy();
+
+    // Activating the ValidationSummary entry expands the block and focuses the field
+    const issueBtn = screen.getByTestId("validation-issue-0");
+    await user.click(issueBtn);
+
+    await waitFor(() => {
+      expect(collapseBtn.getAttribute("aria-expanded")).toBe("true");
+    });
+
+    const headlineInput = screen.getByLabelText(/Encabezado/i);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(headlineInput);
+    });
   });
 
   it("enforces the 30-block shell bound", () => {

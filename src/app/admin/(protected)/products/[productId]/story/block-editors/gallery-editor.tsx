@@ -2,7 +2,10 @@
 
 import React, { useRef } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import type { EditorGalleryPayload } from "@/lib/admin/catalog/story-builder-model";
+import {
+  getExactFieldIssue,
+  type EditorGalleryPayload,
+} from "@/lib/admin/catalog/story-builder-model";
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
 import type { StoryValidationIssue } from "@/lib/admin/catalog/story-validation";
 import { EditorField, MediaField } from "./editor-field";
@@ -36,7 +39,7 @@ export function GalleryEditor({
 }: GalleryEditorProps) {
   const addButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const getIssue = (fieldPath: string) => issues.find((i) => i.path.includes(fieldPath))?.message;
+  const getIssue = (fieldPath: string) => getExactFieldIssue(issues, fieldPath);
 
   function addItem() {
     if (payload.items.length >= 6) return;
