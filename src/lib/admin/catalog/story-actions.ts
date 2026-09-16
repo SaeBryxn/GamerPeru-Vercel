@@ -21,6 +21,7 @@ import {
   type StoryPointerMutationInput,
 } from "./story-service";
 import { StoryValidationError, type StoryValidationIssue } from "./story-validation";
+import { searchStoryRelatedProducts, type AdminStoryRelatedProductOption } from "./story-reader";
 
 export interface StoryActionResult<T = unknown> {
   success: boolean;
@@ -187,4 +188,56 @@ export async function unpublishProductStoryAction(
   input: StoryPointerMutationInput
 ): Promise<StoryActionResult<StoryMutationResult>> {
   return runStoryAction("catalog:publish", input, unpublishProductStory, true);
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export async function searchStoryRelatedProductsAction(
+  productIdOrInput: string | { productId: string; query: string },
+  queryParam?: string
+): Promise<StoryActionResult<AdminStoryRelatedProductOption[]>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
+    return unauthorizedResult(authContext.status) as unknown as StoryActionResult<
+      AdminStoryRelatedProductOption[]
+    >;
+  }
+  if (!authContext.permissions.has("catalog:manage")) {
+    return forbiddenResult() as unknown as StoryActionResult<AdminStoryRelatedProductOption[]>;
+  }
+
+  const productId =
+    typeof productIdOrInput === "string" ? productIdOrInput : productIdOrInput?.productId;
+  const rawQuery =
+    typeof productIdOrInput === "string" ? (queryParam ?? "") : (productIdOrInput?.query ?? "");
+
+  if (typeof productId !== "string" || !UUID_REGEX.test(productId)) {
+    return {
+      success: false,
+      error: "Identificador de producto inválido.",
+      code: "STORY_INVALID_REQUEST",
+    };
+  }
+
+  const trimmedQuery = typeof rawQuery === "string" ? rawQuery.trim().slice(0, 100) : "";
+
+  try {
+    const results = await searchStoryRelatedProducts(productId, trimmedQuery, {
+      authContext,
+    });
+    return { success: true, data: results };
+  } catch (error) {
+    if (error instanceof CatalogDomainError) {
+      return {
+        success: false,
+        error: error.message,
+        code: error.code,
+      };
+    }
+    return {
+      success: false,
+      error: "Ocurrió un error inesperado al buscar productos relacionados.",
+      code: "UNKNOWN_ERROR",
+    };
+  }
 }

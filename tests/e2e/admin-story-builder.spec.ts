@@ -221,4 +221,67 @@ test.describe("GP-026 CHK2 — Admin Product Story Builder", () => {
     `;
     expect(aggregateRows[0]!.draft_revision_id).toBeNull();
   });
+
+  test("authors structured block editors, selects media from accessible picker, collapses/expands cards and saves", async ({
+    page,
+  }) => {
+    await clearStory();
+    await loginAndNavigateTo(page, ADMIN_E2E_USERS.catalog.email, storyPath);
+
+    await page.getByRole("button", { name: "Agregar primer bloque" }).click();
+    const chooser = page.getByRole("dialog", { name: "Agregar bloque" });
+    await chooser.getByRole("button", { name: /Imagen y texto/i }).click();
+
+    const card = page.locator('[data-testid^="story-block-"][data-block-id]').first();
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("Configuración pendiente");
+
+    // Fill headline
+    await card.getByLabel(/Encabezado/i).fill("Sensor Óptico Avanzado");
+    // Fill body
+    await card
+      .getByLabel(/Cuerpo editorial/i)
+      .fill("Diseñado para un rastreo preciso de hasta 26,000 DPI.");
+
+    // Open media picker
+    await card.getByRole("button", { name: /Seleccionar imagen/i }).click();
+    const mediaDialog = page.getByRole("dialog", { name: "Seleccionar imagen" });
+    await expect(mediaDialog).toBeVisible();
+    await expect(mediaDialog.getByRole("listbox")).toBeVisible();
+
+    // Select the first image option
+    const firstOption = mediaDialog.getByRole("option").first();
+    await firstOption.click();
+    await expect(mediaDialog).toBeHidden();
+
+    // Card should now be complete
+    await expect(card).toContainText("Contenido guardado");
+
+    // Collapse card
+    await card.getByRole("button", { name: /Colapsar bloque 1/i }).click();
+    await expect(card.locator('input[id*="headline"]')).toBeHidden();
+
+    // Expand card
+    await card.getByRole("button", { name: /Expandir bloque 1/i }).click();
+    await expect(card.locator('input[id*="headline"]')).toBeVisible();
+
+    // Save draft
+    await page.getByTestId("story-save-draft").click();
+    await expect(page.getByTestId("story-success")).toContainText("Borrador r1 guardado");
+
+    // Verify persisted block in database
+    const saved = await sql`
+      SELECT revisions.blocks
+      FROM product_stories AS stories
+      INNER JOIN product_story_revisions AS revisions ON revisions.id = stories.draft_revision_id
+      WHERE stories.product_id = ${product.id};
+    `;
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.blocks).toHaveLength(1);
+    expect(saved[0]!.blocks[0].type).toBe("image_text");
+    expect(saved[0]!.blocks[0].payload.headline).toBe("Sensor Óptico Avanzado");
+    expect(saved[0]!.blocks[0].payload.body).toBe(
+      "Diseñado para un rastreo preciso de hasta 26,000 DPI."
+    );
+  });
 });

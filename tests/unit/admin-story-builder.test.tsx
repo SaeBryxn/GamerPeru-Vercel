@@ -92,6 +92,7 @@ function makeStory(
     initialDocument: lifecycle === "NO_STORY" ? [] : structuredClone(document),
     initialDocumentSource: hasDraft ? "DRAFT" : hasPublished ? "PUBLISHED" : "EMPTY",
     selectableMedia: [],
+    initialRelatedProducts: [],
     concurrency: {
       expectedDraftRevisionId: hasDraft ? DRAFT_ID : null,
       expectedPublishedRevisionId: hasPublished ? PUBLISHED_ID : null,
@@ -264,16 +265,18 @@ describe("GP-026 CHK2 Story Builder component", () => {
     expect(cards[1]!.getAttribute("data-block-id")).not.toBe(originalId);
     expect(
       within(cards[0]!)
-        .getByRole("button", { name: /hacia arriba/i })
+        .getByRole("button", { name: /Mover Datos destacados hacia arriba/i })
         .hasAttribute("disabled")
     ).toBe(true);
     expect(
       within(cards[2]!)
-        .getByRole("button", { name: /hacia abajo/i })
+        .getByRole("button", { name: /Mover Preguntas frecuentes hacia abajo/i })
         .hasAttribute("disabled")
     ).toBe(true);
 
-    await user.click(within(cards[1]!).getByRole("button", { name: /hacia arriba/i }));
+    await user.click(
+      within(cards[1]!).getByRole("button", { name: /Mover Datos destacados hacia arriba/i })
+    );
     expect(screen.getAllByTestId(/^story-block-(?!list$)/)[0]!.getAttribute("data-block-id")).toBe(
       cards[1]!.getAttribute("data-block-id")
     );
@@ -404,7 +407,12 @@ describe("GP-026 CHK2 Story Builder component", () => {
     await user.click(screen.getAllByRole("button", { name: /Duplicar/i })[0]!);
     await user.click(screen.getByTestId("story-save-draft"));
     await waitFor(() => expect(screen.getByText(/conexión se interrumpió/i)).toBeTruthy());
-    await user.click(screen.getAllByRole("button", { name: /hacia arriba/i })[1]!);
+    const cardsAfterAmbiguous = screen.getAllByTestId(/^story-block-(?!list$)/);
+    await user.click(
+      within(cardsAfterAmbiguous[1]!).getByRole("button", {
+        name: /Mover Datos destacados hacia arriba/i,
+      })
+    );
     await user.click(screen.getByTestId("story-save-draft"));
     await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(2));
 
@@ -475,7 +483,12 @@ describe("GP-026 CHK2 Story Builder component", () => {
       expect(screen.getByRole("button", { name: "Reintentar guardado" })).toBeTruthy()
     );
 
-    await user.click(screen.getAllByRole("button", { name: /hacia arriba/i })[1]!);
+    const cardsAfterUnknown = screen.getAllByTestId(/^story-block-(?!list$)/);
+    await user.click(
+      within(cardsAfterUnknown[1]!).getByRole("button", {
+        name: /Mover Datos destacados hacia arriba/i,
+      })
+    );
     await user.click(screen.getByTestId("story-save-draft"));
     await waitFor(() => expect(mocks.saveDraft).toHaveBeenCalledTimes(2));
 
@@ -613,17 +626,20 @@ describe("GP-026 CHK2 Story Builder component", () => {
     const cards = screen.getAllByTestId(/^story-block-(?!list$)/);
     expect(
       within(cards[0]!)
-        .getByRole("button", { name: /hacia arriba/i })
+        .getByRole("button", { name: /Mover Datos destacados hacia arriba/i })
         .hasAttribute("disabled")
     ).toBe(true);
     expect(
       within(cards[1]!)
-        .getByRole("button", { name: /hacia abajo/i })
+        .getByRole("button", { name: /Mover Preguntas frecuentes hacia abajo/i })
         .hasAttribute("disabled")
     ).toBe(true);
-    fireEvent.keyDown(within(cards[0]!).getByRole("button", { name: /hacia arriba/i }), {
-      key: "Enter",
-    });
+    fireEvent.keyDown(
+      within(cards[0]!).getByRole("button", { name: /Mover Datos destacados hacia arriba/i }),
+      {
+        key: "Enter",
+      }
+    );
     expect(screen.getAllByTestId(/^story-block-(?!list$)/)[0]!.getAttribute("data-block-id")).toBe(
       FIRST_BLOCK_ID
     );

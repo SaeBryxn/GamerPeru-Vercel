@@ -9,6 +9,8 @@ import {
   ArrowLeft,
   ArrowUp,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Copy,
   FileText,
   Loader2,
@@ -25,27 +27,48 @@ import {
 } from "@/lib/admin/catalog/story-actions";
 import {
   classifyStoryActionResult,
-  createBuilderDocument,
-  createIncompleteBuilderBlock,
-  duplicateBuilderBlock,
-  getBuilderBlockId,
-  getBuilderBlockType,
+  createEditorDocument,
+  createInitialEditorBlock,
+  duplicateEditorBlock,
   getStoryBlockDefinition,
   getStoryLifecycleText,
   isStoryBuilderDirty,
-  moveBuilderBlock,
-  removeBuilderBlock,
+  moveEditorBlock,
+  normalizeEditorStoryDocument,
+  removeEditorBlock,
+  resolveTargetFromIssuePath,
   STORY_BLOCK_LIBRARY,
   STORY_BUILDER_MAX_BLOCKS,
-  toCompleteStoryDocument,
-  type BuilderStoryBlock,
+  type EditorStoryBlock,
   type StoryBlockType,
   type StoryLifecycle,
   type StoryLifecycleSummary,
 } from "@/lib/admin/catalog/story-builder-model";
 import { MutationRequestTracker } from "@/lib/admin/catalog/mutation-request";
-import type { AdminProductStoryDto } from "@/lib/admin/catalog/story-reader";
-import type { AuthoringStoryDocument } from "@/lib/admin/catalog/story-validation";
+import type {
+  AdminProductStoryDto,
+  AdminStoryRelatedProductOption,
+} from "@/lib/admin/catalog/story-reader";
+import type {
+  AuthoringStoryDocument,
+  StoryValidationIssue,
+} from "@/lib/admin/catalog/story-validation";
+import { MediaPickerDialog } from "./media-picker-dialog";
+import { RelatedProductPickerDialog } from "./related-product-picker-dialog";
+import { ValidationSummary } from "./validation-summary";
+import { HeroMediaEditor } from "./block-editors/hero-media-editor";
+import { FullBleedImageEditor } from "./block-editors/full-bleed-image-editor";
+import { ImageTextEditor } from "./block-editors/image-text-editor";
+import { StatHighlightEditor } from "./block-editors/stat-highlight-editor";
+import { SpecFeatureEditor } from "./block-editors/spec-feature-editor";
+import { VideoEditor } from "./block-editors/video-editor";
+import { GalleryEditor } from "./block-editors/gallery-editor";
+import { ComparisonEditor } from "./block-editors/comparison-editor";
+import { DimensionsEditor } from "./block-editors/dimensions-editor";
+import { BoxContentsEditor } from "./block-editors/box-contents-editor";
+import { TechnicalSpecsEditor } from "./block-editors/technical-specs-editor";
+import { FaqEditor } from "./block-editors/faq-editor";
+import { RelatedProductsEditor } from "./block-editors/related-products-editor";
 import styles from "./story-builder.module.css";
 
 const FOCUSABLE_SELECTOR =
@@ -66,6 +89,22 @@ type PendingConfirmation =
   | { kind: "DISCARD_DRAFT" }
   | { kind: "NAVIGATE"; href: string }
   | { kind: "RELOAD_SERVER" };
+
+interface MediaPickerState {
+  isOpen: boolean;
+  title: string;
+  mediaType: "IMAGE" | "VIDEO";
+  selectedMediaId?: string;
+  allowClear?: boolean;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
+  onSelect: (mediaId: string | undefined) => void;
+}
+
+interface RelatedProductPickerState {
+  isOpen: boolean;
+  blockId: string;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
+}
 
 function deriveLifecycle(
   draftRevisionId: string | null,
@@ -110,6 +149,9 @@ function useDialogFocus(
     if (!dialog) return;
 
     const focusFirst = () => {
+      if (dialog.contains(document.activeElement) && document.activeElement !== dialog) {
+        return;
+      }
       const first = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
       (first ?? dialog).focus();
     };
@@ -163,8 +205,10 @@ function useDialogFocus(
 
 export function StoryBuilder({ initialStory }: StoryBuilderProps) {
   const router = useRouter();
-  const [document, setDocument] = useState<BuilderStoryBlock[]>(() =>
-    createBuilderDocument(initialStory.initialDocument)
+
+  // Unified canonical rehydration
+  const [document, setDocument] = useState<EditorStoryBlock[]>(() =>
+    createEditorDocument(initialStory.initialDocument)
   );
   const [savedBaseline, setSavedBaseline] = useState<AuthoringStoryDocument>(() =>
     structuredClone(initialStory.initialDocument)
@@ -172,8 +216,26 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
   const [durableStory, setDurableStory] = useState<DurableStoryView>(() =>
     durableViewFromStory(initialStory)
   );
+  const [knownProductOptions, setKnownProductOptions] = useState<
+    Map<string, AdminStoryRelatedProductOption>
+  >(() => new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p])));
+
+  // Block expansion state (all blocks expanded initially)
+  const [expandedBlockIds, setExpandedBlockIds] = useState<Set<string>>(
+    () => new Set(initialStory.initialDocument.map((b) => b.blockId))
+  );
+
+  // Validation issues state
+  const [validationIssues, setValidationIssues] = useState<StoryValidationIssue[]>([]);
+
+  // Modals state
   const [isBlockLibraryOpen, setIsBlockLibraryOpen] = useState(false);
+  const [mediaPickerState, setMediaPickerState] = useState<MediaPickerState | null>(null);
+  const [relatedProductPickerState, setRelatedProductPickerState] =
+    useState<RelatedProductPickerState | null>(null);
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
+
+  // Status & feedback
   const [isSaving, setIsSaving] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -184,6 +246,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
   const [announcement, setAnnouncement] = useState("");
   const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null);
 
+  // Trackers and refs
   const saveTracker = useRef(new MutationRequestTracker());
   const discardTracker = useRef(new MutationRequestTracker());
   const blockRefs = useRef(new Map<string, HTMLElement>());
@@ -196,24 +259,42 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     () => isStoryBuilderDirty(document, savedBaseline),
     [document, savedBaseline]
   );
-  const incompleteCount = document.filter((block) => block.state === "INCOMPLETE").length;
-  const completeDocument = useMemo(() => toCompleteStoryDocument(document), [document]);
+  const normResult = useMemo(() => normalizeEditorStoryDocument(document), [document]);
+  const incompleteBlockIds = useMemo(() => {
+    if (normResult.success) return new Set<string>();
+    const ids = new Set<string>();
+    for (const issue of normResult.issues) {
+      const match = issue.path.match(/^blocks\[(\d+)\]/);
+      if (match) {
+        const idx = parseInt(match[1]!, 10);
+        const b = document[idx];
+        if (b) ids.add(b.blockId);
+      }
+    }
+    return ids;
+  }, [document, normResult]);
+  const incompleteCount = incompleteBlockIds.size;
   const canSaveWithoutChanges = durableStory.draftRevisionId === null;
   const saveDisabled =
     isSaving ||
     isDiscarding ||
-    incompleteCount > 0 ||
     document.length > STORY_BUILDER_MAX_BLOCKS ||
-    (!dirty && !canSaveWithoutChanges);
+    (!dirty && !canSaveWithoutChanges) ||
+    incompleteCount > 0;
 
   useEffect(() => {
-    setDocument(createBuilderDocument(initialStory.initialDocument));
+    setDocument(createEditorDocument(initialStory.initialDocument));
     setSavedBaseline(structuredClone(initialStory.initialDocument));
     setDurableStory(durableViewFromStory(initialStory));
+    setKnownProductOptions(
+      new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p]))
+    );
+    setExpandedBlockIds(new Set(initialStory.initialDocument.map((b) => b.blockId)));
     setStaleConflict(false);
     setAmbiguousSave(false);
     setErrorMessage(null);
     setFieldErrors([]);
+    setValidationIssues([]);
   }, [initialStory]);
 
   useEffect(() => {
@@ -280,6 +361,9 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
   const closeConfirmation = useCallback(() => {
     if (!isDiscarding) setPendingConfirmation(null);
   }, [isDiscarding]);
+  const handleOpenMediaPicker = useCallback((options: Omit<MediaPickerState, "isOpen">) => {
+    setMediaPickerState({ isOpen: true, ...options });
+  }, []);
 
   useDialogFocus(isBlockLibraryOpen, libraryDialogRef, addBlockTriggerRef, closeBlockLibrary);
   useDialogFocus(
@@ -305,66 +389,133 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     setPendingConfirmation(value);
   }
 
+  function toggleBlockExpanded(blockId: string) {
+    setExpandedBlockIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(blockId)) next.delete(blockId);
+      else next.add(blockId);
+      return next;
+    });
+  }
+
+  function navigateToIssue(blockId: string | null, targetId: string) {
+    if (blockId) {
+      setExpandedBlockIds((prev) => new Set(prev).add(blockId));
+    }
+    setTimeout(() => {
+      const el =
+        window.document.getElementById(targetId) ??
+        (blockId ? window.document.getElementById(`story-block-${blockId}`) : null);
+      el?.focus();
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 30);
+  }
+
   function addBlock(type: StoryBlockType) {
     if (document.length >= STORY_BUILDER_MAX_BLOCKS) return;
-    const block = createIncompleteBuilderBlock(type);
+    const block = createInitialEditorBlock(type);
     clearFeedbackForEdit();
     setDocument((current) => [...current, block]);
+    setExpandedBlockIds((prev) => new Set(prev).add(block.blockId));
     setIsBlockLibraryOpen(false);
     setPendingFocusBlockId(block.blockId);
-    announce(`${getStoryBlockDefinition(type).label} agregado como bloque pendiente.`);
+    announce(`${getStoryBlockDefinition(type).label} agregado como nuevo bloque.`);
   }
 
   function duplicateBlock(index: number) {
     const source = document[index];
-    if (!source || source.state !== "COMPLETE") return;
+    if (!source || document.length >= STORY_BUILDER_MAX_BLOCKS) return;
     const newBlockId = crypto.randomUUID();
-    const next = duplicateBuilderBlock(document, index, () => newBlockId);
+    const next = duplicateEditorBlock(document, index, () => newBlockId);
     clearFeedbackForEdit();
     setDocument(next);
+    setExpandedBlockIds((prev) => new Set(prev).add(newBlockId));
     setPendingFocusBlockId(newBlockId);
     announce(
-      `${getStoryBlockDefinition(source.block.type).label} duplicado en la posición ${index + 2}.`
+      `${getStoryBlockDefinition(source.type).label} duplicado en la posición ${index + 2}.`
     );
   }
 
   function moveBlock(index: number, direction: -1 | 1) {
     const block = document[index];
     if (!block) return;
-    const next = moveBuilderBlock(document, index, direction);
+    const next = moveEditorBlock(document, index, direction);
     clearFeedbackForEdit();
     setDocument(next);
-    setPendingFocusBlockId(getBuilderBlockId(block));
+    setPendingFocusBlockId(block.blockId);
     announce(`Bloque movido a la posición ${index + direction + 1} de ${document.length}.`);
   }
 
   function removeBlock(blockId: string) {
-    const index = document.findIndex((block) => getBuilderBlockId(block) === blockId);
+    const index = document.findIndex((block) => block.blockId === blockId);
     if (index === -1) return;
-    const next = removeBuilderBlock(document, blockId);
+    const next = removeEditorBlock(document, blockId);
     const nextFocus = next[index] ?? next[index - 1] ?? null;
     clearFeedbackForEdit();
     setDocument(next);
+    setExpandedBlockIds((prev) => {
+      const n = new Set(prev);
+      n.delete(blockId);
+      return n;
+    });
     setPendingConfirmation(null);
     if (nextFocus) {
-      setPendingFocusBlockId(getBuilderBlockId(nextFocus));
+      setPendingFocusBlockId(nextFocus.blockId);
     } else {
       window.setTimeout(() => addBlockTriggerRef.current?.focus(), 10);
     }
     announce(`Bloque eliminado. Quedan ${next.length} bloques.`);
   }
 
+  function updateBlockPayload<TType extends StoryBlockType>(
+    index: number,
+    payload: Extract<EditorStoryBlock, { type: TType }>["payload"]
+  ) {
+    const next = [...document];
+    const current = next[index];
+    if (!current) return;
+    next[index] = { ...current, payload } as EditorStoryBlock;
+    setDocument(next);
+    clearFeedbackForEdit();
+
+    // If validation summary is currently active, update errors live
+    if (validationIssues.length > 0) {
+      const res = normalizeEditorStoryDocument(next);
+      setValidationIssues(res.issues);
+    }
+  }
+
   async function saveDraft() {
-    if (completeDocument === null) {
-      setErrorMessage("Completa o elimina los bloques pendientes antes de guardar el borrador.");
+    // 1. Convert local editable state to canonical candidate and validate
+    const normResult = normalizeEditorStoryDocument(document);
+    if (!normResult.success || normResult.document === null) {
+      setValidationIssues(normResult.issues);
+      setErrorMessage("Corrige los errores señalados en la historia antes de guardar.");
+      if (normResult.issues.length > 0) {
+        const firstIssue = normResult.issues[0]!;
+        const { blockId, targetId } = resolveTargetFromIssuePath(firstIssue.path, document);
+        if (blockId) {
+          setExpandedBlockIds((prev) => new Set(prev).add(blockId));
+        }
+        setTimeout(() => {
+          const el =
+            window.document.getElementById(targetId) ??
+            (blockId ? window.document.getElementById(`story-block-${blockId}`) : null);
+          el?.focus();
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 30);
+      }
       return;
     }
 
+    // 2. Canonical normalized document
+    setValidationIssues([]);
+    const validDocument = normResult.document;
     const payload = {
       productId: initialStory.product.id,
       expectedDraftRevisionId: durableStory.draftRevisionId,
       expectedPublishedRevisionId: durableStory.publishedRevisionId,
-      document: completeDocument,
+      document: validDocument,
     };
     const mutationRequestId = saveTracker.current.getRequestId(payload);
     setIsSaving(true);
@@ -380,8 +531,8 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
       if (disposition === "SUCCESS") {
         const committed = result.data!;
         saveTracker.current.complete();
-        const baseline = structuredClone(completeDocument);
-        setDocument(createBuilderDocument(baseline));
+        const baseline = structuredClone(validDocument);
+        setDocument(createEditorDocument(baseline));
         setSavedBaseline(baseline);
         setDurableStory((current) => {
           const publishedRevisionNumber =
@@ -415,7 +566,12 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
         saveTracker.current.complete();
         setAmbiguousSave(false);
         setErrorMessage(result.error ?? "No se pudo guardar el borrador.");
-        setFieldErrors(result.fieldErrors?.map((issue) => `${issue.path}: ${issue.message}`) ?? []);
+        if (result.fieldErrors && result.fieldErrors.length > 0) {
+          setValidationIssues(result.fieldErrors);
+          setFieldErrors(result.fieldErrors.map((issue) => `${issue.path}: ${issue.message}`));
+        } else {
+          setFieldErrors([]);
+        }
         setStaleConflict(result.code === "STORY_STALE_WRITE");
         return;
       }
@@ -448,6 +604,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
     setIsDiscarding(true);
     setErrorMessage(null);
     setFieldErrors([]);
+    setValidationIssues([]);
     setSuccessMessage(null);
 
     try {
@@ -499,7 +656,8 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
         removeBlock(confirmation.blockId);
         return;
       case "RESET_LOCAL":
-        setDocument(createBuilderDocument(savedBaseline));
+        setDocument(createEditorDocument(savedBaseline));
+        setValidationIssues([]);
         clearFeedbackForEdit();
         setStaleConflict(false);
         setPendingConfirmation(null);
@@ -577,6 +735,164 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
         return null;
     }
   })();
+
+  function renderBlockEditor(
+    block: EditorStoryBlock,
+    index: number,
+    blockIssues: readonly StoryValidationIssue[]
+  ) {
+    switch (block.type) {
+      case "hero_media":
+        return (
+          <HeroMediaEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            selectableMedia={initialStory.selectableMedia}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"hero_media">(index, payload)}
+            onOpenMediaPicker={handleOpenMediaPicker}
+          />
+        );
+      case "full_bleed_image":
+        return (
+          <FullBleedImageEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            selectableMedia={initialStory.selectableMedia}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"full_bleed_image">(index, payload)}
+            onOpenMediaPicker={handleOpenMediaPicker}
+          />
+        );
+      case "image_text":
+        return (
+          <ImageTextEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            selectableMedia={initialStory.selectableMedia}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"image_text">(index, payload)}
+            onOpenMediaPicker={handleOpenMediaPicker}
+          />
+        );
+      case "stat_highlight":
+        return (
+          <StatHighlightEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"stat_highlight">(index, payload)}
+            onAnnounce={announce}
+          />
+        );
+      case "spec_feature":
+        return (
+          <SpecFeatureEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            selectableMedia={initialStory.selectableMedia}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"spec_feature">(index, payload)}
+            onOpenMediaPicker={handleOpenMediaPicker}
+          />
+        );
+      case "video":
+        return (
+          <VideoEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            selectableMedia={initialStory.selectableMedia}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"video">(index, payload)}
+            onOpenMediaPicker={handleOpenMediaPicker}
+          />
+        );
+      case "gallery":
+        return (
+          <GalleryEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            selectableMedia={initialStory.selectableMedia}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"gallery">(index, payload)}
+            onOpenMediaPicker={handleOpenMediaPicker}
+            onAnnounce={announce}
+          />
+        );
+      case "comparison":
+        return (
+          <ComparisonEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"comparison">(index, payload)}
+            onAnnounce={announce}
+          />
+        );
+      case "dimensions":
+        return (
+          <DimensionsEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            selectableMedia={initialStory.selectableMedia}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"dimensions">(index, payload)}
+            onOpenMediaPicker={handleOpenMediaPicker}
+            onAnnounce={announce}
+          />
+        );
+      case "box_contents":
+        return (
+          <BoxContentsEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            selectableMedia={initialStory.selectableMedia}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"box_contents">(index, payload)}
+            onOpenMediaPicker={handleOpenMediaPicker}
+            onAnnounce={announce}
+          />
+        );
+      case "technical_specs":
+        return (
+          <TechnicalSpecsEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"technical_specs">(index, payload)}
+            onAnnounce={announce}
+          />
+        );
+      case "faq":
+        return (
+          <FaqEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"faq">(index, payload)}
+            onAnnounce={announce}
+          />
+        );
+      case "related_products":
+        return (
+          <RelatedProductsEditor
+            blockId={block.blockId}
+            payload={block.payload}
+            knownProductOptions={knownProductOptions}
+            issues={blockIssues}
+            onChange={(payload) => updateBlockPayload<"related_products">(index, payload)}
+            onOpenProductPicker={(triggerRef) =>
+              setRelatedProductPickerState({
+                isOpen: true,
+                blockId: block.blockId,
+                triggerRef,
+              })
+            }
+            onAnnounce={announce}
+          />
+        );
+    }
+  }
 
   return (
     <div className={styles.container} data-testid="story-builder">
@@ -661,6 +977,12 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
         </div>
       )}
 
+      <ValidationSummary
+        issues={validationIssues}
+        document={document}
+        onNavigateToIssue={navigateToIssue}
+      />
+
       <div className={styles.workspace}>
         <section className={styles.documentPanel} aria-labelledby="story-document-title">
           <div className={styles.documentHeader}>
@@ -695,8 +1017,8 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
               <FileText size={30} aria-hidden="true" />
               <h3>La historia está vacía</h3>
               <p>
-                Puedes guardar un borrador vacío o agregar el primer bloque. La configuración de
-                contenido estará disponible en la siguiente etapa.
+                Puedes guardar un borrador vacío o agregar el primer bloque para configurar su
+                contenido estructurado.
               </p>
               <button
                 type="button"
@@ -713,10 +1035,16 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
           ) : (
             <ol className={styles.blockList} data-testid="story-block-list">
               {document.map((block, index) => {
-                const blockId = getBuilderBlockId(block);
-                const type = getBuilderBlockType(block);
+                const blockId = block.blockId;
+                const type = block.type;
                 const definition = getStoryBlockDefinition(type);
                 const position = index + 1;
+                const isExpanded = expandedBlockIds.has(blockId);
+                const blockIssues = validationIssues.filter((i) =>
+                  i.path.startsWith(`blocks[${index}]`)
+                );
+                const hasErrors = blockIssues.length > 0;
+
                 return (
                   <li key={blockId}>
                     <article
@@ -726,7 +1054,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
                       }}
                       tabIndex={-1}
                       className={`${styles.blockCard} ${
-                        block.state === "INCOMPLETE" ? styles.blockCardIncomplete : ""
+                        hasErrors ? styles.blockCardIncomplete : ""
                       }`}
                       data-testid={`story-block-${blockId}`}
                       data-block-id={blockId}
@@ -739,29 +1067,34 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
                           <h3>{definition.label}</h3>
                           <p>{definition.description}</p>
                         </div>
-                        <span
-                          className={
-                            block.state === "INCOMPLETE"
-                              ? styles.incompleteBadge
-                              : styles.completeBadge
-                          }
-                        >
-                          {block.state === "INCOMPLETE"
-                            ? "Configuración pendiente"
-                            : "Contenido guardado"}
-                        </span>
+                        <div className={styles.blockHeaderToggle}>
+                          <span
+                            className={
+                              incompleteBlockIds.has(blockId)
+                                ? styles.incompleteBadge
+                                : styles.completeBadge
+                            }
+                          >
+                            {incompleteBlockIds.has(blockId)
+                              ? "Configuración pendiente"
+                              : "Contenido guardado"}
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.expandButton}
+                            onClick={() => toggleBlockExpanded(blockId)}
+                            aria-expanded={isExpanded}
+                            aria-label={`${isExpanded ? "Colapsar" : "Expandir"} bloque ${position}`}
+                          >
+                            {isExpanded ? (
+                              <ChevronUp size={16} aria-hidden="true" />
+                            ) : (
+                              <ChevronDown size={16} aria-hidden="true" />
+                            )}
+                            {isExpanded ? "Colapsar" : "Expandir"}
+                          </button>
+                        </div>
                       </div>
-
-                      {block.state === "INCOMPLETE" ? (
-                        <p className={styles.incompleteExplanation}>
-                          Este bloque contiene solamente su estructura. Configura su contenido
-                          cuando los campos estén disponibles o elimínalo antes de guardar.
-                        </p>
-                      ) : (
-                        <p className={styles.completeExplanation}>
-                          El contenido y las referencias actuales se conservarán sin cambios.
-                        </p>
-                      )}
 
                       <div
                         className={styles.blockActions}
@@ -790,10 +1123,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
                         <button
                           type="button"
                           className={styles.blockAction}
-                          disabled={
-                            block.state === "INCOMPLETE" ||
-                            document.length >= STORY_BUILDER_MAX_BLOCKS
-                          }
+                          disabled={document.length >= STORY_BUILDER_MAX_BLOCKS}
                           onClick={() => duplicateBlock(index)}
                           aria-label={`Duplicar ${definition.label}`}
                         >
@@ -804,7 +1134,8 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
                           type="button"
                           className={`${styles.blockAction} ${styles.deleteAction}`}
                           onClick={(event) => {
-                            if (block.state === "INCOMPLETE") {
+                            const isSavedBlock = savedBaseline.some((b) => b.blockId === blockId);
+                            if (!isSavedBlock) {
                               removeBlock(blockId);
                               return;
                             }
@@ -820,6 +1151,12 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
                           Eliminar
                         </button>
                       </div>
+
+                      {isExpanded && (
+                        <div className={styles.blockCardContent}>
+                          {renderBlockEditor(block, index, blockIssues)}
+                        </div>
+                      )}
                     </article>
                   </li>
                 );
@@ -907,7 +1244,7 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
             <div className={styles.modalHeader}>
               <div>
                 <h2 id="story-library-title">Agregar bloque</h2>
-                <p>Elige una estructura. Su contenido se configurará en la siguiente etapa.</p>
+                <p>Elige un tipo de bloque estructurado para agregarlo a la historia.</p>
               </div>
               <button
                 type="button"
@@ -937,6 +1274,58 @@ export function StoryBuilder({ initialStory }: StoryBuilderProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {mediaPickerState && (
+        <MediaPickerDialog
+          isOpen={mediaPickerState.isOpen}
+          title={mediaPickerState.title}
+          mediaType={mediaPickerState.mediaType}
+          selectableMedia={initialStory.selectableMedia}
+          selectedMediaId={mediaPickerState.selectedMediaId}
+          allowClear={mediaPickerState.allowClear}
+          triggerRef={mediaPickerState.triggerRef}
+          onSelect={mediaPickerState.onSelect}
+          onClose={() => setMediaPickerState(null)}
+        />
+      )}
+
+      {relatedProductPickerState && (
+        <RelatedProductPickerDialog
+          isOpen={relatedProductPickerState.isOpen}
+          currentProductId={initialStory.product.id}
+          alreadySelectedProductIds={
+            document.find((b) => b.blockId === relatedProductPickerState.blockId)?.type ===
+            "related_products"
+              ? (
+                  document.find((b) => b.blockId === relatedProductPickerState.blockId) as Extract<
+                    EditorStoryBlock,
+                    { type: "related_products" }
+                  >
+                ).payload.productIds
+              : []
+          }
+          triggerRef={relatedProductPickerState.triggerRef}
+          onSelectProduct={(product) => {
+            const targetBlock = document.find(
+              (b) => b.blockId === relatedProductPickerState.blockId
+            );
+            if (targetBlock && targetBlock.type === "related_products") {
+              const blockIdx = document.findIndex(
+                (b) => b.blockId === relatedProductPickerState.blockId
+              );
+              if (!targetBlock.payload.productIds.includes(product.productId)) {
+                updateBlockPayload<"related_products">(blockIdx, {
+                  ...targetBlock.payload,
+                  productIds: [...targetBlock.payload.productIds, product.productId],
+                });
+                setKnownProductOptions((prev) => new Map(prev).set(product.productId, product));
+                announce(`Producto ${product.name} agregado.`);
+              }
+            }
+          }}
+          onClose={() => setRelatedProductPickerState(null)}
+        />
       )}
 
       {pendingConfirmation && confirmationCopy && (

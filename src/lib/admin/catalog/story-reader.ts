@@ -36,6 +36,14 @@ export interface AdminStorySelectableMedia {
   altText: string | null;
 }
 
+export interface AdminStoryRelatedProductOption {
+  productId: string;
+  name: string;
+  slug: string;
+  status: string;
+  isPublicEligible: boolean;
+}
+
 export interface AdminProductStoryDto {
   product: {
     id: string;
@@ -49,6 +57,7 @@ export interface AdminProductStoryDto {
   initialDocument: AuthoringStoryDocument;
   initialDocumentSource: "DRAFT" | "PUBLISHED" | "EMPTY";
   selectableMedia: AdminStorySelectableMedia[];
+  initialRelatedProducts: AdminStoryRelatedProductOption[];
   concurrency: {
     expectedDraftRevisionId: string | null;
     expectedPublishedRevisionId: string | null;
@@ -252,6 +261,11 @@ export async function getAdminProductStory(
     ];
   });
 
+  const initialRelatedIds = initialDocument.flatMap((block) =>
+    block.type === "related_products" ? block.payload.productIds : []
+  );
+  const initialRelatedProducts = await loadRelatedProductOptionsByIds(initialRelatedIds);
+
   const lifecycle: AdminProductStoryDto["lifecycle"] = draftRow
     ? publishedRow
       ? "DRAFT_OVER_PUBLISHED"
@@ -269,9 +283,114 @@ export async function getAdminProductStory(
     initialDocument,
     initialDocumentSource,
     selectableMedia,
+    initialRelatedProducts,
     concurrency: {
       expectedDraftRevisionId: aggregate?.draft_revision_id ?? null,
       expectedPublishedRevisionId: aggregate?.published_revision_id ?? null,
     },
   };
+}
+
+interface RelatedProductMetadataRow {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  brand_status: string;
+  category_status: string;
+  has_active_variant: boolean;
+}
+
+function isPublicEligible(row: RelatedProductMetadataRow): boolean {
+  return (
+    row.status === "PUBLISHED" &&
+    row.brand_status === "PUBLISHED" &&
+    row.category_status === "PUBLISHED" &&
+    row.has_active_variant
+  );
+}
+
+async function loadRelatedProductOptionsByIds(
+  ids: readonly string[]
+): Promise<AdminStoryRelatedProductOption[]> {
+  if (ids.length === 0) return [];
+  const uniqueIds = Array.from(new Set(ids));
+  const rows = (await db.execute(sql`
+    SELECT
+      products.id,
+      products.name,
+      products.slug,
+      products.status,
+      brands.status AS brand_status,
+      categories.status AS category_status,
+      EXISTS (
+        SELECT 1 FROM product_variants
+        WHERE product_variants.product_id = products.id
+          AND product_variants.status = 'ACTIVE'
+      ) AS has_active_variant
+    FROM products
+    INNER JOIN brands ON brands.id = products.brand_id
+    INNER JOIN categories ON categories.id = products.category_id
+    WHERE products.id IN (${sql.join(
+      uniqueIds.map((id) => sql`${id}::uuid`),
+      sql`, `
+    )})
+    ORDER BY products.name ASC;
+  `)) as unknown as RelatedProductMetadataRow[];
+
+  return rows.map((row) => ({
+    productId: row.id,
+    name: row.name,
+    slug: row.slug,
+    status: row.status,
+    isPublicEligible: isPublicEligible(row),
+  }));
+}
+
+export async function searchStoryRelatedProducts(
+  currentProductId: string,
+  query: string,
+  options?: StoryReaderOptions
+): Promise<AdminStoryRelatedProductOption[]> {
+  await assertManagePermission(options);
+  if (!z.string().uuid().safeParse(currentProductId).success) {
+    throw new CatalogDomainError(
+      "La identidad del producto no tiene una estructura válida.",
+      "STORY_INVALID_REQUEST",
+      422
+    );
+  }
+
+  const sanitizedQuery = query.trim().slice(0, 100);
+  const pattern = `%${sanitizedQuery}%`;
+
+  const rows = (await db.execute(sql`
+    SELECT
+      products.id,
+      products.name,
+      products.slug,
+      products.status,
+      brands.status AS brand_status,
+      categories.status AS category_status,
+      EXISTS (
+        SELECT 1 FROM product_variants
+        WHERE product_variants.product_id = products.id
+          AND product_variants.status = 'ACTIVE'
+      ) AS has_active_variant
+    FROM products
+    INNER JOIN brands ON brands.id = products.brand_id
+    INNER JOIN categories ON categories.id = products.category_id
+    WHERE products.id != ${currentProductId}::uuid
+      AND (products.name ILIKE ${pattern} OR products.slug ILIKE ${pattern})
+    ORDER BY products.name ASC
+    LIMIT 20;
+  `)) as unknown as RelatedProductMetadataRow[];
+
+  return rows.map((row) => ({
+    productId: row.id,
+    name: row.name,
+    slug: row.slug,
+    status: row.status,
+    isPublicEligible: isPublicEligible(row),
+  }));
 }

@@ -9,9 +9,14 @@ const mocks = vi.hoisted(() => ({
   discardProductStoryDraft: vi.fn(),
   publishProductStory: vi.fn(),
   unpublishProductStory: vi.fn(),
+  searchStoryRelatedProducts: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
+
+vi.mock("@/lib/admin/catalog/story-reader", () => ({
+  searchStoryRelatedProducts: mocks.searchStoryRelatedProducts,
+}));
 
 vi.mock("@/lib/auth/rbac", async (importOriginal) => {
   const actual = await importOriginal<typeof AuthRbac>();
@@ -33,6 +38,7 @@ import {
   discardProductStoryDraftAction,
   publishProductStoryAction,
   saveProductStoryDraftAction,
+  searchStoryRelatedProductsAction,
   unpublishProductStoryAction,
 } from "@/lib/admin/catalog/story-actions";
 import { StoryStaleWriteError } from "@/lib/admin/catalog/story-service";
@@ -190,5 +196,63 @@ describe("GP-026 CHK1 thin Story Server Actions", () => {
       currentPublishedRevisionId: publishedId,
     });
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  describe("searchStoryRelatedProductsAction", () => {
+    it("fails closed when unauthenticated or unauthorized", async () => {
+      mocks.getVerifiedAuthContext.mockResolvedValueOnce({ status: "UNAUTHENTICATED" });
+      await expect(searchStoryRelatedProductsAction(productId, "mouse")).resolves.toMatchObject({
+        success: false,
+        code: "AUTHENTICATION_REQUIRED",
+      });
+
+      mocks.getVerifiedAuthContext.mockResolvedValueOnce({
+        status: "READY",
+        permissions: new Set(),
+      });
+      await expect(searchStoryRelatedProductsAction(productId, "mouse")).resolves.toMatchObject({
+        success: false,
+        code: "FORBIDDEN",
+      });
+      expect(mocks.searchStoryRelatedProducts).not.toHaveBeenCalled();
+    });
+
+    it("validates productId as a valid UUID", async () => {
+      mocks.getVerifiedAuthContext.mockResolvedValue({
+        status: "READY",
+        permissions: new Set(["catalog:manage"]),
+      });
+      await expect(searchStoryRelatedProductsAction("not-a-uuid", "mouse")).resolves.toMatchObject({
+        success: false,
+        code: "STORY_INVALID_REQUEST",
+      });
+      expect(mocks.searchStoryRelatedProducts).not.toHaveBeenCalled();
+    });
+
+    it("trims search query and returns results without path revalidation", async () => {
+      mocks.getVerifiedAuthContext.mockResolvedValue({
+        status: "READY",
+        permissions: new Set(["catalog:manage"]),
+      });
+      const expectedResults = [
+        {
+          productId: "018f0026-2000-7000-8000-000000000099",
+          name: "Mousepad Speed",
+          slug: "mousepad-speed",
+          status: "PUBLISHED",
+          isPublicEligible: true,
+        },
+      ];
+      mocks.searchStoryRelatedProducts.mockResolvedValue(expectedResults);
+
+      const response = await searchStoryRelatedProductsAction(productId, "  mouse  ");
+      expect(response).toEqual({ success: true, data: expectedResults });
+      expect(mocks.searchStoryRelatedProducts).toHaveBeenCalledWith(
+        productId,
+        "mouse",
+        expect.objectContaining({ authContext: expect.any(Object) })
+      );
+      expect(mocks.revalidatePath).not.toHaveBeenCalled();
+    });
   });
 });
