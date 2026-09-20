@@ -234,6 +234,25 @@ export const ADMIN_E2E_PRODUCT_FIXTURES = {
     sku: "E2E-IMMUTABLE-SKU-003",
     inventoryItemId: "018f0000-0000-7000-8000-000000004a03",
   },
+  inventoryLocation: {
+    id: "018f0000-0000-7000-8000-00000000e0a1",
+    code: "ADMIN_E2E_LOCATION",
+    name: "Almacén Admin E2E",
+  },
+  relatedProductA: {
+    id: "018f0000-0000-7000-8000-000000001a11",
+    name: "Gamer Mouse Pro",
+    slug: "gamer-mouse-pro-admin-e2e",
+    variantId: "018f0000-0000-7000-8000-000000007a11",
+    sku: "E2E-RELATED-PRO-001",
+  },
+  relatedProductB: {
+    id: "018f0000-0000-7000-8000-000000001a12",
+    name: "Gamer Mouse Ultra",
+    slug: "gamer-mouse-ultra-admin-e2e",
+    variantId: "018f0000-0000-7000-8000-000000007a12",
+    sku: "E2E-RELATED-ULTRA-002",
+  },
   catChangeProduct: {
     id: "018f0000-0000-7000-8000-000000001a04",
     name: "Producto E2E Cambio Categoria",
@@ -386,6 +405,89 @@ export async function seedAdminProductFixtures(clientSql) {
       UPDATE categories
       SET current_spec_schema_id = ${ADMIN_E2E_PRODUCT_FIXTURES.categoryB.schemaId}
       WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.categoryB.id};
+    `;
+
+    await tx`
+      INSERT INTO inventory_locations (id, code, name, is_active, created_at)
+      VALUES (
+        ${ADMIN_E2E_PRODUCT_FIXTURES.inventoryLocation.id},
+        ${ADMIN_E2E_PRODUCT_FIXTURES.inventoryLocation.code},
+        ${ADMIN_E2E_PRODUCT_FIXTURES.inventoryLocation.name},
+        true,
+        NOW()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        code = EXCLUDED.code,
+        name = EXCLUDED.name,
+        is_active = true;
+    `;
+
+    await tx`
+      INSERT INTO products (id, name, slug, brand_id, category_id, status, primary_media_id, created_at, updated_at)
+      VALUES
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.name},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.slug},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.brand.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.categoryA.id},
+          'PUBLISHED',
+          NULL,
+          NOW(),
+          NOW()
+        ),
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.name},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.slug},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.brand.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.categoryA.id},
+          'PUBLISHED',
+          NULL,
+          NOW(),
+          NOW()
+        )
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        slug = EXCLUDED.slug,
+        status = 'PUBLISHED',
+        updated_at = NOW();
+    `;
+
+    await tx`
+      INSERT INTO product_variants (id, product_id, sku, title, price_cents, cost_cents, weight_grams, status, display_order, created_at, updated_at)
+      VALUES
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.variantId},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.sku},
+          'Variante Pro',
+          14990,
+          7000,
+          58,
+          'ACTIVE',
+          0,
+          NOW(),
+          NOW()
+        ),
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.variantId},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.sku},
+          'Variante Ultra',
+          19990,
+          9500,
+          52,
+          'ACTIVE',
+          0,
+          NOW(),
+          NOW()
+        )
+      ON CONFLICT (id) DO UPDATE SET
+        sku = EXCLUDED.sku,
+        price_cents = EXCLUDED.price_cents,
+        status = 'ACTIVE',
+        updated_at = NOW();
     `;
 
     // Public Media Assets for Publishable Product
@@ -625,7 +727,7 @@ export async function seedAdminProductFixtures(clientSql) {
       VALUES (
         ${ADMIN_E2E_PRODUCT_FIXTURES.immutableProduct.inventoryItemId},
         '018f0000-0000-7000-8000-000000007a03',
-        '018f0000-0000-7000-8000-00000000e004',
+        ${ADMIN_E2E_PRODUCT_FIXTURES.inventoryLocation.id},
         10,
         0,
         0,

@@ -79,6 +79,17 @@ export async function cleanupAdminProductFixtures(clientSql) {
   console.log("[Admin E2E Cleanup] Cleaning up deterministic Product Manager fixtures...");
 
   await clientSql.begin(async (tx) => {
+    await tx`
+      DELETE FROM audit_events
+      WHERE target_type = 'product_story_revision'
+        AND metadata->>'product_id' IN (
+          '018f0000-0000-7000-8000-000000001a01',
+          '018f0000-0000-7000-8000-000000001a02',
+          '018f0000-0000-7000-8000-000000001a03',
+          '018f0000-0000-7000-8000-000000001a04'
+        );
+    `;
+
     // 1. Inventory Items
     await tx`
       DELETE FROM inventory_items
@@ -88,6 +99,11 @@ export async function cleanupAdminProductFixtures(clientSql) {
              SELECT id FROM products WHERE category_id IN ('018f0000-0000-7000-8000-00000000ca01', '018f0000-0000-7000-8000-00000000ca02') OR brand_id = '018f0000-0000-7000-8000-00000000ba01'
            )
          );
+    `;
+
+    await tx`
+      DELETE FROM inventory_locations
+      WHERE id = '018f0000-0000-7000-8000-00000000e0a1';
     `;
 
     // 2. Product Specifications (scoped to owned test categories / products)
