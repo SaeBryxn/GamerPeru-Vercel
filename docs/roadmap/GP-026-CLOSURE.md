@@ -1,39 +1,36 @@
-# GP-026 — Final Closure Candidate
+# GP-026 — Definitive Closure
 
 ## Status
 
-PENDING EXTERNAL REVIEW
+GP-026 CLOSED / EXTERNALLY APPROVED / FROZEN / MAIN INTEGRATION COMPLETE / CI INFRASTRUCTURE WAIVER
 
 ## Verdict
 
-LOCAL REGRESSION PASS / REMOTE CI NOT TRIGGERED ON AUDIT BRANCH BY WORKFLOW CONFIGURATION / PENDING
-EXTERNAL REVIEW. Final remote CI disposition remains pending the subsequent externally approved
-fast-forward integration push to `main`. This document does not claim that GP-026 is externally
-approved or closed and does not predeclare an infrastructure waiver outcome.
+PASS WITH CI INFRASTRUCTURE WAIVER
 
-## Exact Baseline and Candidate Boundary
+Definitively closed following external review approval of CHK5-BR1 (`49299966aa96b77073c515189566ffe0b6b58311`), exact fast-forward integration to `main`, and main CI adjudication under the approved infrastructure waiver.
 
-- Authorized `origin/main` baseline: `f1bcb664f265484ed73065319e4674bbc79aee49`.
+## Exact Baseline, Lineage, and Integration Boundary
+
 - Pre-GP-026 comparison baseline: `672222b098aff8713be902ef2173f9c13e761e35`.
-- Original CHK5 candidate: `cac77dcdcafb019ff3b8eba11117b6763005037d` on
-  `audit/gp026-chk5`.
-- CHK5-BR1 evidence-remediation branch: `audit/gp026-chk5-br1`, created directly from the original
-  candidate.
-- The immutable CHK5-BR1 SHA is intentionally reported only after commit and publication.
+- Authorized pre-integration `origin/main` baseline: `f1bcb664f265484ed73065319e4674bbc79aee49`.
+- Original CHK5 candidate: `cac77dcdcafb019ff3b8eba11117b6763005037d` on `audit/gp026-chk5`.
+- Externally approved CHK5-BR1 implementation SHA: `49299966aa96b77073c515189566ffe0b6b58311` on `audit/gp026-chk5-br1`.
+- Main integration method: exact fast-forward only (`git merge --ff-only`), integrating `49299966aa96b77073c515189566ffe0b6b58311` directly into `main` with zero merge commits, squash, rebase, cherry-pick, amendment, or rewrites.
+- Exact lineage:
+  `f1bcb664f265484ed73065319e4674bbc79aee49`
+  -> `cac77dcdcafb019ff3b8eba11117b6763005037d`
+  -> `49299966aa96b77073c515189566ffe0b6b58311`
 - Original CHK5 candidate files:
   - `docs/roadmap/GP-026.md`;
   - `docs/roadmap/GP-026-CLOSURE.md`;
   - `scripts/test/seed-admin-e2e.mjs`;
   - `scripts/test/cleanup-admin-e2e.mjs`.
-- CHK5-BR1 delta:
-  - `docs/roadmap/GP-026.md`;
-  - `docs/roadmap/GP-026-CLOSURE.md`.
+- CHK5-BR1 delta: documentation/evidence corrections only (`docs/roadmap/GP-026.md` and `docs/roadmap/GP-026-CLOSURE.md`).
 - Production/runtime code delta: ZERO.
-- Original candidate test tooling delta: the accepted deterministic Admin E2E seed and cleanup
-  scripts only.
-- CHK5-BR1 test and test-tooling delta: ZERO.
-- Schema, migration, migration metadata, package, lockfile, workflow, public asset, and hosted
-  service deltas: ZERO.
+- Test tooling delta: the accepted deterministic Admin E2E seed and cleanup scripts only.
+- Test code delta: ZERO.
+- Schema, migration, migration metadata, package, lockfile, workflow, public asset, and hosted service deltas: ZERO.
 
 ## Approved CHK0–CHK4 Lineage
 
@@ -286,34 +283,24 @@ An initial Admin live worker exit also had no assertion failure; its exact compl
 
 ## GitHub Actions and Infrastructure Waiver
 
-The last integrated CHK4 implementation produced GitHub Actions run `35167047894` on
-`4f4211ff1820f3ef1038edb9ee5c0adf08bcabe9`. Light CI failed before runner allocation with an empty
-`runner_name` and zero steps; Catalog Gate and Full Gate were skipped. That is infrastructure
-failure, not executed code/test failure.
+The main fast-forward integration push of approved implementation `49299966aa96b77073c515189566ffe0b6b58311` triggered the standard GitHub Actions push workflow because it contained non-document test tooling changes under `scripts/test/**`.
 
-The current workflow has `push.branches: [main]`. Therefore `audit/gp026-chk5` and
-`audit/gp026-chk5-br1` do not receive push-triggered CI runs by design. The original CHK5 candidate
-has zero workflow runs and zero check runs. After BR1 publication, its actual audit-branch state must
-also be inspected, but no push run is expected under the unchanged trigger configuration.
+The push produced GitHub Actions run `35536599552` (workflow: `CI`):
+- Run ID: `35536599552`
+- URL: `https://github.com/latamcreativa/GamerPeru/actions/runs/35536599552`
+- Workflow conclusion: `failure`
+- Job `Light CI` (ID: `106146635224`): status `completed`, conclusion `failure`, `runner_name`: `''` (empty / no runner allocated), steps count: `0` (zero executed steps).
+- Job `Catalog Gate` (ID: `106146635880`): status `completed`, conclusion `skipped`, `runner_name`: `''`, steps count: `0`.
+- Job `Full Gate` (ID: `106146635943`): status `completed`, conclusion `skipped`, `runner_name`: `''`, steps count: `0`.
 
-Candidate-stage classification:
-
-`REMOTE CI NOT TRIGGERED ON AUDIT BRANCH BY WORKFLOW CONFIGURATION`.
-
-This absence is neither a CI PASS nor an infrastructure failure and does not show that the candidate
-repeated run `35167047894`. No remote PASS is claimed. No workflow trigger, pull request, empty
-commit, or `workflow_dispatch` invocation is introduced merely to manufacture evidence.
-
-After external approval, the exact lineage may be fast-forwarded to `main`. That non-document-only
-main push is eligible for the normal Light CI trigger. Its actual result controls final closure:
-
-- If a runner executes and CI passes: `REMOTE CI PASS`.
-- If a runner executes code/tests and they fail: GP-026 cannot close; the waiver is forbidden.
-- If the workflow fails before runner allocation with zero steps under the established account
-  condition: `REMOTE CI INFRASTRUCTURE BLOCKED`, and `PASS WITH CI INFRASTRUCTURE WAIVER` may be
-  considered.
-
-No future outcome is predeclared by this candidate.
+Adjudication:
+- No GitHub Actions runner was allocated.
+- Zero repository commands or workflow steps executed.
+- The failure reproduced the established account billing/spending limit condition before runner execution, identical to previous runs `35025929837` and `35167047894`.
+- There was no executed code, test, build, or migration failure.
+- Classification: `REMOTE CI INFRASTRUCTURE BLOCKED`.
+- Final GP-026 CI verdict: `PASS WITH CI INFRASTRUCTURE WAIVER`.
+- Explicit statement: No remote test PASS is claimed. The approved local substitute evidence remains authoritative.
 
 ## Documentation Drift Audit
 
@@ -325,25 +312,28 @@ identified as historical evidence. No architectural documentation contradiction 
 
 ## Residual Risks and Follow-ups
 
-- Final remote CI remains pending a future approved `main` integration push. The established
-  account-level runner allocation/billing condition is relevant only if that eligible run fails
-  before allocation with zero executed steps.
+- Main integration and main CI adjudication are complete. Under the established account-level runner
+  allocation/billing condition, run `35536599552` concluded with zero executed steps and no runner
+  allocated, qualifying for `PASS WITH CI INFRASTRUCTURE WAIVER`.
 - Dedicated future roadmap gates GP-036+, GP-043, GP-044, GP-045, GP-046, GP-047, and GP-048 remain
   responsible for their broader SEO, security, performance, accessibility, responsive, and commerce
   hardening scopes.
 - This closure does not authorize AI-generated Story content, public preview tokens, new block
   types, a second renderer, media upload/transcoding, or a storefront redesign.
-- GP-027 remains NOT AUTHORIZED and was not started.
+- GP-027 becomes the NEXT dependency eligible for separate authorization. It is NOT implemented in
+  this operation.
 
 ## Repository and Authority Status
 
-- The original candidate scope remains the four files listed above; BR1 changes only the two roadmap
-  documents.
-- Temporary screenshots, performance harnesses, and baseline worktree artifacts are not tracked.
-- Final repository cleanliness and remote SHA equality are reported after commit and publication.
+- CHK0 through CHK5 are closed; GP-026 implementation is frozen.
+- The definitive post-approval closure commit modifies exactly `docs/roadmap/GP-026.md` and
+  `docs/roadmap/GP-026-CLOSURE.md`.
+- Runtime code, tests, test scripts, package manifests, lockfile, Playwright configurations,
+  `.github/**`, database schema, migrations (`0000–0014`, `0015` absent), migration metadata,
+  hosted Supabase/PostgreSQL, and Cloudflare R2 remain unchanged with ZERO delta.
 - GP-026A remains `CANCELLED / SUPERSEDED / HISTORICAL / NON-AUTHORITATIVE`.
-- GP-026 remains pending external review; this candidate does not declare it closed.
+- GP-026 is fully and definitively closed.
 
-## Final Candidate Classification
+## Final Classification
 
-GP-026 CHK5-BR1 EVIDENCE REMEDIATION CANDIDATE / PENDING EXTERNAL APPROVAL / READY FOR EXTERNAL VERIFICATION
+GP-026 CLOSED / EXTERNALLY APPROVED / FROZEN / MAIN INTEGRATION COMPLETE / CI INFRASTRUCTURE WAIVER
