@@ -6,23 +6,32 @@ PENDING EXTERNAL REVIEW
 
 ## Verdict
 
-PASS WITH CI INFRASTRUCTURE WAIVER, conditional only on the CHK5 candidate's remote workflow
-repeating the established failure-before-runner-allocation condition. All canonical local gates
-pass. This document does not claim that GP-026 is externally approved or closed.
+LOCAL REGRESSION PASS / REMOTE CI NOT TRIGGERED ON AUDIT BRANCH BY WORKFLOW CONFIGURATION / PENDING
+EXTERNAL REVIEW. Final remote CI disposition remains pending the subsequent externally approved
+fast-forward integration push to `main`. This document does not claim that GP-026 is externally
+approved or closed and does not predeclare an infrastructure waiver outcome.
 
 ## Exact Baseline and Candidate Boundary
 
 - Authorized `origin/main` baseline: `f1bcb664f265484ed73065319e4674bbc79aee49`.
 - Pre-GP-026 comparison baseline: `672222b098aff8713be902ef2173f9c13e761e35`.
-- CHK5 branch: `audit/gp026-chk5`.
-- The immutable CHK5 candidate SHA is intentionally reported only after commit and publication.
-- Candidate files:
+- Original CHK5 candidate: `cac77dcdcafb019ff3b8eba11117b6763005037d` on
+  `audit/gp026-chk5`.
+- CHK5-BR1 evidence-remediation branch: `audit/gp026-chk5-br1`, created directly from the original
+  candidate.
+- The immutable CHK5-BR1 SHA is intentionally reported only after commit and publication.
+- Original CHK5 candidate files:
   - `docs/roadmap/GP-026.md`;
   - `docs/roadmap/GP-026-CLOSURE.md`;
   - `scripts/test/seed-admin-e2e.mjs`;
   - `scripts/test/cleanup-admin-e2e.mjs`.
+- CHK5-BR1 delta:
+  - `docs/roadmap/GP-026.md`;
+  - `docs/roadmap/GP-026-CLOSURE.md`.
 - Production/runtime code delta: ZERO.
-- Test tooling delta: the deterministic Admin E2E seed and cleanup scripts only.
+- Original candidate test tooling delta: the accepted deterministic Admin E2E seed and cleanup
+  scripts only.
+- CHK5-BR1 test and test-tooling delta: ZERO.
 - Schema, migration, migration metadata, package, lockfile, workflow, public asset, and hosted
   service deltas: ZERO.
 
@@ -242,7 +251,7 @@ migration, full Admin E2E run, cleanup, and integrity audit all passed.
 | Admin AI Product Assistant           | PASS — 4 tests                                                                                 |
 | Admin Story Builder                  | PASS — 17 tests                                                                                |
 | Focused previously failing Story E2E | PASS — 1/1 test after fresh reset                                                              |
-| Canonical Storefront E2E             | PASS — 142/142 tests on complete one-worker rerun                                              |
+| Canonical Storefront E2E             | PASS — two consecutive exact default-config `pnpm test:e2e` reruns, 142/142 each               |
 | Story Builder / published PDP Axe    | PASS — zero WCAG 2.1 A/AA violations in tested states                                          |
 | Visual evidence                      | PASS — ten deterministic desktop/mobile screenshots manually inspected                         |
 | Performance comparison               | PASS — no material public regression                                                           |
@@ -255,11 +264,25 @@ migration, full Admin E2E run, cleanup, and integrity audit all passed.
 | `pnpm ignored-builds`                | PASS — `@google/genai` remains explicitly allowlisted; no unexpected ignored build             |
 | `git diff --check`                   | PASS                                                                                           |
 
-The first full Storefront run produced 139 passes and three navigation timeouts under 12-worker dev
-load. The exact three tests passed 3/3 in isolation, then the complete canonical suite passed
-142/142 with one worker. This is classified as local parallel runner instability, not a product
-failure. An initial Admin live worker exit also had no assertion failure; the exact complete rerun
-passed 263/263.
+The complete Storefront evidence sequence is preserved:
+
+1. The initial exact default-config `pnpm test:e2e` run produced 139 passes and three navigation
+   timeouts under the normal 12-worker dev load.
+2. The exact three timed-out tests passed 3/3 in isolation.
+3. A diagnostic complete serial run passed 142/142. It remains diagnostic evidence and is not
+   treated as the canonical gate.
+4. The first subsequent exact default-config `pnpm test:e2e` rerun passed 142/142 using the normal
+   12 workers in 58.7 seconds.
+5. The second consecutive exact default-config `pnpm test:e2e` rerun passed 142/142 using the normal
+   12 workers in 36.8 seconds.
+
+Neither canonical rerun used a worker override, retry override, timeout modification, filter, or
+Playwright configuration change. Final local classification:
+
+`CANONICAL STOREFRONT E2E PASS / TRANSIENT PRIOR PARALLEL INSTABILITY NOT REPRODUCED`.
+
+An initial Admin live worker exit also had no assertion failure; its exact complete rerun passed
+263/263.
 
 ## GitHub Actions and Infrastructure Waiver
 
@@ -268,13 +291,29 @@ The last integrated CHK4 implementation produced GitHub Actions run `35167047894
 `runner_name` and zero steps; Catalog Gate and Full Gate were skipped. That is infrastructure
 failure, not executed code/test failure.
 
-At this document freeze, the CHK5 commit does not yet exist and therefore has no candidate-specific
-run to inspect. No remote CI PASS is claimed. After publication, the immutable candidate SHA, run
-ID, runner allocation, executed steps, and conclusion must be reported externally. A genuine
-executed code/test failure blocks closure and cannot use the waiver. If the candidate again fails
-before allocation with zero steps, classify it as:
+The current workflow has `push.branches: [main]`. Therefore `audit/gp026-chk5` and
+`audit/gp026-chk5-br1` do not receive push-triggered CI runs by design. The original CHK5 candidate
+has zero workflow runs and zero check runs. After BR1 publication, its actual audit-branch state must
+also be inspected, but no push run is expected under the unchanged trigger configuration.
 
-`REMOTE CI INFRASTRUCTURE BLOCKED / PASS WITH CI INFRASTRUCTURE WAIVER`.
+Candidate-stage classification:
+
+`REMOTE CI NOT TRIGGERED ON AUDIT BRANCH BY WORKFLOW CONFIGURATION`.
+
+This absence is neither a CI PASS nor an infrastructure failure and does not show that the candidate
+repeated run `35167047894`. No remote PASS is claimed. No workflow trigger, pull request, empty
+commit, or `workflow_dispatch` invocation is introduced merely to manufacture evidence.
+
+After external approval, the exact lineage may be fast-forwarded to `main`. That non-document-only
+main push is eligible for the normal Light CI trigger. Its actual result controls final closure:
+
+- If a runner executes and CI passes: `REMOTE CI PASS`.
+- If a runner executes code/tests and they fail: GP-026 cannot close; the waiver is forbidden.
+- If the workflow fails before runner allocation with zero steps under the established account
+  condition: `REMOTE CI INFRASTRUCTURE BLOCKED`, and `PASS WITH CI INFRASTRUCTURE WAIVER` may be
+  considered.
+
+No future outcome is predeclared by this candidate.
 
 ## Documentation Drift Audit
 
@@ -286,8 +325,9 @@ identified as historical evidence. No architectural documentation contradiction 
 
 ## Residual Risks and Follow-ups
 
-- GitHub Actions remains subject to the account-level runner allocation/billing condition. This is
-  the only allowed unresolved CHK5 condition if the candidate reproduces the same zero-step state.
+- Final remote CI remains pending a future approved `main` integration push. The established
+  account-level runner allocation/billing condition is relevant only if that eligible run fails
+  before allocation with zero executed steps.
 - Dedicated future roadmap gates GP-036+, GP-043, GP-044, GP-045, GP-046, GP-047, and GP-048 remain
   responsible for their broader SEO, security, performance, accessibility, responsive, and commerce
   hardening scopes.
@@ -297,7 +337,8 @@ identified as historical evidence. No architectural documentation contradiction 
 
 ## Repository and Authority Status
 
-- Candidate scope is intentional and limited to the four files listed above.
+- The original candidate scope remains the four files listed above; BR1 changes only the two roadmap
+  documents.
 - Temporary screenshots, performance harnesses, and baseline worktree artifacts are not tracked.
 - Final repository cleanliness and remote SHA equality are reported after commit and publication.
 - GP-026A remains `CANCELLED / SUPERSEDED / HISTORICAL / NON-AUTHORITATIVE`.
@@ -305,4 +346,4 @@ identified as historical evidence. No architectural documentation contradiction 
 
 ## Final Candidate Classification
 
-GP-026 CHK5 FULL INTEGRATED REGRESSION / FINAL CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL / READY FOR EXTERNAL VERIFICATION
+GP-026 CHK5-BR1 EVIDENCE REMEDIATION CANDIDATE / PENDING EXTERNAL APPROVAL / READY FOR EXTERNAL VERIFICATION
