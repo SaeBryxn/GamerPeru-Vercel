@@ -8,9 +8,10 @@ describe("GP-018 CHK2-BR1 — Migration Candidate 0009 Static Audit", () => {
     (f) => f.endsWith(".sql") && !f.startsWith("meta")
   );
 
-  it("verifies exact migration count is now 15 (0000 to 0014)", () => {
-    expect(migrationFiles).toHaveLength(15);
-    const ordinals = migrationFiles.map((f) => f.slice(0, 4));
+  it("verifies the historical 0000–0014 migration chain remains complete", () => {
+    const historicalFiles = migrationFiles.filter((f) => Number(f.slice(0, 4)) <= 14);
+    expect(historicalFiles).toHaveLength(15);
+    const ordinals = historicalFiles.map((f) => f.slice(0, 4));
     expect(ordinals).toContain("0000");
     expect(ordinals).toContain("0001");
     expect(ordinals).toContain("0002");

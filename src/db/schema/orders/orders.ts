@@ -65,6 +65,12 @@ export const orders = pgTable(
     ),
     index("orders_customer_id_idx").on(table.customerId),
     index("orders_status_created_at_idx").on(table.status, table.createdAt),
+    index("orders_created_id_idx").on(table.createdAt.desc(), table.id.desc()),
+    index("orders_lower_email_created_id_idx").on(
+      sql`lower(${table.customerEmail})`,
+      table.createdAt.desc(),
+      table.id.desc()
+    ),
   ]
 );
 
