@@ -286,6 +286,7 @@ An initial Admin live worker exit also had no assertion failure; its exact compl
 The main fast-forward integration push of approved implementation `49299966aa96b77073c515189566ffe0b6b58311` triggered the standard GitHub Actions push workflow because it contained non-document test tooling changes under `scripts/test/**`.
 
 The push produced GitHub Actions run `35536599552` (workflow: `CI`):
+
 - Run ID: `35536599552`
 - URL: `https://github.com/latamcreativa/GamerPeru/actions/runs/35536599552`
 - Workflow conclusion: `failure`
@@ -294,6 +295,7 @@ The push produced GitHub Actions run `35536599552` (workflow: `CI`):
 - Job `Full Gate` (ID: `106146635943`): status `completed`, conclusion `skipped`, `runner_name`: `''`, steps count: `0`.
 
 Adjudication:
+
 - No GitHub Actions runner was allocated.
 - Zero repository commands or workflow steps executed.
 - The failure reproduced the established account billing/spending limit condition before runner execution, identical to previous runs `35025929837` and `35167047894`.
