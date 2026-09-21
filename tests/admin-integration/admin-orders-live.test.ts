@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { SQL } from "drizzle-orm";
 import postgres from "postgres";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { db } from "@/db";
 import { assertLocalDatabaseTarget } from "@/lib/admin/test-target-guard";
 import type * as RbacModule from "@/lib/auth/rbac";
 
@@ -11,6 +14,7 @@ vi.mock("@/lib/auth/rbac", async () => {
 
 import { requirePermission, ForbiddenError } from "@/lib/auth/rbac";
 import { createAdminOrderNote } from "@/lib/admin/orders/note-service";
+import { loadAdminTimelinePage } from "@/lib/admin/orders/timeline";
 import {
   getAdminOrderDetail,
   getAdminOrderList,
@@ -37,9 +41,12 @@ describe("GP-027 CHK1 Orders Admin local PostgreSQL", () => {
     a: randomUUID(),
     b: randomUUID(),
     c: randomUUID(),
+    d: randomUUID(),
+    paymentD: randomUUID(),
   };
   const code = `GP027${randomUUID().slice(0, 8).toUpperCase()}`;
   const orderNumber = `${code}-A`;
+  const tieOrderNumber = `TIE${randomUUID().slice(0, 8).toUpperCase()}-D`;
   const auth = (authUserId: string) => ({
     status: "READY" as const,
     authUserId,
@@ -72,7 +79,7 @@ describe("GP-027 CHK1 Orders Admin local PostgreSQL", () => {
       await pg`
         INSERT INTO orders (id, order_number, customer_email, customer_phone, status,
           subtotal_cents, discount_cents, shipping_cents, total_cents, currency, created_at, updated_at)
-        VALUES (${orderId}, ${`${code}-${suffix}`}, ${email}, '999999999', 'PENDING',
+        VALUES (${orderId}, ${`${code}-${suffix}`}, ${email}, '999999999', ${suffix === "A" ? "PENDING" : suffix === "B" ? "CONFIRMED" : "CANCELLED"},
           10000, 0, 0, 10000, 'PEN', ${createdAt}, ${createdAt})
       `;
     }
@@ -85,14 +92,17 @@ describe("GP-027 CHK1 Orders Admin local PostgreSQL", () => {
 
   afterAll(async () => {
     if (!pg) return;
-    await pg`DELETE FROM audit_events WHERE target_type = 'Order' AND target_id = ${id.a}`;
-    await pg`DELETE FROM order_notes WHERE order_id IN (${id.a}, ${id.b}, ${id.c})`;
-    await pg`DELETE FROM shipments WHERE order_id = ${id.a}`;
-    await pg`DELETE FROM payments WHERE order_id = ${id.a}`;
+    await pg`DELETE FROM audit_events WHERE target_type = 'Order' AND target_id IN (${id.a}, ${id.b}, ${id.c}, ${id.d})`;
+    await pg`DELETE FROM outbox_events WHERE aggregate_type = 'Order' AND aggregate_id = ${id.b}`;
+    await pg`DELETE FROM order_notes WHERE order_id IN (${id.a}, ${id.b}, ${id.c}, ${id.d})`;
+    await pg`DELETE FROM refunds WHERE order_id = ${id.d}`;
+    await pg`DELETE FROM payment_submissions WHERE payment_id = ${id.paymentD}`;
+    await pg`DELETE FROM shipments WHERE order_id IN (${id.a}, ${id.d})`;
+    await pg`DELETE FROM payments WHERE order_id IN (${id.a}, ${id.d})`;
     await pg`DELETE FROM order_items WHERE order_id = ${id.a}`;
     await pg`DELETE FROM order_address_snapshots WHERE order_id = ${id.a}`;
     await pg`DELETE FROM order_pricing_snapshots WHERE order_id = ${id.a}`;
-    await pg`DELETE FROM orders WHERE id IN (${id.a}, ${id.b}, ${id.c})`;
+    await pg`DELETE FROM orders WHERE id IN (${id.a}, ${id.b}, ${id.c}, ${id.d})`;
     await pg`DELETE FROM shipping_methods WHERE id = ${id.shipping}`;
     await pg`DELETE FROM payment_instruction_versions WHERE id = ${id.instruction}`;
     await pg`DELETE FROM payment_method_configurations WHERE id = ${id.method}`;
@@ -160,6 +170,45 @@ describe("GP-027 CHK1 Orders Admin local PostgreSQL", () => {
     }
   });
 
+  it("physically filters order, payment, and shipment states without duplicate or leaked orders", async () => {
+    const cases: [Record<string, string>, string[]][] = [
+      [{ orderStatus: "PENDING" }, [`${code}-A`]],
+      [{ orderStatus: "CONFIRMED" }, [`${code}-B`]],
+      [{ paymentStatus: "UNPAID" }, [`${code}-A`]],
+      [{ paymentStatus: "NOT_RECORDED" }, [`${code}-C`, `${code}-B`]],
+      [{ shipmentStatus: "UNFULFILLED" }, [`${code}-A`]],
+      [{ shipmentStatus: "NOT_RECORDED" }, [`${code}-C`, `${code}-B`]],
+      [{ orderStatus: "CONFIRMED", from: "2026-09-20", to: "2026-09-20" }, [`${code}-B`]],
+      [{ paymentStatus: "UNPAID", shipmentStatus: "UNFULFILLED" }, [`${code}-A`]],
+    ];
+    for (const [filters, expected] of cases) {
+      const result = await getAdminOrderList({ q: code, ...filters });
+      expect(result.status, JSON.stringify(filters)).toBe("READY");
+      if (result.status !== "READY") continue;
+      const numbers = result.rows.map((row) => row.orderNumber);
+      expect(numbers).toEqual(expected);
+      expect(new Set(numbers).size).toBe(numbers.length);
+    }
+    for (const key of ["paymentStatus", "shipmentStatus"] as const) {
+      const first = await getAdminOrderList({ q: code, [key]: "NOT_RECORDED", pageSize: "1" });
+      expect(first.status).toBe("READY");
+      if (first.status !== "READY") continue;
+      expect(first.rows.map((row) => row.orderNumber)).toEqual([`${code}-C`]);
+      expect(first.nextCursor).not.toBeNull();
+      const second = await getAdminOrderList({
+        q: code,
+        [key]: "NOT_RECORDED",
+        pageSize: "1",
+        cursor: first.nextCursor!,
+      });
+      expect(second.status).toBe("READY");
+      if (second.status === "READY") {
+        expect(second.rows.map((row) => row.orderNumber)).toEqual([`${code}-B`]);
+        expect(second.nextCursor).toBeNull();
+      }
+    }
+  });
+
   it("uses immutable detail snapshots and never fabricates confirmation", async () => {
     const result = await getAdminOrderDetail(orderNumber);
     expect(result.status).toBe("READY");
@@ -176,6 +225,140 @@ describe("GP-027 CHK1 Orders Admin local PostgreSQL", () => {
       expect.arrayContaining(["https://courier.example/track", null])
     );
     expect(result.detail.timeline.entries.map((entry) => entry.type)).toEqual(["ORDER_PLACED"]);
+  });
+
+  it("projects one durable confirmation and none from current CONFIRMED status alone", async () => {
+    const timestamp = "2026-09-20T05:00:00.000Z";
+    await pg`
+      INSERT INTO audit_events (id, actor_type, actor_id, action, target_type, target_id, timestamp)
+      VALUES (${randomUUID()}, 'ADMIN', ${id.actor}, 'orders:approve_payment', 'Order', ${id.b}, ${timestamp})
+    `;
+    await pg`
+      INSERT INTO outbox_events (id, event_name, aggregate_type, aggregate_id, payload, created_at)
+      VALUES (${randomUUID()}, 'OrderConfirmed', 'Order', ${id.b}, '{}'::jsonb, ${timestamp})
+    `;
+    try {
+      const evidenced = await getAdminOrderDetail(`${code}-B`);
+      expect(evidenced.status).toBe("READY");
+      if (evidenced.status === "READY") {
+        expect(evidenced.detail.order.status).toBe("CONFIRMED");
+        expect(
+          evidenced.detail.timeline.entries.filter((entry) => entry.type === "ORDER_CONFIRMED")
+        ).toHaveLength(1);
+      }
+    } finally {
+      await pg`DELETE FROM audit_events WHERE target_type = 'Order' AND target_id = ${id.b} AND action = 'orders:approve_payment'`;
+      await pg`DELETE FROM outbox_events WHERE aggregate_type = 'Order' AND aggregate_id = ${id.b} AND event_name = 'OrderConfirmed'`;
+    }
+    const unsupported = await getAdminOrderDetail(`${code}-B`);
+    expect(unsupported.status).toBe("READY");
+    if (unsupported.status === "READY") {
+      expect(unsupported.detail.order.status).toBe("CONFIRMED");
+      expect(
+        unsupported.detail.timeline.entries.some((entry) => entry.type === "ORDER_CONFIRMED")
+      ).toBe(false);
+    }
+  });
+
+  it("deduplicates canonical cancellation audits and uses cancelled_at only as fallback", async () => {
+    const timestamp = "2026-09-20T05:00:00.000Z";
+    await pg`UPDATE orders SET cancelled_at = ${timestamp} WHERE id IN (${id.b}, ${id.c})`;
+    await pg`
+      INSERT INTO audit_events (id, actor_type, actor_id, action, target_type, target_id, timestamp)
+      VALUES (${randomUUID()}, 'ADMIN', ${id.actor}, 'orders:cancel', 'Order', ${id.b}, ${timestamp}),
+             (${randomUUID()}, 'ADMIN', ${id.actor}, 'orders:refund_and_cancel', 'Order', ${id.c}, ${timestamp})
+    `;
+    for (const [orderId, number] of [
+      [id.b, `${code}-B`],
+      [id.c, `${code}-C`],
+    ] as const) {
+      const result = await getAdminOrderDetail(number);
+      expect(result.status).toBe("READY");
+      if (result.status === "READY") {
+        expect(
+          result.detail.timeline.entries.filter((entry) => entry.type === "ORDER_CANCELLED")
+        ).toHaveLength(1);
+        expect(
+          result.detail.timeline.entries.find((entry) => entry.type === "ORDER_CANCELLED")?.id
+        ).not.toBe(`order_cancelled-${orderId}`);
+      }
+    }
+    await pg`DELETE FROM audit_events WHERE target_type = 'Order' AND target_id = ${id.b} AND action = 'orders:cancel'`;
+    const fallback = await getAdminOrderDetail(`${code}-B`);
+    expect(fallback.status).toBe("READY");
+    if (fallback.status === "READY") {
+      expect(
+        fallback.detail.timeline.entries.filter((entry) => entry.type === "ORDER_CANCELLED")
+      ).toHaveLength(1);
+      expect(
+        fallback.detail.timeline.entries.find((entry) => entry.type === "ORDER_CANCELLED")?.id
+      ).toBe(`order_cancelled-${id.b}`);
+    }
+  });
+
+  it("orders all eight event types at one timestamp and retains each shipment event", async () => {
+    const timestamp = "2026-09-19T10:00:00.000Z";
+    await pg`
+      INSERT INTO orders (id, order_number, customer_email, customer_phone, status,
+        subtotal_cents, discount_cents, shipping_cents, total_cents, currency,
+        cancelled_at, created_at, updated_at)
+      VALUES (${id.d}, ${tieOrderNumber}, 'tie@example.com', '999999999', 'REFUNDED',
+        10000, 0, 0, 10000, 'PEN', ${timestamp}, ${timestamp}, ${timestamp})
+    `;
+    await pg`
+      INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id,
+        amount_cents, refunded_amount_cents, currency, status)
+      VALUES (${id.paymentD}, ${id.d}, ${code}, ${id.instruction}, 10000, 100, 'PEN', 'REFUNDED')
+    `;
+    await pg`
+      INSERT INTO payment_submissions (id, payment_id, attempt_number, operation_code, submitted_at)
+      VALUES (${randomUUID()}, ${id.paymentD}, 1, 'GP027-TIE', ${timestamp})
+    `;
+    await pg`
+      INSERT INTO refunds (id, order_id, payment_id, amount_cents, reason, created_at)
+      VALUES (${randomUUID()}, ${id.d}, ${id.paymentD}, 100, 'Test refund', ${timestamp})
+    `;
+    await pg`
+      INSERT INTO shipments (id, order_id, shipping_method_id, status, shipped_at, delivered_at)
+      VALUES (${randomUUID()}, ${id.d}, ${id.shipping}, 'DELIVERED', ${timestamp}, ${timestamp}),
+             (${randomUUID()}, ${id.d}, ${id.shipping}, 'DELIVERED', ${timestamp}, ${timestamp})
+    `;
+    await pg`
+      INSERT INTO order_notes (id, order_id, author_auth_user_id, body, created_at,
+        mutation_request_id, intent_fingerprint, actor_binding_digest)
+      VALUES (${randomUUID()}, ${id.d}, ${id.actor}, 'Tie note', ${timestamp},
+        ${randomUUID()}, ${"a".repeat(64)}, ${"b".repeat(64)})
+    `;
+    await pg`
+      INSERT INTO audit_events (id, actor_type, actor_id, action, target_type, target_id, timestamp)
+      VALUES (${randomUUID()}, 'ADMIN', ${id.actor}, 'orders:approve_payment', 'Order', ${id.d}, ${timestamp}),
+             (${randomUUID()}, 'ADMIN', ${id.actor}, 'orders:refund_and_cancel', 'Order', ${id.d}, ${timestamp})
+    `;
+    const result = await getAdminOrderDetail(tieOrderNumber);
+    expect(result.status).toBe("READY");
+    if (result.status !== "READY") return;
+    const types = result.detail.timeline.entries.map((entry) => entry.type);
+    expect(types).toEqual([
+      "ORDER_PLACED",
+      "PAYMENT_SUBMITTED",
+      "ORDER_CONFIRMED",
+      "ORDER_CANCELLED",
+      "REFUND_ISSUED",
+      "SHIPMENT_DISPATCHED",
+      "SHIPMENT_DISPATCHED",
+      "ORDER_DELIVERED",
+      "ORDER_DELIVERED",
+      "INTERNAL_NOTE",
+    ]);
+    expect(result.detail.timeline.entries.map((entry) => entry.timestamp)).toEqual(
+      Array.from({ length: 10 }, () => timestamp)
+    );
+    for (const type of ["SHIPMENT_DISPATCHED", "ORDER_DELIVERED"] as const) {
+      const ids = result.detail.timeline.entries
+        .filter((entry) => entry.type === type)
+        .map((entry) => entry.id);
+      expect(ids).toEqual([...ids].sort());
+    }
   });
 
   it("fails closed on currency mismatch and does not invent missing snapshots", async () => {
@@ -332,9 +515,9 @@ describe("GP-027 CHK1 Orders Admin local PostgreSQL", () => {
     }
   });
 
-  it("orders tied timeline events and pages the latest 50 notes and events", async () => {
+  it("bounds every source read and paginates 220 tied notes without omission", async () => {
     const timestamp = "2026-09-20T05:00:00.000Z";
-    const noteIds = Array.from({ length: 52 }, () => randomUUID());
+    const noteIds = Array.from({ length: 220 }, () => randomUUID());
     await pg`
       INSERT INTO order_notes (id, order_id, author_auth_user_id, body, created_at,
         mutation_request_id, intent_fingerprint, actor_binding_digest)
@@ -349,20 +532,77 @@ describe("GP-027 CHK1 Orders Admin local PostgreSQL", () => {
     expect(detail.detail.notes.olderCursor).not.toBeNull();
     const olderNotes = await getAdminOrderNotesPage(orderNumber, detail.detail.notes.olderCursor!);
     expect(olderNotes.status).toBe("READY");
-    if (olderNotes.status === "READY")
-      expect(olderNotes.page.notes.length).toBeGreaterThanOrEqual(2);
-    expect(detail.detail.timeline.entries).toHaveLength(50);
-    expect(detail.detail.timeline.olderCursor).not.toBeNull();
-    const olderTimeline = await getAdminOrderTimelinePage(
-      orderNumber,
-      detail.detail.timeline.olderCursor!
-    );
-    expect(olderTimeline.status).toBe("READY");
-    if (olderTimeline.status === "READY") {
-      expect(olderTimeline.page.entries[0]?.type).toBe("ORDER_PLACED");
+    if (olderNotes.status === "READY") expect(olderNotes.page.notes).toHaveLength(50);
+
+    const spy = vi.spyOn(db, "execute");
+    let firstCursor: string | null = null;
+    try {
+      const firstPage = await loadAdminTimelinePage(id.a, null);
+      firstCursor = firstPage?.olderCursor ?? null;
+      expect(firstCursor).not.toBeNull();
+      if (!firstCursor) throw new Error("Expected older timeline page");
+      await loadAdminTimelinePage(id.a, null, firstCursor);
+      const queries = spy.mock.calls.map(([statement]) => {
+        if (!(statement instanceof SQL)) throw new Error("Expected SQL timeline source query");
+        return new PgDialect().sqlToQuery(statement);
+      });
+      expect(queries).toHaveLength(16);
+      for (const pageQueries of [queries.slice(0, 8), queries.slice(8)]) {
+        expect(pageQueries.map((query) => query.params.at(-1))).toEqual([
+          1, 51, 1, 1, 51, 51, 51, 51,
+        ]);
+        expect(pageQueries.every((query) => /LIMIT \$\d+/.test(query.sql))).toBe(true);
+      }
+      expect(queries.slice(8).every((query) => query.sql.includes("WHERE (e.event_at,"))).toBe(
+        true
+      );
+      const returned = await Promise.all(
+        spy.mock.results.map(async (result) => ((await result.value) as unknown[]).length)
+      );
       expect(
-        olderTimeline.page.entries.slice(1).every((entry) => entry.type === "INTERNAL_NOTE")
+        returned.slice(0, 8).every((count, index) => count <= [1, 51, 1, 1, 51, 51, 51, 51][index]!)
       ).toBe(true);
+      expect(returned[7]).toBe(51);
+    } finally {
+      spy.mockRestore();
     }
+
+    const expected = await pg`
+      SELECT event_type, source_id FROM (
+        SELECT 'ORDER_PLACED'::text AS event_type, o.id AS source_id,
+               o.created_at AS event_at, 1 AS precedence
+        FROM orders o WHERE o.id = ${id.a}
+        UNION ALL
+        SELECT 'INTERNAL_NOTE', n.id, n.created_at, 8
+        FROM order_notes n WHERE n.order_id = ${id.a}
+      ) e ORDER BY event_at DESC, precedence DESC, source_id DESC
+    `;
+    const expectedIds = expected.map(
+      (row) => `${String(row.event_type).toLowerCase()}-${row.source_id}`
+    );
+    expect(expectedIds.length).toBeGreaterThan(220);
+    const pages = [];
+    let cursor: string | null = null;
+    for (let index = 0; index < 20; index++) {
+      const page = await loadAdminTimelinePage(id.a, null, cursor);
+      expect(page).not.toBeNull();
+      if (!page) break;
+      expect(page.entries.length).toBeLessThanOrEqual(50);
+      expect(page.entries.map((entry) => entry.id)).toEqual(
+        expectedIds.slice(index * 50, (index + 1) * 50).reverse()
+      );
+      pages.push(page);
+      cursor = page.olderCursor;
+      if (!cursor) break;
+    }
+    expect(cursor).toBeNull();
+    const allIds = pages.flatMap((page) => [...page.entries].reverse().map((entry) => entry.id));
+    expect(allIds).toEqual(expectedIds);
+    expect(new Set(allIds).size).toBe(allIds.length);
+    expect(allIds.at(-1)).toBe(`order_placed-${id.a}`);
+    if (!firstCursor) throw new Error("Expected older timeline cursor");
+    expect(await getAdminOrderTimelinePage(`${code}-B`, firstCursor)).toEqual({
+      status: "INVALID_INPUT",
+    });
   });
 });
