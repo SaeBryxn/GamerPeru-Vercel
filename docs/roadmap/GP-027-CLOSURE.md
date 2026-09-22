@@ -133,7 +133,7 @@ The disposable local PostgreSQL database (running on port 54322) registers migra
   - Unpaid order cancellation with required operational reason.
   - Paid pre-shipment order cancellation with mandatory attestation of external refund recording.
 - **Accessibility & Responsive**: Full keyboard operability, focus traps, focus restoration, zero horizontal overflow from 360px to 1440px, and automated Axe checks reported zero WCAG 2.1 A/AA violations in the tested surfaces.
-- **Security & Privacy Hardening**: Safe tracking URL allowlist validation, PII masking, complete isolation of private data from Web Storage and audit logs.
+- **Security & Privacy Hardening**: Safe tracking URL allowlist validation, PII masking, and hardened data isolation: GP-027 does not persist private order/customer/mutation-intent data into localStorage or sessionStorage, and its own note audit path excludes the raw note body and raw client mutationRequestId. Payment proof, operation code, verification notes, reviewer workflow data, and external refund reference remain outside the GP-027 browser DTO.
 
 ### GP-028 Out-of-Scope Boundary (Strictly Maintained)
 
@@ -165,7 +165,7 @@ GP-027 preserves complete architectural separation from GP-028 (Payment Verifica
 - **Web Storage Hygiene**: GP-027 does not persist its private order/customer/mutation-intent data into `localStorage` or `sessionStorage`.
 - **Audit Metadata Hygiene**:
   - For note creation, action is `orders:note_added` emitting only allowed note identifier metadata (`noteId`). Raw note bodies and raw client `mutationRequestId` are omitted from metadata; the audit request identity uses the derived domain-separated digest rather than the raw client ID.
-  - For order cancellation, canonical lifecycle audit actions relevant to GP-027 include `orders:cancel` and `orders:refund_and_cancel`. Operational cancellation/refund lifecycle metadata includes required domain consequences (e.g. operational reason, external refund reference where recorded) in accordance with GP-020.
+  - For cancellation/refund lifecycle audits, GP-020 records the canonical operational metadata defined by the underlying service. Relevant canonical actions include `orders:cancel` and `orders:refund_and_cancel`. The `orders:refund_and_cancel` audit metadata includes order number, refund monetary consequences, and the normalized operational reason. An optional external refund reference is persisted on the canonical refund record when supplied; it is not included in the `orders:refund_and_cancel` audit metadata and remains absent from the GP-027 detail DTO.
 
 ---
 
