@@ -4,12 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminNotePage, AdminTimelinePage, AdminTimelineType } from "@/lib/admin/orders/types";
 import { createAdminOrderNoteAction } from "@/lib/admin/orders/actions";
-import {
-  clearOrderIntent,
-  getOrCreateOrderIntent,
-  markOrderIntentSent,
-  readOrderIntent,
-} from "./intent-storage";
 import { formatLimaDateTime } from "./order-detail-format";
 import { loadOlderAdminNotes, loadOlderAdminTimeline } from "./pagination-actions";
 import styles from "./order-detail.module.css";
@@ -59,6 +53,7 @@ export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: Or
   const [notesBusy, setNotesBusy] = useState(false);
   const [timelineBusy, setTimelineBusy] = useState(false);
   const noteBusyRef = useRef(false);
+  const noteIntentRef = useRef<{ id: string; body: string } | null>(null);
 
   useEffect(() => {
     setNotes(initialNotes.notes);
@@ -69,10 +64,6 @@ export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: Or
     setTimeline(initialTimeline.entries);
     setTimelineCursor(initialTimeline.olderCursor);
   }, [initialTimeline]);
-
-  useEffect(() => {
-    setPendingNotice(readOrderIntent(orderNumber, "note")?.sent === true);
-  }, [orderNumber]);
 
   async function loadOlderNotes() {
     if (!noteCursor || notesBusy) return;
@@ -132,11 +123,12 @@ export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: Or
       setNoteFeedback("Escribe una nota de 1 a 2,000 caracteres válidos.");
       return;
     }
-    const intent = getOrCreateOrderIntent(orderNumber, "note");
-    if (!intent || !markOrderIntentSent(orderNumber, "note", intent)) {
-      setNoteFeedback("No se pudo guardar el identificador de reintento. La nota no se envió.");
+    if (noteIntentRef.current && noteIntentRef.current.body !== normalized) {
+      setNoteFeedback("Restaura exactamente el texto original antes de reintentar esta nota.");
       return;
     }
+    const intent = noteIntentRef.current ?? { id: crypto.randomUUID(), body: normalized };
+    noteIntentRef.current = intent;
 
     noteBusyRef.current = true;
     setNoteBusy(true);
@@ -149,7 +141,7 @@ export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: Or
         mutationRequestId: intent.id,
       });
       if (result.success) {
-        clearOrderIntent(orderNumber, "note");
+        noteIntentRef.current = null;
         setPendingNotice(false);
         setBody("");
         setNotes((current) =>
@@ -248,8 +240,8 @@ export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: Or
           </div>
           {pendingNotice && (
             <p className={styles.pendingNotice}>
-              Hay un intento pendiente. Si hubo una respuesta perdida, reingresa exactamente la
-              misma nota y reintenta; se conservará su identificador.
+              Hay un intento pendiente. Reintenta con el mismo texto para confirmar el resultado; se
+              conservará su identificador mientras esta página siga abierta.
             </p>
           )}
           {noteFeedback && (

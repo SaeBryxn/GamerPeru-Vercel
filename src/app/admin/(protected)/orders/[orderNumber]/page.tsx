@@ -335,11 +335,12 @@ function DetailBody({ detail }: { detail: AdminOrderDetail }) {
       </div>
 
       <OrderActivity
+        key={`activity:${order.orderNumber}`}
         orderNumber={order.orderNumber}
         initialNotes={detail.notes}
         initialTimeline={detail.timeline}
       />
-      <OrderCancellation detail={detail} />
+      <OrderCancellation key={`cancellation:${order.orderNumber}`} detail={detail} />
     </div>
   );
 }

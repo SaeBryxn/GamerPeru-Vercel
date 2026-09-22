@@ -38,6 +38,17 @@ async function expectAxeClean(page: Page) {
   expect(result.violations).toEqual([]);
 }
 
+async function readBrowserStorage(page: Page) {
+  return page.evaluate(() => {
+    const entries = (storage: Storage) =>
+      Array.from({ length: storage.length }, (_, index) => {
+        const key = storage.key(index)!;
+        return [key, storage.getItem(key) ?? ""] as const;
+      });
+    return { local: entries(localStorage), session: entries(sessionStorage) };
+  });
+}
+
 test.beforeAll(async ({}, testInfo) => {
   if (!testInfo.config.configFile?.endsWith("playwright.admin.config.ts")) return;
   const existing = await sql<{ order_number: string; status: string }[]>`
@@ -197,6 +208,46 @@ test.describe("GP-027 CHK3 — protected order detail", () => {
     );
   });
 
+  test("order details and an in-flight intent do not persist private data in browser storage", async ({
+    page,
+  }) => {
+    await login(page, ADMIN_E2E_USERS.orders.email, `/admin/orders/${orders.orderNumber(10)}`);
+    await expect(page.getByText("buyer10@example.com")).toBeVisible();
+    await expect(page.getByText(orders.privatePhone).first()).toBeVisible();
+    await expect(page.getByText(orders.privateStreet)).toBeVisible();
+    await expect(page.getByRole("region", { name: "Notas internas" })).toContainText(
+      "Nota histórica 55"
+    );
+    const before = await readBrowserStorage(page);
+    const noteBody = "Nota privada temporal E2E";
+    const reason = "Razón privada temporal E2E";
+    await page.getByLabel("Nueva nota").fill(noteBody);
+    await page.getByRole("button", { name: "Cancelar pedido sin pagar" }).click();
+    await page.getByLabel("Razón operacional obligatoria").fill(reason);
+    const after = await readBrowserStorage(page);
+    const areas = ["local", "session"] as const;
+    const changed = areas.flatMap((area) =>
+      after[area].filter(([key, value]) =>
+        before[area].every(([oldKey, oldValue]) => oldKey !== key || oldValue !== value)
+      )
+    );
+    expect(
+      areas.flatMap((area) => after[area]).filter(([key]) => key.startsWith("gp027:"))
+    ).toEqual([]);
+    const newStorage = JSON.stringify(changed);
+    for (const privateValue of [
+      orders.orderNumber(10),
+      "buyer10@example.com",
+      orders.privatePhone,
+      orders.privateStreet,
+      "Nota histórica 55",
+      noteBody,
+      reason,
+    ]) {
+      expect(newStorage).not.toContain(privateValue);
+    }
+  });
+
   test("notes reject invalid text, preserve plain text and reconcile a lost response", async ({
     page,
   }) => {
@@ -219,25 +270,20 @@ test.describe("GP-027 CHK3 — protected order detail", () => {
     });
     await page.getByRole("button", { name: "Guardar nota" }).click();
     await expect(page.getByText("El resultado es incierto.", { exact: false })).toBeVisible();
-    const intentBefore = await page.evaluate(
-      (number) => sessionStorage.getItem(`gp027:order-intent:${number}:note`),
-      orders.orderNumber(1)
-    );
-    expect(intentBefore).toBeTruthy();
-    await page.reload();
-    await page.getByLabel("Nueva nota").fill(body);
+    await expect(textarea).toHaveValue(body);
+    await textarea.fill("Texto distinto");
+    await page.getByRole("button", { name: "Guardar nota" }).click();
+    await expect(page.getByText("Restaura exactamente el texto original")).toBeVisible();
+    await textarea.fill(body);
     await page.getByRole("button", { name: "Guardar nota" }).click();
     await expect(page.getByText("La nota ya estaba guardada.", { exact: false })).toBeVisible();
-    const [count] = await sql<
-      { count: string }[]
-    >`SELECT count(*)::text AS count FROM order_notes WHERE order_id = (SELECT id FROM orders WHERE order_number = ${orders.orderNumber(1)}) AND body = ${body}`;
-    expect(count?.count).toBe("1");
-    expect(
-      await page.evaluate(
-        (number) => sessionStorage.getItem(`gp027:order-intent:${number}:note`),
-        orders.orderNumber(1)
-      )
-    ).toBeNull();
+    const [state] = await sql<{ note_count: string; audit_count: string }[]>`
+      SELECT
+        (SELECT count(*)::text FROM order_notes WHERE order_id = o.id AND body = ${body}) AS note_count,
+        (SELECT count(*)::text FROM audit_events WHERE target_type = 'Order'
+          AND target_id = o.id::text AND action = 'orders:note_added') AS audit_count
+      FROM orders o WHERE o.order_number = ${orders.orderNumber(1)}`;
+    expect(state).toEqual({ note_count: "1", audit_count: "1" });
     await expect(page.locator("script:visible")).toHaveCount(0);
   });
 
@@ -247,18 +293,8 @@ test.describe("GP-027 CHK3 — protected order detail", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByRole("dialog")).toContainText("puede liberarse stock reservado");
     await expect(page.getByRole("dialog")).not.toContainText("devolución de dinero");
-    const firstIntent = await page.evaluate(
-      (number) => sessionStorage.getItem(`gp027:order-intent:${number}:unpaid-cancellation`),
-      orders.unpaidActionNumber
-    );
     await page.getByRole("button", { name: "Volver sin cambios" }).click();
     await page.getByRole("button", { name: "Cancelar pedido sin pagar" }).click();
-    expect(
-      await page.evaluate(
-        (number) => sessionStorage.getItem(`gp027:order-intent:${number}:unpaid-cancellation`),
-        orders.unpaidActionNumber
-      )
-    ).toBe(firstIntent);
     await page.getByRole("button", { name: "Confirmar cancelación" }).click();
     await expect(page.getByLabel("Razón operacional obligatoria")).toBeFocused();
     await page.getByLabel("Razón operacional obligatoria").fill("Razón stale E2E");
@@ -291,23 +327,27 @@ test.describe("GP-027 CHK3 — protected order detail", () => {
     });
     await page.getByRole("button", { name: "Confirmar cancelación" }).click();
     await expect(page.getByRole("dialog")).toContainText("El resultado es incierto");
-    const intent = await page.evaluate(
-      (number) => sessionStorage.getItem(`gp027:order-intent:${number}:unpaid-cancellation`),
-      orders.unpaidActionNumber
-    );
-    expect(intent).toBeTruthy();
-    await page.reload();
-    await page.getByRole("button", { name: "Resolver intento pendiente" }).click();
+    await page.getByLabel("Razón operacional obligatoria").fill("Razón distinta");
+    await page.getByRole("button", { name: "Confirmar cancelación" }).click();
+    await expect(page.getByRole("dialog")).toContainText("Restaura exactamente la razón original");
+    await page.getByRole("button", { name: "Volver sin cambios" }).click();
+    await page
+      .getByRole("button", { name: /Resolver intento pendiente|Cancelar pedido sin pagar/ })
+      .click();
     await page.getByLabel("Razón operacional obligatoria").fill("Cancelación unpaid E2E");
     await page.getByRole("button", { name: "Confirmar cancelación" }).click();
     await expect(
       page.getByText("La operación ya estaba registrada", { exact: false })
     ).toBeVisible();
     const [state] = await sql<
-      { status: string; count: string }[]
-    >`SELECT o.status, (SELECT count(*)::text FROM audit_events WHERE target_type = 'Order' AND target_id = o.id::text AND action = 'orders:cancel') AS count FROM orders o WHERE o.order_number = ${orders.unpaidActionNumber}`;
+      { status: string; audit_count: string; outbox_count: string }[]
+    >`SELECT o.status,
+        (SELECT count(*)::text FROM audit_events WHERE target_type = 'Order' AND target_id = o.id::text AND action = 'orders:cancel') AS audit_count,
+        (SELECT count(*)::text FROM outbox_events WHERE aggregate_type = 'Order' AND aggregate_id = o.id::text AND event_name = 'OrderCancelled') AS outbox_count
+      FROM orders o WHERE o.order_number = ${orders.unpaidActionNumber}`;
     expect(state?.status).toBe("CANCELLED");
-    expect(state?.count).toBe("1");
+    expect(state?.audit_count).toBe("1");
+    expect(state?.outbox_count).toBe("1");
   });
 
   test("paid cancellation requires explicit attestation and rejects a stale shipment", async ({

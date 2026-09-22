@@ -1,27 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminOrderDetail } from "@/lib/admin/orders/types";
 import {
   cancelAdminPaidOrderAction,
   cancelAdminUnpaidOrderAction,
 } from "@/lib/admin/orders/actions";
-import {
-  clearOrderIntent,
-  getOrCreateOrderIntent,
-  markOrderIntentSent,
-  readOrderIntent,
-  type OrderIntentKind,
-  type PendingOrderIntent,
-} from "./intent-storage";
 import styles from "./order-detail.module.css";
 
 type CancellationMode = "unpaid" | "paid";
-
-function intentKind(mode: CancellationMode): OrderIntentKind {
-  return mode === "unpaid" ? "unpaid-cancellation" : "paid-cancellation";
-}
+type CancellationIntent = { id: string; reason: string | null; sent: boolean };
 
 function safeActionError(code: string): string {
   if (code === "IDEMPOTENCY_CONFLICT") {
@@ -59,6 +48,10 @@ export function OrderCancellation({ detail }: { detail: AdminOrderDetail }) {
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const busyRef = useRef(false);
+  const intentsRef = useRef<Record<CancellationMode, CancellationIntent | null>>({
+    unpaid: null,
+    paid: null,
+  });
   const [mode, setMode] = useState<CancellationMode | null>(null);
   const [reason, setReason] = useState("");
   const [attested, setAttested] = useState(false);
@@ -66,25 +59,21 @@ export function OrderCancellation({ detail }: { detail: AdminOrderDetail }) {
   const [resolved, setResolved] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [dialogFeedback, setDialogFeedback] = useState("");
-  const [pendingUnpaid, setPendingUnpaid] = useState<PendingOrderIntent | null>(null);
-  const [pendingPaid, setPendingPaid] = useState<PendingOrderIntent | null>(null);
+  const [pendingUnpaid, setPendingUnpaid] = useState<CancellationIntent | null>(null);
+  const [pendingPaid, setPendingPaid] = useState<CancellationIntent | null>(null);
 
-  useEffect(() => {
-    setPendingUnpaid(readOrderIntent(orderNumber, "unpaid-cancellation"));
-    setPendingPaid(readOrderIntent(orderNumber, "paid-cancellation"));
-  }, [orderNumber]);
-
-  function updatePending(nextMode: CancellationMode, intent: PendingOrderIntent | null) {
+  function updatePending(nextMode: CancellationMode, intent: CancellationIntent | null) {
+    intentsRef.current[nextMode] = intent;
     if (nextMode === "unpaid") setPendingUnpaid(intent);
     else setPendingPaid(intent);
   }
 
   function openDialog(nextMode: CancellationMode, trigger: HTMLButtonElement) {
-    const intent = getOrCreateOrderIntent(orderNumber, intentKind(nextMode));
-    if (!intent) {
-      setFeedback("No se pudo conservar un intento seguro. La acción no se inició.");
-      return;
-    }
+    const intent = intentsRef.current[nextMode] ?? {
+      id: crypto.randomUUID(),
+      reason: null,
+      sent: false,
+    };
     updatePending(nextMode, intent);
     setFeedback("");
     setDialogFeedback("");
@@ -120,15 +109,16 @@ export function OrderCancellation({ detail }: { detail: AdminOrderDetail }) {
       return;
     }
 
-    const kind = intentKind(mode);
-    const intent = getOrCreateOrderIntent(orderNumber, kind);
-    if (!intent || !markOrderIntentSent(orderNumber, kind, intent)) {
-      setDialogFeedback(
-        "No se pudo conservar el identificador de reintento. La acción no se envió."
-      );
+    const intent = intentsRef.current[mode];
+    if (!intent) {
+      setDialogFeedback("No se pudo conservar un intento seguro. La acción no se envió.");
       return;
     }
-    updatePending(mode, { ...intent, sent: true });
+    if (intent.sent && intent.reason !== normalizedReason) {
+      setDialogFeedback("Restaura exactamente la razón original antes de reintentar.");
+      return;
+    }
+    updatePending(mode, { ...intent, reason: normalizedReason, sent: true });
     busyRef.current = true;
     setBusy(true);
     setDialogFeedback("");
@@ -147,7 +137,6 @@ export function OrderCancellation({ detail }: { detail: AdminOrderDetail }) {
               externalRefundCompleted: true,
             });
       if (result.success) {
-        clearOrderIntent(orderNumber, kind);
         updatePending(mode, null);
         setResolved(true);
         setFeedback(
