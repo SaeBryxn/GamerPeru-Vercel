@@ -158,7 +158,11 @@ function OrderTable({ rows }: { rows: AdminOrderListRow[] }) {
         <tbody>
           {rows.map((row) => (
             <tr key={row.orderNumber} data-testid={`order-row-${row.orderNumber}`}>
-              <td className={styles.orderNumber}>{row.orderNumber}</td>
+              <td className={styles.orderNumber}>
+                <Link href={`/admin/orders/${encodeURIComponent(row.orderNumber)}`}>
+                  {row.orderNumber}
+                </Link>
+              </td>
               <td>
                 <span className={styles.customerEmail}>{row.customerEmailMasked}</span>
                 <span className={styles.secondaryText}>
@@ -208,7 +212,11 @@ function OrderCards({ rows }: { rows: AdminOrderListRow[] }) {
         >
           <div className={styles.cardHeader}>
             <div>
-              <p className={styles.orderNumber}>{row.orderNumber}</p>
+              <p className={styles.orderNumber}>
+                <Link href={`/admin/orders/${encodeURIComponent(row.orderNumber)}`}>
+                  {row.orderNumber}
+                </Link>
+              </p>
               <p className={styles.customerEmail}>{row.customerEmailMasked}</p>
             </div>
             <StatusBadge label={orderLabels[row.orderStatus]} status={row.orderStatus} />

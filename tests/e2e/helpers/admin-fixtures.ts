@@ -40,6 +40,8 @@ export const ADMIN_E2E_ORDER_FIXTURES = {
   privatePhone: "999111222",
   privateStreet: "Calle Privada E2E 123",
   privateOperationCode: "OPERACION-E2E-PRIVADA",
+  unpaidActionNumber: "GP-CK000001",
+  paidActionNumber: "GP-CK000002",
 };
 
 export const ADMIN_E2E_PRODUCT_FIXTURES = {

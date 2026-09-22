@@ -829,17 +829,20 @@ export async function seedAdminOrderFixtures(clientSql) {
       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_active = true;
     `;
 
-    for (let index = 1; index <= ADMIN_ORDER_COUNT; index += 1) {
+    for (let index = 1; index <= ADMIN_ORDER_COUNT + 2; index += 1) {
       const orderId = adminOrderId(0xd100, index);
-      const orderNumber = `GP-AD${String(index).padStart(6, "0")}`;
+      const orderNumber =
+        index <= ADMIN_ORDER_COUNT
+          ? `GP-AD${String(index).padStart(6, "0")}`
+          : `GP-CK${String(index - ADMIN_ORDER_COUNT).padStart(6, "0")}`;
       const createdAt = new Date(
-        Date.UTC(2026, 8, index <= 27 ? 19 : 18, 20, 0) -
+        Date.UTC(2026, 8, index <= 27 ? 19 : index <= 30 ? 18 : 17, 20, 0) -
           (index <= 27 ? index - 1 : index - 28) * 60_000
       ).toISOString();
       const paymentAt = new Date(Date.parse(createdAt) + 10 * 60_000).toISOString();
       const shipmentAt = new Date(Date.parse(createdAt) + 20 * 60_000).toISOString();
       const orderStatus =
-        index === 2
+        index === 2 || index === 32
           ? "CONFIRMED"
           : index === 3
             ? "CANCELLED"
@@ -895,7 +898,11 @@ export async function seedAdminOrderFixtures(clientSql) {
 
       if (index !== 5) {
         const paymentStatus =
-          index === 2 || index === 6 || index === 7 ? "PAID" : index === 4 ? "REFUNDED" : "UNPAID";
+          index === 2 || index === 6 || index === 7 || index === 32
+            ? "PAID"
+            : index === 4
+              ? "REFUNDED"
+              : "UNPAID";
         await tx`
           INSERT INTO payments
             (id, order_id, payment_method_code, instruction_version_id, amount_cents,
@@ -914,12 +921,18 @@ export async function seedAdminOrderFixtures(clientSql) {
         const shipmentStatus = index === 2 ? "SHIPPED" : index === 4 ? "DELIVERED" : "UNFULFILLED";
         await tx`
           INSERT INTO shipments
-            (id, order_id, shipping_method_id, status, shipped_at, delivered_at, created_at, updated_at)
+            (id, order_id, shipping_method_id, status, courier_name, tracking_number, tracking_url,
+             shipped_at, delivered_at, created_at, updated_at)
           VALUES
             (${adminOrderId(0xd600, index)}, ${orderId}, ${ADMIN_ORDER_SHIPPING_METHOD_ID},
-             ${shipmentStatus}, ${index === 2 || index === 4 ? shipmentAt : null},
+             ${shipmentStatus}, ${index === 2 ? "Envíos E2E" : null},
+             ${index === 2 ? "TRACK-E2E-2" : null},
+             ${index === 2 ? "https://tracking.example.com/GP-AD000002" : index === 3 ? "javascript:alert(1)" : null},
+             ${index === 2 || index === 4 ? shipmentAt : null},
              ${index === 4 ? shipmentAt : null}, ${createdAt}, ${shipmentAt})
-          ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, updated_at = EXCLUDED.updated_at;
+          ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status,
+            courier_name = EXCLUDED.courier_name, tracking_number = EXCLUDED.tracking_number,
+            tracking_url = EXCLUDED.tracking_url, updated_at = EXCLUDED.updated_at;
         `;
       }
       if (index === 7) {
@@ -932,6 +945,23 @@ export async function seedAdminOrderFixtures(clientSql) {
           ON CONFLICT (id) DO UPDATE SET status = 'DELIVERED', updated_at = EXCLUDED.updated_at;
         `;
       }
+    }
+
+    await tx`DELETE FROM order_address_snapshots WHERE order_id = ${adminOrderId(0xd100, 8)}`;
+    await tx`DELETE FROM order_pricing_snapshots WHERE order_id = ${adminOrderId(0xd100, 9)}`;
+
+    for (let index = 1; index <= 55; index += 1) {
+      const createdAt = new Date(Date.UTC(2026, 8, 19, 21, index)).toISOString();
+      await tx`
+        INSERT INTO order_notes
+          (id, order_id, author_auth_user_id, body, created_at,
+           mutation_request_id, intent_fingerprint, actor_binding_digest)
+        VALUES
+          (${adminOrderId(0xe000, index)}, ${adminOrderId(0xd100, 10)},
+           ${ADMIN_E2E_USERS.orders.id}, ${`Nota histórica ${index}`}, ${createdAt},
+           ${adminOrderId(0xe100, index)}, ${"a".repeat(64)}, ${"b".repeat(64)})
+        ON CONFLICT (id) DO UPDATE SET body = EXCLUDED.body, created_at = EXCLUDED.created_at;
+      `;
     }
 
     await tx`
@@ -952,7 +982,7 @@ export async function seedAdminOrderFixtures(clientSql) {
     `;
   });
 
-  console.log(`[Admin E2E Seed] Seeded ${ADMIN_ORDER_COUNT} deterministic Orders.`);
+  console.log(`[Admin E2E Seed] Seeded ${ADMIN_ORDER_COUNT} list Orders and 2 CHK3 action Orders.`);
 }
 
 // Execute seed if invoked directly

@@ -74,7 +74,9 @@ test.describe("GP-027 CHK2 — Admin Orders list", () => {
     await expect(page.locator('[data-testid="orders-mobile-list"]')).toHaveCount(0);
   });
 
-  test("desktop row shows only the guarded list DTO and no detail link", async ({ page }) => {
+  test("desktop row shows only the guarded list DTO and a protected detail link", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await login(page, ADMIN_E2E_USERS.orders.email, "/admin/orders?q=GP-AD");
 
@@ -92,7 +94,10 @@ test.describe("GP-027 CHK2 — Admin Orders list", () => {
     await expect(row.locator("td").nth(6)).toHaveText("2");
     await expect(row.locator("td").nth(8)).toContainText("15:00");
     await expect(row.locator("td").nth(9)).toContainText("15:20");
-    await expect(row.locator("a")).toHaveCount(0);
+    await expect(row.getByRole("link", { name: number })).toHaveAttribute(
+      "href",
+      `/admin/orders/${number}`
+    );
 
     const listText = await page.getByTestId("orders-desktop-list").textContent();
     expect(listText).not.toContain(ADMIN_E2E_ORDER_FIXTURES.mixedCaseEmail);

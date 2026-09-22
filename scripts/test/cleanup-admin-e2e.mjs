@@ -191,11 +191,15 @@ export async function cleanupAdminProductFixtures(clientSql) {
 
 export async function cleanupAdminOrderFixtures(clientSql) {
   const orderIds = Array.from(
-    { length: 30 },
+    { length: 32 },
     (_, offset) => `018f0000-0000-7000-8000-${(0xd100 + offset + 1).toString(16).padStart(12, "0")}`
   );
 
   await clientSql.begin(async (tx) => {
+    await tx`
+      DELETE FROM idempotency_keys
+      WHERE operation_type = 'ORDER_CANCELLATION' AND target_aggregate_id IN ${tx(orderIds)};
+    `;
     await tx`
       DELETE FROM audit_events
       WHERE target_type = 'Order' AND target_id IN ${tx(orderIds)};

@@ -42,6 +42,7 @@ export default defineConfig({
     "**/admin-foundation.spec.ts",
     "**/admin-product-manager.spec.ts",
     "**/admin-orders-list.spec.ts",
+    "**/admin-z-orders-detail.spec.ts",
     "**/admin-ai-product-assistant.spec.ts",
     "**/admin-story-builder.spec.ts",
   ],
@@ -75,6 +76,11 @@ export default defineConfig({
       E2E_CATALOG_FIXTURES: "0",
       PLAYWRIGHT_TEST: "1",
       DEV_CATALOG_PREVIEW: "0",
+      CHECKOUT_HMAC_SECRET:
+        process.env.CHECKOUT_HMAC_SECRET ??
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      ORDER_MANAGEMENT_IDEMPOTENCY_TTL_MINUTES:
+        process.env.ORDER_MANAGEMENT_IDEMPOTENCY_TTL_MINUTES ?? "60",
     },
   },
 });

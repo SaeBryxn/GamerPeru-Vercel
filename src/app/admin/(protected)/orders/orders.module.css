@@ -265,6 +265,20 @@
   white-space: nowrap;
 }
 
+.orderNumber a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-brand-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.orderNumber a:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
 .customerEmail,
 .secondaryText,
 .integrityWarning {
