@@ -2,7 +2,7 @@
 
 ## Status
 
-**GP-027 CHK5 FULL CANONICAL VALIDATION PASSED / FINAL CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
+**GP-027 CHK5 FULL CANONICAL VALIDATION PASSED / CORRECTED FINAL CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
 
 External review approved CHK0, CHK1, CHK2, CHK3, CHK4, and runtime remediation CHK5-BR1. This closure candidate documents the complete checkpoint lineage, the real runtime defect encountered during the initial CHK5 attempt, the approved server-side remediation, its exact fast-forward integration, and the full post-remediation canonical validation suite.
 
@@ -21,7 +21,7 @@ External review approved CHK0, CHK1, CHK2, CHK3, CHK4, and runtime remediation C
 - Validation baseline: `99789a3fb50585c2651fb8fa2c5c58b78e9bbbce`
 - Result: **VALIDATION FAILURE / REMEDIATION REQUIRED** (No closure candidate produced).
 - Admin E2E suite execution: **86/87 PASS, 1 FAIL**.
-- Root cause defect: Native Orders GET filter form submission could submit exact-empty optional query strings (`q=&orderStatus=&paymentStatus=&shipmentStatus=&from=&to=&pageSize=25`) when submitted before React client hydration attached the `formdata` cleanup listener. The server parser validated raw keys against string schemas without treating exact `""` as absence for optional parameters, causing the server to reject valid native-form GET submissions with `VALIDATION_FAILED` (400).
+- Root cause defect: Native Orders GET filter form submission could submit exact-empty optional query strings (`q=&orderStatus=&paymentStatus=&shipmentStatus=&from=&to=&pageSize=25`) when submitted before React client hydration attached the `formdata` cleanup listener. The pre-hydration native GET submission was interpreted by the server parser as `INVALID_INPUT`, causing the Orders page to render its invalid-filter state ("Los filtros o la paginación no son válidos.").
 - Action taken: Work immediately stopped without fabricating a passing closure or bypassing the failure. Remediation branch `audit/gp027-chk5-br1` was created to fix the defect.
 
 ### CHK5-BR1 Remediation
@@ -59,7 +59,7 @@ External review approved CHK0, CHK1, CHK2, CHK3, CHK4, and runtime remediation C
   - empty `cursor`;
   - malformed or tampered keyset cursor;
   - empty `pageSize`;
-  - invalid page sizes (outside allowlisted 25, 50, 100).
+  - invalid page sizes (outside positive integer range 1–50; default is 25).
 - External review verdict: **PASS — GP-027 CHK5-BR1 RUNTIME REMEDIATION EXTERNALLY APPROVED FOR INTEGRATION**.
 - Exact integration execution:
   - Checkout `main` at `99789a3fb50585c2651fb8fa2c5c58b78e9bbbce`.
@@ -97,16 +97,24 @@ External review approved CHK0, CHK1, CHK2, CHK3, CHK4, and runtime remediation C
 
 The disposable local PostgreSQL database (running on port 54322) registers migrations `0000` through `0015` (16 migrations total):
 
-1. Physical `order_notes` table created with expected columns: `id`, `order_id`, `author_user_id`, `author_display_name`, `note_text`, `created_at`.
-2. Foreign key constraints:
+1. Physical `order_notes` table created with exact migration `0015` schema:
+   - `id` UUID PRIMARY KEY NOT NULL
+   - `order_id` UUID NOT NULL
+   - `author_auth_user_id` UUID NULL
+   - `body` TEXT NOT NULL
+   - `created_at` TIMESTAMPTZ NOT NULL DEFAULT now()
+   - `mutation_request_id` UUID NOT NULL UNIQUE
+   - `intent_fingerprint` CHAR(64) NOT NULL
+   - `actor_binding_digest` CHAR(64) NOT NULL
+2. Physical foreign key constraints:
    - `order_id` references `orders(id)` with `ON DELETE RESTRICT` (protects order record from cascading note deletion).
-   - `author_user_id` references `auth.users(id)` with `ON DELETE SET NULL` (preserves historical internal audit trail if staff user is deleted).
-3. Constraints and indexes:
-   - Unique mutation request constraint and actor binding.
-   - Note body length constraint: 1 to 2,000 Unicode code points.
-   - Keyset index on `orders(created_at DESC, id DESC)` (`orders_created_id_idx`).
-   - Keyset index on `order_notes(order_id, created_at DESC, id DESC)`.
-   - Lower-email index on `orders(LOWER(customer_email), created_at DESC, id DESC)` (`orders_lower_email_created_id_idx`).
+   - `author_auth_user_id` references `auth.users(id)` with `ON DELETE SET NULL` (preserves historical internal audit trail if staff user is deleted).
+3. Physical constraints and indexes:
+   - Unique physical constraint on `mutation_request_id`. Actor binding is stored in `actor_binding_digest` and verified by application semantics.
+   - Note body physical check constraints: `length(trim(body)) > 0` and `char_length(body) <= 2000`. Application validation additionally normalizes line endings and enforces the 2,000 Unicode-code-point application boundary.
+   - Index on `order_notes(order_id, created_at, id)` (`order_notes_order_created_id_idx`).
+   - Keyset index on `orders(created_at DESC NULLS LAST, id DESC NULLS LAST)` (`orders_created_id_idx`).
+   - Lower-email keyset index on `orders(lower(customer_email), created_at DESC NULLS LAST, id DESC NULLS LAST)` (`orders_lower_email_created_id_idx`).
 4. Strict absence of migration `0016` or ad-hoc DDL.
 
 ---
@@ -116,15 +124,15 @@ The disposable local PostgreSQL database (running on port 54322) registers migra
 ### Delivered Scope (GP-027)
 
 - **Admin Orders List**: Server-rendered list view accessible at `/admin/orders`, exposing operational metadata with masked customer email.
-- **Search & Filter**: Exact-email lookup, anchored order-number prefix lookup, status filters (`orderStatus`, `paymentStatus`, `shipmentStatus`), Lima-timezone calendar date range filter, and keyset pagination (`pageSize` 25, 50, 100).
+- **Search & Filter**: Exact-email lookup, anchored order-number prefix lookup, status filters (`orderStatus`, `paymentStatus`, `shipmentStatus`), Lima-timezone calendar date range filter, and keyset pagination (default `pageSize` 25; accepted integer range 1–50).
 - **Protected Detail**: Protected route `/admin/orders/[orderNumber]` accessible only to authorized Orders staff and Super Admin.
 - **Immutable Purchase Snapshots**: Renders historical pricing snapshot (`order_pricing_snapshots`) and address snapshot (`order_address_snapshots`) rather than mutable catalog or live customer profile state.
-- **Order Timeline**: Unified, deterministic, append-only chronological activity feed reading eight canonical event types from underlying aggregate tables (`orders`, `payments`, `payment_submissions`, `shipments`, `refunds`, `order_notes`).
-- **Internal Notes**: Append-only internal notes workbench with 2,000 Unicode code point limit, control character stripping, bidirectional Trojan text rejection, actor binding, and transactional audit emission (`orders:note_added`).
+- **Order Timeline**: Unified, deterministic, append-only chronological activity feed reading canonical timeline event types.
+- **Internal Notes**: Append-only internal notes workbench with 2,000 Unicode code point limit, CRLF/CR normalization to LF, outer whitespace trimming, rejection of empty notes and unsafe control/format/invisible/bidi/separator character classes, actor binding, and transactional audit emission (`orders:note_added`).
 - **Order Cancellation**:
   - Unpaid order cancellation with required operational reason.
   - Paid pre-shipment order cancellation with mandatory attestation of external refund recording.
-- **Accessibility & Responsive**: Full keyboard operability, focus traps, focus restoration, zero horizontal overflow from 360px to 1440px, and zero Axe WCAG 2.1 AA violations.
+- **Accessibility & Responsive**: Full keyboard operability, focus traps, focus restoration, zero horizontal overflow from 360px to 1440px, and automated Axe checks reported zero WCAG 2.1 A/AA violations in the tested surfaces.
 - **Security & Privacy Hardening**: Safe tracking URL allowlist validation, PII masking, complete isolation of private data from Web Storage and audit logs.
 
 ### GP-028 Out-of-Scope Boundary (Strictly Maintained)
@@ -148,28 +156,32 @@ GP-027 preserves complete architectural separation from GP-028 (Payment Verifica
 
 ## Authorization, Privacy, and Security Audit
 
-- **Server-Side RBAC**: Authorization is strictly enforced server-side. Orders routes and Server Actions verify `ADMIN_ORDERS` or `SUPER_ADMIN` role mappings via `resolveAdminUserRole()`. Unauthorized roles (`ADMIN_CATALOG`, `ADMIN_SUPPORT`, `CUSTOMER`, anonymous) fail closed with 403 / unauthorized error state.
-- **PII Protection**:
+- **Permission-Based Enforcement (`orders:manage`)**: Authorization is strictly enforced server-side. Page-level defense in depth verifies authenticated context with `getVerifiedAuthContext()` and asserts `authContext.permissions.has("orders:manage")`. Underlying Orders readers and Server Actions enforce authority via `requireOrdersAdmin()`, which delegates to `requirePermission("orders:manage")`. Under canonical role mappings, `SUPER_ADMIN` and `ADMIN_ORDERS` possess this permission, while `ADMIN_CATALOG`, `ADMIN_SUPPORT`, `CUSTOMER`, or anonymous visitors lack it and fail closed. Navigation visibility does not substitute for server authorization.
+- **PII Protection & Payment Projection**:
   - Orders list exposes only masked emails (e.g. `M***@Example.com`) and operational identifiers.
-  - Customer phone numbers, shipping street addresses, and payment transaction details are excluded from list DTOs and restricted to protected detail responses.
-  - Raw payment proofs and payment operation codes remain hidden in GP-027.
-- **Web Storage Hygiene**: Zero GP-027 sensitive or private order data is stored in `localStorage` or `sessionStorage`. Browser storage contains only standard ephemeral client tracking state without customer PII.
-- **Audit Metadata Hygiene**: Audit events (`orders:note_added`, `orders:cancelled`) emit only Aggregate ID, Actor ID, Actor Role, and high-level operational metadata. Raw note bodies and raw client mutation request IDs are strictly excluded from audit metadata payloads.
+  - Customer phone numbers and shipping street addresses are excluded from list DTOs and restricted to protected detail responses.
+  - GP-027 detail intentionally exposes only its approved operational payment projection (payment method, status, amount, refunded amount where present, currency, and timestamps).
+  - GP-027 detail strictly hides: payment proofs, operation codes, verification notes, reviewer workflow data, and external refund references.
+- **Web Storage Hygiene**: GP-027 does not persist its private order/customer/mutation-intent data into `localStorage` or `sessionStorage`.
+- **Audit Metadata Hygiene**:
+  - For note creation, action is `orders:note_added` emitting only allowed note identifier metadata (`noteId`). Raw note bodies and raw client `mutationRequestId` are omitted from metadata; the audit request identity uses the derived domain-separated digest rather than the raw client ID.
+  - For order cancellation, canonical lifecycle audit actions relevant to GP-027 include `orders:cancel` and `orders:refund_and_cancel`. Operational cancellation/refund lifecycle metadata includes required domain consequences (e.g. operational reason, external refund reference where recorded) in accordance with GP-020.
 
 ---
 
 ## Timeline, Notes, and Idempotency Audit
 
-- **Timeline Event Types**: Unified activity feed deterministically aggregates eight canonical event types:
-  1. `ORDER_CREATED`
-  2. `PAYMENT_ATTEMPT_SUBMITTED`
-  3. `PAYMENT_CONFIRMED`
-  4. `PAYMENT_REJECTED`
-  5. `SHIPMENT_DISPATCHED`
-  6. `SHIPMENT_DELIVERED`
-  7. `ORDER_CANCELLED`
+- **Timeline Event Types**: Unified activity feed deterministically aggregates the eight canonical `AdminTimelineType` values:
+  1. `ORDER_PLACED`
+  2. `PAYMENT_SUBMITTED`
+  3. `ORDER_CONFIRMED`
+  4. `ORDER_CANCELLED`
+  5. `REFUND_ISSUED`
+  6. `SHIPMENT_DISPATCHED`
+  7. `ORDER_DELIVERED`
   8. `INTERNAL_NOTE`
-- **Timeline Pagination**: Bounded query limits (maximum 10 events per page) with order-bound cursor pagination. Older events cannot leak across order boundaries.
+     There is no separate `PAYMENT_REJECTED` Admin timeline event type in GP-027; terminal payment rejection consequences contribute to canonical cancellation evidence projected as `ORDER_CANCELLED`.
+- **Timeline Sources & Pagination**: The timeline projects bounded evidence from canonical order/payment/submission/refund/shipment/note data plus the durable audit/outbox evidence required for confirmation and cancellation semantics (`audit_events`, `outbox_events`). It does not manufacture confirmation or delivery events from current order status alone. Timeline pagination uses `PAGE_SIZE = 50`. Source queries are individually bounded (singleton sources use limit 1; repeatable sources use `PAGE_SIZE + 1`, therefore 51). The bounded source windows are merged deterministically in memory, and the selected timeline page exposes up to 50 entries with order-bound cursor pagination.
 - **Deterministic Notes Idempotency**:
   - Notes are deduplicated via non-secret domain-separated SHA-256 digests (`order_note_actor:`, `order_note_intent:`, `order_note_request:`).
   - Identical retry with the same mutation request ID returns the existing note without duplicate row creation or duplicate audit event emission.
@@ -212,8 +224,8 @@ All validation suites were executed against the remediated baseline `81f1c287d86
 ### Canonical Gate (`pnpm check`)
 
 - `pnpm format:check`: **PASS** (All files match Prettier code style).
-- `pnpm typecheck`: **PASS** (TypeScript compilation zero errors).
-- `pnpm lint`: **PASS** (ESLint zero warnings, zero errors).
+- `pnpm typecheck`: **PASS** (TypeScript compilation exited with zero errors).
+- `pnpm lint`: **PASS** (ESLint exited with zero warnings and zero errors under `--max-warnings=0`).
 - `pnpm test`: **PASS (1555/1555)** (125 test files, 1,555 unit tests passed).
 - `pnpm build`: **PASS** (Next.js production build compiled cleanly; all static and dynamic admin routes verified).
 - `git diff --check`: **PASS** (Zero trailing whitespace or merge conflict artifacts).
@@ -236,7 +248,7 @@ All validation suites were executed against the remediated baseline `81f1c287d86
   - Notes textarea, timeline load more button, and cancellation dialog focus traps operate cleanly with focus restoration upon dialog dismissal (`Escape`).
 - **Axe Accessibility Audit**:
   - Executed via `@axe-core/playwright` across populated list, empty list state, protected detail, activity/notes, and cancellation dialogs.
-  - Result: **zero Axe violations in the tested surfaces** (WCAG 2.1 AA compliant).
+  - Result: Automated Axe checks reported zero WCAG 2.1 A/AA violations in the tested surfaces.
 
 ---
 
@@ -252,6 +264,6 @@ All validation suites were executed against the remediated baseline `81f1c287d86
 
 ## Final Closure Verdict
 
-**GP-027 CHK5 FULL CANONICAL VALIDATION PASSED / FINAL CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
+**GP-027 CHK5 FULL CANONICAL VALIDATION PASSED / CORRECTED FINAL CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
 
-All functional, visual, performance, security, SEO, and accessibility DoD gates are fully satisfied. The codebase is verified clean and ready for final external verification.
+All required GP-027 final validation gates recorded in this closure passed on the remediated baseline. GP-027 introduced no SEO architecture change, and the established SEO architecture remained preserved. Automated accessibility checks reported zero WCAG 2.1 A/AA violations in the tested surfaces. Operational diagnostics observed during local development/test runs (including expected negative-test anomaly logs, client stream aborts, and test asset notices) remained non-failing and did not block any gate. The codebase is verified clean and ready for external verification.
