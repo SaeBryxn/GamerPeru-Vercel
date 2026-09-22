@@ -1,4 +1,4 @@
-# GP-027 CHK2 — Closure Candidate
+# GP-027 CHK2 — Closure
 
 ## Base Checkpoint
 
@@ -8,11 +8,11 @@
 
 ## Closure Checkpoint
 
-The approved implementation commit was integrated unchanged by `git merge --ff-only 0b8ebad388eef5d743e21feed3aea796f6e0f764` and pushed to `main`. After fetch, local `HEAD` and `origin/main` both resolved to `0b8ebad388eef5d743e21feed3aea796f6e0f764`. There was no merge commit, rebase, squash, cherry-pick, amendment, or reconstruction. This documentation-only closure candidate must have that exact implementation SHA as its parent; its own SHA and final remote verification are recorded in the publication report. External approval of this closure candidate is still required. CHK2 is **not** declared closed.
+The approved implementation commit was integrated unchanged by `git merge --ff-only 0b8ebad388eef5d743e21feed3aea796f6e0f764` and pushed to `main`. After fetch, local `HEAD` and `origin/main` both resolved to `0b8ebad388eef5d743e21feed3aea796f6e0f764`. There was no merge commit, rebase, squash, cherry-pick, amendment, or reconstruction. The documentation-only closure candidate `5ec723a02c7ae7cc2035345b4960ad23dc7cc57b` was committed directly on that implementation SHA, published to `main`, and definitively approved by external review. This final documentary status update records the approved verdict without changing implementation behavior.
 
 ## Summary
 
-CHK2 adds the first user-facing Orders Admin surface at `/admin/orders` and the permission-filtered **Pedidos** navigation item. The force-dynamic Server Component independently requires `orders:manage` and consumes the frozen CHK1 `getAdminOrderList` reader without duplicating its search, filter, cursor, aggregation, masking, or Lima-date logic. It provides exact-email or anchored order-number-prefix search, canonical physical status filters, Lima date controls, opaque keyset next-page navigation, explicit invalid/empty/error states, a semantic desktop table, and genuine narrow-screen order cards. Order numbers remain non-interactive because CHK3 detail does not exist.
+CHK2 adds the first user-facing Orders Admin surface at `/admin/orders` and the permission-filtered **Pedidos** navigation item. The force-dynamic Server Component independently requires `orders:manage` and consumes the frozen CHK1 `getAdminOrderList` reader without duplicating its search, filter, cursor, aggregation, masking, or Lima-date logic. It provides exact-email or anchored order-number-prefix search, canonical physical status filters, Lima date controls, opaque keyset next-page navigation, explicit invalid/empty/error states, a semantic desktop table, and genuine narrow-screen order cards. Order numbers remain non-interactive in CHK2; detail links belong to CHK3.
 
 The list displays only the reader's masked purchase-time email and operational DTO. It does not render full email, phone, address, payment proof or operation code, refund reference, or internal note body. Payment and shipment states, including `NOT_RECORDED` and multiple shipments, are read-only; no mutation or payment verification was added. Integer-cent totals and `America/Lima` timestamps remain explicit.
 
@@ -38,7 +38,7 @@ The approved implementation candidate changed exactly:
 16. `tests/e2e/helpers/admin-fixtures.ts`
 17. `tests/unit/admin-navigation.test.ts`
 
-This closure commit changes exactly `docs/roadmap/GP-027.md` and this new `docs/roadmap/GP-027-CHK2-CLOSURE.md`. It changes no runtime, tests, configuration, schema, migrations, packages, workflows, or hosted services.
+The closure candidate and this final approval-status commit each change exactly `docs/roadmap/GP-027.md` and `docs/roadmap/GP-027-CHK2-CLOSURE.md`. Neither changes runtime, tests, configuration, schema, migrations, packages, workflows, or hosted services.
 
 ## Decisions
 
@@ -60,7 +60,7 @@ This closure commit changes exactly `docs/roadmap/GP-027.md` and this new `docs/
 
 ## Acceptance Criteria
 
-The exact externally approved CHK2 implementation is integrated. The Orders list, guarded navigation, presentation, local fixtures, and E2E coverage meet the approved CHK2 scope. No CHK1 server semantics, schema, migration, hosted Supabase/database, R2, or infrastructure were changed. The only non-passing remote signal is the pre-runner GitHub Actions infrastructure condition with no executed repository steps; external closure approval remains pending.
+The exact externally approved CHK2 implementation is integrated. The Orders list, guarded navigation, presentation, local fixtures, and E2E coverage meet the approved CHK2 scope. No CHK1 server semantics, schema, migration, hosted Supabase/database, R2, or infrastructure were changed. External review has approved the CHK2 closure with the documented pre-runner GitHub Actions infrastructure waiver.
 
 ## Deviations / Notes
 
@@ -70,12 +70,12 @@ The remote workflow's `failure` conclusion is reported as-is; the authorized wai
 
 - The remote runner infrastructure condition remains unresolved. Any future runner-executed repository step failure requires separate remediation; this waiver cannot excuse it.
 - CHK4 should normalize the Playwright harness inconsistency: the new `admin-orders-list.spec.ts` self-skips under the default configuration, while older Admin specs are excluded there using `testIgnore`. This is non-blocking for CHK2 and is not changed during this closure.
-- `/admin/orders/[orderNumber]`, timeline, notes, and Admin cancellation UX remain for CHK3, which has not started. GP-028 payment review has not started. Hosted migration `0015` requires separate authorization.
+- `/admin/orders/[orderNumber]`, timeline, notes, and Admin cancellation UX are separately authorized CHK3 scope, not part of CHK2. GP-028 payment review has not started. Hosted migration `0015` requires separate authorization.
 
 ## Repository Status
 
-This documentation-only closure candidate must be committed directly on `0b8ebad388eef5d743e21feed3aea796f6e0f764`, change only the two documentation files identified above, and leave local `HEAD` equal to fetched `origin/main` at the closure SHA with a clean working tree. The final publication report records the verified values.
+The closure candidate `5ec723a02c7ae7cc2035345b4960ad23dc7cc57b` is directly on `0b8ebad388eef5d743e21feed3aea796f6e0f764` and changed only the two documentation files identified above. This final approval-status commit changes the same two files only. Its SHA and clean remote state are recorded in the publication report; that SHA becomes the authorized CHK3 baseline.
 
 ## Final Status
 
-**PASS WITH NOTES — GP-027 CHK2 INTEGRATED / CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL.** The note is the authorized, unexecuted remote CI infrastructure condition; CHK2 is not closed until external approval.
+**PASS WITH NOTES — GP-027 CHK2 CLOSED / EXTERNALLY APPROVED / INTEGRATED / CI INFRASTRUCTURE WAIVER.** The note is solely GitHub Actions run `35681978201`: `Light CI` had no runner and zero steps, while dependent jobs were skipped. No repository command ran remotely; this is not CI PASS.
