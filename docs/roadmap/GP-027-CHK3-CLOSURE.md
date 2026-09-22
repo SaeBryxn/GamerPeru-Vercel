@@ -17,9 +17,9 @@
 
 The approved implementation candidate was integrated into `main` strictly via fast-forward:
 `git merge --ff-only 3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`
-and pushed to `origin/main`. After fetch, local `HEAD` and `origin/main` both resolved to `3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`. There was no merge commit, squash, rebase, cherry-pick, amend, or commit reconstruction. The documentation-only closure candidate commit was placed directly on top of `3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`, and this corrected closure update builds directly upon it.
+and pushed to `origin/main`. After fetch, local `HEAD` and `origin/main` both resolved to `3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`. There was no merge commit, squash, rebase, cherry-pick, amend, or commit reconstruction. The documentation closure candidate commits `d503964f8ebb2e3a1ba53eb1041fb1b34ac2d36d` and `e9f78289a6b6a388406628d215ef1a23ba3ae6fc` were committed directly on `main`. External review has completed verification and formally closed CHK3 with an infrastructure waiver for GitHub Actions runner capacity.
 
-Status at closure creation: **CHK3 INTEGRATED / CORRECTED CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**.
+Status: **GP-027 CHK3 CLOSED / EXTERNALLY APPROVED / INTEGRATED / CI INFRASTRUCTURE WAIVER**.
 
 ## Summary
 
@@ -186,11 +186,11 @@ The documentation closure candidate commits modify `docs/roadmap/GP-027.md` and 
 - Working tree: clean.
 - Hosted Supabase: untouched (no migration `0015` deployment, no `0016`).
 - Cloudflare R2: untouched.
-- Next checkpoint: CHK4 (not started).
+- Next checkpoint: CHK4 (authorized).
 - Next GP: GP-028 (not started).
 
 ## Final Status
 
-**PASS WITH NOTES — GP-027 CHK3 INTEGRATED / CORRECTED CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
+**PASS WITH NOTES — GP-027 CHK3 CLOSED / EXTERNALLY APPROVED / INTEGRATED / CI INFRASTRUCTURE WAIVER**
 
-**REMOTE CI INFRASTRUCTURE BLOCKED / CI INFRASTRUCTURE WAIVER — NOT CI PASS**
+The only note is GitHub Actions run `35704948249`: `Light CI` had `runner_id=0`, empty runner name, and zero repository steps executed, with dependent gates skipped. No repository command executed remotely; this is a CI infrastructure waiver and NOT CI PASS.
