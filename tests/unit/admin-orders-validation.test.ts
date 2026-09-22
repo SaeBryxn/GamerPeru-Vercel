@@ -24,6 +24,62 @@ describe("GP-027 CHK1 Admin order validation", () => {
     }
   });
 
+  it("accepts native GET forms with exact-empty optional fields", () => {
+    const populated = parseAdminOrderListQuery(
+      new URLSearchParams(
+        "q=GP-AD&orderStatus=&paymentStatus=&shipmentStatus=&from=&to=&pageSize=25"
+      )
+    );
+    expect(populated.valid).toBe(true);
+    if (populated.valid) {
+      expect(populated.query).toMatchObject({
+        search: { kind: "ORDER_PREFIX", value: "GP-AD" },
+        orderStatus: null,
+        paymentStatus: null,
+        shipmentStatus: null,
+        from: null,
+        to: null,
+        fromUtc: null,
+        toUtcExclusive: null,
+        pageSize: 25,
+        cursor: null,
+      });
+    }
+
+    const empty = parseAdminOrderListQuery(
+      new URLSearchParams("q=&orderStatus=&paymentStatus=&shipmentStatus=&from=&to=&pageSize=25")
+    );
+    expect(empty.valid).toBe(true);
+    if (empty.valid) {
+      expect(empty.query).toEqual({
+        search: null,
+        orderStatus: null,
+        paymentStatus: null,
+        shipmentStatus: null,
+        from: null,
+        to: null,
+        fromUtc: null,
+        toUtcExclusive: null,
+        pageSize: 25,
+        cursor: null,
+      });
+    }
+  });
+
+  it("keeps partial dates, duplicate keys, whitespace search, and empty operational controls invalid", () => {
+    for (const params of [
+      "from=2026-09-18&to=",
+      "from=&to=2026-09-18",
+      "q=&q=GP-AD",
+      "orderStatus=&orderStatus=PENDING",
+      "q=+++",
+      "cursor=",
+      "pageSize=",
+    ]) {
+      expect(parseAdminOrderListQuery(new URLSearchParams(params)).valid, params).toBe(false);
+    }
+  });
+
   it("rejects unknown, duplicate, oversized, wildcard, and invalid filters", () => {
     for (const params of [
       "foo=bar",

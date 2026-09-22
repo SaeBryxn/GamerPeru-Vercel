@@ -137,6 +137,9 @@ export function parseAdminOrderListQuery(
     if (!KEYS.has(key) || values.has(key) || value.length > 1024) return { valid: false };
     values.set(key, value);
   }
+  for (const key of ["q", "orderStatus", "paymentStatus", "shipmentStatus", "from", "to"]) {
+    if (values.get(key) === "") values.delete(key);
+  }
 
   let search: AdminOrderListQuery["search"] = null;
   const q = values.get("q");

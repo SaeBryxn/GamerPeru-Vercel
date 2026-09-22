@@ -215,6 +215,23 @@ test.describe("GP-027 CHK2 — Admin Orders list", () => {
     await expect(page.getByText("Los filtros o la paginación no son válidos.")).toBeVisible();
   });
 
+  test("native GET form empty optional fields work without client cleanup", async ({ page }) => {
+    await login(
+      page,
+      ADMIN_E2E_USERS.orders.email,
+      "/admin/orders?q=GP-AD&orderStatus=&paymentStatus=&shipmentStatus=&from=&to=&pageSize=25"
+    );
+    await expect(page.getByText("Los filtros o la paginación no son válidos.")).toHaveCount(0);
+    await expect(visibleRows(page)).toHaveCount(25);
+    await expect(page.getByRole("link", { name: "Siguiente" })).toBeVisible();
+    await expect(page.getByRole("searchbox", { name: "Buscar pedido" })).toHaveValue("GP-AD");
+    await expect(page.getByLabel("Estado del pedido")).toHaveValue("");
+    await expect(page.getByLabel("Estado del pago")).toHaveValue("");
+    await expect(page.getByLabel("Estado del envío")).toHaveValue("");
+    await expect(page.getByLabel("Desde")).toHaveValue("");
+    await expect(page.getByLabel("Hasta")).toHaveValue("");
+  });
+
   test("mobile cards and tablet layout preserve key data without viewport overflow", async ({
     page,
   }) => {
