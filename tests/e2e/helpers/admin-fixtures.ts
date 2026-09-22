@@ -33,6 +33,15 @@ export const ADMIN_E2E_USERS = {
 
 export const ADMIN_E2E_PASSWORD = "AdminSecretPass2026!";
 
+export const ADMIN_E2E_ORDER_FIXTURES = {
+  count: 30,
+  orderNumber: (index: number) => `GP-AD${String(index).padStart(6, "0")}`,
+  mixedCaseEmail: "MiXeD.Order@Example.com",
+  privatePhone: "999111222",
+  privateStreet: "Calle Privada E2E 123",
+  privateOperationCode: "OPERACION-E2E-PRIVADA",
+};
+
 export const ADMIN_E2E_PRODUCT_FIXTURES = {
   brand: {
     id: "018f0000-0000-7000-8000-00000000ba01",
@@ -84,5 +93,11 @@ export const ADMIN_E2E_PRODUCT_FIXTURES = {
     name: "Producto E2E Cambio Categoria",
     slug: "prod-e2e-cat-change",
     sku: "E2E-CAT-CHANGE-SKU",
+  },
+  relatedProductA: {
+    id: "018f0000-0000-7000-8000-000000001a11",
+  },
+  relatedProductB: {
+    id: "018f0000-0000-7000-8000-000000001a12",
   },
 };

@@ -41,6 +41,7 @@ export default defineConfig({
   testMatch: [
     "**/admin-foundation.spec.ts",
     "**/admin-product-manager.spec.ts",
+    "**/admin-orders-list.spec.ts",
     "**/admin-ai-product-assistant.spec.ts",
     "**/admin-story-builder.spec.ts",
   ],

@@ -2,19 +2,24 @@ import { describe, it, expect } from "vitest";
 import { getAdminNavigation, CANONICAL_ADMIN_NAV_ITEMS } from "@/lib/admin/navigation";
 import type { PermissionName } from "@/lib/auth/rbac";
 
-describe("GP-022 / GP-024 / GP-025 — Admin Navigation Filtering & Scope Contract Tests", () => {
+describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Scope Contract Tests", () => {
   it("D1: only implemented destinations are registered in canonical navigation", () => {
-    expect(CANONICAL_ADMIN_NAV_ITEMS.length).toBe(4);
+    expect(CANONICAL_ADMIN_NAV_ITEMS.length).toBe(5);
     expect(CANONICAL_ADMIN_NAV_ITEMS[0]?.href).toBe("/admin");
     expect(CANONICAL_ADMIN_NAV_ITEMS[0]?.id).toBe("overview");
     expect(CANONICAL_ADMIN_NAV_ITEMS[1]?.href).toBe("/admin/products");
     expect(CANONICAL_ADMIN_NAV_ITEMS[1]?.id).toBe("products");
     expect(CANONICAL_ADMIN_NAV_ITEMS[1]?.requiredPermission).toBe("catalog:manage");
     expect(CANONICAL_ADMIN_NAV_ITEMS[2]).toMatchObject({
+      href: "/admin/orders",
+      label: "Pedidos",
+      requiredPermission: "orders:manage",
+    });
+    expect(CANONICAL_ADMIN_NAV_ITEMS[3]).toMatchObject({
       href: "/admin/products/ai-import",
       requiredPermission: "catalog:ai_research",
     });
-    expect(CANONICAL_ADMIN_NAV_ITEMS[3]).toMatchObject({
+    expect(CANONICAL_ADMIN_NAV_ITEMS[4]).toMatchObject({
       href: "/admin/settings/ai",
       requiredPermission: "ai:manage_credentials",
     });
@@ -57,7 +62,6 @@ describe("GP-022 / GP-024 / GP-025 — Admin Navigation Filtering & Scope Contra
 
     const ordersPerms = new Set<PermissionName>(["orders:manage"]);
     const navOrders = getAdminNavigation(ordersPerms);
-    expect(navOrders.length).toBe(1);
-    expect(navOrders[0]?.href).toBe("/admin");
+    expect(navOrders.map((item) => item.href)).toEqual(["/admin", "/admin/orders"]);
   });
 });

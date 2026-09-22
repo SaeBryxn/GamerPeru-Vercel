@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { Bot, LayoutDashboard, Package, Settings2 } from "lucide-react";
+import { Bot, LayoutDashboard, Package, Settings2, ShoppingCart } from "lucide-react";
 import type { AdminNavItem, AdminStaffProfile } from "@/lib/admin/types";
 import styles from "./admin-shell.module.css";
 
@@ -11,7 +11,7 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ navItems, staff, currentPath = "/admin" }: AdminSidebarProps) {
-  const iconMap = { LayoutDashboard, Package, Bot, Settings2 };
+  const iconMap = { LayoutDashboard, Package, ShoppingCart, Bot, Settings2 };
   return (
     <aside className={styles.sidebar} aria-label="Navegación administrativa">
       <div>

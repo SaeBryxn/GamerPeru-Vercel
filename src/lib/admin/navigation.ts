@@ -25,6 +25,14 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Gestión de catálogo y productos",
   },
   {
+    id: "orders",
+    label: "Pedidos",
+    href: "/admin/orders",
+    iconName: "ShoppingCart",
+    requiredPermission: "orders:manage",
+    description: "Gestión y seguimiento de pedidos",
+  },
+  {
     id: "ai-product-assistant",
     label: "Asistente IA",
     href: "/admin/products/ai-import",

@@ -27,6 +27,13 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
   };
 
   const navItems = getAdminNavigation(authContext.permissions);
+  const currentNavItem = navItems
+    .filter(
+      (item) =>
+        currentPath === item.href ||
+        (item.href !== "/admin" && currentPath.startsWith(`${item.href}/`))
+    )
+    .sort((left, right) => right.href.length - left.href.length)[0];
 
   return (
     <div className={styles.shell}>
@@ -36,6 +43,7 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
 
       <AdminHeader
         onOpenMobileNav={() => setIsMobileNavOpen(true)}
+        pageTitle={currentNavItem?.label ?? "Inicio"}
         isMobileNavOpen={isMobileNavOpen}
         triggerRef={menuButtonRef}
       />
