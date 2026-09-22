@@ -1,10 +1,10 @@
-# GP-027 CHK4 — Closure Candidate
+# GP-027 CHK4 — Closure
 
 ## Status
 
-**CHK4 INTEGRATED / CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
+**GP-027 CHK4 CLOSED / EXTERNALLY APPROVED / INTEGRATED / CI INFRASTRUCTURE WAIVER**
 
-This document records the exact integration and evidence for the externally approved CHK4 implementation. It is a documentation-only closure candidate and does not declare CHK4 closed. External approval remains required before CHK5 can begin.
+External review approved closure candidate `06304f765f88ce6fd86d2b51901007d63abd8871` with notes limited solely to the established GitHub Actions runner/account-capacity condition. CHK4 is definitively closed and CHK5 is authorized for final canonical validation. This approval is not CI PASS.
 
 ## Integration Checkpoints
 
@@ -146,19 +146,19 @@ Classification: **REMOTE CI INFRASTRUCTURE BLOCKED / CI INFRASTRUCTURE WAIVER �
 
 This waiver applies only to the observed lack of runner allocation and cannot excuse a future runner-executed repository failure.
 
-## Closure Candidate Scope
+## Closure Scope
 
-The closure candidate modifies exactly:
+The externally approved closure candidate `06304f765f88ce6fd86d2b51901007d63abd8871` modified exactly:
 
 1. `docs/roadmap/GP-027.md`
 2. `docs/roadmap/GP-027-CHK4-CLOSURE.md`
 
 It contains documentation only. It does not modify runtime code, tests, Playwright configuration, schema, migrations, workflows, packages, or hosted services.
 
-## Pending External Decision
+## External Decision
 
 - CHK4 implementation: externally approved and exactly integrated.
-- CHK4 closure: candidate pending external approval.
+- CHK4 closure: externally approved and definitively closed.
 - CHK5: not started.
 - GP-027 final closure: not started.
 - GP-028: not started.
@@ -166,6 +166,6 @@ It contains documentation only. It does not modify runtime code, tests, Playwrig
 
 ## Final Status
 
-**GP-027 CHK4 INTEGRATED / CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
+**GP-027 CHK4 CLOSED / EXTERNALLY APPROVED / INTEGRATED / CI INFRASTRUCTURE WAIVER**
 
 **REMOTE CI INFRASTRUCTURE BLOCKED / CI INFRASTRUCTURE WAIVER — NOT CI PASS**
