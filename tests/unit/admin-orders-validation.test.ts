@@ -11,6 +11,7 @@ import {
   normalizeAdminCancellationReason,
   normalizeOrderNoteBody,
   parseAdminOrderListQuery,
+  safeTrackingUrl,
 } from "@/lib/admin/orders/validation";
 
 describe("GP-027 CHK1 Admin order validation", () => {
@@ -119,5 +120,59 @@ describe("GP-027 CHK1 Admin order validation", () => {
       noteIntentFingerprint(order, actor, "ab")
     );
     expect(noteAuditRequestId(randomUUID())).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("hardens safeTrackingUrl against unsafe schemes, credentials, IPs, internal hosts, and custom ports", () => {
+    // Null / empty / falsy
+    expect(safeTrackingUrl(null)).toBeNull();
+    expect(safeTrackingUrl("")).toBeNull();
+
+    // Disallowed protocols
+    expect(safeTrackingUrl("http://courier.example.pe/track")).toBeNull();
+    expect(safeTrackingUrl("javascript:alert(1)")).toBeNull();
+    expect(safeTrackingUrl("data:text/html,<script>alert(1)</script>")).toBeNull();
+    expect(safeTrackingUrl("file:///etc/passwd")).toBeNull();
+    expect(safeTrackingUrl("ftp://courier.example.pe/track")).toBeNull();
+
+    // Embedded credentials
+    expect(safeTrackingUrl("https://user:pass@courier.example.pe/track")).toBeNull();
+    expect(safeTrackingUrl("https://user@courier.example.pe/track")).toBeNull();
+
+    // Raw IPs (IPv4 and IPv6)
+    expect(safeTrackingUrl("https://127.0.0.1/track")).toBeNull();
+    expect(safeTrackingUrl("https://192.168.1.10/track")).toBeNull();
+    expect(safeTrackingUrl("https://10.0.0.1/track")).toBeNull();
+    expect(safeTrackingUrl("https://[::1]/track")).toBeNull();
+    expect(safeTrackingUrl("https://[2001:db8::1]/track")).toBeNull();
+
+    // Localhost, internal, and single-label hostnames
+    expect(safeTrackingUrl("https://localhost/track")).toBeNull();
+    expect(safeTrackingUrl("https://myserver/track")).toBeNull();
+    expect(safeTrackingUrl("https://app.local/track")).toBeNull();
+    expect(safeTrackingUrl("https://service.internal/track")).toBeNull();
+    expect(safeTrackingUrl("https://sub.cluster.local/track")).toBeNull();
+    expect(safeTrackingUrl("https://deep.env.internal/track")).toBeNull();
+
+    // Non-standard ports
+    expect(safeTrackingUrl("https://courier.example.pe:8080/track")).toBeNull();
+    expect(safeTrackingUrl("https://courier.example.pe:8443/track")).toBeNull();
+    expect(safeTrackingUrl("https://courier.example.pe:80/track")).toBeNull();
+
+    // Malformed URLs
+    expect(safeTrackingUrl("not-a-url")).toBeNull();
+    expect(safeTrackingUrl("https://")).toBeNull();
+    expect(safeTrackingUrl("https://.")).toBeNull();
+    expect(safeTrackingUrl("https:///path")).toBeNull();
+
+    // Eligible HTTPS destinations
+    expect(safeTrackingUrl("https://tracking.olva.pe/envio/12345")).toBe(
+      "https://tracking.olva.pe/envio/12345"
+    );
+    expect(safeTrackingUrl("https://www.chazki.com/track?order=GP-1234&sig=abc")).toBe(
+      "https://www.chazki.com/track?order=GP-1234&sig=abc"
+    );
+    expect(safeTrackingUrl("https://courier.example.pe:443/track")).toBe(
+      "https://courier.example.pe/track"
+    );
   });
 });

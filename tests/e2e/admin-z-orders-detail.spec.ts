@@ -80,13 +80,6 @@ test.afterAll(async ({}, testInfo) => {
 });
 
 test.describe("GP-027 CHK3 — protected order detail", () => {
-  test.beforeEach(({}, testInfo) => {
-    test.skip(
-      !testInfo.config.configFile?.endsWith("playwright.admin.config.ts"),
-      "Orders detail fixtures require the serial Admin E2E setup."
-    );
-  });
-
   test("orders staff and superadmin see detail; catalog, support and customer do not", async ({
     page,
   }) => {

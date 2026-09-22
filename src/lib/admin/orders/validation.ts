@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { isIP } from "node:net";
 import { orderStatusEnum, paymentStatusEnum, shipmentStatusEnum } from "@/db/schema";
 import { startOfLimaDay } from "@/lib/admin/dashboard-period";
 import type { AdminOrderListQuery } from "./types";
@@ -235,4 +236,28 @@ export function normalizeOrderNoteBody(value: unknown): string | null {
   const normalized = value.replace(/\r\n?/g, "\n").trim();
   if (!normalized || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(normalized.replace(/\n/g, ""))) return null;
   return Array.from(normalized).length <= 2000 ? normalized : null;
+}
+
+export function safeTrackingUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    const labels = hostname.split(".");
+    return url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      !isIP(hostname) &&
+      labels.length >= 2 &&
+      labels.every(
+        (label) => label.length > 0 && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label)
+      ) &&
+      !hostname.endsWith(".local") &&
+      !hostname.endsWith(".internal") &&
+      (!url.port || url.port === "443")
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
 }

@@ -39,13 +39,6 @@ async function expectAxeClean(page: Page) {
 }
 
 test.describe("GP-027 CHK2 — Admin Orders list", () => {
-  test.beforeEach(({}, testInfo) => {
-    test.skip(
-      !testInfo.config.configFile?.endsWith("playwright.admin.config.ts"),
-      "Orders fixtures require the serial Admin E2E setup."
-    );
-  });
-
   test("orders staff and superadmin can access the guarded route and navigation", async ({
     page,
   }) => {

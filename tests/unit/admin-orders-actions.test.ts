@@ -7,13 +7,18 @@ vi.mock("@/lib/orders/service", () => ({
   cancelUnpaidOrder: vi.fn(),
   cancelPaidPreShipmentAndRefund: vi.fn(),
 }));
+vi.mock("@/lib/admin/orders/note-service", () => ({
+  createAdminOrderNote: vi.fn(),
+}));
 
 import { revalidatePath } from "next/cache";
 import { requireOrdersAdmin } from "@/lib/admin/orders/guard";
 import {
   cancelAdminPaidOrderAction,
   cancelAdminUnpaidOrderAction,
+  createAdminOrderNoteAction,
 } from "@/lib/admin/orders/actions";
+import { createAdminOrderNote } from "@/lib/admin/orders/note-service";
 import { cancelPaidPreShipmentAndRefund, cancelUnpaidOrder } from "@/lib/orders/service";
 
 const allowed = { authorized: true, context: { authUserId: randomUUID() } };
@@ -98,5 +103,34 @@ describe("GP-027 CHK1 cancellation wrappers", () => {
       cancellationAttemptId,
       externalReference: input.externalReference,
     });
+  });
+
+  it("delegates createAdminOrderNoteAction and revalidates paths on success", async () => {
+    vi.mocked(createAdminOrderNote).mockResolvedValue({
+      success: true,
+      note: { id: randomUUID(), body: "Nota de prueba", createdAt: new Date().toISOString() },
+      replayed: false,
+    });
+    const result = await createAdminOrderNoteAction({
+      orderNumber: "GP-027-A",
+      body: "Nota de prueba",
+      mutationRequestId: randomUUID(),
+    });
+    expect(result.success).toBe(true);
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/orders");
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/orders/GP-027-A");
+
+    vi.clearAllMocks();
+    vi.mocked(createAdminOrderNote).mockResolvedValue({
+      success: false,
+      code: "INVALID_INPUT",
+    });
+    const failed = await createAdminOrderNoteAction({
+      orderNumber: "GP-027-A",
+      body: "",
+      mutationRequestId: "invalid",
+    });
+    expect(failed.success).toBe(false);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,6 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { isIP } from "node:net";
 import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -34,6 +33,7 @@ import {
   maskOrderEmail,
   normalizeOrderNumber,
   parseAdminOrderListQuery,
+  safeTrackingUrl,
 } from "./validation";
 
 function iso(value: Date | string): string {
@@ -114,7 +114,7 @@ export async function getAdminOrderList(
     const page = await db.execute<{ id: string; created_at: Date | string }>(sql`
       SELECT o.id, o.created_at FROM orders o
       WHERE ${where}
-      ORDER BY o.created_at DESC, o.id DESC
+      ORDER BY o.created_at DESC NULLS LAST, o.id DESC NULLS LAST
       LIMIT ${query.pageSize + 1}
     `);
     const hasNext = page.length > query.pageSize;
@@ -293,26 +293,6 @@ async function loadNotePage(
           ).toString("base64url")
         : null,
   };
-}
-
-function safeTrackingUrl(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    const hostname = url.hostname.toLowerCase();
-    return url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      !isIP(hostname) &&
-      hostname.includes(".") &&
-      !hostname.endsWith(".local") &&
-      !hostname.endsWith(".internal") &&
-      (!url.port || url.port === "443")
-      ? url.toString()
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 export async function getAdminOrderDetail(
