@@ -2,9 +2,9 @@
 
 ## Status
 
-**GP-027 CHK5 FULL CANONICAL VALIDATION PASSED / CORRECTED FINAL CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
+**GP-027 CLOSED / EXTERNALLY APPROVED / FROZEN / MAIN INTEGRATION COMPLETE**
 
-External review approved CHK0, CHK1, CHK2, CHK3, CHK4, and runtime remediation CHK5-BR1. This closure candidate documents the complete checkpoint lineage, the real runtime defect encountered during the initial CHK5 attempt, the approved server-side remediation, its exact fast-forward integration, and the full post-remediation canonical validation suite.
+External review approved CHK0, CHK1, CHK2, CHK3, CHK4, runtime remediation CHK5-BR1, and final closure candidate `9aebc61002645562ae0eb5a4e92020cdc0cf67a9`. Final fast-forward integration into `main` has completed. This definitive closure report documents the complete checkpoint lineage, the real runtime defect encountered during the initial CHK5 attempt, the approved server-side remediation, its exact fast-forward integration, the full post-remediation canonical validation suite, and the final external approval.
 
 ---
 
@@ -73,12 +73,23 @@ External review approved CHK0, CHK1, CHK2, CHK3, CHK4, and runtime remediation C
   - `Full Gate` (job `106891886566`) and `Catalog Gate` (job `106891886807`) skipped with 0 steps.
   - Classification: **REMOTE CI INFRASTRUCTURE BLOCKED / CI INFRASTRUCTURE WAIVER — NOT CI PASS**.
 
-### Restarted CHK5 Validation
+### Restarted CHK5 Validation and Definitive Integration
 
 - Authorized baseline: `81f1c287d86d290c407828a165c74710d7e21714`
 - Audit branch: `audit/gp027-chk5-rerun` created directly from `81f1c287d86d290c407828a165c74710d7e21714`.
 - Initial branch state: merge-base with `main` = `81f1c287d86d290c407828a165c74710d7e21714`, 0 ahead / 0 behind, clean working tree.
 - Canonical post-remediation validation suites executed across the entire repository.
+- Complete factual CHK5 history:
+  1. Original CHK5 validation failed on baseline `99789a3fb50585c2651fb8fa2c5c58b78e9bbbce` (`pnpm test:admin:e2e` 86/87 PASS, 1 FAIL).
+  2. Failure was not bypassed or fabricated.
+  3. CHK5-BR1 fixed the real progressive-enhancement parser defect in `src/lib/admin/orders/validation.ts`.
+  4. BR1 candidate `81f1c287d86d290c407828a165c74710d7e21714` was externally approved and integrated into `main` via exact fast-forward merge.
+  5. Full canonical validation was rerun across the entire repository on baseline `81f1c287d86d290c407828a165c74710d7e21714`.
+  6. Original final closure candidate `84ceaf74bde07fe76332850b1236b080a6c6d9fe` was created.
+  7. BR2 candidate `8abae08836b6c38299384bee6880db16db05ffd5` corrected factual documentation.
+  8. BR3 candidate `9aebc61002645562ae0eb5a4e92020cdc0cf67a9` corrected final audit and privacy wording.
+  9. BR3 candidate `9aebc61002645562ae0eb5a4e92020cdc0cf67a9` was externally approved under PASS WITH NOTES (CI infrastructure waiver).
+  10. Exact fast-forward integration completed: `main` merged `9aebc61002645562ae0eb5a4e92020cdc0cf67a9` via `git merge --ff-only` and pushed to `origin/main`.
 
 ---
 
@@ -133,7 +144,7 @@ The disposable local PostgreSQL database (running on port 54322) registers migra
   - Unpaid order cancellation with required operational reason.
   - Paid pre-shipment order cancellation with mandatory attestation of external refund recording.
 - **Accessibility & Responsive**: Full keyboard operability, focus traps, focus restoration, zero horizontal overflow from 360px to 1440px, and automated Axe checks reported zero WCAG 2.1 A/AA violations in the tested surfaces.
-- **Security & Privacy Hardening**: Safe tracking URL allowlist validation, PII masking, and hardened data isolation: GP-027 does not persist private order/customer/mutation-intent data into localStorage or sessionStorage, and its own note audit path excludes the raw note body and raw client mutationRequestId. Payment proof, operation code, verification notes, reviewer workflow data, and external refund reference remain outside the GP-027 browser DTO.
+- **Security & Privacy Hardening**: Server-side safe tracking URL validation, PII masking, and hardened data isolation: GP-027 does not persist private order/customer/mutation-intent data into localStorage or sessionStorage, and its own note audit path excludes the raw note body and raw client mutationRequestId. Payment proof, operation code, verification notes, reviewer workflow data, and external refund reference remain outside the GP-027 browser DTO.
 
 ### GP-028 Out-of-Scope Boundary (Strictly Maintained)
 
@@ -254,16 +265,49 @@ All validation suites were executed against the remediated baseline `81f1c287d86
 
 ## Hosted Firewall Verification
 
-- Migration `0015`: Not deployed to hosted Supabase.
+- Migration `0015`: LOCAL VALIDATED ONLY / NOT DEPLOYED TO HOSTED SUPABASE.
 - Migration `0016`: Absent.
 - Hosted Supabase SQL / schema: Untouched.
 - Cloudflare R2: Untouched (no production/staging bucket mutations).
 - GP-028 Payment Verification: Not started.
 
+**Migration 0015: LOCAL VALIDATED ONLY / NOT DEPLOYED TO HOSTED SUPABASE**
+
+**MIGRATION 0015 HOSTED DEPLOYMENT PENDING SEPARATE AUTHORIZATION**
+
+**GP-028 PENDING SEPARATE EXTERNAL AUTHORIZATION**
+
+---
+
+## Final External Approval Record
+
+- Externally approved final closure candidate: `9aebc61002645562ae0eb5a4e92020cdc0cf67a9`
+- Candidate baseline: `81f1c287d86d290c407828a165c74710d7e21714`
+- Frozen contract commit: `aa26b95ca1885dbdaa8684ed49b7ce85b6cd7477`
+- Frozen contract blob: `295784bca864bc2480ec89ee8189089122a07a0b`
+- Migration `0015` blob: `bc3a0fa39aa8a1e2857cf008cb2eb4d762832ecc`
+- Migration `0016`: absent
+- Full canonical post-remediation regression: externally accepted as local evidence
+- Hosted Supabase: untouched
+- Cloudflare R2: untouched
+- GP-028: not started.
+
 ---
 
 ## Final Closure Verdict
 
-**GP-027 CHK5 FULL CANONICAL VALIDATION PASSED / CORRECTED FINAL CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
+**GP-027 CLOSED / EXTERNALLY APPROVED / FROZEN / MAIN INTEGRATION COMPLETE**
 
-All required GP-027 final validation gates recorded in this closure passed on the remediated baseline. GP-027 introduced no SEO architecture change, and the established SEO architecture remained preserved. Automated accessibility checks reported zero WCAG 2.1 A/AA violations in the tested surfaces. Operational diagnostics observed during local development/test runs (including expected negative-test anomaly logs, client stream aborts, and test asset notices) remained non-failing and did not block any gate. The codebase is verified clean and ready for external verification.
+Verdict: **PASS WITH NOTES**
+
+Note: **REMOTE CI INFRASTRUCTURE BLOCKED / CI INFRASTRUCTURE WAIVER — NOT CI PASS**
+
+All required GP-027 final validation gates recorded in this closure passed on the remediated baseline. GP-027 introduced no SEO architecture change, and the established SEO architecture remained preserved. Automated accessibility checks reported zero WCAG 2.1 A/AA violations in the tested surfaces. Operational diagnostics observed during local development/test runs (including expected negative-test anomaly logs, client stream aborts, and test asset notices) remained non-failing and did not block any gate.
+
+The externally approved candidate `9aebc61002645562ae0eb5a4e92020cdc0cf67a9` has been integrated into `main` via exact fast-forward merge.
+
+**Migration 0015: LOCAL VALIDATED ONLY / NOT DEPLOYED TO HOSTED SUPABASE**
+
+**MIGRATION 0015 HOSTED DEPLOYMENT PENDING SEPARATE AUTHORIZATION**
+
+**GP-028 PENDING SEPARATE EXTERNAL AUTHORIZATION**
