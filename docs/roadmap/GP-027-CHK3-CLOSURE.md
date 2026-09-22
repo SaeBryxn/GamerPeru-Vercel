@@ -17,24 +17,24 @@
 
 The approved implementation candidate was integrated into `main` strictly via fast-forward:
 `git merge --ff-only 3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`
-and pushed to `origin/main`. After fetch, local `HEAD` and `origin/main` both resolved to `3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`. There was no merge commit, squash, rebase, cherry-pick, amend, or commit reconstruction. The documentation-only closure candidate commit is placed directly on top of `3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`.
+and pushed to `origin/main`. After fetch, local `HEAD` and `origin/main` both resolved to `3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`. There was no merge commit, squash, rebase, cherry-pick, amend, or commit reconstruction. The documentation-only closure candidate commit was placed directly on top of `3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`, and this corrected closure update builds directly upon it.
 
-Status at closure creation: **CHK3 INTEGRATED / CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**.
+Status at closure creation: **CHK3 INTEGRATED / CORRECTED CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**.
 
 ## Summary
 
 CHK3 implements the Orders Admin dynamic detail surface at `/admin/orders/[orderNumber]`, list-to-detail navigation from `/admin/orders`, internal operational timeline, append-only order notes, and the two authorized Admin cancellation/refund recording actions from GP-020.
 
-The surface independently enforces `orders:manage` server-side and renders private dynamic detail. Sensitive purchase-time contact data (full email, phone, shipping address) is exposed only within this protected detail view and never in the list. Financial, item, and address snapshots are rendered immutably from order creation time. Payments and refunds are strictly read-only; external refund reference codes are withheld from the client. Shipping tracking URLs are validated against a safe URL scheme whitelist. Data integrity warnings are highlighted if stored item totals differ from line calculations.
+The surface independently enforces `orders:manage` server-side and renders private dynamic detail. Sensitive purchase-time contact data (full email, phone, shipping address) is exposed only within this protected detail view and never in the list. Financial, item, and address snapshots are rendered immutably from order creation time. Payments and refunds are strictly read-only; external refund reference codes are withheld from the client. Tracking URLs are exposed only after server-side `safeTrackingUrl` validation; only eligible HTTPS destinations are returned to the UI. Known reader integrity states (`MISSING_PAYMENT`, `MISSING_ADDRESS_SNAPSHOT`, `MISSING_PRICING_SNAPSHOT`, `MULTIPLE_SHIPMENTS`, `CURRENCY_MISMATCH`, `UNSUPPORTED_CURRENCY`) are surfaced explicitly to the Admin operator.
 
-The activity timeline and internal order notes are presented in reverse-chronological order with independent keyset pagination. Note creation is append-only with optimistic local append and server-authoritative reconciliation.
+Internal order notes and activity timeline feature independent keyset pagination with distinct chronological ordering: notes query by `createdAt DESC, id DESC` presenting the newest notes first; the activity timeline retrieves recent events and displays them in global chronological ascending order within the page (`timestamp ASC, precedence ASC, source ID ASC`), with older event pages prepended via cursor to maintain overall chronological sequence. Note creation is server-authoritative with local UI reconciliation after successful/replayed response.
 
 Order cancellation implements only the two approved GP-020 actions:
 
-1. Unpaid order cancellation (`CANCELLED_UNPAID`).
-2. Paid pre-shipment order cancellation with explicit external-refund attestation (`CANCELLED_REFUNDED`).
+1. Unpaid cancellation: order becomes `CANCELLED`.
+2. Paid pre-shipment cancellation/refund recording with explicit external-refund attestation: order becomes `REFUNDED`.
 
-No monetary transaction or automated refund is initiated. Stale/conflict states (HTTP 409) and ambiguous/lost network responses are reconciled gracefully using idempotent client mutation IDs without duplicate state corruption.
+No monetary transaction or automated refund is initiated. Stale/precondition/idempotency conflict states and ambiguous/lost network responses are reconciled gracefully using client mutation IDs without duplicate state corruption.
 
 ## Web Storage Remediation
 
@@ -46,8 +46,8 @@ The approved remediation commit `3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`:
 2. Replaced client storage with React in-memory state and refs.
 3. Preserved stable mutation attempt IDs across duplicate submits, modal open/close cycles, network retry ambiguity, lost-response reconciliation, and `router.refresh()` while the page remains active in memory.
 4. Conceded that hard browser page reloads discard in-memory mutation attempts without storing sensitive order or mutation data in client storage.
-5. Guaranteed zero GP-027 data in `sessionStorage`, `localStorage`, `IndexedDB`, or `document.cookie`.
-6. Validated this browser privacy guarantee with an automated Playwright assertion in `tests/e2e/admin-z-orders-detail.spec.ts`.
+5. Runtime implementation does not introduce browser persistence for GP-027 intents (source-level confirmation of zero GP-027 data written to `localStorage`, `sessionStorage`, `IndexedDB`, or `document.cookie`).
+6. The focused E2E assertion in `tests/e2e/admin-z-orders-detail.spec.ts` verifies that `localStorage` and `sessionStorage` remain completely free of `gp027:*` keys and the tested private values throughout the interaction.
 
 ## Scope Implemented vs Out of Scope
 
@@ -56,17 +56,17 @@ The approved remediation commit `3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18`:
 - Dynamic route `/admin/orders/[orderNumber]` with independent `orders:manage` permission verification.
 - List-to-detail interactive links at `/admin/orders`.
 - Protected dynamic order detail showing purchase-time email, phone, and shipping address snapshots.
-- Immutable item snapshot table with unit prices, quantities, line totals, and integrity warning banners.
+- Immutable item snapshot table with unit prices, quantities, and line totals, alongside explicit display of known reader integrity states (`MISSING_PAYMENT`, `MISSING_ADDRESS_SNAPSHOT`, `MISSING_PRICING_SNAPSHOT`, `MULTIPLE_SHIPMENTS`, `CURRENCY_MISMATCH`, `UNSUPPORTED_CURRENCY`).
 - Read-only payment status and history display without sensitive provider credentials.
 - Read-only refund event list with external references withheld.
-- Safe shipping tracking URL parser (`https:` / `http:` protocols only).
-- Internal operational timeline with server-side keyset pagination.
-- Append-only internal notes workbench with character limit, empty validation, optimistic display, and keyset pagination.
+- Safe shipping tracking URL validation (server-side `safeTrackingUrl` enforcement returning only eligible HTTPS destinations to the UI).
+- Internal operational timeline with server-side keyset pagination (events displayed in global ascending order within the page, older event pages prepended via cursor).
+- Append-only internal notes workbench with character limit, empty validation, reverse-chronological pages (`createdAt DESC`), keyset pagination, and server-authoritative note creation with local UI reconciliation after successful/replayed response.
 - Two authorized GP-020 cancellation actions:
-  - Unpaid cancellation modal with confirmation prompt.
-  - Paid pre-shipment cancellation modal requiring explicit staff external-refund attestation checkbox.
-- Concurrency / 409 conflict handling displaying refreshed order state.
-- Idempotent action dispatch with stable client-generated UUIDs in React memory.
+  - Unpaid cancellation modal with confirmation prompt (order becomes `CANCELLED`).
+  - Paid pre-shipment cancellation modal requiring explicit staff external-refund attestation checkbox (order becomes `REFUNDED`).
+- Safe server conflict/precondition and concurrency handling displaying refreshed order state.
+- Idempotent action dispatch with mutation IDs that are cryptographically random and stable per logical intent in React memory.
 - Responsive layout verified across mobile (360px, 390px), tablet (768px), and desktop (1440px).
 - Semantic headings, ARIA dialog roles, accessible focus management, and keyboard escape handling.
 
@@ -112,15 +112,15 @@ The incremental remediation commit `3f7c6729d1bd6f3a7450ddfa5feaca63fedd4d18` to
 - Modified: `src/app/admin/(protected)/orders/[orderNumber]/page.tsx`
 - Modified: `tests/e2e/admin-z-orders-detail.spec.ts`
 
-The documentation-only closure commit modifies `docs/roadmap/GP-027.md` and creates `docs/roadmap/GP-027-CHK3-CLOSURE.md`.
+The documentation closure candidate commits modify `docs/roadmap/GP-027.md` and manage `docs/roadmap/GP-027-CHK3-CLOSURE.md`.
 
 ## Decisions
 
-- **Defense in Depth**: Route authorization checks `orders:manage` via `requireAdminPermission` in the page Server Component before delegating to server readers and actions.
-- **Client Storage Elimination**: No order data, customer data, or mutation identifiers are written to `localStorage`, `sessionStorage`, `IndexedDB`, or cookies. Mutation tracking resides purely in React in-memory state and refs.
+- **Defense in Depth**: The page verifies a READY authenticated context (`getVerifiedAuthContext()`) and `orders:manage` before rendering; underlying readers/actions independently enforce Orders Admin authority through `requireOrdersAdmin()`.
+- **Client Storage Elimination**: Runtime implementation does not introduce browser persistence for GP-027 intents, with source-level guarantee that no order data, customer data, or mutation identifiers are written to `localStorage`, `sessionStorage`, `IndexedDB`, or cookies. Mutation tracking resides purely in React in-memory state and refs. Focused E2E testing confirms `localStorage` and `sessionStorage` remain free of `gp027:*` keys and private values.
 - **Strict Read-Only Financials**: Payment and refund states are strictly informational. External refund reference identifiers from payment processors are not exposed to the client interface.
 - **Lima Timezone Normalization**: All timeline, order, and note timestamps are formatted consistently in Peru standard time (`America/Lima`).
-- **Idempotency & Conflict Guarding**: Cancellation actions pass deterministic mutation IDs generated in memory and gracefully handle HTTP 409 conflict states without silent data corruption.
+- **Idempotency & Conflict Guarding**: Cancellation actions pass mutation IDs generated via `crypto.randomUUID()` that are cryptographically random and stable per logical intent (reused during exact retry/replay while the page remains active, and discarded upon resolution), gracefully handling safe server conflict/precondition results and stale states without silent data corruption.
 - **Local-Only Database Migration**: Migration `0015` remains validated only in the local PostgreSQL/Supabase test harness and has not been run or deployed to hosted Supabase.
 
 ## Validation Performed
@@ -160,7 +160,7 @@ The documentation-only closure commit modifies `docs/roadmap/GP-027.md` and crea
 - [x] Dynamic order detail view at `/admin/orders/[orderNumber]` requires `orders:manage`.
 - [x] Customer contact data displayed only in protected detail, not in order list.
 - [x] Financial, item, and address snapshots rendered immutably.
-- [x] Safe tracking URL scheme enforced.
+- [x] Safe tracking URL validation enforced (only eligible HTTPS destinations returned to the UI).
 - [x] Timeline and notes displayed in Lima timezone with keyset pagination.
 - [x] Two GP-020 cancellation actions implemented with confirmation/attestation safeguards.
 - [x] Client Web Storage strictly eliminated; zero private/order data in `sessionStorage`/`localStorage`.
@@ -191,6 +191,6 @@ The documentation-only closure commit modifies `docs/roadmap/GP-027.md` and crea
 
 ## Final Status
 
-**PASS WITH NOTES — GP-027 CHK3 INTEGRATED / CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
+**PASS WITH NOTES — GP-027 CHK3 INTEGRATED / CORRECTED CLOSURE CANDIDATE / PENDING EXTERNAL APPROVAL**
 
 **REMOTE CI INFRASTRUCTURE BLOCKED / CI INFRASTRUCTURE WAIVER — NOT CI PASS**
