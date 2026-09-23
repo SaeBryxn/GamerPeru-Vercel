@@ -306,8 +306,22 @@ All required GP-027 final validation gates recorded in this closure passed on th
 
 The externally approved candidate `9aebc61002645562ae0eb5a4e92020cdc0cf67a9` has been integrated into `main` via exact fast-forward merge.
 
-**Migration 0015: LOCAL VALIDATED ONLY / NOT DEPLOYED TO HOSTED SUPABASE**
-
-**MIGRATION 0015 HOSTED DEPLOYMENT PENDING SEPARATE AUTHORIZATION**
+**MIGRATION 0015 HOSTED DEPLOYMENT COMPLETE / PHYSICALLY VERIFIED / EXTERNALLY APPROVED**
 
 **GP-028 PENDING SEPARATE EXTERNAL AUTHORIZATION**
+
+---
+
+## Post-Closure Hosted Deployment Record
+
+- **Historical Scope Boundary:** The statement `Migration 0015: LOCAL VALIDATED ONLY / NOT DEPLOYED TO HOSTED SUPABASE` accurately reflects the state at the time of initial GP-027 code closure.
+- **Subsequent Deployment Status:** That marker has now been superseded. Migration `0015_nifty_prowler.sql` has been physically deployed and verified against authorized hosted Supabase project `jpjffalmvlxpufvtvskx` as part of the externally approved canonical catch-up (`0013 → 0014 → 0015`).
+- **Physical Verification Evidence:**
+  - Table `public.order_notes` installed with exact 8-column schema.
+  - Primary key `order_notes_pkey` installed.
+  - Unique constraint `order_notes_mutation_request_id_unique` installed.
+  - CHECK constraints `order_notes_body_not_blank` and `order_notes_body_max_length` installed.
+  - Foreign keys `order_notes_order_id_orders_id_fk` and `order_notes_author_auth_user_id_fk` installed.
+  - Indexes `order_notes_order_created_id_idx`, `orders_created_id_idx`, and `orders_lower_email_created_id_idx` installed.
+  - Idempotence verified via a second `pnpm db:migrate` run exiting 0 with zero DDL changes.
+- **Authoritative Closure Document:** Full deployment and physical introspection evidence is recorded in [`HOSTED-MIGRATIONS-0013-0015-CLOSURE.md`](./HOSTED-MIGRATIONS-0013-0015-CLOSURE.md).

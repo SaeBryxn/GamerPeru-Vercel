@@ -339,3 +339,16 @@ identified as historical evidence. No architectural documentation contradiction 
 ## Final Classification
 
 GP-026 CLOSED / EXTERNALLY APPROVED / FROZEN / MAIN INTEGRATION COMPLETE / CI INFRASTRUCTURE WAIVER
+
+---
+
+## Post-Closure Hosted Deployment Record
+
+- **Historical Scope Boundary:** Statements in this report noting that hosted services and hosted Supabase/PostgreSQL remained untouched refer strictly to the original GP-026 implementation and closure operation.
+- **Subsequent Deployment Status:** Migration `0014_steep_skreet.sql` has subsequently been physically deployed and verified against the authorized GamerPeru hosted Supabase project (`jpjffalmvlxpufvtvskx`) as part of the externally approved canonical catch-up (`0013 → 0014 → 0015`).
+- **Physical Verification Evidence:**
+  - `product_stories.draft_revision_id` column present.
+  - 5 canonical constraints and 2 canonical partial unique indexes installed.
+  - All six Story data invariants return zero violations.
+  - Forecasted backfill insertions: 0; actual: 0. Zero domain-row mutations were generated.
+- **Authoritative Closure Document:** Full deployment and physical introspection evidence is recorded in [`HOSTED-MIGRATIONS-0013-0015-CLOSURE.md`](./HOSTED-MIGRATIONS-0013-0015-CLOSURE.md).
