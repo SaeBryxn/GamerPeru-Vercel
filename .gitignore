@@ -54,3 +54,6 @@ desktop.ini
 
 # npm artefact; this project uses pnpm
 package-lock.json
+
+# Timestamped copies written by scripts/rotate-secrets.mjs; they hold previous secrets
+.env*.backup-*
