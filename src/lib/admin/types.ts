@@ -14,7 +14,9 @@ export interface AdminNavItem {
     | "LifeBuoy"
     | "Settings"
     | "Bot"
-    | "Settings2";
+    | "Settings2"
+    | "Tags"
+    | "Menu";
   requiredPermission?: PermissionName;
   description?: string;
 }

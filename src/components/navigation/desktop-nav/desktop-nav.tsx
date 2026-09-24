@@ -3,21 +3,64 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
-import { Container, Icon } from "@/components/ui";
-import type { MegaMenuCategory } from "../types";
+import { AnimatePresence, MotionConfig, motion, type Variants } from "framer-motion";
+import { Container, Icon, MagneticWrapper } from "@/components/ui";
+import type { MegaMenuCategory, MegaMenuShelves, NavLink } from "../types";
+import { MegaMenuGrid } from "./mega-menu-grid";
+import { MegaMenuLinks } from "./mega-menu-links";
+import { MegaMenuProducts } from "./mega-menu-products";
+import { MegaMenuSeries } from "./mega-menu-series";
 import styles from "./desktop-nav.module.css";
+
+const EASE_OUT_EXPO = [0.22, 1, 0.36, 1] as const;
+const PANEL_ROUNDING = "round 0px 0px 12px 12px";
+
+/*
+ * Panels stay mounted (their links remain in the server HTML for crawlers), so
+ * presence is handled with variants: "open" reveals top-down like an accordion,
+ * "closed" folds back up a little slower and only then drops to display:none.
+ * Switching menus runs one panel's close and the other's open at the same time,
+ * which reads as a single morph rather than a cut. clipPath is released after
+ * opening so the drop shadow is not clipped.
+ */
+const PANEL_VARIANTS: Variants = {
+  open: {
+    display: "block",
+    opacity: 1,
+    clipPath: `inset(0% 0% 0% 0% ${PANEL_ROUNDING})`,
+    transition: {
+      opacity: { duration: 0.3, ease: "easeOut" },
+      clipPath: { duration: 0.55, ease: EASE_OUT_EXPO },
+    },
+    transitionEnd: { clipPath: "none" },
+  },
+  closed: {
+    opacity: 0,
+    clipPath: `inset(0% 0% 100% 0% ${PANEL_ROUNDING})`,
+    transition: {
+      opacity: { duration: 0.4, ease: "easeInOut" },
+      clipPath: { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
+    },
+    transitionEnd: { display: "none" },
+  },
+};
 
 export interface DesktopNavProps {
   items: MegaMenuCategory[];
+  productTypes?: NavLink[];
+  /** Live product shelves resolved on the server; absent when nothing is published. */
+  shelves?: MegaMenuShelves;
   className?: string;
 }
 
-export function DesktopNav({ items, className }: DesktopNavProps) {
+export function DesktopNav({ items, productTypes = [], shelves, className }: DesktopNavProps) {
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const navRef = useRef<HTMLElement>(null);
   const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
-  // Close mega-menu on Escape key and return focus to the active disclosure trigger
+  const closeMenu = () => setActiveCategoryId(null);
+
+  // Close mega-menu on Escape key and return focus to the active trigger
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape" && activeCategoryId) {
@@ -45,48 +88,42 @@ export function DesktopNav({ items, className }: DesktopNavProps) {
   }, []);
 
   return (
-    <nav
-      ref={navRef}
-      className={[styles.desktopNav, className].filter(Boolean).join(" ")}
-      aria-label="Navegación principal"
-      onMouseLeave={() => setActiveCategoryId(null)}
-    >
-      <ul className={styles.navList}>
-        {items.map((category) => {
-          const isExpanded = activeCategoryId === category.id;
-          const panelId = `mega-menu-${category.id}`;
+    <MotionConfig reducedMotion="user">
+      <nav
+        ref={navRef}
+        className={[styles.desktopNav, className].filter(Boolean).join(" ")}
+        aria-label="Navegación principal"
+      >
+        <ul className={styles.navList}>
+          {items.map((category) => {
+            if (!category.menuLayout) {
+              return (
+                <li key={category.id} className={styles.navItem}>
+                  <Link href={category.href} className={styles.categoryTrigger}>
+                    <MagneticWrapper>{category.label}</MagneticWrapper>
+                  </Link>
+                </li>
+              );
+            }
 
-          return (
-            <li
-              key={category.id}
-              className={styles.navItem}
-              onMouseEnter={() => setActiveCategoryId(category.id)}
-            >
-              <div
-                className={[styles.navItemWrapper, isExpanded ? styles.navItemWrapperActive : ""]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                {/* Primary Category Destination Link — Semantic & Crawlable */}
-                <Link
-                  href={category.href}
-                  className={[styles.categoryLink, isExpanded ? styles.categoryLinkActive : ""]
-                    .filter(Boolean)
-                    .join(" ")}
-                  onClick={() => setActiveCategoryId(null)}
-                >
-                  {category.label}
-                </Link>
+            const isExpanded = activeCategoryId === category.id;
+            const panelId = `mega-menu-${category.id}`;
 
-                {/* Separate Disclosure Button for MegaMenu Toggle */}
+            return (
+              <li key={category.id} className={styles.navItem}>
+                {/* Label and chevron form a single disclosure trigger. */}
                 <button
                   ref={(el) => {
                     if (el) triggerRefs.current.set(category.id, el);
                     else triggerRefs.current.delete(category.id);
                   }}
                   type="button"
-                  className={styles.disclosureTrigger}
-                  aria-label={`Abrir menú desplegable de ${category.label}`}
+                  className={[
+                    styles.categoryTrigger,
+                    isExpanded ? styles.categoryTriggerActive : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   aria-expanded={isExpanded}
                   aria-controls={panelId}
                   onClick={(e) => {
@@ -94,107 +131,86 @@ export function DesktopNav({ items, className }: DesktopNavProps) {
                     setActiveCategoryId(isExpanded ? null : category.id);
                   }}
                 >
-                  <span className={styles.chevron}>
-                    <Icon icon={ChevronDown} size="sm" aria-hidden="true" />
-                  </span>
+                  <MagneticWrapper className={styles.triggerContent}>
+                    <span>{category.label}</span>
+                    <motion.span
+                      className={styles.chevron}
+                      initial={false}
+                      animate={{ rotate: isExpanded ? 180 : 0, y: isExpanded ? 1 : 0 }}
+                      transition={{ type: "spring", stiffness: 420, damping: 26 }}
+                    >
+                      <Icon icon={ChevronDown} size="sm" aria-hidden="true" />
+                    </motion.span>
+                  </MagneticWrapper>
+                  {isExpanded && (
+                    <motion.span
+                      layoutId="desktop-nav-active-dot"
+                      className={styles.activeDot}
+                      transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                      aria-hidden="true"
+                    />
+                  )}
                 </button>
-              </div>
 
-              {/* Full-Width MegaMenu Panel — positioned relative to SiteHeader containing block */}
-              {isExpanded && (
-                <div
+                <motion.div
                   id={panelId}
                   className={styles.megaMenuPanel}
                   role="region"
                   aria-label={`Menú desplegable ${category.label}`}
+                  variants={PANEL_VARIANTS}
+                  initial={false}
+                  animate={isExpanded ? "open" : "closed"}
                 >
-                  <Container size="default">
-                    <div className={styles.megaMenuLayout}>
-                      {/* Left Zone: Category / Collection Hierarchy */}
-                      <div className={styles.megaSide}>
-                        <p className={styles.sideEyebrow}>Colecciones</p>
-                        <div className={styles.sideLinks}>
-                          {category.sections[0]?.items.map((item, itemIdx) => (
-                            <Link
-                              key={itemIdx}
-                              href={item.href}
-                              className={styles.sideLeadLink}
-                              onClick={() => setActiveCategoryId(null)}
-                            >
-                              {item.label}
-                            </Link>
-                          ))}
-                        </div>
-
-                        {/* Secondary sections / Brands if present */}
-                        {category.brands && category.brands.length > 0 && (
-                          <div className={styles.sideBrands}>
-                            <p className={styles.sideSubEyebrow}>Marcas</p>
-                            <div className={styles.brandTags}>
-                              {category.brands.slice(0, 4).map((brand, brandIdx) => (
-                                <Link
-                                  key={brandIdx}
-                                  href={brand.href}
-                                  className={styles.brandTag}
-                                  onClick={() => setActiveCategoryId(null)}
-                                >
-                                  {brand.label}
-                                </Link>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <Link
-                          href={category.href}
-                          className={styles.viewAllFooterLink}
-                          onClick={() => setActiveCategoryId(null)}
-                        >
-                          <span>Ver todos los {category.label.toLowerCase()}</span>
-                          <span aria-hidden="true">→</span>
-                        </Link>
-                      </div>
-
-                      {/* Right / Center Zone: Visual Preview Tiles */}
-                      <div className={styles.megaPreviews}>
-                        <div className={styles.previewsHeader}>
-                          <p className={styles.sideEyebrow}>Líneas destacadas</p>
-                          <Link
-                            href={category.href}
-                            className={styles.topRightViewAll}
-                            onClick={() => setActiveCategoryId(null)}
-                          >
-                            Explorar catálogo completo →
-                          </Link>
-                        </div>
-
-                        <div className={styles.previewGrid}>
-                          {(category.previews ?? []).map((preview, previewIdx) => (
-                            <Link
-                              key={previewIdx}
-                              href={preview.href}
-                              className={styles.previewCard}
-                              onClick={() => setActiveCategoryId(null)}
-                            >
-                              <div className={styles.previewMedia} aria-hidden="true">
-                                <div className={styles.previewAmbient} />
-                              </div>
-                              <div className={styles.previewContent}>
-                                <h3 className={styles.previewTitle}>{preview.title}</h3>
-                                <p className={styles.previewSubtitle}>{preview.subtitle}</p>
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                  <Container size="full">
+                    {category.menuLayout === "series" ? (
+                      <MegaMenuSeries
+                        category={category}
+                        isOpen={isExpanded}
+                        onNavigate={closeMenu}
+                      />
+                    ) : category.menuLayout === "grid" ? (
+                      <MegaMenuGrid
+                        category={category}
+                        isOpen={isExpanded}
+                        onNavigate={closeMenu}
+                      />
+                    ) : category.menuLayout === "links" ? (
+                      <MegaMenuLinks
+                        category={category}
+                        isOpen={isExpanded}
+                        onNavigate={closeMenu}
+                      />
+                    ) : (
+                      <MegaMenuProducts
+                        category={category}
+                        collections={productTypes}
+                        shelves={shelves}
+                        isOpen={isExpanded}
+                        onNavigate={closeMenu}
+                      />
+                    )}
                   </Container>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+                </motion.div>
+              </li>
+            );
+          })}
+        </ul>
+
+        {/* One backdrop shared by every panel, so switching menus never flickers it. */}
+        <AnimatePresence>
+          {activeCategoryId && (
+            <motion.div
+              key="mega-menu-backdrop"
+              className={styles.megaMenuBackdrop}
+              aria-hidden="true"
+              onClick={closeMenu}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: 0.35, ease: "easeOut" } }}
+              exit={{ opacity: 0, transition: { duration: 0.45, ease: "easeInOut" } }}
+            />
+          )}
+        </AnimatePresence>
+      </nav>
+    </MotionConfig>
   );
 }

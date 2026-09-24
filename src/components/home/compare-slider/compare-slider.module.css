@@ -1,0 +1,139 @@
+.section {
+  width: 100%;
+  max-width: var(--container-full);
+  margin: 0 auto;
+  padding: var(--space-24) var(--gutter-desktop-lg);
+  background-color: var(--color-surface-card);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-10);
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-accent-violet-deep);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(32px, 4vw, 56px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--color-accent-violet-deep);
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 21 / 9;
+  min-height: 320px;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-secondary);
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+}
+
+.layer :global(img) {
+  object-fit: contain;
+}
+
+/* Vertical divider with the draggable grip at its center. */
+.handle {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 100%;
+  margin-left: -22px;
+  cursor: ew-resize;
+}
+
+.handleLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--color-surface-card);
+}
+
+.handleGrip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-card);
+  color: var(--color-accent-violet-deep);
+  box-shadow: var(--elevation-mid);
+}
+
+.handle:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.caption {
+  position: absolute;
+  bottom: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.captionLeft {
+  left: var(--space-6);
+  text-align: left;
+}
+
+.captionRight {
+  right: var(--space-6);
+  text-align: right;
+}
+
+.captionKicker {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.captionName {
+  font-family: var(--font-heading);
+  font-size: clamp(18px, 2vw, 26px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+@media (max-width: 1023px) {
+  .section {
+    padding: var(--space-16) var(--gutter-tablet);
+  }
+
+  .stage {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+@media (max-width: 767px) {
+  .section {
+    padding: var(--space-12) var(--gutter-mobile);
+  }
+}

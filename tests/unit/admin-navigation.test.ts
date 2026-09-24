@@ -4,17 +4,25 @@ import type { PermissionName } from "@/lib/auth/rbac";
 
 describe("GP-022 / GP-024 / GP-025 — Admin Navigation Filtering & Scope Contract Tests", () => {
   it("D1: only implemented destinations are registered in canonical navigation", () => {
-    expect(CANONICAL_ADMIN_NAV_ITEMS.length).toBe(4);
+    expect(CANONICAL_ADMIN_NAV_ITEMS.length).toBe(6);
     expect(CANONICAL_ADMIN_NAV_ITEMS[0]?.href).toBe("/admin");
     expect(CANONICAL_ADMIN_NAV_ITEMS[0]?.id).toBe("overview");
     expect(CANONICAL_ADMIN_NAV_ITEMS[1]?.href).toBe("/admin/products");
     expect(CANONICAL_ADMIN_NAV_ITEMS[1]?.id).toBe("products");
     expect(CANONICAL_ADMIN_NAV_ITEMS[1]?.requiredPermission).toBe("catalog:manage");
     expect(CANONICAL_ADMIN_NAV_ITEMS[2]).toMatchObject({
+      href: "/admin/taxonomia",
+      requiredPermission: "catalog:manage",
+    });
+    expect(CANONICAL_ADMIN_NAV_ITEMS[3]).toMatchObject({
+      href: "/admin/menu",
+      requiredPermission: "catalog:manage",
+    });
+    expect(CANONICAL_ADMIN_NAV_ITEMS[4]).toMatchObject({
       href: "/admin/products/ai-import",
       requiredPermission: "catalog:ai_research",
     });
-    expect(CANONICAL_ADMIN_NAV_ITEMS[3]).toMatchObject({
+    expect(CANONICAL_ADMIN_NAV_ITEMS[5]).toMatchObject({
       href: "/admin/settings/ai",
       requiredPermission: "ai:manage_credentials",
     });
@@ -39,9 +47,11 @@ describe("GP-022 / GP-024 / GP-025 — Admin Navigation Filtering & Scope Contra
   it("D3: returns destinations filtered by authorized staff permissions", () => {
     const catalogPerms = new Set<PermissionName>(["catalog:manage"]);
     const navCatalog = getAdminNavigation(catalogPerms);
-    expect(navCatalog.length).toBe(2);
+    expect(navCatalog.length).toBe(4);
     expect(navCatalog[0]?.href).toBe("/admin");
     expect(navCatalog[1]?.href).toBe("/admin/products");
+    expect(navCatalog[2]?.href).toBe("/admin/taxonomia");
+    expect(navCatalog[3]?.href).toBe("/admin/menu");
 
     const researchPerms = new Set<PermissionName>(["catalog:ai_research"]);
     expect(getAdminNavigation(researchPerms).map((item) => item.href)).toEqual([

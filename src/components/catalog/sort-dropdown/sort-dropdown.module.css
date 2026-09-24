@@ -1,0 +1,125 @@
+/* Positioning context: the menu opens over the trigger from its top-right corner. */
+.sortDropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.label {
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.trigger {
+  --dome-height: 46px;
+  --dome-radius: var(--radius-sm);
+  --dome-padding: 0 21px;
+  --dome-font-size: 15px;
+  min-width: 147px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: currentColor;
+}
+
+/*
+ * Opens on top of the trigger: its top-right corner sits on the trigger's
+ * top-right corner and it scales out from there, covering the button.
+ */
+.menu {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 50;
+  width: 300px;
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-dark-canvas);
+  color: var(--color-text-dark-primary);
+  box-shadow: var(--elevation-high);
+  transform-origin: top right;
+}
+
+.menuHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.menuTitle {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-dark-muted);
+}
+
+.menuClose {
+  --dome-border: var(--color-border-dark-default);
+}
+
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text-dark-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The active choice reads dimmed with a dot, as in the reference. */
+.optionSelected {
+  color: var(--color-text-dark-muted);
+}
+
+.selectedDot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background-color: currentColor;
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--color-border-dark-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.optionLabel {
+  position: relative;
+  display: inline-block;
+}
+
+.underline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1.5px;
+  background-color: currentColor;
+  transform-origin: left center;
+}

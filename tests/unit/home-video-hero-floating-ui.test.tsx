@@ -1,0 +1,326 @@
+// @vitest-environment jsdom
+
+import fs from "node:fs";
+import path from "node:path";
+import React from "react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
+import { beforeAll, describe, expect, it } from "vitest";
+import { HERO_EMBED_SRC, VideoHero } from "@/components/home/video-hero/video-hero";
+import { ProductCarousel } from "@/components/home/product-carousel/product-carousel";
+import { FeatureVideo, buildFeatureEmbedSrc } from "@/components/home/feature-video/feature-video";
+import {
+  BentoShowcase,
+  CatalogRail,
+  CommunityBanner,
+  CompareSlider,
+  SplitShowcase,
+  TrustStrip,
+} from "@/components/home";
+import type { ProductDiscoveryItem } from "@/lib/catalog/types";
+import { ChatWidget, SocialRail } from "@/components/floating";
+import { PROMO_PILL, SOCIAL_LINKS } from "@/config/social-links";
+import { STOREFRONT_INVENTORY, inventoryFamilies } from "@/lib/catalog/storefront-inventory";
+
+beforeAll(() => {
+  // jsdom has no IntersectionObserver; whileInView only needs it to exist.
+  class StubObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  }
+  Object.defineProperty(window, "IntersectionObserver", { writable: true, value: StubObserver });
+  Object.defineProperty(globalThis, "IntersectionObserver", {
+    writable: true,
+    value: StubObserver,
+  });
+});
+
+describe("Video hero", () => {
+  it("embeds the background video muted, looping and chromeless on the privacy host", () => {
+    const url = new URL(HERO_EMBED_SRC);
+    expect(url.host).toBe("www.youtube-nocookie.com");
+    expect(url.pathname).toBe("/embed/2gX-vyQwHsA");
+    expect(url.searchParams.get("autoplay")).toBe("1");
+    expect(url.searchParams.get("mute")).toBe("1");
+    expect(url.searchParams.get("loop")).toBe("1");
+    // YouTube only loops a single video when it is also the playlist.
+    expect(url.searchParams.get("playlist")).toBe("2gX-vyQwHsA");
+    expect(url.searchParams.get("controls")).toBe("0");
+  });
+
+  it("keeps the page H1 and exposes the reveal control", () => {
+    const html = renderToStaticMarkup(
+      <VideoHero heading="Periféricos gaming de alto rendimiento" revealTargetId="destacado" />
+    );
+    expect(html).toContain("<h1");
+    expect(html).toContain("Periféricos gaming de alto rendimiento");
+    expect(html).toContain("Desliza para ver la tienda");
+    expect(html).toContain("youtube-nocookie.com");
+  });
+});
+
+describe("Social rail", () => {
+  it("renders every network without linking to an unconfigured profile", () => {
+    const html = renderToStaticMarkup(<SocialRail />);
+    const svgCount = (html.match(/<svg/g) ?? []).length;
+    expect(svgCount).toBe(SOCIAL_LINKS.length);
+    expect(html).not.toContain('href=""');
+    expect(html).not.toContain('href="#"');
+
+    for (const link of SOCIAL_LINKS.filter((entry) => entry.href)) {
+      expect(html).toContain(`href="${link.href}"`);
+    }
+    expect(html).toContain(PROMO_PILL.label);
+  });
+});
+
+describe("Chat widget", () => {
+  it("opens from the launcher and shows the welcome, product card and composer", async () => {
+    const user = userEvent.setup();
+    render(<ChatWidget />);
+
+    await user.click(screen.getByRole("button", { name: "Chat" }));
+    // The launcher animates out before the window mounts (AnimatePresence).
+    await screen.findByTestId("chat-window");
+
+    expect(screen.getByText(/Bienvenido a Gamer Perú/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Iniciar sesión" }).getAttribute("href")).toBe(
+      "/auth/login"
+    );
+
+    const featured = STOREFRONT_INVENTORY[0]!;
+    const productLink = screen.getByTestId("chat-product-card");
+    expect(productLink.getAttribute("href")).toBe(`/productos/${featured.slug}`);
+    expect(productLink.textContent).toContain(featured.name);
+
+    expect(screen.getByPlaceholderText("Pregunta lo que quieras...")).toBeTruthy();
+  });
+
+  it("answers that the assistant is not connected instead of faking a reply", async () => {
+    const user = userEvent.setup();
+    render(<ChatWidget />);
+
+    await user.click(screen.getByRole("button", { name: "Chat" }));
+    await screen.findByTestId("chat-window");
+    await user.type(screen.getByTestId("chat-input"), "¿Tienen stock?");
+    await user.click(screen.getByRole("button", { name: "Enviar mensaje" }));
+
+    expect(screen.getByText("¿Tienen stock?")).toBeTruthy();
+    expect(screen.getByText(/todavía no está conectado/)).toBeTruthy();
+  });
+
+  it("carries no competitor branding or third-party platform claims", () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, "../../src/components/floating/chat-widget/chat-widget.tsx"),
+      "utf8"
+    );
+    expect(source.toLowerCase()).not.toContain("wlmouse");
+    expect(source.toLowerCase()).not.toContain("shopify");
+  });
+});
+
+describe("Product carousel", () => {
+  it("shows one card per model, with the colorway count as superscript", () => {
+    const families = inventoryFamilies();
+    render(<ProductCarousel id="coleccion" eyebrow="Colección" title="Disponible" />);
+
+    const cards = screen.getAllByRole("listitem");
+    expect(cards).toHaveLength(families.length);
+    // Every listing is accounted for by exactly one card.
+    expect(families.reduce((sum, family) => sum + family.items.length, 0)).toBe(
+      STOREFRONT_INVENTORY.length
+    );
+
+    const multi = families.find((family) => family.items.length > 1)!;
+    const card = screen.getByText(multi.name).closest("a")!;
+    expect(card.getAttribute("href")).toBe(`/productos/${multi.lead.slug}`);
+    expect(card.querySelector("sup")?.textContent).toBe(String(multi.items.length));
+    expect(card.textContent).toContain(multi.brand.name);
+
+    const single = families.find((family) => family.items.length === 1)!;
+    expect(screen.getByText(single.name).closest("a")!.querySelector("sup")).toBeNull();
+  });
+
+  it("steps with the reused dome arrows, starting clamped at the left", () => {
+    render(<ProductCarousel id="coleccion" eyebrow="Colección" title="Disponible" />);
+
+    const prev = screen.getByTestId("product-carousel-prev");
+    const next = screen.getByTestId("product-carousel-next");
+    expect(prev).toHaveProperty("disabled", true);
+    expect(next.getAttribute("aria-label")).toBe("Productos siguientes");
+  });
+});
+
+describe("Feature video", () => {
+  it("embeds the film chromeless, looping and with the JS API for its play control", () => {
+    const url = new URL(buildFeatureEmbedSrc("3nAqLAV8JN0"));
+    expect(url.host).toBe("www.youtube-nocookie.com");
+    expect(url.pathname).toBe("/embed/3nAqLAV8JN0");
+    expect(url.searchParams.get("mute")).toBe("1");
+    expect(url.searchParams.get("loop")).toBe("1");
+    expect(url.searchParams.get("playlist")).toBe("3nAqLAV8JN0");
+    expect(url.searchParams.get("controls")).toBe("0");
+    expect(url.searchParams.get("enablejsapi")).toBe("1");
+  });
+
+  it("renders the overlay and toggles the play control", async () => {
+    const user = userEvent.setup();
+    render(
+      <FeatureVideo
+        videoId="3nAqLAV8JN0"
+        eyebrow="Nueva generación"
+        title="ATK A9 PRO MAX"
+        subtitle="El mouse insignia de ATK, disponible en Gamer Perú."
+        cta={{ label: "Ver más", href: "/productos/atk-a9-pro-max-white" }}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: /ATK A9 PRO MAX/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Ver más" }).getAttribute("href")).toBe(
+      "/productos/atk-a9-pro-max-white"
+    );
+
+    const toggle = screen.getByTestId("feature-video-toggle");
+    expect(toggle.getAttribute("aria-label")).toBe("Pausar el video");
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-label")).toBe("Reproducir el video");
+  });
+});
+
+const COMPARE_PROPS = {
+  eyebrow: "Dos acabados del mismo modelo",
+  title: "Elige el tuyo.",
+  left: { kicker: "Clásico", name: "Negro", image: { src: "/images/home/a.png", alt: "Negro" } },
+  right: { kicker: "Limpio", name: "Blanco", image: { src: "/images/home/b.png", alt: "Blanco" } },
+};
+
+describe("Home sections", () => {
+  it("compares two finishes and lets the keyboard move the curtain", async () => {
+    const user = userEvent.setup();
+    render(<CompareSlider {...COMPARE_PROPS} />);
+
+    expect(screen.getByText("Negro")).toBeTruthy();
+    expect(screen.getByText("Blanco")).toBeTruthy();
+
+    const handle = screen.getByRole("slider", { name: "Comparar Negro y Blanco" });
+    expect(handle.getAttribute("aria-valuenow")).toBe("50");
+
+    handle.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(Number(handle.getAttribute("aria-valuenow"))).toBeGreaterThan(50);
+  });
+
+  it("lists every showcase feature", () => {
+    render(
+      <SplitShowcase
+        eyebrow="Multimarca"
+        title="Armado para competir"
+        features={[
+          { title: "Uno", description: "Primero" },
+          { title: "Dos", description: "Segundo" },
+        ]}
+        image={{ src: "/images/home/mouse.png", alt: "Mouse" }}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "Armado para competir" })).toBeTruthy();
+    expect(screen.getAllByRole("term")).toHaveLength(2);
+    expect(screen.getByText("Segundo")).toBeTruthy();
+  });
+
+  it("splits the bento headline so the second half carries the accent", () => {
+    const { container } = render(
+      <BentoShowcase
+        title={["Explora nuestros", "mousepads"]}
+        description="Superficies de control y de velocidad."
+        images={[
+          { src: "/images/home/1.jpg", alt: "Uno" },
+          { src: "/images/home/2.jpg", alt: "Dos" },
+          { src: "/images/home/3.jpg", alt: "Tres" },
+        ]}
+      />
+    );
+
+    const heading = screen.getByRole("heading", { name: /Explora nuestros mousepads/ });
+    expect(heading.querySelector("span")?.textContent).toBe("mousepads");
+    expect(container.querySelectorAll("img")).toHaveLength(3);
+  });
+
+  it("keeps the community call to action inert until a profile is configured", () => {
+    render(
+      <CommunityBanner
+        eyebrow="Gamer Perú"
+        title={["Únete a nuestra", "comunidad"]}
+        description="Novedades y lanzamientos."
+        ctaLabel="Entrar al Discord"
+        background={{ src: "/images/home/bg.jpg", alt: "Fondo" }}
+      />
+    );
+
+    // SOCIAL_LINKS ships without URLs, so no link may be rendered.
+    expect(screen.queryByRole("link", { name: "Entrar al Discord" })).toBeNull();
+    expect(screen.getByTestId("community-banner-cta").textContent).toBe("Entrar al Discord");
+  });
+
+  it("renders only the claims it is given", () => {
+    render(
+      <TrustStrip
+        items={[
+          {
+            icon: "whatsapp",
+            title: "Atención por WhatsApp",
+            description: "Te responde el equipo.",
+          },
+          { icon: "currency", title: "Precios en soles", description: "Catálogo en PEN." },
+        ]}
+      />
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("Precios en soles")).toBeTruthy();
+  });
+
+  it("renders catalog cards in the rail and hides the rail when empty", () => {
+    const product: ProductDiscoveryItem = {
+      id: "p1",
+      name: "ATK A9 Plus 2.0 Black",
+      slug: "atk-a9-plus-2-0-black",
+      subtitle: null,
+      brand: { name: "ATK", slug: "atk" },
+      category: { name: "Mouses Gaming", slug: "mouses" },
+      primaryMedia: null,
+      startingPriceCents: 18900,
+    };
+
+    const { container, rerender } = render(
+      <CatalogRail
+        id="mouses"
+        eyebrow="Mouses"
+        title="Nuestros mouses"
+        products={[product]}
+        seeAll={{ label: "Ver todos", href: "/categorias/mouses" }}
+      />
+    );
+
+    expect(screen.getByTestId("product-card")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Ver todos" }).getAttribute("href")).toBe(
+      "/categorias/mouses"
+    );
+
+    rerender(
+      <CatalogRail
+        id="mouses"
+        eyebrow="Mouses"
+        title="Nuestros mouses"
+        products={[]}
+        seeAll={{ label: "Ver todos", href: "/categorias/mouses" }}
+      />
+    );
+    expect(container.querySelector("section")).toBeNull();
+  });
+});

@@ -1,0 +1,80 @@
+.section {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-10);
+  align-items: center;
+  width: 100%;
+  max-width: var(--container-full);
+  margin: 0 auto;
+  padding: var(--space-24) var(--gutter-desktop-lg);
+  background-color: var(--color-surface-card);
+}
+
+@media (min-width: 1024px) {
+  .section {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: var(--space-16);
+  }
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-heading);
+  font-size: clamp(30px, 3.4vw, 48px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--color-text-primary);
+}
+
+.titleAccent {
+  color: var(--color-accent-violet-deep);
+}
+
+.description {
+  margin: 0;
+  max-width: 46ch;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+/* Wide tile and square tile stack on the left; the tall one spans both rows. */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(3, 200px);
+  gap: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 220px 220px;
+  }
+
+  .tileTall {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+.tile {
+  position: relative;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-secondary);
+  overflow: hidden;
+}
+
+.tile :global(img) {
+  object-fit: cover;
+}

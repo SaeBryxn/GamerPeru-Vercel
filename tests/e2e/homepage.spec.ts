@@ -16,154 +16,104 @@ test.describe("GP-010 Homepage — Sections, Hierarchy, Responsiveness & Accessi
     await expect(h1Elements).toHaveText("Periféricos gaming de alto rendimiento");
   });
 
-  test("B: verifies Hero section renders with minimum 590px height and semantic multi-brand CTAs", async ({
+  test("B: verifies the video hero fills the viewport and reveals the store on click", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
 
-    const heroSection = page.locator("section[aria-label='Portada principal de Gamer Perú']");
-    await expect(heroSection).toBeVisible();
+    const hero = page.locator("section[aria-label='Portada principal de Gamer Perú']");
+    await expect(hero).toBeVisible();
 
-    const box = await heroSection.boundingBox();
+    const box = await hero.boundingBox();
     expect(box).not.toBeNull();
-    expect(box!.height).toBeGreaterThanOrEqual(590);
+    // Full viewport minus the announcement bar and header stack.
+    expect(box!.height).toBeGreaterThanOrEqual(600);
 
-    // Primary CTA
-    const primaryCta = heroSection.getByRole("link", { name: "Ver mouses" });
-    await expect(primaryCta).toBeVisible();
-    await expect(primaryCta).toHaveAttribute("href", "/categorias/mouses");
-
-    // Secondary CTA
-    const secondaryCta = heroSection.getByRole("link", { name: "Explorar categorías" });
-    await expect(secondaryCta).toBeVisible();
-    await expect(secondaryCta).toHaveAttribute("href", "#categorias");
-  });
-
-  test("C: verifies Featured Editorial renders and links to mouses category", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto("/");
-
-    const featuredSection = page.locator("section[aria-label='Ingeniería y diseño destacado']");
-    await expect(featuredSection).toBeVisible();
-
-    await expect(
-      featuredSection.getByRole("heading", { name: "Ingeniería ultraligera en magnesio" })
-    ).toBeVisible();
-
-    const link = featuredSection.getByRole("link", { name: /Explorar mouses/ });
-    await expect(link).toBeVisible();
-    await expect(link).toHaveAttribute("href", "/categorias/mouses");
-  });
-
-  test("D: verifies CategoryShowcase has id='categorias' and renders all 5 category entry links", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto("/");
-
-    const categorySection = page.locator("#categorias");
-    await expect(categorySection).toBeVisible();
-
-    const expectedCategories = [
-      { name: "Mouses", href: "/categorias/mouses" },
-      { name: "Teclados", href: "/categorias/teclados" },
-      { name: "Mousepads", href: "/categorias/mousepads" },
-      { name: "Audio", href: "/categorias/audio" },
-      { name: "Accesorios", href: "/categorias/accesorios" },
-    ];
-
-    for (const cat of expectedCategories) {
-      const card = categorySection.locator(`a[href='${cat.href}']`);
-      await expect(card).toBeVisible();
-      await expect(card).toContainText(cat.name);
+    // The embed is a muted, chromeless, looping background on the privacy host.
+    const frame = hero.locator("[data-testid='video-hero-frame']");
+    const src = await frame.getAttribute("src");
+    expect(src).toContain("youtube-nocookie.com/embed/2gX-vyQwHsA");
+    for (const param of ["autoplay=1", "mute=1", "loop=1", "controls=0"]) {
+      expect(src).toContain(param);
     }
+
+    // The hint scrolls the store into view.
+    await hero.getByTestId("video-hero-scroll-hint").click();
+    await expect(page.locator("#coleccion")).toBeInViewport();
   });
 
-  test("E: verifies CuratedGear renders 4 category doors without fake commercial data", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+  test("C: verifies the split showcase lists its features beside the stage", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
 
-    const gearSection = page.locator("section[aria-label='Selección de gear destacado']");
-    await expect(gearSection).toBeVisible();
-
-    await expect(gearSection.getByRole("heading", { name: "Selección Gamer Perú" })).toBeVisible();
-
-    // Verify all 4 curated items exist
-    await expect(gearSection.getByText("Mouses ultraligeros")).toBeVisible();
-    await expect(gearSection.getByText("Teclados magnéticos")).toBeVisible();
-    await expect(gearSection.getByText("Mousepads de control")).toBeVisible();
-    await expect(gearSection.getByText("Dongles y accesorios")).toBeVisible();
+    const showcase = page.getByTestId("split-showcase");
+    await showcase.scrollIntoViewIfNeeded();
+    await expect(showcase.getByRole("heading", { name: "Armado para competir" })).toBeVisible();
+    await expect(showcase.getByText("Precios en soles")).toBeVisible();
+    await expect(showcase.locator("dt")).toHaveCount(4);
   });
 
-  test("F: verifies TechnicalEditorial renders giant typography stats and technology concepts", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+  test("D: verifies the comparison curtain moves with the keyboard", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
 
-    const techSection = page.locator(
-      "section[aria-label='Ingeniería y especificaciones técnicas']"
-    );
-    await expect(techSection).toBeVisible();
+    const handle = page.getByTestId("compare-slider-handle");
+    await handle.scrollIntoViewIfNeeded();
+    await expect(handle).toHaveAttribute("aria-valuenow", "50");
 
-    await expect(
-      techSection.getByRole("heading", { name: "Tecnología para respuesta instantánea" })
-    ).toBeVisible();
-
-    // Giant stats
-    await expect(techSection.getByText("8000Hz", { exact: true })).toBeVisible();
-    await expect(techSection.getByText("0.125ms", { exact: true })).toBeVisible();
+    await handle.focus();
+    await page.keyboard.press("ArrowRight");
+    const value = Number(await handle.getAttribute("aria-valuenow"));
+    expect(value).toBeGreaterThan(50);
   });
 
-  test("G: verifies BrandDiscovery has id='marcas' and renders 5 multi-brand links", async ({
+  test("E: verifies both catalog rails render cards and step with their arrows", async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
 
-    const brandSection = page.locator("#marcas");
-    await expect(brandSection).toBeVisible();
-
-    const expectedBrands = [
-      { name: "WLMOUSE", href: "/marcas/wlmouse" },
-      { name: "Pulsar", href: "/marcas/pulsar" },
-      { name: "Lamzu", href: "/marcas/lamzu" },
-      { name: "ATK", href: "/marcas/atk" },
-      { name: "Ninjutso", href: "/marcas/ninjutso" },
-    ];
-
-    for (const brand of expectedBrands) {
-      const link = brandSection.locator(`a[href='${brand.href}']`);
-      await expect(link).toBeVisible();
-      await expect(link).toContainText(brand.name);
+    for (const rail of ["mouses", "mousepads"]) {
+      const track = page.getByTestId(`${rail}-track`);
+      await track.scrollIntoViewIfNeeded();
+      expect(await track.locator("[data-testid='product-card']").count()).toBeGreaterThan(0);
     }
+
+    const track = page.getByTestId("mouses-track");
+    const before = await track.evaluate((el) => el.getBoundingClientRect().left);
+    await page.getByTestId("mouses-next").click();
+    await page.waitForTimeout(600);
+    const after = await track.evaluate((el) => el.getBoundingClientRect().left);
+    expect(after).toBeLessThan(before);
   });
 
-  test("H: verifies HomeDiscoveryFooter renders 4 trust facts and SEO directory columns", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+  test("F: verifies the mousepad bento and the community banner render", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
 
-    const trustSection = page.locator(
-      "section[aria-label='Información de confianza y directorio']"
-    );
-    await expect(trustSection).toBeVisible();
+    const bento = page.getByTestId("bento-showcase");
+    await bento.scrollIntoViewIfNeeded();
+    await expect(bento.getByRole("heading", { name: /Explora nuestros mousepads/ })).toBeVisible();
 
-    // 4 Grounded trust facts
-    await expect(trustSection.getByText("Selección multimarca")).toBeVisible();
-    await expect(trustSection.getByText("Precios y pagos en PEN / S/")).toBeVisible();
-    await expect(trustSection.getByText("Verificación manual de pagos")).toBeVisible();
-    await expect(trustSection.getByText("Plataforma enfocada en Perú")).toBeVisible();
+    const banner = page.getByTestId("community-banner");
+    await banner.scrollIntoViewIfNeeded();
+    await expect(banner.getByRole("heading", { level: 2 })).toBeVisible();
+  });
 
-    // SEO Directory
-    await expect(trustSection.getByRole("heading", { name: "Categorías" })).toBeVisible();
-    await expect(trustSection.getByRole("heading", { name: "Marcas" })).toBeVisible();
-    await expect(trustSection.getByRole("heading", { name: "Atención" })).toBeVisible();
-    await expect(trustSection.getByRole("heading", { name: "Legal" })).toBeVisible();
+  test("G: verifies the trust strip states only claims the store can back", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+
+    const strip = page.locator("section[aria-label='Cómo compras en Gamer Perú']");
+    await strip.scrollIntoViewIfNeeded();
+    await expect(strip.locator("li")).toHaveCount(4);
+    await expect(strip.getByText("Pago con Yape o Plin")).toBeVisible();
+
+    // Claims the store cannot honour today must not appear anywhere on the page.
+    const body = page.locator("body");
+    await expect(body).not.toContainText("garantía");
+    await expect(body).not.toContainText("AfterPay");
   });
 
   test("I: verifies responsive matrix with zero horizontal overflow across 8 viewports", async ({
@@ -192,91 +142,48 @@ test.describe("GP-010 Homepage — Sections, Hierarchy, Responsiveness & Accessi
     }
   });
 
-  test("J: verifies responsive grid geometry for Category Showcase and Curated Gear", async ({
-    page,
-  }) => {
-    // 1. Desktop 1280px: Category 3+2, Gear 4 columns
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto("/");
-
-    const categoryCards = page.locator("#categorias a");
-    await expect(categoryCards).toHaveCount(5);
-
-    const card0 = await categoryCards.nth(0).boundingBox();
-    const card1 = await categoryCards.nth(1).boundingBox();
-    const card2 = await categoryCards.nth(2).boundingBox();
-    const card3 = await categoryCards.nth(3).boundingBox();
-    const card4 = await categoryCards.nth(4).boundingBox();
-
-    // Top 3 cards in row 1
-    expect(Math.abs(card0!.y - card1!.y)).toBeLessThanOrEqual(2);
-    expect(Math.abs(card1!.y - card2!.y)).toBeLessThanOrEqual(2);
-    // Bottom 2 cards in row 2
-    expect(card3!.y).toBeGreaterThan(card0!.y + 50);
-    expect(Math.abs(card3!.y - card4!.y)).toBeLessThanOrEqual(2);
-
-    // Curated Gear: 4 columns
-    const gearCards = page.locator("section[aria-label='Selección de gear destacado'] a");
-    await expect(gearCards).toHaveCount(4);
-    const gear0 = await gearCards.nth(0).boundingBox();
-    const gear1 = await gearCards.nth(1).boundingBox();
-    const gear2 = await gearCards.nth(2).boundingBox();
-    const gear3 = await gearCards.nth(3).boundingBox();
-    expect(Math.abs(gear0!.y - gear1!.y)).toBeLessThanOrEqual(2);
-    expect(Math.abs(gear1!.y - gear2!.y)).toBeLessThanOrEqual(2);
-    expect(Math.abs(gear2!.y - gear3!.y)).toBeLessThanOrEqual(2);
-
-    // 2. Tablet 768px: Category 2 cols, Gear 2 cols
-    await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto("/");
-    const catTab0 = await categoryCards.nth(0).boundingBox();
-    const catTab1 = await categoryCards.nth(1).boundingBox();
-    const catTab2 = await categoryCards.nth(2).boundingBox();
-    expect(Math.abs(catTab0!.y - catTab1!.y)).toBeLessThanOrEqual(2);
-    expect(catTab2!.y).toBeGreaterThan(catTab0!.y + 50);
-
-    const gearTab0 = await gearCards.nth(0).boundingBox();
-    const gearTab1 = await gearCards.nth(1).boundingBox();
-    const gearTab2 = await gearCards.nth(2).boundingBox();
-    expect(Math.abs(gearTab0!.y - gearTab1!.y)).toBeLessThanOrEqual(2);
-    expect(gearTab2!.y).toBeGreaterThan(gearTab0!.y + 50);
-
-    // 3. Mobile 360px: 1 col vertical stack
-    await page.setViewportSize({ width: 360, height: 640 });
-    await page.goto("/");
-    const catMob0 = await categoryCards.nth(0).boundingBox();
-    const catMob1 = await categoryCards.nth(1).boundingBox();
-    expect(catMob1!.y).toBeGreaterThan(catMob0!.y + 50);
-  });
-
   test("K: verifies MegaMenu geometry, preview zone width, and zero overflow at 1920px", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto("/");
 
-    const mousesDisclosureBtn = page.getByRole("button", {
-      name: "Abrir menú desplegable de Mouses",
-    });
-    await expect(mousesDisclosureBtn).toBeVisible();
-    await mousesDisclosureBtn.click();
-    await expect(mousesDisclosureBtn).toHaveAttribute("aria-expanded", "true");
+    const productTrigger = page.getByRole("button", { name: "Product", exact: true });
+    await expect(productTrigger).toBeVisible();
+    await productTrigger.click();
+    await expect(productTrigger).toHaveAttribute("aria-expanded", "true");
 
-    const panel = page.locator("#mega-menu-mouses");
+    const panel = page.locator("#mega-menu-productos");
     await expect(panel).toBeVisible();
 
     // Verify left collection links exist
-    await expect(panel.getByText("Colecciones")).toBeVisible();
-    await expect(panel.getByRole("link", { name: "Ultraligeros (< 45g)" })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: "Collections" })).toBeVisible();
+    const mouseTab = panel.getByRole("tab", { name: "Gaming Mouse" });
+    await expect(mouseTab).toHaveAttribute("aria-selected", "true");
 
-    // Verify right preview zone exists with 4 tiles
-    const previewTiles = panel.locator("a:has(h3)");
-    await expect(previewTiles).toHaveCount(4);
+    // Switching tabs swaps the shelf and the "All …" link without closing the panel
+    await panel.getByRole("tab", { name: "Keyboard" }).click();
+    await expect(panel.getByRole("tab", { name: "Keyboard" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    await expect(panel.getByRole("link", { name: /All Keyboard/ })).toHaveAttribute(
+      "href",
+      "/categorias/teclados"
+    );
+    await expect(productTrigger).toHaveAttribute("aria-expanded", "true");
+    await mouseTab.click();
 
-    // Verify "Ver todos los mouses" semantic link
-    const viewAllLink = panel.getByRole("link", { name: /Ver todos los mouses/i });
+    // Verify right product zone exists with 4 cards, each with a title link and cart action
+    const productCards = panel.locator("article");
+    await expect(productCards).toHaveCount(4);
+    await expect(productCards.locator("h3 a")).toHaveCount(4);
+    await expect(panel.getByRole("button", { name: "Agregar al carrito" })).toHaveCount(4);
+
+    // Verify "View All Products" semantic link
+    const viewAllLink = panel.getByRole("link", { name: /View All Products/i });
     await expect(viewAllLink).toBeVisible();
-    await expect(viewAllLink).toHaveAttribute("href", "/categorias/mouses");
+    await expect(viewAllLink).toHaveAttribute("href", "/buscar");
 
     // Verify zero horizontal overflow with MegaMenu open
     const hasHorizontalOverflow = await page.evaluate(() => {

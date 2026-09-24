@@ -10,7 +10,7 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
 
       const launcherBtn = page.getByTestId("filter-launcher-button");
       await expect(launcherBtn).toBeVisible();
-      await expect(launcherBtn).toContainText("Filtros");
+      await expect(launcherBtn).toContainText("Mostrar filtros");
 
       await launcherBtn.click();
       const drawer = page.getByTestId("filter-drawer");
@@ -41,7 +41,7 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
       const priceChip = page.getByText("Precio: Desde S/ 130");
       await expect(priceChip).toBeVisible();
 
-      await expect(launcherBtn).toContainText("Filtros");
+      await expect(launcherBtn).toContainText("Mostrar filtros");
       await expect(launcherBtn).toContainText("3");
     });
 
@@ -73,14 +73,34 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
     test("D: sort dropdown changes ordering and canonical URL", async ({ page }) => {
       await page.goto("/categorias/mouses");
 
-      const sortSelect = page.getByTestId("catalog-sort-select");
-      await expect(sortSelect).toBeVisible();
+      const sortButton = page.getByTestId("catalog-sort-button");
+      await expect(sortButton).toContainText("Destacados");
 
-      await sortSelect.selectOption("precio-menor");
+      await sortButton.click();
+      const sortMenu = page.getByTestId("catalog-sort-menu");
+      await expect(sortMenu).toBeVisible();
+      await sortMenu.getByRole("menuitemradio", { name: "Precio, menor a mayor" }).click();
       await expect(page).toHaveURL(/.*\/categorias\/mouses\?sort=precio-menor$/);
+      await expect(sortButton).toContainText("Precio, menor a mayor");
 
-      await sortSelect.selectOption("nombre-asc");
+      await sortButton.click();
+      await page
+        .getByTestId("catalog-sort-menu")
+        .getByRole("menuitemradio", { name: "Alfabéticamente, A-Z" })
+        .click();
       await expect(page).toHaveURL(/.*\/categorias\/mouses\?sort=nombre-asc$/);
+    });
+
+    test("D2: sort menu closes on Escape and returns focus to its trigger", async ({ page }) => {
+      await page.goto("/categorias/mouses");
+
+      const sortButton = page.getByTestId("catalog-sort-button");
+      await sortButton.click();
+      await expect(page.getByTestId("catalog-sort-menu")).toBeVisible();
+
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("catalog-sort-menu")).toHaveCount(0);
+      await expect(sortButton).toBeFocused();
     });
 
     test("E: renders filtered zero state when no products match filters", async ({ page }) => {
@@ -400,13 +420,16 @@ test.describe("GP-013 — Faceted Discovery & Filtering E2E Suite", () => {
     test("P1: filtered page 2 preserves filters and sort", async ({ page }) => {
       await page.goto("/categorias/mouses?marca=marca-qa&sort=precio-menor&page=2");
       await expect(page.getByText("Marca: Marca QA")).toBeVisible();
-      await expect(page.getByTestId("catalog-sort-select")).toHaveValue("precio-menor");
+      await expect(page.getByTestId("catalog-sort-button")).toContainText("Precio, menor a mayor");
     });
 
     test("P2: applying filter or changing sort resets page to 1", async ({ page }) => {
       await page.goto("/categorias/mouses?marca=marca-qa&page=2");
-      const sortSelect = page.getByTestId("catalog-sort-select");
-      await sortSelect.selectOption("precio-menor");
+      await page.getByTestId("catalog-sort-button").click();
+      await page
+        .getByTestId("catalog-sort-menu")
+        .getByRole("menuitemradio", { name: "Precio, menor a mayor" })
+        .click();
       await expect(page).toHaveURL(/.*\/categorias\/mouses\?marca=marca-qa&sort=precio-menor$/);
     });
 

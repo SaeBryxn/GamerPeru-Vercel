@@ -19,7 +19,6 @@
 html,
 body {
   max-width: 100vw;
-  overflow-x: hidden;
   background-color: var(--color-surface-canvas);
   color: var(--color-text-primary);
   font-family:
@@ -33,6 +32,16 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/*
+ * Horizontal overflow is clipped on body only. Setting overflow on both html
+ * and body turns body into a scroll container that never scrolls, which
+ * silently disables every position: sticky (e.g. the catalog toolbar).
+ * With html left visible, the browser propagates this value to the viewport.
+ */
+body {
+  overflow-x: clip;
 }
 
 a {

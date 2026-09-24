@@ -12,6 +12,8 @@ describe("GP-022 / BR1 — AdminHeader Mobile Trigger & ARIA Contract Tests", ()
         isMobileNavOpen={false}
         triggerRef={triggerRef}
         pageTitle="Inicio"
+        theme="light"
+        onToggleTheme={() => {}}
       />
     );
 
@@ -28,6 +30,8 @@ describe("GP-022 / BR1 — AdminHeader Mobile Trigger & ARIA Contract Tests", ()
         isMobileNavOpen={true}
         triggerRef={triggerRef}
         pageTitle="Inicio"
+        theme="light"
+        onToggleTheme={() => {}}
       />
     );
 
@@ -38,7 +42,13 @@ describe("GP-022 / BR1 — AdminHeader Mobile Trigger & ARIA Contract Tests", ()
 
   it("renders breadcrumb title and navigation landmark properly", () => {
     const html = renderToString(
-      <AdminHeader onOpenMobileNav={() => {}} isMobileNavOpen={false} pageTitle="Catálogo" />
+      <AdminHeader
+        onOpenMobileNav={() => {}}
+        isMobileNavOpen={false}
+        pageTitle="Catálogo"
+        theme="light"
+        onToggleTheme={() => {}}
+      />
     );
 
     expect(html).toContain('aria-label="Ruta de navegación"');

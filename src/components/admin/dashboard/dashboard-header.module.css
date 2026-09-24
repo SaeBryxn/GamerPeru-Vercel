@@ -3,7 +3,7 @@
   flex-direction: column;
   gap: 1.5rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--color-border-subtle, #e4e4e7);
+  border-bottom: 1px solid var(--color-border-subtle, var(--color-border-subtle));
 }
 
 .topRow {
@@ -25,13 +25,13 @@
   font-size: 1.75rem;
   font-weight: 700;
   letter-spacing: -0.025em;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   margin: 0 0 0.25rem;
 }
 
 .subtitle {
   font-size: 0.9375rem;
-  color: var(--color-text-secondary, #52525b);
+  color: var(--color-text-secondary, var(--color-text-secondary));
   margin: 0;
 }
 
@@ -40,8 +40,8 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background-color: var(--color-surface-card, #ffffff);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  background-color: var(--color-surface-card, var(--color-surface-card));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-md, 0.5rem);
   align-self: flex-start;
 }
@@ -55,7 +55,7 @@
 .bannerIcon {
   width: 1.75rem;
   height: 1.75rem;
-  color: var(--color-brand-primary, #e11d48);
+  color: var(--color-brand-primary, var(--color-brand-primary));
   flex-shrink: 0;
 }
 
@@ -68,7 +68,7 @@
 .bannerEmail {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
 }
 
 .bannerRoles {
@@ -82,8 +82,8 @@
   font-family: var(--font-heading, sans-serif);
   font-weight: 600;
   padding: 0.1rem 0.35rem;
-  background-color: var(--color-surface-secondary, #f4f4f5);
-  color: var(--color-brand-active, #be123c);
+  background-color: var(--color-surface-secondary, var(--color-surface-secondary));
+  color: var(--color-brand-active, var(--color-status-danger-text));
   border-radius: var(--radius-sm, 0.25rem);
 }
 
@@ -115,7 +115,7 @@
   gap: 0.375rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-secondary, #52525b);
+  color: var(--color-text-secondary, var(--color-text-secondary));
 }
 
 .periodIcon {
@@ -126,10 +126,10 @@
 .periodNav {
   display: inline-flex;
   align-items: center;
-  background-color: var(--color-surface-secondary, #f4f4f5);
+  background-color: var(--color-surface-secondary, var(--color-surface-secondary));
   padding: 0.25rem;
   border-radius: var(--radius-md, 0.5rem);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   gap: 0.25rem;
 }
 
@@ -141,7 +141,7 @@
   font-size: 0.8125rem;
   font-family: var(--font-heading, sans-serif);
   font-weight: 600;
-  color: var(--color-text-secondary, #52525b);
+  color: var(--color-text-secondary, var(--color-text-secondary));
   text-decoration: none;
   border-radius: var(--radius-sm, 0.25rem);
   transition:
@@ -152,35 +152,89 @@
 }
 
 .periodBtn:hover {
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   background-color: rgba(0, 0, 0, 0.05);
 }
 
 .periodBtn:focus-visible {
-  outline: 2px solid var(--color-brand-primary, #e11d48);
+  outline: 2px solid var(--color-brand-primary, var(--color-brand-primary));
   outline-offset: 1px;
 }
 
 .periodBtnActive {
-  background-color: var(--color-surface-card, #ffffff);
-  color: #be123c;
+  background-color: var(--color-surface-card, var(--color-surface-card));
+  color: var(--color-status-danger-text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .refreshNote {
   font-size: 0.75rem;
-  color: #52525b;
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
-@media (prefers-color-scheme: dark) {
-  .periodNav {
-    background-color: var(--color-surface-dark-secondary, #18181b);
-    border-color: var(--color-border-dark-subtle, #27272a);
-  }
+/* ---- Premium pass ---- */
+.title {
+  color: var(--color-text-primary);
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
 
-  .periodBtnActive {
-    background-color: var(--color-surface-dark-card, #121215);
-    color: var(--color-brand-primary, #e11d48);
-  }
+.subtitle {
+  color: var(--color-text-muted);
+}
+
+.userBanner {
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--admin-panel);
+  box-shadow: var(--admin-card-shadow);
+}
+
+.bannerEmail {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.roleTag {
+  border: 1px solid var(--admin-inset-border);
+  background-color: var(--admin-inset);
+  color: var(--color-text-secondary);
+}
+
+.bannerIcon {
+  color: var(--admin-accent);
+}
+
+/* Segmented period control on an inset track. */
+.periodGroup {
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--admin-inset-border);
+  border-radius: var(--radius-full);
+  background-color: var(--admin-inset);
+}
+
+.periodBtn {
+  border: none;
+  border-radius: var(--radius-full);
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.periodBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.periodBtnActive {
+  background-color: var(--admin-accent);
+  color: var(--admin-accent-contrast);
+}
+
+.periodLabel,
+.refreshNote {
+  color: var(--color-text-muted);
 }

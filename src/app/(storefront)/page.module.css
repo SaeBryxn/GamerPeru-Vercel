@@ -1,0 +1,9 @@
+/*
+ * The video stage is sticky at z-index 0; this layer carries its own surface
+ * and a higher stacking order, so the store scrolls over the pinned video.
+ */
+.storeLayer {
+  position: relative;
+  z-index: 1;
+  background-color: var(--color-surface-canvas);
+}

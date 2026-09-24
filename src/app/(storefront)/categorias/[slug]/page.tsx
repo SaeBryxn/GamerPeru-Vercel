@@ -195,7 +195,7 @@ export default async function CategoryPage({
   };
 
   return (
-    <main id="main-content" className={styles.container}>
+    <main id="main-content" className={styles.container} data-seamless-header="">
       <DiscoveryHeader
         title={category.name}
         description={
@@ -204,6 +204,7 @@ export default async function CategoryPage({
         }
         breadcrumbs={breadcrumbs}
         totalProducts={paginated.totalItems}
+        visuallyHidden
       />
 
       <DiscoveryShell

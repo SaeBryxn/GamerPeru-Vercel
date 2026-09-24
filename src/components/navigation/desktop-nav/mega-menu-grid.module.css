@@ -1,0 +1,110 @@
+.gridHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+
+.gridEyebrow {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.viewAll {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+/* A single horizontal row: every tile gets an equal share of the width. */
+.tileRow {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: 1 / 1;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  overflow: hidden;
+  transition: background-color var(--motion-duration-normal) var(--motion-easing-standard);
+}
+
+.tile:hover {
+  background-color: var(--color-surface-tertiary);
+}
+
+.tileFeature {
+  background-color: var(--color-feature-indigo);
+  color: var(--color-brand-text-on-accent);
+}
+
+.tileFeature:hover {
+  background-color: var(--color-feature-indigo-hover);
+}
+
+.tileMedia {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.tileImage {
+  object-fit: contain;
+  /* Product shots ship on white; multiply lets the gray tile show through. */
+  mix-blend-mode: multiply;
+  transition: transform var(--motion-duration-slow) var(--motion-easing-snappy);
+}
+
+/* On the indigo tile, multiply would tint the shot; show it as-is instead. */
+.tileFeature .tileImage {
+  mix-blend-mode: normal;
+}
+
+.tile:hover .tileImage {
+  transform: scale(1.04);
+}
+
+.tileFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+}
+
+.tileTitle {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  background-size: 0% 2px;
+  transition: background-size var(--motion-duration-moderate) var(--motion-easing-snappy);
+}
+
+.tile:hover .tileTitle,
+.tile:focus-visible .tileTitle {
+  background-size: 100% 2px;
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
+  outline-offset: 2px;
+}

@@ -77,6 +77,30 @@ export function formatSpecFieldValue(
 }
 
 /**
+ * Builds the displayable spec rows: schema fields in displayOrder, formatted,
+ * dropping malformed values and keys the schema does not define. Shared by the
+ * specifications table and the PDP highlights grid.
+ */
+export function buildSpecRows(specifications: ProductSpecificationDetail): FormattedSpecRow[] {
+  const { schema, specValues } = specifications;
+
+  if (!schema || !schema.fieldDefinitions || !specValues) {
+    return [];
+  }
+
+  const sortedFields = [...schema.fieldDefinitions].sort((a, b) => a.displayOrder - b.displayOrder);
+
+  const rows: FormattedSpecRow[] = [];
+  for (const field of sortedFields) {
+    const formatted = formatSpecFieldValue(field, specValues[field.key]);
+    if (formatted !== null) {
+      rows.push({ key: field.key, label: field.label, formattedValue: formatted });
+    }
+  }
+  return rows;
+}
+
+/**
  * Server Component: HardwareSpecifications
  *
  * Renders technical hardware attributes validated against the category schema.
@@ -85,27 +109,7 @@ export function formatSpecFieldValue(
 export function HardwareSpecifications({
   specifications,
 }: HardwareSpecificationsProps): React.JSX.Element {
-  const { schema, specValues } = specifications;
-
-  if (!schema || !schema.fieldDefinitions || !specValues) {
-    return <></>;
-  }
-
-  // Sort schema fields deterministically by displayOrder
-  const sortedFields = [...schema.fieldDefinitions].sort((a, b) => a.displayOrder - b.displayOrder);
-
-  const validRows: FormattedSpecRow[] = [];
-  for (const field of sortedFields) {
-    const rawVal = specValues[field.key];
-    const formatted = formatSpecFieldValue(field, rawVal);
-    if (formatted !== null) {
-      validRows.push({
-        key: field.key,
-        label: field.label,
-        formattedValue: formatted,
-      });
-    }
-  }
+  const validRows = buildSpecRows(specifications);
 
   if (validRows.length === 0) {
     return <></>;

@@ -5,6 +5,7 @@ import {
   SYNTHETIC_QA_BRAND,
   filterAndSortSyntheticProducts,
   generateSyntheticProducts,
+  type SyntheticBrandEntry,
   type SyntheticProductWithSpecs,
 } from "@/lib/catalog/synthetic-catalog-data";
 import type {
@@ -39,6 +40,20 @@ export function getAllSyntheticProducts(): SyntheticProductWithSpecs[] {
 
   return [...mouses, ...teclados, ...mousepads, ...audio, ...accesorios];
 }
+
+/**
+ * Product and brand universe the synthetic engine searches. The fixture reader
+ * uses the default QA catalog; the local preview passes the real inventory.
+ */
+export interface SyntheticSearchSource {
+  products: () => SyntheticProductWithSpecs[];
+  brands: () => Record<string, SyntheticBrandEntry>;
+}
+
+export const DEFAULT_SYNTHETIC_SEARCH_SOURCE: SyntheticSearchSource = {
+  products: () => getAllSyntheticProducts(),
+  brands: () => ({ ...SYNTHETIC_NAV_BRANDS, [SYNTHETIC_QA_BRAND.slug]: SYNTHETIC_QA_BRAND }),
+};
 
 export function getAllSyntheticBrands(): SearchBrandSuggestion[] {
   const list = Object.values(SYNTHETIC_NAV_BRANDS)
@@ -105,9 +120,14 @@ export function scoreSyntheticCategory(
   return 0;
 }
 
-export function executeSyntheticSearch(cleanQuery: string) {
-  const allProducts = getAllSyntheticProducts();
-  const allBrands = getAllSyntheticBrands();
+export function executeSyntheticSearch(
+  cleanQuery: string,
+  source: SyntheticSearchSource = DEFAULT_SYNTHETIC_SEARCH_SOURCE
+) {
+  const allProducts = source.products();
+  const allBrands = Object.values(source.brands())
+    .filter((b) => b.status === "PUBLISHED")
+    .map((b) => ({ name: b.name, slug: b.slug }));
   const allCategories = getAllSyntheticCategories();
 
   const matchingProducts: Array<{ product: SyntheticProductWithSpecs; score: number }> = [];
@@ -214,8 +234,11 @@ function deriveSyntheticTechnicalFacets(
   return facets;
 }
 
-export async function getSyntheticSuggestions(query: string): Promise<SearchSuggestionsResult> {
-  const { products, brands, categories } = executeSyntheticSearch(query);
+export async function getSyntheticSuggestions(
+  query: string,
+  source: SyntheticSearchSource = DEFAULT_SYNTHETIC_SEARCH_SOURCE
+): Promise<SearchSuggestionsResult> {
+  const { products, brands, categories } = executeSyntheticSearch(query, source);
 
   const productSuggestions: SearchProductSuggestion[] = products.slice(0, 6).map((p) => ({
     id: p.id,
@@ -234,7 +257,10 @@ export async function getSyntheticSuggestions(query: string): Promise<SearchSugg
   };
 }
 
-export async function getSyntheticSearchBaseFacetOptions(query: string): Promise<{
+export async function getSyntheticSearchBaseFacetOptions(
+  query: string,
+  source: SyntheticSearchSource = DEFAULT_SYNTHETIC_SEARCH_SOURCE
+): Promise<{
   brands: BrandFacetOption[];
   categories: CategoryFacetOption[];
 }> {
@@ -243,21 +269,13 @@ export async function getSyntheticSearchBaseFacetOptions(query: string): Promise
     return { brands: [], categories: [] };
   }
 
-  const { products } = executeSyntheticSearch(cleanQuery);
+  const { products } = executeSyntheticSearch(cleanQuery, source);
   const representedBrandSlugs = new Set(products.map((p) => p.brand.slug));
   const representedCategorySlugs = new Set(products.map((p) => p.category.slug));
 
-  const brandOptions = Object.values(SYNTHETIC_NAV_BRANDS)
+  const brandOptions = Object.values(source.brands())
     .filter((b) => b.status === "PUBLISHED" && representedBrandSlugs.has(b.slug))
     .map((b) => ({ id: b.id, name: b.name, slug: b.slug }));
-
-  if (representedBrandSlugs.has(SYNTHETIC_QA_BRAND.slug)) {
-    brandOptions.push({
-      id: SYNTHETIC_QA_BRAND.id,
-      name: SYNTHETIC_QA_BRAND.name,
-      slug: SYNTHETIC_QA_BRAND.slug,
-    });
-  }
 
   const categoryOptions = Object.values(SYNTHETIC_CATEGORIES)
     .filter((c) => c.status === "PUBLISHED" && representedCategorySlugs.has(c.slug))
@@ -274,7 +292,8 @@ export async function getSyntheticSearchDiscoveryFacets(
   baseBrands: BrandFacetOption[],
   baseCategories: CategoryFacetOption[],
   selectedCategoryId: string | null,
-  schema: ValidatedSpecificationSchema | null
+  schema: ValidatedSpecificationSchema | null,
+  source: SyntheticSearchSource = DEFAULT_SYNTHETIC_SEARCH_SOURCE
 ): Promise<DiscoveryFacets> {
   const cleanQuery = normalizeSearchQuery(query);
   if (getQueryCodePointLength(cleanQuery) < MIN_SEARCH_QUERY_LENGTH) {
@@ -289,7 +308,7 @@ export async function getSyntheticSearchDiscoveryFacets(
   let techFacets: TechnicalFacet[] = [];
 
   if (selectedCategoryId && schema) {
-    const { products } = executeSyntheticSearch(cleanQuery);
+    const { products } = executeSyntheticSearch(cleanQuery, source);
     const selectedCat = Object.values(SYNTHETIC_CATEGORIES).find(
       (c) => c.id === selectedCategoryId
     );
@@ -317,7 +336,8 @@ export async function searchSyntheticProducts(
   query: string,
   pagination: SearchPagination,
   filterState?: DiscoveryFilterState,
-  schema?: ValidatedSpecificationSchema | null
+  schema?: ValidatedSpecificationSchema | null,
+  source: SyntheticSearchSource = DEFAULT_SYNTHETIC_SEARCH_SOURCE
 ): Promise<PaginatedResult<ProductDiscoveryItem>> {
   const cleanQuery = normalizeSearchQuery(query);
   const safePage = Math.max(1, Math.trunc(pagination.page));
@@ -333,7 +353,7 @@ export async function searchSyntheticProducts(
     };
   }
 
-  const { products: candidateProducts } = executeSyntheticSearch(cleanQuery);
+  const { products: candidateProducts } = executeSyntheticSearch(cleanQuery, source);
 
   const filtered = filterAndSortSyntheticProducts(
     candidateProducts,
@@ -356,8 +376,11 @@ export async function searchSyntheticProducts(
   };
 }
 
-export async function searchSyntheticMatchingEntities(query: string): Promise<SearchEntityMatches> {
-  const { brands, categories } = executeSyntheticSearch(query);
+export async function searchSyntheticMatchingEntities(
+  query: string,
+  source: SyntheticSearchSource = DEFAULT_SYNTHETIC_SEARCH_SOURCE
+): Promise<SearchEntityMatches> {
+  const { brands, categories } = executeSyntheticSearch(query, source);
 
   return {
     brands: brands.slice(0, 4),

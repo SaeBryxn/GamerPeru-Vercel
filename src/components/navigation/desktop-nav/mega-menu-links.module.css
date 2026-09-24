@@ -1,0 +1,35 @@
+.linkRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-around;
+  gap: var(--space-8);
+  margin: 0;
+  padding: var(--space-4) 0;
+  list-style: none;
+}
+
+.link {
+  font-family: var(--font-heading);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  background-size: 0% 2px;
+  transition: background-size var(--motion-duration-moderate) var(--motion-easing-snappy);
+}
+
+.link:hover,
+.link:focus-visible {
+  background-size: 100% 2px;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
+  outline-offset: 4px;
+  border-radius: var(--radius-xs);
+}

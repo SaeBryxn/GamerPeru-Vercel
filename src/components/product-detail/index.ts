@@ -36,10 +36,23 @@ export {
 } from "./variant-selector";
 export type { VariantSelectorProps, ResolvedDimension } from "./variant-selector";
 
-export { HardwareSpecifications, formatSpecFieldValue } from "./hardware-specifications";
+export {
+  HardwareSpecifications,
+  buildSpecRows,
+  formatSpecFieldValue,
+} from "./hardware-specifications";
 export type { HardwareSpecificationsProps, FormattedSpecRow } from "./hardware-specifications";
 
 export { ProductJsonLd } from "./product-json-ld";
 export type { ProductJsonLdProps } from "./product-json-ld";
 
 export type { CommerceHeroProjection } from "./types";
+
+export { PdpAccordion } from "./pdp-accordion";
+export type { PdpAccordionItem, PdpAccordionProps } from "./pdp-accordion";
+
+export { PdpAccessories } from "./pdp-accessories";
+export type { PdpAccessory, PdpAccessoriesProps } from "./pdp-accessories";
+
+export { PdpSpecGrid } from "./pdp-spec-grid";
+export type { PdpSpecGridProps } from "./pdp-spec-grid";

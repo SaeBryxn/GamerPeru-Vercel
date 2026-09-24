@@ -1,4 +1,9 @@
-import type { NavigationConfig } from "./types";
+import {
+  inventoryFamilies,
+  productHref,
+  type InventoryCategorySlug,
+} from "@/lib/catalog/storefront-inventory";
+import type { FooterColumn, NavigationConfig, NavLink } from "./types";
 
 /**
  * Gamer Perú — Static Navigation Presentation Seed
@@ -8,6 +13,61 @@ import type { NavigationConfig } from "./types";
  * 2. It emits canonical GP-013 parameter destinations.
  * 3. Modifying this seed does not mutate catalog state.
  */
+const PRODUCT_TYPES: NavLink[] = [
+  { label: "Gaming Mouse", href: "/categorias/mouses" },
+  { label: "MousePad", href: "/categorias/mousepads" },
+  { label: "Keyboard", href: "/categorias/teclados" },
+  { label: "Skates", href: "/categorias/accesorios?tipo_accesorio=skates" },
+  { label: "Grip Tape", href: "/categorias/accesorios?tipo_accesorio=grip-tapes" },
+];
+
+/**
+ * Product columns come from the storefront inventory, so the footer always
+ * lists models the store actually sells. Every other link points at a route
+ * that exists today.
+ */
+function modelLinks(categorySlug: InventoryCategorySlug): NavLink[] {
+  return inventoryFamilies()
+    .filter((family) => family.categorySlug === categorySlug)
+    .map((family) => ({ label: family.name, href: productHref(family.lead) }));
+}
+
+function buildFooterColumns(): FooterColumn[] {
+  return [
+    { title: "Mouses", links: modelLinks("mouses") },
+    { title: "Mousepads", links: modelLinks("mousepads") },
+    {
+      title: "Explorar",
+      links: [
+        { label: "Mouses", href: "/categorias/mouses" },
+        { label: "Mousepads", href: "/categorias/mousepads" },
+        { label: "Accesorios", href: "/categorias/accesorios" },
+        { label: "Skates", href: "/categorias/accesorios?tipo_accesorio=skates" },
+        { label: "Buscar", href: "/buscar" },
+      ],
+    },
+    {
+      title: "Marcas",
+      links: [
+        { label: "ATK", href: "/marcas/atk" },
+        { label: "Mchose", href: "/marcas/mchose" },
+        { label: "JINMS", href: "/marcas/jinms" },
+        { label: "X-Raypad", href: "/marcas/x-raypad" },
+      ],
+    },
+    {
+      title: "Tu cuenta",
+      links: [
+        { label: "Iniciar sesión", href: "/auth/login" },
+        { label: "Crear cuenta", href: "/auth/registro" },
+        { label: "Mis pedidos", href: "/cuenta/pedidos" },
+        { label: "Favoritos", href: "/cuenta/favoritos" },
+        { label: "Carrito", href: "/carrito" },
+      ],
+    },
+  ];
+}
+
 export const NAVIGATION_CONFIG: NavigationConfig = {
   announcement: {
     message: "Periféricos gaming multimarca para Perú",
@@ -18,9 +78,59 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
   },
   primaryNav: [
     {
+      id: "productos",
+      label: "Product",
+      href: "/buscar",
+      menuLayout: "products",
+      sections: [{ title: "Colecciones", items: PRODUCT_TYPES }],
+    },
+    {
       id: "mouses",
-      label: "Mouses",
+      label: "Mouse",
       href: "/categorias/mouses",
+      menuLayout: "series",
+      series: [
+        {
+          title: "Serie G",
+          items: [
+            { label: "G Wireless", href: "/buscar?q=serie%20g" },
+            { label: "G Edición Especial", href: "/buscar?q=serie%20g%20edicion" },
+          ],
+        },
+        {
+          title: "Serie X",
+          items: [
+            { label: "X Mini", href: "/buscar?q=serie%20x%20mini" },
+            { label: "X Pro", href: "/buscar?q=serie%20x%20pro" },
+            { label: "X Max", href: "/buscar?q=serie%20x%20max" },
+          ],
+        },
+        {
+          title: "Ediciones Limitadas",
+          items: [{ label: "Colección Magnesio", href: "/buscar?q=edicion%20limitada" }],
+        },
+        {
+          title: "Serie M",
+          items: [
+            { label: "M Standard", href: "/buscar?q=serie%20m" },
+            { label: "M Magnesio", href: "/buscar?q=serie%20m%20magnesio" },
+          ],
+        },
+      ],
+      guide: { label: "Buying Guide", href: "/guia-de-compra/mouses" },
+      promos: [
+        {
+          title: "Serie G",
+          href: "/buscar?q=serie%20g",
+          image: "/media/mega-menu/angulo-1.png",
+        },
+        {
+          title: "Serie M",
+          href: "/buscar?q=serie%20m",
+          image: "/media/mega-menu/angulo-3.png",
+          badge: "NEW",
+        },
+      ],
       sections: [
         {
           title: "Por Tipo",
@@ -75,8 +185,47 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
     },
     {
       id: "teclados",
-      label: "Teclados",
+      label: "Keyboard",
       href: "/categorias/teclados",
+      menuLayout: "series",
+      series: [
+        {
+          title: "Serie 63 HE",
+          items: [
+            { label: "63 HE Magnético", href: "/buscar?q=63%20he" },
+            { label: "63 HE Edición Aluminio", href: "/buscar?q=63%20he%20aluminio" },
+          ],
+        },
+        {
+          title: "Serie 75 HE",
+          items: [
+            { label: "75 HE Rapid Trigger", href: "/buscar?q=75%20he" },
+            { label: "75 HE Wireless", href: "/buscar?q=75%20he%20wireless" },
+          ],
+        },
+        {
+          title: "Accesorios",
+          items: [
+            { label: "Keycaps PBT", href: "/categorias/accesorios?tipo_accesorio=keycaps" },
+            { label: "Switches", href: "/categorias/accesorios?tipo_accesorio=switches" },
+          ],
+        },
+      ],
+      guide: { label: "Buying Guide", href: "/guia-de-compra/teclados" },
+      promos: [
+        {
+          title: "Serie 63 HE",
+          href: "/buscar?q=63%20he",
+          image: "/media/mega-menu/keyboard/producto-1-angulo-1.png",
+          badge: "Sold out",
+        },
+        {
+          title: "Serie 75 HE",
+          href: "/buscar?q=75%20he",
+          image: "/media/mega-menu/keyboard/producto-2-angulo-1.png",
+          badge: "New",
+        },
+      ],
       sections: [
         {
           title: "Por Formato",
@@ -134,9 +283,70 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
       ],
     },
     {
+      id: "audio",
+      label: "IEM",
+      href: "/categorias/audio",
+      sections: [
+        {
+          title: "Categorías",
+          items: [
+            { label: "IEMs para Gaming Competitivo", href: "/categorias/audio?tipo_audio=iem" },
+            { label: "Auriculares Open-Back", href: "/categorias/audio?tipo_audio=open-back" },
+            { label: "DACs & Amplificadores USB", href: "/categorias/audio?tipo_audio=dac" },
+          ],
+        },
+      ],
+      brands: [
+        { label: "Moondrop", href: "/marcas/moondrop" },
+        { label: "Tangzu", href: "/marcas/tangzu" },
+        { label: "Truthear", href: "/marcas/truthear" },
+        { label: "Sennheiser", href: "/marcas/sennheiser" },
+      ],
+      previews: [
+        {
+          title: "IEMs Gaming",
+          subtitle: "Posicionamiento sonoro",
+          href: "/categorias/audio?tipo_audio=iem",
+        },
+        {
+          title: "Open-Back",
+          subtitle: "Escena sonora abierta",
+          href: "/categorias/audio?tipo_audio=open-back",
+        },
+        {
+          title: "DACs USB",
+          subtitle: "Amplificación limpia",
+          href: "/categorias/audio?tipo_audio=dac",
+        },
+      ],
+    },
+    {
       id: "mousepads",
-      label: "Mousepads",
+      label: "MousePad",
       href: "/categorias/mousepads",
+      menuLayout: "grid",
+      tiles: [
+        {
+          title: "Vidrio",
+          href: "/categorias/mousepads?superficie=vidrio",
+          image: "/media/mega-menu/mousepad/producto-1-angulo-1.png",
+        },
+        {
+          title: "Control",
+          href: "/categorias/mousepads?superficie=control",
+          image: "/media/mega-menu/mousepad/producto-2-angulo-1.png",
+        },
+        {
+          title: "Speed",
+          href: "/categorias/mousepads?superficie=speed",
+          image: "/media/mega-menu/mousepad/producto-3-angulo-1.png",
+        },
+        {
+          title: "Deskmat XXL",
+          href: "/categorias/mousepads?tamano=xxl",
+          image: "/media/mega-menu/mousepad/producto-4-angulo-1.png",
+        },
+      ],
       sections: [
         {
           title: "Por Superficie",
@@ -193,122 +403,59 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
       ],
     },
     {
-      id: "audio",
-      label: "Audio",
-      href: "/categorias/audio",
+      id: "soporte",
+      label: "Support",
+      href: "/soporte",
+      menuLayout: "links",
       sections: [
         {
-          title: "Categorías",
+          title: "Soporte",
           items: [
-            { label: "IEMs para Gaming Competitivo", href: "/categorias/audio?tipo_audio=iem" },
-            { label: "Auriculares Open-Back", href: "/categorias/audio?tipo_audio=open-back" },
-            { label: "DACs & Amplificadores USB", href: "/categorias/audio?tipo_audio=dac" },
+            { label: "FAQs", href: "/soporte/preguntas-frecuentes" },
+            { label: "Contact", href: "/soporte/contacto" },
+            { label: "Online Reseller", href: "/soporte/distribuidores" },
+            { label: "Official Online Store", href: "/soporte/tienda-oficial" },
           ],
-        },
-      ],
-      brands: [
-        { label: "Moondrop", href: "/marcas/moondrop" },
-        { label: "Tangzu", href: "/marcas/tangzu" },
-        { label: "Truthear", href: "/marcas/truthear" },
-        { label: "Sennheiser", href: "/marcas/sennheiser" },
-      ],
-      previews: [
-        {
-          title: "IEMs Gaming",
-          subtitle: "Posicionamiento sonoro",
-          href: "/categorias/audio?tipo_audio=iem",
-        },
-        {
-          title: "Open-Back",
-          subtitle: "Escena sonora abierta",
-          href: "/categorias/audio?tipo_audio=open-back",
-        },
-        {
-          title: "DACs USB",
-          subtitle: "Amplificación limpia",
-          href: "/categorias/audio?tipo_audio=dac",
         },
       ],
     },
     {
-      id: "accesorios",
-      label: "Accesorios",
-      href: "/categorias/accesorios",
-      sections: [
+      id: "software",
+      label: "Software",
+      href: "/software",
+      menuLayout: "grid",
+      sections: [],
+      tiles: [
         {
-          title: "Complementos",
-          items: [
-            {
-              label: "Cables Paracord & Coiled",
-              href: "/categorias/accesorios?tipo_accesorio=cables",
-            },
-            { label: "Bungees de Mouse", href: "/categorias/accesorios?tipo_accesorio=bungees" },
-            {
-              label: "Soportes de Auriculares",
-              href: "/categorias/accesorios?tipo_accesorio=soportes",
-            },
-            {
-              label: "Herramientas de Mantenimiento",
-              href: "/categorias/accesorios?tipo_accesorio=herramientas",
-            },
-          ],
-        },
-      ],
-      brands: [
-        { label: "Pulsar", href: "/marcas/pulsar" },
-        { label: "Lamzu", href: "/marcas/lamzu" },
-        { label: "WLMOUSE", href: "/marcas/wlmouse" },
-      ],
-      previews: [
-        {
-          title: "Dongles 8K",
-          subtitle: "Receptores ultra-rápidos",
-          href: "/categorias/accesorios?tipo_accesorio=dongles",
+          title: "MOUSE",
+          href: "/software/mouse",
+          image: "/media/mega-menu/software/mouse.png",
+          tone: "feature",
         },
         {
-          title: "Skates PTFE",
-          subtitle: "Deslizamiento suave",
-          href: "/categorias/accesorios?tipo_accesorio=skates",
+          title: "KEYBOARD",
+          href: "/software/teclado",
+          image: "/media/mega-menu/software/keyboard.png",
         },
         {
-          title: "Grip Tapes",
-          subtitle: "Textura antideslizante",
-          href: "/categorias/accesorios?tipo_accesorio=grip-tapes",
+          title: "DONGLE 8K",
+          href: "/software/dongle",
+          image: "/media/mega-menu/software/dongle.png",
         },
         {
-          title: "Bungees",
-          subtitle: "Control de cable",
-          href: "/categorias/accesorios?tipo_accesorio=bungees",
+          title: "FIRMWARE",
+          href: "/software/firmware",
+          image: "/media/mega-menu/software/firmware.png",
         },
       ],
     },
   ],
+  productTypes: PRODUCT_TYPES,
   utilityLinks: {
     search: { label: "Buscar productos", href: "/buscar" },
     account: { label: "Mi cuenta", href: "/cuenta" },
     wishlist: { label: "Lista de favoritos", href: "/cuenta/favoritos" },
     cart: { label: "Carrito de compras", href: "/carrito" },
   },
-  footerColumns: [
-    {
-      title: "Explorar Catálogo",
-      links: [
-        { label: "Mouses de Rendimiento", href: "/categorias/mouses" },
-        { label: "Teclados Mecánicos & Magnéticos", href: "/categorias/teclados" },
-        { label: "Mousepads de Control & Vidrio", href: "/categorias/mousepads" },
-        { label: "Audio IEM para Gaming", href: "/categorias/audio" },
-        { label: "Accesorios & Modding", href: "/categorias/accesorios" },
-      ],
-    },
-    {
-      title: "Atención al Cliente",
-      links: [
-        { label: "Centro de Ayuda", href: "/ayuda" },
-        { label: "Información de Envíos", href: "/envios" },
-        { label: "Cambios y Devoluciones", href: "/devoluciones" },
-        { label: "Política de Privacidad", href: "/privacidad" },
-        { label: "Términos y Condiciones", href: "/terminos" },
-      ],
-    },
-  ],
+  footerColumns: buildFooterColumns(),
 };

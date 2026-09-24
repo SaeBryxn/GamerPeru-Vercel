@@ -19,7 +19,7 @@
 .sectionIcon {
   width: 1.25rem;
   height: 1.25rem;
-  color: var(--color-brand-primary, #dc2626);
+  color: var(--color-brand-primary, var(--color-status-danger-text));
   flex-shrink: 0;
 }
 
@@ -27,7 +27,7 @@
   font-family: var(--font-heading, sans-serif);
   font-size: 1.125rem;
   font-weight: 700;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   margin: 0;
 }
 
@@ -54,21 +54,21 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 1.25rem;
-  background-color: var(--color-surface-primary, #ffffff);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  background-color: var(--color-surface-primary, var(--color-surface-card));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-lg, 0.75rem);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .cardWarning {
-  border-color: #fde68a;
-  background-color: #fffdf5;
+  border-color: var(--color-status-warning-border);
+  background-color: var(--color-status-warning-background);
 }
 
 .metricLabel {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #52525b;
+  color: var(--color-text-secondary);
 }
 
 .metricValue {
@@ -76,21 +76,21 @@
   font-size: 1.625rem;
   font-weight: 700;
   letter-spacing: -0.03em;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
 
 .metricFooter {
   font-size: 0.75rem;
-  color: #52525b;
+  color: var(--color-text-secondary);
 }
 
 .cleanStatus {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  color: #047857;
+  color: var(--color-status-success-text);
   font-weight: 600;
 }
 
@@ -98,7 +98,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  color: #92400e;
+  color: var(--color-status-warning-text);
   font-weight: 600;
 }
 
@@ -108,22 +108,39 @@
   flex-shrink: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  .cardWarning {
-    background-color: rgba(217, 119, 6, 0.1);
-    border-color: rgba(245, 158, 11, 0.3);
-  }
+/* ---- Premium pass ---- */
+.card {
+  padding: var(--admin-card-padding);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--admin-panel);
+  box-shadow: var(--admin-card-shadow);
+}
 
-  .metricLabel,
-  .metricFooter {
-    color: #a1a1aa;
-  }
+.cardWarning {
+  border-color: var(--color-status-warning-border);
+  background-color: var(--color-status-warning-background);
+}
 
-  .cleanStatus {
-    color: #34d399;
-  }
+.metricLabel {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
 
-  .warningStatus {
-    color: #fbbf24;
-  }
+.metricValue {
+  color: var(--color-text-primary);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.metricFooter {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.grid {
+  gap: var(--space-4);
 }

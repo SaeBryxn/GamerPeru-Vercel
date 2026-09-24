@@ -1,0 +1,78 @@
+/*
+ * Consumers size and shape the button through custom properties instead of
+ * overriding these rules, which keeps cross-module specificity out of play:
+ * --dome-height, --dome-padding, --dome-radius, --dome-border, --dome-font-size,
+ * --dome-background, --dome-fill.
+ */
+.domeButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--dome-height, 44px);
+  padding: var(--dome-padding, 0 var(--space-5));
+  border: 1px solid var(--dome-border, var(--color-surface-dark-canvas));
+  border-radius: var(--dome-radius, var(--radius-md));
+  font-family: var(--font-body);
+  font-size: var(--dome-font-size, 14px);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.light {
+  background-color: var(--dome-background, var(--color-surface-card));
+  color: var(--color-text-primary);
+}
+
+.dark {
+  background-color: var(--dome-background, var(--color-surface-dark-canvas));
+  color: var(--color-surface-card);
+}
+
+/* Parked just below the button; Framer Motion lifts it on hover. */
+.dome {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: -1;
+  width: 200%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.light .dome {
+  background-color: var(--dome-fill, var(--color-surface-dark-canvas));
+}
+
+.dark .dome {
+  background-color: var(--dome-fill, var(--color-surface-card));
+}
+
+.content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.domeButton:focus-visible {
+  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
+  outline-offset: 2px;
+}
+
+.closeButton {
+  --dome-height: 40px;
+  --dome-padding: 0;
+  --dome-radius: var(--radius-full);
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.closeIcon {
+  display: inline-flex;
+}

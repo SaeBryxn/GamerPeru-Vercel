@@ -1,0 +1,37 @@
+.arrowLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+}
+
+.fullWidth {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.arrow {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* Subtle underline drawn left to right while the link is hovered or focused. */
+.label {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  background-size: 0% 1.5px;
+  transition: background-size var(--motion-duration-moderate) var(--motion-easing-snappy);
+}
+
+.arrowLink:hover .label,
+.arrowLink:focus-visible .label {
+  background-size: 100% 1.5px;
+}
+
+.arrowLink:focus-visible {
+  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}

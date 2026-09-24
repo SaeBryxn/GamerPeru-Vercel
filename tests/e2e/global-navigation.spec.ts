@@ -52,7 +52,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     expect(styles.backgroundColor).toBe("rgb(9, 9, 11)");
   });
 
-  test("C: verifies Desktop Header 64px height, sticky positioning, and BrandMark link", async ({
+  test("C: verifies Desktop Header 68px height, non-sticky positioning, and BrandMark link", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -63,10 +63,10 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
 
     const box = await header.boundingBox();
     expect(box).not.toBeNull();
-    expect(box!.height).toBe(64);
+    expect(box!.height).toBe(68);
 
     const position = await header.evaluate((el) => window.getComputedStyle(el).position);
-    expect(position).toBe("sticky");
+    expect(position).toBe("relative");
 
     const brandMark = header.getByRole("link", { name: /Gamer Perú/ });
     await expect(brandMark).toBeVisible();
@@ -117,24 +117,24 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     const nav = page.locator("nav[aria-label='Navegación principal']");
     await expect(nav).toBeVisible();
 
-    // Semantic category destination links must exist in initial DOM
+    // Category destination links must exist in the initial DOM (inside closed panels or as plain links)
     const categoryHrefs = [
       "/categorias/mouses",
       "/categorias/teclados",
       "/categorias/mousepads",
       "/categorias/audio",
-      "/categorias/accesorios",
     ];
 
     for (const href of categoryHrefs) {
-      const link = nav.locator(`a[href='${href}']`);
-      await expect(link).toBeVisible();
+      await expect(nav.locator(`a[href='${href}']`).first()).toBeAttached();
     }
+    await expect(nav.getByRole("link", { name: "IEM", exact: true })).toBeVisible();
 
     // Open MegaMenu and assert full-width geometry relative to SiteHeader
     const header = page.locator("header");
     const mousesDisclosureBtn = page.getByRole("button", {
-      name: "Abrir menú desplegable de Mouses",
+      name: "Mouse",
+      exact: true,
     });
     await expect(mousesDisclosureBtn).toBeVisible();
 
@@ -159,7 +159,8 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await page.setViewportSize({ width: 1536, height: 900 });
     await page.goto("/");
     const mousesDisclosureBtnWide = page.getByRole("button", {
-      name: "Abrir menú desplegable de Mouses",
+      name: "Mouse",
+      exact: true,
     });
     await mousesDisclosureBtnWide.click();
     const widePanel = page.locator("#mega-menu-mouses");
@@ -180,7 +181,8 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await page.goto("/");
 
     const disclosureBtn = page.getByRole("button", {
-      name: "Abrir menú desplegable de Mouses",
+      name: "Mouse",
+      exact: true,
     });
     await expect(disclosureBtn).toBeVisible();
 
@@ -202,7 +204,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
 
     // Tab into the first MegaMenu sub-link
     await page.keyboard.press("Tab");
-    const subLink = panel.getByRole("link", { name: "Ultraligeros (< 45g)" });
+    const subLink = panel.getByRole("link", { name: "G Wireless" });
     await expect(subLink).toBeFocused();
 
     // Close MegaMenu using keyboard Escape
@@ -370,31 +372,38 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     }
   });
 
-  test("K: verifies SiteFooter exactly 4-column structure, Yape/Plin payment representation, and landmarks", async ({
+  test("K: verifies SiteFooter columns, social row, Yape/Plin note and landmarks", async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
 
     const footer = page.locator("footer[aria-label='Pie de página']");
     await expect(footer).toBeVisible();
 
-    // Verify exactly 4 first-level footerColumn elements exist in footerGrid
+    // Five link columns, each a labelled navigation landmark
     const columns = footer.locator("[class*='footerColumn']");
-    await expect(columns).toHaveCount(4);
+    await expect(columns).toHaveCount(5);
 
-    await expect(footer.getByText("Explorar Catálogo")).toBeVisible();
-    await expect(footer.getByText("Atención al Cliente")).toBeVisible();
-    await expect(footer.getByText("Métodos de Pago")).toBeVisible();
+    for (const title of ["Mouses", "Mousepads", "Explorar", "Marcas", "Tu cuenta"]) {
+      await expect(footer.getByRole("heading", { name: title, level: 3 })).toBeVisible();
+    }
 
-    // Verified payment chips
+    // Product columns link to real product detail pages
+    await expect(footer.getByRole("link", { name: "ATK A9 Plus 2.0" }).first()).toHaveAttribute(
+      "href",
+      "/productos/atk-a9-plus-2-0-black"
+    );
+
+    // Social profiles row
+    await expect(footer.locator("ul[aria-label='Redes sociales de Gamer Perú']")).toBeVisible();
+
+    // Payment representation stays truthful and unauthorized methods never appear
     await expect(footer.getByText("YAPE")).toBeVisible();
     await expect(footer.getByText("PLIN")).toBeVisible();
-    // Unauthorized payment chip must NOT exist
     await expect(footer.getByText("TRANSFERENCIA")).toHaveCount(0);
+    await expect(footer.getByText("en soles (PEN / S/).")).toBeVisible();
 
-    // Verified trust notice
-    await expect(footer.getByText("Pagos en moneda nacional (PEN / S/).")).toBeVisible();
     await expect(
       footer.getByText("© 2026 Gamer Perú. Todos los derechos reservados.")
     ).toBeVisible();
@@ -441,7 +450,8 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await page.goto("/");
 
     const mousesDisclosureBtn = page.getByRole("button", {
-      name: "Abrir menú desplegable de Mouses",
+      name: "Mouse",
+      exact: true,
     });
     await mousesDisclosureBtn.click();
 
@@ -474,7 +484,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
       { width: 1280, height: 800 },
     ];
 
-    const categoryNames = ["Mouses", "Teclados", "Mousepads", "Audio", "Accesorios"];
+    const categoryNames = ["Product", "Mouse", "Keyboard", "MousePad"];
 
     for (const vp of viewports) {
       await page.setViewportSize(vp);
@@ -493,7 +503,8 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
       // Verify each disclosure trigger meets minimum 44x44px interactive bounding box
       for (const name of categoryNames) {
         const trigger = page.getByRole("button", {
-          name: `Abrir menú desplegable de ${name}`,
+          name,
+          exact: true,
         });
         await expect(trigger).toBeVisible();
 
@@ -517,10 +528,10 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
 
-    // Tab through skip link and brand mark into first primary category link
+    // Tab through skip link and brand mark into the first primary category trigger
     const categoryLink = page
       .locator("nav[aria-label='Navegación principal']")
-      .getByRole("link", { name: "Mouses" });
+      .getByRole("button", { name: "Product", exact: true });
 
     let isLinkFocused = false;
     for (let i = 0; i < 10; i++) {
@@ -547,11 +558,12 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     // Canonical light focus color #09090B -> rgb(9, 9, 11)
     expect(linkFocusStyles.outlineColor).toBe("rgb(9, 9, 11)");
 
-    // Tab into adjacent disclosure button
+    // Tab into the next category trigger
     await page.keyboard.press("Tab");
 
     const disclosureBtn = page.getByRole("button", {
-      name: "Abrir menú desplegable de Mouses",
+      name: "Mouse",
+      exact: true,
     });
     await expect(disclosureBtn).toBeFocused();
 

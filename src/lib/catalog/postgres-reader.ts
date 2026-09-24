@@ -1,4 +1,5 @@
 import "server-only";
+import { buildProductCardSpecs } from "./card-specs";
 import { validateSpecificationSchema } from "@/lib/discovery-filters/schema-validation";
 import type {
   CategoryFacetOption,
@@ -241,6 +242,7 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
           }
         : null,
       startingPriceCents: row.startingPriceCents,
+      specs: buildProductCardSpecs(row.specValues, row.specFieldDefinitions),
     }));
 
     return {
@@ -291,6 +293,7 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
           }
         : null,
       startingPriceCents: row.startingPriceCents,
+      specs: buildProductCardSpecs(row.specValues, row.specFieldDefinitions),
     }));
 
     return {

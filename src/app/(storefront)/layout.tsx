@@ -1,29 +1,29 @@
 import React from "react";
 import { CartDrawer, CartProvider } from "@/components/cart";
-import {
-  AnnouncementBar,
-  NAVIGATION_CONFIG,
-  SiteFooter,
-  SiteHeader,
-  SkipLink,
-} from "@/components/navigation";
+import { ChatWidget, SocialRail } from "@/components/floating";
+import { AnnouncementBar, SiteFooter, SiteHeader, SkipLink } from "@/components/navigation";
+import { getStorefrontNavigation } from "@/lib/navigation/resolve-navigation";
 
-export default function StorefrontLayout({
+export default async function StorefrontLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const navigation = await getStorefrontNavigation();
+
   return (
     <CartProvider>
       <SkipLink />
       <AnnouncementBar
-        message={NAVIGATION_CONFIG.announcement?.message}
-        href={NAVIGATION_CONFIG.announcement?.href}
+        message={navigation.announcement?.message}
+        href={navigation.announcement?.href}
       />
-      <SiteHeader config={NAVIGATION_CONFIG} />
+      <SiteHeader config={navigation} />
       {children}
-      <SiteFooter columns={NAVIGATION_CONFIG.footerColumns} />
+      <SiteFooter columns={navigation.footerColumns} />
       <CartDrawer />
+      <SocialRail />
+      <ChatWidget />
     </CartProvider>
   );
 }

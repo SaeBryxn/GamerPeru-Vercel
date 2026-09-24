@@ -2,7 +2,9 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Package, Video } from "lucide-react";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { ChevronLeft, ChevronRight, Package, Video } from "lucide-react";
+import { DomeButton, Icon } from "@/components/ui";
 import type { ProductMediaItem, ProductVariantDetail } from "@/lib/catalog/product-detail-types";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import styles from "./product-media-gallery.module.css";
@@ -203,6 +205,17 @@ export function resolveSwipeDirection({
   return deltaX < 0 ? "next" : "prev";
 }
 
+// Same spring as the mega-menu card carousel, so every swish in the store matches.
+const SWISH_TRANSITION = { type: "spring", stiffness: 260, damping: 32, mass: 0.8 } as const;
+
+// Physical carousel: the outgoing slide leaves a full stage width to one side
+// while the incoming one arrives from the other, both moving at the same time.
+const STAGE_VARIANTS: Variants = {
+  enter: (direction: number) => ({ x: `${direction * 100}%` }),
+  center: { x: "0%", transition: SWISH_TRANSITION },
+  exit: (direction: number) => ({ x: `${direction * -100}%`, transition: SWISH_TRANSITION }),
+};
+
 export function ProductMediaGallery({
   media,
   primaryMedia,
@@ -217,6 +230,7 @@ export function ProductMediaGallery({
 
   // Synchronous variant-scoped focus state
   const [userSelectedIndex, setUserSelectedIndex] = useState<number | null>(null);
+  const [direction, setDirection] = useState(1);
   const [prevVariantId, setPrevVariantId] = useState(selectedVariant.id);
 
   // When selectedVariant changes, synchronously reset manual user override during render
@@ -243,6 +257,18 @@ export function ProductMediaGallery({
   );
 
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const selectIndex = (index: number) => {
+    setDirection(index >= activeIndex ? 1 : -1);
+    setUserSelectedIndex(index);
+  };
+
+  const stepBy = (step: 1 | -1) => {
+    const next = (activeIndex + step + eligibleGallery.length) % eligibleGallery.length;
+    setDirection(step);
+    setUserSelectedIndex(next);
+    buttonRefs.current[next]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  };
 
   const activeMedia =
     activeIndex >= 0 && activeIndex < eligibleGallery.length ? eligibleGallery[activeIndex] : null;
@@ -278,10 +304,12 @@ export function ProductMediaGallery({
 
     if (swipeDir === "next") {
       const next = (activeIndex + 1) % eligibleGallery.length;
+      setDirection(1);
       setUserSelectedIndex(next);
       buttonRefs.current[next]?.focus();
     } else if (swipeDir === "prev") {
       const prev = (activeIndex - 1 + eligibleGallery.length) % eligibleGallery.length;
+      setDirection(-1);
       setUserSelectedIndex(prev);
       buttonRefs.current[prev]?.focus();
     }
@@ -299,11 +327,13 @@ export function ProductMediaGallery({
     if (e.key === "ArrowRight" || e.key === "ArrowDown") {
       e.preventDefault();
       const next = (index + 1) % eligibleGallery.length;
+      setDirection(1);
       setUserSelectedIndex(next);
       buttonRefs.current[next]?.focus();
     } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
       e.preventDefault();
       const prev = (index - 1 + eligibleGallery.length) % eligibleGallery.length;
+      setDirection(-1);
       setUserSelectedIndex(prev);
       buttonRefs.current[prev]?.focus();
     }
@@ -327,14 +357,26 @@ export function ProductMediaGallery({
         onPointerCancel={handlePointerCancel}
       >
         {activeMediaUrl && activeMediaType === "image" ? (
-          <Image
-            src={activeMediaUrl}
-            alt={activeAltText}
-            fill
-            priority={isLcpImage}
-            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 58vw, 800px"
-            className={styles.mainImage}
-          />
+          <AnimatePresence initial={false} custom={direction}>
+            <motion.div
+              key={activeMedia?.mediaAssetId}
+              className={styles.stageSlide}
+              custom={direction}
+              variants={STAGE_VARIANTS}
+              initial="enter"
+              animate="center"
+              exit="exit"
+            >
+              <Image
+                src={activeMediaUrl}
+                alt={activeAltText}
+                fill
+                priority={isLcpImage}
+                sizes="(max-width: 768px) 100vw, (max-width: 1280px) 52vw, 760px"
+                className={styles.mainImage}
+              />
+            </motion.div>
+          </AnimatePresence>
         ) : activeMediaUrl && activeMediaType === "video" ? (
           <video
             src={activeMediaUrl}
@@ -353,57 +395,88 @@ export function ProductMediaGallery({
             </span>
           </div>
         )}
+
+        {eligibleGallery.length > 1 && (
+          <>
+            <span className={`${styles.navArrowSlot} ${styles.navArrowSlotPrev}`}>
+              <DomeButton
+                tone="light"
+                domeRise="-75%"
+                className={styles.navArrow}
+                onClick={() => stepBy(-1)}
+                aria-label="Imagen anterior"
+                data-testid="gallery-prev-button"
+              >
+                <Icon icon={ChevronLeft} size="lg" aria-hidden="true" />
+              </DomeButton>
+            </span>
+            <span className={`${styles.navArrowSlot} ${styles.navArrowSlotNext}`}>
+              <DomeButton
+                tone="light"
+                domeRise="-75%"
+                className={styles.navArrow}
+                onClick={() => stepBy(1)}
+                aria-label="Imagen siguiente"
+                data-testid="gallery-next-button"
+              >
+                <Icon icon={ChevronRight} size="lg" aria-hidden="true" />
+              </DomeButton>
+            </span>
+          </>
+        )}
       </div>
 
       {eligibleGallery.length > 1 && (
-        <ul
-          className={styles.thumbnailList}
-          aria-label="Vistas disponibles del producto"
-          data-testid="gallery-thumbnails"
-        >
-          {eligibleGallery.map((item, index) => {
-            const url = resolvePublicMediaUrl(item.asset.objectKey);
-            const isCurrent = index === activeIndex;
-            const itemType = getGalleryMediaType(item.asset.mimeType);
-            const isVideo = itemType === "video";
-            const thumbAlt =
-              item.asset.altText ??
-              `${isVideo ? "Video" : "Miniatura"} ${index + 1} de ${eligibleGallery.length}`;
+        <div className={styles.thumbnailRow}>
+          <ul
+            className={styles.thumbnailList}
+            aria-label="Vistas disponibles del producto"
+            data-testid="gallery-thumbnails"
+          >
+            {eligibleGallery.map((item, index) => {
+              const url = resolvePublicMediaUrl(item.asset.objectKey);
+              const isCurrent = index === activeIndex;
+              const itemType = getGalleryMediaType(item.asset.mimeType);
+              const isVideo = itemType === "video";
+              const thumbAlt =
+                item.asset.altText ??
+                `${isVideo ? "Video" : "Miniatura"} ${index + 1} de ${eligibleGallery.length}`;
 
-            return (
-              <li key={item.mediaAssetId} className={styles.thumbnailItem}>
-                <button
-                  ref={(el) => {
-                    buttonRefs.current[index] = el;
-                  }}
-                  type="button"
-                  onClick={() => setUserSelectedIndex(index)}
-                  onKeyDown={(e) => handleKeyDown(e, index)}
-                  className={`${styles.thumbnailButton} ${isCurrent ? styles.thumbnailButtonActive : ""}`}
-                  aria-label={`Ver ${isVideo ? "video" : "imagen"} ${index + 1} de ${eligibleGallery.length}`}
-                  aria-current={isCurrent ? "true" : undefined}
-                >
-                  {isVideo ? (
-                    <div className={styles.thumbnailVideoIcon}>
-                      <Video size={20} aria-hidden="true" />
-                      <span className={styles.thumbnailVideoLabel}>Video</span>
-                    </div>
-                  ) : url ? (
-                    <Image
-                      src={url}
-                      alt={thumbAlt}
-                      fill
-                      sizes="64px"
-                      className={styles.thumbnailImage}
-                    />
-                  ) : (
-                    <Package size={20} aria-hidden="true" />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+              return (
+                <li key={item.mediaAssetId} className={styles.thumbnailItem}>
+                  <button
+                    ref={(el) => {
+                      buttonRefs.current[index] = el;
+                    }}
+                    type="button"
+                    onClick={() => selectIndex(index)}
+                    onKeyDown={(e) => handleKeyDown(e, index)}
+                    className={`${styles.thumbnailButton} ${isCurrent ? styles.thumbnailButtonActive : ""}`}
+                    aria-label={`Ver ${isVideo ? "video" : "imagen"} ${index + 1} de ${eligibleGallery.length}`}
+                    aria-current={isCurrent ? "true" : undefined}
+                  >
+                    {isVideo ? (
+                      <div className={styles.thumbnailVideoIcon}>
+                        <Video size={20} aria-hidden="true" />
+                        <span className={styles.thumbnailVideoLabel}>Video</span>
+                      </div>
+                    ) : url ? (
+                      <Image
+                        src={url}
+                        alt={thumbAlt}
+                        fill
+                        sizes="96px"
+                        className={styles.thumbnailImage}
+                      />
+                    ) : (
+                      <Package size={20} aria-hidden="true" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
     </div>
   );

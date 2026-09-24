@@ -1,0 +1,89 @@
+.box {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-card);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  border: none;
+  background: var(--color-surface-secondary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.header:focus-visible {
+  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
+  outline-offset: -2px;
+}
+
+.headerLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.headerToggle {
+  display: inline-flex;
+}
+
+.list {
+  margin: 0;
+  padding: 0 var(--space-3);
+  overflow: hidden;
+  list-style: none;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* checkbox | thumbnail | name | price (right-aligned) */
+.row {
+  display: grid;
+  grid-template-columns: auto 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-2);
+  cursor: pointer;
+}
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-surface-dark-canvas);
+  cursor: pointer;
+}
+
+.thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+}
+
+.name {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+.price {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}

@@ -18,13 +18,17 @@ export function SiteHeader({ config, cartCount, className }: SiteHeaderProps) {
 
   return (
     <header className={classNames}>
-      <Container size="default" style={{ height: "100%" }}>
+      <Container size="full" style={{ height: "100%" }}>
         <div className={styles.headerInner}>
           {/* Desktop Layout (>= 1024px) */}
           <div className={styles.desktopLayout}>
             <BrandMark />
             <div className={styles.desktopCenter}>
-              <DesktopNav items={config.primaryNav} />
+              <DesktopNav
+                items={config.primaryNav}
+                productTypes={config.productTypes}
+                shelves={config.shelves}
+              />
             </div>
             <HeaderUtilities
               searchLabel={config.utilityLinks.search.label}

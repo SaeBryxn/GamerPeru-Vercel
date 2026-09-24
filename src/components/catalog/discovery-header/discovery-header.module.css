@@ -93,3 +93,25 @@
   font-size: var(--text-sm);
   margin-bottom: var(--space-6);
 }
+
+/*
+ * Visually hidden header: every child except the unsupported-filter notice is
+ * clipped out of view but stays in the accessibility tree.
+ */
+.headerHidden > :not(.unsupportedNotice) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.headerHidden {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

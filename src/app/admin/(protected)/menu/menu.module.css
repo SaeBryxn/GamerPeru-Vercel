@@ -1,0 +1,231 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 900px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 70ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--admin-inset-padding);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--admin-panel);
+  box-shadow: var(--admin-card-shadow);
+}
+
+.itemHidden {
+  background-color: var(--admin-inset);
+  border-style: dashed;
+}
+
+.itemHidden .itemName {
+  color: var(--color-text-muted);
+}
+
+.itemMain {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.itemHeading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.itemName {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.statusOn,
+.statusOff {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.statusOn {
+  background-color: var(--color-status-success-background);
+  color: var(--color-status-success-text);
+}
+
+.statusOff {
+  background-color: var(--admin-inset);
+  border: 1px solid var(--admin-inset-border);
+  color: var(--color-text-muted);
+}
+
+.itemDescription {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.warnings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: 2px;
+}
+
+.warning,
+.warningStrong {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.warning {
+  background-color: var(--color-status-warning-background);
+  color: var(--color-status-warning-text);
+}
+
+.warningStrong {
+  background-color: var(--color-status-danger-background);
+  color: var(--color-status-danger-text);
+}
+
+.itemActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background-color: var(--admin-panel);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.iconButton:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.iconButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  width: 48px;
+  height: 28px;
+  padding: 3px;
+  margin-left: var(--space-2);
+  border: none;
+  border-radius: var(--radius-full);
+  background-color: var(--admin-inset-border);
+  cursor: pointer;
+}
+
+.switch:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.switchOn {
+  background-color: var(--admin-accent);
+  justify-content: flex-end;
+}
+
+.switchKnob {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 28%);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--admin-focus-ring, var(--admin-accent));
+  outline-offset: 2px;
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--admin-inset-radius);
+  background-color: var(--color-status-danger-background);
+  color: var(--color-status-danger-text);
+  font-size: 13px;
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+
+  .itemActions {
+    justify-content: flex-end;
+  }
+}

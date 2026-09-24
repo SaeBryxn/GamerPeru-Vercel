@@ -1,7 +1,7 @@
 import "server-only";
 import type { ProductDiscoveryItem } from "./types";
 import type { StoryRelatedProductsReader } from "./story-related-products-reader";
-import { ALL_PREVIEW_PRODUCTS } from "./dev-preview-reader";
+import { getAllPreviewProducts } from "./dev-preview-reader";
 
 export class DevPreviewStoryRelatedProductsReader implements StoryRelatedProductsReader {
   async getPublishedProductsBySlugs(
@@ -17,7 +17,7 @@ export class DevPreviewStoryRelatedProductsReader implements StoryRelatedProduct
       return [];
     }
 
-    const matching = ALL_PREVIEW_PRODUCTS.filter(
+    const matching = getAllPreviewProducts().filter(
       (p) => uniqueSlugs.includes(p.slug) && (!excludeProductId || p.id !== excludeProductId)
     );
 

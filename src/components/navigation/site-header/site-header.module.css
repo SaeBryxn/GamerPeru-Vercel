@@ -1,10 +1,11 @@
+/*
+ * Scrolls away with the page (not sticky) so browsing surfaces keep the full
+ * viewport; relative positioning still anchors the mega-menu panels.
+ */
 .siteHeader {
-  position: sticky;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   width: 100%;
-  height: 64px;
+  height: 68px;
   background-color: var(--color-surface-header);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -12,6 +13,15 @@
   z-index: 100;
   display: flex;
   align-items: center;
+}
+
+/*
+ * Pages that render [data-seamless-header] (the catalog) read as one block with
+ * the header: no divider line and the same surface color as the page.
+ */
+:global(body:has([data-seamless-header])) .siteHeader {
+  border-bottom-color: transparent;
+  background-color: var(--color-surface-canvas);
 }
 
 .headerInner {
@@ -22,22 +32,32 @@
   width: 100%;
 }
 
+/* Equal 1fr side tracks keep the center column optically centered regardless of logo/utility widths. */
 .desktopLayout {
   display: none;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   width: 100%;
   height: 100%;
 }
 
 @media (min-width: 1024px) {
   .desktopLayout {
-    display: flex;
+    display: grid;
   }
+}
+
+.desktopLayout > :first-child {
+  justify-self: start;
+}
+
+.desktopLayout > :last-child {
+  justify-self: end;
 }
 
 .desktopCenter {
   display: flex;
   align-items: center;
+  justify-content: center;
   height: 100%;
 }

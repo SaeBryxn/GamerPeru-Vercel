@@ -19,13 +19,13 @@
   gap: 0.375rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--color-text-secondary, #71717a);
+  color: var(--color-text-secondary, var(--color-text-muted));
   text-decoration: none;
   width: fit-content;
 }
 
 .backLink:hover {
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
 }
 
 .titleArea {
@@ -37,14 +37,14 @@
 .title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   letter-spacing: -0.025em;
   margin: 0;
 }
 
 .subtitle {
   font-size: 0.875rem;
-  color: var(--color-text-secondary, #71717a);
+  color: var(--color-text-secondary, var(--color-text-muted));
   margin: 0;
 }
 
@@ -55,8 +55,8 @@
 }
 
 .card {
-  background-color: var(--color-surface-card, #ffffff);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  background-color: var(--color-surface-card, var(--admin-panel));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-lg, 0.75rem);
   padding: 1.5rem;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
@@ -68,15 +68,15 @@
 .cardTitle {
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   margin: 0;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--color-border-subtle, #e4e4e7);
+  border-bottom: 1px solid var(--color-border-subtle, var(--color-border-subtle));
 }
 
 .cardDescription {
   font-size: 0.8125rem;
-  color: var(--color-text-secondary, #71717a);
+  color: var(--color-text-secondary, var(--color-text-muted));
   margin-top: -0.75rem;
   margin-bottom: 0.25rem;
 }
@@ -114,11 +114,11 @@
 .label {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
 }
 
 .required {
-  color: var(--color-brand-primary, #e11d48);
+  color: var(--color-brand-primary, var(--color-brand-primary));
   margin-left: 0.125rem;
 }
 
@@ -126,9 +126,9 @@
 .select,
 .textarea {
   font-size: 0.875rem;
-  color: var(--color-text-primary, #09090b);
-  background-color: var(--color-surface-card, #ffffff);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  color: var(--color-text-primary, var(--color-text-primary));
+  background-color: var(--color-surface-card, var(--admin-panel));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-md, 0.5rem);
   padding: 0.5rem 0.75rem;
   outline: none;
@@ -138,7 +138,7 @@
 .input:focus,
 .select:focus,
 .textarea:focus {
-  border-color: var(--color-brand-primary, #e11d48);
+  border-color: var(--color-brand-primary, var(--color-brand-primary));
 }
 
 .textarea {
@@ -149,7 +149,7 @@
 
 .helpText {
   font-size: 0.75rem;
-  color: var(--color-text-secondary, #71717a);
+  color: var(--color-text-secondary, var(--color-text-muted));
   margin: 0;
 }
 
@@ -164,20 +164,20 @@
 .checkbox {
   width: 1.125rem;
   height: 1.125rem;
-  accent-color: var(--color-brand-primary, #e11d48);
+  accent-color: var(--color-brand-primary, var(--color-brand-primary));
   cursor: pointer;
 }
 
 .checkboxLabel {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
 }
 
 .alertError {
-  background-color: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
+  background-color: var(--color-status-danger-background);
+  border: 1px solid var(--color-status-danger-border);
+  color: var(--color-status-danger-text);
   border-radius: var(--radius-md, 0.5rem);
   padding: 0.875rem 1rem;
   font-size: 0.875rem;
@@ -189,7 +189,7 @@
 .errorCode {
   font-size: 0.75rem;
   font-family: monospace;
-  color: #b91c1c;
+  color: var(--color-status-danger-text);
 }
 
 .actions {
@@ -207,8 +207,8 @@
   padding: 0.625rem 1.25rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #ffffff;
-  background-color: var(--color-brand-primary, #e11d48);
+  color: var(--admin-panel);
+  background-color: var(--color-brand-primary, var(--color-brand-primary));
   border: 1px solid transparent;
   border-radius: var(--radius-md, 0.5rem);
   cursor: pointer;
@@ -216,7 +216,7 @@
 }
 
 .submitButton:hover:not(:disabled) {
-  background-color: #be123c;
+  background-color: var(--color-brand-hover);
 }
 
 .submitButton:disabled {
@@ -230,14 +230,182 @@
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-text-primary, #09090b);
-  background-color: var(--color-surface-card, #ffffff);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  color: var(--color-text-primary, var(--color-text-primary));
+  background-color: var(--color-surface-card, var(--admin-panel));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-md, 0.5rem);
   text-decoration: none;
   transition: background-color 0.15s ease;
 }
 
 .cancelButton:hover {
-  background-color: var(--color-surface-hover, #f4f4f5);
+  background-color: var(--color-surface-hover, var(--admin-inset));
+}
+
+/* ---- Premium pass ---- */
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.title {
+  color: var(--color-text-primary);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.subtitle {
+  color: var(--color-text-muted);
+}
+
+.backLink {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.backLink:hover {
+  color: var(--color-text-primary);
+}
+
+/* Every block of the form is a panel, including the variant section. */
+.card {
+  padding: var(--admin-card-padding);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--admin-panel);
+  box-shadow: var(--admin-card-shadow);
+}
+
+.cardTitle {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-primary);
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.cardDescription {
+  margin: 0 0 var(--space-6);
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.grid2,
+.grid3 {
+  gap: var(--space-5);
+}
+
+.field {
+  gap: var(--space-2);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 10px var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background-color: var(--admin-panel);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-easing-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--color-text-disabled);
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px var(--admin-accent-soft);
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.required {
+  color: var(--color-status-danger-text);
+}
+
+.helpText {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.checkboxField {
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.checkboxLabel {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.submitButton,
+.cancelButton {
+  height: 44px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submitButton {
+  border: none;
+  background-color: var(--admin-accent);
+  color: var(--admin-accent-contrast);
+}
+
+.submitButton:hover:not(:disabled) {
+  background-color: var(--admin-accent-strong);
+}
+
+.cancelButton {
+  border: 1px solid var(--color-border-default);
+  background-color: var(--admin-panel);
+  color: var(--color-text-primary);
+}
+
+.cancelButton:hover {
+  background-color: var(--admin-inset);
+}
+
+.alertError {
+  padding: var(--space-4);
+  border: 1px solid var(--color-status-danger-border);
+  border-radius: var(--admin-inset-radius);
+  background-color: var(--color-status-danger-background);
+  color: var(--color-status-danger-text);
 }

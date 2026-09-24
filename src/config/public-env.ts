@@ -10,6 +10,11 @@ export const publicEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().default("http://127.0.0.1:54321"),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1).default("sb_publishable_placeholder_key"),
   NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
+  /** Store WhatsApp number in international format, digits only (e.g. 51987654321). */
+  NEXT_PUBLIC_WHATSAPP_NUMBER: z
+    .string()
+    .regex(/^\d{8,15}$/)
+    .optional(),
 });
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;
@@ -28,6 +33,11 @@ function parsePublicEnv(): PublicEnv {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+    // An empty value in .env means "not configured", not an invalid number.
+    NEXT_PUBLIC_WHATSAPP_NUMBER:
+      process.env.NEXT_PUBLIC_WHATSAPP_NUMBER === ""
+        ? undefined
+        : process.env.NEXT_PUBLIC_WHATSAPP_NUMBER,
   });
 }
 

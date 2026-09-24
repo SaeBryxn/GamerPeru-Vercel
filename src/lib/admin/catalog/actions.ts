@@ -15,6 +15,7 @@ import {
   finalizeCatalogMediaUpload,
   updateMediaAssetAltText,
   reorderProductMedia,
+  detachProductMedia,
   setProductPrimaryMedia,
   reassignProductMediaVariant,
   type RequestCatalogMediaUploadIntentResult,
@@ -24,6 +25,17 @@ import { parsePenInputToCents } from "./money";
 import { mapDomainErrorToUi } from "./error-mapping";
 import { type CatalogStatus, type VariantStatus } from "./types";
 import type { Product, ProductVariant } from "@/db/schema";
+
+/**
+ * Drops the cached storefront after a catalog write.
+ *
+ * Storefront routes render from the database without their own revalidation window, so without
+ * this an edit stays invisible to customers until the next deploy. Invalidating the root layout
+ * covers the product page, its category and brand listings, and the navigation at once.
+ */
+function revalidateStorefront() {
+  revalidatePath("/", "layout");
+}
 
 export interface ActionResult<T = unknown> {
   success: boolean;
@@ -211,6 +223,7 @@ export async function createProductAction(
 
     revalidatePath("/admin/products");
     revalidatePath(`/admin/products/${product.id}`);
+    revalidateStorefront();
 
     return { success: true, data: { product } };
   } catch (err) {
@@ -262,6 +275,7 @@ export async function updateProductAction(
 
     revalidatePath("/admin/products");
     revalidatePath(`/admin/products/${input.productId}`);
+    revalidateStorefront();
 
     return { success: true, data: { product } };
   } catch (err) {
@@ -340,6 +354,7 @@ export async function createVariantAction(
 
     revalidatePath("/admin/products");
     revalidatePath(`/admin/products/${input.productId}`);
+    revalidateStorefront();
 
     return { success: true, data: { variant } };
   } catch (err) {
@@ -427,6 +442,7 @@ export async function updateVariantAction(
 
     revalidatePath("/admin/products");
     revalidatePath(`/admin/products/${input.productId}`);
+    revalidateStorefront();
 
     return { success: true, data: { variant } };
   } catch (err) {
@@ -470,6 +486,7 @@ export async function duplicateProductAction(
 
     revalidatePath("/admin/products");
     revalidatePath(`/admin/products/${product.id}`);
+    revalidateStorefront();
 
     return { success: true, data: { product } };
   } catch (err) {
@@ -511,6 +528,7 @@ export async function transitionProductStatusAction(
 
     revalidatePath("/admin/products");
     revalidatePath(`/admin/products/${input.productId}`);
+    revalidateStorefront();
 
     return { success: true, data: { product } };
   } catch (err) {
@@ -605,6 +623,7 @@ export async function finalizeMediaUploadAction(
 
     revalidatePath("/admin/products");
     revalidatePath(`/admin/products/${input.productId}`);
+    revalidateStorefront();
 
     return {
       success: true,
@@ -663,6 +682,7 @@ export async function updateMediaAltTextAction(
 
     revalidatePath("/admin/products");
     revalidatePath(`/admin/products/${input.productId}`);
+    revalidateStorefront();
 
     return {
       success: true,
@@ -719,6 +739,55 @@ export async function reorderProductMediaAction(
 
     revalidatePath(`/admin/products/${input.productId}`);
 
+    revalidateStorefront();
+
+    return { success: true, data: result };
+  } catch (err) {
+    const uiError = mapDomainErrorToUi(err);
+    return { success: false, ...uiError };
+  }
+}
+
+export interface DetachProductMediaActionInput {
+  productId: string;
+  productMediaId: string;
+  mutationRequestId: string;
+}
+
+export async function detachProductMediaAction(
+  input: DetachProductMediaActionInput
+): Promise<ActionResult<{ success: boolean; replayed: boolean }>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
+    return {
+      success: false,
+      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
+      code: "AUTHENTICATION_REQUIRED",
+    };
+  }
+
+  if (!authContext.permissions.has("catalog:manage")) {
+    return {
+      success: false,
+      error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
+      code: "FORBIDDEN",
+    };
+  }
+
+  try {
+    const result = await detachProductMedia(
+      {
+        productId: input.productId,
+        productMediaId: input.productMediaId,
+        mutationRequestId: input.mutationRequestId,
+      },
+      { authContext }
+    );
+
+    revalidatePath(`/admin/products/${input.productId}`);
+
+    revalidateStorefront();
+
     return { success: true, data: result };
   } catch (err) {
     const uiError = mapDomainErrorToUi(err);
@@ -769,6 +838,7 @@ export async function setPrimaryMediaAction(
 
     revalidatePath("/admin/products");
     revalidatePath(`/admin/products/${input.productId}`);
+    revalidateStorefront();
 
     return {
       success: true,
@@ -825,6 +895,8 @@ export async function reassignProductMediaVariantAction(
     );
 
     revalidatePath(`/admin/products/${input.productId}`);
+
+    revalidateStorefront();
 
     return {
       success: true,

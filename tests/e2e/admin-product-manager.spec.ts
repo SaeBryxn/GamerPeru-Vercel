@@ -22,6 +22,16 @@ test.afterAll(async () => {
   await sql.end();
 });
 
+type EditorSection = "resumen" | "informacion" | "imagenes" | "variantes" | "especificaciones";
+
+/** The product editor renders one section at a time; open the tab before driving its controls. */
+async function openSection(page: Page, section: EditorSection) {
+  const tab = page.locator(`[data-testid="section-nav-${section}"]`);
+  await tab.waitFor({ state: "visible", timeout: 15000 });
+  await tab.click();
+  await page.locator(`#panel-${section}`).waitFor({ state: "visible", timeout: 15000 });
+}
+
 async function loginAndNavigateTo(page: Page, email: string, targetPath: string) {
   await page.context().clearCookies();
   await page.goto(`/auth/login?redirect=${encodeURIComponent(targetPath)}`);
@@ -77,10 +87,8 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     // Verify canonical column headers
     await expect(page.getByRole("columnheader", { name: "Producto", exact: true })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Estado", exact: true })).toBeVisible();
-    await expect(
-      page.getByRole("columnheader", { name: "ATS Variantes Activas", exact: true })
-    ).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Variantes", exact: true })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Stock", exact: true })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Qué falta", exact: true })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Precio", exact: true })).toBeVisible();
 
     // Verify deterministic seeded product row
@@ -192,6 +200,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     // Verify mixed-case SKU was NOT silently converted to uppercase
+    await openSection(page, "variantes");
     await expect(
       page.locator('[data-testid="table-variants"]').locator(`text=${mixedCaseSku}`)
     ).toBeVisible();
@@ -232,6 +241,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     `;
 
     // Attempt to save again without refreshing (holding stale expectedUpdatedAt)
+    await openSection(page, "informacion");
     await page
       .locator('[data-testid="input-subtitle"]')
       .fill("Subtítulo De Conflicto No Sobrescrito");
@@ -278,6 +288,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
 
     const specialCasingSku = `sku.with.valid-app-text_${Date.now().toString().slice(-4)}`;
 
+    await openSection(page, "variantes");
     await page.locator('[data-testid="btn-add-variant"]').click();
     await expect(page.locator('[data-testid="modal-create-variant"]')).toBeVisible();
 
@@ -317,6 +328,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     // Edit the primary variant (E2E-PUB-SKU-001)
+    await openSection(page, "variantes");
     await page.locator('button[data-testid="btn-edit-variant"]').first().click();
     await expect(page.locator('[data-testid="modal-edit-variant"]')).toBeVisible();
 
@@ -349,6 +361,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     // Click edit variant on immutable variant
+    await openSection(page, "variantes");
     await page.locator('button[data-testid="btn-edit-variant"]').first().click();
     await expect(page.locator('[data-testid="modal-edit-variant"]')).toBeVisible();
 
@@ -375,6 +388,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     // Category A schema fields must render
+    await openSection(page, "especificaciones");
     await expect(page.locator('[data-testid="spec-input-sensor"]')).toBeVisible();
     await expect(page.locator('[data-testid="spec-input-dpi_max"]')).toBeVisible();
     await expect(page.locator('[data-testid="spec-input-connection_type"]')).toBeVisible();
@@ -383,6 +397,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await page.locator('[data-testid="spec-input-dpi_max"]').fill("28000");
     await page.locator('[data-testid="btn-save-specs"]').click();
 
+    await openSection(page, "informacion");
     await expect(page.locator('[data-testid="alert-general-success"]')).toContainText(
       "Especificaciones técnicas guardadas exitosamente"
     );
@@ -429,7 +444,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     await expect(page.locator('[data-testid="section-publish-readiness"]')).toBeVisible();
-    await expect(page.locator('[data-testid="readiness-badge"]')).toContainText("No Publicable");
+    await expect(page.locator('[data-testid="readiness-badge"]')).toContainText("Falta");
     await expect(page.locator('[data-testid="readiness-blockers-list"]')).toContainText(
       "El producto debe tener al menos una imagen pública global para publicarse"
     );
@@ -465,6 +480,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       );
 
       // 4. Verify ordinary catalog:manage authoring remains fully operational
+      await openSection(page, "informacion");
       await page
         .locator('[data-testid="input-subtitle"]')
         .fill("Subtítulo por autor con manage-only");
@@ -528,6 +544,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       );
 
       // 6. Ordinary catalog:manage authoring remains operational
+      await openSection(page, "informacion");
       await page
         .locator('[data-testid="input-subtitle"]')
         .fill("Subtítulo por autor con manage-only en publicado");
@@ -754,12 +771,17 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     // 1. Media Authoring controls are present
+    await openSection(page, "imagenes");
     await expect(page.locator('[data-testid="section-media"]')).toBeVisible();
     await expect(page.locator('[data-testid="media-upload-area"]')).toBeVisible();
-    await expect(page.locator('[data-testid="media-upload-limits"]')).toContainText("10 MiB");
+    await expect(page.locator('[data-testid="media-upload-limits"]')).toContainText("10 MB");
     await expect(page.locator('input[data-testid="input-media-file"]')).toBeVisible();
     await expect(page.locator('[data-testid="select-media-upload-variant"]')).toBeVisible();
     await expect(page.locator('[data-testid="btn-upload-media"]')).toBeVisible();
+    await expect(page.locator('input[data-testid="input-media-file"]')).toHaveAttribute(
+      "multiple",
+      ""
+    );
 
     // 2. Private sentinel objectKey must NEVER appear in client DOM or page source
     const pageContent = await page.content();
@@ -1084,6 +1106,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/Acceso no autorizado/i);
 
     // Media section is completely absent
+    await openSection(page, "imagenes");
     await expect(page.locator('[data-testid="section-media"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="media-upload-area"]')).toHaveCount(0);
   });
@@ -1098,6 +1121,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     // 1. Input accept attribute contains exactly intended MIME types
+    await openSection(page, "imagenes");
     const fileInput = page.locator('input[data-testid="input-media-file"]');
     await expect(fileInput).toHaveAttribute("accept", "image/jpeg,image/png,image/webp,image/avif");
 
@@ -1112,7 +1136,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     // Advisory error is visible and has role="alert" / aria-live="assertive"
     const clientError = page.locator('[data-testid="media-client-error"]');
     await expect(clientError).toBeVisible();
-    await expect(clientError).toContainText("10 MiB");
+    await expect(clientError).toContainText("10 MB");
     await expect(clientError).toHaveAttribute("role", "alert");
     await expect(clientError).toHaveAttribute("aria-live", "assertive");
 
@@ -1120,7 +1144,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     const uploadBtn = page.locator('[data-testid="btn-upload-media"]');
     await expect(uploadBtn).toBeDisabled();
 
-    // 3. Zero permanent deletion controls across entire page
+    // 3. Photos can be detached from a product, but nothing offers to destroy the stored object
     await expect(page.locator('[data-testid^="btn-delete-media"]')).toHaveCount(0);
     await expect(page.locator('button:has-text("Eliminar Imagen")')).toHaveCount(0);
     await expect(page.locator('button:has-text("Delete Image")')).toHaveCount(0);
@@ -1199,10 +1223,12 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     // 1. Initially Category A schema is rendered
+    await openSection(page, "especificaciones");
     await expect(page.locator('[data-testid="spec-input-sensor"]')).toBeVisible();
     await expect(page.locator('[data-testid="spec-input-dpi_max"]')).toBeVisible();
 
     // 2. Change Category dropdown to Category B (Teclados)
+    await openSection(page, "informacion");
     await page
       .locator('[data-testid="select-category"]')
       .selectOption(ADMIN_E2E_PRODUCT_FIXTURES.categoryB.id);
@@ -1213,6 +1239,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     // 3. Refreshed UI must render Category B authoritative schema
+    await openSection(page, "especificaciones");
     await expect(page.locator('[data-testid="spec-input-switch_type"]')).toBeVisible();
     await expect(page.locator('[data-testid="spec-input-layout"]')).toBeVisible();
 
@@ -1224,6 +1251,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await page.locator('[data-testid="spec-input-layout"]').fill("ANSI 75%");
     await page.locator('[data-testid="btn-save-specs"]').click();
 
+    await openSection(page, "informacion");
     await expect(page.locator('[data-testid="alert-general-success"]')).toContainText(
       "Especificaciones técnicas guardadas exitosamente"
     );
@@ -1266,6 +1294,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     );
 
     // 1. Verify numeric step advisory attribute on dpi_max
+    await openSection(page, "especificaciones");
     const dpiInput = page.locator('[data-testid="spec-input-dpi_max"]');
     await expect(dpiInput).toBeVisible();
     await expect(dpiInput).toHaveAttribute("step", "100");
@@ -1284,6 +1313,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
 
     // 4. Save specifications
     await page.locator('[data-testid="btn-save-specs"]').click();
+    await openSection(page, "informacion");
     await expect(page.locator('[data-testid="alert-general-success"]')).toContainText(
       "Especificaciones técnicas guardadas exitosamente"
     );

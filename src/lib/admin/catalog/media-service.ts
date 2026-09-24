@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { generateUuidV7 } from "@/db/utils/uuid";
 import { requirePermission, type VerifiedAuthContextReady } from "@/lib/auth/rbac";
@@ -85,6 +85,12 @@ export interface UpdateMediaAssetAltTextInput {
   productId: string;
   mediaAssetId: string;
   altText: string | null;
+  mutationRequestId: string;
+}
+
+export interface DetachProductMediaInput {
+  productId: string;
+  productMediaId: string;
   mutationRequestId: string;
 }
 
@@ -1037,6 +1043,138 @@ export async function updateMediaAssetAltText(
 /**
  * Service: Atomically reorders ProductMedia rows belonging strictly to the target Product.
  */
+/**
+ * Service: Removes an image from a product without destroying the stored object.
+ *
+ * Detaching rather than deleting keeps the content-addressed asset intact: the same bytes may be
+ * attached to another product, and an immutable public object lets existing links and caches stay
+ * valid. Remaining images are renumbered so display order has no gaps, and clearing the product's
+ * primary image is refused outright — an operator has to choose a replacement first, otherwise a
+ * published product silently loses the photo every storefront surface resolves through.
+ */
+export async function detachProductMedia(
+  input: DetachProductMediaInput,
+  options?: MediaServiceOptions
+): Promise<{ success: boolean; replayed: boolean }> {
+  const caller = await assertAuthorizedCaller("catalog:manage", options);
+
+  if (!input.mutationRequestId || input.mutationRequestId.trim() === "") {
+    throw new CatalogDomainError(
+      "El identificador de solicitud de mutación es obligatorio.",
+      "INVALID_MUTATION_REQUEST_ID",
+      400
+    );
+  }
+
+  const action = "catalog:media:detach";
+  const mutationRequestDigest = computeMutationRequestDigest(
+    caller.authUserId,
+    action,
+    input.mutationRequestId
+  );
+  const requestFingerprint = computeRequestFingerprint({
+    op: action,
+    productId: input.productId,
+    productMediaId: input.productMediaId,
+  });
+
+  const database = options?.db ?? db;
+
+  return await database.transaction(async (tx) => {
+    const lockKey = createCatalogAdvisoryLockKey(mutationRequestDigest);
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey})`);
+
+    const [lockedProduct] = await tx
+      .select()
+      .from(products)
+      .where(eq(products.id, input.productId))
+      .for("update");
+
+    const [existingAudit] = await tx
+      .select()
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.actorId, caller.authUserId),
+          sql`${auditEvents.metadata}->>'mutation_request_digest' = ${mutationRequestDigest}`
+        )
+      );
+
+    if (existingAudit) {
+      assertReplayMarkerIdentity(existingAudit, {
+        action,
+        targetType: "product",
+        targetId: input.productId,
+      });
+      if (!lockedProduct) {
+        throw new CatalogReplayIntegrityError();
+      }
+      const storedFp = (existingAudit.metadata as Record<string, unknown>)?.request_fingerprint;
+      if (storedFp !== requestFingerprint) {
+        throw new CatalogIdempotencyConflictError();
+      }
+      return { success: true, replayed: true };
+    }
+
+    if (!lockedProduct) {
+      throw new CatalogDomainError("El producto solicitado no existe.", "PRODUCT_NOT_FOUND", 404);
+    }
+
+    const [target] = await tx
+      .select()
+      .from(productMedia)
+      .where(
+        and(eq(productMedia.id, input.productMediaId), eq(productMedia.productId, input.productId))
+      );
+
+    if (!target) {
+      throw new CatalogDomainError(
+        "La imagen indicada no pertenece a este producto.",
+        "PRODUCT_MEDIA_NOT_FOUND",
+        404
+      );
+    }
+
+    if (lockedProduct.primaryMediaId === target.mediaAssetId) {
+      throw new CatalogDomainError(
+        "No puedes quitar la imagen principal. Elige otra como principal y vuelve a intentarlo.",
+        "PRIMARY_MEDIA_CANNOT_BE_DETACHED",
+        422
+      );
+    }
+
+    await tx.delete(productMedia).where(eq(productMedia.id, target.id));
+
+    const remaining = await tx
+      .select()
+      .from(productMedia)
+      .where(eq(productMedia.productId, input.productId))
+      .orderBy(asc(productMedia.displayOrder), asc(productMedia.createdAt), asc(productMedia.id));
+
+    for (let i = 0; i < remaining.length; i++) {
+      const row = remaining[i];
+      if (!row || row.displayOrder === i) continue;
+      await tx.update(productMedia).set({ displayOrder: i }).where(eq(productMedia.id, row.id));
+    }
+
+    await tx.insert(auditEvents).values({
+      actorType: "ADMIN",
+      actorId: caller.authUserId,
+      action,
+      targetType: "product",
+      targetId: input.productId,
+      metadata: {
+        mutation_request_digest: mutationRequestDigest,
+        request_fingerprint: requestFingerprint,
+        product_media_id: target.id,
+        media_asset_id: target.mediaAssetId,
+      },
+    });
+
+    return { success: true, replayed: false };
+  });
+}
+
 export async function reorderProductMedia(
   input: ReorderProductMediaInput,
   options?: MediaServiceOptions

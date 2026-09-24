@@ -24,6 +24,32 @@ const securityHeaders = [
   },
 ];
 
+/**
+ * The media CDN host is environment-specific (Supabase Storage today, a custom domain later).
+ * Deriving it from NEXT_PUBLIC_CDN_URL keeps next/image from rejecting catalog photos whenever
+ * that bucket changes, instead of requiring a hardcoded hostname per environment.
+ */
+function resolveCdnRemotePattern() {
+  const raw = process.env.NEXT_PUBLIC_CDN_URL?.trim();
+  if (!raw) return null;
+
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return {
+      protocol: url.protocol.replace(":", "") as "http" | "https",
+      hostname: url.hostname,
+      port: url.port,
+      pathname: "/**",
+      search: "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+const cdnRemotePattern = resolveCdnRemotePattern();
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -36,10 +62,16 @@ const nextConfig: NextConfig = {
         pathname: "/**",
         search: "",
       },
+      ...(cdnRemotePattern ? [cdnRemotePattern] : []),
     ],
     localPatterns: [
       {
         pathname: "/media/**",
+        search: "",
+      },
+      // Editorial art for the homepage (see public/images/home/README.md).
+      {
+        pathname: "/images/**",
         search: "",
       },
     ],

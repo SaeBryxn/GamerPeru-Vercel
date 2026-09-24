@@ -15,6 +15,25 @@ export interface NavLink {
   description?: string;
 }
 
+/** A published product as the mega-menu shows it. */
+export interface MegaMenuProduct {
+  id: string;
+  title: string;
+  href: string;
+  priceCents: number;
+  /** Public image URLs; scrubbing activates with two or more. */
+  images: readonly string[];
+}
+
+export interface MegaMenuShelf {
+  /** How many published products the collection holds, shown in the "All …" link. */
+  totalCount: number;
+  products: readonly MegaMenuProduct[];
+}
+
+/** Shelves keyed by the collection href they belong to. */
+export type MegaMenuShelves = Readonly<Record<string, MegaMenuShelf>>;
+
 export interface MegaMenuSection {
   title: string;
   items: NavLink[];
@@ -26,11 +45,41 @@ export interface MegaMenuPreview {
   href: string;
 }
 
+export interface MegaMenuPromo {
+  title: string;
+  href: string;
+  image: string;
+  badge?: string;
+}
+
+export interface MegaMenuTile {
+  title: string;
+  href: string;
+  image: string;
+  /** `feature` renders the tile on the indigo highlight surface. */
+  tone?: "feature";
+}
+
+/**
+ * Desktop mega-menu composition. Categories without a layout render as a plain
+ * link in the desktop bar (the mobile drawer still lists them).
+ * - `products`: collections tabs + popular product cards.
+ * - `series`: multi-column series lists + guide link + large promo cards.
+ * - `grid`: one row of square tiles.
+ * - `links`: one row of large text links taken from `sections`.
+ */
+export type MegaMenuLayout = "products" | "series" | "grid" | "links";
+
 export interface MegaMenuCategory {
   id: string;
   label: string;
   href: string;
+  menuLayout?: MegaMenuLayout;
   sections: MegaMenuSection[];
+  series?: MegaMenuSection[];
+  guide?: NavLink;
+  promos?: MegaMenuPromo[];
+  tiles?: MegaMenuTile[];
   brands?: NavLink[];
   previews?: MegaMenuPreview[];
   spotlight?: {
@@ -47,6 +96,8 @@ export interface FooterColumn {
 }
 
 export interface NavigationConfig {
+  /** Live product shelves for the "products" mega-menu, resolved from the catalog. */
+  shelves?: MegaMenuShelves;
   announcement?: {
     message: string;
     href?: string;
@@ -56,6 +107,8 @@ export interface NavigationConfig {
     href: string;
   };
   primaryNav: MegaMenuCategory[];
+  /** Cross-category product types listed at the top of every mega-menu. */
+  productTypes: NavLink[];
   utilityLinks: {
     search: { label: string; href: string };
     account: { label: string; href: string };

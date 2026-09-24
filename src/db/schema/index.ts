@@ -49,4 +49,5 @@ export * from "./inventory/inventory-ledger";
 export * from "./outbox";
 export * from "./audit/enums";
 export * from "./audit/audit-events";
+export * from "./navigation/menu-entries";
 export * from "./ai";

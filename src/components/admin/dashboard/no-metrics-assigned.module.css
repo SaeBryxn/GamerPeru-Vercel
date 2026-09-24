@@ -12,8 +12,8 @@
   gap: 1rem;
   max-width: 32rem;
   padding: 2rem 1.5rem;
-  background-color: var(--color-surface-card, #ffffff);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  background-color: var(--color-surface-card, var(--color-surface-card));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-lg, 0.75rem);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -31,8 +31,8 @@
   width: 3rem;
   height: 3rem;
   border-radius: var(--radius-full, 9999px);
-  background-color: var(--color-surface-secondary, #f4f4f5);
-  color: var(--color-text-secondary, #52525b);
+  background-color: var(--color-surface-secondary, var(--color-surface-secondary));
+  color: var(--color-text-secondary, var(--color-text-secondary));
 }
 
 .icon {
@@ -51,20 +51,43 @@
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   margin: 0;
 }
 
 .text {
   font-size: 0.9375rem;
   font-weight: 500;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   margin: 0;
 }
 
 .subtext {
   font-size: 0.8125rem;
-  color: #52525b;
+  color: var(--color-text-secondary);
   margin: 0;
   line-height: 1.5;
+}
+
+/* ---- Premium pass ---- */
+.card {
+  padding: var(--admin-card-padding);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--admin-panel);
+  box-shadow: var(--admin-card-shadow);
+}
+
+.iconWrapper {
+  background-color: var(--admin-accent-soft);
+  color: var(--admin-accent);
+}
+
+.title {
+  color: var(--color-text-primary);
+}
+
+.text,
+.subtext {
+  color: var(--color-text-secondary);
 }

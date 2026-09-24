@@ -21,6 +21,27 @@ import type {
   ValidatedSpecificationSchema,
 } from "@/lib/discovery-filters/types";
 
+/**
+ * Asset shown on a discovery card.
+ *
+ * A product can carry images without one being designated primary — the operator simply has not
+ * chosen yet. Falling back to its first global image keeps a real photo on the card instead of a
+ * grey placeholder, while a designated primary always wins when it exists.
+ */
+const CARD_MEDIA_ASSET_ID = sql`COALESCE(
+  ${products.primaryMediaId},
+  (
+    SELECT a.id
+    FROM product_media pm
+    JOIN media_assets a ON a.id = pm.media_asset_id
+    WHERE pm.product_id = ${products.id}
+      AND a.security_class = 'PUBLIC_MEDIA'
+      AND a.media_type = 'IMAGE'
+    ORDER BY (pm.variant_id IS NULL) DESC, pm.display_order ASC, pm.created_at ASC
+    LIMIT 1
+  )
+)`;
+
 export function buildPublishedCategoryBySlugQuery(slug: string) {
   return db
     .select({
@@ -295,6 +316,8 @@ export function buildCategoryFilteredProductsQuery(
       primaryMediaWidth: mediaAssets.width,
       primaryMediaHeight: mediaAssets.height,
       startingPriceCents: startingPriceSql.mapWith(Number),
+      specValues: productSpecifications.specValues,
+      specFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
     })
     .from(products)
     .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
@@ -305,9 +328,17 @@ export function buildCategoryFilteredProductsQuery(
     .leftJoin(
       mediaAssets,
       and(
-        eq(products.primaryMediaId, mediaAssets.id),
+        sql`${mediaAssets.id} = ${CARD_MEDIA_ASSET_ID}`,
         eq(mediaAssets.securityClass, "PUBLIC_MEDIA"),
         eq(mediaAssets.mediaType, "IMAGE")
+      )
+    )
+    .leftJoin(productSpecifications, eq(productSpecifications.productId, products.id))
+    .leftJoin(
+      categorySpecificationSchemas,
+      and(
+        eq(categorySpecificationSchemas.categoryId, products.categoryId),
+        eq(categorySpecificationSchemas.isActive, true)
       )
     )
     .where(whereClause)
@@ -368,6 +399,8 @@ export function buildBrandFilteredProductsQuery(
       primaryMediaWidth: mediaAssets.width,
       primaryMediaHeight: mediaAssets.height,
       startingPriceCents: startingPriceSql.mapWith(Number),
+      specValues: productSpecifications.specValues,
+      specFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
     })
     .from(products)
     .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
@@ -378,9 +411,17 @@ export function buildBrandFilteredProductsQuery(
     .leftJoin(
       mediaAssets,
       and(
-        eq(products.primaryMediaId, mediaAssets.id),
+        sql`${mediaAssets.id} = ${CARD_MEDIA_ASSET_ID}`,
         eq(mediaAssets.securityClass, "PUBLIC_MEDIA"),
         eq(mediaAssets.mediaType, "IMAGE")
+      )
+    )
+    .leftJoin(productSpecifications, eq(productSpecifications.productId, products.id))
+    .leftJoin(
+      categorySpecificationSchemas,
+      and(
+        eq(categorySpecificationSchemas.categoryId, products.categoryId),
+        eq(categorySpecificationSchemas.isActive, true)
       )
     )
     .where(whereClause)

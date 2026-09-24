@@ -442,7 +442,7 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
       expect(html).toContain("-9%");
       expect(html).toContain("SKU: WLM-BX-BLK");
       expect(html).toContain("Peso: 39 g");
-      expect(html).toContain("Pago Seguro en Soles");
+      expect(html).toContain("Pago seguro en soles");
     });
 
     it("omits compare-at price when compareAtPriceCents is null or <= priceCents", () => {

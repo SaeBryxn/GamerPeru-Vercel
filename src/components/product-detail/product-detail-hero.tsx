@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { MotionConfig } from "framer-motion";
 import type { ProductVariantDetail } from "@/lib/catalog/product-detail-types";
+import type { FormattedSpecRow } from "./hardware-specifications";
+import type { PdpAccessory } from "./pdp-accessories";
 import type { CommerceHeroProjection } from "./types";
 import { ProductMediaGallery } from "./product-media-gallery";
 import { ProductCommercePanel } from "./product-commerce-panel";
@@ -9,6 +12,9 @@ import styles from "./product-detail-hero.module.css";
 
 export interface ProductDetailHeroProps {
   projection: CommerceHeroProjection;
+  specHighlights?: FormattedSpecRow[];
+  accessories?: PdpAccessory[];
+  details?: React.ReactNode;
 }
 
 /**
@@ -41,37 +47,47 @@ export function resolveCanonicalDefaultVariant(
   return first;
 }
 
-export function ProductDetailHero({ projection }: ProductDetailHeroProps): React.JSX.Element {
+export function ProductDetailHero({
+  projection,
+  specHighlights,
+  accessories,
+  details,
+}: ProductDetailHeroProps): React.JSX.Element {
   const { product, brand, variants, primaryMedia, media } = projection;
 
   const defaultVariant = useMemo(() => resolveCanonicalDefaultVariant(variants), [variants]);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariantDetail>(defaultVariant);
 
   return (
-    <section
-      className={styles.heroLayout}
-      data-testid="product-detail-hero"
-      aria-label="Información y compra del producto"
-    >
-      <div className={styles.galleryColumn}>
-        <ProductMediaGallery
-          media={media}
-          primaryMedia={primaryMedia}
-          selectedVariant={selectedVariant}
-          productName={product.name}
-          brandName={brand.name}
-        />
-      </div>
+    <MotionConfig reducedMotion="user">
+      <section
+        className={styles.heroLayout}
+        data-testid="product-detail-hero"
+        aria-label="Información y compra del producto"
+      >
+        <div className={styles.galleryColumn}>
+          <ProductMediaGallery
+            media={media}
+            primaryMedia={primaryMedia}
+            selectedVariant={selectedVariant}
+            productName={product.name}
+            brandName={brand.name}
+          />
+        </div>
 
-      <div className={styles.commerceColumn}>
-        <ProductCommercePanel
-          product={product}
-          brand={brand}
-          variants={variants}
-          selectedVariant={selectedVariant}
-          onSelectVariant={setSelectedVariant}
-        />
-      </div>
-    </section>
+        <div className={styles.commerceColumn}>
+          <ProductCommercePanel
+            product={product}
+            brand={brand}
+            variants={variants}
+            selectedVariant={selectedVariant}
+            onSelectVariant={setSelectedVariant}
+            specHighlights={specHighlights}
+            accessories={accessories}
+            details={details}
+          />
+        </div>
+      </section>
+    </MotionConfig>
   );
 }

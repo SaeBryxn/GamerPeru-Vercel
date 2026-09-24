@@ -1,0 +1,187 @@
+/*
+ * First layer over the sticky video stage: it carries its own opaque surface
+ * and rounded top edge so it reads as a sheet sliding up over the hero.
+ */
+.section {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: var(--space-16) 0 var(--space-12);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background-color: var(--color-surface-canvas);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 auto var(--space-10);
+  padding: 0 var(--gutter-desktop-lg);
+  max-width: var(--container-full);
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(28px, 3vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--color-text-primary);
+}
+
+/* The arrows float over the first and last cards. */
+.stage {
+  position: relative;
+  max-width: var(--container-full);
+  margin: 0 auto;
+  padding: 0 var(--gutter-desktop-lg);
+}
+
+.viewport {
+  overflow: hidden;
+}
+
+.track {
+  display: flex;
+  column-gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.track:active {
+  cursor: grabbing;
+}
+
+.card {
+  flex: 0 0 auto;
+  width: 280px;
+}
+
+.cardLink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  height: 100%;
+  padding: var(--space-8) var(--space-5) var(--space-6);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-secondary);
+  text-align: center;
+  text-decoration: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.cardLink:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  margin-bottom: var(--space-5);
+}
+
+.image {
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.cardTitle {
+  font-family: var(--font-body);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-accent-violet-deep);
+}
+
+.superscript {
+  margin-left: 1px;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: super;
+}
+
+.cardSubtitle {
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-accent-violet-muted);
+}
+
+.arrowSlot {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+}
+
+.arrowSlotPrev {
+  left: calc(var(--gutter-desktop-lg) - var(--space-5));
+}
+
+.arrowSlotNext {
+  right: calc(var(--gutter-desktop-lg) - var(--space-5));
+}
+
+.arrow {
+  --dome-height: 56px;
+  --dome-padding: 0;
+  --dome-radius: var(--radius-full);
+  --dome-border: var(--color-border-default);
+  width: 56px;
+  box-shadow: var(--elevation-mid);
+}
+
+.arrow:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1023px) {
+  .section {
+    padding: var(--space-12) 0 var(--space-10);
+  }
+
+  .head,
+  .stage {
+    padding: 0 var(--gutter-tablet);
+  }
+
+  .card {
+    width: 240px;
+  }
+
+  .arrowSlot {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .head,
+  .stage {
+    padding: 0 var(--gutter-mobile);
+  }
+
+  .card {
+    width: 70vw;
+    max-width: 260px;
+  }
+}

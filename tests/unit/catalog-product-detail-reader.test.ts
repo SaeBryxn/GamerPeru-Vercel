@@ -642,10 +642,11 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     expect(mouse1?.specifications).not.toBeNull();
     expect(mouse1?.story).not.toBeNull();
 
-    // Dev preview reader
-    const devMouse = await devReader.getPublishedProductBySlug("mouse-pro-mod-01");
+    // Dev preview reader serves the real storefront inventory
+    const devMouse = await devReader.getPublishedProductBySlug("atk-a9-plus-2-0-black");
     expect(devMouse).not.toBeNull();
-    expect(devMouse?.slug).toBe("mouse-pro-mod-01");
+    expect(devMouse?.slug).toBe("atk-a9-plus-2-0-black");
+    expect(await devReader.getPublishedProductBySlug("mouse-pro-mod-01")).toBeNull();
 
     // Edge cases return null
     expect(await fixtureReader.getPublishedProductBySlug("producto-draft")).toBeNull();
@@ -678,7 +679,7 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
       const devReader = new DevCatalogPreviewReader();
       const fixtureReader = new FixtureCatalogDiscoveryReader();
 
-      const devProduct = await devReader.getPublishedProductBySlug("mouse-pro-mod-01");
+      const devProduct = await devReader.getPublishedProductBySlug("atk-a9-plus-2-0-black");
       const fixtureProduct = await fixtureReader.getPublishedProductBySlug("mouse-pro-mod-01");
 
       expect(devProduct).not.toBeNull();
@@ -1023,8 +1024,8 @@ describe("GP-014 — Product Detail Reader & Data Layer (DB3A)", () => {
     });
 
     it("L: synthetic Product Detail uses only canonical Story block types", async () => {
-      const devReader = new DevCatalogPreviewReader();
-      const product = await devReader.getPublishedProductBySlug("mouse-pro-mod-01");
+      const fixtureReader = new FixtureCatalogDiscoveryReader();
+      const product = await fixtureReader.getPublishedProductBySlug("mouse-pro-mod-01");
       expect(product?.story).not.toBeNull();
       for (const block of product!.story!.blocks) {
         expect(CANONICAL_STORY_BLOCK_TYPES).toContain(block.type);

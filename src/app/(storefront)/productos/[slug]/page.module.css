@@ -1,27 +1,45 @@
+/*
+ * Same max width and side gutters as the site header and the catalog grid,
+ * so gallery and details run out to the page edges with only a breathing margin.
+ */
 .pageWrapper {
   width: 100%;
-  max-width: var(--container-default, 1440px);
+  max-width: var(--container-full);
   margin: 0 auto;
-  padding: var(--space-6, 24px) var(--space-4, 16px) var(--space-16, 64px);
+  padding: var(--space-8) var(--gutter-compact-mobile) var(--space-16);
+}
+
+@media (min-width: 480px) {
+  .pageWrapper {
+    padding-left: var(--gutter-mobile);
+    padding-right: var(--gutter-mobile);
+  }
 }
 
 @media (min-width: 768px) {
   .pageWrapper {
-    padding-left: var(--space-6, 24px);
-    padding-right: var(--space-6, 24px);
+    padding-left: var(--gutter-tablet);
+    padding-right: var(--gutter-tablet);
   }
 }
 
 @media (min-width: 1024px) {
   .pageWrapper {
-    padding-left: var(--space-8, 32px);
-    padding-right: var(--space-8, 32px);
+    padding-left: var(--gutter-desktop);
+    padding-right: var(--gutter-desktop);
   }
 }
 
 @media (min-width: 1280px) {
   .pageWrapper {
-    padding-left: var(--space-12, 48px);
-    padding-right: var(--space-12, 48px);
+    padding-left: var(--gutter-desktop-lg);
+    padding-right: var(--gutter-desktop-lg);
+  }
+}
+
+@media (min-width: 1536px) {
+  .pageWrapper {
+    padding-left: var(--gutter-desktop-wide);
+    padding-right: var(--gutter-desktop-wide);
   }
 }

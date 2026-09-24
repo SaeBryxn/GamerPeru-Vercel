@@ -228,6 +228,16 @@ export function evaluatePublishReadiness(input: PublishReadinessInput): PublishR
     }
   }
 
+  // An undesignated primary is not a harmless default: discovery cards and social previews all
+  // resolve through it, so publishing without one ships a product with no representative image.
+  if (!product.primaryMediaId && hasValidGlobalPublicImage) {
+    blockers.push({
+      code: "PRIMARY_MEDIA_MISSING",
+      message: "Falta elegir cuál de las imágenes es la principal del producto.",
+      field: "primaryMediaId",
+    });
+  }
+
   // If primaryMediaId is defined, verify it
   if (product.primaryMediaId) {
     const primaryMediaItem = media.find((m) => m.mediaAssetId === product.primaryMediaId);

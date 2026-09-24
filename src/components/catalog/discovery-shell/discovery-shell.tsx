@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { MotionConfig } from "framer-motion";
 import type {
   AppliedFilterChip,
   DiscoveryFacets,
@@ -35,7 +36,7 @@ export function DiscoveryShell({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       <DiscoveryToolbar
         basePath={basePath}
         totalProducts={totalProducts}
@@ -57,6 +58,6 @@ export function DiscoveryShell({
         surface={surface}
         searchQuery={searchQuery}
       />
-    </>
+    </MotionConfig>
   );
 }

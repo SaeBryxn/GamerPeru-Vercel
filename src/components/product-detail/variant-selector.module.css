@@ -18,14 +18,14 @@
 }
 
 .dimensionLabel {
-  font-size: var(--type-body-small-size, 13px);
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-text-primary, #09090b);
   text-transform: capitalize;
 }
 
 .dimensionCurrentValue {
-  font-size: var(--type-body-small-size, 13px);
+  font-size: 14px;
   color: var(--color-text-secondary, #52525b);
 }
 
@@ -46,7 +46,7 @@
   border-radius: var(--radius-sm, 4px);
   color: var(--color-text-primary, #09090b);
   font-family: inherit;
-  font-size: var(--type-body-small-size, 13px);
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
@@ -88,40 +88,49 @@
   opacity: 0.6;
 }
 
-/* Swatch Circles */
+/*
+ * Swatch tiles: rounded squares on a light card. Hover draws a soft ring,
+ * the selected tile gets a crisp dark ring with a small gap (premium look).
+ */
 .swatchButton {
   position: relative;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border-radius: var(--radius-full, 9999px);
-  border: 2px solid transparent;
-  background: transparent;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--motion-duration-fast, 150ms) var(--motion-easing-standard, ease);
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-card);
+  cursor: pointer;
+  box-shadow: 0 0 0 0 transparent;
+  transition:
+    box-shadow var(--motion-duration-normal) var(--motion-easing-snappy),
+    border-color var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
 .swatchButton:hover:not(:disabled) {
-  transform: scale(1.05);
+  border-color: var(--color-border-strong);
 }
 
 .swatchButton:focus-visible {
-  outline: 2px solid var(--color-border-focus, #09090b);
-  outline-offset: 2px;
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 3px;
 }
 
 .swatchButtonSelected {
-  border-color: var(--color-brand-primary, #e11d48);
+  border-color: var(--color-surface-dark-canvas);
+  box-shadow:
+    0 0 0 2px var(--color-surface-card),
+    0 0 0 4px var(--color-surface-dark-canvas);
 }
 
 .swatchInnerCircle {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-full, 9999px);
-  border: 1px solid var(--color-border-default, #d4d4d8);
+  width: 33px;
+  height: 33px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
 }
 
 /* Pre-approved Swatch Allowlist Classes */

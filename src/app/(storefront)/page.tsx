@@ -1,14 +1,21 @@
+import React from "react";
 import type { Metadata } from "next";
 import {
-  BrandDiscovery,
-  CategoryShowcase,
-  CuratedGear,
-  FeaturedEditorial,
-  HomeDiscoveryFooter,
-  HomeHero,
-  HOMEPAGE_DATA,
-  TechnicalEditorial,
+  BentoShowcase,
+  CatalogRail,
+  CommunityBanner,
+  CompareSlider,
+  FeatureVideo,
+  ProductCarousel,
+  SplitShowcase,
+  TrustStrip,
+  VideoHero,
 } from "@/components/home";
+import { loadRailProducts } from "@/components/home/home-catalog";
+import styles from "./page.module.css";
+
+/** Page H1: kept for SEO and screen readers while the stage stays wordless. */
+const HOME_HEADING = "Periféricos gaming de alto rendimiento";
 
 export const metadata: Metadata = {
   title: "Gamer Perú | Periféricos Gaming de Alto Rendimiento",
@@ -17,55 +24,162 @@ export const metadata: Metadata = {
 };
 
 /**
- * Storefront Homepage — GP-010 Canonical Implementation
+ * Storefront Homepage
  *
- * Visual Role & Rhythm:
- * 1. Cinematic Hero (Dominant / Dark #09090B)
- * 2. Featured Editorial (Major / Light #FFFFFF)
- * 3. Category Visual Doors (Major / Light + Neutral/Dark stages)
- * 4. Curated Gear Shelf (Medium / Light #FFFFFF)
- * 5. Technical Editorial (Dominant / Dark #09090B)
- * 6. Multi-Brand Discovery (Medium / Light #FFFFFF)
- * 7. Compact Local Trust + SEO Directory (Compact / Subtle #F4F4F5)
+ * Visual rhythm:
+ * 1. Full-screen video stage (Dominant / Dark), pinned while the store layer
+ *    below scrolls over it.
+ * 2. Product rail (Major / Subtle)
+ * 3. Flagship product film (Dominant / Dark)
+ * 4. Split showcase (Major / Light)
+ * 5. Comparison curtain (Major / Light)
+ * 6. Mouse rail from the catalog (Major / Light)
+ * 7. Mousepad bento + rail (Major / Light)
+ * 8. Community banner + trust strip (Dark / Light)
  *
  * Landmark Architecture:
  * - Owns <main id="main-content"> (preserves SkipLink target from GP-009).
- * - 100% React Server Component composition.
+ * - Server Component; the animated blocks are client islands.
  */
-export default function HomePage() {
+export default async function HomePage(): Promise<React.JSX.Element> {
+  const [mice, mousepads] = await Promise.all([
+    loadRailProducts("mouses"),
+    loadRailProducts("mousepads"),
+  ]);
+
   return (
     <main id="main-content">
-      {/* 1. Cinematic Hero */}
-      <HomeHero hero={HOMEPAGE_DATA.hero} />
+      {/* 1. Full-screen video stage */}
+      <VideoHero heading={HOME_HEADING} revealTargetId="coleccion" />
 
-      {/* 2. Featured Editorial */}
-      <FeaturedEditorial data={HOMEPAGE_DATA.featuredEditorial} />
+      <div className={styles.storeLayer}>
+        {/* 2. Product rail sliding over the stage */}
+        <ProductCarousel id="coleccion" eyebrow="Colección" title="Lo que tenemos disponible" />
 
-      {/* 3. Category Visual Doors */}
-      <CategoryShowcase categories={HOMEPAGE_DATA.categories} />
+        {/* 3. Flagship product film */}
+        <FeatureVideo
+          videoId="3nAqLAV8JN0"
+          eyebrow="Nueva generación"
+          title="ATK A9 PRO MAX"
+          subtitle="El mouse insignia de ATK, disponible en Gamer Perú."
+          cta={{ label: "Ver más", href: "/productos/atk-a9-pro-max-white" }}
+        />
 
-      {/* 4. Curated Gear Shelf */}
-      <CuratedGear
-        eyebrow={HOMEPAGE_DATA.curatedGear.eyebrow}
-        title={HOMEPAGE_DATA.curatedGear.title}
-        items={HOMEPAGE_DATA.curatedGear.items}
-      />
+        {/* 4. Split showcase */}
+        <SplitShowcase
+          eyebrow="Multimarca · Precios en soles · Soporte local"
+          title="Armado para competir"
+          features={[
+            {
+              title: "Marcas que cuestan encontrar",
+              description: "Trabajamos con ATK, Mchose, JINMS y X-Raypad.",
+            },
+            {
+              title: "Precios en soles",
+              description: "Todo el catálogo en PEN, sin conversiones ni sorpresas al pagar.",
+            },
+            {
+              title: "Pago con Yape o Plin",
+              description: "Coordinamos y verificamos cada pago contigo antes de despachar.",
+            },
+            {
+              title: "Atención por WhatsApp",
+              description: "Te responde una persona del equipo, no un robot.",
+            },
+          ]}
+          image={{
+            src: "/images/home/mouse-destacado.png",
+            alt: "Mouse gaming destacado de Gamer Perú",
+          }}
+        />
 
-      {/* 5. Technical Editorial */}
-      <TechnicalEditorial data={HOMEPAGE_DATA.technicalEditorial} />
+        {/* 5. Comparison curtain */}
+        <CompareSlider
+          eyebrow="Dos acabados del mismo modelo"
+          title="Elige el tuyo."
+          left={{
+            kicker: "Clásico",
+            name: "Negro",
+            image: {
+              src: "/images/home/mouse-negro.png",
+              alt: "Mouse gaming en color negro, vista de perfil",
+            },
+          }}
+          right={{
+            kicker: "Limpio",
+            name: "Blanco",
+            image: {
+              src: "/images/home/mouse-blanco.png",
+              alt: "Mouse gaming en color blanco, vista de perfil",
+            },
+          }}
+        />
 
-      {/* 6. Multi-Brand Discovery */}
-      <BrandDiscovery
-        eyebrow={HOMEPAGE_DATA.brands.eyebrow}
-        title={HOMEPAGE_DATA.brands.title}
-        items={HOMEPAGE_DATA.brands.items}
-      />
+        {/* 6. Mouse rail from the catalog */}
+        <CatalogRail
+          id="mouses"
+          eyebrow="Mouses"
+          title="Nuestros mouses"
+          products={mice}
+          seeAll={{ label: "Ver todos", href: "/categorias/mouses" }}
+        />
 
-      {/* 7. Compact Local Trust + SEO Directory */}
-      <HomeDiscoveryFooter
-        trustFacts={HOMEPAGE_DATA.discoveryFooter.trustFacts}
-        directoryColumns={HOMEPAGE_DATA.discoveryFooter.directoryColumns}
-      />
+        {/* 7. Mousepad bento + rail */}
+        <BentoShowcase
+          title={["Explora nuestros", "mousepads"]}
+          description="Superficies de control y de velocidad, en tamaño grande o compacto según tu sensibilidad."
+          images={[
+            { src: "/images/home/mousepad-1.jpg", alt: "Mousepad grande sobre un escritorio" },
+            { src: "/images/home/mousepad-2.jpg", alt: "Detalle del borde cosido de un mousepad" },
+            { src: "/images/home/mousepad-3.jpg", alt: "Mousepad con diseño ilustrado" },
+          ]}
+        />
+
+        <CatalogRail
+          id="mousepads"
+          eyebrow="Mousepads"
+          title="Nuestros mousepads"
+          products={mousepads}
+          seeAll={{ label: "Ver todos", href: "/categorias/mousepads" }}
+        />
+
+        {/* 8. Community banner + trust strip */}
+        <CommunityBanner
+          eyebrow="Gamer Perú"
+          title={["Únete a nuestra", "comunidad"]}
+          description="Novedades, lanzamientos y recomendaciones directo del equipo que arma la tienda."
+          ctaLabel="Entrar al Discord"
+          background={{
+            src: "/images/home/comunidad-fondo.jpg",
+            alt: "Ilustración de la comunidad Gamer Perú",
+          }}
+        />
+
+        <TrustStrip
+          items={[
+            {
+              icon: "whatsapp",
+              title: "Atención por WhatsApp",
+              description: "Te responde una persona del equipo.",
+            },
+            {
+              icon: "payment",
+              title: "Pago con Yape o Plin",
+              description: "Verificamos cada pago al coordinar tu pedido.",
+            },
+            {
+              icon: "currency",
+              title: "Precios en soles",
+              description: "Todo el catálogo en PEN, sin conversiones.",
+            },
+            {
+              icon: "catalog",
+              title: "Catálogo multimarca",
+              description: "ATK, Mchose, JINMS y X-Raypad.",
+            },
+          ]}
+        />
+      </div>
     </main>
   );
 }

@@ -84,7 +84,7 @@ test.describe("GP-008 Design System — Foundational Visual & Architectural Cont
     await page.goto("/");
 
     // The first category link in the desktop nav is on the light/transparent header
-    const mousesNavLink = page.getByRole("link", { name: "Mouses", exact: true }).first();
+    const mousesNavLink = page.getByRole("button", { name: "Mouse", exact: true }).first();
     await mousesNavLink.focus();
 
     const focusStyles = await mousesNavLink.evaluate((el) => {

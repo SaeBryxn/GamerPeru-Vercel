@@ -1,0 +1,247 @@
+/*
+ * The native dialog only provides modality (focus trap, inert page, Escape).
+ * It is a transparent full-viewport layer; the overlay, the floating close
+ * button and the panel inside it are animated by Framer Motion.
+ */
+.dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  overflow: hidden;
+}
+
+.dialog::backdrop {
+  background: transparent;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-surface-overlay);
+  cursor: pointer;
+}
+
+/* With a mouse, the floating close button stands in for the cursor. */
+@media (hover: hover) and (pointer: fine) {
+  .overlay {
+    cursor: none;
+  }
+}
+
+.floatingClose {
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-card);
+  color: var(--color-text-primary);
+  box-shadow: var(--elevation-high);
+  pointer-events: none;
+}
+
+/* Full-height white sheet anchored to the right edge. */
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(400px, 100vw);
+  height: 100vh;
+  height: 100dvh;
+  background-color: var(--color-surface-card);
+  box-shadow: var(--elevation-high);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-6) var(--space-5);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary);
+}
+
+.closeButton {
+  --dome-border: var(--color-border-default);
+}
+
+.form {
+  padding: 0 var(--space-6);
+}
+
+/* Very light gray, borderless field; clear and mic buttons sit inside it. */
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 52px;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-secondary);
+}
+
+.field:focus-within {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.fieldButton {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  isolation: isolate;
+}
+
+.fieldButton:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.fieldButton:disabled {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+.fieldButton:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 1px;
+}
+
+.fieldButtonActive {
+  color: var(--color-text-primary);
+}
+
+.listeningPulse {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-tertiary);
+  z-index: -1;
+}
+
+.results {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+.group + .group {
+  margin-top: var(--space-6);
+}
+
+.groupTitle {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.productList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.productLink {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.productLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.productLink:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.emptyText {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--color-text-secondary);
+}
+
+.footer {
+  padding: var(--space-4) var(--space-6) var(--space-6);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.searchAllLink {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.searchAllLink:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}

@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   PackageOpen,
+  Check,
 } from "lucide-react";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
@@ -16,7 +17,9 @@ import {
   getPublishedCategories,
 } from "@/lib/admin/catalog/readers";
 import { formatCentsToPenDisplay } from "@/lib/admin/catalog/money";
-import type { CatalogStatus } from "@/lib/admin/catalog/types";
+import { getProductReadinessGaps, isReadyToPublish } from "@/lib/admin/catalog/list-readiness";
+import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
+import type { AdminProductPendingFilter, CatalogStatus } from "@/lib/admin/catalog/types";
 import styles from "./products.module.css";
 
 export const dynamic = "force-dynamic";
@@ -25,11 +28,18 @@ interface AdminProductsPageProps {
   searchParams?: Promise<{
     search?: string;
     status?: string;
+    pending?: string;
     brandId?: string;
     categoryId?: string;
     page?: string;
   }>;
 }
+
+const STATUS_LABEL: Record<CatalogStatus, string> = {
+  PUBLISHED: "En la tienda",
+  DRAFT: "Oculto",
+  ARCHIVED: "Archivado",
+};
 
 export default async function AdminProductsPage({ searchParams }: AdminProductsPageProps) {
   const authContext = await getVerifiedAuthContext();
@@ -47,47 +57,93 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
     rawStatus === "DRAFT" || rawStatus === "PUBLISHED" || rawStatus === "ARCHIVED"
       ? rawStatus
       : undefined;
+  const rawPending = resolvedParams.pending;
+  const pending: AdminProductPendingFilter | undefined =
+    rawPending === "media" || rawPending === "stock" || rawPending === "price"
+      ? rawPending
+      : undefined;
   const brandId = resolvedParams.brandId?.trim() ? resolvedParams.brandId.trim() : undefined;
   const categoryId = resolvedParams.categoryId?.trim()
     ? resolvedParams.categoryId.trim()
     : undefined;
   const page = Math.max(1, parseInt(resolvedParams.page ?? "1", 10) || 1);
 
-  const [listResult, brands, categories] = await Promise.all([
+  const [listResult, brands, categories, allProducts] = await Promise.all([
     getAdminProductList(
-      {
-        search,
-        status,
-        brandId,
-        categoryId,
-        page,
-        pageSize: 20,
-      },
+      { search, status, pending, brandId, categoryId, page, pageSize: 20 },
       { authContext }
     ),
     getPublishedBrands({ authContext }),
     getPublishedCategories({ authContext }),
+    // Unfiltered snapshot so the summary counters describe the whole catalog, not the current page.
+    getAdminProductList({ page: 1, pageSize: 100 }, { authContext }),
   ]);
 
+  const catalog = allProducts.items;
+  const publishedCount = catalog.filter((i) => i.status === "PUBLISHED").length;
+  const hiddenCount = catalog.filter((i) => i.status === "DRAFT").length;
+  const missingPhotoCount = catalog.filter((i) => !i.primaryMediaKey).length;
+  const outOfStockCount = catalog.filter((i) => i.activeVariantAts <= 0).length;
+
   const hasFiltersApplied =
-    Boolean(search) || Boolean(status) || Boolean(brandId) || Boolean(categoryId);
+    Boolean(search) ||
+    Boolean(status) ||
+    Boolean(pending) ||
+    Boolean(brandId) ||
+    Boolean(categoryId);
+
+  function buildUrl(overrides: Record<string, string | undefined>) {
+    const params = new URLSearchParams();
+    const merged = { search, status, pending, brandId, categoryId, ...overrides };
+    for (const [key, value] of Object.entries(merged)) {
+      if (value) params.set(key, value);
+    }
+    const qs = params.toString();
+    return qs ? `/admin/products?${qs}` : "/admin/products";
+  }
 
   function buildPageUrl(targetPage: number) {
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (status) params.set("status", status);
-    if (brandId) params.set("brandId", brandId);
-    if (categoryId) params.set("categoryId", categoryId);
-    params.set("page", String(targetPage));
-    return `/admin/products?${params.toString()}`;
+    return buildUrl({ page: String(targetPage) });
   }
+
+  const quickFilters = [
+    { label: "Todos", href: "/admin/products", active: !hasFiltersApplied },
+    {
+      label: "En la tienda",
+      href: buildUrl({ status: "PUBLISHED", pending: undefined, page: undefined }),
+      active: status === "PUBLISHED" && !pending,
+      count: publishedCount,
+    },
+    {
+      label: "Ocultos",
+      href: buildUrl({ status: "DRAFT", pending: undefined, page: undefined }),
+      active: status === "DRAFT" && !pending,
+      count: hiddenCount,
+    },
+    {
+      label: "Sin foto",
+      href: buildUrl({ pending: "media", status: undefined, page: undefined }),
+      active: pending === "media",
+      count: missingPhotoCount,
+    },
+    {
+      label: "Sin stock",
+      href: buildUrl({ pending: "stock", status: undefined, page: undefined }),
+      active: pending === "stock",
+      count: outOfStockCount,
+    },
+  ];
 
   return (
     <div className={styles.container}>
       <header className={styles.header}>
         <div className={styles.titleArea}>
           <h1 className={styles.title}>Productos</h1>
-          <p className={styles.subtitle}>Gestión del catálogo maestro y variantes de Gamer Perú.</p>
+          <p className={styles.subtitle}>
+            {catalog.length} producto{catalog.length === 1 ? "" : "s"} en total &middot;{" "}
+            {publishedCount} visible{publishedCount === 1 ? "" : "s"} en la tienda &middot;{" "}
+            {hiddenCount} oculto{hiddenCount === 1 ? "" : "s"}
+          </p>
         </div>
         <Link
           href="/admin/products/new"
@@ -95,21 +151,38 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
           data-testid="btn-new-product"
         >
           <Plus size={16} aria-hidden="true" />
-          <span>Nuevo Producto</span>
+          <span>Nuevo producto</span>
         </Link>
       </header>
 
-      {/* Filter Toolbar */}
-      <section className={styles.filterCard} aria-label="Filtros de productos">
+      <nav className={styles.chipRow} aria-label="Filtros rápidos">
+        {quickFilters.map((filter) => (
+          <Link
+            key={filter.label}
+            href={filter.href}
+            className={`${styles.chip} ${filter.active ? styles.chipActive : ""}`}
+            aria-current={filter.active ? "true" : undefined}
+            data-testid={`quick-filter-${filter.label.toLowerCase().replace(/\s+/g, "-")}`}
+          >
+            <span>{filter.label}</span>
+            {filter.count !== undefined && <span className={styles.chipCount}>{filter.count}</span>}
+          </Link>
+        ))}
+      </nav>
+
+      <section className={styles.filterCard} aria-label="Búsqueda avanzada">
         <form method="GET" action="/admin/products" className={styles.filterForm}>
+          {pending && <input type="hidden" name="pending" value={pending} />}
+
           <div className={styles.filterField} style={{ flex: 2, minWidth: 200 }}>
             <input
               type="search"
               name="search"
               defaultValue={search ?? ""}
-              placeholder="Buscar por nombre o slug..."
+              placeholder="Buscar por nombre..."
               className={styles.filterInput}
               data-testid="filter-search"
+              aria-label="Buscar productos"
             />
           </div>
 
@@ -121,10 +194,10 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
               data-testid="filter-status"
               aria-label="Filtrar por estado"
             >
-              <option value="">Todos los estados</option>
-              <option value="DRAFT">Borrador (DRAFT)</option>
-              <option value="PUBLISHED">Publicado (PUBLISHED)</option>
-              <option value="ARCHIVED">Archivado (ARCHIVED)</option>
+              <option value="">Cualquier estado</option>
+              <option value="PUBLISHED">En la tienda</option>
+              <option value="DRAFT">Ocultos</option>
+              <option value="ARCHIVED">Archivados</option>
             </select>
           </div>
 
@@ -165,7 +238,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
           <div className={styles.filterActions}>
             <button type="submit" className={styles.submitButton} data-testid="filter-submit">
               <Search size={14} aria-hidden="true" />
-              <span>Filtrar</span>
+              <span>Buscar</span>
             </button>
             {hasFiltersApplied && (
               <Link
@@ -173,28 +246,26 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                 className={styles.clearButton}
                 data-testid="filter-clear"
               >
-                Limpiar filtros
+                Limpiar
               </Link>
             )}
           </div>
         </form>
       </section>
 
-      {/* Main Table / Empty State */}
       {listResult.items.length > 0 ? (
         <div className={styles.tableContainer}>
           <table className={styles.table} data-testid="product-table">
             <thead>
               <tr>
-                <th style={{ width: 60 }}>Imagen</th>
+                <th style={{ width: 64 }}>Foto</th>
                 <th>Producto</th>
-                <th>Marca / Categoría</th>
-                <th>Estado</th>
-                <th>Variantes</th>
+                <th>Categoría</th>
                 <th>Precio</th>
-                <th>ATS Variantes Activas</th>
-                <th>Actualizado</th>
-                <th style={{ textAlign: "right" }}>Acciones</th>
+                <th>Stock</th>
+                <th>Estado</th>
+                <th>Qué falta</th>
+                <th style={{ textAlign: "right" }}>&nbsp;</th>
               </tr>
             </thead>
             <tbody>
@@ -211,11 +282,29 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                   }
                 }
 
+                const thumbnailUrl = item.primaryMediaKey
+                  ? resolvePublicMediaUrl(item.primaryMediaKey)
+                  : null;
+                const gaps = getProductReadinessGaps(item);
+                const ready = isReadyToPublish(item);
+
                 return (
                   <tr key={item.id} data-testid={`product-row-${item.id}`}>
                     <td>
                       <div className={styles.mediaThumb}>
-                        <ImageIcon size={20} style={{ color: "#a1a1aa" }} aria-hidden="true" />
+                        {thumbnailUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={thumbnailUrl}
+                            alt={item.primaryMediaAlt ?? ""}
+                            width={48}
+                            height={48}
+                            loading="lazy"
+                            data-testid={`product-thumb-${item.id}`}
+                          />
+                        ) : (
+                          <ImageIcon size={18} aria-hidden="true" />
+                        )}
                       </div>
                     </td>
                     <td>
@@ -227,14 +316,19 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                         >
                           {item.name}
                         </Link>
-                        <span className={styles.productSlug}>{item.slug}</span>
+                        <span className={styles.productSlug}>{item.brandName}</span>
                       </div>
                     </td>
                     <td>
-                      <div className={styles.taxoText}>
-                        <span className={styles.brandLabel}>{item.brandName}</span>
-                        <span className={styles.categoryLabel}>{item.categoryName}</span>
-                      </div>
+                      <span className={styles.categoryLabel}>{item.categoryName}</span>
+                    </td>
+                    <td className={styles.priceCell} data-testid={`product-price-${item.id}`}>
+                      {priceDisplay}
+                    </td>
+                    <td className={styles.atsCell} data-testid={`product-ats-${item.id}`}>
+                      <span className={item.activeVariantAts <= 0 ? styles.stockEmpty : undefined}>
+                        {item.activeVariantAts <= 0 ? "Agotado" : `${item.activeVariantAts} u.`}
+                      </span>
                     </td>
                     <td>
                       <span
@@ -247,43 +341,42 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                         }`}
                         data-testid={`product-status-${item.id}`}
                       >
-                        {item.status === "PUBLISHED"
-                          ? "Publicado"
-                          : item.status === "ARCHIVED"
-                            ? "Archivado"
-                            : "Borrador"}
+                        {STATUS_LABEL[item.status]}
                       </span>
                     </td>
                     <td>
-                      <span data-testid={`product-variants-count-${item.id}`}>
-                        {item.activeVariants} / {item.totalVariants} activas
-                      </span>
-                    </td>
-                    <td className={styles.priceCell} data-testid={`product-price-${item.id}`}>
-                      {priceDisplay}
-                    </td>
-                    <td className={styles.atsCell} data-testid={`product-ats-${item.id}`}>
-                      {item.activeVariantAts}
-                    </td>
-                    <td
-                      style={{
-                        fontSize: "0.8125rem",
-                        color: "var(--color-text-secondary, #71717a)",
-                      }}
-                    >
-                      {new Date(item.updatedAt).toLocaleDateString("es-PE", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {gaps.length === 0 ? (
+                        <span className={styles.readyChip} data-testid={`product-ready-${item.id}`}>
+                          <Check size={12} aria-hidden="true" />
+                          <span>Listo</span>
+                        </span>
+                      ) : (
+                        <div className={styles.pendingList}>
+                          {gaps.map((gap) => (
+                            <span
+                              key={gap.id}
+                              className={`${styles.pendingChip} ${
+                                gap.id === "stock" ? styles.pendingChipSoft : ""
+                              }`}
+                              data-testid={`product-gap-${gap.id}-${item.id}`}
+                            >
+                              {gap.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <Link
-                        href={`/admin/products/${item.id}`}
+                        href={
+                          ready
+                            ? `/admin/products/${item.id}`
+                            : `/admin/products/${item.id}#${gaps[0]?.section ?? "resumen"}`
+                        }
                         className={styles.secondaryButton}
                         data-testid={`btn-edit-${item.id}`}
                       >
-                        Editar
+                        {ready ? "Abrir" : "Completar"}
                       </Link>
                     </td>
                   </tr>
@@ -295,25 +388,24 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
       ) : hasFiltersApplied ? (
         <div className={styles.emptyState} data-testid="empty-filtered">
           <Search className={styles.emptyIcon} aria-hidden="true" />
-          <h2 className={styles.emptyTitle}>No se encontraron productos</h2>
+          <h2 className={styles.emptyTitle}>Ningún producto coincide</h2>
           <p className={styles.emptyDescription}>
-            No hay ningún producto que coincida con los criterios de búsqueda o filtros
-            seleccionados.
+            Prueba con otra búsqueda o quita los filtros para ver todo el catálogo.
           </p>
           <Link
             href="/admin/products"
             className={styles.secondaryButton}
             data-testid="btn-reset-filters"
           >
-            Limpiar filtros
+            Ver todos
           </Link>
         </div>
       ) : (
         <div className={styles.emptyState} data-testid="empty-catalog">
           <PackageOpen className={styles.emptyIcon} aria-hidden="true" />
-          <h2 className={styles.emptyTitle}>No hay productos en el catálogo</h2>
+          <h2 className={styles.emptyTitle}>Todavía no hay productos</h2>
           <p className={styles.emptyDescription}>
-            Comienza creando el primer producto maestro con su variante inicial para Gamer Perú.
+            Crea el primero para empezar a construir el catálogo de Gamer Perú.
           </p>
           <Link
             href="/admin/products/new"
@@ -321,12 +413,11 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
             data-testid="btn-create-first"
           >
             <Plus size={16} aria-hidden="true" />
-            <span>Crear Primer Producto</span>
+            <span>Crear el primero</span>
           </Link>
         </div>
       )}
 
-      {/* Pagination Bar */}
       {listResult.totalPages > 1 && (
         <nav
           className={styles.pagination}

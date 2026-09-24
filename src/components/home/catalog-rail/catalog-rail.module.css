@@ -1,0 +1,140 @@
+.section {
+  width: 100%;
+  max-width: var(--container-full);
+  margin: 0 auto;
+  padding: var(--space-20) 0;
+  background-color: var(--color-surface-card);
+}
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+  padding: 0 var(--gutter-desktop-lg);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(26px, 2.8vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--color-text-primary);
+}
+
+.seeAll {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.seeAll:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* The arrows float over the first and last cards. */
+.stage {
+  position: relative;
+  padding: 0 var(--gutter-desktop-lg);
+}
+
+.viewport {
+  overflow: hidden;
+}
+
+.track {
+  display: flex;
+  column-gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.track:active {
+  cursor: grabbing;
+}
+
+.card {
+  flex: 0 0 auto;
+  width: 300px;
+}
+
+.arrowSlot {
+  position: absolute;
+  top: 40%;
+  z-index: 2;
+  transform: translateY(-50%);
+}
+
+.arrowSlotPrev {
+  left: calc(var(--gutter-desktop-lg) - var(--space-5));
+}
+
+.arrowSlotNext {
+  right: calc(var(--gutter-desktop-lg) - var(--space-5));
+}
+
+.arrow {
+  --dome-height: 56px;
+  --dome-padding: 0;
+  --dome-radius: var(--radius-full);
+  --dome-border: var(--color-border-default);
+  width: 56px;
+  box-shadow: var(--elevation-mid);
+}
+
+.arrow:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1023px) {
+  .section {
+    padding: var(--space-16) 0;
+  }
+
+  .head,
+  .stage {
+    padding: 0 var(--gutter-tablet);
+  }
+
+  .card {
+    width: 260px;
+  }
+
+  .arrowSlot {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .head,
+  .stage {
+    padding: 0 var(--gutter-mobile);
+  }
+
+  .card {
+    width: 74vw;
+    max-width: 280px;
+  }
+}

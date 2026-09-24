@@ -5,11 +5,18 @@
   width: 100%;
 }
 
+/* Gallery left, details right; the details column is the narrower one. */
 @media (min-width: 1024px) {
   .heroLayout {
-    grid-template-columns: 58fr 42fr;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     align-items: start;
-    gap: var(--space-10, 40px);
+    gap: var(--space-12);
+  }
+}
+
+@media (min-width: 1280px) {
+  .heroLayout {
+    gap: var(--space-16);
   }
 }
 
@@ -22,9 +29,10 @@
   position: relative;
 }
 
+/* The gallery follows while the longer details column scrolls. */
 @media (min-width: 1024px) {
-  .commerceColumn {
+  .galleryColumn {
     position: sticky;
-    top: 96px;
+    top: var(--space-6);
   }
 }

@@ -25,6 +25,22 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Gestión de catálogo y productos",
   },
   {
+    id: "taxonomy",
+    label: "Categorías y marcas",
+    href: "/admin/taxonomia",
+    iconName: "Tags",
+    requiredPermission: "catalog:manage",
+    description: "Árbol del catálogo: categorías y marcas",
+  },
+  {
+    id: "storefront-menu",
+    label: "Menú de la tienda",
+    href: "/admin/menu",
+    iconName: "Menu",
+    requiredPermission: "catalog:manage",
+    description: "Qué secciones ve el cliente en la barra superior",
+  },
+  {
     id: "ai-product-assistant",
     label: "Asistente IA",
     href: "/admin/products/ai-import",

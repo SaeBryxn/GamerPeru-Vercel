@@ -19,10 +19,24 @@ if (isProduction && !rawUrl) {
 
 const connectionString = rawUrl ?? "postgres://postgres:postgres@127.0.0.1:54322/postgres";
 
-// Prevent multiple connection pool instances in development hot-reloading
+/*
+ * One pool per module instance, cached on globalThis so a single dev compilation
+ * never opens several. A hot reload builds a new module instance: the sockets of
+ * the disposed one stay open but its handlers are gone, and reusing them leaves
+ * every query waiting for a reply that is never processed. So a new instance
+ * retires the previous pool instead of adopting it.
+ */
 const globalForDb = globalThis as unknown as {
   conn: postgres.Sql | undefined;
+  connOwner: symbol | undefined;
 };
+
+const moduleInstanceId = Symbol("db-module-instance");
+
+if (!isProduction && globalForDb.conn && globalForDb.connOwner !== moduleInstanceId) {
+  void globalForDb.conn.end({ timeout: 0 }).catch(() => {});
+  globalForDb.conn = undefined;
+}
 
 const client =
   globalForDb.conn ??
@@ -31,10 +45,16 @@ const client =
     max: isProduction ? 10 : 3,
     idle_timeout: 20,
     connect_timeout: 10,
+    // Supavisor recycles pooled sessions on its own. Without these bounds a
+    // socket it already dropped keeps a request waiting forever instead of
+    // failing fast and being retried on a fresh connection.
+    max_lifetime: 60 * 10,
+    connection: { statement_timeout: 15_000 },
   });
 
 if (!isProduction) {
   globalForDb.conn = client;
+  globalForDb.connOwner = moduleInstanceId;
 }
 
 export const db = drizzle(client, { schema });

@@ -17,13 +17,16 @@ import {
   SYNTHETIC_SPEC_SCHEMAS,
   SYNTHETIC_TEST_BRANDS,
   SYNTHETIC_TEST_CATEGORIES,
-  buildSyntheticProductDetail,
   filterAndSortSyntheticProducts,
-  generateSyntheticProducts,
   type SyntheticBrandEntry,
   type SyntheticCategoryEntry,
   type SyntheticProductWithSpecs,
 } from "./synthetic-catalog-data";
+import {
+  INVENTORY_BRAND_ENTRIES,
+  buildInventoryProductDetail,
+  getInventoryPreviewProducts,
+} from "./preview-inventory";
 
 import type {
   BrandDiscoveryEntity,
@@ -43,19 +46,20 @@ const PREVIEW_BRANDS: Record<string, SyntheticBrandEntry> = {
   "marca-qa": SYNTHETIC_QA_BRAND,
   ...SYNTHETIC_NAV_BRANDS,
   ...SYNTHETIC_TEST_BRANDS,
+  ...INVENTORY_BRAND_ENTRIES,
 };
 
-const PREVIEW_PRODUCTS_BY_CATEGORY: Record<string, SyntheticProductWithSpecs[]> = {
-  mouses: generateSyntheticProducts("mouses", "Mouses Gaming", 14),
-  teclados: generateSyntheticProducts("teclados", "Teclados Gaming", 4),
-  mousepads: generateSyntheticProducts("mousepads", "Mousepads Gaming", 4),
-  audio: generateSyntheticProducts("audio", "Audio Gaming", 4),
-  accesorios: generateSyntheticProducts("accesorios", "Accesorios Gaming", 4),
-};
+/**
+ * Preview listings come from the real storefront inventory. Read per call so a
+ * product photo dropped into public/media/productos shows up without a restart.
+ */
+export function getAllPreviewProducts(): SyntheticProductWithSpecs[] {
+  return getInventoryPreviewProducts();
+}
 
-export const ALL_PREVIEW_PRODUCTS: SyntheticProductWithSpecs[] = Object.values(
-  PREVIEW_PRODUCTS_BY_CATEGORY
-).flat();
+function previewProductsInCategory(categorySlug: string): SyntheticProductWithSpecs[] {
+  return getAllPreviewProducts().filter((p) => p.category.slug === categorySlug);
+}
 
 function deriveSyntheticTechnicalFacets(
   schema: ValidatedSpecificationSchema,
@@ -131,7 +135,7 @@ function deriveSyntheticTechnicalFacets(
 
 export class DevCatalogPreviewReader implements CatalogDiscoveryReader, ProductDetailReader {
   async getPublishedProductBySlug(slug: string): Promise<ProductDetailEntity | null> {
-    return buildSyntheticProductDetail(slug, ALL_PREVIEW_PRODUCTS);
+    return buildInventoryProductDetail(slug);
   }
 
   async getPublishedCategoryBySlug(slug: string): Promise<CategoryDiscoveryEntity | null> {
@@ -180,7 +184,7 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader, ProductD
       return { brands: [], categories: [], technicalSchema: null, technicalFacets: [] };
     }
 
-    const baseProducts = PREVIEW_PRODUCTS_BY_CATEGORY[category.slug] ?? [];
+    const baseProducts = previewProductsInCategory(category.slug);
     const representedBrandSlugs = new Set(baseProducts.map((p) => p.brand.slug));
     const brandOptions = Object.values(PREVIEW_BRANDS)
       .filter((b) => b.status === "PUBLISHED" && representedBrandSlugs.has(b.slug))
@@ -203,7 +207,7 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader, ProductD
     const brand = Object.values(PREVIEW_BRANDS).find((b) => b.id === brandId);
     if (!brand) return [];
 
-    const baseProducts = ALL_PREVIEW_PRODUCTS.filter((p) => p.brand.slug === brand.slug);
+    const baseProducts = getAllPreviewProducts().filter((p) => p.brand.slug === brand.slug);
     const representedCategorySlugs = new Set(baseProducts.map((p) => p.category.slug));
     return Object.values(PREVIEW_CATEGORIES)
       .filter((c) => c.status === "PUBLISHED" && representedCategorySlugs.has(c.slug))
@@ -221,7 +225,7 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader, ProductD
       return { brands: [], categories: [], technicalSchema: null, technicalFacets: [] };
     }
 
-    const baseProducts = ALL_PREVIEW_PRODUCTS.filter((p) => p.brand.slug === brand.slug);
+    const baseProducts = getAllPreviewProducts().filter((p) => p.brand.slug === brand.slug);
     let techFacets: TechnicalFacet[] = [];
 
     if (selectedCategoryId && schema) {
@@ -259,7 +263,7 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader, ProductD
       return { items: [], totalItems: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 };
     }
 
-    const baseProducts = PREVIEW_PRODUCTS_BY_CATEGORY[category.slug] ?? [];
+    const baseProducts = previewProductsInCategory(category.slug);
     const resolvedSchema = schema ?? SYNTHETIC_SPEC_SCHEMAS[category.slug] ?? null;
 
     const filtered = filterAndSortSyntheticProducts(
@@ -305,7 +309,7 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader, ProductD
       return { items: [], totalItems: 0, page: 1, pageSize: pagination.pageSize, totalPages: 0 };
     }
 
-    const baseProducts = ALL_PREVIEW_PRODUCTS.filter((p) => p.brand.slug === brand.slug);
+    const baseProducts = getAllPreviewProducts().filter((p) => p.brand.slug === brand.slug);
 
     const filtered = filterAndSortSyntheticProducts(
       baseProducts,

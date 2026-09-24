@@ -1,0 +1,43 @@
+/* Light gray box, two columns of highlights. */
+.specGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-5);
+  margin: 0;
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-secondary);
+}
+
+.specCell {
+  min-width: 0;
+}
+
+/* Icon + label on one line; the value sits underneath, aligned past the icon. */
+.specLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-text-primary);
+}
+
+.specIcon {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.specValue {
+  margin: 0;
+  padding-left: 32px;
+  overflow: hidden;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

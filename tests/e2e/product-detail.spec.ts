@@ -30,12 +30,8 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     const response = await page.goto("/productos/mouse-pro-mod-01");
     expect(response?.status()).toBe(200);
 
-    // Breadcrumbs
-    const breadcrumbs = page.locator('nav[aria-label="Breadcrumb"]');
-    await expect(breadcrumbs).toBeVisible();
-    await expect(breadcrumbs).toContainText("Inicio");
-    await expect(breadcrumbs).toContainText("Mouses Gaming");
-    await expect(breadcrumbs).toContainText("Mouse Pro Mod 01");
+    // No visible breadcrumb trail (BreadcrumbList lives in JSON-LD, see test J)
+    await expect(page.locator('nav[aria-label="Breadcrumb"]')).toHaveCount(0);
 
     // Brand link
     const brandLink = page
@@ -55,7 +51,9 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     const galleryStage = page.getByTestId("gallery-main-stage");
     await expect(galleryStage).toBeVisible();
 
-    // Hardware specifications table
+    // Specs highlights grid, plus the full table inside the "Especificaciones" accordion
+    await expect(page.getByTestId("pdp-spec-grid")).toBeVisible();
+    await page.getByTestId("pdp-accordion-especificaciones").click();
     const specsSection = page.getByTestId("hardware-specifications");
     await expect(specsSection).toBeVisible();
     await expect(specsSection).toContainText("Especificaciones Técnicas");

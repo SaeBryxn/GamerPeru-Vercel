@@ -64,8 +64,8 @@ describe("GP-009 Global Navigation — Unit Contracts & Drift Protection", () =>
       expect(util.href.startsWith("/")).toBe(true);
     }
 
-    // Footer columns (dynamic columns: Catalog and Support)
-    expect(NAVIGATION_CONFIG.footerColumns.length).toBe(2);
+    // Footer columns: product models, catalog entry points, brands and account
+    expect(NAVIGATION_CONFIG.footerColumns.length).toBe(5);
     for (const col of NAVIGATION_CONFIG.footerColumns) {
       expect(col.title).toBeTruthy();
       for (const link of col.links) {
@@ -98,16 +98,15 @@ describe("GP-009 Global Navigation — Unit Contracts & Drift Protection", () =>
       "/categorias/teclados",
       "/categorias/mousepads",
       "/categorias/audio",
-      "/categorias/accesorios",
     ];
 
     for (const href of expectedCategoryHrefs) {
       expect(html).toContain(`href="${href}"`);
     }
 
-    // Also assert disclosure button triggers exist with aria-expanded="false"
+    // Unified disclosure triggers render collapsed and point at their panels
     expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('aria-label="Abrir menú desplegable de Mouses"');
+    expect(html).toContain('aria-controls="mega-menu-mouses"');
   });
 
   it("protects business copy against unapproved claims and unauthorized payment methods", () => {

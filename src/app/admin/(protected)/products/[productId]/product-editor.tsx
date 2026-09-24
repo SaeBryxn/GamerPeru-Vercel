@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   Copy,
@@ -23,6 +24,9 @@ import {
   Globe,
   BookOpen,
   ChevronRight,
+  ExternalLink,
+  X,
+  Trash2,
 } from "lucide-react";
 import {
   updateProductAction,
@@ -34,6 +38,7 @@ import {
   finalizeMediaUploadAction,
   updateMediaAltTextAction,
   reorderProductMediaAction,
+  detachProductMediaAction,
   setPrimaryMediaAction,
   reassignProductMediaVariantAction,
 } from "@/lib/admin/catalog/actions";
@@ -50,6 +55,11 @@ import {
   type MediaFinalizationIdentity,
   type PendingFinalizationState,
 } from "@/lib/admin/catalog/media-finalization-retry";
+import {
+  getReadinessGuidance,
+  type ProductEditorSection,
+} from "@/lib/admin/catalog/readiness-guidance";
+import { ProductSectionNav } from "@/components/admin/products/product-section-nav";
 import type { AdminProductUiDetail } from "@/lib/admin/catalog/ui-dto";
 import type {
   AdminProductDetailVariant,
@@ -58,6 +68,8 @@ import type {
   CatalogStatus,
   VariantStatus,
 } from "@/lib/admin/catalog/types";
+import { VariantStockCell } from "@/components/admin/inventory/variant-stock-cell";
+import type { VariantStockRow } from "@/lib/admin/inventory/readers";
 import styles from "./product-editor.module.css";
 
 interface ProductEditorProps {
@@ -66,6 +78,8 @@ interface ProductEditorProps {
   categories: CategoryReference[];
   actorPermissions: string[];
   storySummary: StoryLifecycleSummary;
+  /** Stock per variant at the primary location. */
+  variantStock: Record<string, VariantStockRow>;
 }
 
 function centsToInputString(cents: number | null | undefined): string {
@@ -77,12 +91,43 @@ function centsToInputString(cents: number | null | undefined): string {
   return `${sign}${whole}.${fraction}`;
 }
 
+interface ToastMessage {
+  id: number;
+  tone: "success" | "error";
+  text: string;
+}
+
+/** Long enough to read a short confirmation, short enough to stay out of the way. */
+const TOAST_LIFETIME_MS = 3600;
+
+/** Reordering is a burst of clicks; one save after the burst beats one save per click. */
+const REORDER_DEBOUNCE_MS = 700;
+
+interface UploadQueueItem {
+  name: string;
+  status: "pending" | "uploading" | "done" | "error";
+  error?: string;
+}
+
+const MAX_MEDIA_BYTES = 10485760;
+const ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
+
+const EDITOR_SECTION_ORDER: ProductEditorSection[] = [
+  "resumen",
+  "informacion",
+  "imagenes",
+  "variantes",
+  "especificaciones",
+  "historia",
+];
+
 export function ProductEditor({
   initialDetail,
   brands,
   categories,
   actorPermissions,
   storySummary,
+  variantStock,
 }: ProductEditorProps) {
   const router = useRouter();
 
@@ -100,6 +145,45 @@ export function ProductEditor({
   } = detail;
 
   const hasPublishPermission = actorPermissions.includes("catalog:publish");
+
+  const [activeSection, setActiveSection] = useState<ProductEditorSection>("resumen");
+
+  // A deep link from the product list ("#imagenes") should open that tab, not scroll a long page.
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (EDITOR_SECTION_ORDER.includes(hash as ProductEditorSection)) {
+      setActiveSection(hash as ProductEditorSection);
+    }
+  }, []);
+
+  const pushToast = useCallback((tone: ToastMessage["tone"], text: string) => {
+    const id = ++toastSeq.current;
+    setToasts((current) => [...current, { id, tone, text }]);
+    setTimeout(() => {
+      setToasts((current) => current.filter((t) => t.id !== id));
+    }, TOAST_LIFETIME_MS);
+  }, []);
+
+  // Server state wins whenever the set of images changes; a pending local reorder is not lost
+  // because the debounced save always sends the order the operator can see.
+  // Keyed on the id list rather than the array: a new array identity arrives on every server
+  // render and would otherwise discard a reorder the operator can already see on screen.
+  const mediaSignature = media.map((m) => m.id).join("|");
+  const mediaRef = useRef(media);
+  mediaRef.current = media;
+  useEffect(() => {
+    setMediaOrder(mediaRef.current);
+  }, [mediaSignature]);
+
+  useEffect(() => {
+    return () => {
+      if (reorderTimer.current) clearTimeout(reorderTimer.current);
+    };
+  }, []);
+
+  const sectionsWithIssues = Array.from(
+    new Set(publishReadiness.blockers.map((blocker) => getReadinessGuidance(blocker.code).section))
+  );
 
   // General Details State
   const [name, setName] = useState(product.name);
@@ -152,7 +236,10 @@ export function ProductEditor({
   const [editVariantError, setEditVariantError] = useState<string | null>(null);
 
   // Media Authoring & Management State (CHK3)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const toastSeq = useRef(0);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
   const [uploadTargetVariantId, setUploadTargetVariantId] = useState<string>("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [uploadStage, setUploadStage] = useState<
@@ -168,9 +255,12 @@ export function ProductEditor({
 
   // Media Operation Feedback State
   const [isSettingPrimary, setIsSettingPrimary] = useState<string | null>(null);
+  const [detachingMediaId, setDetachingMediaId] = useState<string | null>(null);
+  const [confirmDetachId, setConfirmDetachId] = useState<string | null>(null);
+  const [mediaOrder, setMediaOrder] = useState(media);
+  const reorderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isReorderingMedia, setIsReorderingMedia] = useState(false);
   const [mediaOpError, setMediaOpError] = useState<string | null>(null);
-  const [mediaOpSuccess, setMediaOpSuccess] = useState<string | null>(null);
 
   // Alt Text Modal State
   const [altTextModalMedia, setAltTextModalMedia] = useState<
@@ -773,47 +863,63 @@ export function ProductEditor({
   }, [variantModalMedia]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     setUploadError(null);
     setUploadSuccess(null);
+    setUploadQueue([]);
     setPendingFinalization((current) =>
       transitionPendingFinalization(current, { type: "new_logical_operation" })
     );
-    if (!file) {
-      setSelectedFile(null);
+
+    if (files.length === 0) {
+      setSelectedFiles([]);
       setClientFileError(null);
       return;
     }
 
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/avif"];
-    if (!allowedTypes.includes(file.type)) {
-      setClientFileError(
-        "Formato de archivo no permitido. Solo se aceptan JPEG, PNG, WebP o AVIF."
-      );
-      setSelectedFile(null);
-      return;
-    }
+    const rejected: string[] = [];
+    const accepted = files.filter((file) => {
+      if (!ALLOWED_MEDIA_TYPES.includes(file.type)) {
+        rejected.push(`${file.name}: formato no permitido`);
+        return false;
+      }
+      if (file.size > MAX_MEDIA_BYTES) {
+        rejected.push(`${file.name}: supera los 10 MB`);
+        return false;
+      }
+      return true;
+    });
 
-    if (file.size > 10485760) {
-      setClientFileError(
-        "El archivo seleccionado excede el límite máximo de 10 MiB (10485760 bytes)."
-      );
-      setSelectedFile(null);
-      return;
-    }
-
-    setClientFileError(null);
-    setSelectedFile(file);
+    setClientFileError(
+      rejected.length > 0
+        ? `No se pueden subir ${rejected.length} archivo${rejected.length === 1 ? "" : "s"}. ${rejected.join(". ")}.`
+        : null
+    );
+    setSelectedFiles(accepted);
   };
 
-  const handleStartUpload = async () => {
-    if (!selectedFile) return;
-    setPendingFinalization((current) =>
-      transitionPendingFinalization(current, { type: "new_logical_operation" })
-    );
-    setIsUploadingMedia(true);
-    setUploadError(null);
-    setUploadSuccess(null);
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles((current) => current.filter((_, i) => i !== index));
+    setUploadQueue([]);
+  };
+
+  const clearSelectedFiles = () => {
+    setSelectedFiles([]);
+    setUploadQueue([]);
+    setClientFileError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  /**
+   * Runs one file through the full authorize -> transfer -> finalize pipeline.
+   *
+   * Returns the outcome instead of driving page-level state so the queue above can decide whether
+   * to continue; a transport failure during finalization is reported separately because the bytes
+   * already reached storage and only the confirmation needs retrying.
+   */
+  const uploadSingleFile = async (
+    file: File
+  ): Promise<{ ok: boolean; error?: string; needsFinalizationRetry?: boolean }> => {
     setUploadStage("requesting_intent");
 
     let signedToken = "";
@@ -824,53 +930,35 @@ export function ProductEditor({
       const intentRes = await requestMediaUploadIntentAction({
         productId: product.id,
         variantId: uploadTargetVariantId ? uploadTargetVariantId : null,
-        mimeType: selectedFile.type as AllowedMediaUploadMimeType,
+        mimeType: file.type as AllowedMediaUploadMimeType,
       });
 
       if (!intentRes.success || !intentRes.data) {
-        setUploadError(intentRes.error ?? "No se pudo generar la autorización de subida.");
-        setUploadStage("error");
-        setIsUploadingMedia(false);
-        return;
+        return { ok: false, error: intentRes.error ?? "No se pudo autorizar la subida." };
       }
 
       signedToken = intentRes.data.signedIntentToken;
       putUrl = intentRes.data.presignedPutUrl;
       reqHeaders = intentRes.data.requiredHeaders;
     } catch {
-      setUploadError("Error al solicitar autorización de subida.");
-      setUploadStage("error");
-      setIsUploadingMedia(false);
-      return;
+      return { ok: false, error: "Error al solicitar autorización de subida." };
     }
 
     try {
       setUploadStage("uploading_staging");
-      const putRes = await fetch(putUrl, {
-        method: "PUT",
-        headers: reqHeaders,
-        body: selectedFile,
-      });
-
+      const putRes = await fetch(putUrl, { method: "PUT", headers: reqHeaders, body: file });
       if (!putRes.ok) {
-        setUploadError("Error al transferir el archivo al almacenamiento temporal.");
-        setUploadStage("error");
-        setIsUploadingMedia(false);
-        return;
+        return { ok: false, error: "Error al transferir el archivo al almacenamiento temporal." };
       }
     } catch {
-      setUploadError("Error de conexión durante la transferencia al almacenamiento temporal.");
-      setUploadStage("error");
-      setIsUploadingMedia(false);
-      return;
+      return { ok: false, error: "Error de conexión durante la transferencia." };
     }
 
     setUploadStage("finalizing");
-    const finalPayload = {
+    const mutationRequestId = mediaUploadTracker.current.getRequestId({
       productId: product.id,
       signedIntentToken: signedToken,
-    };
-    const mutationRequestId = mediaUploadTracker.current.getRequestId(finalPayload);
+    });
 
     const finalizationIdentity: MediaFinalizationIdentity = {
       signedIntentToken: signedToken,
@@ -886,26 +974,19 @@ export function ProductEditor({
         mutationRequestId,
       });
 
+      mediaUploadTracker.current.complete();
+
       if (finalRes.success) {
-        mediaUploadTracker.current.complete();
         setPendingFinalization((current) =>
           transitionPendingFinalization(current, { type: "structured_success" })
         );
-        setUploadSuccess("Imagen subida y normalizada a WebP exitosamente.");
-        setUploadStage("success");
-        setSelectedFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-        router.refresh();
-      } else {
-        mediaUploadTracker.current.complete();
-        setPendingFinalization((current) =>
-          transitionPendingFinalization(current, { type: "structured_domain_rejection" })
-        );
-        setUploadError(finalRes.error ?? "Error al finalizar el registro del activo multimedia.");
-        setUploadStage("error");
+        return { ok: true };
       }
+
+      setPendingFinalization((current) =>
+        transitionPendingFinalization(current, { type: "structured_domain_rejection" })
+      );
+      return { ok: false, error: finalRes.error ?? "No se pudo registrar la imagen." };
     } catch {
       setPendingFinalization((current) =>
         transitionPendingFinalization(current, {
@@ -913,13 +994,85 @@ export function ProductEditor({
           identity: finalizationIdentity,
         })
       );
+      return {
+        ok: false,
+        error:
+          "Se cortó la conexión al confirmar. Puedes reintentar sin volver a subir el archivo.",
+        needsFinalizationRetry: true,
+      };
+    }
+  };
+
+  const handleStartUpload = async () => {
+    if (selectedFiles.length === 0) return;
+
+    setPendingFinalization((current) =>
+      transitionPendingFinalization(current, { type: "new_logical_operation" })
+    );
+    setIsUploadingMedia(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+
+    const queue: UploadQueueItem[] = selectedFiles.map((file) => ({
+      name: file.name,
+      status: "pending",
+    }));
+    setUploadQueue(queue);
+
+    let uploaded = 0;
+    let stoppedForRetry = false;
+
+    for (const [index, file] of selectedFiles.entries()) {
+      setUploadQueue((current) =>
+        current.map((item, i) => (i === index ? { ...item, status: "uploading" } : item))
+      );
+
+      const result = await uploadSingleFile(file);
+
+      setUploadQueue((current) =>
+        current.map((item, i) =>
+          i === index
+            ? { ...item, status: result.ok ? "done" : "error", error: result.error }
+            : item
+        )
+      );
+
+      if (result.ok) {
+        uploaded += 1;
+        continue;
+      }
+
+      // A finalization that failed in transit keeps recoverable state, so the queue stops and
+      // lets the operator retry that exact file before continuing.
+      if (result.needsFinalizationRetry) {
+        stoppedForRetry = true;
+        break;
+      }
+    }
+
+    const failed = selectedFiles.length - uploaded;
+    if (uploaded > 0) {
+      setUploadSuccess(
+        `${uploaded} foto${uploaded === 1 ? "" : "s"} subida${uploaded === 1 ? "" : "s"}.`
+      );
+      setUploadStage("success");
+    }
+    if (failed > 0) {
       setUploadError(
-        "Error de conexión durante la finalización del activo. Puede reintentar la confirmación sin volver a transferir el archivo."
+        stoppedForRetry
+          ? "Se interrumpió la subida. Reintenta la confirmación para continuar."
+          : `${failed} foto${failed === 1 ? "" : "s"} no se pudo subir. Revisa el detalle debajo.`
       );
       setUploadStage("error");
-    } finally {
-      setIsUploadingMedia(false);
     }
+
+    if (uploaded > 0) {
+      setSelectedFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      router.refresh();
+    }
+
+    setIsUploadingMedia(false);
   };
 
   const handleRetryFinalization = async () => {
@@ -947,7 +1100,7 @@ export function ProductEditor({
         );
         setUploadSuccess("Imagen subida y normalizada a WebP exitosamente.");
         setUploadStage("success");
-        setSelectedFile(null);
+        setSelectedFiles([]);
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
@@ -980,7 +1133,6 @@ export function ProductEditor({
     if (item.variantId !== null) return;
     setIsSettingPrimary(item.id);
     setMediaOpError(null);
-    setMediaOpSuccess(null);
 
     const payload = {
       productId: product.id,
@@ -997,7 +1149,7 @@ export function ProductEditor({
       mediaPrimaryTracker.current.complete();
 
       if (res.success) {
-        setMediaOpSuccess("Imagen principal actualizada exitosamente.");
+        pushToast("success", "Foto principal actualizada");
         router.refresh();
       } else {
         setMediaOpError(res.error ?? "No se pudo actualizar la imagen principal.");
@@ -1042,7 +1194,7 @@ export function ProductEditor({
       if (res.success) {
         const trigger = altTextTriggerRef.current;
         setAltTextModalMedia(null);
-        setMediaOpSuccess("Texto alternativo actualizado exitosamente en todas sus referencias.");
+        pushToast("success", "Texto alternativo actualizado");
         if (trigger) trigger.focus();
         router.refresh();
       } else {
@@ -1055,43 +1207,84 @@ export function ProductEditor({
     }
   };
 
-  const handleMoveMedia = async (index: number, direction: "up" | "down") => {
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= media.length) return;
-
+  /**
+   * Persists whatever order is on screen. Called on a debounce so a run of arrow clicks results in
+   * one write instead of one per click, which is what made the grid feel frozen.
+   */
+  const persistMediaOrder = async (ordered: AdminProductUiDetail["media"]) => {
     setIsReorderingMedia(true);
     setMediaOpError(null);
-    setMediaOpSuccess(null);
 
-    const reordered = [...media];
-    const temp = reordered[index]!;
-    reordered[index] = reordered[targetIndex]!;
-    reordered[targetIndex] = temp;
-
-    const orderedIds = reordered.map((m) => m.id);
     const payload = {
       productId: product.id,
-      orderedProductMediaIds: orderedIds,
+      orderedProductMediaIds: ordered.map((m) => m.id),
     };
     const mutationRequestId = mediaReorderTracker.current.getRequestId(payload);
 
     try {
-      const res = await reorderProductMediaAction({
-        ...payload,
-        mutationRequestId,
-      });
+      const res = await reorderProductMediaAction({ ...payload, mutationRequestId });
       mediaReorderTracker.current.complete();
 
       if (res.success) {
-        setMediaOpSuccess("Orden de medios actualizado exitosamente.");
-        router.refresh();
+        pushToast("success", "Orden guardado");
       } else {
-        setMediaOpError(res.error ?? "No se pudo reordenar los medios multimedia.");
+        setMediaOpError(res.error ?? "No se pudo reordenar las fotos.");
+        pushToast("error", res.error ?? "No se pudo guardar el orden");
+        router.refresh();
       }
     } catch {
-      setMediaOpError("Error de conexión al reordenar medios multimedia.");
+      setMediaOpError("Error de conexión al reordenar las fotos.");
+      pushToast("error", "Se perdió la conexión al guardar el orden");
+      router.refresh();
     } finally {
       setIsReorderingMedia(false);
+    }
+  };
+
+  const handleMoveMedia = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= mediaOrder.length) return;
+
+    const reordered = [...mediaOrder];
+    const moved = reordered[index];
+    const displaced = reordered[targetIndex];
+    if (!moved || !displaced) return;
+    reordered[index] = displaced;
+    reordered[targetIndex] = moved;
+
+    setMediaOrder(reordered);
+
+    if (reorderTimer.current) clearTimeout(reorderTimer.current);
+    reorderTimer.current = setTimeout(() => {
+      void persistMediaOrder(reordered);
+    }, REORDER_DEBOUNCE_MS);
+  };
+
+  const handleDetachMedia = async (mediaItem: AdminProductUiDetail["media"][number]) => {
+    setConfirmDetachId(null);
+    setDetachingMediaId(mediaItem.id);
+    setMediaOpError(null);
+
+    try {
+      const res = await detachProductMediaAction({
+        productId: product.id,
+        productMediaId: mediaItem.id,
+        mutationRequestId: crypto.randomUUID(),
+      });
+
+      if (res.success) {
+        setMediaOrder((current) => current.filter((m) => m.id !== mediaItem.id));
+        pushToast("success", "Foto quitada del producto");
+        router.refresh();
+      } else {
+        setMediaOpError(res.error ?? "No se pudo quitar la foto.");
+        pushToast("error", res.error ?? "No se pudo quitar la foto");
+      }
+    } catch {
+      setMediaOpError("Error de conexión al quitar la foto.");
+      pushToast("error", "Se perdió la conexión al quitar la foto");
+    } finally {
+      setDetachingMediaId(null);
     }
   };
 
@@ -1128,7 +1321,7 @@ export function ProductEditor({
       if (res.success) {
         const trigger = variantTriggerRef.current;
         setVariantModalMedia(null);
-        setMediaOpSuccess("Asociación de variante actualizada exitosamente.");
+        pushToast("success", "Variante de la foto actualizada");
         if (trigger) trigger.focus();
         router.refresh();
       } else {
@@ -1149,7 +1342,7 @@ export function ProductEditor({
       <div className={styles.topBar}>
         <Link href="/admin/products" className={styles.backLink}>
           <ArrowLeft size={14} aria-hidden="true" />
-          <span>Volver a Productos</span>
+          <span>Volver a productos</span>
         </Link>
       </div>
 
@@ -1243,6 +1436,16 @@ export function ProductEditor({
 
             {product.status === "PUBLISHED" && (
               <>
+                <a
+                  href={`/productos/${product.slug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.secondaryButton}
+                  data-testid="btn-view-on-storefront"
+                >
+                  <ExternalLink size={14} aria-hidden="true" />
+                  <span>Ver en la tienda</span>
+                </a>
                 <button
                   type="button"
                   disabled={!hasPublishPermission || isTransitioning}
@@ -1264,7 +1467,7 @@ export function ProductEditor({
                   }
                 >
                   <RefreshCw size={14} aria-hidden="true" />
-                  <span>Despublicar a Borrador</span>
+                  <span>Quitar de la tienda</span>
                 </button>
                 <button
                   type="button"
@@ -1351,911 +1554,1165 @@ export function ProductEditor({
         </div>
       )}
 
-      <section
-        className={`${styles.card} ${styles.storyEntryCard}`}
-        aria-labelledby="product-story-entry-title"
-        data-testid="product-story-entry"
-      >
-        <div className={styles.storyEntryContent}>
-          <div className={styles.storyEntryIcon} aria-hidden="true">
-            <BookOpen size={22} />
-          </div>
-          <div className={styles.storyEntryCopy}>
-            <h2 id="product-story-entry-title" className={styles.cardTitle}>
-              Historia del producto
-            </h2>
-            <p className={styles.cardDescription}>
-              Organiza el relato editorial del producto en un espacio de trabajo dedicado.
-            </p>
-            <span className={styles.storyLifecycleText} data-testid="product-story-status">
-              Estado: {getStoryLifecycleText(storySummary)}
-            </span>
-          </div>
-        </div>
-        <Link
-          href={`/admin/products/${product.id}/story`}
-          className={styles.storyEntryLink}
-          data-testid="product-story-link"
-        >
-          Editar historia
-          <ChevronRight size={16} aria-hidden="true" />
-        </Link>
-      </section>
+      <ProductSectionNav
+        sections={EDITOR_SECTION_ORDER}
+        active={activeSection}
+        onSelect={setActiveSection}
+        sectionsWithIssues={sectionsWithIssues}
+      />
 
-      {/* Section: Publish Readiness */}
-      <section
-        className={`${styles.card} ${styles.readinessCard} ${
-          publishReadiness.isPublishable ? styles.readinessCardReady : styles.readinessCardBlocked
-        }`}
-        aria-label="Estado de publicación"
-        data-testid="section-publish-readiness"
-      >
-        <div className={styles.readinessStatusHeader}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <h2 className={styles.cardTitle}>Estado de Publicación</h2>
-            <span
-              className={`${styles.readinessBadge} ${
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={activeSection}
+          role="tabpanel"
+          id={`panel-${activeSection}`}
+          aria-labelledby={`tab-${activeSection}`}
+          className={styles.sectionPanel}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {activeSection === "resumen" && (
+            <section
+              id="resumen"
+              className={`${styles.card} ${styles.readinessCard} ${
                 publishReadiness.isPublishable
-                  ? styles.readinessBadgeReady
-                  : styles.readinessBadgeBlocked
+                  ? styles.readinessCardReady
+                  : styles.readinessCardBlocked
               }`}
-              data-testid="readiness-badge"
+              aria-label="Estado de publicación"
+              data-testid="section-publish-readiness"
             >
-              {publishReadiness.isPublishable ? (
-                <>
-                  <CheckCircle2 size={14} aria-hidden="true" />
-                  <span>Listo para publicar</span>
-                </>
-              ) : (
-                <>
-                  <XCircle size={14} aria-hidden="true" />
-                  <span>No Publicable ({publishReadiness.blockers.length} bloqueadores)</span>
-                </>
-              )}
-            </span>
-          </div>
-
-          {!hasPublishPermission && (
-            <span className={styles.permissionNotice} data-testid="publish-permission-notice">
-              <Lock size={12} style={{ display: "inline", marginRight: 4 }} aria-hidden="true" />
-              Solo lectura de publicación (requiere permiso <code>catalog:publish</code>).
-            </span>
-          )}
-        </div>
-
-        {/* Blockers */}
-        {publishReadiness.blockers.length > 0 && (
-          <div className={styles.issuesList} data-testid="readiness-blockers-list">
-            <strong style={{ fontSize: "0.8125rem", color: "#991b1b" }}>Bloqueadores:</strong>
-            {publishReadiness.blockers.map((b) => (
-              <div key={b.code} className={styles.blockerItem} data-testid={`blocker-${b.code}`}>
-                <XCircle size={14} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />
-                <div>
-                  <span className={styles.issueCode}>[{b.code}]</span> {b.message}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Warnings */}
-        {publishReadiness.warnings.length > 0 && (
-          <div className={styles.issuesList} data-testid="publish-warnings">
-            <strong style={{ fontSize: "0.8125rem", color: "#92400e" }}>Advertencias:</strong>
-            {publishReadiness.warnings.map((w) => (
-              <div key={w.code} className={styles.warningItem} data-testid={`warning-${w.code}`}>
-                <AlertTriangle
-                  size={14}
-                  style={{ flexShrink: 0, marginTop: 2 }}
-                  aria-hidden="true"
-                />
-                <div>
-                  <span className={styles.issueCode}>[{w.code}]</span> {w.message}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Section: General Details */}
-      <section className={styles.card} data-testid="section-general-details">
-        <h2 className={styles.cardTitle}>Información General</h2>
-        <form
-          onSubmit={handleSaveDetails}
-          style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
-        >
-          <div className={styles.grid2}>
-            <div className={styles.field}>
-              <label htmlFor="edit-name" className={styles.label}>
-                Nombre del Producto <span className={styles.required}>*</span>
-              </label>
-              <input
-                id="edit-name"
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className={styles.input}
-                data-testid="input-name"
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label htmlFor="edit-slug" className={styles.label}>
-                Slug URL <span className={styles.required}>*</span>
-              </label>
-              <input
-                id="edit-slug"
-                type="text"
-                required
-                value={slug}
-                onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                className={styles.input}
-                data-testid="input-slug"
-              />
-            </div>
-          </div>
-
-          <div className={styles.grid2}>
-            <div className={styles.field}>
-              <label htmlFor="edit-brand" className={styles.label}>
-                Marca <span className={styles.required}>*</span>
-              </label>
-              <select
-                id="edit-brand"
-                required
-                value={brandId}
-                onChange={(e) => setBrandId(e.target.value)}
-                className={styles.select}
-                data-testid="select-brand"
-              >
-                {brands.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.field}>
-              <label htmlFor="edit-category" className={styles.label}>
-                Categoría <span className={styles.required}>*</span>
-              </label>
-              <select
-                id="edit-category"
-                required
-                value={categoryId}
-                onChange={(e) => {
-                  setCategoryId(e.target.value);
-                }}
-                className={styles.select}
-                data-testid="select-category"
-              >
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              {categoryId !== product.categoryId && (
-                <p className={styles.helpText} style={{ color: "#b45309" }}>
-                  Advertencia: Al cambiar la categoría, las especificaciones técnicas se
-                  reconciliarán según el esquema de la nueva categoría.
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor="edit-subtitle" className={styles.label}>
-              Subtítulo (Opcional)
-            </label>
-            <input
-              id="edit-subtitle"
-              type="text"
-              value={subtitle}
-              onChange={(e) => setSubtitle(e.target.value)}
-              placeholder="Breve descripción complementaria"
-              className={styles.input}
-              data-testid="input-subtitle"
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor="edit-description" className={styles.label}>
-              Descripción Detallada (Opcional)
-            </label>
-            <textarea
-              id="edit-description"
-              rows={4}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Detalles sobre el producto, tecnología, materiales..."
-              className={styles.textarea}
-              data-testid="input-description"
-            />
-          </div>
-
-          <div className={styles.checkboxField}>
-            <label className={styles.checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={isFeatured}
-                onChange={(e) => setIsFeatured(e.target.checked)}
-                data-testid="input-featured"
-              />
-              <span>Marcar como producto destacado en la tienda</span>
-            </label>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              type="submit"
-              disabled={isSavingDetails}
-              className={styles.primaryButton}
-              data-testid="btn-save-details"
-            >
-              {isSavingDetails ? (
-                <>
-                  <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-                  <span>Guardando...</span>
-                </>
-              ) : (
-                <span>Guardar Cambios</span>
-              )}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {/* Section: Category Specifications */}
-      <section className={styles.card} data-testid="section-specifications">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h2 className={styles.cardTitle}>Especificaciones Técnicas ({category.name})</h2>
-            <p className={styles.cardDescription}>
-              {currentSpecSchema
-                ? `Esquema activo v${currentSpecSchema.schemaVersion}. Puedes guardar especificaciones parciales.`
-                : "Esta categoría no tiene un esquema de especificaciones técnicas configurado."}
-            </p>
-          </div>
-        </div>
-
-        {currentSpecSchema && currentSpecSchema.fieldDefinitions ? (
-          <form
-            onSubmit={handleSaveSpecs}
-            style={{ display: "flex", flexDirection: "column", gap: "1.25rem", marginTop: "1rem" }}
-          >
-            <div className={styles.grid2}>
-              {currentSpecSchema.fieldDefinitions.map((field) => {
-                const val = specValues[field.key];
-
-                return (
-                  <div key={field.key} className={styles.field}>
-                    <label htmlFor={`spec-${field.key}`} className={styles.label}>
-                      {field.label}
-                      {field.unit && (
-                        <span style={{ color: "#a1a1aa", fontWeight: 400, marginLeft: 4 }}>
-                          ({field.unit})
-                        </span>
-                      )}
-                    </label>
-
-                    {/* STRING / TEXT Field */}
-                    {field.dataType === "string" && (
-                      <input
-                        id={`spec-${field.key}`}
-                        type="text"
-                        value={typeof val === "string" ? val : ""}
-                        onChange={(e) => handleSpecFieldChange(field.key, e.target.value)}
-                        className={styles.input}
-                        data-testid={`spec-input-${field.key}`}
-                      />
-                    )}
-
-                    {/* NUMBER Field */}
-                    {field.dataType === "number" && (
-                      <input
-                        id={`spec-${field.key}`}
-                        type="number"
-                        min={field.min ?? undefined}
-                        max={field.max ?? undefined}
-                        step={field.step ?? "any"}
-                        value={val !== undefined && val !== null ? String(val) : ""}
-                        onChange={(e) => {
-                          const num = e.target.value === "" ? "" : Number(e.target.value);
-                          handleSpecFieldChange(field.key, num);
-                        }}
-                        className={styles.input}
-                        data-testid={`spec-input-${field.key}`}
-                      />
-                    )}
-
-                    {/* BOOLEAN Field */}
-                    {field.dataType === "boolean" && (
-                      <select
-                        id={`spec-${field.key}`}
-                        value={val === true ? "true" : val === false ? "false" : ""}
-                        onChange={(e) => {
-                          const boolVal =
-                            e.target.value === "true"
-                              ? true
-                              : e.target.value === "false"
-                                ? false
-                                : "";
-                          handleSpecFieldChange(field.key, boolVal);
-                        }}
-                        className={styles.select}
-                        data-testid={`spec-input-${field.key}`}
-                      >
-                        <option value="">(No especificado)</option>
-                        <option value="true">Sí</option>
-                        <option value="false">No</option>
-                      </select>
-                    )}
-
-                    {/* ENUM Field (Always single-choice string selection for all enum specifications) */}
-                    {field.dataType === "enum" && (
-                      <select
-                        id={`spec-${field.key}`}
-                        value={typeof val === "string" ? val : ""}
-                        onChange={(e) => handleSpecFieldChange(field.key, e.target.value || "")}
-                        className={styles.select}
-                        data-testid={`spec-input-${field.key}`}
-                      >
-                        <option value="">(Seleccionar opción)</option>
-                        {field.options?.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button
-                type="submit"
-                disabled={isSavingSpecs}
-                className={styles.primaryButton}
-                data-testid="btn-save-specs"
-              >
-                {isSavingSpecs ? (
-                  <>
-                    <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-                    <span>Guardando...</span>
-                  </>
-                ) : (
-                  <span>Guardar Especificaciones</span>
-                )}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <p className={styles.cardDescription}>
-            Selecciona una categoría con especificaciones técnicas para configurar sus valores.
-          </p>
-        )}
-      </section>
-
-      {/* Section: Variants Management */}
-      <section className={styles.card} data-testid="section-variants">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h2 className={styles.cardTitle}>Variantes de Producto</h2>
-            <p className={styles.cardDescription}>
-              Cada variante posee un SKU único, precio de venta y estado para la gestión de stock.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleOpenCreateVariant}
-            className={styles.primaryButton}
-            data-testid="btn-add-variant"
-          >
-            <Plus size={14} aria-hidden="true" />
-            <span>Agregar Variante</span>
-          </button>
-        </div>
-
-        <div className={styles.tableWrapper} style={{ marginTop: "1rem" }}>
-          <table className={styles.table} data-testid="table-variants">
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Nombre</th>
-                <th>Precio Venta</th>
-                <th>Precio Tachado</th>
-                <th>Costo</th>
-                <th>Peso</th>
-                <th>Estado</th>
-                <th style={{ textAlign: "right" }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {variants.map((v) => (
-                <tr key={v.id} data-testid={`variant-row-${v.id}`}>
-                  <td>
-                    <span className={styles.skuBadge} data-testid={`variant-sku-${v.id}`}>
-                      {v.sku}
-                    </span>
-                    {v.isSkuImmutable && (
-                      <span
-                        title="SKU inmutable: posee inventario o pedidos históricos"
-                        style={{
-                          marginLeft: 6,
-                          fontSize: "0.6875rem",
-                          color: "#b45309",
-                          fontWeight: 600,
-                        }}
-                        data-testid={`variant-immutable-badge-${v.id}`}
-                      >
-                        (Inmutable)
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <strong>{v.title}</strong>
-                  </td>
-                  <td>
-                    <span className={styles.pricePositive}>
-                      {formatCentsToPenDisplay(v.priceCents)}
-                    </span>
-                  </td>
-                  <td>
-                    {v.compareAtPriceCents ? (
-                      <span className={styles.priceCompare}>
-                        {formatCentsToPenDisplay(v.compareAtPriceCents)}
-                      </span>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                  <td>
-                    {v.costCents ? (
-                      <span className={styles.costConfidential}>
-                        {formatCentsToPenDisplay(v.costCents)}
-                      </span>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                  <td>{v.weightGrams ? `${v.weightGrams}g` : "-"}</td>
-                  <td>
-                    <span
-                      className={`${styles.badge} ${
-                        v.status === "ACTIVE"
-                          ? styles.badgePublished
-                          : v.status === "INACTIVE"
-                            ? styles.badgeDraft
-                            : styles.badgeArchived
-                      }`}
-                    >
-                      {v.status === "ACTIVE"
-                        ? "Activa"
-                        : v.status === "INACTIVE"
-                          ? "Inactiva"
-                          : "Archivada"}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditVariant(v)}
-                      className={styles.actionBtn}
-                      data-testid="btn-edit-variant"
-                      id={`btn-edit-variant-${v.id}`}
-                      title="Editar variante"
-                    >
-                      <Edit2 size={14} aria-hidden="true" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Section: Product Media Authoring Gallery */}
-      <section className={styles.card} data-testid="section-media">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h2 className={styles.cardTitle}>Medios Multimedia</h2>
-            <p className={styles.cardDescription}>
-              Gestione las imágenes del catálogo. Las subidas se firman criptográficamente, se
-              cargan directamente a Cloudflare R2 y se normalizan automáticamente a formato WebP
-              optimizado.
-            </p>
-          </div>
-        </div>
-
-        {/* Upload Control Box */}
-        <div className={styles.mediaUploadBox} data-testid="media-upload-area">
-          <span
-            style={{
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              color: "var(--color-text-primary, #18181b)",
-            }}
-          >
-            Subir Nueva Imagen
-          </span>
-          <div className={styles.mediaUploadLimits} data-testid="media-upload-limits">
-            Formatos admitidos: JPEG, PNG, WebP, AVIF. Tamaño máximo: 10 MiB (10,485,760 bytes).
-            Normalización automática a WebP optimizado y direccionamiento por contenido SHA-256.
-          </div>
-
-          <div className={styles.mediaUploadControls}>
-            <input
-              id="media-file-input"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className={styles.mediaFileInput}
-              data-testid="input-media-file"
-              disabled={isUploadingMedia}
-            />
-
-            <select
-              id="media-upload-variant"
-              value={uploadTargetVariantId}
-              onChange={(e) => {
-                setUploadTargetVariantId(e.target.value);
-                setPendingFinalization((current) =>
-                  transitionPendingFinalization(current, { type: "new_logical_operation" })
-                );
-              }}
-              className={styles.mediaVariantSelect}
-              data-testid="select-media-upload-variant"
-              disabled={isUploadingMedia}
-            >
-              <option value="">Global (Todo el producto)</option>
-              {variants.map((v) => (
-                <option key={v.id} value={v.id}>
-                  Variante: {v.title} ({v.sku})
-                </option>
-              ))}
-            </select>
-
-            <button
-              type="button"
-              onClick={handleStartUpload}
-              disabled={!selectedFile || isUploadingMedia}
-              className={styles.primaryButton}
-              data-testid="btn-upload-media"
-            >
-              {isUploadingMedia ? (
-                <>
-                  <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-                  <span>
-                    {uploadStage === "requesting_intent"
-                      ? "Autorizando..."
-                      : uploadStage === "uploading_staging"
-                        ? "Subiendo a R2..."
-                        : uploadStage === "finalizing"
-                          ? "Normalizando WebP..."
-                          : "Procesando..."}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Upload size={14} aria-hidden="true" />
-                  <span>Subir Imagen</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {pendingFinalization && (
-            <div style={{ marginTop: "0.5rem" }}>
-              <button
-                type="button"
-                onClick={handleRetryFinalization}
-                disabled={isUploadingMedia}
-                className={styles.secondaryButton}
-                data-testid="btn-retry-finalization"
-              >
-                {isUploadingMedia && uploadStage === "finalizing" ? (
-                  <>
-                    <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-                    <span>Reintentando finalización...</span>
-                  </>
-                ) : (
-                  <span>Reintentar Finalización</span>
-                )}
-              </button>
-            </div>
-          )}
-
-          {clientFileError && (
-            <div
-              className={styles.mediaUploadError}
-              data-testid="media-client-error"
-              role="alert"
-              aria-live="assertive"
-            >
-              {clientFileError}
-            </div>
-          )}
-
-          {uploadError && (
-            <div
-              className={styles.mediaUploadError}
-              data-testid="media-upload-error"
-              role="alert"
-              aria-live="assertive"
-            >
-              {uploadError}
-            </div>
-          )}
-
-          {uploadSuccess && (
-            <div
-              className={styles.mediaUploadSuccess}
-              data-testid="media-upload-success"
-              role="status"
-              aria-live="polite"
-            >
-              {uploadSuccess}
-            </div>
-          )}
-        </div>
-
-        {/* Operational Notifications */}
-        {mediaOpError && (
-          <div
-            className={styles.mediaUploadError}
-            data-testid="media-op-error"
-            role="alert"
-            aria-live="assertive"
-            style={{ marginTop: "1rem" }}
-          >
-            {mediaOpError}
-          </div>
-        )}
-        {mediaOpSuccess && (
-          <div
-            className={styles.mediaUploadSuccess}
-            data-testid="media-op-success"
-            role="status"
-            aria-live="polite"
-            style={{ marginTop: "1rem" }}
-          >
-            {mediaOpSuccess}
-          </div>
-        )}
-
-        {/* Primary Media Banner */}
-        {primaryMedia && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              borderRadius: 8,
-              border: "1px solid var(--color-border-subtle, #e4e4e7)",
-              backgroundColor: "#fafafa",
-              display: "flex",
-              alignItems: "center",
-              gap: "1rem",
-              marginTop: "1rem",
-            }}
-            data-testid="primary-media-display"
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <div
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 6,
-                  backgroundColor: "#f4f4f5",
-                  border: "1px solid var(--color-border-subtle, #e4e4e7)",
-                  overflow: "hidden",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {primaryThumbUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={primaryThumbUrl}
-                    alt={primaryMedia.altText ?? product.name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    data-testid="primary-media-img"
-                  />
-                ) : (
-                  <ImageIcon size={24} style={{ color: "#a1a1aa" }} aria-hidden="true" />
-                )}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.125rem",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <span style={{ fontWeight: 600 }}>
-                  {primaryMedia.altText ?? "Imagen Principal"}
-                </span>
-                <span style={{ color: "var(--color-text-secondary, #71717a)" }}>
-                  Clase: {primaryMedia.securityClass} | Tipo: {primaryMedia.mimeType}
-                </span>
-                {!primaryMedia.publicUrl && (
+              <div className={styles.readinessStatusHeader}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <h2 className={styles.cardTitle}>Resumen</h2>
                   <span
-                    style={{ color: "#b45309", fontSize: "0.7rem" }}
-                    data-testid="non-public-primary-notice"
+                    className={`${styles.readinessBadge} ${
+                      publishReadiness.isPublishable
+                        ? styles.readinessBadgeReady
+                        : styles.readinessBadgeBlocked
+                    }`}
+                    data-testid="readiness-badge"
                   >
-                    Asset no público (solo metadatos) [Privado]
+                    {publishReadiness.isPublishable ? (
+                      <>
+                        <CheckCircle2 size={14} aria-hidden="true" />
+                        <span>Listo para publicar</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle size={14} aria-hidden="true" />
+                        <span>
+                          Falta
+                          {publishReadiness.blockers.length === 1
+                            ? " 1 cosa"
+                            : ` ${publishReadiness.blockers.length} cosas`}
+                        </span>
+                      </>
+                    )}
                   </span>
-                )}
-                {primaryMedia.width && primaryMedia.height && (
-                  <span style={{ color: "var(--color-text-secondary, #71717a)" }}>
-                    Dimensiones: {primaryMedia.width} x {primaryMedia.height} px
+                </div>
+
+                {!hasPublishPermission && (
+                  <span className={styles.permissionNotice} data-testid="publish-permission-notice">
+                    <Lock
+                      size={12}
+                      style={{ display: "inline", marginRight: 4 }}
+                      aria-hidden="true"
+                    />
+                    Solo lectura de publicación (requiere permiso <code>catalog:publish</code>).
                   </span>
                 )}
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* Media Gallery Grid */}
-        {media.length > 0 ? (
-          <div className={styles.mediaGrid}>
-            {media.map((m, idx) => {
-              const url = m.publicUrl;
-              const isPrimary = m.mediaAssetId === product.primaryMediaId;
-              const isVariantScoped = m.variantId !== null;
-              const assignedVariant = m.variantId
-                ? variants.find((v) => v.id === m.variantId)
-                : null;
-
-              return (
-                <div key={m.id} className={styles.mediaCard} data-testid={`media-card-${m.id}`}>
-                  <div className={styles.mediaPreviewBox}>
-                    {url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={url}
-                        alt={m.altText ?? product.name}
-                        className={styles.mediaPreviewImg}
-                      />
-                    ) : (
-                      <ImageIcon size={32} style={{ color: "#a1a1aa" }} aria-hidden="true" />
-                    )}
-                  </div>
-
-                  <div className={styles.mediaCardBadges}>
-                    {isPrimary && (
-                      <span className={styles.badgePrimary} data-testid={`badge-primary-${m.id}`}>
-                        <Star size={10} fill="currentColor" aria-hidden="true" />
-                        <span>Principal</span>
-                      </span>
-                    )}
-                    {isVariantScoped ? (
-                      <span className={styles.badgeVariant} data-testid={`badge-variant-${m.id}`}>
-                        <Tag size={10} aria-hidden="true" />
-                        <span>
-                          Variante: {assignedVariant ? assignedVariant.title : m.variantId}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className={styles.badgeGlobal} data-testid={`badge-global-${m.id}`}>
-                        <Globe size={10} aria-hidden="true" />
-                        <span>Global</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <div className={styles.mediaInfo}>
-                    <span className={styles.mediaKey}>
-                      {m.altText ?? `Asset Multimedia (Pos. ${m.displayOrder})`}
-                    </span>
-                    <span className={styles.mediaClass}>
-                      Orden: {m.displayOrder} · {m.mimeType}
-                      {m.width && m.height ? ` · ${m.width}×${m.height}px` : ""}
-                    </span>
-                    {!url && (
-                      <span
-                        style={{ color: "#b45309", fontSize: "0.7rem" }}
-                        data-testid="non-public-media-badge"
+              {publishReadiness.blockers.length > 0 && (
+                <div className={styles.issuesList} data-testid="readiness-blockers-list">
+                  <strong className={styles.issuesHeading}>
+                    Falta esto para que el producto entre a la tienda
+                  </strong>
+                  {publishReadiness.blockers.map((b) => {
+                    const guidance = getReadinessGuidance(b.code);
+                    return (
+                      <div
+                        key={b.code}
+                        className={styles.blockerItem}
+                        data-testid={`blocker-${b.code}`}
                       >
-                        Asset no público (solo metadatos) [Privado]
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Actions Toolbar */}
-                  <div className={styles.mediaActionsToolbar}>
-                    <button
-                      type="button"
-                      disabled={isPrimary || isVariantScoped || isSettingPrimary === m.id}
-                      onClick={() => handleSetPrimary(m)}
-                      className={styles.mediaActionButton}
-                      title={
-                        isVariantScoped
-                          ? "Las imágenes de variante no pueden ser asignadas como principal global"
-                          : isPrimary
-                            ? "Ya es la imagen principal"
-                            : "Asignar como imagen principal"
-                      }
-                      data-testid={`btn-set-primary-${m.id}`}
-                    >
-                      {isSettingPrimary === m.id ? (
-                        <Loader2 size={12} className={styles.spinner} aria-hidden="true" />
-                      ) : (
-                        <Star
-                          size={12}
-                          fill={isPrimary ? "currentColor" : "none"}
+                        <XCircle
+                          size={14}
+                          style={{ flexShrink: 0, marginTop: 2 }}
                           aria-hidden="true"
                         />
+                        <div className={styles.issueBody}>
+                          <span className={styles.issueAction}>{guidance.action}</span>
+                          <span className={styles.issueDetail}>{b.message}</span>
+                        </div>
+                        <a
+                          href={`#${guidance.section}`}
+                          className={styles.issueJump}
+                          data-testid={`blocker-jump-${b.code}`}
+                        >
+                          Ir
+                          <ChevronRight size={13} aria-hidden="true" />
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {publishReadiness.warnings.length > 0 && (
+                <div className={styles.issuesList} data-testid="publish-warnings">
+                  <strong className={styles.issuesHeading}>Recomendado, pero no obligatorio</strong>
+                  {publishReadiness.warnings.map((w) => {
+                    const guidance = getReadinessGuidance(w.code);
+                    return (
+                      <div
+                        key={w.code}
+                        className={styles.warningItem}
+                        data-testid={`warning-${w.code}`}
+                      >
+                        <AlertTriangle
+                          size={14}
+                          style={{ flexShrink: 0, marginTop: 2 }}
+                          aria-hidden="true"
+                        />
+                        <div className={styles.issueBody}>
+                          <span className={styles.issueAction}>{guidance.action}</span>
+                          <span className={styles.issueDetail}>{w.message}</span>
+                        </div>
+                        <a
+                          href={`#${guidance.section}`}
+                          className={styles.issueJump}
+                          data-testid={`warning-jump-${w.code}`}
+                        >
+                          Ir
+                          <ChevronRight size={13} aria-hidden="true" />
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeSection === "informacion" && (
+            <section id="informacion" className={styles.card} data-testid="section-general-details">
+              <h2 className={styles.cardTitle}>Información</h2>
+              <p className={styles.cardDescription}>
+                Esto es lo que el cliente lee en la ficha del producto. El subtítulo aparece bajo el
+                nombre y la descripción debajo del precio.
+              </p>
+              <form
+                onSubmit={handleSaveDetails}
+                style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
+              >
+                <div className={styles.grid2}>
+                  <div className={styles.field}>
+                    <label htmlFor="edit-name" className={styles.label}>
+                      Nombre del producto <span className={styles.required}>*</span>
+                    </label>
+                    <input
+                      id="edit-name"
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className={styles.input}
+                      data-testid="input-name"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <label htmlFor="edit-slug" className={styles.label}>
+                      Dirección en la tienda <span className={styles.required}>*</span>
+                    </label>
+                    <input
+                      id="edit-slug"
+                      type="text"
+                      required
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                      className={styles.input}
+                      data-testid="input-slug"
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.grid2}>
+                  <div className={styles.field}>
+                    <label htmlFor="edit-brand" className={styles.label}>
+                      Marca <span className={styles.required}>*</span>
+                    </label>
+                    <select
+                      id="edit-brand"
+                      required
+                      value={brandId}
+                      onChange={(e) => setBrandId(e.target.value)}
+                      className={styles.select}
+                      data-testid="select-brand"
+                    >
+                      {brands.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={styles.field}>
+                    <label htmlFor="edit-category" className={styles.label}>
+                      Categoría <span className={styles.required}>*</span>
+                    </label>
+                    <select
+                      id="edit-category"
+                      required
+                      value={categoryId}
+                      onChange={(e) => {
+                        setCategoryId(e.target.value);
+                      }}
+                      className={styles.select}
+                      data-testid="select-category"
+                    >
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    {categoryId !== product.categoryId && (
+                      <p className={styles.helpText} style={{ color: "#b45309" }}>
+                        Advertencia: Al cambiar la categoría, las especificaciones técnicas se
+                        reconciliarán según el esquema de la nueva categoría.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className={styles.field}>
+                  <label htmlFor="edit-subtitle" className={styles.label}>
+                    Subtítulo
+                  </label>
+                  <input
+                    id="edit-subtitle"
+                    type="text"
+                    value={subtitle}
+                    onChange={(e) => setSubtitle(e.target.value)}
+                    placeholder="Ej. Edición de rendimiento"
+                    className={styles.input}
+                    data-testid="input-subtitle"
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label htmlFor="edit-description" className={styles.label}>
+                    Descripción
+                  </label>
+                  <textarea
+                    id="edit-description"
+                    rows={4}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Qué lo hace distinto: construcción, sensor, para qué tipo de juego sirve..."
+                    className={styles.textarea}
+                    data-testid="input-description"
+                  />
+                </div>
+
+                <div className={styles.checkboxField}>
+                  <label className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={isFeatured}
+                      onChange={(e) => setIsFeatured(e.target.checked)}
+                      data-testid="input-featured"
+                    />
+                    <span>Marcar como producto destacado en la tienda</span>
+                  </label>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    type="submit"
+                    disabled={isSavingDetails}
+                    className={styles.primaryButton}
+                    data-testid="btn-save-details"
+                  >
+                    {isSavingDetails ? (
+                      <>
+                        <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                        <span>Guardando...</span>
+                      </>
+                    ) : (
+                      <span>Guardar Cambios</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+
+          {activeSection === "imagenes" && (
+            <section id="imagenes" className={styles.card} data-testid="section-media">
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
+                <div>
+                  <h2 className={styles.cardTitle}>Fotos del producto</h2>
+                  <p className={styles.cardDescription}>
+                    La foto principal es la que ve el cliente en la tienda y en los listados. Las
+                    demás aparecen en la galería. Cada foto se optimiza sola al subirla.
+                  </p>
+                </div>
+              </div>
+
+              {/* Upload Control Box */}
+              <div className={styles.mediaUploadBox} data-testid="media-upload-area">
+                <span
+                  style={{
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    color: "var(--color-text-primary, #18181b)",
+                  }}
+                >
+                  Agregar una foto
+                </span>
+                <div className={styles.mediaUploadLimits} data-testid="media-upload-limits">
+                  JPEG, PNG, WebP o AVIF, hasta 10 MB por foto. Se recomiendan imágenes cuadradas de
+                  al menos 1200 x 1200 px.
+                </div>
+
+                <div className={styles.mediaUploadControls}>
+                  <input
+                    id="media-file-input"
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className={styles.mediaFileInput}
+                    data-testid="input-media-file"
+                    disabled={isUploadingMedia}
+                  />
+
+                  <select
+                    id="media-upload-variant"
+                    value={uploadTargetVariantId}
+                    onChange={(e) => {
+                      setUploadTargetVariantId(e.target.value);
+                      setPendingFinalization((current) =>
+                        transitionPendingFinalization(current, { type: "new_logical_operation" })
+                      );
+                    }}
+                    className={styles.mediaVariantSelect}
+                    data-testid="select-media-upload-variant"
+                    disabled={isUploadingMedia}
+                  >
+                    <option value="">Para todo el producto</option>
+                    {variants.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        Variante: {v.title} ({v.sku})
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={handleStartUpload}
+                    disabled={selectedFiles.length === 0 || isUploadingMedia}
+                    className={styles.primaryButton}
+                    data-testid="btn-upload-media"
+                  >
+                    {isUploadingMedia ? (
+                      <>
+                        <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                        <span>
+                          {uploadStage === "requesting_intent"
+                            ? "Autorizando..."
+                            : uploadStage === "uploading_staging"
+                              ? "Subiendo..."
+                              : uploadStage === "finalizing"
+                                ? "Normalizando WebP..."
+                                : "Procesando..."}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={14} aria-hidden="true" />
+                        <span>
+                          {selectedFiles.length > 1
+                            ? `Subir ${selectedFiles.length} fotos`
+                            : "Subir foto"}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {selectedFiles.length > 0 && uploadQueue.length === 0 && (
+                  <ul className={styles.mediaSelectedList} data-testid="media-selected-list">
+                    {selectedFiles.map((file, index) => (
+                      <li key={`${file.name}-${index}`} className={styles.mediaSelectedItem}>
+                        <ImageIcon size={14} aria-hidden="true" />
+                        <span className={styles.mediaSelectedName}>{file.name}</span>
+                        <span className={styles.mediaSelectedSize}>
+                          {(file.size / 1048576).toFixed(1)} MB
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeSelectedFile(index)}
+                          className={styles.mediaSelectedRemove}
+                          aria-label={`Quitar ${file.name} de la lista`}
+                          disabled={isUploadingMedia}
+                        >
+                          <X size={13} aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                    <li>
+                      <button
+                        type="button"
+                        onClick={clearSelectedFiles}
+                        className={styles.mediaSelectedClear}
+                        disabled={isUploadingMedia}
+                      >
+                        Quitar todas
+                      </button>
+                    </li>
+                  </ul>
+                )}
+
+                {uploadQueue.length > 0 && (
+                  <ul className={styles.mediaSelectedList} data-testid="media-upload-queue">
+                    {uploadQueue.map((item, index) => (
+                      <li
+                        key={`${item.name}-${index}`}
+                        className={styles.mediaSelectedItem}
+                        data-testid={`media-queue-item-${index}`}
+                      >
+                        {item.status === "uploading" ? (
+                          <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                        ) : item.status === "done" ? (
+                          <CheckCircle2 size={14} className={styles.queueDone} aria-hidden="true" />
+                        ) : item.status === "error" ? (
+                          <XCircle size={14} className={styles.queueError} aria-hidden="true" />
+                        ) : (
+                          <ImageIcon size={14} aria-hidden="true" />
+                        )}
+                        <span className={styles.mediaSelectedName}>{item.name}</span>
+                        <span className={styles.mediaSelectedSize}>
+                          {item.status === "done"
+                            ? "Lista"
+                            : item.status === "uploading"
+                              ? "Subiendo..."
+                              : item.status === "error"
+                                ? (item.error ?? "Error")
+                                : "En espera"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {pendingFinalization && (
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={handleRetryFinalization}
+                      disabled={isUploadingMedia}
+                      className={styles.secondaryButton}
+                      data-testid="btn-retry-finalization"
+                    >
+                      {isUploadingMedia && uploadStage === "finalizing" ? (
+                        <>
+                          <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                          <span>Reintentando finalización...</span>
+                        </>
+                      ) : (
+                        <span>Reintentar Finalización</span>
                       )}
-                      <span>{isPrimary ? "Principal" : "Hacer Principal"}</span>
                     </button>
+                  </div>
+                )}
 
-                    <button
-                      type="button"
-                      onClick={(e) => handleOpenAltTextModal(m, e.currentTarget)}
-                      className={styles.mediaActionButton}
-                      title="Editar texto alternativo (alt text)"
-                      data-testid={`btn-edit-alt-${m.id}`}
+                {clientFileError && (
+                  <div
+                    className={styles.mediaUploadError}
+                    data-testid="media-client-error"
+                    role="alert"
+                    aria-live="assertive"
+                  >
+                    {clientFileError}
+                  </div>
+                )}
+
+                {uploadError && (
+                  <div
+                    className={styles.mediaUploadError}
+                    data-testid="media-upload-error"
+                    role="alert"
+                    aria-live="assertive"
+                  >
+                    {uploadError}
+                  </div>
+                )}
+
+                {uploadSuccess && (
+                  <div
+                    className={styles.mediaUploadSuccess}
+                    data-testid="media-upload-success"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {uploadSuccess}
+                  </div>
+                )}
+              </div>
+
+              {/* Operational Notifications */}
+              {mediaOpError && (
+                <div
+                  className={styles.mediaUploadError}
+                  data-testid="media-op-error"
+                  role="alert"
+                  aria-live="assertive"
+                  style={{ marginTop: "1rem" }}
+                >
+                  {mediaOpError}
+                </div>
+              )}
+
+              {/* Primary Media Banner */}
+              {primaryMedia && (
+                <div
+                  style={{
+                    padding: "0.75rem 1rem",
+                    borderRadius: 8,
+                    border: "1px solid var(--color-border-subtle, #e4e4e7)",
+                    backgroundColor: "#fafafa",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "1rem",
+                    marginTop: "1rem",
+                  }}
+                  data-testid="primary-media-display"
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <div
+                      style={{
+                        width: 80,
+                        height: 80,
+                        borderRadius: 6,
+                        backgroundColor: "#f4f4f5",
+                        border: "1px solid var(--color-border-subtle, #e4e4e7)",
+                        overflow: "hidden",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                     >
-                      <Edit2 size={12} aria-hidden="true" />
-                      <span>Alt Text</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleOpenVariantModal(m, e.currentTarget)}
-                      className={styles.mediaActionButton}
-                      title="Asignar o cambiar variante"
-                      data-testid={`btn-reassign-variant-${m.id}`}
+                      {primaryThumbUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={primaryThumbUrl}
+                          alt={primaryMedia.altText ?? product.name}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          data-testid="primary-media-img"
+                        />
+                      ) : (
+                        <ImageIcon size={24} style={{ color: "#a1a1aa" }} aria-hidden="true" />
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.125rem",
+                        fontSize: "0.75rem",
+                      }}
                     >
-                      <Tag size={12} aria-hidden="true" />
-                      <span>Variante</span>
-                    </button>
-
-                    <div className={styles.mediaReorderButtons}>
-                      <button
-                        type="button"
-                        disabled={idx === 0 || isReorderingMedia}
-                        onClick={() => handleMoveMedia(idx, "up")}
-                        className={styles.mediaReorderButton}
-                        aria-label="Mover hacia arriba"
-                        title="Mover hacia arriba"
-                        data-testid={`btn-move-up-${m.id}`}
-                      >
-                        <ArrowUp size={12} aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={idx === media.length - 1 || isReorderingMedia}
-                        onClick={() => handleMoveMedia(idx, "down")}
-                        className={styles.mediaReorderButton}
-                        aria-label="Mover hacia abajo"
-                        title="Mover hacia abajo"
-                        data-testid={`btn-move-down-${m.id}`}
-                      >
-                        <ArrowDown size={12} aria-hidden="true" />
-                      </button>
+                      <span style={{ fontWeight: 600 }}>
+                        {primaryMedia.altText ?? "Imagen Principal"}
+                      </span>
+                      <span style={{ color: "var(--color-text-secondary, #71717a)" }}>
+                        Clase: {primaryMedia.securityClass} | Tipo: {primaryMedia.mimeType}
+                      </span>
+                      {!primaryMedia.publicUrl && (
+                        <span
+                          style={{ color: "#b45309", fontSize: "0.7rem" }}
+                          data-testid="non-public-primary-notice"
+                        >
+                          Asset no público (solo metadatos) [Privado]
+                        </span>
+                      )}
+                      {primaryMedia.width && primaryMedia.height && (
+                        <span style={{ color: "var(--color-text-secondary, #71717a)" }}>
+                          Dimensiones: {primaryMedia.width} x {primaryMedia.height} px
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className={styles.cardDescription} data-testid="media-empty-state">
-            Este producto no tiene medios multimedia registrados. Seleccione una imagen arriba para
-            subirla.
-          </p>
-        )}
-      </section>
+              )}
+
+              {/* Media Gallery Grid */}
+              {mediaOrder.length > 0 ? (
+                <div className={styles.mediaGrid}>
+                  {mediaOrder.map((m, idx) => {
+                    const url = m.publicUrl;
+                    const isPrimary = m.mediaAssetId === product.primaryMediaId;
+                    const isVariantScoped = m.variantId !== null;
+                    const assignedVariant = m.variantId
+                      ? variants.find((v) => v.id === m.variantId)
+                      : null;
+
+                    return (
+                      <div
+                        key={m.id}
+                        className={styles.mediaCard}
+                        data-testid={`media-card-${m.id}`}
+                      >
+                        <div className={styles.mediaPreviewBox}>
+                          {url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={url}
+                              alt={m.altText ?? product.name}
+                              className={styles.mediaPreviewImg}
+                            />
+                          ) : (
+                            <ImageIcon size={32} style={{ color: "#a1a1aa" }} aria-hidden="true" />
+                          )}
+
+                          {confirmDetachId === m.id ? (
+                            <div className={styles.mediaDetachConfirm}>
+                              <span>¿Quitar esta foto?</span>
+                              <div className={styles.mediaDetachConfirmActions}>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDetachId(null)}
+                                  className={styles.mediaDetachCancel}
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleDetachMedia(m)}
+                                  className={styles.mediaDetachConfirmButton}
+                                  data-testid={`btn-confirm-detach-${m.id}`}
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDetachId(m.id)}
+                              disabled={isPrimary || detachingMediaId === m.id}
+                              className={styles.mediaDetachButton}
+                              title={
+                                isPrimary
+                                  ? "Elige otra foto como principal antes de quitar esta"
+                                  : "Quitar esta foto del producto"
+                              }
+                              aria-label={`Quitar la foto ${idx + 1} del producto`}
+                              data-testid={`btn-detach-media-${m.id}`}
+                            >
+                              {detachingMediaId === m.id ? (
+                                <Loader2 size={13} className={styles.spinner} aria-hidden="true" />
+                              ) : (
+                                <Trash2 size={13} aria-hidden="true" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        <div className={styles.mediaCardBadges}>
+                          {isPrimary && (
+                            <span
+                              className={styles.badgePrimary}
+                              data-testid={`badge-primary-${m.id}`}
+                            >
+                              <Star size={10} fill="currentColor" aria-hidden="true" />
+                              <span>Principal</span>
+                            </span>
+                          )}
+                          {isVariantScoped ? (
+                            <span
+                              className={styles.badgeVariant}
+                              data-testid={`badge-variant-${m.id}`}
+                            >
+                              <Tag size={10} aria-hidden="true" />
+                              <span>
+                                Variante: {assignedVariant ? assignedVariant.title : m.variantId}
+                              </span>
+                            </span>
+                          ) : (
+                            <span
+                              className={styles.badgeGlobal}
+                              data-testid={`badge-global-${m.id}`}
+                            >
+                              <Globe size={10} aria-hidden="true" />
+                              <span>Global</span>
+                            </span>
+                          )}
+                        </div>
+
+                        <div className={styles.mediaInfo}>
+                          <span className={styles.mediaKey}>
+                            {m.altText ?? `Asset Multimedia (Pos. ${m.displayOrder})`}
+                          </span>
+                          <span className={styles.mediaClass}>
+                            Orden: {m.displayOrder} · {m.mimeType}
+                            {m.width && m.height ? ` · ${m.width}×${m.height}px` : ""}
+                          </span>
+                          {!url && (
+                            <span
+                              style={{ color: "#b45309", fontSize: "0.7rem" }}
+                              data-testid="non-public-media-badge"
+                            >
+                              Asset no público (solo metadatos) [Privado]
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Actions Toolbar */}
+                        <div className={styles.mediaActionsToolbar}>
+                          <button
+                            type="button"
+                            disabled={isPrimary || isVariantScoped || isSettingPrimary === m.id}
+                            onClick={() => handleSetPrimary(m)}
+                            className={styles.mediaActionButton}
+                            title={
+                              isVariantScoped
+                                ? "Las imágenes de variante no pueden ser asignadas como principal global"
+                                : isPrimary
+                                  ? "Ya es la imagen principal"
+                                  : "Asignar como imagen principal"
+                            }
+                            data-testid={`btn-set-primary-${m.id}`}
+                          >
+                            {isSettingPrimary === m.id ? (
+                              <Loader2 size={12} className={styles.spinner} aria-hidden="true" />
+                            ) : (
+                              <Star
+                                size={12}
+                                fill={isPrimary ? "currentColor" : "none"}
+                                aria-hidden="true"
+                              />
+                            )}
+                            <span>{isPrimary ? "Principal" : "Hacer Principal"}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenAltTextModal(m, e.currentTarget)}
+                            className={styles.mediaActionButton}
+                            title="Editar texto alternativo (alt text)"
+                            data-testid={`btn-edit-alt-${m.id}`}
+                          >
+                            <Edit2 size={12} aria-hidden="true" />
+                            <span>Alt Text</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenVariantModal(m, e.currentTarget)}
+                            className={styles.mediaActionButton}
+                            title="Asignar o cambiar variante"
+                            data-testid={`btn-reassign-variant-${m.id}`}
+                          >
+                            <Tag size={12} aria-hidden="true" />
+                            <span>Variante</span>
+                          </button>
+
+                          <div className={styles.mediaReorderButtons}>
+                            <button
+                              type="button"
+                              disabled={idx === 0 || isReorderingMedia}
+                              onClick={() => handleMoveMedia(idx, "up")}
+                              className={styles.mediaReorderButton}
+                              aria-label="Mover hacia arriba"
+                              title="Mover hacia arriba"
+                              data-testid={`btn-move-up-${m.id}`}
+                            >
+                              <ArrowUp size={12} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === media.length - 1 || isReorderingMedia}
+                              onClick={() => handleMoveMedia(idx, "down")}
+                              className={styles.mediaReorderButton}
+                              aria-label="Mover hacia abajo"
+                              title="Mover hacia abajo"
+                              data-testid={`btn-move-down-${m.id}`}
+                            >
+                              <ArrowDown size={12} aria-hidden="true" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className={styles.cardDescription} data-testid="media-empty-state">
+                  Este producto no tiene medios multimedia registrados. Seleccione una imagen arriba
+                  para subirla.
+                </p>
+              )}
+            </section>
+          )}
+
+          {activeSection === "variantes" && (
+            <section id="variantes" className={styles.card} data-testid="section-variants">
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
+                <div>
+                  <h2 className={styles.cardTitle}>Variantes y stock</h2>
+                  <p className={styles.cardDescription}>
+                    Cada color o medida es una variante, con su propio código, precio y stock.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenCreateVariant}
+                  className={styles.primaryButton}
+                  data-testid="btn-add-variant"
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  <span>Agregar Variante</span>
+                </button>
+              </div>
+
+              <div className={styles.tableWrapper} style={{ marginTop: "1rem" }}>
+                <table className={styles.table} data-testid="table-variants">
+                  <thead>
+                    <tr>
+                      <th>SKU</th>
+                      <th>Nombre</th>
+                      <th>Precio Venta</th>
+                      <th>Precio Tachado</th>
+                      <th>Costo</th>
+                      <th>Peso</th>
+                      <th>Stock</th>
+                      <th>Estado</th>
+                      <th style={{ textAlign: "right" }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {variants.map((v) => (
+                      <tr key={v.id} data-testid={`variant-row-${v.id}`}>
+                        <td>
+                          <span className={styles.skuBadge} data-testid={`variant-sku-${v.id}`}>
+                            {v.sku}
+                          </span>
+                          {v.isSkuImmutable && (
+                            <span
+                              title="SKU inmutable: posee inventario o pedidos históricos"
+                              style={{
+                                marginLeft: 6,
+                                fontSize: "0.6875rem",
+                                color: "#b45309",
+                                fontWeight: 600,
+                              }}
+                              data-testid={`variant-immutable-badge-${v.id}`}
+                            >
+                              (Inmutable)
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <strong>{v.title}</strong>
+                        </td>
+                        <td>
+                          <span className={styles.pricePositive}>
+                            {formatCentsToPenDisplay(v.priceCents)}
+                          </span>
+                        </td>
+                        <td>
+                          {v.compareAtPriceCents ? (
+                            <span className={styles.priceCompare}>
+                              {formatCentsToPenDisplay(v.compareAtPriceCents)}
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td>
+                          {v.costCents ? (
+                            <span className={styles.costConfidential}>
+                              {formatCentsToPenDisplay(v.costCents)}
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td>{v.weightGrams ? `${v.weightGrams}g` : "-"}</td>
+                        <td>
+                          <VariantStockCell
+                            productId={product.id}
+                            variantId={v.id}
+                            stock={
+                              variantStock[v.id] ?? {
+                                variantId: v.id,
+                                onHand: 0,
+                                reserved: 0,
+                                allocated: 0,
+                                available: 0,
+                              }
+                            }
+                            canManage={actorPermissions.includes("inventory:manage")}
+                          />
+                        </td>
+                        <td>
+                          <span
+                            className={`${styles.badge} ${
+                              v.status === "ACTIVE"
+                                ? styles.badgePublished
+                                : v.status === "INACTIVE"
+                                  ? styles.badgeDraft
+                                  : styles.badgeArchived
+                            }`}
+                          >
+                            {v.status === "ACTIVE"
+                              ? "Activa"
+                              : v.status === "INACTIVE"
+                                ? "Inactiva"
+                                : "Archivada"}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditVariant(v)}
+                            className={styles.actionBtn}
+                            data-testid="btn-edit-variant"
+                            id={`btn-edit-variant-${v.id}`}
+                            title="Editar variante"
+                          >
+                            <Edit2 size={14} aria-hidden="true" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {activeSection === "especificaciones" && (
+            <section
+              id="especificaciones"
+              className={styles.card}
+              data-testid="section-specifications"
+            >
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
+                <div>
+                  <h2 className={styles.cardTitle}>Especificaciones Técnicas ({category.name})</h2>
+                  <p className={styles.cardDescription}>
+                    {currentSpecSchema
+                      ? `Esquema activo v${currentSpecSchema.schemaVersion}. Puedes guardar especificaciones parciales.`
+                      : "Esta categoría no tiene un esquema de especificaciones técnicas configurado."}
+                  </p>
+                </div>
+              </div>
+
+              {currentSpecSchema && currentSpecSchema.fieldDefinitions ? (
+                <form
+                  onSubmit={handleSaveSpecs}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1.25rem",
+                    marginTop: "1rem",
+                  }}
+                >
+                  <div className={styles.grid2}>
+                    {currentSpecSchema.fieldDefinitions.map((field) => {
+                      const val = specValues[field.key];
+
+                      return (
+                        <div key={field.key} className={styles.field}>
+                          <label htmlFor={`spec-${field.key}`} className={styles.label}>
+                            {field.label}
+                            {field.unit && (
+                              <span style={{ color: "#a1a1aa", fontWeight: 400, marginLeft: 4 }}>
+                                ({field.unit})
+                              </span>
+                            )}
+                          </label>
+
+                          {/* STRING / TEXT Field */}
+                          {field.dataType === "string" && (
+                            <input
+                              id={`spec-${field.key}`}
+                              type="text"
+                              value={typeof val === "string" ? val : ""}
+                              onChange={(e) => handleSpecFieldChange(field.key, e.target.value)}
+                              className={styles.input}
+                              data-testid={`spec-input-${field.key}`}
+                            />
+                          )}
+
+                          {/* NUMBER Field */}
+                          {field.dataType === "number" && (
+                            <input
+                              id={`spec-${field.key}`}
+                              type="number"
+                              min={field.min ?? undefined}
+                              max={field.max ?? undefined}
+                              step={field.step ?? "any"}
+                              value={val !== undefined && val !== null ? String(val) : ""}
+                              onChange={(e) => {
+                                const num = e.target.value === "" ? "" : Number(e.target.value);
+                                handleSpecFieldChange(field.key, num);
+                              }}
+                              className={styles.input}
+                              data-testid={`spec-input-${field.key}`}
+                            />
+                          )}
+
+                          {/* BOOLEAN Field */}
+                          {field.dataType === "boolean" && (
+                            <select
+                              id={`spec-${field.key}`}
+                              value={val === true ? "true" : val === false ? "false" : ""}
+                              onChange={(e) => {
+                                const boolVal =
+                                  e.target.value === "true"
+                                    ? true
+                                    : e.target.value === "false"
+                                      ? false
+                                      : "";
+                                handleSpecFieldChange(field.key, boolVal);
+                              }}
+                              className={styles.select}
+                              data-testid={`spec-input-${field.key}`}
+                            >
+                              <option value="">(No especificado)</option>
+                              <option value="true">Sí</option>
+                              <option value="false">No</option>
+                            </select>
+                          )}
+
+                          {/* ENUM Field (Always single-choice string selection for all enum specifications) */}
+                          {field.dataType === "enum" && (
+                            <select
+                              id={`spec-${field.key}`}
+                              value={typeof val === "string" ? val : ""}
+                              onChange={(e) =>
+                                handleSpecFieldChange(field.key, e.target.value || "")
+                              }
+                              className={styles.select}
+                              data-testid={`spec-input-${field.key}`}
+                            >
+                              <option value="">(Seleccionar opción)</option>
+                              {field.options?.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button
+                      type="submit"
+                      disabled={isSavingSpecs}
+                      className={styles.primaryButton}
+                      data-testid="btn-save-specs"
+                    >
+                      {isSavingSpecs ? (
+                        <>
+                          <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <span>Guardar Especificaciones</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <p className={styles.cardDescription}>
+                  Selecciona una categoría con especificaciones técnicas para configurar sus
+                  valores.
+                </p>
+              )}
+            </section>
+          )}
+
+          {activeSection === "historia" && (
+            <section
+              id="historia"
+              className={`${styles.card} ${styles.storyEntryCard}`}
+              aria-labelledby="product-story-entry-title"
+              data-testid="product-story-entry"
+            >
+              <div className={styles.storyEntryContent}>
+                <div className={styles.storyEntryIcon} aria-hidden="true">
+                  <BookOpen size={22} />
+                </div>
+                <div className={styles.storyEntryCopy}>
+                  <h2 id="product-story-entry-title" className={styles.cardTitle}>
+                    Historia del producto
+                  </h2>
+                  <p className={styles.cardDescription}>
+                    Organiza el relato editorial del producto en un espacio de trabajo dedicado.
+                  </p>
+                  <span className={styles.storyLifecycleText} data-testid="product-story-status">
+                    Estado: {getStoryLifecycleText(storySummary)}
+                  </span>
+                </div>
+              </div>
+              <Link
+                href={`/admin/products/${product.id}/story`}
+                className={styles.storyEntryLink}
+                data-testid="product-story-link"
+              >
+                Editar historia
+                <ChevronRight size={16} aria-hidden="true" />
+              </Link>
+            </section>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      <div className={styles.toastStack} aria-live="polite" data-testid="media-op-success">
+        <AnimatePresence initial={false}>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              layout
+              className={`${styles.toast} ${toast.tone === "error" ? styles.toastError : styles.toastSuccess}`}
+              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.7 }}
+              role={toast.tone === "error" ? "alert" : "status"}
+            >
+              {toast.tone === "error" ? (
+                <XCircle size={15} aria-hidden="true" />
+              ) : (
+                <CheckCircle2 size={15} aria-hidden="true" />
+              )}
+              <span>{toast.text}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
       {/* --- Modals --- */}
 

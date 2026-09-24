@@ -2,12 +2,19 @@
 
 import React, { useRef, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ShoppingCart } from "lucide-react";
+import { AlertCircle, MessageCircle, ShieldCheck, Tag } from "lucide-react";
 import { useCart } from "@/components/cart";
-import { Button, Icon } from "@/components/ui";
+import { DomeButton, DomeLink, Icon } from "@/components/ui";
+import { publicEnv } from "@/config/public-env";
+import { MAX_CART_LINE_QUANTITY } from "@/lib/cart/constants";
 import type { ProductVariantDetail } from "@/lib/catalog/product-detail-types";
 import { formatCurrency } from "@/lib/utils/currency";
+import type { FormattedSpecRow } from "./hardware-specifications";
+import { PdpAccessories, type PdpAccessory } from "./pdp-accessories";
+import { PdpQuantityStepper } from "./pdp-quantity-stepper";
+import { PdpSpecGrid } from "./pdp-spec-grid";
 import { VariantSelector } from "./variant-selector";
+import { WhatsAppIcon } from "./whatsapp-icon";
 import styles from "./product-commerce-panel.module.css";
 
 export interface ProductCommercePanelProps {
@@ -23,6 +30,25 @@ export interface ProductCommercePanelProps {
   variants: ProductVariantDetail[];
   selectedVariant: ProductVariantDetail;
   onSelectVariant: (variant: ProductVariantDetail) => void;
+  /** Formatted spec rows for the highlights grid (already display-ready). */
+  specHighlights?: FormattedSpecRow[];
+  /** Optional add-on list; omitted when the catalog has no accessories to offer. */
+  accessories?: PdpAccessory[];
+  /** Server-rendered detail sections (accordions) placed under the actions. */
+  details?: React.ReactNode;
+}
+
+/**
+ * wa.me deep link with a prefilled message. Without a configured store number
+ * the button only renders outside production, pointing at WhatsApp itself so
+ * the layout can be reviewed locally.
+ */
+function buildWhatsAppHref(productName: string, variantTitle: string): string | null {
+  const number = publicEnv.NEXT_PUBLIC_WHATSAPP_NUMBER;
+  if (!number && process.env.NODE_ENV === "production") return null;
+
+  const message = `Hola, quiero consultar por ${productName} (${variantTitle}).`;
+  return `https://wa.me/${number ?? ""}?text=${encodeURIComponent(message)}`;
 }
 
 export function ProductCommercePanel({
@@ -31,10 +57,14 @@ export function ProductCommercePanel({
   variants,
   selectedVariant,
   onSelectVariant,
+  specHighlights = [],
+  accessories,
+  details,
 }: ProductCommercePanelProps): React.JSX.Element {
   const { status, isMutating, pendingVariantIds, addItem, openDrawer, lastError } = useCart();
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const [hasAttemptedAdd, setHasAttemptedAdd] = useState(false);
+  const [quantity, setQuantity] = useState(1);
 
   const isPending = isMutating || pendingVariantIds.has(selectedVariant.id);
   const isAvailable = selectedVariant.status === "ACTIVE";
@@ -47,7 +77,7 @@ export function ProductCommercePanel({
 
   const handleAddToCart = async () => {
     setHasAttemptedAdd(true);
-    const success = await addItem(selectedVariant.id, 1);
+    const success = await addItem(selectedVariant.id, quantity);
     if (success) {
       openDrawer({ returnFocusTo: addButtonRef.current });
     }
@@ -66,62 +96,62 @@ export function ProductCommercePanel({
     : null;
 
   const showPdpError = hasAttemptedAdd && Boolean(lastError) && !isPending && !isProfileRequired;
+  const whatsappHref = buildWhatsAppHref(product.name, selectedVariant.title);
 
   return (
     <div className={styles.panelContainer} data-testid="product-commerce-panel">
-      {/* Brand Header Link */}
-      <Link href={`/marcas/${brand.slug}`} className={styles.brandLink}>
-        {brand.name}
-      </Link>
+      <div className={styles.titleBlock}>
+        <Link href={`/marcas/${brand.slug}`} className={styles.brandLink}>
+          {brand.name}
+        </Link>
+        <h1 className={styles.title}>{product.name}</h1>
+        {product.subtitle && <p className={styles.subtitle}>{product.subtitle}</p>}
 
-      {/* Product Title & Subtitle */}
-      <h1 className={styles.title}>{product.name}</h1>
-      {product.subtitle && <p className={styles.subtitle}>{product.subtitle}</p>}
-
-      {/* Pricing Cluster */}
-      <div className={styles.priceCluster} data-testid="price-cluster">
-        <span className={styles.sellingPrice} data-testid="selling-price">
-          {formatCurrency(selectedVariant.priceCents)}
-        </span>
-
-        {showCompareAt && (
-          <span className={styles.compareAtPrice} data-testid="compare-at-price">
-            {formatCurrency(selectedVariant.compareAtPriceCents!)}
+        <div className={styles.priceCluster} data-testid="price-cluster">
+          <span className={styles.sellingPrice} data-testid="selling-price">
+            {formatCurrency(selectedVariant.priceCents)}
           </span>
-        )}
 
-        {discountPercent !== null && discountPercent > 0 && (
-          <span className={styles.discountBadge} data-testid="discount-badge">
-            -{discountPercent}%
+          {showCompareAt && (
+            <span className={styles.compareAtPrice} data-testid="compare-at-price">
+              {formatCurrency(selectedVariant.compareAtPriceCents!)}
+            </span>
+          )}
+
+          {discountPercent !== null && discountPercent > 0 && (
+            <span className={styles.discountBadge} data-testid="discount-badge">
+              -{discountPercent}%
+            </span>
+          )}
+        </div>
+
+        <div className={styles.metaRow}>
+          <span className={styles.skuTag} data-testid="variant-sku">
+            SKU: {selectedVariant.sku}
           </span>
-        )}
+          {selectedVariant.weightGrams !== null && (
+            <span className={styles.weightTag} data-testid="variant-weight">
+              Peso: {selectedVariant.weightGrams} g
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Meta Row: SKU & Weight */}
-      <div className={styles.metaRow}>
-        <span className={styles.skuTag} data-testid="variant-sku">
-          SKU: {selectedVariant.sku}
-        </span>
-        {selectedVariant.weightGrams !== null && (
-          <span className={styles.weightTag} data-testid="variant-weight">
-            Peso: {selectedVariant.weightGrams} g
-          </span>
-        )}
-      </div>
+      <PdpSpecGrid rows={specHighlights} />
 
-      {/* Interactive Variant Selectors */}
       <VariantSelector
         variants={variants}
         selectedVariant={selectedVariant}
         onSelectVariant={handleSelectVariant}
       />
 
-      {/* Primary Add-to-Cart Action */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+      {accessories && accessories.length > 0 && <PdpAccessories accessories={accessories} />}
+
+      <div className={styles.actions}>
         {isProfileRequired ? (
           <div className={styles.profileRequiredBox} data-testid="pdp-profile-required-box">
             <div className={styles.profileRequiredMessage}>
-              <Icon icon={AlertCircle} size="sm" aria-hidden="true" style={{ flexShrink: 0 }} />
+              <Icon icon={AlertCircle} size="sm" aria-hidden="true" />
               <span>Debes completar tu perfil para utilizar el carrito de compras.</span>
             </div>
             <Link
@@ -133,49 +163,70 @@ export function ProductCommercePanel({
             </Link>
           </div>
         ) : (
-          <Button
-            ref={addButtonRef}
-            variant="primary"
-            fullWidth
-            onClick={handleAddToCart}
-            disabled={!isAvailable || isPending}
-            data-testid="pdp-add-to-cart-button"
+          <div className={styles.purchaseRow}>
+            <PdpQuantityStepper
+              value={quantity}
+              max={MAX_CART_LINE_QUANTITY}
+              onChange={setQuantity}
+              disabled={!isAvailable || isPending}
+            />
+            <DomeButton
+              ref={addButtonRef}
+              tone="dark"
+              className={styles.primaryAction}
+              onClick={handleAddToCart}
+              disabled={!isAvailable || isPending}
+              data-testid="pdp-add-to-cart-button"
+            >
+              {!isAvailable ? "No disponible" : isPending ? "Añadiendo..." : "Añadir al carrito"}
+            </DomeButton>
+          </div>
+        )}
+
+        {whatsappHref && (
+          <DomeLink
+            href={whatsappHref}
+            tone="light"
+            className={styles.secondaryAction}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="pdp-whatsapp-button"
           >
-            <Icon icon={ShoppingCart} size="md" aria-hidden="true" style={{ marginRight: "8px" }} />
-            {!isAvailable ? "No disponible" : isPending ? "Añadiendo..." : "Añadir al carrito"}
-          </Button>
+            <WhatsAppIcon size={18} />
+            Contactar por WhatsApp
+          </DomeLink>
         )}
 
         {showPdpError && (
-          <div
-            role="alert"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "8px 12px",
-              borderRadius: "4px",
-              backgroundColor: "rgba(255, 77, 79, 0.1)",
-              border: "1px solid #ff4d4f",
-              color: "#ff4d4f",
-              fontSize: "13px",
-            }}
-            data-testid="pdp-add-to-cart-error"
-          >
-            <Icon icon={AlertCircle} size="sm" aria-hidden="true" style={{ flexShrink: 0 }} />
+          <div role="alert" className={styles.errorBox} data-testid="pdp-add-to-cart-error">
+            <Icon icon={AlertCircle} size="sm" aria-hidden="true" />
             <span>{lastError}</span>
           </div>
         )}
       </div>
 
-      {/* Static Payment Trust Box */}
-      <div className={styles.paymentTrustBox} data-testid="payment-trust-box">
-        <p className={styles.paymentTrustTitle}>Pago Seguro en Soles</p>
-        <p className={styles.paymentTrustText}>
-          Verificación manual mediante <strong>Yape</strong> o <strong>Plin</strong> al coordinar tu
-          pedido con Gamer Perú.
-        </p>
-      </div>
+      {details}
+
+      {/* Only claims the store can stand behind: no stock or warranty promises. */}
+      <ul className={styles.assuranceBox} data-testid="payment-trust-box">
+        <li className={styles.assuranceItem}>
+          <Icon icon={ShieldCheck} size="md" aria-hidden="true" />
+          <span>
+            Pago seguro en soles con <strong>Yape</strong> o <strong>Plin</strong>, verificado
+            manualmente al coordinar tu pedido.
+          </span>
+        </li>
+        <li className={styles.assuranceItem}>
+          <Icon icon={Tag} size="md" aria-hidden="true" />
+          <span>Precios finales en soles (PEN).</span>
+        </li>
+        {whatsappHref && (
+          <li className={styles.assuranceItem}>
+            <Icon icon={MessageCircle} size="md" aria-hidden="true" />
+            <span>Atención directa por WhatsApp.</span>
+          </li>
+        )}
+      </ul>
     </div>
   );
 }

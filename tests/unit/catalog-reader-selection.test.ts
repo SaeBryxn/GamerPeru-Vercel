@@ -246,8 +246,8 @@ describe("DevCatalogPreviewReader — entity resolution", () => {
     expect(brand).toBeNull();
   });
 
-  // Mouses pagination: 14 products -> page 1 = 12, page 2 = 2
-  it("paginates mouses category: page 1 = 12, page 2 = 2", async () => {
+  // The preview catalog is the real storefront inventory.
+  it("lists the 7 inventory mice, most recent (listed order) first", async () => {
     const reader = new DevCatalogPreviewReader();
     const cat = await reader.getPublishedCategoryBySlug("mouses");
     expect(cat).not.toBeNull();
@@ -256,60 +256,48 @@ describe("DevCatalogPreviewReader — entity resolution", () => {
       page: 1,
       pageSize: 12,
     });
-    expect(page1.items).toHaveLength(12);
-    expect(page1.totalItems).toBe(14);
-    expect(page1.totalPages).toBe(2);
-
-    const page2 = await reader.getPublishedProductsByCategory(cat!.id, {
-      page: 2,
-      pageSize: 12,
-    });
-    expect(page2.items).toHaveLength(2);
+    expect(page1.totalItems).toBe(7);
+    expect(page1.totalPages).toBe(1);
+    expect(page1.items[0]?.slug).toBe("atk-a9-plus-2-0-black");
+    expect(page1.items[0]?.startingPriceCents).toBe(18900);
   });
 
-  // Other categories have 4 products each
-  it("teclados has at least 4 products", async () => {
-    const reader = new DevCatalogPreviewReader();
-    const cat = await reader.getPublishedCategoryBySlug("teclados");
-    const result = await reader.getPublishedProductsByCategory(cat!.id, {
-      page: 1,
-      pageSize: 12,
-    });
-    expect(result.totalItems).toBeGreaterThanOrEqual(4);
-  });
-
-  it("mousepads has at least 4 products", async () => {
+  it("lists the 5 inventory mousepads", async () => {
     const reader = new DevCatalogPreviewReader();
     const cat = await reader.getPublishedCategoryBySlug("mousepads");
     const result = await reader.getPublishedProductsByCategory(cat!.id, {
       page: 1,
       pageSize: 12,
     });
-    expect(result.totalItems).toBeGreaterThanOrEqual(4);
+    expect(result.totalItems).toBe(5);
   });
 
-  it("audio has at least 4 products", async () => {
-    const reader = new DevCatalogPreviewReader();
-    const cat = await reader.getPublishedCategoryBySlug("audio");
-    const result = await reader.getPublishedProductsByCategory(cat!.id, {
-      page: 1,
-      pageSize: 12,
-    });
-    expect(result.totalItems).toBeGreaterThanOrEqual(4);
-  });
-
-  it("accesorios has at least 4 products", async () => {
+  it("lists the 2 skates under accesorios", async () => {
     const reader = new DevCatalogPreviewReader();
     const cat = await reader.getPublishedCategoryBySlug("accesorios");
     const result = await reader.getPublishedProductsByCategory(cat!.id, {
       page: 1,
       pageSize: 12,
     });
-    expect(result.totalItems).toBeGreaterThanOrEqual(4);
+    expect(result.items.map((p) => p.slug)).toEqual([
+      "x-raypad-jade-air",
+      "x-raypad-obsidian-air-pro",
+    ]);
   });
 
-  // Synthetic products never expose cost_cents or private media
-  it("synthetic products never expose cost_cents or private media", async () => {
+  it("categories without inventory are empty", async () => {
+    const reader = new DevCatalogPreviewReader();
+    for (const slug of ["teclados", "audio"]) {
+      const cat = await reader.getPublishedCategoryBySlug(slug);
+      const result = await reader.getPublishedProductsByCategory(cat!.id, {
+        page: 1,
+        pageSize: 12,
+      });
+      expect(result.totalItems).toBe(0);
+    }
+  });
+
+  it("inventory products never expose cost_cents", async () => {
     const reader = new DevCatalogPreviewReader();
     const cat = await reader.getPublishedCategoryBySlug("mouses");
     const result = await reader.getPublishedProductsByCategory(cat!.id, {
@@ -318,24 +306,30 @@ describe("DevCatalogPreviewReader — entity resolution", () => {
     });
 
     for (const product of result.items) {
-      expect(product.primaryMedia).toBeNull();
       expect("costCents" in product).toBe(false);
       expect("cost_cents" in product).toBe(false);
-      expect(product.brand.name).toBe("Marca QA");
     }
   });
 
-  // marca-qa brand should resolve all synthetic products
-  it("marca-qa brand resolves with all synthetic products", async () => {
+  it("resolves inventory brands with their products", async () => {
     const reader = new DevCatalogPreviewReader();
-    const brand = await reader.getPublishedBrandBySlug("marca-qa");
+    const brand = await reader.getPublishedBrandBySlug("mchose");
     expect(brand).not.toBeNull();
 
     const result = await reader.getPublishedProductsByBrand(brand!.id, {
       page: 1,
       pageSize: 100,
     });
-    // 14 (mouses) + 4*4 (teclados, mousepads, audio, accesorios) = 30
-    expect(result.totalItems).toBe(30);
+    expect(result.totalItems).toBe(3);
+  });
+
+  it("resolves an inventory PDP with one variant at the listed price", async () => {
+    const reader = new DevCatalogPreviewReader();
+    const product = await reader.getPublishedProductBySlug("atk-a9-plus-2-0-black");
+    expect(product?.name).toBe("ATK A9 Plus 2.0 Black");
+    expect(product?.variants).toHaveLength(1);
+    expect(product?.variants[0]?.priceCents).toBe(18900);
+    expect(product?.variants[0]?.compareAtPriceCents).toBeNull();
+    expect(product?.story).toBeNull();
   });
 });

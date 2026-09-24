@@ -231,6 +231,15 @@ export class R2CatalogStorageAdapter implements CatalogStorageAdapter {
     contentType: string;
     cacheControl?: string;
   }): Promise<{ created: boolean }> {
+    // Supabase Storage accepts and ignores If-None-Match, so a conditional PUT alone would
+    // report every write as a creation and skip the caller's integrity verification branch.
+    // The HEAD probe restores that signal; the conditional header still wins genuine races on
+    // providers that honor it. Keys are content-addressed, so a lost race rewrites identical bytes.
+    const existing = await this.headObject({ bucket: params.bucket, key: params.key });
+    if (existing) {
+      return { created: false };
+    }
+
     try {
       await this.client.send(
         new PutObjectCommand({

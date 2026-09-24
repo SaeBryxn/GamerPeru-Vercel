@@ -53,6 +53,23 @@ export async function getAdminProductList(
     ? sql`p.category_id = ${query.categoryId}::uuid`
     : sql`TRUE`;
 
+  // Readiness gaps mirror the publish blockers so the list can answer "what is missing".
+  let pendingFilter = sql`TRUE`;
+  if (query.pending === "media") {
+    pendingFilter = sql`p.primary_media_id IS NULL`;
+  } else if (query.pending === "variants") {
+    pendingFilter = sql`NOT EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'ACTIVE')`;
+  } else if (query.pending === "price") {
+    pendingFilter = sql`NOT EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id AND pv.status = 'ACTIVE' AND pv.price_cents > 0)`;
+  } else if (query.pending === "stock") {
+    pendingFilter = sql`COALESCE((
+      SELECT SUM(ii.quantity_on_hand - ii.quantity_reserved - ii.quantity_allocated)
+      FROM product_variants pv
+      INNER JOIN inventory_items ii ON ii.variant_id = pv.id
+      WHERE pv.product_id = p.id AND pv.status = 'ACTIVE'
+    ), 0) <= 0`;
+  }
+
   let searchFilter = sql`TRUE`;
   if (query.search && query.search.trim()) {
     const term = `%${query.search.trim()}%`;
@@ -66,6 +83,7 @@ export async function getAdminProductList(
     WHERE ${statusFilter}
       AND ${brandFilter}
       AND ${categoryFilter}
+      AND ${pendingFilter}
       AND ${searchFilter};
   `;
 
@@ -121,6 +139,7 @@ export async function getAdminProductList(
     WHERE ${statusFilter}
       AND ${brandFilter}
       AND ${categoryFilter}
+      AND ${pendingFilter}
       AND ${searchFilter}
     ORDER BY p.updated_at DESC, p.id DESC
     LIMIT ${pageSize} OFFSET ${offset};

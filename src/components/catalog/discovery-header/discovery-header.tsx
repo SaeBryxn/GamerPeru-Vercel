@@ -13,6 +13,12 @@ export interface DiscoveryHeaderProps {
   breadcrumbs: BreadcrumbItem[];
   totalProducts: number;
   unsupportedFilterNotice?: boolean;
+  /**
+   * Keeps the H1, breadcrumbs and count in the document for search engines and
+   * assistive tech while removing them visually, so the toolbar sits directly
+   * under the navbar. The unsupported-filter notice stays visible.
+   */
+  visuallyHidden?: boolean;
 }
 
 /**
@@ -37,9 +43,14 @@ export function DiscoveryHeader({
   breadcrumbs,
   totalProducts,
   unsupportedFilterNotice = false,
+  visuallyHidden = false,
 }: DiscoveryHeaderProps): React.JSX.Element {
   return (
-    <header className={styles.header}>
+    <header
+      className={[styles.header, visuallyHidden ? styles.headerHidden : ""]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {breadcrumbs.length > 0 && (
         <nav aria-label="Breadcrumb">
           <ol className={styles.breadcrumb}>

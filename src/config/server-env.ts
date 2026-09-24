@@ -16,6 +16,8 @@ export const serverEnvSchema = z
     DATABASE_MIGRATION_URL: z.string().optional(),
     SUPABASE_SECRET_KEY: z.string().optional(),
     RESEND_API_KEY: z.string().optional(),
+    S3_ENDPOINT: z.string().url().optional(),
+    S3_REGION: z.string().optional(),
     R2_ACCOUNT_ID: z.string().optional(),
     R2_ACCESS_KEY_ID: z.string().optional(),
     R2_SECRET_ACCESS_KEY: z.string().optional(),
@@ -75,6 +77,8 @@ function parseServerEnv(): ServerEnv {
     DATABASE_MIGRATION_URL: process.env.DATABASE_MIGRATION_URL,
     SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
+    S3_ENDPOINT: process.env.S3_ENDPOINT,
+    S3_REGION: process.env.S3_REGION,
     R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
     R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
@@ -105,6 +109,7 @@ export const serverEnv = new Proxy({} as ServerEnv, {
 });
 
 export interface CatalogMediaRuntimeConfig {
+  /** Empty when an explicit S3_ENDPOINT supplies the storage host instead. */
   r2AccountId: string;
   r2AccessKeyId: string;
   r2SecretAccessKey: string;
@@ -128,8 +133,17 @@ export function requireCatalogMediaRuntimeConfig(): CatalogMediaRuntimeConfig {
   const catalogStagingBucket = serverEnv.R2_CATALOG_STAGING_BUCKET;
   const secret = serverEnv.CATALOG_MEDIA_INTENT_HMAC_SECRET;
 
-  if (!accountId || accountId.startsWith("placeholder_") || accountId.trim() === "") {
-    throw new Error("R2_ACCOUNT_ID is required for real catalog media storage operations.");
+  // R2 derives its endpoint from the account id; an explicit S3_ENDPOINT (Supabase Storage,
+  // MinIO, any S3-compatible provider) already carries that host, so the account id is only
+  // mandatory when we fall back to the Cloudflare naming convention.
+  const hasExplicitEndpoint = Boolean(serverEnv.S3_ENDPOINT?.trim());
+  if (
+    !hasExplicitEndpoint &&
+    (!accountId || accountId.startsWith("placeholder_") || accountId.trim() === "")
+  ) {
+    throw new Error(
+      "R2_ACCOUNT_ID is required for real catalog media storage operations when S3_ENDPOINT is not set."
+    );
   }
   if (!accessKeyId || accessKeyId.startsWith("placeholder_") || accessKeyId.trim() === "") {
     throw new Error("R2_ACCESS_KEY_ID is required for real catalog media storage operations.");
@@ -170,7 +184,7 @@ export function requireCatalogMediaRuntimeConfig(): CatalogMediaRuntimeConfig {
   }
 
   return {
-    r2AccountId: accountId.trim(),
+    r2AccountId: accountId?.trim() ?? "",
     r2AccessKeyId: accessKeyId.trim(),
     r2SecretAccessKey: secretAccessKey.trim(),
     r2PublicMediaBucket: publicMediaBucket.trim(),

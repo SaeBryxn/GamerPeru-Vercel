@@ -1,0 +1,119 @@
+.section {
+  width: 100%;
+  max-width: var(--container-full);
+  margin: 0 auto;
+  padding: var(--space-20) var(--gutter-desktop-lg) var(--space-12);
+  background-color: var(--color-surface-card);
+}
+
+.banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 420px;
+  padding: var(--space-16) var(--space-12);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-dark-canvas);
+  overflow: hidden;
+}
+
+.background {
+  position: absolute;
+  inset: 0;
+}
+
+.background :global(img) {
+  object-fit: cover;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    var(--color-surface-dark-canvas) 0%,
+    color-mix(in srgb, var(--color-surface-dark-canvas) 70%, transparent) 55%,
+    transparent 100%
+  );
+}
+
+.content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: 520px;
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-accent-gold);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(30px, 3.6vw, 52px);
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--color-text-dark-primary);
+}
+
+.description {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-text-dark-secondary);
+}
+
+.cta {
+  --dome-height: 48px;
+  --dome-radius: var(--radius-sm);
+  --dome-font-size: 15px;
+  --dome-border: var(--color-surface-card);
+  margin-top: var(--space-3);
+}
+
+.ctaPending {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  padding: 0 var(--space-5);
+  border: 1px solid var(--color-border-dark-default);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-dark-secondary);
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-dark-secondary);
+}
+
+@media (max-width: 1023px) {
+  .section {
+    padding: var(--space-16) var(--gutter-tablet) var(--space-10);
+  }
+
+  .banner {
+    padding: var(--space-12) var(--space-8);
+  }
+}
+
+@media (max-width: 767px) {
+  .section {
+    padding: var(--space-12) var(--gutter-mobile) var(--space-8);
+  }
+
+  .banner {
+    padding: var(--space-10) var(--space-6);
+  }
+}

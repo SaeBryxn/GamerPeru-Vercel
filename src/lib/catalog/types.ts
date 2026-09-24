@@ -18,6 +18,8 @@ export interface BrandDiscoveryEntity {
   } | null;
 }
 
+import type { ProductCardSpec } from "./card-specs";
+
 export interface ProductDiscoveryItem {
   id: string;
   name: string;
@@ -38,6 +40,8 @@ export interface ProductDiscoveryItem {
     height: number | null;
   } | null;
   startingPriceCents: number;
+  /** Resolved from the product's own specification values; absent when the reader has none. */
+  specs?: ProductCardSpec[];
 }
 
 export interface PaginationOptions {

@@ -32,8 +32,12 @@ export interface AdminProductListItem {
   activeVariantAts: number;
 }
 
+/** Readiness gaps an operator can filter the catalog by. */
+export type AdminProductPendingFilter = "media" | "stock" | "price" | "variants";
+
 export interface AdminProductListQuery {
   status?: CatalogStatus | null;
+  pending?: AdminProductPendingFilter | null;
   brandId?: string | null;
   categoryId?: string | null;
   search?: string | null;

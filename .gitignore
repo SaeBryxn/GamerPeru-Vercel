@@ -51,3 +51,6 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+# npm artefact; this project uses pnpm
+package-lock.json

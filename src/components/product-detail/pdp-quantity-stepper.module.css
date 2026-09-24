@@ -1,0 +1,52 @@
+/* Same height and radius as the add-to-cart button it sits beside. */
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 58px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-card);
+}
+
+.stepButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.stepButton:disabled {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+.stepButton:focus-visible {
+  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
+  outline-offset: 1px;
+}
+
+/* Fixed box so the rolling digit never shifts the layout. */
+.value {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 26px;
+  overflow: hidden;
+  font-family: var(--font-body);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.valueDigit {
+  display: inline-block;
+}

@@ -7,119 +7,104 @@
     display: flex;
     align-items: center;
     height: 100%;
-    position: static;
   }
 }
 
 .navList {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  list-style: none;
+  gap: var(--space-1);
+  height: 100%;
   margin: 0;
   padding: 0;
-  height: 100%;
-  position: static;
+  list-style: none;
 }
 
 @media (min-width: 1280px) {
   .navList {
-    gap: var(--space-6);
+    gap: var(--space-4);
   }
 }
 
+/* Must stay static: panels and backdrop anchor to the SiteHeader, not the item. */
 .navItem {
   display: flex;
   align-items: center;
   height: 100%;
-  position: static;
 }
 
-.navItemWrapper {
-  position: static;
-  display: inline-flex;
-  align-items: center;
-  height: 100%;
-}
-
-.categoryLink {
+.categoryTrigger {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: 100%;
-  padding: 0 var(--space-1);
-  font-family: var(--font-body);
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  text-decoration: none;
-  transition: color var(--motion-duration-fast) var(--motion-easing-standard);
-}
-
-.categoryLink:hover,
-.categoryLinkActive {
-  color: var(--color-brand-primary);
-}
-
-.categoryLink::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background-color: var(--color-brand-primary);
-  transform: scaleX(0);
-  transform-origin: center;
-  transition: transform var(--motion-duration-fast) var(--motion-easing-snappy);
-  pointer-events: none;
-}
-
-.categoryLink:hover::after,
-.categoryLink:focus-visible::after,
-.categoryLinkActive::after {
-  transform: scaleX(1);
-}
-
-.categoryLink:focus-visible {
-  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
-  outline-offset: 2px;
-  border-radius: var(--radius-xs);
-}
-
-.disclosureTrigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 44px;
   min-height: 44px;
   height: 100%;
-  padding: 0;
-  background: transparent;
+  padding: 0 var(--space-2);
   border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
-  color: var(--color-text-secondary);
-  transition: color var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
-.disclosureTrigger:hover,
-.disclosureTrigger[aria-expanded="true"] {
-  color: var(--color-brand-primary);
+/*
+ * Seven items (six with chevrons) must fit between the logo and utilities on
+ * small desktops, so the larger 16px label only applies from 1280px.
+ */
+@media (max-width: 1279px) {
+  .navList {
+    gap: 0;
+  }
+
+  .categoryTrigger {
+    padding: 0 var(--space-1);
+    font-size: 14px;
+  }
 }
 
-.disclosureTrigger:focus-visible {
+.categoryTrigger:focus-visible {
   outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
   outline-offset: 2px;
   border-radius: var(--radius-xs);
 }
 
-.chevron {
-  display: inline-flex;
-  transition: transform var(--motion-duration-fast) var(--motion-easing-snappy);
+.triggerContent {
+  gap: var(--space-1);
 }
 
-.disclosureTrigger[aria-expanded="true"] .chevron {
-  transform: rotate(180deg);
+@media (max-width: 1279px) {
+  .triggerContent {
+    gap: 2px;
+  }
+}
+
+/* Rotation is driven by Framer Motion; only the color change is CSS. */
+.chevron {
+  display: inline-flex;
+  color: var(--color-text-secondary);
+  transition: color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.categoryTriggerActive .chevron {
+  color: var(--color-text-primary);
+}
+
+.activeDot {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-text-primary);
+  pointer-events: none;
 }
 
 /* Mega Menu Dropdown Panel — Positions against full-width SiteHeader containing block */
@@ -135,26 +120,26 @@
   border-bottom-right-radius: var(--radius-lg);
   box-shadow: var(--elevation-high);
   z-index: 1000;
-  padding: var(--space-8) 0 var(--space-10);
-  animation: megaMenuFadeIn var(--motion-duration-fast) var(--motion-easing-snappy);
+  padding: var(--space-12) 0 var(--space-16);
 }
 
-@keyframes megaMenuFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* Dims the page below the header and closes the menu on click. */
+.megaMenuBackdrop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 100dvh;
+  background-color: var(--color-surface-overlay);
+  z-index: 999;
 }
 
-.megaMenuLayout {
+.productsLayout {
+  min-height: 400px;
   display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: var(--space-10);
-  align-items: start;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--space-12);
+  align-items: stretch;
 }
 
 /* Left Zone */
@@ -163,145 +148,115 @@
   flex-direction: column;
 }
 
-.sideEyebrow {
-  margin: 0 0 var(--space-3);
-  font-family: var(--font-heading);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
+.sideHeading {
+  margin: 0 0 var(--space-5);
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text-primary);
 }
 
-.sideLinks {
+.collectionsList {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.sideLeadLink {
+/*
+ * Inactive tabs stay gray and draw an underline on hover; the active tab turns
+ * black with no underline. Tabs switch on click only; the button spans the
+ * column for a generous target while the underline stays on the label.
+ */
+.collectionsLink {
   display: block;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background-color: transparent;
+  text-align: left;
+  cursor: pointer;
   font-family: var(--font-heading);
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.03em;
-  color: var(--color-text-primary);
-  text-decoration: none;
-  padding: var(--space-1) 0;
-  transition: color var(--motion-duration-fast) var(--motion-easing-standard);
-}
-
-.sideLeadLink:hover {
-  color: var(--color-brand-primary);
-}
-
-.sideLeadLink:focus-visible {
-  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
-  outline-offset: 2px;
-  border-radius: var(--radius-xs);
-}
-
-.sideBrands {
-  margin-top: var(--space-6);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border-subtle);
-}
-
-.sideSubEyebrow {
-  margin: 0 0 var(--space-2);
-  font-family: var(--font-heading);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  line-height: 1.2;
   color: var(--color-text-muted);
-}
-
-.brandTags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.brandTag {
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-xs);
-  background-color: var(--color-surface-secondary);
-  transition:
-    color var(--motion-duration-fast) var(--motion-easing-standard),
-    background-color var(--motion-duration-fast) var(--motion-easing-standard);
-}
-
-.brandTag:hover {
-  color: var(--color-brand-primary);
-  background-color: var(--color-surface-tertiary);
-}
-
-.brandTag:focus-visible {
-  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
-  outline-offset: 2px;
-}
-
-.viewAllFooterLink {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-6);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border-strong);
-  font-family: var(--font-heading);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-brand-primary);
-  text-decoration: none;
   transition: color var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
-.viewAllFooterLink:hover {
-  color: var(--color-brand-hover);
+.collectionsLabel {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  background-size: 0% 2px;
+  transition: background-size var(--motion-duration-normal) var(--motion-easing-snappy);
 }
 
-.viewAllFooterLink:focus-visible {
+.collectionsLinkCurrent {
+  color: var(--color-text-primary);
+}
+
+.collectionsLink:not(.collectionsLinkCurrent):hover .collectionsLabel {
+  background-size: 100% 2px;
+}
+
+.collectionsLink:focus-visible {
   outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
   outline-offset: 2px;
   border-radius: var(--radius-xs);
 }
 
-/* Right Zone Previews */
+.footerRow {
+  margin-top: auto;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-strong);
+}
+
+.footerRowLink {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+}
+
+/* Right Zone */
 .megaPreviews {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .previewsHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.sideEyebrow {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
 }
 
 .topRightViewAll {
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-brand-primary);
-  text-decoration: none;
-  transition: color var(--motion-duration-fast) var(--motion-easing-standard);
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
 }
 
-.topRightViewAll:hover {
-  text-decoration: underline;
-}
-
-.topRightViewAll:focus-visible {
-  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
-  outline-offset: 2px;
-  border-radius: var(--radius-xs);
+.viewAllCount {
+  font-weight: 500;
+  color: var(--color-text-secondary);
 }
 
 .previewGrid {
@@ -310,78 +265,204 @@
   gap: var(--space-4);
 }
 
-.previewCard {
+.productCard {
+  position: relative;
   display: flex;
   flex-direction: column;
-  text-decoration: none;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  transition: transform var(--motion-duration-fast) var(--motion-easing-standard);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  transition: background-color var(--motion-duration-normal) var(--motion-easing-standard);
 }
 
-.previewCard:hover {
-  transform: translateY(-2px);
+.productCard:hover,
+.productCard:focus-within {
+  background-color: var(--color-surface-secondary);
 }
 
-.previewCard:focus-visible {
-  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
-  outline-offset: 2px;
-}
-
-.previewMedia {
+.productMedia {
   position: relative;
   width: 100%;
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-md);
-  background-color: var(--color-surface-secondary);
-  border: 1px solid var(--color-border-subtle);
   overflow: hidden;
+}
+
+.productMediaLink {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.productSlide {
+  position: absolute;
+  inset: 0;
+}
+
+.productImage {
+  object-fit: contain;
+  /* Product shots ship on white; multiply lets the hover surface show through. */
+  mix-blend-mode: multiply;
+}
+
+/*
+ * Card actions and dots are hidden until the whole card is hovered (or holds
+ * keyboard focus, so tabbing never lands on an invisible control), then fade in
+ * while rising 10px. The slots own position and reveal; the dome fill itself
+ * comes from DomeButton so it shares timing with every other dome.
+ */
+.quickViewSlot,
+.addToCartSlot,
+.scrubDots {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition:
+    opacity var(--motion-duration-moderate) var(--motion-easing-snappy),
+    transform var(--motion-duration-moderate) var(--motion-easing-snappy);
+}
+
+.productCard:hover .quickViewSlot,
+.productCard:hover .addToCartSlot,
+.productCard:hover .scrubDots,
+.productCard:focus-within .quickViewSlot,
+.productCard:focus-within .addToCartSlot,
+.productCard:focus-within .scrubDots {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.productCard:hover .scrubDots,
+.productCard:focus-within .scrubDots {
+  transition-delay: 30ms;
+}
+
+.productCard:hover .addToCartSlot,
+.productCard:focus-within .addToCartSlot {
+  transition-delay: 60ms;
+}
+
+/* Touch screens have no hover, so the actions stay available there. */
+@media (hover: none) {
+  .quickViewSlot,
+  .addToCartSlot {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+}
+
+.quickViewSlot {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;
+}
+
+.quickViewButton {
+  --dome-height: 40px;
+  --dome-padding: 0;
+  --dome-border: var(--color-border-subtle);
+  width: 40px;
+}
+
+/* Floats centered just above the dots row, sized to its label. */
+.addToCartSlot {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  z-index: 1;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.addToCartButton {
+  --dome-height: 40px;
+  --dome-padding: 0 var(--space-5);
+}
+
+/* Image position dots: top row of the info box, revealed as it expands. */
+.scrubDots {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: var(--space-2);
+  height: var(--info-dots-row);
+}
+
+.scrubDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-dark-canvas);
   transition:
-    border-color var(--motion-duration-fast) var(--motion-easing-standard),
-    box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
+    width var(--motion-duration-fast) var(--motion-easing-standard),
+    height var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
-.previewCard:hover .previewMedia {
-  border-color: var(--color-border-strong);
-  box-shadow: var(--elevation-low);
+.scrubDotActive {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--color-surface-dark-canvas);
+  background-color: var(--color-surface-card);
 }
 
-.previewAmbient {
-  width: 65%;
-  height: 65%;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--color-border-subtle) 0%, transparent 70%);
-  opacity: 0.7;
-  transition: transform var(--motion-duration-slow) var(--motion-easing-standard);
+/*
+ * Pulled up over the image by the dots row height (must match DOTS_ROW_HEIGHT
+ * in mega-menu-product-card.tsx). At rest the box clips that row away, so the
+ * visible box starts at the title.
+ */
+.productInfoArea {
+  --info-dots-row: 32px;
+  position: relative;
+  margin-top: calc(-1 * var(--info-dots-row));
 }
 
-.previewCard:hover .previewAmbient {
-  transform: scale(1.12);
-}
-
-.previewContent {
-  padding: var(--space-3) 0 0;
+.productInfo {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-secondary);
+  text-align: center;
 }
 
-.previewTitle {
-  margin: 0;
+.productTitle {
+  margin: var(--space-3) 0 0;
   font-family: var(--font-heading);
   font-size: 14px;
   font-weight: 700;
-  color: var(--color-text-primary);
   letter-spacing: -0.01em;
+  line-height: 1.35;
 }
 
-.previewSubtitle {
+.productLink {
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.productLink:hover {
+  text-decoration: underline;
+}
+
+.productPrice {
   margin: 0;
-  font-family: var(--font-body);
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
   color: var(--color-text-secondary);
-  line-height: 1.3;
+}
+
+.productLink:focus-visible {
+  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
+  outline-offset: 2px;
+}
+
+.emptyShelf {
+  margin: 0;
+  padding: 2.5rem 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
 }

@@ -113,7 +113,7 @@ describe("GP-026 CHK1 Story lifecycle schema and migration", () => {
     const journal = JSON.parse(
       readFileSync(resolve(process.cwd(), "src/db/migrations/meta/_journal.json"), "utf8")
     ) as { entries: { idx: number; tag: string }[] };
-    expect(journal.entries.at(-1)).toEqual(
+    expect(journal.entries).toContainEqual(
       expect.objectContaining({ idx: 14, tag: "0014_steep_skreet" })
     );
 

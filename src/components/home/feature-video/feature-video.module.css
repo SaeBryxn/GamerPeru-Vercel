@@ -1,0 +1,160 @@
+.section {
+  width: 100%;
+  padding: var(--space-12) var(--gutter-desktop-lg);
+  background-color: var(--color-surface-canvas);
+}
+
+/*
+ * Rounded film stage. The embed is 16:9 and cannot use object-fit, so it is
+ * scaled past the shorter axis to cover the frame.
+ */
+.stage {
+  position: relative;
+  width: 100%;
+  max-width: var(--container-full);
+  height: 85svh;
+  min-height: 460px;
+  margin: 0 auto;
+  border-radius: var(--radius-xl);
+  background-color: var(--color-surface-dark-canvas);
+  overflow: hidden;
+}
+
+.videoFrame {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.video {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, calc(85svh * 16 / 9));
+  height: max(85svh, calc(100vw * 9 / 16));
+  transform: translate(-50%, -50%);
+  border: 0;
+  pointer-events: none;
+}
+
+/* Keeps the overlay readable over bright frames. */
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--color-surface-dark-canvas) 75%, transparent) 0%,
+    transparent 55%
+  );
+  pointer-events: none;
+}
+
+.overlay {
+  position: absolute;
+  left: var(--space-12);
+  bottom: var(--space-12);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: min(720px, 85%);
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-dark-primary);
+}
+
+/* Outlined display type; solid white where text-stroke is unavailable. */
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(36px, 5vw, 76px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--color-text-dark-primary);
+}
+
+@supports (-webkit-text-stroke: 2px white) {
+  .title {
+    color: transparent;
+    -webkit-text-stroke: 2px var(--color-text-dark-primary);
+  }
+}
+
+.subtitle {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: clamp(15px, 1.4vw, 18px);
+  line-height: 1.5;
+  color: var(--color-text-dark-primary);
+}
+
+.cta {
+  --dome-height: 52px;
+  --dome-radius: var(--radius-sm);
+  --dome-font-size: 15px;
+  --dome-border: var(--color-surface-card);
+  margin-top: var(--space-2);
+}
+
+.playToggle {
+  position: absolute;
+  right: var(--space-8);
+  bottom: var(--space-8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-card);
+  color: var(--color-text-primary);
+  box-shadow: var(--elevation-mid);
+  cursor: pointer;
+}
+
+.playToggle:focus-visible {
+  outline: 2px solid var(--color-border-dark-focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 1023px) {
+  .section {
+    padding: var(--space-10) var(--gutter-tablet);
+  }
+
+  .stage {
+    height: 70svh;
+  }
+
+  .video {
+    width: max(100%, calc(70svh * 16 / 9));
+    height: max(70svh, calc(100vw * 9 / 16));
+  }
+
+  .overlay {
+    left: var(--space-6);
+    bottom: var(--space-8);
+    max-width: calc(100% - var(--space-12));
+  }
+
+  .playToggle {
+    right: var(--space-5);
+    bottom: var(--space-5);
+  }
+}
+
+@media (max-width: 767px) {
+  .section {
+    padding: var(--space-8) var(--gutter-mobile);
+  }
+}

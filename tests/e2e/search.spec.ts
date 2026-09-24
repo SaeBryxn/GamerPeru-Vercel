@@ -36,7 +36,7 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
       await expect(launcher).toBeFocused();
     });
 
-    test("B: shows 1-character guidance and renders predictive suggestions when typing 'mouse'", async ({
+    test("B: lists grouped quick results, filters them while typing and links to /buscar", async ({
       page,
     }) => {
       const launcher = page.getByRole("link", { name: "Buscar productos" });
@@ -46,61 +46,57 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
         name: "Término de búsqueda",
       });
 
-      // 1 char -> guidance
-      await searchInput.fill("m");
-      await expect(page.getByText("Escribe al menos 2 caracteres para buscar.")).toBeVisible();
+      // Empty query: every group is listed
+      for (const group of ["Mouse", "Mousepad", "Skates"]) {
+        await expect(page.getByRole("heading", { name: group, level: 3 })).toBeVisible();
+      }
 
-      // 2+ chars -> predictive suggestions (wait for predictive API response)
-      const predictiveResponse = page.waitForResponse(
-        (res) => res.url().includes("/api/search/predictive") && res.status() === 200
-      );
+      // Typing narrows the groups and products
+      await searchInput.fill("sky orange");
+      await expect(page.getByRole("heading", { name: "Mouse", level: 3 })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "ATK Sky Orange (Large Size)" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "ATK Sky Black (Large Size)" })).toHaveCount(0);
+
+      // "Ver todos" opens the full results page
       await searchInput.fill("mouse");
-      await predictiveResponse;
-
-      // Wait for suggestions
-      const seeAllLink = page.getByRole("link", {
-        name: /Ver todos los resultados para/i,
-      });
+      const seeAllLink = page.getByRole("link", { name: /Ver todos los resultados para/i });
       await expect(seeAllLink).toBeVisible();
-
-      // Verify product section heading exists
-      const productsHeading = page.getByRole("heading", {
-        name: "Productos",
-        level: 3,
-      });
-      await expect(productsHeading).toBeVisible();
-
-      // Click "Ver todos los resultados"
       await seeAllLink.click();
       await expect(page).toHaveURL(/\/buscar\?q=mouse/);
-
-      // Verify /buscar results page rendered
       await expect(page.getByRole("heading", { name: "Búsqueda", level: 1 })).toBeVisible();
-      await expect(page.getByText(/resultados para/i)).toBeVisible();
     });
 
-    test("C: clear button resets query and suggestions and keeps focus on input", async ({
-      page,
-    }) => {
+    test("C: clear button resets the query and keeps focus on input", async ({ page }) => {
       const launcher = page.getByRole("link", { name: "Buscar productos" });
       await launcher.click();
 
       const searchInput = page.getByRole("searchbox", {
         name: "Término de búsqueda",
       });
-      const predictiveResponse = page.waitForResponse(
-        (res) => res.url().includes("/api/search/predictive") && res.status() === 200
-      );
-      await searchInput.fill("teclado");
-      await predictiveResponse;
+      await searchInput.fill("zzzz");
+      await expect(page.getByText(/No encontramos productos para/)).toBeVisible();
 
       const clearBtn = page.getByRole("button", { name: "Limpiar búsqueda" });
-      await expect(clearBtn).toBeVisible();
-
       await clearBtn.click();
       await expect(searchInput).toHaveValue("");
       await expect(searchInput).toBeFocused();
-      await expect(page.getByText("Comienza a escribir para buscar")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Mouse", level: 3 })).toBeVisible();
+    });
+
+    test("D: clicking the backdrop closes the panel and a product link opens its PDP", async ({
+      page,
+    }) => {
+      const launcher = page.getByRole("link", { name: "Buscar productos" });
+      await launcher.click();
+      const dialog = page.getByRole("dialog", { name: "Búsqueda de productos" });
+      await expect(dialog).toBeVisible();
+
+      await page.mouse.click(100, 400);
+      await expect(dialog).not.toBeVisible();
+
+      await launcher.click();
+      await page.getByRole("link", { name: "ATK A9 Plus 2.0 Black" }).click();
+      await expect(page).toHaveURL(/\/productos\/atk-a9-plus-2-0-black/);
     });
   });
 

@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("Catalog Discovery Components (GP-013 UI/Accessibility Verification)", () => {
-  it("renders DiscoveryToolbar with result count, sort select, and filter launcher", () => {
+  it("renders DiscoveryToolbar with result count, sort menu trigger, and filter launcher", () => {
     const filterState: DiscoveryFilterState = {
       brands: ["wlmouse"],
       categories: [],
@@ -33,9 +33,10 @@ describe("Catalog Discovery Components (GP-013 UI/Accessibility Verification)", 
     );
 
     expect(html).toContain("8 productos");
-    expect(html).toContain("Filtros");
+    expect(html).toContain("Mostrar filtros");
     expect(html).toContain("Ordenar por:");
-    expect(html).toContain('value="precio-menor"');
+    expect(html).toContain("Precio, menor a mayor");
+    expect(html).toContain('aria-haspopup="menu"');
   });
 
   it("renders AppliedFilters with chips and clear all button", () => {

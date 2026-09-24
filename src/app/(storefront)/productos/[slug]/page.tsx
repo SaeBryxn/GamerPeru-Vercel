@@ -6,10 +6,14 @@ import { buildProductMetadata } from "@/lib/catalog/pdp-seo";
 import {
   CommerceHeroContainer,
   HardwareSpecifications,
-  ProductBreadcrumb,
+  PdpAccordion,
   ProductJsonLd,
+  buildSpecRows,
   type CommerceHeroProjection,
+  type PdpAccordionItem,
 } from "@/components/product-detail";
+import { getPreviewExtras } from "@/components/product-detail/pdp-preview-extras";
+import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
 import { ProductStoryRenderer } from "@/components/product-story";
 import type { ProductDiscoveryItem } from "@/lib/catalog/types";
 import styles from "./page.module.css";
@@ -55,6 +59,55 @@ export default async function ProductDetailPage({
     media: product.media,
   };
 
+  const specRows = product.specifications ? buildSpecRows(product.specifications) : [];
+  // One template for every category (mouses, teclados, mousepads, audio…);
+  // only the showcase extras vary with the product type.
+  const previewExtras =
+    resolveCatalogReaderMode() === "dev-preview" ? getPreviewExtras(product.category.slug) : null;
+
+  // Accordion sections only render when they have real content to show.
+  const dimensionRows = specRows.filter((row) =>
+    /largo|ancho|alto|length|width|height|dimens|peso|weight/i.test(`${row.key} ${row.label}`)
+  );
+  const accordionItems: PdpAccordionItem[] = [];
+  if (dimensionRows.length > 0) {
+    accordionItems.push({
+      id: "dimensiones",
+      title: "Dimensiones",
+      content: (
+        <ul key="dimensiones">
+          {dimensionRows.map((row) => (
+            <li key={row.key}>
+              {row.label}: {row.formattedValue}
+            </li>
+          ))}
+        </ul>
+      ),
+    });
+  }
+  if (product.specifications && specRows.length > 0) {
+    accordionItems.push({
+      id: "especificaciones",
+      title: "Especificaciones",
+      content: (
+        <HardwareSpecifications key="especificaciones" specifications={product.specifications} />
+      ),
+    });
+  }
+  if (previewExtras && previewExtras.packageContents.length > 0) {
+    accordionItems.push({
+      id: "contenido",
+      title: "Contenido del paquete",
+      content: (
+        <ul key="contenido">
+          {previewExtras.packageContents.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ),
+    });
+  }
+
   // Single-query page-level RelatedProducts hydration for Story cross-sell
   let relatedProductsMap: Map<string, ProductDiscoveryItem> | undefined;
 
@@ -80,11 +133,20 @@ export default async function ProductDetailPage({
     <main className={styles.pageWrapper} data-testid="product-detail-page">
       <ProductJsonLd product={product} />
 
-      <ProductBreadcrumb category={product.category} productName={product.name} />
-
-      <CommerceHeroContainer projection={heroProjection} />
-
-      {product.specifications && <HardwareSpecifications specifications={product.specifications} />}
+      <CommerceHeroContainer
+        projection={heroProjection}
+        specHighlights={specRows}
+        accessories={
+          previewExtras && previewExtras.accessories.length > 0
+            ? previewExtras.accessories
+            : undefined
+        }
+        details={
+          accordionItems.length > 0 ? (
+            <PdpAccordion key="pdp-details" items={accordionItems} />
+          ) : undefined
+        }
+      />
 
       {product.story && (
         <ProductStoryRenderer

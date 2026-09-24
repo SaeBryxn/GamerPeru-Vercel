@@ -1,6 +1,8 @@
+/* Same max width and gutters as the header's full container, so the toolbar
+   and grid run edge to edge with the navbar. */
 .container {
   width: 100%;
-  max-width: var(--container-default);
+  max-width: var(--container-full);
   margin-left: auto;
   margin-right: auto;
   padding-left: var(--gutter-compact-mobile);

@@ -127,6 +127,7 @@ test.describe("GP-014 DB3E — Visual QA Evidence Suite", () => {
     // -------------------------------------------------------------------------
     // SS-03: Desktop Hardware Specifications Table (1280x800)
     // -------------------------------------------------------------------------
+    await page.getByTestId("pdp-accordion-especificaciones").click();
     const hardwareSpecs = page.getByTestId("hardware-specifications");
     await expect(hardwareSpecs).toBeVisible();
     await hardwareSpecs.scrollIntoViewIfNeeded();

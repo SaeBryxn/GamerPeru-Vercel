@@ -2,8 +2,10 @@
 
 import React from "react";
 import Link from "next/link";
-import { Menu, ExternalLink } from "lucide-react";
+import { ExternalLink, Menu } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { AdminThemeToggle } from "./admin-theme-toggle";
+import type { AdminTheme } from "./use-admin-theme";
 import styles from "./admin-shell.module.css";
 
 interface AdminHeaderProps {
@@ -11,6 +13,8 @@ interface AdminHeaderProps {
   pageTitle?: string;
   isMobileNavOpen?: boolean;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
+  theme: AdminTheme;
+  onToggleTheme: () => void;
 }
 
 export function AdminHeader({
@@ -18,6 +22,8 @@ export function AdminHeader({
   pageTitle = "Inicio",
   isMobileNavOpen = false,
   triggerRef,
+  theme,
+  onToggleTheme,
 }: AdminHeaderProps) {
   return (
     <header className={styles.header}>
@@ -42,6 +48,7 @@ export function AdminHeader({
       </div>
 
       <div className={styles.headerRight}>
+        <AdminThemeToggle theme={theme} onToggle={onToggleTheme} />
         <Link href="/" className={styles.storefrontLink} target="_blank" rel="noopener noreferrer">
           <span>Ir a la tienda</span>
           <ExternalLink className={styles.navIcon} aria-hidden="true" />

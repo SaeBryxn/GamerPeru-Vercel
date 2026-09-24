@@ -162,3 +162,44 @@
 .interactiveCard:hover .image {
   transform: scale(1.03);
 }
+
+/*
+ * "Elegir opciones": centered near the bottom of the image, hidden until the
+ * card is hovered or holds keyboard focus, then fading in while rising 10px.
+ */
+.actionSlot {
+  position: absolute;
+  right: 0;
+  bottom: var(--space-4);
+  left: 0;
+  z-index: 1;
+  width: fit-content;
+  margin: 0 auto;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition:
+    opacity var(--motion-duration-moderate) var(--motion-easing-snappy),
+    transform var(--motion-duration-moderate) var(--motion-easing-snappy);
+}
+
+.card:hover .actionSlot,
+.card:focus-within .actionSlot {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+/* Touch screens have no hover, so the action stays available there. */
+@media (hover: none) {
+  .actionSlot {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+}
+
+.actionButton {
+  --dome-height: 40px;
+  --dome-padding: 0 var(--space-5);
+}

@@ -1,0 +1,12 @@
+.magnetic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.content {
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+}

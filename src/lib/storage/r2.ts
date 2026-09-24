@@ -33,9 +33,15 @@ export function createR2Client() {
   const accessKeyId = serverEnv.R2_ACCESS_KEY_ID ?? "placeholder_r2_access_key";
   const secretAccessKey = serverEnv.R2_SECRET_ACCESS_KEY ?? "placeholder_r2_secret";
 
+  // S3_ENDPOINT points the same client at Supabase Storage (S3 compatible) or
+  // any other provider; without it we keep talking to Cloudflare R2.
+  const endpoint = serverEnv.S3_ENDPOINT ?? `https://${accountId}.r2.cloudflarestorage.com`;
+
   return new S3Client({
-    region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    region: serverEnv.S3_REGION ?? "auto",
+    endpoint,
+    // Supabase serves buckets as a path, not as a host prefix.
+    forcePathStyle: Boolean(serverEnv.S3_ENDPOINT),
     credentials: {
       accessKeyId,
       secretAccessKey,

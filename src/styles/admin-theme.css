@@ -1,0 +1,115 @@
+/**
+ * Gamer Perú — Admin Theme Scope
+ *
+ * The admin shell carries data-admin-theme="light" | "dark". Each theme
+ * redefines the canonical tokens inside that scope, so every admin screen that
+ * already consumes --color-* follows the theme without touching its CSS.
+ *
+ * Accent tokens (--admin-accent-*) are admin-only: they tint icons, active
+ * states and focus rings without altering the storefront brand palette.
+ */
+
+[data-admin-theme] {
+  /* Signal Crimson: the storefront brand accent, shared by the admin. */
+  --admin-accent: #e11d48;
+  --admin-accent-strong: #be123c;
+  --admin-accent-soft: rgba(225, 29, 72, 0.1);
+  --admin-accent-contrast: #ffffff;
+  --admin-sidebar-width: 268px;
+  /* Three elevation levels: canvas -> panel -> inset metric tile. */
+  --admin-card-radius: 18px;
+  --admin-inset-radius: 14px;
+  --admin-card-padding: 28px;
+  --admin-inset-padding: 20px;
+  --admin-header-height: 64px;
+  --admin-radius: 14px;
+}
+
+[data-admin-theme="light"] {
+  --color-surface-canvas: #f6f7fb;
+  --color-surface-card: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-surface-secondary: #f1f2f7;
+  --color-surface-tertiary: #e4e5ee;
+
+  --color-text-primary: #101014;
+  --color-text-secondary: #4b4d5a;
+  --color-text-muted: #6f7180;
+  --color-text-disabled: #a2a4b0;
+
+  --color-border-subtle: #e5e6ee;
+  --color-border-default: #d5d7e2;
+  --color-border-strong: #b4b7c6;
+  --color-border-focus: #e11d48;
+
+  --admin-shadow: 0 1px 2px rgba(16, 16, 20, 0.04), 0 8px 24px -12px rgba(16, 16, 20, 0.16);
+  --admin-panel: #ffffff;
+  --admin-panel-border: #edeef4;
+  --admin-card-shadow: 0 1px 3px rgba(16, 16, 20, 0.05), 0 1px 2px rgba(16, 16, 20, 0.04);
+  --admin-inset: #f8f9fc;
+  --admin-inset-border: #eceef5;
+  --admin-sidebar-surface: #ffffff;
+  --admin-header-surface: rgba(255, 255, 255, 0.86);
+  --admin-scrim: rgba(16, 16, 20, 0.45);
+}
+
+[data-admin-theme="dark"] {
+  --color-surface-canvas: #0b0c10;
+  --color-surface-card: #15161c;
+  --color-surface-elevated: #1b1d25;
+  --color-surface-secondary: #1b1d25;
+  --color-surface-tertiary: #262933;
+
+  --color-text-primary: #f2f3f7;
+  --color-text-secondary: #b6b9c6;
+  --color-text-muted: #8b8fa0;
+  --color-text-disabled: #5d6170;
+
+  --color-border-subtle: #262933;
+  --color-border-default: #333744;
+  --color-border-strong: #474c5c;
+  --color-border-focus: #f43f5e;
+
+  /* Status colors need more lift to stay readable on dark surfaces. */
+  --color-status-success-text: #4ade80;
+  --color-status-success-background: rgba(74, 222, 128, 0.12);
+  --color-status-success-border: rgba(74, 222, 128, 0.32);
+  --color-status-warning-text: #fbbf24;
+  --color-status-warning-background: rgba(251, 191, 36, 0.12);
+  --color-status-warning-border: rgba(251, 191, 36, 0.32);
+  --color-status-danger-text: #fb7185;
+  --color-status-danger-background: rgba(251, 113, 133, 0.12);
+  --color-status-danger-border: rgba(251, 113, 133, 0.32);
+  --color-status-info-text: #38bdf8;
+  --color-status-info-background: rgba(56, 189, 248, 0.12);
+  --color-status-info-border: rgba(56, 189, 248, 0.32);
+
+  /* Lifted on dark so filled surfaces keep white text readable. */
+  --admin-accent: #f43f5e;
+  --admin-accent-strong: #fb7185;
+  --admin-accent-soft: rgba(244, 63, 94, 0.16);
+  --admin-accent-contrast: #ffffff;
+
+  --admin-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 16px 40px -20px rgba(0, 0, 0, 0.8);
+  --admin-panel: #15161c;
+  --admin-panel-border: #22242d;
+  --admin-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --admin-inset: #1b1d25;
+  --admin-inset-border: #282b35;
+  --admin-sidebar-surface: #101117;
+  --admin-header-surface: rgba(16, 17, 23, 0.88);
+  --admin-scrim: rgba(0, 0, 0, 0.6);
+}
+
+/* The attribute lives on <html> (set before paint) and is removed on leaving. */
+html[data-admin-theme="dark"],
+html[data-admin-theme="dark"] body {
+  background-color: #0b0c10;
+  color-scheme: dark;
+}
+
+html[data-admin-theme="light"],
+html[data-admin-theme="light"] body {
+  background-color: #f6f7fb;
+  color-scheme: light;
+}

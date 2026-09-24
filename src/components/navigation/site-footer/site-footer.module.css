@@ -10,20 +10,26 @@
 .footerGrid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--space-8);
+  gap: var(--space-10);
 }
 
 @media (min-width: 768px) {
   .footerGrid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .footerGrid {
-    grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
+    grid-template-columns: 1.4fr repeat(5, 1fr);
     gap: var(--space-8);
   }
+}
+
+.brandColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
 }
 
 .footerColumn {
@@ -32,12 +38,40 @@
   gap: var(--space-4);
 }
 
-.brandDescription {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--color-text-dark-muted);
-  max-width: 320px;
+.socialList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.socialLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  color: var(--color-text-dark-primary);
+  transition:
+    color 300ms ease-in-out,
+    background-color 300ms ease-in-out;
+}
+
+.socialLink:hover {
+  background-color: var(--color-accent-red-soft);
+  color: var(--color-surface-card);
+}
+
+.socialLink:focus-visible {
+  outline: 2px solid var(--color-border-dark-focus);
+  outline-offset: 2px;
+}
+
+.socialLinkPending {
+  color: var(--color-text-dark-secondary);
 }
 
 .columnTitle {
@@ -78,40 +112,19 @@
   border-radius: var(--radius-xs);
 }
 
-/* Payment & Trust Section */
-.paymentSection {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.paymentBadges {
-  display: flex;
+.paymentNote {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   flex-wrap: wrap;
 }
 
 .paymentBadge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-1) var(--space-3);
-  background-color: var(--color-surface-dark-secondary);
-  border: 1px solid var(--color-border-dark-control);
-  border-radius: var(--radius-sm);
   color: var(--color-text-dark-primary);
   font-family: var(--font-heading);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
-}
-
-.trustNote {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--color-text-dark-muted);
-  margin: 0;
 }
 
 /* Bottom Bar */

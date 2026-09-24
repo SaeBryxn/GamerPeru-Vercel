@@ -19,7 +19,7 @@
 .sectionIcon {
   width: 1.25rem;
   height: 1.25rem;
-  color: var(--color-brand-primary, #e11d48);
+  color: var(--color-brand-primary, var(--color-brand-primary));
 }
 
 .sectionTitle {
@@ -27,7 +27,7 @@
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   margin: 0;
 }
 
@@ -36,8 +36,8 @@
   flex-direction: column;
   gap: 1.25rem;
   padding: 1.5rem;
-  background-color: var(--color-surface-card, #ffffff);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  background-color: var(--color-surface-card, var(--color-surface-card));
+  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-lg, 0.75rem);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -52,7 +52,7 @@
 .summaryLabel {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-secondary, #52525b);
+  color: var(--color-text-secondary, var(--color-text-secondary));
 }
 
 .summaryValue {
@@ -60,7 +60,7 @@
   font-size: 2rem;
   font-weight: 700;
   letter-spacing: -0.03em;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   margin-top: 0.25rem;
@@ -71,7 +71,7 @@
   height: 0.5rem;
   border-radius: var(--radius-full, 9999px);
   overflow: hidden;
-  background-color: var(--color-surface-secondary, #f4f4f5);
+  background-color: var(--color-surface-secondary, var(--color-surface-secondary));
   gap: 2px;
 }
 
@@ -103,7 +103,7 @@
   flex-direction: column;
   gap: 0.375rem;
   padding: 0.75rem;
-  background-color: var(--color-surface-secondary, #f4f4f5);
+  background-color: var(--color-surface-secondary, var(--color-surface-secondary));
   border-radius: var(--radius-md, 0.5rem);
 }
 
@@ -123,14 +123,14 @@
 .statusName {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--color-text-secondary, #52525b);
+  color: var(--color-text-secondary, var(--color-text-secondary));
 }
 
 .statusCount {
   font-family: var(--font-heading, sans-serif);
   font-size: 1.125rem;
   font-weight: 700;
-  color: var(--color-text-primary, #09090b);
+  color: var(--color-text-primary, var(--color-text-primary));
   font-variant-numeric: tabular-nums;
 }
 
@@ -157,8 +157,86 @@
   background-color: #ec4899;
 }
 
-@media (prefers-color-scheme: dark) {
-  .statusCard {
-    background-color: var(--color-surface-dark-secondary, #18181b);
-  }
+/* ---- Premium pass ---- */
+.containerCard {
+  padding: var(--admin-card-padding);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--admin-panel);
+  box-shadow: var(--admin-card-shadow);
+}
+
+.summaryValue {
+  color: var(--color-text-primary);
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.summaryLabel {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.statusGrid {
+  gap: var(--space-3);
+}
+
+/* Inset tile per state with its colored dot; never a black box. */
+.statusCard {
+  padding: var(--admin-inset-padding);
+  border: 1px solid var(--admin-inset-border);
+  border-radius: var(--admin-inset-radius);
+  background-color: var(--admin-inset);
+  box-shadow: none;
+}
+
+.statusName {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.statusCount {
+  color: var(--color-text-primary);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+}
+
+.statusPending {
+  background-color: var(--color-status-warning-text);
+}
+
+.statusConfirmed {
+  background-color: var(--color-status-info-text);
+}
+
+.statusProcessing {
+  /* Violet, so "en proceso" never reads as the red of "cancelado". */
+  background-color: var(--color-feature-indigo);
+}
+
+.statusFulfilled {
+  background-color: var(--color-status-success-text);
+}
+
+.statusCancelled {
+  background-color: var(--color-status-danger-text);
+}
+
+.statusExpired {
+  background-color: var(--color-text-disabled);
+}
+
+.statusRefunded {
+  background-color: var(--color-brand-primary);
 }
