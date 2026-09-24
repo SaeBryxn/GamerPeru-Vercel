@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { Minus, Plus } from "lucide-react";
-import { Icon } from "@/components/ui";
+import { motion } from "framer-motion";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import styles from "./cart-quantity-control.module.css";
 
 export interface CartQuantityControlProps {
@@ -29,31 +29,40 @@ export function CartQuantityControl({
 
   return (
     <div className={styles.container} role="group" aria-label={`Cantidad para ${productName}`}>
-      <button
-        type="button"
-        onClick={onDecrement}
-        disabled={disabled || isMin}
-        className={styles.button}
-        aria-label={`Disminuir cantidad de ${productName}`}
-        data-testid="cart-qty-decrement"
+      <motion.span
+        key={quantity}
+        className={styles.quantity}
+        aria-live="polite"
+        data-testid="cart-qty-value"
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
       >
-        <Icon icon={Minus} size="sm" aria-hidden="true" />
-      </button>
-
-      <span className={styles.quantity} aria-live="polite" data-testid="cart-qty-value">
         {quantity}
-      </span>
+      </motion.span>
 
-      <button
-        type="button"
-        onClick={onIncrement}
-        disabled={disabled || isMax}
-        className={styles.button}
-        aria-label={`Aumentar cantidad de ${productName}`}
-        data-testid="cart-qty-increment"
-      >
-        <Icon icon={Plus} size="sm" aria-hidden="true" />
-      </button>
+      <div className={styles.steppers}>
+        <button
+          type="button"
+          onClick={onIncrement}
+          disabled={disabled || isMax}
+          className={styles.stepper}
+          aria-label={`Aumentar cantidad de ${productName}`}
+          data-testid="cart-qty-increment"
+        >
+          <ChevronUp size={13} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={onDecrement}
+          disabled={disabled || isMin}
+          className={styles.stepper}
+          aria-label={`Disminuir cantidad de ${productName}`}
+          data-testid="cart-qty-decrement"
+        >
+          <ChevronDown size={13} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   );
 }

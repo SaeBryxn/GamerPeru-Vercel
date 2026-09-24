@@ -1,14 +1,35 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, AlertTriangle, RefreshCw, X } from "lucide-react";
-import { Button, Icon } from "@/components/ui";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  AlertCircle,
+  AlertTriangle,
+  Lock,
+  Percent,
+  RefreshCw,
+  StickyNote,
+  Truck,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui";
+import { formatCurrency } from "@/lib/utils/currency";
 import { CartEmptyState } from "./cart-empty-state";
 import { CartLine } from "./cart-line";
 import { useCart } from "./cart-provider";
-import { CartSummary } from "./cart-summary";
 import styles from "./cart-drawer.module.css";
+
+/** Matches the mega-menu spring, so every panel in the store settles the same way. */
+const PANEL_TRANSITION = { type: "spring", stiffness: 320, damping: 36, mass: 0.9 } as const;
+
+type UtilityTab = "note" | "shipping" | "discount";
+
+const UTILITY_TABS: { id: UtilityTab; label: string; icon: typeof StickyNote }[] = [
+  { id: "note", label: "Nota del pedido", icon: StickyNote },
+  { id: "shipping", label: "Envío", icon: Truck },
+  { id: "discount", label: "Descuento", icon: Percent },
+];
 
 export function CartDrawer(): React.JSX.Element | null {
   const {
@@ -26,8 +47,9 @@ export function CartDrawer(): React.JSX.Element | null {
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const [openTab, setOpenTab] = useState<UtilityTab | null>(null);
+  const [orderNote, setOrderNote] = useState("");
 
-  // Sync native dialog showModal / close
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -52,7 +74,6 @@ export function CartDrawer(): React.JSX.Element | null {
     };
   }, [isDrawerOpen]);
 
-  // Handle native Escape and backdrop clicks
   const handleCancel = (e: React.SyntheticEvent) => {
     e.preventDefault();
     closeDrawer();
@@ -81,18 +102,23 @@ export function CartDrawer(): React.JSX.Element | null {
       aria-labelledby="cart-drawer-title"
       data-testid="cart-drawer"
     >
-      <div className={styles.drawerPanel}>
-        {/* Header */}
-        <div className={styles.header}>
+      <motion.div
+        className={styles.drawerPanel}
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        transition={PANEL_TRANSITION}
+      >
+        <header className={styles.header}>
           <div className={styles.headerTitleGroup}>
             <h2 id="cart-drawer-title" className={styles.title}>
-              Tu Carrito
+              Carrito
+              {status === "READY" && itemCount > 0 && (
+                <sup className={styles.countSuperscript} data-testid="cart-drawer-count">
+                  {itemCount}
+                </sup>
+              )}
             </h2>
-            {status === "READY" && itemCount > 0 && (
-              <span className={styles.countBadge} data-testid="cart-drawer-count">
-                {itemCount} {itemCount === 1 ? "producto" : "productos"}
-              </span>
-            )}
+            <span className={styles.headerMuted}>Vistos recientemente</span>
           </div>
 
           <button
@@ -103,19 +129,17 @@ export function CartDrawer(): React.JSX.Element | null {
             aria-label="Cerrar carrito"
             data-testid="cart-drawer-close"
           >
-            <Icon icon={X} size="lg" aria-hidden="true" />
+            <X size={20} aria-hidden="true" />
           </button>
-        </div>
+        </header>
 
-        {/* Inline Error if present */}
         {lastError && (
           <div className={styles.errorAlert} role="alert" data-testid="cart-drawer-error-alert">
-            <Icon icon={AlertCircle} size="sm" aria-hidden="true" />
+            <AlertCircle size={16} aria-hidden="true" />
             <span>{lastError}</span>
           </div>
         )}
 
-        {/* Body Content */}
         <div className={styles.body}>
           {status === "LOADING" && (
             <div className={styles.loadingState} aria-busy="true" data-testid="cart-drawer-loading">
@@ -128,12 +152,7 @@ export function CartDrawer(): React.JSX.Element | null {
 
           {status === "PROFILE_REQUIRED" && (
             <div className={styles.profileRequiredState} data-testid="cart-profile-required-state">
-              <Icon
-                icon={AlertCircle}
-                size="xl"
-                className={styles.profileRequiredIcon}
-                aria-hidden="true"
-              />
+              <AlertCircle size={32} className={styles.profileRequiredIcon} aria-hidden="true" />
               <h3 className={styles.profileRequiredTitle}>Completa tu perfil</h3>
               <p className={styles.profileRequiredText}>
                 Debes completar tu perfil de cliente para poder utilizar el carrito de compras.
@@ -144,14 +163,14 @@ export function CartDrawer(): React.JSX.Element | null {
                 className={styles.profileActionLink}
                 data-testid="cart-complete-profile-link"
               >
-                Completar Perfil
+                Completar perfil
               </Link>
             </div>
           )}
 
           {status === "ERROR" && (
             <div className={styles.errorState} data-testid="cart-drawer-error-state">
-              <Icon icon={AlertCircle} size="xl" className={styles.errorIcon} aria-hidden="true" />
+              <AlertCircle size={32} className={styles.errorIcon} aria-hidden="true" />
               <h3 className={styles.errorTitle}>Error al cargar el carrito</h3>
               <p className={styles.errorText}>No pudimos recuperar tu carrito en este momento.</p>
               <Button
@@ -159,12 +178,7 @@ export function CartDrawer(): React.JSX.Element | null {
                 onClick={() => retryBootstrap()}
                 data-testid="cart-retry-button"
               >
-                <Icon
-                  icon={RefreshCw}
-                  size="sm"
-                  aria-hidden="true"
-                  style={{ marginRight: "6px" }}
-                />
+                <RefreshCw size={14} aria-hidden="true" style={{ marginRight: "6px" }} />
                 Reintentar
               </Button>
             </div>
@@ -182,60 +196,129 @@ export function CartDrawer(): React.JSX.Element | null {
                   role="alert"
                   data-testid="cart-unavailable-warning"
                 >
-                  <Icon icon={AlertTriangle} size="sm" aria-hidden="true" />
+                  <AlertTriangle size={16} aria-hidden="true" />
                   <span>Algunos productos en tu carrito ya no están disponibles.</span>
                 </div>
               )}
 
-              {lines.map((line) => (
-                <CartLine
-                  key={line.variantId}
-                  line={line}
-                  onUpdateQuantity={(qty) => updateQuantity(line.variantId, qty)}
-                  onRemove={() => removeItem(line.variantId)}
-                  disabled={isMutating || pendingVariantIds.has(line.variantId)}
-                />
-              ))}
+              <AnimatePresence initial={false} mode="popLayout">
+                {lines.map((line) => (
+                  <motion.div
+                    key={line.variantId}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
+                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    className={styles.lineRow}
+                  >
+                    <CartLine
+                      line={line}
+                      onUpdateQuantity={(qty) => updateQuantity(line.variantId, qty)}
+                      onRemove={() => removeItem(line.variantId)}
+                      disabled={isMutating || pendingVariantIds.has(line.variantId)}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           )}
         </div>
 
-        {/* Footer */}
         {status === "READY" && lines.length > 0 && snapshot && (
-          <div className={styles.footer} data-testid="cart-drawer-footer">
-            <CartSummary subtotalCents={snapshot.subtotalCents} />
-
-            <div className={styles.ctaGroup}>
-              <Link
-                href="/checkout"
-                onClick={closeDrawer}
-                className={styles.checkoutDrawerButton}
-                data-testid="cart-drawer-checkout-button"
-              >
-                Finalizar compra
-              </Link>
-
-              <Link
-                href="/carrito"
-                onClick={closeDrawer}
-                className={styles.viewCartButton}
-                data-testid="cart-view-full-page"
-              >
-                Ver carrito
-              </Link>
-
-              <Button
-                variant="ghost"
-                fullWidth
-                onClick={closeDrawer}
-                data-testid="cart-continue-shopping"
-              >
-                Seguir comprando
-              </Button>
+          <footer className={styles.footer} data-testid="cart-drawer-footer">
+            <div className={styles.utilityTabs} role="group" aria-label="Opciones del pedido">
+              {UTILITY_TABS.map((tab) => {
+                const TabIcon = tab.icon;
+                const isOpen = openTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setOpenTab(isOpen ? null : tab.id)}
+                    className={`${styles.utilityTab} ${isOpen ? styles.utilityTabActive : ""}`}
+                    aria-expanded={isOpen}
+                    data-testid={`cart-utility-${tab.id}`}
+                  >
+                    <TabIcon size={15} aria-hidden="true" />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
             </div>
-          </div>
+
+            <AnimatePresence initial={false}>
+              {openTab && (
+                <motion.div
+                  key={openTab}
+                  className={styles.utilityPanel}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  {openTab === "note" && (
+                    <label className={styles.utilityField}>
+                      <span className={styles.utilityLabel}>Instrucciones para tu pedido</span>
+                      <textarea
+                        value={orderNote}
+                        onChange={(event) => setOrderNote(event.target.value)}
+                        rows={3}
+                        className={styles.utilityTextarea}
+                        placeholder="Referencia de entrega, horario preferido..."
+                        data-testid="cart-order-note"
+                      />
+                    </label>
+                  )}
+
+                  {openTab === "shipping" && (
+                    <p className={styles.utilityNote}>
+                      El costo de envío se calcula al finalizar la compra, según tu dirección.
+                    </p>
+                  )}
+
+                  {openTab === "discount" && (
+                    <p className={styles.utilityNote}>
+                      Los códigos de descuento se aplican en el checkout.
+                    </p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className={styles.subtotalRow}>
+              <p className={styles.taxNote}>
+                Impuestos incluidos. El envío se calcula al finalizar la compra.
+              </p>
+              <div className={styles.subtotalGroup}>
+                <span className={styles.subtotalLabel}>Subtotal</span>
+                <span className={styles.subtotalValue} data-testid="cart-subtotal-value">
+                  {formatCurrency(snapshot.subtotalCents)}
+                </span>
+              </div>
+            </div>
+
+            <Link
+              href="/checkout"
+              onClick={closeDrawer}
+              className={styles.checkoutDrawerButton}
+              data-testid="cart-drawer-checkout-button"
+            >
+              <Lock size={15} aria-hidden="true" />
+              <span>Finalizar compra</span>
+            </Link>
+
+            <Link
+              href="/carrito"
+              onClick={closeDrawer}
+              className={styles.viewCartButton}
+              data-testid="cart-view-full-page"
+            >
+              Ver carrito
+            </Link>
+          </footer>
         )}
-      </div>
+      </motion.div>
     </dialog>
   );
 }

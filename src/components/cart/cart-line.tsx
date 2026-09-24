@@ -2,10 +2,8 @@
 
 import React from "react";
 import Image from "next/image";
-import { Trash2 } from "lucide-react";
-import { Icon } from "@/components/ui";
-import type { CartLineSnapshot } from "@/lib/cart/types";
 import { formatCurrency } from "@/lib/utils/currency";
+import type { CartLineSnapshot } from "@/lib/cart/types";
 import { CartQuantityControl } from "./cart-quantity-control";
 import styles from "./cart-line.module.css";
 
@@ -26,9 +24,8 @@ export function CartLine({
 }: CartLineProps): React.JSX.Element {
   const mediaUrl = line.primaryMedia?.url;
 
-  const attributesText = Object.entries(line.selectedAttributes)
-    .map(([key, val]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${val}`)
-    .join(" · ");
+  // Variant attributes read as one quiet line under the title ("Mini / Negro").
+  const variantText = Object.values(line.selectedAttributes).join(" / ");
 
   return (
     <div
@@ -38,14 +35,13 @@ export function CartLine({
       data-testid="cart-line-item"
       data-variant-id={line.variantId}
     >
-      {/* Thumbnail */}
       <div className={styles.thumbnailWrapper}>
         {mediaUrl ? (
           <Image
             src={mediaUrl}
             alt={line.primaryMedia?.altText ?? line.productName}
-            width={72}
-            height={72}
+            width={88}
+            height={88}
             className={styles.thumbnailImage}
           />
         ) : (
@@ -55,45 +51,41 @@ export function CartLine({
         )}
       </div>
 
-      {/* Info */}
       <div className={styles.infoCol}>
-        <div className={styles.titleRow}>
-          <h3 className={styles.productName}>{line.productName}</h3>
-          <button
-            type="button"
-            onClick={onRemove}
-            disabled={disabled}
-            className={styles.removeButton}
-            aria-label={`Eliminar ${line.productName} del carrito`}
-            data-testid="cart-line-remove"
-          >
-            <Icon icon={Trash2} size="sm" aria-hidden="true" />
-          </button>
-        </div>
-
-        {attributesText && <p className={styles.attributesText}>{attributesText}</p>}
+        <h3 className={styles.productName}>{line.productName}</h3>
+        {variantText && <p className={styles.variantText}>{variantText}</p>}
+        <p className={styles.unitPrice}>{formatCurrency(line.unitPriceCents)}</p>
 
         {!line.available && (
           <span className={styles.unavailableBadge} data-testid="cart-line-unavailable-badge">
             No disponible
           </span>
         )}
+      </div>
 
-        <div className={styles.priceAndQtyRow}>
-          <div className={styles.unitPrice}>{formatCurrency(line.unitPriceCents)}</div>
+      <div className={styles.actionsCol}>
+        <CartQuantityControl
+          quantity={line.quantity}
+          productName={line.productName}
+          onIncrement={() => onUpdateQuantity(line.quantity + 1)}
+          onDecrement={() => onUpdateQuantity(line.quantity - 1)}
+          disabled={disabled || !line.available}
+        />
 
-          <CartQuantityControl
-            quantity={line.quantity}
-            productName={line.productName}
-            onIncrement={() => onUpdateQuantity(line.quantity + 1)}
-            onDecrement={() => onUpdateQuantity(line.quantity - 1)}
-            disabled={disabled || !line.available}
-          />
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className={styles.removeButton}
+          aria-label={`Quitar ${line.productName} del carrito`}
+          data-testid="cart-line-remove"
+        >
+          Quitar
+        </button>
 
-          <div className={styles.lineSubtotal} data-testid="cart-line-subtotal">
-            {formatCurrency(line.lineSubtotalCents)}
-          </div>
-        </div>
+        <span className={styles.lineSubtotal} data-testid="cart-line-subtotal">
+          {formatCurrency(line.lineSubtotalCents)}
+        </span>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -93,6 +94,8 @@ export function CheckoutPageClient({
   // 3. Fail-Closed & Terminal Execution States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshingContext, setIsRefreshingContext] = useState(false);
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountNotice, setDiscountNotice] = useState<string | null>(null);
   const [isCryptoUnavailable, setIsCryptoUnavailable] = useState(false);
   const [isConfigurationUnavailable, setIsConfigurationUnavailable] = useState(false);
   const [isCartConverted, setIsCartConverted] = useState(false);
@@ -1009,6 +1012,49 @@ export function CheckoutPageClient({
               ))}
             </div>
 
+            <div className={styles.discountRow}>
+              <label htmlFor="checkout-discount" className={styles.visuallyHidden}>
+                Código de descuento
+              </label>
+              <input
+                id="checkout-discount"
+                type="text"
+                value={discountCode}
+                onChange={(event) => {
+                  setDiscountCode(event.target.value);
+                  setDiscountNotice(null);
+                }}
+                placeholder="Código de descuento"
+                className={styles.discountInput}
+                data-testid="checkout-discount-input"
+              />
+              <button
+                type="button"
+                onClick={() => setDiscountNotice("Todavía no hay códigos de descuento activos.")}
+                disabled={discountCode.trim() === ""}
+                className={styles.discountButton}
+                data-testid="checkout-discount-apply"
+              >
+                Aplicar
+              </button>
+            </div>
+
+            <AnimatePresence initial={false}>
+              {discountNotice && (
+                <motion.p
+                  className={styles.discountNotice}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  role="status"
+                  data-testid="checkout-discount-notice"
+                >
+                  {discountNotice}
+                </motion.p>
+              )}
+            </AnimatePresence>
+
             {/* Pricing Totals */}
             <div className={styles.pricingRows}>
               <div className={styles.priceRow}>
@@ -1029,9 +1075,16 @@ export function CheckoutPageClient({
 
               <div className={styles.totalRow}>
                 <span className={styles.totalLabel}>Total</span>
-                <span className={styles.totalValue} data-testid="checkout-total-value">
+                <motion.span
+                  key={reviewedTotalCents}
+                  className={styles.totalValue}
+                  data-testid="checkout-total-value"
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                >
                   {formatCurrency(reviewedTotalCents)}
-                </span>
+                </motion.span>
               </div>
             </div>
 
