@@ -23,8 +23,29 @@ import styles from "./cart-drawer.module.css";
 /** Matches the mega-menu spring, so every panel in the store settles the same way. */
 const PANEL_TRANSITION = { type: "spring", stiffness: 320, damping: 36, mass: 0.9 } as const;
 
-/** Comfortably longer than the exit spring; only reached if the animation never reports back. */
-const EXIT_SAFETY_MS = 600;
+/**
+ * Leaving uses a fixed-length tween: a spring's settle time depends on its tail, and the safety
+ * timer below must never cut the panel off mid-slide.
+ */
+const PANEL_EXIT_TRANSITION = { duration: 0.26, ease: [0.4, 0, 1, 1] } as const;
+
+/** Comfortably longer than the exit tween; only reached if the animation never reports back. */
+const EXIT_SAFETY_MS = 700;
+
+/**
+ * Hiding the body overflow removes the scrollbar, which would shift the whole page sideways as
+ * the panel slides in. Padding the body by the scrollbar's width keeps the layout where it was.
+ */
+function lockPageScroll() {
+  const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+  document.body.style.overflow = "hidden";
+  if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+}
+
+function unlockPageScroll() {
+  document.body.style.overflow = "";
+  document.body.style.paddingRight = "";
+}
 
 type UtilityTab = "note" | "shipping" | "discount";
 
@@ -64,13 +85,11 @@ export function CartDrawer(): React.JSX.Element | null {
           closeButtonRef.current?.focus();
         });
       }
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = "";
-      };
+      lockPageScroll();
+      return unlockPageScroll;
     }
 
-    document.body.style.overflow = "";
+    unlockPageScroll();
 
     // The exit animation normally closes the dialog. This is the safety net: a modal dialog left
     // open would keep the focus trap and the page inert, so it closes regardless of whether the
@@ -81,7 +100,7 @@ export function CartDrawer(): React.JSX.Element | null {
 
     return () => {
       clearTimeout(fallback);
-      document.body.style.overflow = "";
+      unlockPageScroll();
     };
   }, [isDrawerOpen]);
 
@@ -129,7 +148,7 @@ export function CartDrawer(): React.JSX.Element | null {
               className={styles.drawerPanel}
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
-              exit={{ x: "100%" }}
+              exit={{ x: "100%", transition: PANEL_EXIT_TRANSITION }}
               transition={PANEL_TRANSITION}
             >
               <header className={styles.header}>

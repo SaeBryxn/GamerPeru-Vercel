@@ -7,11 +7,12 @@ import styles from "./dome-button.module.css";
 
 /**
  * Shared timing for every dome fill in the storefront, so buttons, close
- * controls and card actions all rise and settle in sync. Matches the design
- * tokens --motion-duration-slow and --motion-easing-snappy: most of the travel
- * happens in the first frames, so the fill reads as instant, then settles.
+ * controls and card actions all rise and settle in sync. The curve is
+ * --motion-easing-snappy: most of the travel happens in the first frames, so
+ * the fill answers the pointer immediately. A longer duration only adds a tail
+ * the eye reads as lag.
  */
-export const DOME_TRANSITION: Transition = { duration: 0.5, ease: [0.16, 1, 0.3, 1] };
+export const DOME_TRANSITION: Transition = { duration: 0.4, ease: [0.16, 1, 0.3, 1] };
 
 export type DomeTone = "light" | "dark";
 
@@ -73,7 +74,6 @@ function DomeLayers({
     <>
       <motion.span
         className={styles.dome}
-        style={{ x: "-50%" }}
         variants={domeVariantsFor(domeRise)}
         aria-hidden="true"
       />

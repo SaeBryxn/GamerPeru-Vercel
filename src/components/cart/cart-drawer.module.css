@@ -17,11 +17,12 @@
   background-color: transparent;
 }
 
+/* No backdrop-filter: blurring the full viewport every frame, often over the hero video, is what
+ * made the fade stutter. A plain scrim composites for free. */
 .backdrop {
   position: absolute;
   inset: 0;
-  background-color: rgb(17 17 17 / 34%);
-  backdrop-filter: blur(2px);
+  background-color: rgb(9 9 11 / 42%);
 }
 
 .drawerPanel {
@@ -36,6 +37,7 @@
   border-radius: 16px 0 0 16px;
   box-shadow: -24px 0 60px rgb(0 0 0 / 12%);
   overflow: hidden;
+  will-change: transform;
 }
 
 /* --------------------------------------------------------------------------
