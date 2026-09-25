@@ -42,26 +42,30 @@ export function CartQuantityControl({
       </motion.span>
 
       <div className={styles.steppers}>
-        <button
+        <motion.button
           type="button"
           onClick={onIncrement}
           disabled={disabled || isMax}
           className={styles.stepper}
           aria-label={`Aumentar cantidad de ${productName}`}
           data-testid="cart-qty-increment"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.95 }}
         >
           <ChevronUp size={13} aria-hidden="true" />
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           type="button"
           onClick={onDecrement}
           disabled={disabled || isMin}
           className={styles.stepper}
           aria-label={`Disminuir cantidad de ${productName}`}
           data-testid="cart-qty-decrement"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.95 }}
         >
           <ChevronDown size={13} aria-hidden="true" />
-        </button>
+        </motion.button>
       </div>
     </div>
   );

@@ -12,7 +12,14 @@
   overflow: hidden;
 }
 
+/* The visible scrim is our own element, so Framer can fade it; the native one stays clear. */
 .dialog::backdrop {
+  background-color: transparent;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
   background-color: rgb(17 17 17 / 34%);
   backdrop-filter: blur(2px);
 }

@@ -460,7 +460,28 @@ export async function queryCartHydrationLines(
     .from(cartItems)
     .innerJoin(productVariants, eq(cartItems.variantId, productVariants.id))
     .innerJoin(products, eq(productVariants.productId, products.id))
-    .leftJoin(mediaAssets, eq(products.primaryMediaId, mediaAssets.id))
+    // Falls back to the product's first global photo when no primary is designated, so a cart
+    // line shows the same image the catalog grid and the menu already resolve for it.
+    .leftJoin(
+      mediaAssets,
+      and(
+        sql`${mediaAssets.id} = COALESCE(
+          ${products.primaryMediaId},
+          (
+            SELECT a.id
+            FROM product_media pm
+            JOIN media_assets a ON a.id = pm.media_asset_id
+            WHERE pm.product_id = ${products.id}
+              AND a.security_class = 'PUBLIC_MEDIA'
+              AND a.media_type = 'IMAGE'
+            ORDER BY (pm.variant_id IS NULL) DESC, pm.display_order ASC, pm.created_at ASC
+            LIMIT 1
+          )
+        )`,
+        eq(mediaAssets.securityClass, "PUBLIC_MEDIA"),
+        eq(mediaAssets.mediaType, "IMAGE")
+      )
+    )
     .where(eq(cartItems.cartId, cartId))
     .orderBy(cartItems.createdAt);
 

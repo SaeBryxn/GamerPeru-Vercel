@@ -10,7 +10,7 @@ import {
   staggerVariants,
   useOpenCount,
 } from "./mega-menu-motion";
-import { MegaMenuProductCard } from "./mega-menu-product-card";
+import { ProductCard } from "@/components/catalog/product-card/product-card";
 import styles from "./desktop-nav.module.css";
 
 // Left column: heading, then each tab top to bottom, then the footer link.
@@ -179,12 +179,9 @@ export function MegaMenuProducts({
                 {shelf && shelf.products.length > 0 ? (
                   <div className={styles.previewGrid}>
                     {shelf.products.map((product) => (
-                      <MegaMenuProductCard
-                        key={product.id}
-                        product={product}
-                        variants={RISE_FROM_BELOW}
-                        onNavigate={onNavigate}
-                      />
+                      <motion.div key={product.id} variants={RISE_FROM_BELOW} onClick={onNavigate}>
+                        <ProductCard product={product} href={`/productos/${product.slug}`} />
+                      </motion.div>
                     ))}
                   </div>
                 ) : (

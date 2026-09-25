@@ -889,7 +889,11 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
       await act(async () => {
         fireEvent.click(screen.getByTestId("cart-drawer-close"));
       });
-      expect(getDialog().open).toBe(false);
+
+      // The panel slides out before the dialog closes, so closing is asynchronous now.
+      await waitFor(() => {
+        expect(getDialog().open).toBe(false);
+      });
     });
 
     it("dispatches updateQuantity when clicking increment in CartLine", async () => {

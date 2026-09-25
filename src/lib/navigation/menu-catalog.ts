@@ -1,9 +1,19 @@
 import "server-only";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { brands, categories, mediaAssets, productVariants, products } from "@/db/schema";
+import {
+  brands,
+  categories,
+  categorySpecificationSchemas,
+  mediaAssets,
+  productSpecifications,
+  productVariants,
+  products,
+} from "@/db/schema";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
-import type { MegaMenuProduct, MegaMenuShelves, NavLink } from "@/components/navigation/types";
+import { buildProductCardSpecs } from "@/lib/catalog/card-specs";
+import type { ProductDiscoveryItem } from "@/lib/catalog/types";
+import type { MegaMenuShelves, NavLink } from "@/components/navigation/types";
 
 /** Cards that fit one shelf row without the panel scrolling. */
 const SHELF_SIZE = 4;
@@ -12,13 +22,18 @@ export interface MenuCatalogEntry {
   productId: string;
   name: string;
   slug: string;
+  subtitle: string | null;
   priceCents: number;
+  categoryName: string;
   categorySlug: string;
   brandName: string;
   brandSlug: string;
   objectKey: string | null;
   altText: string | null;
+  specs: ProductCardSpecList;
 }
+
+type ProductCardSpecList = ReturnType<typeof buildProductCardSpecs>;
 
 /**
  * Published products as the navigation needs them: cheapest active variant for the price, and the
@@ -52,8 +67,12 @@ export async function getMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
         productId: products.id,
         name: products.name,
         slug: products.slug,
+        subtitle: products.subtitle,
         priceCents: cheapestActiveVariant,
+        categoryName: categories.name,
         categorySlug: categories.slug,
+        specValues: productSpecifications.specValues,
+        specFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
         brandName: brands.name,
         brandSlug: brands.slug,
         objectKey: mediaAssets.objectKey,
@@ -78,6 +97,14 @@ export async function getMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
           eq(mediaAssets.mediaType, "IMAGE")
         )
       )
+      .leftJoin(productSpecifications, eq(productSpecifications.productId, products.id))
+      .leftJoin(
+        categorySpecificationSchemas,
+        and(
+          eq(categorySpecificationSchemas.categoryId, products.categoryId),
+          eq(categorySpecificationSchemas.isActive, true)
+        )
+      )
       .where(eq(products.status, "PUBLISHED"))
       .orderBy(desc(products.updatedAt), asc(products.name));
 
@@ -87,12 +114,15 @@ export async function getMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
         productId: row.productId,
         name: row.name,
         slug: row.slug,
+        subtitle: row.subtitle,
         priceCents: Number(row.priceCents),
+        categoryName: row.categoryName,
         categorySlug: row.categorySlug,
         brandName: row.brandName,
         brandSlug: row.brandSlug,
         objectKey: row.objectKey,
         altText: row.altText,
+        specs: buildProductCardSpecs(row.specValues, row.specFieldDefinitions),
       }));
   } catch {
     // The navigation must survive a database problem; an empty catalog renders an empty shelf.
@@ -100,14 +130,19 @@ export async function getMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
   }
 }
 
-function toMegaMenuProduct(entry: MenuCatalogEntry): MegaMenuProduct {
-  const url = resolvePublicMediaUrl(entry.objectKey);
+function toDiscoveryItem(entry: MenuCatalogEntry): ProductDiscoveryItem {
   return {
     id: entry.productId,
-    title: entry.name,
-    href: `/productos/${entry.slug}`,
-    priceCents: entry.priceCents,
-    images: url ? [url] : [],
+    name: entry.name,
+    slug: entry.slug,
+    subtitle: entry.subtitle,
+    brand: { name: entry.brandName, slug: entry.brandSlug },
+    category: { name: entry.categoryName, slug: entry.categorySlug },
+    primaryMedia: entry.objectKey
+      ? { objectKey: entry.objectKey, altText: entry.altText, width: null, height: null }
+      : null,
+    startingPriceCents: entry.priceCents,
+    specs: entry.specs,
   };
 }
 
@@ -129,7 +164,7 @@ export function buildMenuShelves(
     byCategory.set(entry.categorySlug, list);
   }
 
-  const shelves: Record<string, { totalCount: number; products: MegaMenuProduct[] }> = {};
+  const shelves: Record<string, { totalCount: number; products: ProductDiscoveryItem[] }> = {};
 
   for (const collection of collections) {
     const match = /^\/categorias\/([a-z0-9-]+)/.exec(collection.href);
@@ -141,7 +176,7 @@ export function buildMenuShelves(
 
     shelves[collection.href] = {
       totalCount: items.length,
-      products: items.slice(0, SHELF_SIZE).map(toMegaMenuProduct),
+      products: items.slice(0, SHELF_SIZE).map(toDiscoveryItem),
     };
   }
 

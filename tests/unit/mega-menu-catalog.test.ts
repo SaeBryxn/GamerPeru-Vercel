@@ -11,8 +11,11 @@ function entry(overrides: Partial<MenuCatalogEntry> = {}): MenuCatalogEntry {
     productId: "p1",
     name: "Mchose K7 v2 Ultra+ White Gold",
     slug: "mchose-k7-v2-ultra-white-gold",
+    subtitle: null,
     priceCents: 39900,
+    categoryName: "Mouses",
     categorySlug: "mouses",
+    specs: [],
     brandName: "Mchose",
     brandSlug: "mchose",
     objectKey: "products/mchose/k7/abc.webp",
@@ -51,18 +54,20 @@ describe("Mega-menu shelves", () => {
     expect(shelf?.products).toHaveLength(4);
   });
 
-  it("links each card to its own product page with its real price", () => {
+  it("hands the shared card the same shape the category grid receives", () => {
     const shelf = buildMenuShelves([entry()], COLLECTIONS)["/categorias/mouses"];
     expect(shelf?.products[0]).toMatchObject({
-      title: "Mchose K7 v2 Ultra+ White Gold",
-      href: "/productos/mchose-k7-v2-ultra-white-gold",
-      priceCents: 39900,
+      name: "Mchose K7 v2 Ultra+ White Gold",
+      slug: "mchose-k7-v2-ultra-white-gold",
+      startingPriceCents: 39900,
+      brand: { name: "Mchose", slug: "mchose" },
+      category: { name: "Mouses", slug: "mouses" },
     });
   });
 
   it("leaves a product without a photo imageless instead of substituting one", () => {
     const shelf = buildMenuShelves([entry({ objectKey: null })], COLLECTIONS)["/categorias/mouses"];
-    expect(shelf?.products[0]?.images).toEqual([]);
+    expect(shelf?.products[0]?.primaryMedia).toBeNull();
   });
 
   it("returns nothing when the catalog is empty", () => {

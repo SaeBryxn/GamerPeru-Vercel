@@ -1,3 +1,5 @@
+import type { ProductDiscoveryItem } from "@/lib/catalog/types";
+
 /**
  * Gamer Perú — Global Navigation Types
  *
@@ -15,20 +17,11 @@ export interface NavLink {
   description?: string;
 }
 
-/** A published product as the mega-menu shows it. */
-export interface MegaMenuProduct {
-  id: string;
-  title: string;
-  href: string;
-  priceCents: number;
-  /** Public image URLs; scrubbing activates with two or more. */
-  images: readonly string[];
-}
-
 export interface MegaMenuShelf {
   /** How many published products the collection holds, shown in the "All …" link. */
   totalCount: number;
-  products: readonly MegaMenuProduct[];
+  /** The same shape the category grid renders, so one card component serves both surfaces. */
+  products: readonly ProductDiscoveryItem[];
 }
 
 /** Shelves keyed by the collection href they belong to. */
