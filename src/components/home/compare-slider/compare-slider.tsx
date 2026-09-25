@@ -1,13 +1,30 @@
 "use client";
 
 import React, { useLayoutEffect, useRef, useState } from "react";
-import { motion, useMotionValue, useMotionValueEvent, useTransform } from "framer-motion";
+import {
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useTransform,
+  type Variants,
+} from "framer-motion";
 import { GripVertical } from "lucide-react";
 import { Icon } from "@/components/ui";
 import { HomeImage } from "../home-image";
 import styles from "./compare-slider.module.css";
 
 const KEYBOARD_STEP_RATIO = 0.05;
+
+// While the handle is held the line and grip flash to the brand red, so the grab reads as live.
+const HANDLE_LINE_VARIANTS: Variants = {
+  idle: { backgroundColor: "var(--color-surface-card)", transition: { duration: 0.25 } },
+  held: { backgroundColor: "var(--color-brand-red)", transition: { duration: 0.12 } },
+};
+
+const HANDLE_GRIP_VARIANTS: Variants = {
+  idle: { color: "var(--color-accent-violet-deep)", scale: 1, transition: { duration: 0.25 } },
+  held: { color: "var(--color-brand-red)", scale: 1.08, transition: { duration: 0.12 } },
+};
 
 export interface CompareSide {
   /** Small line above the name. */
@@ -107,6 +124,10 @@ export function CompareSlider({ eyebrow, title, left, right }: CompareSliderProp
           dragConstraints={{ left: -width / 2, right: width / 2 }}
           dragElastic={0}
           dragMomentum={false}
+          initial="idle"
+          animate="idle"
+          whileTap="held"
+          whileDrag="held"
           role="slider"
           tabIndex={0}
           aria-label={`Comparar ${left.name} y ${right.name}`}
@@ -117,10 +138,14 @@ export function CompareSlider({ eyebrow, title, left, right }: CompareSliderProp
           onKeyDown={handleKeyDown}
           data-testid="compare-slider-handle"
         >
-          <span className={styles.handleLine} aria-hidden="true" />
-          <span className={styles.handleGrip}>
+          <motion.span
+            className={styles.handleLine}
+            variants={HANDLE_LINE_VARIANTS}
+            aria-hidden="true"
+          />
+          <motion.span className={styles.handleGrip} variants={HANDLE_GRIP_VARIANTS}>
             <Icon icon={GripVertical} size="sm" aria-hidden="true" />
-          </span>
+          </motion.span>
         </motion.div>
 
         <div className={`${styles.caption} ${styles.captionLeft}`}>

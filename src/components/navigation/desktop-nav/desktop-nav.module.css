@@ -95,15 +95,15 @@
   color: var(--color-text-primary);
 }
 
-.activeDot {
+/* Brand-red line that glides between items; the label itself stays ink. */
+.underline {
   position: absolute;
+  right: var(--space-2);
   bottom: 8px;
-  left: 50%;
-  width: 5px;
-  height: 5px;
-  margin-left: -2.5px;
+  left: var(--space-2);
+  height: 2px;
   border-radius: var(--radius-full);
-  background-color: var(--color-text-primary);
+  background-color: var(--color-brand-red);
   pointer-events: none;
 }
 

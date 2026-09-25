@@ -50,6 +50,21 @@ function domeVariantsFor(domeRise: string): Variants {
   };
 }
 
+/**
+ * Dark buttons answer hover with the brand red: the border turns red and a faint inner glow fades
+ * in, in the dome's own timing. The fill and label stay black and white, so red only ever reads
+ * as the interface responding.
+ */
+const DARK_ROOT_VARIANTS: Variants = {
+  rest: { borderColor: "var(--color-surface-dark-canvas)", transition: DOME_TRANSITION },
+  hover: { borderColor: "var(--color-brand-red)", transition: DOME_TRANSITION },
+};
+
+const ACCENT_RING_VARIANTS: Variants = {
+  rest: { opacity: 0, transition: DOME_TRANSITION },
+  hover: { opacity: 1, transition: DOME_TRANSITION },
+};
+
 function contentVariantsFor(tone: DomeTone, hoverColor?: string): Variants {
   const colors = TONE_COLORS[tone];
   return {
@@ -72,6 +87,13 @@ function DomeLayers({
 }) {
   return (
     <>
+      {tone === "dark" && (
+        <motion.span
+          className={styles.accentRing}
+          variants={ACCENT_RING_VARIANTS}
+          aria-hidden="true"
+        />
+      )}
       <motion.span
         className={styles.dome}
         variants={domeVariantsFor(domeRise)}
@@ -97,6 +119,7 @@ export function DomeButton({
     <motion.button
       type={type}
       className={[styles.domeButton, styles[tone], className].filter(Boolean).join(" ")}
+      variants={tone === "dark" ? DARK_ROOT_VARIANTS : undefined}
       initial="rest"
       animate="rest"
       whileHover="hover"
@@ -131,6 +154,7 @@ export function DomeLink({
     <MotionLink
       href={href}
       className={[styles.domeButton, styles[tone], className].filter(Boolean).join(" ")}
+      variants={tone === "dark" ? DARK_ROOT_VARIANTS : undefined}
       initial="rest"
       animate="rest"
       whileHover="hover"

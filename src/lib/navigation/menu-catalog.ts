@@ -11,8 +11,10 @@ import {
   products,
 } from "@/db/schema";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
+import { buildCardGallery } from "@/lib/catalog/card-gallery";
 import { buildProductCardSpecs } from "@/lib/catalog/card-specs";
-import type { ProductDiscoveryItem } from "@/lib/catalog/types";
+import { cardCompareAtSql, cardGallerySql, cardSingleVariantSql } from "@/lib/catalog/card-sql";
+import type { ProductCardImage, ProductDiscoveryItem } from "@/lib/catalog/types";
 import type { MegaMenuShelves, NavLink } from "@/components/navigation/types";
 
 /** Cards that fit one shelf row without the panel scrolling. */
@@ -30,6 +32,9 @@ export interface MenuCatalogEntry {
   brandSlug: string;
   objectKey: string | null;
   altText: string | null;
+  compareAtPriceCents: number | null;
+  gallery: ProductCardImage[];
+  singleVariantId: string | null;
   specs: ProductCardSpecList;
 }
 
@@ -69,6 +74,9 @@ export async function getMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
         slug: products.slug,
         subtitle: products.subtitle,
         priceCents: cheapestActiveVariant,
+        compareAtPriceCents: cardCompareAtSql(cheapestActiveVariant),
+        gallery: cardGallerySql,
+        singleVariantId: cardSingleVariantSql,
         categoryName: categories.name,
         categorySlug: categories.slug,
         specValues: productSpecifications.specValues,
@@ -122,6 +130,12 @@ export async function getMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
         brandSlug: row.brandSlug,
         objectKey: row.objectKey,
         altText: row.altText,
+        compareAtPriceCents: row.compareAtPriceCents,
+        gallery: buildCardGallery(
+          row.objectKey ? { objectKey: row.objectKey, altText: row.altText } : null,
+          row.gallery
+        ),
+        singleVariantId: row.singleVariantId,
         specs: buildProductCardSpecs(row.specValues, row.specFieldDefinitions),
       }));
   } catch {
@@ -142,6 +156,9 @@ function toDiscoveryItem(entry: MenuCatalogEntry): ProductDiscoveryItem {
       ? { objectKey: entry.objectKey, altText: entry.altText, width: null, height: null }
       : null,
     startingPriceCents: entry.priceCents,
+    compareAtPriceCents: entry.compareAtPriceCents,
+    gallery: entry.gallery,
+    singleVariantId: entry.singleVariantId,
     specs: entry.specs,
   };
 }

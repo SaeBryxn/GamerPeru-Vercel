@@ -42,6 +42,17 @@ export interface ProductDiscoveryItem {
   startingPriceCents: number;
   /** Resolved from the product's own specification values; absent when the reader has none. */
   specs?: ProductCardSpec[];
+  /** Up to three public photos for the card's hover scrub, the card image first. */
+  gallery?: ProductCardImage[];
+  /** Reference price of the starting variant; the card strikes it through only when it is higher. */
+  compareAtPriceCents?: number | null;
+  /** Set only when the product sells exactly one active variant, so a card can add it directly. */
+  singleVariantId?: string | null;
+}
+
+export interface ProductCardImage {
+  objectKey: string;
+  altText: string | null;
 }
 
 export interface PaginationOptions {

@@ -1,4 +1,5 @@
 import "server-only";
+import { buildCardGallery } from "./card-gallery";
 import { buildProductCardSpecs } from "./card-specs";
 import { validateSpecificationSchema } from "@/lib/discovery-filters/schema-validation";
 import type {
@@ -107,6 +108,40 @@ export function deriveTechnicalFacets(
   }
 
   return facets;
+}
+
+type ProductRow = Awaited<ReturnType<typeof buildCategoryFilteredProductsQuery>>[number];
+
+function toDiscoveryItem(row: ProductRow): ProductDiscoveryItem {
+  const primaryMedia = row.primaryMediaKey
+    ? {
+        objectKey: row.primaryMediaKey,
+        altText: row.primaryMediaAlt,
+        width: row.primaryMediaWidth,
+        height: row.primaryMediaHeight,
+      }
+    : null;
+
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    subtitle: row.subtitle,
+    brand: {
+      name: row.brandName,
+      slug: row.brandSlug,
+    },
+    category: {
+      name: row.categoryName,
+      slug: row.categorySlug,
+    },
+    primaryMedia,
+    startingPriceCents: row.startingPriceCents,
+    compareAtPriceCents: row.compareAtPriceCents,
+    gallery: buildCardGallery(primaryMedia, row.gallery),
+    singleVariantId: row.singleVariantId,
+    specs: buildProductCardSpecs(row.specValues, row.specFieldDefinitions),
+  };
 }
 
 export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
@@ -220,30 +255,7 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
     const totalItems = countRows[0]?.count ?? 0;
     const totalPages = Math.ceil(totalItems / safePageSize);
 
-    const items: ProductDiscoveryItem[] = productRows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      subtitle: row.subtitle,
-      brand: {
-        name: row.brandName,
-        slug: row.brandSlug,
-      },
-      category: {
-        name: row.categoryName,
-        slug: row.categorySlug,
-      },
-      primaryMedia: row.primaryMediaKey
-        ? {
-            objectKey: row.primaryMediaKey,
-            altText: row.primaryMediaAlt,
-            width: row.primaryMediaWidth,
-            height: row.primaryMediaHeight,
-          }
-        : null,
-      startingPriceCents: row.startingPriceCents,
-      specs: buildProductCardSpecs(row.specValues, row.specFieldDefinitions),
-    }));
+    const items = productRows.map(toDiscoveryItem);
 
     return {
       items,
@@ -271,30 +283,7 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
     const totalItems = countRows[0]?.count ?? 0;
     const totalPages = Math.ceil(totalItems / safePageSize);
 
-    const items: ProductDiscoveryItem[] = productRows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      subtitle: row.subtitle,
-      brand: {
-        name: row.brandName,
-        slug: row.brandSlug,
-      },
-      category: {
-        name: row.categoryName,
-        slug: row.categorySlug,
-      },
-      primaryMedia: row.primaryMediaKey
-        ? {
-            objectKey: row.primaryMediaKey,
-            altText: row.primaryMediaAlt,
-            width: row.primaryMediaWidth,
-            height: row.primaryMediaHeight,
-          }
-        : null,
-      startingPriceCents: row.startingPriceCents,
-      specs: buildProductCardSpecs(row.specValues, row.specFieldDefinitions),
-    }));
+    const items = productRows.map(toDiscoveryItem);
 
     return {
       items,

@@ -2,10 +2,20 @@
 
 import React, { useRef } from "react";
 import Link from "next/link";
+import { motion, type Variants } from "framer-motion";
 import { ShoppingCart } from "lucide-react";
 import { Icon } from "@/components/ui";
+import { CountPulse } from "./count-pulse";
 import { useCart } from "./cart-provider";
 import styles from "./cart-launcher.module.css";
+
+const MotionLink = motion.create(Link);
+
+// Hovering the cart gives the badge one soft beat, a nudge toward checkout.
+const BADGE_VARIANTS: Variants = {
+  rest: { scale: 1 },
+  hover: { scale: [1, 1.18, 1], transition: { duration: 0.45, ease: "easeOut" } },
+};
 
 export interface CartLauncherProps {
   label?: string;
@@ -39,20 +49,32 @@ export function CartLauncher({
   const classNames = [styles.launcherLink, className].filter(Boolean).join(" ");
 
   return (
-    <Link
+    <MotionLink
       ref={linkRef}
       href="/carrito"
       onClick={handleClick}
       className={classNames}
       aria-label={accessibleLabel}
       data-testid={testId}
+      initial="rest"
+      animate="rest"
+      whileHover="hover"
     >
       <Icon icon={ShoppingCart} size="lg" aria-hidden="true" />
       {showBadge && (
-        <span className={styles.badge} aria-hidden="true" data-testid="cart-badge-count">
-          {itemCount > 99 ? "99+" : itemCount}
-        </span>
+        <motion.span
+          className={styles.badgeAnchor}
+          variants={BADGE_VARIANTS}
+          aria-hidden="true"
+          data-testid="cart-badge-count"
+        >
+          <CountPulse
+            value={itemCount}
+            label={itemCount > 99 ? "99+" : undefined}
+            className={styles.badge}
+          />
+        </motion.span>
       )}
-    </Link>
+    </MotionLink>
   );
 }

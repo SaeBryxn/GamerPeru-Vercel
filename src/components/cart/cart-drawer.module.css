@@ -72,7 +72,13 @@
   font-size: 0.6875rem;
   font-weight: 600;
   vertical-align: super;
-  color: #1a1a1a;
+  color: var(--color-brand-red);
+}
+
+.countPulse {
+  position: relative;
+  min-width: 1.1em;
+  padding: 0 2px;
 }
 
 /* Present but inactive, exactly as the reference shows it. */
@@ -383,6 +389,10 @@
   font-weight: 600;
   text-decoration: none;
   transition: background-color 0.16s ease;
+}
+
+.checkoutLock {
+  display: inline-flex;
 }
 
 .checkoutDrawerButton:hover {

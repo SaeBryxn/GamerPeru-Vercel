@@ -1,0 +1,14 @@
+.dot {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  border: 1.5px solid var(--color-text-primary);
+  border-radius: 50%;
+}
+
+.fill {
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 50%;
+  background-color: var(--color-brand-red);
+}

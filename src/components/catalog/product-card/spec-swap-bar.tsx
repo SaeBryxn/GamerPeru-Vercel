@@ -2,87 +2,110 @@
 
 import React from "react";
 import { AnimatePresence, motion, type Transition, type Variants } from "framer-motion";
-import { Cpu, Crosshair, Layers, MousePointerClick, type LucideIcon } from "lucide-react";
+import {
+  BatteryFull,
+  Cpu,
+  Crosshair,
+  Feather,
+  Hand,
+  Layers,
+  MousePointerClick,
+  Radio,
+  Ruler,
+  SlidersHorizontal,
+  type LucideIcon,
+} from "lucide-react";
 import { Icon } from "@/components/ui";
+import type { ProductCardSpec } from "@/lib/catalog/card-specs";
 import styles from "./spec-swap-bar.module.css";
 
-export type SpecIconName = "crosshair" | "chip" | "material" | "switch";
-
-export interface ProductSpec {
-  icon: SpecIconName;
-  title: string;
-  value: string;
-}
-
-/** Two specs shown at rest and two revealed while the card is active. */
-export interface ProductSpecPair {
-  rest: readonly [ProductSpec, ProductSpec];
-  active: readonly [ProductSpec, ProductSpec];
-}
-
-const SPEC_ICONS: Record<SpecIconName, LucideIcon> = {
-  crosshair: Crosshair,
-  chip: Cpu,
+const SPEC_ICONS: Record<string, LucideIcon> = {
+  sensor: Crosshair,
+  polling: Radio,
+  mcu: Cpu,
+  switches: MousePointerClick,
+  peso: Feather,
+  bateria: BatteryFull,
+  forma: Hand,
   material: Layers,
-  switch: MousePointerClick,
+  superficie: Layers,
+  base: Layers,
+  largo: Ruler,
+  ancho: Ruler,
+  grosor: Ruler,
 };
 
-// direction +1: the active pair arrives from the right; -1: the rest pair returns from the left.
-const SLIDE_VARIANTS: Variants = {
-  enter: (direction: number) => ({ x: direction > 0 ? "100%" : "-100%" }),
-  center: { x: "0%" },
-  exit: (direction: number) => ({ x: direction > 0 ? "-100%" : "100%" }),
+// The outgoing pair lifts away while the next one rises into its place.
+const SWAP_VARIANTS: Variants = {
+  enter: (direction: number) => ({ y: direction > 0 ? "70%" : "-70%", opacity: 0 }),
+  center: { y: "0%", opacity: 1 },
+  exit: (direction: number) => ({ y: direction > 0 ? "-70%" : "70%", opacity: 0 }),
 };
 
-// Same spring as the mega-menu image carousel, so every swish in the store matches.
-export const SWISH_TRANSITION: Transition = {
-  type: "spring",
-  stiffness: 260,
-  damping: 32,
-  mass: 0.8,
-};
+const SWAP_TRANSITION: Transition = { type: "spring", stiffness: 420, damping: 36, mass: 0.7 };
 
 export interface SpecSwapBarProps {
-  specs: ProductSpecPair;
+  /** The card's specs in schema order: the first two rest, the next two show while active. */
+  specs: readonly ProductCardSpec[];
   active: boolean;
-  transition?: Transition;
+}
+
+function SpecCell({ spec }: { spec: ProductCardSpec }) {
+  return (
+    <div className={styles.spec}>
+      <Icon
+        icon={SPEC_ICONS[spec.key] ?? SlidersHorizontal}
+        size="md"
+        className={styles.specIcon}
+        aria-hidden="true"
+      />
+      <div className={styles.specText}>
+        <span className={styles.specTitle}>{spec.label}</span>
+        <span className={styles.specValue}>{spec.value}</span>
+      </div>
+    </div>
+  );
 }
 
 /**
- * Two-column spec strip. When the card becomes active the current pair slides
- * out to the left while the next pair slides in from the right, and back again
- * when it rests — the same carousel motion as the image scrubbing.
+ * Technical strip at the base of a card. With three or more specs, activating the card swaps the
+ * resting pair for the next one; with two it simply holds them. All values stay in the markup so
+ * assistive technology reads the full set regardless of hover.
  */
-export function SpecSwapBar({ specs, active, transition = SWISH_TRANSITION }: SpecSwapBarProps) {
-  const pair = active ? specs.active : specs.rest;
-  const direction = active ? 1 : -1;
+export function SpecSwapBar({ specs, active }: SpecSwapBarProps): React.JSX.Element | null {
+  if (specs.length < 2) return null;
+
+  const restPair = specs.slice(0, 2);
+  const activePair = specs.slice(2, 4);
+  const canSwap = activePair.length > 0;
+  const showActive = canSwap && active;
+  const pair = showActive ? activePair : restPair;
+  const direction = showActive ? 1 : -1;
 
   return (
     <div className={styles.specBar}>
+      <dl className={styles.srOnly}>
+        {specs.map((spec) => (
+          <div key={spec.key}>
+            <dt>{spec.label}</dt>
+            <dd>{spec.value}</dd>
+          </div>
+        ))}
+      </dl>
       <AnimatePresence initial={false} custom={direction}>
         <motion.div
-          key={active ? "active" : "rest"}
+          key={showActive ? "active" : "rest"}
           className={styles.specRow}
           custom={direction}
-          variants={SLIDE_VARIANTS}
+          variants={SWAP_VARIANTS}
           initial="enter"
           animate="center"
           exit="exit"
-          transition={transition}
+          transition={SWAP_TRANSITION}
+          aria-hidden="true"
         >
           {pair.map((spec) => (
-            <div key={spec.title} className={styles.spec}>
-              <Icon
-                icon={SPEC_ICONS[spec.icon]}
-                size="md"
-                className={styles.specIcon}
-                aria-hidden="true"
-              />
-              <div className={styles.specText}>
-                <span className={styles.specTitle}>{spec.title}</span>
-                <span className={styles.specValue}>{spec.value}</span>
-              </div>
-            </div>
+            <SpecCell key={spec.key} spec={spec} />
           ))}
         </motion.div>
       </AnimatePresence>

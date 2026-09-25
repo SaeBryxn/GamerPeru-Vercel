@@ -9,6 +9,8 @@
    * 1. Brand Accent Palette
    * ------------------------------------------------------------------------- */
   --color-brand-primary: #e11d48;
+  --color-brand-red: #e12d48;
+  --color-brand-red-glow: rgb(225 45 72 / 22%);
   --color-brand-hover: #be123c;
   --color-brand-active: #9f1239;
   --color-brand-subtle-light: #fff1f2;
@@ -23,6 +25,7 @@
   --color-surface-elevated: #ffffff;
   --color-surface-secondary: #f4f4f5;
   --color-surface-tertiary: #e4e4e7;
+  --color-surface-product-stage: #f2f2f3;
   --color-surface-overlay: rgba(9, 9, 11, 0.65);
   --color-surface-header: rgba(255, 255, 255, 0.95);
 

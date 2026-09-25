@@ -70,32 +70,32 @@ describe("Specs shown on a product card", () => {
   it("only reports values the operator actually filled", () => {
     const specs = buildProductCardSpecs({ sensor: "PixArt PAW3950", peso: 49 }, FIELDS);
     expect(specs).toEqual([
-      { label: "Sensor", value: "PixArt PAW3950" },
-      { label: "Peso", value: "49 g" },
+      { key: "sensor", label: "Sensor", value: "PixArt PAW3950" },
+      { key: "peso", label: "Peso", value: "49 g" },
     ]);
   });
 
   it("appends the declared unit to numbers and drops trailing zeros", () => {
     expect(buildProductCardSpecs({ peso: 49.0 }, FIELDS)).toEqual([
-      { label: "Peso", value: "49 g" },
+      { key: "peso", label: "Peso", value: "49 g" },
     ]);
     expect(buildProductCardSpecs({ peso: 48.5 }, FIELDS)).toEqual([
-      { label: "Peso", value: "48.5 g" },
+      { key: "peso", label: "Peso", value: "48.5 g" },
     ]);
   });
 
   it("shows the human label of an enum option, not its stored value", () => {
     expect(buildProductCardSpecs({ forma: "ergonomico" }, FIELDS)).toEqual([
-      { label: "Forma", value: "Ergonómico" },
+      { key: "forma", label: "Forma", value: "Ergonómico" },
     ]);
   });
 
   it("renders booleans in Spanish", () => {
     expect(buildProductCardSpecs({ inalambrico: true }, FIELDS)).toEqual([
-      { label: "Inalámbrico", value: "Sí" },
+      { key: "inalambrico", label: "Inalámbrico", value: "Sí" },
     ]);
     expect(buildProductCardSpecs({ inalambrico: false }, FIELDS)).toEqual([
-      { label: "Inalámbrico", value: "No" },
+      { key: "inalambrico", label: "Inalámbrico", value: "No" },
     ]);
   });
 

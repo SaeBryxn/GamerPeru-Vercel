@@ -20,6 +20,7 @@ import type {
   DiscoveryFilterState,
   ValidatedSpecificationSchema,
 } from "@/lib/discovery-filters/types";
+import { cardCompareAtSql, cardGallerySql, cardSingleVariantSql } from "./card-sql";
 
 /**
  * Asset shown on a discovery card.
@@ -316,6 +317,9 @@ export function buildCategoryFilteredProductsQuery(
       primaryMediaWidth: mediaAssets.width,
       primaryMediaHeight: mediaAssets.height,
       startingPriceCents: startingPriceSql.mapWith(Number),
+      compareAtPriceCents: cardCompareAtSql(startingPriceSql),
+      gallery: cardGallerySql,
+      singleVariantId: cardSingleVariantSql,
       specValues: productSpecifications.specValues,
       specFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
     })
@@ -399,6 +403,9 @@ export function buildBrandFilteredProductsQuery(
       primaryMediaWidth: mediaAssets.width,
       primaryMediaHeight: mediaAssets.height,
       startingPriceCents: startingPriceSql.mapWith(Number),
+      compareAtPriceCents: cardCompareAtSql(startingPriceSql),
+      gallery: cardGallerySql,
+      singleVariantId: cardSingleVariantSql,
       specValues: productSpecifications.specValues,
       specFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
     })

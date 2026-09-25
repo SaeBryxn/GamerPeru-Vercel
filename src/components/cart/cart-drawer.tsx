@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
   AlertCircle,
   AlertTriangle,
@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils/currency";
 import { CartEmptyState } from "./cart-empty-state";
+import { CountPulse } from "./count-pulse";
 import { CartLine } from "./cart-line";
 import { useCart } from "./cart-provider";
 import styles from "./cart-drawer.module.css";
@@ -46,6 +47,19 @@ function unlockPageScroll() {
   document.body.style.overflow = "";
   document.body.style.paddingRight = "";
 }
+
+const CHECKOUT_VARIANTS: Variants = {
+  rest: { scale: 1 },
+  hover: { scale: 1.02 },
+  tap: { scale: 0.96 },
+};
+
+// The lock warms to the brand red while the pointer is on the button: the label stays white.
+const LOCK_VARIANTS: Variants = {
+  rest: { color: "#ffffff", scale: 1 },
+  hover: { color: "var(--color-brand-red)", scale: 1.12 },
+  tap: { color: "var(--color-brand-red)", scale: 1 },
+};
 
 type UtilityTab = "note" | "shipping" | "discount";
 
@@ -157,7 +171,7 @@ export function CartDrawer(): React.JSX.Element | null {
                     Carrito
                     {status === "READY" && itemCount > 0 && (
                       <sup className={styles.countSuperscript} data-testid="cart-drawer-count">
-                        {itemCount}
+                        <CountPulse value={itemCount} className={styles.countPulse} />
                       </sup>
                     )}
                   </h2>
@@ -363,14 +377,22 @@ export function CartDrawer(): React.JSX.Element | null {
                     </div>
                   </div>
 
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }}>
+                  <motion.div
+                    variants={CHECKOUT_VARIANTS}
+                    initial="rest"
+                    animate="rest"
+                    whileHover="hover"
+                    whileTap="tap"
+                  >
                     <Link
                       href="/checkout"
                       onClick={closeDrawer}
                       className={styles.checkoutDrawerButton}
                       data-testid="cart-drawer-checkout-button"
                     >
-                      <Lock size={15} aria-hidden="true" />
+                      <motion.span className={styles.checkoutLock} variants={LOCK_VARIANTS}>
+                        <Lock size={15} aria-hidden="true" />
+                      </motion.span>
                       <span>Finalizar compra</span>
                     </Link>
                   </motion.div>

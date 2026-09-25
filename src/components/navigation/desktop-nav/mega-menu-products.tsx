@@ -180,7 +180,11 @@ export function MegaMenuProducts({
                   <div className={styles.previewGrid}>
                     {shelf.products.map((product) => (
                       <motion.div key={product.id} variants={RISE_FROM_BELOW} onClick={onNavigate}>
-                        <ProductCard product={product} href={`/productos/${product.slug}`} />
+                        <ProductCard
+                          product={product}
+                          href={`/productos/${product.slug}`}
+                          action="add-to-cart"
+                        />
                       </motion.div>
                     ))}
                   </div>

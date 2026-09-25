@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion, type Variants } from "framer-motion";
 import { Container, Icon, MagneticWrapper } from "@/components/ui";
@@ -53,8 +54,12 @@ export interface DesktopNavProps {
   className?: string;
 }
 
+const UNDERLINE_TRANSITION = { type: "spring", stiffness: 520, damping: 38, mass: 0.7 } as const;
+
 export function DesktopNav({ items, productTypes = [], shelves, className }: DesktopNavProps) {
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const pathname = usePathname() ?? "";
   const navRef = useRef<HTMLElement>(null);
   const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
@@ -87,6 +92,27 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
     return () => window.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // One underline travels between items: the hovered one, else the open menu, else the current page.
+  const routeActiveId =
+    items.find(
+      (category) =>
+        category.href !== "/" &&
+        (pathname === category.href || pathname.startsWith(`${category.href}/`))
+    )?.id ?? null;
+  const underlineId = hoveredId ?? activeCategoryId ?? routeActiveId;
+
+  const underline = (
+    <motion.span
+      layoutId="desktop-nav-underline"
+      className={styles.underline}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={UNDERLINE_TRANSITION}
+      aria-hidden="true"
+    />
+  );
+
   return (
     <MotionConfig reducedMotion="user">
       <nav
@@ -94,13 +120,20 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
         className={[styles.desktopNav, className].filter(Boolean).join(" ")}
         aria-label="Navegación principal"
       >
-        <ul className={styles.navList}>
+        <ul className={styles.navList} onPointerLeave={() => setHoveredId(null)}>
           {items.map((category) => {
             if (!category.menuLayout) {
               return (
                 <li key={category.id} className={styles.navItem}>
-                  <Link href={category.href} className={styles.categoryTrigger}>
+                  <Link
+                    href={category.href}
+                    className={styles.categoryTrigger}
+                    onPointerEnter={() => setHoveredId(category.id)}
+                    onFocus={() => setHoveredId(category.id)}
+                    onBlur={() => setHoveredId(null)}
+                  >
                     <MagneticWrapper>{category.label}</MagneticWrapper>
+                    <AnimatePresence>{underlineId === category.id && underline}</AnimatePresence>
                   </Link>
                 </li>
               );
@@ -126,6 +159,9 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
                     .join(" ")}
                   aria-expanded={isExpanded}
                   aria-controls={panelId}
+                  onPointerEnter={() => setHoveredId(category.id)}
+                  onFocus={() => setHoveredId(category.id)}
+                  onBlur={() => setHoveredId(null)}
                   onClick={(e) => {
                     e.stopPropagation();
                     setActiveCategoryId(isExpanded ? null : category.id);
@@ -142,14 +178,7 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
                       <Icon icon={ChevronDown} size="sm" aria-hidden="true" />
                     </motion.span>
                   </MagneticWrapper>
-                  {isExpanded && (
-                    <motion.span
-                      layoutId="desktop-nav-active-dot"
-                      className={styles.activeDot}
-                      transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                      aria-hidden="true"
-                    />
-                  )}
+                  <AnimatePresence>{underlineId === category.id && underline}</AnimatePresence>
                 </button>
 
                 <motion.div

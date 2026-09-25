@@ -1,11 +1,10 @@
-/* Fixed height with both pairs stacked absolutely, so they can slide past each other. */
+/* Fixed height with both pairs stacked absolutely, so they can pass each other mid-swap. */
 .specBar {
   position: relative;
   width: 100%;
-  height: 52px;
-  margin-top: var(--space-3);
-  border-radius: var(--radius-md);
-  background-color: var(--color-surface-secondary);
+  height: 60px;
+  border-top: 1px solid var(--color-border-subtle);
+  background-color: var(--color-surface-card);
   overflow: hidden;
 }
 
@@ -15,9 +14,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-2);
   margin: 0;
-  padding: 0 var(--space-3);
 }
 
 .spec {
@@ -25,11 +22,16 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  padding: 0 var(--space-4);
+}
+
+.spec + .spec {
+  border-left: 1px solid var(--color-border-subtle);
 }
 
 .specIcon {
   flex-shrink: 0;
-  color: var(--color-text-muted);
+  color: var(--color-text-primary);
 }
 
 .specText {
@@ -41,7 +43,6 @@
 
 .specTitle,
 .specValue {
-  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -60,4 +61,16 @@
   font-size: 11px;
   line-height: 1.3;
   color: var(--color-text-muted);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }

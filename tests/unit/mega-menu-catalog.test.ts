@@ -20,6 +20,9 @@ function entry(overrides: Partial<MenuCatalogEntry> = {}): MenuCatalogEntry {
     brandSlug: "mchose",
     objectKey: "products/mchose/k7/abc.webp",
     altText: null,
+    compareAtPriceCents: null,
+    gallery: [],
+    singleVariantId: null,
     ...overrides,
   };
 }

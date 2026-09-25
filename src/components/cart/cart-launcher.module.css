@@ -24,14 +24,20 @@
   outline-offset: 2px;
 }
 
-.badge {
+.badgeAnchor {
   position: absolute;
   top: 4px;
   right: 4px;
+  display: inline-flex;
+  pointer-events: none;
+}
+
+.badge {
+  position: relative;
   min-width: 18px;
   height: 18px;
   padding: 0 4px;
-  background-color: var(--color-brand-primary);
+  background-color: var(--color-brand-red);
   color: var(--color-brand-text-on-accent);
   border-radius: var(--radius-full);
   font-family: var(--font-body);

@@ -1,0 +1,13 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--color-brand-red);
+  border-radius: var(--radius-full);
+  pointer-events: none;
+}

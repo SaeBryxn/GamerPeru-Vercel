@@ -8,6 +8,7 @@ import {
   useScroll,
   useTransform,
   type PanInfo,
+  type Variants,
 } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { Icon } from "@/components/ui";
@@ -33,6 +34,12 @@ const EMBED_PARAMS = new URLSearchParams({
 export const HERO_EMBED_SRC = `https://www.youtube-nocookie.com/embed/${YOUTUBE_VIDEO_ID}?${EMBED_PARAMS.toString()}`;
 
 // Past either threshold the curtain opens instead of springing back.
+// The chevron under "Desliza" flashes brand red while the curtain is held, confirming the grab.
+const HINT_TINT_VARIANTS: Variants = {
+  idle: { color: "var(--color-text-dark-primary)", transition: { duration: 0.3 } },
+  held: { color: "var(--color-brand-red)", transition: { duration: 0.12 } },
+};
+
 const DRAG_DISTANCE_THRESHOLD = 90;
 const DRAG_VELOCITY_THRESHOLD = -450;
 
@@ -103,6 +110,9 @@ export function VideoHero({ heading, revealTargetId }: VideoHeroProps) {
         dragElastic={{ top: 0.4, bottom: 0 }}
         dragMomentum={false}
         onDragEnd={handleDragEnd}
+        initial="idle"
+        animate="idle"
+        whileDrag="held"
       >
         {/*
           The stage is decorative: no audio, no controls and no pointer events,
@@ -142,12 +152,14 @@ export function VideoHero({ heading, revealTargetId }: VideoHeroProps) {
           data-testid="video-hero-scroll-hint"
         >
           <span className={styles.scrollHintLabel}>Desliza para ver la tienda</span>
-          <motion.span
-            className={styles.scrollHintIcon}
-            animate={prefersReducedMotion ? undefined : { y: [0, 8, 0] }}
-            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-          >
-            <Icon icon={ChevronDown} size="md" aria-hidden="true" />
+          <motion.span className={styles.scrollHintTint} variants={HINT_TINT_VARIANTS}>
+            <motion.span
+              className={styles.scrollHintIcon}
+              animate={prefersReducedMotion ? undefined : { y: [0, 8, 0] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <Icon icon={ChevronDown} size="md" aria-hidden="true" />
+            </motion.span>
           </motion.span>
         </motion.button>
       </motion.div>

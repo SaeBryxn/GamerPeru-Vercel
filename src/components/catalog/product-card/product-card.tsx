@@ -1,121 +1,158 @@
 "use client";
 
 import React, { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
-import { DomeLink } from "@/components/ui";
-import type { ProductDiscoveryItem } from "@/lib/catalog/types";
-import type { ProductCardSpec } from "@/lib/catalog/card-specs";
-import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
+import { motion, type Transition, type Variants } from "framer-motion";
+import { Eye } from "lucide-react";
+import { DomeButton, DomeLink } from "@/components/ui";
+import type { ProductCardImage, ProductDiscoveryItem } from "@/lib/catalog/types";
 import { formatCurrency } from "@/lib/utils/currency";
-import { ProductCardFallback } from "./product-card-fallback";
-import { SpecSwapBar, type ProductSpecPair, type SpecIconName } from "./spec-swap-bar";
+import { CardAddToCartButton } from "./card-add-to-cart-button";
+import { QuickViewDialog } from "./quick-view-dialog";
+import { ScrubGallery } from "./scrub-gallery";
+import { SpecSwapBar } from "./spec-swap-bar";
+import { useCanHover } from "./use-can-hover";
 import styles from "./product-card.module.css";
 
-const SPEC_ICON_ORDER: SpecIconName[] = ["crosshair", "chip", "material", "switch"];
+const OVERLAY_VARIANTS: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  shown: { opacity: 1, y: 0 },
+};
 
-/**
- * Splits the product's own specifications into the two pairs the swap bar animates between.
- * Returns null below four values: a half-empty strip reads as missing data, so the card simply
- * omits it until the spec sheet is filled.
- */
-function toSpecPair(specs: ProductCardSpec[] | undefined): ProductSpecPair | null {
-  if (!specs || specs.length < 4) return null;
+const OVERLAY_TRANSITION: Transition = { type: "spring", stiffness: 520, damping: 34, mass: 0.6 };
 
-  const [first, second, third, fourth] = specs;
-  if (!first || !second || !third || !fourth) return null;
-
-  const withIcon = (spec: ProductCardSpec, index: number) => ({
-    icon: SPEC_ICON_ORDER[index] ?? "chip",
-    title: spec.label,
-    value: spec.value,
-  });
-
-  return {
-    rest: [withIcon(first, 0), withIcon(second, 1)],
-    active: [withIcon(third, 2), withIcon(fourth, 3)],
-  };
-}
+/** What the overlaid action does: open the product to pick options, or add it outright. */
+export type ProductCardAction = "choose-options" | "add-to-cart";
 
 export interface ProductCardProps {
   product: ProductDiscoveryItem;
   href?: string;
   showBrandLink?: boolean;
+  /**
+   * `add-to-cart` adds the product directly when it sells a single variant; a product with
+   * options still leads to its page, since there is nothing to add until one is chosen.
+   */
+  action?: ProductCardAction;
+}
+
+/** The card's photos: its gallery when the reader provides one, otherwise the single card image. */
+function cardImages(product: ProductDiscoveryItem): ProductCardImage[] {
+  if (product.gallery && product.gallery.length > 0) return product.gallery;
+  return product.primaryMedia
+    ? [{ objectKey: product.primaryMedia.objectKey, altText: product.primaryMedia.altText }]
+    : [];
 }
 
 /**
- * ProductCard Component
+ * ProductCard
  *
- * Core discovery grid item exhibiting quiet product dominance.
+ * The single discovery card used by category and brand grids and by the mega-menu shelves.
  *
  * Invariants:
- * 1. Product media and title are non-interactive by default in GP-011 (no broken PDP links).
- * 2. When `href` is supplied, media and title render legitimate navigation links without
- *    nesting or conflicting with the Brand link, and the hover "Elegir opciones" action
- *    (which also leads to the PDP) is shown.
- * 3. Brand name links to `/marcas/[slug]` unless `showBrandLink=false` (e.g. on Brand page).
- * 4. Image aspect ratio is strictly 4:5.
- * 5. Prices are rendered in neutral dark Plus Jakarta Sans typography.
- * 6. Hovering (or focusing into) the card swaps the spec bar pair with a horizontal swish.
+ * 1. Without `href` the media and title are not links; the overlays only exist with `href`.
+ * 2. Brand name links to `/marcas/[slug]` unless `showBrandLink=false`.
+ * 3. Moving a mouse across the photo scrubs through up to three views; touch and keyboard users
+ *    see the first photo, and the overlays stay visible where there is no hover.
+ * 4. The compare-at price is shown only when it is higher than the current price.
+ * 5. Activating the card swaps the spec strip to its second pair.
  */
 export function ProductCard({
   product,
   href,
   showBrandLink = true,
+  action = "choose-options",
 }: ProductCardProps): React.JSX.Element {
+  const canHover = useCanHover();
   const [isHovered, setIsHovered] = useState(false);
   const [hasFocusWithin, setHasFocusWithin] = useState(false);
-  const isActive = isHovered || hasFocusWithin;
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
 
-  const specPair = toSpecPair(product.specs);
-  const mediaUrl = resolvePublicMediaUrl(product.primaryMedia?.objectKey);
-  const altText = product.primaryMedia?.altText ?? `${product.brand.name} ${product.name}`;
+  // The quick view renders inside the card, so pointer and focus there must not count as the card.
+  const isActive = !isQuickViewOpen && (isHovered || hasFocusWithin);
+  // Without hover the quick view stays reachable, but the central action is left out: on a narrow
+  // touch card it would cover the photo, and tapping the card already opens the product.
+  const showQuickView = isActive || !canHover;
+  const images = cardImages(product);
+  const altFallback = `${product.brand.name} ${product.name}`;
 
-  const mediaContent = mediaUrl ? (
-    <Image
-      src={mediaUrl}
-      alt={altText}
-      fill
-      sizes="(max-width: 480px) 50vw, (max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"
-      className={styles.image}
-    />
-  ) : (
-    <ProductCardFallback />
-  );
+  const compareAt = product.compareAtPriceCents ?? null;
+  const isOnSale = compareAt !== null && compareAt > product.startingPriceCents;
+  const hasSinglePrice = Boolean(product.singleVariantId);
+
+  const primaryAction =
+    action === "add-to-cart" && product.singleVariantId ? (
+      <CardAddToCartButton variantId={product.singleVariantId} productName={product.name} />
+    ) : (
+      <DomeLink
+        href={href ?? "#"}
+        tone="dark"
+        className={styles.actionButton}
+        aria-label={`Elegir opciones de ${product.name}`}
+      >
+        Elegir opciones
+      </DomeLink>
+    );
+
+  const overlays = href ? (
+    <>
+      <motion.div
+        className={styles.quickViewSlot}
+        variants={OVERLAY_VARIANTS}
+        initial={false}
+        animate={showQuickView ? "shown" : "hidden"}
+        transition={OVERLAY_TRANSITION}
+        style={{ pointerEvents: showQuickView ? "auto" : "none" }}
+      >
+        <DomeButton
+          tone="light"
+          domeRise="-75%"
+          className={styles.quickViewButton}
+          aria-label={`Vista rápida de ${product.name}`}
+          aria-haspopup="dialog"
+          onClick={(event) => {
+            // Inside the mega-menu a click would otherwise bubble up and close the panel.
+            event.stopPropagation();
+            setIsHovered(false);
+            setIsQuickViewOpen(true);
+          }}
+        >
+          <Eye size={18} aria-hidden="true" />
+        </DomeButton>
+      </motion.div>
+
+      <motion.div
+        className={styles.actionSlot}
+        variants={OVERLAY_VARIANTS}
+        initial={false}
+        animate={isActive ? "shown" : "hidden"}
+        transition={OVERLAY_TRANSITION}
+        style={{ pointerEvents: isActive ? "auto" : "none" }}
+      >
+        {primaryAction}
+      </motion.div>
+    </>
+  ) : null;
 
   return (
     <article
       className={`${styles.card} ${href ? styles.interactiveCard : ""}`}
       data-testid="product-card"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== "mouse" || isQuickViewOpen) return;
+        setIsHovered(true);
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType !== "mouse" || isQuickViewOpen) return;
+        setIsHovered(false);
+      }}
       onFocus={() => setHasFocusWithin(true)}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setHasFocusWithin(false);
       }}
     >
-      <div className={styles.mediaStage}>
-        {href ? (
-          <Link href={href} className={styles.mediaLink} tabIndex={-1} aria-hidden="true">
-            {mediaContent}
-          </Link>
-        ) : (
-          mediaContent
-        )}
-
-        {href && (
-          <span className={styles.actionSlot}>
-            <DomeLink
-              href={href}
-              tone="dark"
-              className={styles.actionButton}
-              aria-label={`Elegir opciones de ${product.name}`}
-            >
-              Elegir opciones
-            </DomeLink>
-          </span>
-        )}
-      </div>
+      <ScrubGallery images={images} href={href} altFallback={altFallback} isActive={isActive}>
+        {overlays}
+      </ScrubGallery>
 
       <div className={styles.info}>
         {showBrandLink ? (
@@ -139,12 +176,31 @@ export function ProductCard({
         </h2>
 
         <div className={styles.priceBlock}>
-          <span className={styles.pricePrefix}>Desde</span>
-          <span className={styles.priceValue}>{formatCurrency(product.startingPriceCents)}</span>
+          {!hasSinglePrice && <span className={styles.pricePrefix}>Desde</span>}
+          <span
+            className={isOnSale ? `${styles.priceValue} ${styles.priceSale}` : styles.priceValue}
+          >
+            {formatCurrency(product.startingPriceCents)}
+          </span>
+          {isOnSale && (
+            <s className={styles.compareAt}>
+              <span className={styles.srOnly}>Precio anterior: </span>
+              {formatCurrency(compareAt)}
+            </s>
+          )}
         </div>
-
-        {specPair && <SpecSwapBar specs={specPair} active={isActive} />}
       </div>
+
+      {product.specs && <SpecSwapBar specs={product.specs} active={isActive} />}
+
+      {href && isQuickViewOpen && (
+        <QuickViewDialog
+          product={product}
+          href={href}
+          images={images}
+          onClose={() => setIsQuickViewOpen(false)}
+        />
+      )}
     </article>
   );
 }

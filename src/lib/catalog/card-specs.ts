@@ -1,6 +1,8 @@
 import type { SpecificationFieldDefinition } from "@/db/schema";
 
 export interface ProductCardSpec {
+  /** The schema field key, which picks the spec's icon. */
+  key: string;
   label: string;
   value: string;
 }
@@ -53,7 +55,7 @@ export function buildProductCardSpecs(
       if (typeof raw !== "string" && typeof raw !== "number" && typeof raw !== "boolean") return [];
 
       const value = formatSpecValue(field, raw);
-      return value ? [{ label: field.label, value }] : [];
+      return value ? [{ key: field.key, label: field.label, value }] : [];
     })
     .slice(0, MAX_CARD_SPECS);
 }

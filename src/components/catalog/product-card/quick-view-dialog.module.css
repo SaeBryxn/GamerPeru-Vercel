@@ -1,0 +1,227 @@
+.dialog {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  overflow: hidden;
+}
+
+/* The visible scrim is our own element, so Framer can fade it; the native one stays clear. */
+.dialog::backdrop {
+  background-color: transparent;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  background-color: rgb(9 9 11 / 45%);
+}
+
+.panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: 0;
+  translate: -50% -50%;
+  overflow: auto;
+  background-color: var(--color-surface-card);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 30px 80px -20px rgb(9 9 11 / 40%);
+}
+
+.closeButton {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 2;
+}
+
+.gallery {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-surface-product-stage);
+}
+
+.stage {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+}
+
+.stageImage {
+  position: absolute;
+  inset: 0;
+}
+
+.image {
+  object-fit: contain;
+  padding: 10%;
+  mix-blend-mode: multiply;
+}
+
+.thumbs {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  padding-bottom: var(--space-3);
+}
+
+.dotButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dotButton:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 0;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-8) var(--space-8);
+}
+
+.brand {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.title {
+  margin: 0;
+  padding-right: var(--space-10);
+  font-family: var(--font-heading), sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-text-secondary);
+}
+
+.priceBlock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.pricePrefix {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.price {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+.priceSale {
+  color: var(--color-brand-red);
+}
+
+.compareAt {
+  font-size: 0.9375rem;
+  color: var(--color-text-muted);
+}
+
+.specs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.specItem dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.specItem dd {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: auto;
+  padding-top: var(--space-6);
+}
+
+.primaryAction {
+  --dome-height: 48px;
+  --dome-radius: var(--radius-md);
+  width: 100%;
+}
+
+.detailsLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 767px) {
+  .panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .details {
+    padding: var(--space-6);
+  }
+}
