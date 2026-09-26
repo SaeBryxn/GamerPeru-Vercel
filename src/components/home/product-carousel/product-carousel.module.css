@@ -68,67 +68,12 @@
 
 .card {
   flex: 0 0 auto;
-  width: 280px;
-}
-
-.cardLink {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-  height: 100%;
-  padding: var(--space-8) var(--space-5) var(--space-6);
-  border-radius: var(--radius-lg);
-  background-color: var(--color-surface-secondary);
-  text-align: center;
-  text-decoration: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.cardLink:focus-visible {
-  outline: 2px solid var(--color-border-focus);
-  outline-offset: 2px;
-}
-
-.media {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1;
-  margin-bottom: var(--space-5);
-}
-
-.image {
-  object-fit: contain;
-  mix-blend-mode: multiply;
-  pointer-events: none;
-}
-
-.cardTitle {
-  font-family: var(--font-body);
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--color-accent-violet-deep);
-}
-
-.superscript {
-  margin-left: 1px;
-  font-size: 10px;
-  font-weight: 700;
-  vertical-align: super;
-}
-
-.cardSubtitle {
-  font-family: var(--font-body);
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--color-accent-violet-muted);
+  width: 300px;
 }
 
 .arrowSlot {
   position: absolute;
-  top: 50%;
+  top: 40%;
   z-index: 2;
   transform: translateY(-50%);
 }
@@ -166,11 +111,31 @@
   }
 
   .card {
-    width: 240px;
+    width: 260px;
   }
 
   .arrowSlot {
     display: none;
+  }
+
+  @media (max-width: 1023px) {
+    .viewport {
+      scroll-padding-inline: var(--gutter-tablet);
+    }
+
+    .track {
+      padding-inline: var(--gutter-tablet);
+    }
+  }
+
+  @media (max-width: 767px) {
+    .viewport {
+      scroll-padding-inline: var(--gutter-mobile);
+    }
+
+    .track {
+      padding-inline: var(--gutter-mobile);
+    }
   }
 }
 
@@ -181,7 +146,44 @@
   }
 
   .card {
-    width: 70vw;
-    max-width: 260px;
+    width: 74vw;
+    max-width: 280px;
+  }
+}
+
+/*
+ * Touch: the viewport becomes a native, snapping scroller that bleeds to the
+ * screen edge, and the arrows give way to the swipe.
+ */
+@media not all and (hover: hover) and (pointer: fine) {
+  .stage {
+    padding: 0;
+  }
+
+  .viewport {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--gutter-desktop-lg);
+    scrollbar-width: none;
+  }
+
+  .viewport::-webkit-scrollbar {
+    display: none;
+  }
+
+  .track {
+    width: max-content;
+    padding-inline: var(--gutter-desktop-lg);
+    cursor: auto;
+    touch-action: auto;
+  }
+
+  .card {
+    scroll-snap-align: start;
+  }
+
+  .arrowSlot {
+    display: none;
   }
 }

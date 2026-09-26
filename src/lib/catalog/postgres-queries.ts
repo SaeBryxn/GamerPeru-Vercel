@@ -1,5 +1,5 @@
 import "server-only";
-import { and, countDistinct, eq, sql } from "drizzle-orm";
+import { and, countDistinct, desc, eq, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   brands,
@@ -18,6 +18,7 @@ import {
 } from "@/lib/discovery-filters/postgres-predicates";
 import type {
   DiscoveryFilterState,
+  DiscoverySurface,
   ValidatedSpecificationSchema,
 } from "@/lib/discovery-filters/types";
 import { cardCompareAtSql, cardGallerySql, cardSingleVariantSql } from "./card-sql";
@@ -265,28 +266,43 @@ export function buildBrandFilteredProductCountQuery(
     .where(whereClause);
 }
 
-export function buildCategoryFilteredProductsQuery(
-  categoryId: string,
-  page: number,
-  pageSize: number,
-  filterState?: DiscoveryFilterState,
-  schema?: ValidatedSpecificationSchema | null
-) {
+const UNFILTERED_STATE: Omit<DiscoveryFilterState, "page"> = {
+  brands: [],
+  categories: [],
+  price: { minCents: null, maxCents: null },
+  technical: {},
+  sort: null,
+};
+
+interface DiscoveryProductsQueryOptions {
+  scope: { categoryId?: string; brandId?: string };
+  surface: DiscoverySurface;
+  page: number;
+  pageSize: number;
+  filterState?: DiscoveryFilterState;
+  schema?: ValidatedSpecificationSchema | null;
+  /** Ordering applied ahead of the requested sort. */
+  leadingOrder?: SQL[];
+}
+
+/** Card rows for a discovery surface: the shape every product card on the storefront reads. */
+function buildDiscoveryProductsQuery({
+  scope,
+  surface,
+  page,
+  pageSize,
+  filterState,
+  schema,
+  leadingOrder = [],
+}: DiscoveryProductsQueryOptions) {
   const safePage = Math.max(1, Math.trunc(page));
   const safePageSize = Math.max(1, Math.trunc(pageSize));
   const offset = (safePage - 1) * safePageSize;
 
-  const state: DiscoveryFilterState = filterState ?? {
-    brands: [],
-    categories: [],
-    price: { minCents: null, maxCents: null },
-    technical: {},
-    sort: null,
-    page: safePage,
-  };
+  const state: DiscoveryFilterState = filterState ?? { ...UNFILTERED_STATE, page: safePage };
 
   const whereClause = buildProductDiscoveryWhereClause(state, {
-    categoryId,
+    ...scope,
     validatedSchema: schema ?? null,
   });
 
@@ -297,7 +313,7 @@ export function buildCategoryFilteredProductsQuery(
 
   const orderByClauses = buildProductSortOrderBy(
     state.sort,
-    "category",
+    surface,
     state.price.minCents,
     state.price.maxCents
   );
@@ -346,9 +362,26 @@ export function buildCategoryFilteredProductsQuery(
       )
     )
     .where(whereClause)
-    .orderBy(...orderByClauses)
+    .orderBy(...leadingOrder, ...orderByClauses)
     .limit(safePageSize)
     .offset(offset);
+}
+
+export function buildCategoryFilteredProductsQuery(
+  categoryId: string,
+  page: number,
+  pageSize: number,
+  filterState?: DiscoveryFilterState,
+  schema?: ValidatedSpecificationSchema | null
+) {
+  return buildDiscoveryProductsQuery({
+    scope: { categoryId },
+    surface: "category",
+    page,
+    pageSize,
+    filterState,
+    schema,
+  });
 }
 
 export function buildBrandFilteredProductsQuery(
@@ -358,81 +391,23 @@ export function buildBrandFilteredProductsQuery(
   filterState?: DiscoveryFilterState,
   schema?: ValidatedSpecificationSchema | null
 ) {
-  const safePage = Math.max(1, Math.trunc(page));
-  const safePageSize = Math.max(1, Math.trunc(pageSize));
-  const offset = (safePage - 1) * safePageSize;
-
-  const state: DiscoveryFilterState = filterState ?? {
-    brands: [],
-    categories: [],
-    price: { minCents: null, maxCents: null },
-    technical: {},
-    sort: null,
-    page: safePage,
-  };
-
-  const whereClause = buildProductDiscoveryWhereClause(state, {
-    brandId,
-    validatedSchema: schema ?? null,
+  return buildDiscoveryProductsQuery({
+    scope: { brandId },
+    surface: "brand",
+    page,
+    pageSize,
+    filterState,
+    schema,
   });
+}
 
-  const startingPriceSql = buildEligibleStartingPriceSql(
-    state.price.minCents,
-    state.price.maxCents
-  );
-
-  const orderByClauses = buildProductSortOrderBy(
-    state.sort,
-    "brand",
-    state.price.minCents,
-    state.price.maxCents
-  );
-
-  return db
-    .select({
-      id: products.id,
-      name: products.name,
-      slug: products.slug,
-      subtitle: products.subtitle,
-      brandName: brands.name,
-      brandSlug: brands.slug,
-      categoryName: categories.name,
-      categorySlug: categories.slug,
-      primaryMediaKey: mediaAssets.objectKey,
-      primaryMediaAlt: mediaAssets.altText,
-      primaryMediaWidth: mediaAssets.width,
-      primaryMediaHeight: mediaAssets.height,
-      startingPriceCents: startingPriceSql.mapWith(Number),
-      compareAtPriceCents: cardCompareAtSql(startingPriceSql),
-      gallery: cardGallerySql,
-      singleVariantId: cardSingleVariantSql,
-      specValues: productSpecifications.specValues,
-      specFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
-    })
-    .from(products)
-    .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
-    .innerJoin(
-      categories,
-      and(eq(products.categoryId, categories.id), eq(categories.status, "PUBLISHED"))
-    )
-    .leftJoin(
-      mediaAssets,
-      and(
-        sql`${mediaAssets.id} = ${CARD_MEDIA_ASSET_ID}`,
-        eq(mediaAssets.securityClass, "PUBLIC_MEDIA"),
-        eq(mediaAssets.mediaType, "IMAGE")
-      )
-    )
-    .leftJoin(productSpecifications, eq(productSpecifications.productId, products.id))
-    .leftJoin(
-      categorySpecificationSchemas,
-      and(
-        eq(categorySpecificationSchemas.categoryId, products.categoryId),
-        eq(categorySpecificationSchemas.isActive, true)
-      )
-    )
-    .where(whereClause)
-    .orderBy(...orderByClauses)
-    .limit(safePageSize)
-    .offset(offset);
+/** Published products across every category, featured ones first, then newest. */
+export function buildShowcaseProductsQuery(limit: number) {
+  return buildDiscoveryProductsQuery({
+    scope: {},
+    surface: "search",
+    page: 1,
+    pageSize: limit,
+    leadingOrder: [desc(products.isFeatured)],
+  });
 }

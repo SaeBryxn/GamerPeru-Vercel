@@ -331,6 +331,19 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader, Pr
     };
   }
 
+  async getShowcaseProducts(limit: number): Promise<ProductDiscoveryItem[]> {
+    return FIXTURE_PRODUCTS.slice(0, Math.max(0, Math.trunc(limit))).map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      subtitle: p.subtitle,
+      brand: p.brand,
+      category: p.category,
+      primaryMedia: p.primaryMedia,
+      startingPriceCents: p.startingPriceCents,
+    }));
+  }
+
   async getPublishedProductsByBrand(
     brandId: string,
     pagination: PaginationOptions,

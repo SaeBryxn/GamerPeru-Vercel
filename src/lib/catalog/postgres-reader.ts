@@ -21,6 +21,7 @@ import {
   buildCategorySpecificationSchemaQuery,
   buildPublishedBrandBySlugQuery,
   buildPublishedCategoryBySlugQuery,
+  buildShowcaseProductsQuery,
   buildTechnicalRepresentedSpecValuesQuery,
 } from "./postgres-queries";
 import type { CatalogDiscoveryReader } from "./reader";
@@ -264,6 +265,11 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
       pageSize: safePageSize,
       totalPages,
     };
+  }
+
+  async getShowcaseProducts(limit: number): Promise<ProductDiscoveryItem[]> {
+    const rows = await buildShowcaseProductsQuery(limit);
+    return rows.map(toDiscoveryItem);
   }
 
   async getPublishedProductsByBrand(

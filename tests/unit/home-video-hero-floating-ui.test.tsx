@@ -21,7 +21,7 @@ import {
 import type { ProductDiscoveryItem } from "@/lib/catalog/types";
 import { ChatWidget, SocialRail } from "@/components/floating";
 import { PROMO_PILL, SOCIAL_LINKS } from "@/config/social-links";
-import { STOREFRONT_INVENTORY, inventoryFamilies } from "@/lib/catalog/storefront-inventory";
+import { STOREFRONT_INVENTORY } from "@/lib/catalog/storefront-inventory";
 
 beforeAll(() => {
   // jsdom has no IntersectionObserver; whileInView only needs it to exist.
@@ -125,29 +125,57 @@ describe("Chat widget", () => {
 });
 
 describe("Product carousel", () => {
-  it("shows one card per model, with the colorway count as superscript", () => {
-    const families = inventoryFamilies();
-    render(<ProductCarousel id="coleccion" eyebrow="Colección" title="Disponible" />);
+  const products: ProductDiscoveryItem[] = [
+    {
+      id: "p1",
+      name: "ATK A9 Plus 2.0 Black",
+      slug: "atk-a9-plus-2-0-black",
+      subtitle: null,
+      brand: { name: "ATK", slug: "atk" },
+      category: { name: "Mouses Gaming", slug: "mouses" },
+      primaryMedia: {
+        objectKey: "products/atk-a9-plus/black.webp",
+        altText: "ATK A9 Plus negro",
+        width: 1200,
+        height: 1200,
+      },
+      startingPriceCents: 18900,
+    },
+    {
+      id: "p2",
+      name: "X-Raypad Aqua Control",
+      slug: "x-raypad-aqua-control",
+      subtitle: null,
+      brand: { name: "X-Raypad", slug: "x-raypad" },
+      category: { name: "Mousepads", slug: "mousepads" },
+      primaryMedia: null,
+      startingPriceCents: 21900,
+    },
+  ];
 
-    const cards = screen.getAllByRole("listitem");
-    expect(cards).toHaveLength(families.length);
-    // Every listing is accounted for by exactly one card.
-    expect(families.reduce((sum, family) => sum + family.items.length, 0)).toBe(
-      STOREFRONT_INVENTORY.length
+  it("renders the shared catalog card for every product it is given", () => {
+    render(
+      <ProductCarousel id="coleccion" eyebrow="Colección" title="Disponible" products={products} />
     );
 
-    const multi = families.find((family) => family.items.length > 1)!;
-    const card = screen.getByText(multi.name).closest("a")!;
-    expect(card.getAttribute("href")).toBe(`/productos/${multi.lead.slug}`);
-    expect(card.querySelector("sup")?.textContent).toBe(String(multi.items.length));
-    expect(card.textContent).toContain(multi.brand.name);
+    expect(screen.getAllByTestId("product-card")).toHaveLength(products.length);
+    const card = screen.getAllByRole("link", { name: /ATK A9 Plus 2.0 Black/ })[0]!;
+    expect(card.getAttribute("href")).toBe("/productos/atk-a9-plus-2-0-black");
+  });
 
-    const single = families.find((family) => family.items.length === 1)!;
-    expect(screen.getByText(single.name).closest("a")!.querySelector("sup")).toBeNull();
+  it("keeps the section as the hero's reveal target when the catalog is empty", () => {
+    const { container } = render(
+      <ProductCarousel id="coleccion" eyebrow="Colección" title="Disponible" products={[]} />
+    );
+
+    expect(container.querySelector("section#coleccion")).not.toBeNull();
+    expect(screen.queryByTestId("product-carousel-track")).toBeNull();
   });
 
   it("steps with the reused dome arrows, starting clamped at the left", () => {
-    render(<ProductCarousel id="coleccion" eyebrow="Colección" title="Disponible" />);
+    render(
+      <ProductCarousel id="coleccion" eyebrow="Colección" title="Disponible" products={products} />
+    );
 
     const prev = screen.getByTestId("product-carousel-prev");
     const next = screen.getByTestId("product-carousel-next");

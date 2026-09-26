@@ -11,7 +11,7 @@ import {
   TrustStrip,
   VideoHero,
 } from "@/components/home";
-import { loadRailProducts } from "@/components/home/home-catalog";
+import { loadRailProducts, loadShowcaseProducts } from "@/components/home/home-catalog";
 import styles from "./page.module.css";
 
 /** Page H1: kept for SEO and screen readers while the stage stays wordless. */
@@ -42,7 +42,8 @@ export const metadata: Metadata = {
  * - Server Component; the animated blocks are client islands.
  */
 export default async function HomePage(): Promise<React.JSX.Element> {
-  const [mice, mousepads] = await Promise.all([
+  const [showcase, mice, mousepads] = await Promise.all([
+    loadShowcaseProducts(),
     loadRailProducts("mouses"),
     loadRailProducts("mousepads"),
   ]);
@@ -54,7 +55,12 @@ export default async function HomePage(): Promise<React.JSX.Element> {
 
       <div className={styles.storeLayer}>
         {/* 2. Product rail sliding over the stage */}
-        <ProductCarousel id="coleccion" eyebrow="Colección" title="Lo que tenemos disponible" />
+        <ProductCarousel
+          id="coleccion"
+          eyebrow="Colección"
+          title="Lo que tenemos disponible"
+          products={showcase}
+        />
 
         {/* 3. Flagship product film */}
         <FeatureVideo

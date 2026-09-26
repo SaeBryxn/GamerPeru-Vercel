@@ -26,3 +26,13 @@ export async function loadRailProducts(
     return [];
   }
 }
+
+/** Products for the showcase rail over the hero: every category, featured first. */
+export async function loadShowcaseProducts(limit = 16): Promise<ProductDiscoveryItem[]> {
+  try {
+    return await getCatalogReader().getShowcaseProducts(limit);
+  } catch {
+    logger.warn({ event: "home_showcase_products_unavailable" });
+    return [];
+  }
+}

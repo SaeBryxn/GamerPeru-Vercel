@@ -31,6 +31,8 @@ export interface CatalogDiscoveryReader {
     filterState?: DiscoveryFilterState,
     schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>>;
+  /** Published products across every category, featured first; used by the home showcase. */
+  getShowcaseProducts(limit: number): Promise<ProductDiscoveryItem[]>;
   getPublishedProductsByBrand(
     brandId: string,
     pagination: PaginationOptions,
