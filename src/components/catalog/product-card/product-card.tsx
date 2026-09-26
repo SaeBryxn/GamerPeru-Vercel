@@ -11,7 +11,7 @@ import { CardAddToCartButton } from "./card-add-to-cart-button";
 import { QuickViewDialog } from "./quick-view-dialog";
 import { ScrubGallery } from "./scrub-gallery";
 import { SpecSwapBar } from "./spec-swap-bar";
-import { useCanHover } from "./use-can-hover";
+import { useCanHover } from "@/components/ui/use-can-hover";
 import styles from "./product-card.module.css";
 
 const OVERLAY_VARIANTS: Variants = {
@@ -33,6 +33,8 @@ export interface ProductCardProps {
    * options still leads to its page, since there is nothing to add until one is chosen.
    */
   action?: ProductCardAction;
+  /** Swipe through the photos on touch. Off inside horizontal rails, which need the gesture. */
+  gallerySwipe?: boolean;
 }
 
 /** The card's photos: its gallery when the reader provides one, otherwise the single card image. */
@@ -51,8 +53,8 @@ function cardImages(product: ProductDiscoveryItem): ProductCardImage[] {
  * Invariants:
  * 1. Without `href` the media and title are not links; the overlays only exist with `href`.
  * 2. Brand name links to `/marcas/[slug]` unless `showBrandLink=false`.
- * 3. Moving a mouse across the photo scrubs through up to three views; touch and keyboard users
- *    see the first photo, and the overlays stay visible where there is no hover.
+ * 3. Moving a mouse across the photo scrubs through up to three views; on touch a swipe across it
+ *    does the same (outside rails), and the overlays stay visible where there is no hover.
  * 4. The compare-at price is shown only when it is higher than the current price.
  * 5. Activating the card swaps the spec strip to its second pair.
  */
@@ -61,6 +63,7 @@ export function ProductCard({
   href,
   showBrandLink = true,
   action = "choose-options",
+  gallerySwipe = true,
 }: ProductCardProps): React.JSX.Element {
   const canHover = useCanHover();
   const [isHovered, setIsHovered] = useState(false);
@@ -150,7 +153,13 @@ export function ProductCard({
         if (!event.currentTarget.contains(event.relatedTarget)) setHasFocusWithin(false);
       }}
     >
-      <ScrubGallery images={images} href={href} altFallback={altFallback} isActive={isActive}>
+      <ScrubGallery
+        images={images}
+        href={href}
+        altFallback={altFallback}
+        isActive={isActive}
+        swipe={gallerySwipe && !canHover}
+      >
         {overlays}
       </ScrubGallery>
 

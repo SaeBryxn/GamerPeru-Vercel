@@ -41,7 +41,7 @@ export interface CompareSliderProps {
 }
 
 /**
- * Curtain comparison: dragging the handle moves a clip over the left image,
+ * Curtain comparison: dragging across the stage moves a clip over the left image,
  * revealing the right one underneath. The handle is also a slider for keyboard
  * users, so the comparison never depends on pointer dragging.
  */
@@ -50,6 +50,9 @@ export function CompareSlider({ eyebrow, title, left, right }: CompareSliderProp
   const [width, setWidth] = useState(0);
   const x = useMotionValue(0);
   const [percent, setPercent] = useState(50);
+  const [isHeld, setIsHeld] = useState(false);
+  // Read by the move handler, which can run before the release has re-rendered.
+  const heldRef = useRef(false);
 
   // The left image is clipped to everything on the handle's left.
   const clipPath = useTransform(x, (value) => {
@@ -86,6 +89,38 @@ export function CompareSlider({ eyebrow, title, left, right }: CompareSliderProp
     x.set((next - 0.5) * width);
   };
 
+  const moveTo = (clientX: number) => {
+    const bounds = stageRef.current?.getBoundingClientRect();
+    if (!bounds || bounds.width <= 0) return;
+    const ratio = Math.min(Math.max((clientX - bounds.left) / bounds.width, 0), 1);
+    x.set((ratio - 0.5) * bounds.width);
+  };
+
+  // The whole stage is the grab area: a finger lands anywhere and the curtain follows it, so the
+  // gesture never depends on hitting the thin handle. Vertical pans still scroll the page.
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    heldRef.current = true;
+    setIsHeld(true);
+    moveTo(event.clientX);
+    // Capture keeps the drag alive when the finger leaves the stage; a pointer the browser no
+    // longer tracks cannot be captured, and the tap alone still moves the curtain.
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Not capturable; the drag simply ends at the stage edge.
+    }
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (heldRef.current) moveTo(event.clientX);
+  };
+
+  const release = () => {
+    heldRef.current = false;
+    setIsHeld(false);
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowLeft") {
       event.preventDefault();
@@ -109,7 +144,14 @@ export function CompareSlider({ eyebrow, title, left, right }: CompareSliderProp
         </h2>
       </div>
 
-      <div className={styles.stage} ref={stageRef}>
+      <div
+        className={styles.stage}
+        ref={stageRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={release}
+        onPointerCancel={release}
+      >
         <div className={styles.layer} aria-hidden="true">
           <HomeImage src={right.image.src} alt={right.image.alt} sizes="100vw" />
         </div>
@@ -120,14 +162,8 @@ export function CompareSlider({ eyebrow, title, left, right }: CompareSliderProp
         <motion.div
           className={styles.handle}
           style={{ x }}
-          drag="x"
-          dragConstraints={{ left: -width / 2, right: width / 2 }}
-          dragElastic={0}
-          dragMomentum={false}
           initial="idle"
-          animate="idle"
-          whileTap="held"
-          whileDrag="held"
+          animate={isHeld ? "held" : "idle"}
           role="slider"
           tabIndex={0}
           aria-label={`Comparar ${left.name} y ${right.name}`}

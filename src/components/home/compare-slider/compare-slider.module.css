@@ -40,6 +40,9 @@
   background-color: var(--color-surface-secondary);
   overflow: hidden;
   touch-action: pan-y;
+  cursor: ew-resize;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .layer {
@@ -120,6 +123,23 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--color-text-primary);
+}
+
+/* Fingers need a wider line to aim at and a bigger grip to see under the thumb. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .handle {
+    width: 64px;
+    margin-left: -32px;
+  }
+
+  .handleLine {
+    width: 3px;
+  }
+
+  .handleGrip {
+    width: 48px;
+    height: 48px;
+  }
 }
 
 @media (max-width: 1023px) {

@@ -29,12 +29,21 @@ const TAB_VARIANTS: Variants = {
 
 const TAB_TRANSITION: Transition = { type: "spring", stiffness: 480, damping: 36, mass: 0.7 };
 
+// A horizontal travel past this, clearly wider than it is tall, reads as a swipe rather than a tap.
+const SWIPE_MIN_DISTANCE = 40;
+const SWIPE_DOMINANCE = 1.2;
+
 export interface ScrubGalleryProps {
   images: readonly ProductCardImage[];
   href?: string;
   altFallback: string;
   /** Whether the whole card is hovered or focused; raises the indicator tab. */
   isActive: boolean;
+  /**
+   * Whether a finger swipe across the photo changes it. Left off inside horizontal rails, where
+   * the same gesture has to scroll the rail.
+   */
+  swipe?: boolean;
   /** Overlays drawn above the photos. Passed as elements so a scrub never re-renders them. */
   children?: React.ReactNode;
 }
@@ -49,12 +58,17 @@ export function ScrubGallery({
   href,
   altFallback,
   isActive,
+  swipe = false,
   children,
 }: ScrubGalleryProps): React.JSX.Element {
   const [[index, direction], setPosition] = useState<[number, number]>([0, 0]);
   const indexRef = useRef(0);
   // Other photos are only requested once a pointer shows interest in the card.
   const [hasEngaged, setHasEngaged] = useState(false);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  // A swipe ends with a click on the photo link; that click must not open the product.
+  const didSwipe = useRef(false);
+  const canSwipe = swipe && images.length > 1;
 
   const goTo = (next: number) => {
     const current = indexRef.current;
@@ -68,6 +82,25 @@ export function ScrubGallery({
     const bounds = event.currentTarget.getBoundingClientRect();
     const ratio = (event.clientX - bounds.left) / bounds.width;
     goTo(Math.min(images.length - 1, Math.max(0, Math.floor(ratio * images.length))));
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!canSwipe || event.pointerType === "mouse") return;
+    touchStart.current = { x: event.clientX, y: event.clientY };
+    didSwipe.current = false;
+    setHasEngaged(true);
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_MIN_DISTANCE || Math.abs(dx) < Math.abs(dy) * SWIPE_DOMINANCE) return;
+    didSwipe.current = true;
+    const next = indexRef.current + (dx < 0 ? 1 : -1);
+    goTo(Math.min(images.length - 1, Math.max(0, next)));
   };
 
   const current = images[index];
@@ -115,6 +148,18 @@ export function ScrubGallery({
   return (
     <div
       className={styles.mediaStage}
+      style={canSwipe ? { touchAction: "pan-y" } : undefined}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={() => {
+        touchStart.current = null;
+      }}
+      onClickCapture={(event) => {
+        if (!didSwipe.current) return;
+        didSwipe.current = false;
+        event.preventDefault();
+        event.stopPropagation();
+      }}
       onPointerEnter={(event) => {
         if (event.pointerType === "mouse") setHasEngaged(true);
       }}
@@ -138,7 +183,7 @@ export function ScrubGallery({
           className={styles.dotsTab}
           variants={TAB_VARIANTS}
           initial={false}
-          animate={isActive ? "shown" : "hidden"}
+          animate={isActive || canSwipe ? "shown" : "hidden"}
           transition={TAB_TRANSITION}
           aria-hidden="true"
         >

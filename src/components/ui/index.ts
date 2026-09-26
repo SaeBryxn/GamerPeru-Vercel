@@ -11,3 +11,4 @@ export * from "./liquid-icon";
 export * from "./magnetic-wrapper";
 export * from "./stack";
 export * from "./visually-hidden";
+export * from "./use-can-hover";

@@ -41,3 +41,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Phone columns are too narrow to truncate a value to one line; let it wrap instead. */
+@media (max-width: 767px) {
+  .specGrid {
+    gap: var(--space-4);
+    padding: var(--space-4);
+  }
+
+  .specValue {
+    padding-left: 0;
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

@@ -47,8 +47,8 @@ export function CatalogRail({ id, eyebrow, title, products, seeAll }: CatalogRai
           <motion.ul
             ref={rail.trackRef}
             className={styles.track}
-            style={{ x: rail.x }}
-            drag="x"
+            style={rail.isTouch ? undefined : { x: rail.x }}
+            drag={rail.isTouch ? false : "x"}
             dragConstraints={{ left: -rail.maxOffset, right: 0 }}
             dragElastic={0.12}
             onDragEnd={rail.onDragEnd}
@@ -56,7 +56,11 @@ export function CatalogRail({ id, eyebrow, title, products, seeAll }: CatalogRai
           >
             {products.map((product) => (
               <li key={product.id} className={styles.card}>
-                <ProductCard product={product} href={`/productos/${product.slug}`} />
+                <ProductCard
+                  product={product}
+                  href={`/productos/${product.slug}`}
+                  gallerySwipe={false}
+                />
               </li>
             ))}
           </motion.ul>

@@ -125,6 +125,26 @@
   .arrowSlot {
     display: none;
   }
+
+  @media (max-width: 1023px) {
+    .viewport {
+      scroll-padding-inline: var(--gutter-tablet);
+    }
+
+    .track {
+      padding-inline: var(--gutter-tablet);
+    }
+  }
+
+  @media (max-width: 767px) {
+    .viewport {
+      scroll-padding-inline: var(--gutter-mobile);
+    }
+
+    .track {
+      padding-inline: var(--gutter-mobile);
+    }
+  }
 }
 
 @media (max-width: 767px) {
@@ -136,5 +156,42 @@
   .card {
     width: 74vw;
     max-width: 280px;
+  }
+}
+
+/*
+ * Touch: the viewport becomes a native, snapping scroller that bleeds to the
+ * screen edge, and the arrows give way to the swipe.
+ */
+@media not all and (hover: hover) and (pointer: fine) {
+  .stage {
+    padding: 0;
+  }
+
+  .viewport {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--gutter-desktop-lg);
+    scrollbar-width: none;
+  }
+
+  .viewport::-webkit-scrollbar {
+    display: none;
+  }
+
+  .track {
+    width: max-content;
+    padding-inline: var(--gutter-desktop-lg);
+    cursor: auto;
+    touch-action: auto;
+  }
+
+  .card {
+    scroll-snap-align: start;
+  }
+
+  .arrowSlot {
+    display: none;
   }
 }

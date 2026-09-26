@@ -14,6 +14,7 @@
   position: relative;
   background-color: var(--color-surface-canvas);
   width: 100%;
+  max-width: 100vw;
   aspect-ratio: 1 / 1;
   overflow: hidden;
   display: flex;
@@ -93,6 +94,13 @@
   right: 0;
 }
 
+/* Below desktop the stage is swiped; floating arrows would cover a narrow photo. */
+@media (max-width: 1023px) {
+  .navArrowSlot {
+    display: none;
+  }
+}
+
 .navArrow {
   --dome-height: 60px;
   --dome-padding: 0;
@@ -126,6 +134,7 @@
 
 .thumbnailItem {
   flex-shrink: 0;
+  scroll-snap-align: start;
 }
 
 .thumbnailButton {
@@ -179,6 +188,30 @@
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
+}
+
+/* Touch: the strip snaps thumb by thumb and the thumbs shrink to show more at once. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .thumbnailList {
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+  }
+}
+
+@media (max-width: 767px) {
+  .galleryContainer {
+    gap: var(--space-4);
+  }
+
+  .mainImage {
+    padding: var(--space-3);
+  }
+
+  .thumbnailButton {
+    width: 72px;
+    height: 72px;
+    padding: var(--space-1);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

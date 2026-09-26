@@ -11,7 +11,7 @@ import {
   type Variants,
 } from "framer-motion";
 import { ChevronDown } from "lucide-react";
-import { Icon } from "@/components/ui";
+import { Icon, useCanHover } from "@/components/ui";
 import styles from "./video-hero.module.css";
 
 const YOUTUBE_VIDEO_ID = "2gX-vyQwHsA";
@@ -57,6 +57,10 @@ export interface VideoHeroProps {
 export function VideoHero({ heading, revealTargetId }: VideoHeroProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const prefersReducedMotion = useReducedMotion();
+  // Touch screens scroll the curtain away natively: a drag gesture would fight the page scroll,
+  // and a scroll-linked dim costs a paint per frame on the devices least able to afford it.
+  const isTouch = !useCanHover();
+  const isLite = Boolean(prefersReducedMotion) || isTouch;
 
   // The stage is pinned (sticky) while the store slides over it, so scroll is
   // measured against the page, not against the element's own box.
@@ -105,7 +109,7 @@ export function VideoHero({ heading, revealTargetId }: VideoHeroProps) {
     >
       <motion.div
         className={styles.curtain}
-        drag={prefersReducedMotion ? false : "y"}
+        drag={isLite ? false : "y"}
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0.4, bottom: 0 }}
         dragMomentum={false}
@@ -135,7 +139,7 @@ export function VideoHero({ heading, revealTargetId }: VideoHeroProps) {
         <div className={styles.scrim} aria-hidden="true" />
         <motion.div
           className={styles.dim}
-          style={prefersReducedMotion ? undefined : { opacity: dim }}
+          style={isLite ? undefined : { opacity: dim }}
           aria-hidden="true"
         />
 

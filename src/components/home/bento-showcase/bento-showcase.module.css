@@ -48,18 +48,31 @@
   color: var(--color-text-secondary);
 }
 
-/* Wide tile and square tile stack on the left; the tall one spans both rows. */
+/*
+ * Phones: the wide tile across the top, the other two side by side under it,
+ * so no photo shrinks to a sliver. From 768px the wide and square tiles stack
+ * on the left and the tall one spans both rows.
+ */
 .grid {
   display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: repeat(3, 200px);
-  gap: var(--space-4);
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 180px 180px;
+  gap: var(--space-3);
+}
+
+.tileWide {
+  grid-column: 1 / -1;
 }
 
 @media (min-width: 768px) {
   .grid {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: 220px 220px;
+    gap: var(--space-4);
+  }
+
+  .tileWide {
+    grid-column: auto;
   }
 
   .tileTall {

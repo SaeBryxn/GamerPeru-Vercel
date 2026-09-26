@@ -70,7 +70,7 @@ export function BentoShowcase({ title, description, images }: BentoShowcaseProps
           whileHover={{ scale: 1.03 }}
           transition={HOVER_SPRING}
         >
-          <HomeImage src={square.src} alt={square.alt} sizes="(max-width: 1023px) 90vw, 30vw" />
+          <HomeImage src={square.src} alt={square.alt} sizes="(max-width: 1023px) 45vw, 30vw" />
         </motion.div>
         <motion.div
           className={`${styles.tile} ${styles.tileTall}`}
@@ -78,7 +78,7 @@ export function BentoShowcase({ title, description, images }: BentoShowcaseProps
           whileHover={{ scale: 1.03 }}
           transition={HOVER_SPRING}
         >
-          <HomeImage src={tall.src} alt={tall.alt} sizes="(max-width: 1023px) 90vw, 30vw" />
+          <HomeImage src={tall.src} alt={tall.alt} sizes="(max-width: 1023px) 45vw, 30vw" />
         </motion.div>
       </div>
     </motion.section>
