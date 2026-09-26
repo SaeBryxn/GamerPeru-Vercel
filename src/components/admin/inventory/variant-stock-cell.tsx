@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useTransition } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Check, Loader2 } from "lucide-react";
 import { setVariantStockAction } from "@/lib/admin/inventory/actions";
 import type { VariantStockRow } from "@/lib/admin/inventory/readers";
@@ -79,21 +79,28 @@ export function VariantStockCell({
           disabled={isPending}
           data-testid={`variant-stock-input-${variantId}`}
         />
-        <motion.button
-          type="button"
-          onClick={save}
-          className={styles.saveButton}
-          disabled={!isDirty || isPending}
-          whileHover={isDirty && !isPending ? { scale: 1.04 } : undefined}
-          whileTap={isDirty && !isPending ? { scale: 0.96 } : undefined}
-          data-testid={`variant-stock-save-${variantId}`}
-        >
-          {isPending ? (
-            <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-          ) : (
-            "Guardar"
+        <AnimatePresence initial={false}>
+          {(isDirty || isPending) && (
+            <motion.button
+              type="button"
+              onClick={save}
+              className={styles.saveButton}
+              disabled={isPending}
+              initial={{ opacity: 0, x: -4 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -4 }}
+              transition={{ duration: 0.15 }}
+              whileTap={{ scale: 0.96 }}
+              data-testid={`variant-stock-save-${variantId}`}
+            >
+              {isPending ? (
+                <Loader2 size={13} className={styles.spinner} aria-hidden="true" />
+              ) : (
+                "Guardar"
+              )}
+            </motion.button>
           )}
-        </motion.button>
+        </AnimatePresence>
       </div>
 
       <span className={styles.meta}>

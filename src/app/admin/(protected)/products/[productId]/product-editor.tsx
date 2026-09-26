@@ -11,22 +11,16 @@ import {
   AlertTriangle,
   XCircle,
   Plus,
-  Edit2,
+  Pencil,
   RefreshCw,
   Loader2,
   Image as ImageIcon,
   Lock,
   Upload,
-  ArrowUp,
-  ArrowDown,
-  Star,
-  Tag,
-  Globe,
   BookOpen,
   ChevronRight,
   ExternalLink,
   X,
-  Trash2,
 } from "lucide-react";
 import {
   updateProductAction,
@@ -60,6 +54,9 @@ import {
   type ProductEditorSection,
 } from "@/lib/admin/catalog/readiness-guidance";
 import { ProductSectionNav } from "@/components/admin/products/product-section-nav";
+import { QualityChecklist } from "@/components/admin/products/quality-checklist";
+import { FeaturedToggle } from "@/components/admin/products/featured-toggle";
+import { MediaTile } from "@/components/admin/products/media-tile";
 import type { AdminProductUiDetail } from "@/lib/admin/catalog/ui-dto";
 import type {
   AdminProductDetailVariant,
@@ -140,7 +137,6 @@ export function ProductEditor({
     specifications,
     variants,
     media,
-    primaryMedia,
     publishReadiness,
   } = detail;
 
@@ -260,6 +256,8 @@ export function ProductEditor({
   const [mediaOrder, setMediaOrder] = useState(media);
   const reorderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isReorderingMedia, setIsReorderingMedia] = useState(false);
+  const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const [mediaOpError, setMediaOpError] = useState<string | null>(null);
 
   // Alt Text Modal State
@@ -1241,16 +1239,13 @@ export function ProductEditor({
     }
   };
 
-  const handleMoveMedia = (index: number, direction: "up" | "down") => {
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= mediaOrder.length) return;
+  const reorderMedia = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || toIndex < 0 || toIndex >= mediaOrder.length) return;
 
     const reordered = [...mediaOrder];
-    const moved = reordered[index];
-    const displaced = reordered[targetIndex];
-    if (!moved || !displaced) return;
-    reordered[index] = displaced;
-    reordered[targetIndex] = moved;
+    const [moved] = reordered.splice(fromIndex, 1);
+    if (!moved) return;
+    reordered.splice(toIndex, 0, moved);
 
     setMediaOrder(reordered);
 
@@ -1333,8 +1328,6 @@ export function ProductEditor({
       setIsReassigningVariant(false);
     }
   };
-
-  const primaryThumbUrl = primaryMedia?.publicUrl ?? null;
 
   return (
     <div className={styles.container}>
@@ -1576,11 +1569,7 @@ export function ProductEditor({
           {activeSection === "resumen" && (
             <section
               id="resumen"
-              className={`${styles.card} ${styles.readinessCard} ${
-                publishReadiness.isPublishable
-                  ? styles.readinessCardReady
-                  : styles.readinessCardBlocked
-              }`}
+              className={styles.card}
               aria-label="Estado de publicación"
               data-testid="section-publish-readiness"
             >
@@ -1627,73 +1616,25 @@ export function ProductEditor({
               </div>
 
               {publishReadiness.blockers.length > 0 && (
-                <div className={styles.issuesList} data-testid="readiness-blockers-list">
-                  <strong className={styles.issuesHeading}>
-                    Falta esto para que el producto entre a la tienda
-                  </strong>
-                  {publishReadiness.blockers.map((b) => {
-                    const guidance = getReadinessGuidance(b.code);
-                    return (
-                      <div
-                        key={b.code}
-                        className={styles.blockerItem}
-                        data-testid={`blocker-${b.code}`}
-                      >
-                        <XCircle
-                          size={14}
-                          style={{ flexShrink: 0, marginTop: 2 }}
-                          aria-hidden="true"
-                        />
-                        <div className={styles.issueBody}>
-                          <span className={styles.issueAction}>{guidance.action}</span>
-                          <span className={styles.issueDetail}>{b.message}</span>
-                        </div>
-                        <a
-                          href={`#${guidance.section}`}
-                          className={styles.issueJump}
-                          data-testid={`blocker-jump-${b.code}`}
-                        >
-                          Ir
-                          <ChevronRight size={13} aria-hidden="true" />
-                        </a>
-                      </div>
-                    );
-                  })}
-                </div>
+                <QualityChecklist
+                  title="Falta esto para que el producto entre a la tienda"
+                  tone="blocker"
+                  issues={publishReadiness.blockers}
+                  onJump={setActiveSection}
+                  testId="readiness-blockers-list"
+                  itemTestIdPrefix="blocker"
+                />
               )}
 
               {publishReadiness.warnings.length > 0 && (
-                <div className={styles.issuesList} data-testid="publish-warnings">
-                  <strong className={styles.issuesHeading}>Recomendado, pero no obligatorio</strong>
-                  {publishReadiness.warnings.map((w) => {
-                    const guidance = getReadinessGuidance(w.code);
-                    return (
-                      <div
-                        key={w.code}
-                        className={styles.warningItem}
-                        data-testid={`warning-${w.code}`}
-                      >
-                        <AlertTriangle
-                          size={14}
-                          style={{ flexShrink: 0, marginTop: 2 }}
-                          aria-hidden="true"
-                        />
-                        <div className={styles.issueBody}>
-                          <span className={styles.issueAction}>{guidance.action}</span>
-                          <span className={styles.issueDetail}>{w.message}</span>
-                        </div>
-                        <a
-                          href={`#${guidance.section}`}
-                          className={styles.issueJump}
-                          data-testid={`warning-jump-${w.code}`}
-                        >
-                          Ir
-                          <ChevronRight size={13} aria-hidden="true" />
-                        </a>
-                      </div>
-                    );
-                  })}
-                </div>
+                <QualityChecklist
+                  title="Recomendado, pero no obligatorio"
+                  tone="warning"
+                  issues={publishReadiness.warnings}
+                  onJump={setActiveSection}
+                  testId="publish-warnings"
+                  itemTestIdPrefix="warning"
+                />
               )}
             </section>
           )}
@@ -1821,17 +1762,7 @@ export function ProductEditor({
                   />
                 </div>
 
-                <div className={styles.checkboxField}>
-                  <label className={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={isFeatured}
-                      onChange={(e) => setIsFeatured(e.target.checked)}
-                      data-testid="input-featured"
-                    />
-                    <span>Marcar como producto destacado en la tienda</span>
-                  </label>
-                </div>
+                <FeaturedToggle checked={isFeatured} onChange={setIsFeatured} />
 
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <button
@@ -1856,9 +1787,7 @@ export function ProductEditor({
 
           {activeSection === "imagenes" && (
             <section id="imagenes" className={styles.card} data-testid="section-media">
-              <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-              >
+              <div className={styles.sectionHead}>
                 <div>
                   <h2 className={styles.cardTitle}>Fotos del producto</h2>
                   <p className={styles.cardDescription}>
@@ -2084,284 +2013,64 @@ export function ProductEditor({
                 </div>
               )}
 
-              {/* Primary Media Banner */}
-              {primaryMedia && (
-                <div
-                  style={{
-                    padding: "0.75rem 1rem",
-                    borderRadius: 8,
-                    border: "1px solid var(--color-border-subtle, #e4e4e7)",
-                    backgroundColor: "#fafafa",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "1rem",
-                    marginTop: "1rem",
-                  }}
-                  data-testid="primary-media-display"
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <div
-                      style={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: 6,
-                        backgroundColor: "#f4f4f5",
-                        border: "1px solid var(--color-border-subtle, #e4e4e7)",
-                        overflow: "hidden",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {primaryThumbUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={primaryThumbUrl}
-                          alt={primaryMedia.altText ?? product.name}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                          data-testid="primary-media-img"
-                        />
-                      ) : (
-                        <ImageIcon size={24} style={{ color: "#a1a1aa" }} aria-hidden="true" />
-                      )}
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.125rem",
-                        fontSize: "0.75rem",
-                      }}
-                    >
-                      <span style={{ fontWeight: 600 }}>
-                        {primaryMedia.altText ?? "Imagen Principal"}
-                      </span>
-                      <span style={{ color: "var(--color-text-secondary, #71717a)" }}>
-                        Clase: {primaryMedia.securityClass} | Tipo: {primaryMedia.mimeType}
-                      </span>
-                      {!primaryMedia.publicUrl && (
-                        <span
-                          style={{ color: "#b45309", fontSize: "0.7rem" }}
-                          data-testid="non-public-primary-notice"
-                        >
-                          Asset no público (solo metadatos) [Privado]
-                        </span>
-                      )}
-                      {primaryMedia.width && primaryMedia.height && (
-                        <span style={{ color: "var(--color-text-secondary, #71717a)" }}>
-                          Dimensiones: {primaryMedia.width} x {primaryMedia.height} px
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Media Gallery Grid */}
               {mediaOrder.length > 0 ? (
-                <div className={styles.mediaGrid}>
+                <div
+                  className={styles.mediaGrid}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                      setDropTargetIndex(null);
+                    }
+                  }}
+                >
                   {mediaOrder.map((m, idx) => {
-                    const url = m.publicUrl;
-                    const isPrimary = m.mediaAssetId === product.primaryMediaId;
-                    const isVariantScoped = m.variantId !== null;
                     const assignedVariant = m.variantId
                       ? variants.find((v) => v.id === m.variantId)
                       : null;
 
                     return (
-                      <div
+                      <MediaTile
                         key={m.id}
-                        className={styles.mediaCard}
-                        data-testid={`media-card-${m.id}`}
-                      >
-                        <div className={styles.mediaPreviewBox}>
-                          {url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={url}
-                              alt={m.altText ?? product.name}
-                              className={styles.mediaPreviewImg}
-                            />
-                          ) : (
-                            <ImageIcon size={32} style={{ color: "#a1a1aa" }} aria-hidden="true" />
-                          )}
-
-                          {confirmDetachId === m.id ? (
-                            <div className={styles.mediaDetachConfirm}>
-                              <span>¿Quitar esta foto?</span>
-                              <div className={styles.mediaDetachConfirmActions}>
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmDetachId(null)}
-                                  className={styles.mediaDetachCancel}
-                                >
-                                  Cancelar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleDetachMedia(m)}
-                                  className={styles.mediaDetachConfirmButton}
-                                  data-testid={`btn-confirm-detach-${m.id}`}
-                                >
-                                  Quitar
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDetachId(m.id)}
-                              disabled={isPrimary || detachingMediaId === m.id}
-                              className={styles.mediaDetachButton}
-                              title={
-                                isPrimary
-                                  ? "Elige otra foto como principal antes de quitar esta"
-                                  : "Quitar esta foto del producto"
-                              }
-                              aria-label={`Quitar la foto ${idx + 1} del producto`}
-                              data-testid={`btn-detach-media-${m.id}`}
-                            >
-                              {detachingMediaId === m.id ? (
-                                <Loader2 size={13} className={styles.spinner} aria-hidden="true" />
-                              ) : (
-                                <Trash2 size={13} aria-hidden="true" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-
-                        <div className={styles.mediaCardBadges}>
-                          {isPrimary && (
-                            <span
-                              className={styles.badgePrimary}
-                              data-testid={`badge-primary-${m.id}`}
-                            >
-                              <Star size={10} fill="currentColor" aria-hidden="true" />
-                              <span>Principal</span>
-                            </span>
-                          )}
-                          {isVariantScoped ? (
-                            <span
-                              className={styles.badgeVariant}
-                              data-testid={`badge-variant-${m.id}`}
-                            >
-                              <Tag size={10} aria-hidden="true" />
-                              <span>
-                                Variante: {assignedVariant ? assignedVariant.title : m.variantId}
-                              </span>
-                            </span>
-                          ) : (
-                            <span
-                              className={styles.badgeGlobal}
-                              data-testid={`badge-global-${m.id}`}
-                            >
-                              <Globe size={10} aria-hidden="true" />
-                              <span>Global</span>
-                            </span>
-                          )}
-                        </div>
-
-                        <div className={styles.mediaInfo}>
-                          <span className={styles.mediaKey}>
-                            {m.altText ?? `Asset Multimedia (Pos. ${m.displayOrder})`}
-                          </span>
-                          <span className={styles.mediaClass}>
-                            Orden: {m.displayOrder} · {m.mimeType}
-                            {m.width && m.height ? ` · ${m.width}×${m.height}px` : ""}
-                          </span>
-                          {!url && (
-                            <span
-                              style={{ color: "#b45309", fontSize: "0.7rem" }}
-                              data-testid="non-public-media-badge"
-                            >
-                              Asset no público (solo metadatos) [Privado]
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Actions Toolbar */}
-                        <div className={styles.mediaActionsToolbar}>
-                          <button
-                            type="button"
-                            disabled={isPrimary || isVariantScoped || isSettingPrimary === m.id}
-                            onClick={() => handleSetPrimary(m)}
-                            className={styles.mediaActionButton}
-                            title={
-                              isVariantScoped
-                                ? "Las imágenes de variante no pueden ser asignadas como principal global"
-                                : isPrimary
-                                  ? "Ya es la imagen principal"
-                                  : "Asignar como imagen principal"
-                            }
-                            data-testid={`btn-set-primary-${m.id}`}
-                          >
-                            {isSettingPrimary === m.id ? (
-                              <Loader2 size={12} className={styles.spinner} aria-hidden="true" />
-                            ) : (
-                              <Star
-                                size={12}
-                                fill={isPrimary ? "currentColor" : "none"}
-                                aria-hidden="true"
-                              />
-                            )}
-                            <span>{isPrimary ? "Principal" : "Hacer Principal"}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => handleOpenAltTextModal(m, e.currentTarget)}
-                            className={styles.mediaActionButton}
-                            title="Editar texto alternativo (alt text)"
-                            data-testid={`btn-edit-alt-${m.id}`}
-                          >
-                            <Edit2 size={12} aria-hidden="true" />
-                            <span>Alt Text</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => handleOpenVariantModal(m, e.currentTarget)}
-                            className={styles.mediaActionButton}
-                            title="Asignar o cambiar variante"
-                            data-testid={`btn-reassign-variant-${m.id}`}
-                          >
-                            <Tag size={12} aria-hidden="true" />
-                            <span>Variante</span>
-                          </button>
-
-                          <div className={styles.mediaReorderButtons}>
-                            <button
-                              type="button"
-                              disabled={idx === 0 || isReorderingMedia}
-                              onClick={() => handleMoveMedia(idx, "up")}
-                              className={styles.mediaReorderButton}
-                              aria-label="Mover hacia arriba"
-                              title="Mover hacia arriba"
-                              data-testid={`btn-move-up-${m.id}`}
-                            >
-                              <ArrowUp size={12} aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={idx === media.length - 1 || isReorderingMedia}
-                              onClick={() => handleMoveMedia(idx, "down")}
-                              className={styles.mediaReorderButton}
-                              aria-label="Mover hacia abajo"
-                              title="Mover hacia abajo"
-                              data-testid={`btn-move-down-${m.id}`}
-                            >
-                              <ArrowDown size={12} aria-hidden="true" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                        media={m}
+                        index={idx}
+                        count={mediaOrder.length}
+                        productName={product.name}
+                        isPrimary={m.mediaAssetId === product.primaryMediaId}
+                        variantLabel={assignedVariant?.title ?? null}
+                        isSettingPrimary={isSettingPrimary === m.id}
+                        isDetaching={detachingMediaId === m.id}
+                        isConfirmingDetach={confirmDetachId === m.id}
+                        isReordering={isReorderingMedia}
+                        isDragSource={dragSourceIndex === idx}
+                        isDropTarget={dragSourceIndex !== null && dropTargetIndex === idx}
+                        onSetPrimary={() => handleSetPrimary(m)}
+                        onEditAlt={(trigger) => handleOpenAltTextModal(m, trigger)}
+                        onEditVariant={(trigger) => handleOpenVariantModal(m, trigger)}
+                        onRequestDetach={() => setConfirmDetachId(m.id)}
+                        onCancelDetach={() => setConfirmDetachId(null)}
+                        onConfirmDetach={() => void handleDetachMedia(m)}
+                        onMove={(direction) =>
+                          reorderMedia(idx, direction === "up" ? idx - 1 : idx + 1)
+                        }
+                        onDragStart={() => setDragSourceIndex(idx)}
+                        onDragEnter={() => setDropTargetIndex(idx)}
+                        onDragEnd={() => {
+                          setDragSourceIndex(null);
+                          setDropTargetIndex(null);
+                        }}
+                        onDrop={() => {
+                          if (dragSourceIndex !== null && !isReorderingMedia) {
+                            reorderMedia(dragSourceIndex, idx);
+                          }
+                          setDragSourceIndex(null);
+                          setDropTargetIndex(null);
+                        }}
+                      />
                     );
                   })}
                 </div>
               ) : (
                 <p className={styles.cardDescription} data-testid="media-empty-state">
-                  Este producto no tiene medios multimedia registrados. Seleccione una imagen arriba
-                  para subirla.
+                  Todavía no hay fotos. Sube la primera desde el área de arriba.
                 </p>
               )}
             </section>
@@ -2369,9 +2078,7 @@ export function ProductEditor({
 
           {activeSection === "variantes" && (
             <section id="variantes" className={styles.card} data-testid="section-variants">
-              <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-              >
+              <div className={styles.sectionHead}>
                 <div>
                   <h2 className={styles.cardTitle}>Variantes y stock</h2>
                   <p className={styles.cardDescription}>
@@ -2389,70 +2096,83 @@ export function ProductEditor({
                 </button>
               </div>
 
-              <div className={styles.tableWrapper} style={{ marginTop: "1rem" }}>
+              <div className={styles.tableWrapper}>
                 <table className={styles.table} data-testid="table-variants">
                   <thead>
                     <tr>
-                      <th>SKU</th>
-                      <th>Nombre</th>
-                      <th>Precio Venta</th>
-                      <th>Precio Tachado</th>
-                      <th>Costo</th>
-                      <th>Peso</th>
-                      <th>Stock</th>
-                      <th>Estado</th>
-                      <th style={{ textAlign: "right" }}>Acciones</th>
+                      <th scope="col">SKU</th>
+                      <th scope="col">Nombre</th>
+                      <th scope="col" className={styles.numeric}>
+                        Precio venta
+                      </th>
+                      <th scope="col" className={styles.numeric}>
+                        Precio tachado
+                      </th>
+                      <th scope="col" className={styles.numeric}>
+                        Costo
+                      </th>
+                      <th scope="col" className={styles.numeric}>
+                        Peso
+                      </th>
+                      <th scope="col">Stock</th>
+                      <th scope="col">Estado</th>
+                      <th scope="col" className={styles.actionsCol}>
+                        <span className={styles.srOnly}>Acciones</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {variants.map((v) => (
                       <tr key={v.id} data-testid={`variant-row-${v.id}`}>
                         <td>
-                          <span className={styles.skuBadge} data-testid={`variant-sku-${v.id}`}>
-                            {v.sku}
-                          </span>
-                          {v.isSkuImmutable && (
-                            <span
-                              title="SKU inmutable: posee inventario o pedidos históricos"
-                              style={{
-                                marginLeft: 6,
-                                fontSize: "0.6875rem",
-                                color: "#b45309",
-                                fontWeight: 600,
-                              }}
-                              data-testid={`variant-immutable-badge-${v.id}`}
-                            >
-                              (Inmutable)
+                          <div className={styles.skuCell}>
+                            <span className={styles.skuBadge} data-testid={`variant-sku-${v.id}`}>
+                              {v.sku}
                             </span>
-                          )}
+                            {v.isSkuImmutable && (
+                              <span
+                                className={styles.immutableIcon}
+                                title="SKU fijo: ya tiene inventario o pedidos"
+                                aria-label="SKU fijo"
+                                role="img"
+                                data-testid={`variant-immutable-badge-${v.id}`}
+                              >
+                                <Lock size={11} aria-hidden="true" />
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td>
-                          <strong>{v.title}</strong>
-                        </td>
-                        <td>
-                          <span className={styles.pricePositive}>
+                        <td className={styles.nameCell}>{v.title}</td>
+                        <td className={styles.numeric}>
+                          <span className={styles.price}>
                             {formatCentsToPenDisplay(v.priceCents)}
                           </span>
                         </td>
-                        <td>
+                        <td className={styles.numeric}>
                           {v.compareAtPriceCents ? (
                             <span className={styles.priceCompare}>
                               {formatCentsToPenDisplay(v.compareAtPriceCents)}
                             </span>
                           ) : (
-                            "-"
+                            <span className={styles.empty}>—</span>
                           )}
                         </td>
-                        <td>
+                        <td className={styles.numeric}>
                           {v.costCents ? (
-                            <span className={styles.costConfidential}>
+                            <span className={styles.muted}>
                               {formatCentsToPenDisplay(v.costCents)}
                             </span>
                           ) : (
-                            "-"
+                            <span className={styles.empty}>—</span>
                           )}
                         </td>
-                        <td>{v.weightGrams ? `${v.weightGrams}g` : "-"}</td>
+                        <td className={styles.numeric}>
+                          {v.weightGrams ? (
+                            <span className={styles.muted}>{v.weightGrams} g</span>
+                          ) : (
+                            <span className={styles.empty}>—</span>
+                          )}
+                        </td>
                         <td>
                           <VariantStockCell
                             productId={product.id}
@@ -2471,12 +2191,12 @@ export function ProductEditor({
                         </td>
                         <td>
                           <span
-                            className={`${styles.badge} ${
+                            className={`${styles.statusPill} ${
                               v.status === "ACTIVE"
-                                ? styles.badgePublished
+                                ? styles.statusActive
                                 : v.status === "INACTIVE"
-                                  ? styles.badgeDraft
-                                  : styles.badgeArchived
+                                  ? styles.statusInactive
+                                  : styles.statusArchived
                             }`}
                           >
                             {v.status === "ACTIVE"
@@ -2486,16 +2206,17 @@ export function ProductEditor({
                                 : "Archivada"}
                           </span>
                         </td>
-                        <td style={{ textAlign: "right" }}>
+                        <td className={styles.actionsCol}>
                           <button
                             type="button"
                             onClick={() => handleOpenEditVariant(v)}
-                            className={styles.actionBtn}
+                            className={styles.iconButton}
                             data-testid="btn-edit-variant"
                             id={`btn-edit-variant-${v.id}`}
                             title="Editar variante"
+                            aria-label={`Editar variante ${v.title}`}
                           >
-                            <Edit2 size={14} aria-hidden="true" />
+                            <Pencil size={14} aria-hidden="true" />
                           </button>
                         </td>
                       </tr>
@@ -2512,9 +2233,7 @@ export function ProductEditor({
               className={styles.card}
               data-testid="section-specifications"
             >
-              <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-              >
+              <div className={styles.sectionHead}>
                 <div>
                   <h2 className={styles.cardTitle}>Especificaciones Técnicas ({category.name})</h2>
                   <p className={styles.cardDescription}>

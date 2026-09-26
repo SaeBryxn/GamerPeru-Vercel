@@ -788,7 +788,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     expect(pageContent).not.toContain(ADMIN_E2E_PRODUCT_FIXTURES.sentinelProduct.sentinelKey);
 
     // 3. Shows safe metadata / placeholder for non-public media
-    await expect(page.locator("text=[Privado]").first()).toBeVisible();
+    await expect(page.locator('[data-testid="non-public-media-badge"]').first()).toBeVisible();
 
     // 4. Zero permanent deletion controls exist across the entire media section
     await expect(page.locator('[data-testid^="btn-delete-media"]')).toHaveCount(0);

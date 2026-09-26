@@ -7,6 +7,7 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { createProductAction } from "@/lib/admin/catalog/actions";
 import { MutationRequestTracker } from "@/lib/admin/catalog/mutation-request";
 import type { BrandReference, CategoryReference } from "@/lib/admin/catalog/types";
+import { FeaturedToggle } from "@/components/admin/products/featured-toggle";
 import styles from "./new-product.module.css";
 
 interface CreateProductFormProps {
@@ -241,17 +242,7 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
           />
         </div>
 
-        <div className={styles.checkboxField}>
-          <label className={styles.checkboxLabel}>
-            <input
-              type="checkbox"
-              checked={isFeatured}
-              onChange={(e) => setIsFeatured(e.target.checked)}
-              data-testid="input-featured"
-            />
-            <span>Marcar como producto destacado en la tienda</span>
-          </label>
-        </div>
+        <FeaturedToggle checked={isFeatured} onChange={setIsFeatured} />
       </div>
 
       {/* Section: Initial Variant */}
