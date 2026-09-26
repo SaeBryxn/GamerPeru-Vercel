@@ -148,7 +148,7 @@ test.describe("GP-010 Homepage — Sections, Hierarchy, Responsiveness & Accessi
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto("/");
 
-    const productTrigger = page.getByRole("button", { name: "Product", exact: true });
+    const productTrigger = page.getByRole("button", { name: "Productos", exact: true });
     await expect(productTrigger).toBeVisible();
     await productTrigger.click();
     await expect(productTrigger).toHaveAttribute("aria-expanded", "true");
@@ -157,17 +157,17 @@ test.describe("GP-010 Homepage — Sections, Hierarchy, Responsiveness & Accessi
     await expect(panel).toBeVisible();
 
     // Verify left collection links exist
-    await expect(panel.getByRole("heading", { name: "Collections" })).toBeVisible();
-    const mouseTab = panel.getByRole("tab", { name: "Gaming Mouse" });
+    await expect(panel.getByRole("heading", { name: "Colecciones" })).toBeVisible();
+    const mouseTab = panel.getByRole("tab", { name: "Mouses gaming" });
     await expect(mouseTab).toHaveAttribute("aria-selected", "true");
 
-    // Switching tabs swaps the shelf and the "All …" link without closing the panel
-    await panel.getByRole("tab", { name: "Keyboard" }).click();
-    await expect(panel.getByRole("tab", { name: "Keyboard" })).toHaveAttribute(
+    // Switching tabs swaps the shelf and the "Ver todo en …" link without closing the panel
+    await panel.getByRole("tab", { name: "Teclados" }).click();
+    await expect(panel.getByRole("tab", { name: "Teclados" })).toHaveAttribute(
       "aria-selected",
       "true"
     );
-    await expect(panel.getByRole("link", { name: /All Keyboard/ })).toHaveAttribute(
+    await expect(panel.getByRole("link", { name: /Ver todo en Teclados/ })).toHaveAttribute(
       "href",
       "/categorias/teclados"
     );
@@ -180,8 +180,8 @@ test.describe("GP-010 Homepage — Sections, Hierarchy, Responsiveness & Accessi
     await expect(productCards.locator("h3 a")).toHaveCount(4);
     await expect(panel.getByRole("button", { name: "Agregar al carrito" })).toHaveCount(4);
 
-    // Verify "View All Products" semantic link
-    const viewAllLink = panel.getByRole("link", { name: /View All Products/i });
+    // Verify "Ver todos los productos" semantic link
+    const viewAllLink = panel.getByRole("link", { name: /Ver todos los productos/i });
     await expect(viewAllLink).toBeVisible();
     await expect(viewAllLink).toHaveAttribute("href", "/buscar");
 

@@ -15,7 +15,7 @@ export interface MegaMenuLinksProps {
   onNavigate: () => void;
 }
 
-/** One evenly spaced row of large text links. Used by "Support". */
+/** One evenly spaced row of large text links. Used by "Soporte". */
 export function MegaMenuLinks({ category, isOpen, onNavigate }: MegaMenuLinksProps) {
   const openCount = useOpenCount(isOpen);
   const links = category.sections.flatMap((section) => section.items);

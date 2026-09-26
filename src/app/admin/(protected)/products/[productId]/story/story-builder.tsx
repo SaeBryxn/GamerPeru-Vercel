@@ -1288,7 +1288,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
 
       <Link href={productManagerHref} className={styles.backLink} data-testid="story-back-link">
         <ArrowLeft size={16} aria-hidden="true" />
-        Volver al Product Manager
+        Volver al editor del producto
       </Link>
 
       <header className={styles.header}>

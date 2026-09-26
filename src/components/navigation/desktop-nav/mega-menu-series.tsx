@@ -28,7 +28,7 @@ export interface MegaMenuSeriesProps {
 
 /**
  * Series lists on the left (with a guide link underneath) and large promo
- * cards on the right. Used by "Mouse" and "Keyboard".
+ * cards on the right. Used by "Mouses" and "Teclados".
  */
 export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesProps) {
   const openCount = useOpenCount(isOpen);
@@ -81,7 +81,7 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
             </div>
           )}
           <MegaMenuArrowLink href={category.href} className={styles.allLink} onClick={onNavigate}>
-            Shop all {category.label}
+            Ver todo en {category.label}
           </MegaMenuArrowLink>
         </motion.div>
       </motion.div>

@@ -92,7 +92,7 @@ export function MegaMenuProducts({
           className={styles.sideHeading}
           variants={SLIDE_FROM_RIGHT}
         >
-          Collections
+          Colecciones
         </motion.h2>
         <motion.div
           variants={TAB_LIST_VARIANTS}
@@ -136,7 +136,7 @@ export function MegaMenuProducts({
             fullWidth
             onClick={onNavigate}
           >
-            View All Products
+            Ver todos los productos
           </MegaMenuArrowLink>
         </motion.div>
       </motion.div>
@@ -165,13 +165,13 @@ export function MegaMenuProducts({
                 exit="exit"
               >
                 <motion.div className={styles.previewsHeader} variants={RISE_FROM_BELOW}>
-                  <p className={styles.sideEyebrow}>Most Popular</p>
+                  <p className={styles.sideEyebrow}>Más populares</p>
                   <MegaMenuArrowLink
                     href={activeCollection.href}
                     className={styles.topRightViewAll}
                     onClick={onNavigate}
                   >
-                    All {activeCollection.label}
+                    Ver todo en {activeCollection.label}
                     {shelf && <span className={styles.viewAllCount}> ({shelf.totalCount})</span>}
                   </MegaMenuArrowLink>
                 </motion.div>

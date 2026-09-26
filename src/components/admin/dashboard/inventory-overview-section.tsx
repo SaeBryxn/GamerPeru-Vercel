@@ -47,7 +47,7 @@ export function InventoryOverviewSection({ inventoryOverview }: InventoryOvervie
 
           <div className={styles.breakdownGrid}>
             <div className={styles.breakdownItem} data-testid="inventory-on-hand">
-              <span className={styles.breakdownLabel}>En mano (On Hand)</span>
+              <span className={styles.breakdownLabel}>En almacén</span>
               <span className={styles.breakdownValue}>
                 {formatInteger(globalPhysicalBalances.onHandUnits)}
               </span>

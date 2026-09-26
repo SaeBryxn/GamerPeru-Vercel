@@ -339,7 +339,7 @@ export function AiImportWorkspace({
                     </select>
                     {selectedProduct && <small>Identificador: {selectedProduct.id}</small>}
                     {products.length === 0 && (
-                      <small>No hay productos DRAFT elegibles para enriquecimiento.</small>
+                      <small>No hay productos en borrador elegibles para enriquecimiento.</small>
                     )}
                   </label>
                 )}
@@ -465,7 +465,7 @@ export function AiImportWorkspace({
               </div>
               <label className={styles.progressLabel}>
                 <span>
-                  <strong>{settledItems}</strong> de {job.totalItems} items terminados
+                  <strong>{settledItems}</strong> de {job.totalItems} elementos terminados
                 </span>
                 <progress max={job.totalItems} value={settledItems}>
                   {settledItems} de {job.totalItems}

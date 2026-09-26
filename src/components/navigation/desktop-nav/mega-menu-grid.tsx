@@ -24,7 +24,7 @@ export interface MegaMenuGridProps {
   onNavigate: () => void;
 }
 
-/** One row of square tiles. Used by "MousePad" and "Software". */
+/** One row of square tiles. Used by "Mousepads" and "Software". */
 export function MegaMenuGrid({ category, isOpen, onNavigate }: MegaMenuGridProps) {
   const openCount = useOpenCount(isOpen);
   const tiles = category.tiles ?? [];
@@ -34,7 +34,7 @@ export function MegaMenuGrid({ category, isOpen, onNavigate }: MegaMenuGridProps
       <motion.div className={styles.gridHeader} variants={SLIDE_FROM_RIGHT}>
         <h2 className={styles.gridEyebrow}>{category.label}</h2>
         <MegaMenuArrowLink href={category.href} className={styles.viewAll} onClick={onNavigate}>
-          View all
+          Ver todo
         </MegaMenuArrowLink>
       </motion.div>
 

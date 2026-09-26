@@ -133,7 +133,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     // Open MegaMenu and assert full-width geometry relative to SiteHeader
     const header = page.locator("header");
     const mousesDisclosureBtn = page.getByRole("button", {
-      name: "Mouse",
+      name: "Mouses",
       exact: true,
     });
     await expect(mousesDisclosureBtn).toBeVisible();
@@ -159,7 +159,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await page.setViewportSize({ width: 1536, height: 900 });
     await page.goto("/");
     const mousesDisclosureBtnWide = page.getByRole("button", {
-      name: "Mouse",
+      name: "Mouses",
       exact: true,
     });
     await mousesDisclosureBtnWide.click();
@@ -181,7 +181,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await page.goto("/");
 
     const disclosureBtn = page.getByRole("button", {
-      name: "Mouse",
+      name: "Mouses",
       exact: true,
     });
     await expect(disclosureBtn).toBeVisible();
@@ -450,7 +450,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await page.goto("/");
 
     const mousesDisclosureBtn = page.getByRole("button", {
-      name: "Mouse",
+      name: "Mouses",
       exact: true,
     });
     await mousesDisclosureBtn.click();
@@ -484,7 +484,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
       { width: 1280, height: 800 },
     ];
 
-    const categoryNames = ["Product", "Mouse", "Keyboard", "MousePad"];
+    const categoryNames = ["Productos", "Mouses", "Teclados", "Mousepads"];
 
     for (const vp of viewports) {
       await page.setViewportSize(vp);
@@ -531,7 +531,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     // Tab through skip link and brand mark into the first primary category trigger
     const categoryLink = page
       .locator("nav[aria-label='Navegación principal']")
-      .getByRole("button", { name: "Product", exact: true });
+      .getByRole("button", { name: "Productos", exact: true });
 
     let isLinkFocused = false;
     for (let i = 0; i < 10; i++) {
@@ -562,7 +562,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await page.keyboard.press("Tab");
 
     const disclosureBtn = page.getByRole("button", {
-      name: "Mouse",
+      name: "Mouses",
       exact: true,
     });
     await expect(disclosureBtn).toBeFocused();

@@ -14,11 +14,11 @@ import type { FooterColumn, NavigationConfig, NavLink } from "./types";
  * 3. Modifying this seed does not mutate catalog state.
  */
 const PRODUCT_TYPES: NavLink[] = [
-  { label: "Gaming Mouse", href: "/categorias/mouses" },
-  { label: "MousePad", href: "/categorias/mousepads" },
-  { label: "Keyboard", href: "/categorias/teclados" },
+  { label: "Mouses gaming", href: "/categorias/mouses" },
+  { label: "Mousepads", href: "/categorias/mousepads" },
+  { label: "Teclados", href: "/categorias/teclados" },
   { label: "Skates", href: "/categorias/accesorios?tipo_accesorio=skates" },
-  { label: "Grip Tape", href: "/categorias/accesorios?tipo_accesorio=grip-tapes" },
+  { label: "Grip tapes", href: "/categorias/accesorios?tipo_accesorio=grip-tapes" },
 ];
 
 /**
@@ -79,14 +79,14 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
   primaryNav: [
     {
       id: "productos",
-      label: "Product",
+      label: "Productos",
       href: "/buscar",
       menuLayout: "products",
       sections: [{ title: "Colecciones", items: PRODUCT_TYPES }],
     },
     {
       id: "mouses",
-      label: "Mouse",
+      label: "Mouses",
       href: "/categorias/mouses",
       menuLayout: "series",
       series: [
@@ -117,7 +117,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
           ],
         },
       ],
-      guide: { label: "Buying Guide", href: "/guia-de-compra/mouses" },
+      guide: { label: "Guía de compra", href: "/guia-de-compra/mouses" },
       promos: [
         {
           title: "Serie G",
@@ -128,7 +128,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
           title: "Serie M",
           href: "/buscar?q=serie%20m",
           image: "/media/mega-menu/angulo-3.png",
-          badge: "NEW",
+          badge: "Nuevo",
         },
       ],
       sections: [
@@ -185,7 +185,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
     },
     {
       id: "teclados",
-      label: "Keyboard",
+      label: "Teclados",
       href: "/categorias/teclados",
       menuLayout: "series",
       series: [
@@ -211,19 +211,19 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
           ],
         },
       ],
-      guide: { label: "Buying Guide", href: "/guia-de-compra/teclados" },
+      guide: { label: "Guía de compra", href: "/guia-de-compra/teclados" },
       promos: [
         {
           title: "Serie 63 HE",
           href: "/buscar?q=63%20he",
           image: "/media/mega-menu/keyboard/producto-1-angulo-1.png",
-          badge: "Sold out",
+          badge: "Agotado",
         },
         {
           title: "Serie 75 HE",
           href: "/buscar?q=75%20he",
           image: "/media/mega-menu/keyboard/producto-2-angulo-1.png",
-          badge: "New",
+          badge: "Nuevo",
         },
       ],
       sections: [
@@ -322,7 +322,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
     },
     {
       id: "mousepads",
-      label: "MousePad",
+      label: "Mousepads",
       href: "/categorias/mousepads",
       menuLayout: "grid",
       tiles: [
@@ -404,17 +404,17 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
     },
     {
       id: "soporte",
-      label: "Support",
+      label: "Soporte",
       href: "/soporte",
       menuLayout: "links",
       sections: [
         {
           title: "Soporte",
           items: [
-            { label: "FAQs", href: "/soporte/preguntas-frecuentes" },
-            { label: "Contact", href: "/soporte/contacto" },
-            { label: "Online Reseller", href: "/soporte/distribuidores" },
-            { label: "Official Online Store", href: "/soporte/tienda-oficial" },
+            { label: "Preguntas frecuentes", href: "/soporte/preguntas-frecuentes" },
+            { label: "Contacto", href: "/soporte/contacto" },
+            { label: "Distribuidores", href: "/soporte/distribuidores" },
+            { label: "Tienda oficial", href: "/soporte/tienda-oficial" },
           ],
         },
       ],
@@ -433,7 +433,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
           tone: "feature",
         },
         {
-          title: "KEYBOARD",
+          title: "TECLADO",
           href: "/software/teclado",
           image: "/media/mega-menu/software/keyboard.png",
         },

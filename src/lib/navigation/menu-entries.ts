@@ -26,14 +26,14 @@ export interface MenuEntryDescriptor {
 export const MENU_ENTRY_DESCRIPTORS: MenuEntryDescriptor[] = [
   {
     id: "productos",
-    adminLabel: "Product",
+    adminLabel: "Productos",
     description: "Vitrina general con todas las colecciones.",
     defaultVisible: true,
     defaultOrder: 0,
   },
   {
     id: "mouses",
-    adminLabel: "Mouse",
+    adminLabel: "Mouses",
     description: "Mouses gaming, skates y grip tapes.",
     categorySlug: "mouses",
     missingDestinations: ["/guia-de-compra/mouses"],
@@ -42,7 +42,7 @@ export const MENU_ENTRY_DESCRIPTORS: MenuEntryDescriptor[] = [
   },
   {
     id: "teclados",
-    adminLabel: "Keyboard",
+    adminLabel: "Teclados",
     description: "Teclados mecánicos y magnéticos.",
     categorySlug: "teclados",
     missingDestinations: ["/guia-de-compra/teclados"],
@@ -59,7 +59,7 @@ export const MENU_ENTRY_DESCRIPTORS: MenuEntryDescriptor[] = [
   },
   {
     id: "mousepads",
-    adminLabel: "MousePad",
+    adminLabel: "Mousepads",
     description: "Mousepads y deskmats.",
     categorySlug: "mousepads",
     defaultVisible: true,
@@ -67,7 +67,7 @@ export const MENU_ENTRY_DESCRIPTORS: MenuEntryDescriptor[] = [
   },
   {
     id: "soporte",
-    adminLabel: "Support",
+    adminLabel: "Soporte",
     description: "Preguntas frecuentes, contacto y distribuidores.",
     missingDestinations: [
       "/soporte",
