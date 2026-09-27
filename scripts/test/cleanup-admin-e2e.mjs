@@ -39,6 +39,8 @@ export async function cleanupAdminUsers() {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
+    await cleanupAdminOrderFixtures(sql);
+
     // 1. Clean GamerPeru-owned public schema tables
     await sql.begin(async (tx) => {
       await tx`DELETE FROM user_roles WHERE auth_user_id IN ${tx(ADMIN_E2E_USER_IDS)}`;
@@ -79,6 +81,17 @@ export async function cleanupAdminProductFixtures(clientSql) {
   console.log("[Admin E2E Cleanup] Cleaning up deterministic Product Manager fixtures...");
 
   await clientSql.begin(async (tx) => {
+    await tx`
+      DELETE FROM audit_events
+      WHERE target_type = 'product_story_revision'
+        AND metadata->>'product_id' IN (
+          '018f0000-0000-7000-8000-000000001a01',
+          '018f0000-0000-7000-8000-000000001a02',
+          '018f0000-0000-7000-8000-000000001a03',
+          '018f0000-0000-7000-8000-000000001a04'
+        );
+    `;
+
     // 1. Inventory Items
     await tx`
       DELETE FROM inventory_items
@@ -88,6 +101,11 @@ export async function cleanupAdminProductFixtures(clientSql) {
              SELECT id FROM products WHERE category_id IN ('018f0000-0000-7000-8000-00000000ca01', '018f0000-0000-7000-8000-00000000ca02') OR brand_id = '018f0000-0000-7000-8000-00000000ba01'
            )
          );
+    `;
+
+    await tx`
+      DELETE FROM inventory_locations
+      WHERE id = '018f0000-0000-7000-8000-00000000e0a1';
     `;
 
     // 2. Product Specifications (scoped to owned test categories / products)
@@ -169,6 +187,68 @@ export async function cleanupAdminProductFixtures(clientSql) {
   });
 
   console.log("[Admin E2E Cleanup] Successfully cleaned up Product Manager fixtures.");
+}
+
+export async function cleanupAdminOrderFixtures(clientSql) {
+  const orderIds = Array.from(
+    { length: 32 },
+    (_, offset) => `018f0000-0000-7000-8000-${(0xd100 + offset + 1).toString(16).padStart(12, "0")}`
+  );
+
+  await clientSql.begin(async (tx) => {
+    await tx`
+      DELETE FROM idempotency_keys
+      WHERE operation_type = 'ORDER_CANCELLATION' AND target_aggregate_id IN ${tx(orderIds)};
+    `;
+    await tx`
+      DELETE FROM audit_events
+      WHERE target_type = 'Order' AND target_id IN ${tx(orderIds)};
+    `;
+    await tx`
+      DELETE FROM outbox_events
+      WHERE aggregate_type = 'Order' AND aggregate_id IN ${tx(orderIds)};
+    `;
+    await tx`DELETE FROM order_notes WHERE order_id IN ${tx(orderIds)}`;
+    await tx`
+      DELETE FROM payment_proof_upload_intents
+      WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN ${tx(orderIds)});
+    `;
+    await tx`
+      DELETE FROM guest_payment_access_grants
+      WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN ${tx(orderIds)});
+    `;
+    await tx`
+      DELETE FROM payment_submissions
+      WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN ${tx(orderIds)});
+    `;
+    await tx`DELETE FROM refunds WHERE order_id IN ${tx(orderIds)}`;
+    await tx`DELETE FROM shipments WHERE order_id IN ${tx(orderIds)}`;
+    await tx`DELETE FROM inventory_reservations WHERE order_id IN ${tx(orderIds)}`;
+    await tx`DELETE FROM order_address_snapshots WHERE order_id IN ${tx(orderIds)}`;
+    await tx`DELETE FROM order_pricing_snapshots WHERE order_id IN ${tx(orderIds)}`;
+    await tx`DELETE FROM order_items WHERE order_id IN ${tx(orderIds)}`;
+    await tx`DELETE FROM payments WHERE order_id IN ${tx(orderIds)}`;
+    await tx`DELETE FROM orders WHERE id IN ${tx(orderIds)}`;
+    await tx`
+      UPDATE payment_method_configurations
+      SET current_instruction_version_id = NULL
+      WHERE id = '018f0000-0000-7000-8000-00000000e101';
+    `;
+    await tx`
+      DELETE FROM payment_instruction_versions
+      WHERE id = '018f0000-0000-7000-8000-00000000e102';
+    `;
+    await tx`
+      DELETE FROM payment_method_configurations
+      WHERE id = '018f0000-0000-7000-8000-00000000e101';
+    `;
+    await tx`
+      DELETE FROM shipping_methods
+      WHERE id = '018f0000-0000-7000-8000-00000000e103';
+    `;
+  });
+
+  console.log("[Admin E2E Cleanup] Cleaned up deterministic Orders list fixtures.");
 }
 
 // Execute cleanup if invoked directly

@@ -3,7 +3,16 @@
 import React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Bot, CheckCircle, LayoutDashboard, Menu, Package, Settings2, Tags } from "lucide-react";
+import {
+  Bot,
+  CheckCircle,
+  LayoutDashboard,
+  Menu,
+  Package,
+  Settings2,
+  ShoppingCart,
+  Tags,
+} from "lucide-react";
 import type { AdminNavItem, AdminStaffProfile } from "@/lib/admin/types";
 import styles from "./admin-shell.module.css";
 
@@ -13,7 +22,16 @@ interface AdminSidebarProps {
   currentPath?: string;
 }
 
-const ICONS = { LayoutDashboard, CheckCircle, Package, Bot, Settings2, Tags, Menu };
+const ICONS = {
+  LayoutDashboard,
+  ShoppingCart,
+  CheckCircle,
+  Package,
+  Bot,
+  Settings2,
+  Tags,
+  Menu,
+};
 
 /** Longest matching nav href wins, so nested screens keep their parent active. */
 export function resolveActiveNavId(navItems: AdminNavItem[], currentPath: string): string | null {

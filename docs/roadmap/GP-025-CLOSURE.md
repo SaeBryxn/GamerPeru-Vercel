@@ -295,6 +295,19 @@ Functional, security, accessibility, responsive, build, local PostgreSQL, and Pl
 
 Acceptance criteria for single/batch research, structured validation, visible provenance/conflicts, provider/profile selection, DRAFT-only human review, credential isolation, partial batch failure, and consistent canonical apply are covered by the passing regression matrix. No material code blocker remains.
 
-Independent external review approved CHK5 and the final integrated regression evidence. No material code blocker remains; only the explicitly UNVERIFIED production activation prerequisites remain mandatory before real AI production activation.
-
 **Readiness classification**: GP-025 CLOSED / EXTERNALLY APPROVED / FROZEN / MAIN INTEGRATION COMPLETE / PASS WITH NOTES / PRODUCTION ACTIVATION PREREQUISITES PENDING / GP-026 PENDING EXTERNAL AUTHORIZATION
+
+---
+
+## 30. Post-Closure Hosted Deployment Record
+
+- **Superseded Historical State:** In Section 25 above, the historical statement `production deployment UNVERIFIED / deferred environment validation` accurately described the physical state at the time of initial GP-025 closure.
+- **Subsequent Deployment Status:** That statement has now been superseded. Migration `0013_parched_mephistopheles.sql` has been physically deployed and verified against authorized hosted Supabase project `jpjffalmvlxpufvtvskx` as part of the externally approved canonical hosted catch-up (`0013 → 0014 → 0015`).
+- **Physical Verification Evidence:**
+  - 11 `ai_*` relational tables present.
+  - 23/23 explicit foreign keys verified.
+  - 13/13 explicit indexes verified.
+  - Zero table privileges granted to `anon`, `authenticated`, or `service_role`.
+  - Idempotence verified via a clean second `pnpm db:migrate` no-op execution.
+- **Production Activation Boundary:** Physical migration deployment does NOT activate AI production services. AI credentials, master keys, Tavily configuration, and Inngest production worker serving remain pending external prerequisites.
+- **Authoritative Closure Document:** Full deployment and physical introspection evidence is recorded in [`HOSTED-MIGRATIONS-0013-0015-CLOSURE.md`](./HOSTED-MIGRATIONS-0013-0015-CLOSURE.md).

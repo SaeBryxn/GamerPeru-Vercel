@@ -51,7 +51,13 @@ export function AdminHeader({
 
       <div className={styles.headerRight}>
         <AdminThemeToggle theme={theme} onToggle={onToggleTheme} />
-        <Link href="/" className={styles.storefrontLink} target="_blank" rel="noopener noreferrer">
+        <Link
+          href="/"
+          className={styles.storefrontLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Ir a la tienda"
+        >
           <span>Ir a la tienda</span>
           <ExternalLink className={styles.navIcon} aria-hidden="true" />
         </Link>

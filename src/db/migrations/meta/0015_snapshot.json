@@ -1,5 +1,5 @@
 {
-  "id": "77bda2aa-b203-46ab-976a-f18186afcef1",
+  "id": "2b9cc030-24ed-4588-9e02-56032fbcc039",
   "prevId": "49103f26-cf18-4c66-8897-26bc0186c3e1",
   "version": "7",
   "dialect": "postgresql",
@@ -2379,6 +2379,54 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "orders_created_id_idx": {
+          "name": "orders_created_id_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_lower_email_created_id_idx": {
+          "name": "orders_lower_email_created_id_idx",
+          "columns": [
+            {
+              "expression": "lower(\"customer_email\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2788,6 +2836,141 @@
         "order_pricing_snapshots_arithmetic_check": {
           "name": "order_pricing_snapshots_arithmetic_check",
           "value": "\"order_pricing_snapshots\".\"total_cents\" = \"order_pricing_snapshots\".\"subtotal_cents\" - \"order_pricing_snapshots\".\"discount_cents\" + \"order_pricing_snapshots\".\"shipping_cents\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.order_notes": {
+      "name": "order_notes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_auth_user_id": {
+          "name": "author_auth_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "mutation_request_id": {
+          "name": "mutation_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "intent_fingerprint": {
+          "name": "intent_fingerprint",
+          "type": "char(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_binding_digest": {
+          "name": "actor_binding_digest",
+          "type": "char(64)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "order_notes_order_created_id_idx": {
+          "name": "order_notes_order_created_id_idx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "order_notes_order_id_orders_id_fk": {
+          "name": "order_notes_order_id_orders_id_fk",
+          "tableFrom": "order_notes",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "order_notes_author_auth_user_id_fk": {
+          "name": "order_notes_author_auth_user_id_fk",
+          "tableFrom": "order_notes",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "author_auth_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "order_notes_mutation_request_id_unique": {
+          "name": "order_notes_mutation_request_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "mutation_request_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "order_notes_body_not_blank": {
+          "name": "order_notes_body_not_blank",
+          "value": "length(trim(\"order_notes\".\"body\")) > 0"
+        },
+        "order_notes_body_max_length": {
+          "name": "order_notes_body_max_length",
+          "value": "char_length(\"order_notes\".\"body\") <= 2000"
         }
       },
       "isRLSEnabled": false
@@ -4917,46 +5100,6 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.storefront_menu_entries": {
-      "name": "storefront_menu_entries",
-      "schema": "",
-      "columns": {
-        "entry_id": {
-          "name": "entry_id",
-          "type": "varchar(64)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "is_visible": {
-          "name": "is_visible",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "display_order": {
-          "name": "display_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

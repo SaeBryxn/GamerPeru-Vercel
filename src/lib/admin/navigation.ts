@@ -17,6 +17,14 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Panel principal de administración",
   },
   {
+    id: "orders",
+    label: "Pedidos",
+    href: "/admin/orders",
+    iconName: "ShoppingCart",
+    requiredPermission: "orders:manage",
+    description: "Gestión y seguimiento de pedidos",
+  },
+  {
     id: "payment-verification",
     label: "Pagos",
     href: "/admin/pagos",

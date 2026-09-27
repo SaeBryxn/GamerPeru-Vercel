@@ -2,12 +2,13 @@ import { describe, it, expect } from "vitest";
 import { getAdminNavigation, CANONICAL_ADMIN_NAV_ITEMS } from "@/lib/admin/navigation";
 import type { PermissionName } from "@/lib/auth/rbac";
 
-describe("GP-022 / GP-024 / GP-025 — Admin Navigation Filtering & Scope Contract Tests", () => {
+describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Scope Contract Tests", () => {
   it("D1: only implemented destinations are registered in canonical navigation", () => {
     expect(
       CANONICAL_ADMIN_NAV_ITEMS.map((item) => [item.id, item.href, item.requiredPermission ?? null])
     ).toEqual([
       ["overview", "/admin", null],
+      ["orders", "/admin/orders", "orders:manage"],
       ["payment-verification", "/admin/pagos", "orders:verify"],
       ["products", "/admin/products", "catalog:manage"],
       ["taxonomy", "/admin/taxonomia", "catalog:manage"],
@@ -55,8 +56,7 @@ describe("GP-022 / GP-024 / GP-025 — Admin Navigation Filtering & Scope Contra
 
     const ordersPerms = new Set<PermissionName>(["orders:manage"]);
     const navOrders = getAdminNavigation(ordersPerms);
-    expect(navOrders.length).toBe(1);
-    expect(navOrders[0]?.href).toBe("/admin");
+    expect(navOrders.map((item) => item.href)).toEqual(["/admin", "/admin/orders"]);
 
     const verifyPerms = new Set<PermissionName>(["orders:verify"]);
     expect(getAdminNavigation(verifyPerms).map((item) => item.href)).toEqual([

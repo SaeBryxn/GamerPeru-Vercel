@@ -3,9 +3,9 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { getPaymentVerificationConfig } from "@/lib/payments/config";
 
-describe("GP-028 — migration 0016 payment_verifications", () => {
+describe("GP-028 — migration 0017 payment_verifications", () => {
   const migration = readFileSync(
-    resolve(process.cwd(), "src/db/migrations/0016_payment_verifications.sql"),
+    resolve(process.cwd(), "src/db/migrations/0017_payment_verifications.sql"),
     "utf8"
   );
 

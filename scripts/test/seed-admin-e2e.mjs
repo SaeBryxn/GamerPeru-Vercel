@@ -180,6 +180,7 @@ export async function seedAdminUsers() {
 
     // 5. Seed deterministic CHK2 Product Manager test fixtures
     await seedAdminProductFixtures(sql);
+    await seedAdminOrderFixtures(sql);
   } catch (err) {
     console.error("[Admin E2E Seed] Failed to seed:", err instanceof Error ? err.message : err);
     process.exit(1);
@@ -233,6 +234,25 @@ export const ADMIN_E2E_PRODUCT_FIXTURES = {
     slug: "prod-e2e-sku-immutable",
     sku: "E2E-IMMUTABLE-SKU-003",
     inventoryItemId: "018f0000-0000-7000-8000-000000004a03",
+  },
+  inventoryLocation: {
+    id: "018f0000-0000-7000-8000-00000000e0a1",
+    code: "ADMIN_E2E_LOCATION",
+    name: "Almacén Admin E2E",
+  },
+  relatedProductA: {
+    id: "018f0000-0000-7000-8000-000000001a11",
+    name: "Gamer Mouse Pro",
+    slug: "gamer-mouse-pro-admin-e2e",
+    variantId: "018f0000-0000-7000-8000-000000007a11",
+    sku: "E2E-RELATED-PRO-001",
+  },
+  relatedProductB: {
+    id: "018f0000-0000-7000-8000-000000001a12",
+    name: "Gamer Mouse Ultra",
+    slug: "gamer-mouse-ultra-admin-e2e",
+    variantId: "018f0000-0000-7000-8000-000000007a12",
+    sku: "E2E-RELATED-ULTRA-002",
   },
   catChangeProduct: {
     id: "018f0000-0000-7000-8000-000000001a04",
@@ -386,6 +406,89 @@ export async function seedAdminProductFixtures(clientSql) {
       UPDATE categories
       SET current_spec_schema_id = ${ADMIN_E2E_PRODUCT_FIXTURES.categoryB.schemaId}
       WHERE id = ${ADMIN_E2E_PRODUCT_FIXTURES.categoryB.id};
+    `;
+
+    await tx`
+      INSERT INTO inventory_locations (id, code, name, is_active, created_at)
+      VALUES (
+        ${ADMIN_E2E_PRODUCT_FIXTURES.inventoryLocation.id},
+        ${ADMIN_E2E_PRODUCT_FIXTURES.inventoryLocation.code},
+        ${ADMIN_E2E_PRODUCT_FIXTURES.inventoryLocation.name},
+        true,
+        NOW()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        code = EXCLUDED.code,
+        name = EXCLUDED.name,
+        is_active = true;
+    `;
+
+    await tx`
+      INSERT INTO products (id, name, slug, brand_id, category_id, status, primary_media_id, created_at, updated_at)
+      VALUES
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.name},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.slug},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.brand.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.categoryA.id},
+          'PUBLISHED',
+          NULL,
+          NOW(),
+          NOW()
+        ),
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.name},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.slug},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.brand.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.categoryA.id},
+          'PUBLISHED',
+          NULL,
+          NOW(),
+          NOW()
+        )
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        slug = EXCLUDED.slug,
+        status = 'PUBLISHED',
+        updated_at = NOW();
+    `;
+
+    await tx`
+      INSERT INTO product_variants (id, product_id, sku, title, price_cents, cost_cents, weight_grams, status, display_order, created_at, updated_at)
+      VALUES
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.variantId},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.sku},
+          'Variante Pro',
+          14990,
+          7000,
+          58,
+          'ACTIVE',
+          0,
+          NOW(),
+          NOW()
+        ),
+        (
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.variantId},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.id},
+          ${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.sku},
+          'Variante Ultra',
+          19990,
+          9500,
+          52,
+          'ACTIVE',
+          0,
+          NOW(),
+          NOW()
+        )
+      ON CONFLICT (id) DO UPDATE SET
+        sku = EXCLUDED.sku,
+        price_cents = EXCLUDED.price_cents,
+        status = 'ACTIVE',
+        updated_at = NOW();
     `;
 
     // Public Media Assets for Publishable Product
@@ -625,7 +728,7 @@ export async function seedAdminProductFixtures(clientSql) {
       VALUES (
         ${ADMIN_E2E_PRODUCT_FIXTURES.immutableProduct.inventoryItemId},
         '018f0000-0000-7000-8000-000000007a03',
-        '018f0000-0000-7000-8000-00000000e004',
+        ${ADMIN_E2E_PRODUCT_FIXTURES.inventoryLocation.id},
         10,
         0,
         0,
@@ -684,6 +787,202 @@ export async function seedAdminProductFixtures(clientSql) {
   });
 
   console.log("[Admin E2E Seed] Successfully seeded Product Manager test fixtures.");
+}
+
+const ADMIN_ORDER_COUNT = 30;
+const ADMIN_ORDER_PAYMENT_METHOD_ID = "018f0000-0000-7000-8000-00000000e101";
+const ADMIN_ORDER_INSTRUCTION_ID = "018f0000-0000-7000-8000-00000000e102";
+const ADMIN_ORDER_SHIPPING_METHOD_ID = "018f0000-0000-7000-8000-00000000e103";
+
+function adminOrderId(segment, index) {
+  return `018f0000-0000-7000-8000-${(segment + index).toString(16).padStart(12, "0")}`;
+}
+
+export async function seedAdminOrderFixtures(clientSql) {
+  console.log("[Admin E2E Seed] Seeding deterministic Orders list fixtures...");
+
+  await clientSql.begin(async (tx) => {
+    await tx`
+      INSERT INTO payment_method_configurations
+        (id, code, name, method_type, is_active, display_order)
+      VALUES
+        (${ADMIN_ORDER_PAYMENT_METHOD_ID}, 'ADMIN_E2E_YAPE', 'Yape E2E', 'MANUAL', true, 90)
+      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_active = true;
+    `;
+    await tx`
+      INSERT INTO payment_instruction_versions
+        (id, payment_method_code, version_number, recipient_name, account_identifier, instruction_text, is_active)
+      VALUES
+        (${ADMIN_ORDER_INSTRUCTION_ID}, 'ADMIN_E2E_YAPE', 1, 'Tienda E2E', '999000111', 'Instrucciones sintéticas', true)
+      ON CONFLICT (id) DO UPDATE SET instruction_text = EXCLUDED.instruction_text;
+    `;
+    await tx`
+      UPDATE payment_method_configurations
+      SET current_instruction_version_id = ${ADMIN_ORDER_INSTRUCTION_ID}
+      WHERE id = ${ADMIN_ORDER_PAYMENT_METHOD_ID};
+    `;
+    await tx`
+      INSERT INTO shipping_methods
+        (id, code, name, base_price_cents, estimated_days_min, estimated_days_max, is_active)
+      VALUES
+        (${ADMIN_ORDER_SHIPPING_METHOD_ID}, 'ADMIN_E2E_DELIVERY', 'Envío E2E', 0, 1, 2, true)
+      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_active = true;
+    `;
+
+    for (let index = 1; index <= ADMIN_ORDER_COUNT + 2; index += 1) {
+      const orderId = adminOrderId(0xd100, index);
+      const orderNumber =
+        index <= ADMIN_ORDER_COUNT
+          ? `GP-AD${String(index).padStart(6, "0")}`
+          : `GP-CK${String(index - ADMIN_ORDER_COUNT).padStart(6, "0")}`;
+      const createdAt = new Date(
+        Date.UTC(2026, 8, index <= 27 ? 19 : index <= 30 ? 18 : 17, 20, 0) -
+          (index <= 27 ? index - 1 : index - 28) * 60_000
+      ).toISOString();
+      const paymentAt = new Date(Date.parse(createdAt) + 10 * 60_000).toISOString();
+      const shipmentAt = new Date(Date.parse(createdAt) + 20 * 60_000).toISOString();
+      const orderStatus =
+        index === 2 || index === 32
+          ? "CONFIRMED"
+          : index === 3
+            ? "CANCELLED"
+            : index === 4
+              ? "REFUNDED"
+              : "PENDING";
+      const customerEmail = index === 1 ? "MiXeD.Order@Example.com" : `buyer${index}@example.com`;
+
+      await tx`
+        INSERT INTO orders
+          (id, order_number, customer_id, customer_email, customer_phone, status,
+           subtotal_cents, discount_cents, shipping_cents, total_cents, currency,
+           cancelled_at, cancel_reason, created_at, updated_at)
+        VALUES
+          (${orderId}, ${orderNumber}, ${index === 1 ? ADMIN_E2E_USERS.customer.id : null},
+           ${customerEmail}, '999111222', ${orderStatus},
+           15990, 0, 0, 15990, 'PEN',
+           ${index === 3 ? createdAt : null}, ${index === 3 ? "Cancelación E2E" : null},
+           ${createdAt}, ${createdAt})
+        ON CONFLICT (id) DO UPDATE SET
+          customer_email = EXCLUDED.customer_email,
+          customer_id = EXCLUDED.customer_id,
+          status = EXCLUDED.status,
+          created_at = EXCLUDED.created_at,
+          updated_at = EXCLUDED.updated_at;
+      `;
+      await tx`
+        INSERT INTO order_items
+          (id, order_id, variant_id, sku_snapshot, product_name_snapshot, variant_title_snapshot,
+           unit_price_cents_snapshot, quantity, line_total_cents, created_at)
+        VALUES
+          (${adminOrderId(0xd200, index)}, ${orderId},
+           ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.variantId},
+           'E2E-PUB-SKU-001', 'Producto E2E Listo Publicar', 'Variante E2E',
+           7995, 2, 15990, ${createdAt})
+        ON CONFLICT (id) DO UPDATE SET quantity = 2, line_total_cents = 15990;
+      `;
+      await tx`
+        INSERT INTO order_pricing_snapshots
+          (id, order_id, subtotal_cents, discount_cents, shipping_cents, total_cents, currency, created_at)
+        VALUES
+          (${adminOrderId(0xd300, index)}, ${orderId}, 15990, 0, 0, 15990, 'PEN', ${createdAt})
+        ON CONFLICT (id) DO UPDATE SET total_cents = 15990, currency = 'PEN';
+      `;
+      await tx`
+        INSERT INTO order_address_snapshots
+          (id, order_id, recipient_name, phone, street_address, department, province, district, created_at)
+        VALUES
+          (${adminOrderId(0xd400, index)}, ${orderId}, 'Persona E2E Privada',
+           '999111222', 'Calle Privada E2E 123', 'Lima', 'Lima', 'Miraflores', ${createdAt})
+        ON CONFLICT (id) DO UPDATE SET street_address = EXCLUDED.street_address;
+      `;
+
+      if (index !== 5) {
+        const paymentStatus =
+          index === 2 || index === 6 || index === 7 || index === 32
+            ? "PAID"
+            : index === 4
+              ? "REFUNDED"
+              : "UNPAID";
+        await tx`
+          INSERT INTO payments
+            (id, order_id, payment_method_code, instruction_version_id, amount_cents,
+             refunded_amount_cents, currency, status, created_at, updated_at)
+          VALUES
+            (${adminOrderId(0xd500, index)}, ${orderId}, 'ADMIN_E2E_YAPE',
+             ${ADMIN_ORDER_INSTRUCTION_ID}, 15990, ${index === 4 ? 15990 : 0},
+             'PEN', ${paymentStatus}, ${createdAt}, ${paymentAt})
+          ON CONFLICT (id) DO UPDATE SET
+            status = EXCLUDED.status, refunded_amount_cents = EXCLUDED.refunded_amount_cents,
+            updated_at = EXCLUDED.updated_at;
+        `;
+      }
+
+      if (index !== 5 && index !== 6) {
+        const shipmentStatus = index === 2 ? "SHIPPED" : index === 4 ? "DELIVERED" : "UNFULFILLED";
+        await tx`
+          INSERT INTO shipments
+            (id, order_id, shipping_method_id, status, courier_name, tracking_number, tracking_url,
+             shipped_at, delivered_at, created_at, updated_at)
+          VALUES
+            (${adminOrderId(0xd600, index)}, ${orderId}, ${ADMIN_ORDER_SHIPPING_METHOD_ID},
+             ${shipmentStatus}, ${index === 2 ? "Envíos E2E" : null},
+             ${index === 2 ? "TRACK-E2E-2" : null},
+             ${index === 2 ? "https://tracking.example.com/GP-AD000002" : index === 3 ? "javascript:alert(1)" : null},
+             ${index === 2 || index === 4 ? shipmentAt : null},
+             ${index === 4 ? shipmentAt : null}, ${createdAt}, ${shipmentAt})
+          ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status,
+            courier_name = EXCLUDED.courier_name, tracking_number = EXCLUDED.tracking_number,
+            tracking_url = EXCLUDED.tracking_url, updated_at = EXCLUDED.updated_at;
+        `;
+      }
+      if (index === 7) {
+        await tx`
+          INSERT INTO shipments
+            (id, order_id, shipping_method_id, status, shipped_at, delivered_at, created_at, updated_at)
+          VALUES
+            (${adminOrderId(0xd700, index)}, ${orderId}, ${ADMIN_ORDER_SHIPPING_METHOD_ID},
+             'DELIVERED', ${shipmentAt}, ${shipmentAt}, ${createdAt}, ${shipmentAt})
+          ON CONFLICT (id) DO UPDATE SET status = 'DELIVERED', updated_at = EXCLUDED.updated_at;
+        `;
+      }
+    }
+
+    await tx`DELETE FROM order_address_snapshots WHERE order_id = ${adminOrderId(0xd100, 8)}`;
+    await tx`DELETE FROM order_pricing_snapshots WHERE order_id = ${adminOrderId(0xd100, 9)}`;
+
+    for (let index = 1; index <= 55; index += 1) {
+      const createdAt = new Date(Date.UTC(2026, 8, 19, 21, index)).toISOString();
+      await tx`
+        INSERT INTO order_notes
+          (id, order_id, author_auth_user_id, body, created_at,
+           mutation_request_id, intent_fingerprint, actor_binding_digest)
+        VALUES
+          (${adminOrderId(0xe000, index)}, ${adminOrderId(0xd100, 10)},
+           ${ADMIN_E2E_USERS.orders.id}, ${`Nota histórica ${index}`}, ${createdAt},
+           ${adminOrderId(0xe100, index)}, ${"a".repeat(64)}, ${"b".repeat(64)})
+        ON CONFLICT (id) DO UPDATE SET body = EXCLUDED.body, created_at = EXCLUDED.created_at;
+      `;
+    }
+
+    await tx`
+      INSERT INTO payment_submissions
+        (id, payment_id, attempt_number, operation_code, submitted_at, created_at)
+      VALUES
+        (${adminOrderId(0xd900, 2)}, ${adminOrderId(0xd500, 2)}, 1,
+         'OPERACION-E2E-PRIVADA', '2026-09-19T20:06:00Z', '2026-09-19T20:06:00Z')
+      ON CONFLICT (id) DO UPDATE SET operation_code = EXCLUDED.operation_code;
+    `;
+    await tx`
+      INSERT INTO refunds
+        (id, order_id, payment_id, amount_cents, reason, created_at)
+      VALUES
+        (${adminOrderId(0xd800, 4)}, ${adminOrderId(0xd100, 4)},
+         ${adminOrderId(0xd500, 4)}, 15990, 'Reembolso E2E', '2026-09-19T20:30:00Z')
+      ON CONFLICT (id) DO UPDATE SET amount_cents = 15990;
+    `;
+  });
+
+  console.log(`[Admin E2E Seed] Seeded ${ADMIN_ORDER_COUNT} list Orders and 2 CHK3 action Orders.`);
 }
 
 // Execute seed if invoked directly

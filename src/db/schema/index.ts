@@ -28,6 +28,7 @@ export * from "./orders/orders";
 export * from "./orders/order-items";
 export * from "./orders/order-address-snapshots";
 export * from "./orders/order-pricing-snapshots";
+export * from "./orders/order-notes";
 export * from "./shipping/enums";
 export * from "./shipping/shipping-methods";
 export * from "./shipping/shipments";

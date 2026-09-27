@@ -661,7 +661,9 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
     await expect(relatedDialog.getByText(product.name)).toHaveCount(0);
 
     // Add first product
-    await relatedDialog.getByRole("button", { name: /Agregar Gamer Mouse Pro/i }).click();
+    await relatedDialog
+      .getByTestId(`select-related-product-${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductA.id}`)
+      .click();
     await expect(relatedDialog).toBeHidden();
     await expect(relatedCard.getByText("Gamer Mouse Pro")).toBeVisible();
 
@@ -673,7 +675,9 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
     ).toBeDisabled();
 
     // Add second product
-    await relatedDialog.getByRole("button", { name: /Agregar Gamer Mouse Ultra/i }).click();
+    await relatedDialog
+      .getByTestId(`select-related-product-${ADMIN_E2E_PRODUCT_FIXTURES.relatedProductB.id}`)
+      .click();
     await expect(relatedDialog).toBeHidden();
     await expect(relatedCard.getByText("Gamer Mouse Ultra")).toBeVisible();
 
