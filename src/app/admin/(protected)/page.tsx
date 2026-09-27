@@ -11,6 +11,7 @@ import { PaymentVerificationSection } from "@/components/admin/dashboard/payment
 import { CatalogOverviewSection } from "@/components/admin/dashboard/catalog-overview-section";
 import { InventoryOverviewSection } from "@/components/admin/dashboard/inventory-overview-section";
 import { NoMetricsAssigned } from "@/components/admin/dashboard/no-metrics-assigned";
+import { Stagger } from "@/components/admin/ui";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       />
 
       {hasAnyMetricAccess ? (
-        <div className={styles.dashboardBody}>
+        <Stagger className={styles.dashboardBody}>
           <FinancialCohortSection financialCohort={payload.financialCohort} />
           <OrderPipelineSection orderPipeline={payload.orderPipeline} />
           <PaymentVerificationSection paymentVerification={payload.paymentVerification} />
@@ -58,7 +59,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
             <CatalogOverviewSection catalogOverview={payload.catalogOverview} />
             <InventoryOverviewSection inventoryOverview={payload.inventoryOverview} />
           </div>
-        </div>
+        </Stagger>
       ) : (
         <div className={styles.dashboardBody}>
           <NoMetricsAssigned />

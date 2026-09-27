@@ -1,7 +1,7 @@
 import React from "react";
 import type { InventoryOverviewResult } from "@/lib/admin/dashboard-types";
 import { formatInteger } from "@/lib/admin/dashboard-format";
-import { Boxes, CheckCircle2 } from "lucide-react";
+import { AdminCard, AdminSection, MetricRow, MetricWidget, StaggerItem } from "../ui";
 import styles from "./inventory-overview-section.module.css";
 
 interface InventoryOverviewSectionProps {
@@ -17,114 +17,80 @@ export function InventoryOverviewSection({ inventoryOverview }: InventoryOvervie
     inventoryOverview.data;
 
   return (
-    <section className={styles.section} aria-labelledby="inventory-heading">
-      <div className={styles.sectionHeader}>
-        <div className={styles.titleWrapper}>
-          <Boxes className={styles.sectionIcon} aria-hidden="true" />
-          <h2 id="inventory-heading" className={styles.sectionTitle}>
-            Resumen de Inventario
-          </h2>
-        </div>
-      </div>
+    <AdminSection
+      id="inventory-heading"
+      title="Resumen de Inventario"
+      caption="Todas las ubicaciones"
+    >
+      <AdminCard>
+        <StaggerItem className={styles.headline}>
+          <MetricWidget
+            label="Disponible para venta (ATS)"
+            value={formatInteger(globalPhysicalBalances.availableToSellUnits)}
+            valueTestId="inventory-ats-units"
+            size="large"
+            footnote="Unidades físicas comercializables inmediatamente"
+          />
+        </StaggerItem>
 
-      <div className={styles.grid}>
-        {/* Card 1: Balances Físicos Globales */}
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <h3 className={styles.cardTitle}>Balances físicos globales</h3>
-            <span className={styles.cardCaption}>Todas las ubicaciones</span>
-          </div>
+        <MetricRow minCellWidth={120}>
+          <StaggerItem>
+            <MetricWidget
+              label="En almacén"
+              value={formatInteger(globalPhysicalBalances.onHandUnits)}
+              size="small"
+              testId="inventory-on-hand"
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <MetricWidget
+              label="Reservadas"
+              value={formatInteger(globalPhysicalBalances.reservedUnits)}
+              size="small"
+              testId="inventory-reserved"
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <MetricWidget
+              label="Asignadas"
+              value={formatInteger(globalPhysicalBalances.allocatedUnits)}
+              size="small"
+              testId="inventory-allocated"
+            />
+          </StaggerItem>
+        </MetricRow>
 
-          <div className={styles.balanceHighlight}>
-            <span className={styles.highlightLabel}>Disponible para venta (ATS)</span>
-            <span className={styles.highlightValue} data-testid="inventory-ats-units">
-              {formatInteger(globalPhysicalBalances.availableToSellUnits)}
-            </span>
-            <span className={styles.highlightFooter}>
-              Unidades físicas comercializables inmediatamente
-            </span>
-          </div>
-
-          <div className={styles.breakdownGrid}>
-            <div className={styles.breakdownItem} data-testid="inventory-on-hand">
-              <span className={styles.breakdownLabel}>En almacén</span>
-              <span className={styles.breakdownValue}>
-                {formatInteger(globalPhysicalBalances.onHandUnits)}
-              </span>
-            </div>
-
-            <div className={styles.breakdownItem} data-testid="inventory-reserved">
-              <span className={styles.breakdownLabel}>Reservadas</span>
-              <span className={styles.breakdownValue}>
-                {formatInteger(globalPhysicalBalances.reservedUnits)}
-              </span>
-            </div>
-
-            <div className={styles.breakdownItem} data-testid="inventory-allocated">
-              <span className={styles.breakdownLabel}>Asignadas</span>
-              <span className={styles.breakdownValue}>
-                {formatInteger(globalPhysicalBalances.allocatedUnits)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Alertas de Existencias */}
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <h3 className={styles.cardTitle}>Alertas de existencias</h3>
-            <span className={styles.cardCaption}>Monitoreo de niveles críticos</span>
-          </div>
-
-          <div className={styles.alertsContainer}>
-            {/* Out of stock SKUs */}
-            <div
-              className={`${styles.alertItem} ${
-                outOfStockActiveSkus > 0 ? styles.alertDanger : styles.alertClean
-              }`}
-              data-testid="inventory-out-of-stock-skus"
-            >
-              <div className={styles.alertItemHeader}>
-                <span className={styles.alertLabel}>SKUs activos agotados</span>
-                {outOfStockActiveSkus === 0 && (
-                  <CheckCircle2 className={styles.cleanIcon} aria-hidden="true" />
-                )}
-              </div>
-              <span className={styles.alertValue}>{formatInteger(outOfStockActiveSkus)}</span>
-              <span className={styles.alertFooter}>
-                {outOfStockActiveSkus === 0
+        <MetricRow>
+          <StaggerItem>
+            <MetricWidget
+              label="SKUs activos agotados"
+              value={formatInteger(outOfStockActiveSkus)}
+              size="small"
+              dot={outOfStockActiveSkus > 0 ? "critical" : "ok"}
+              footnote={
+                outOfStockActiveSkus === 0
                   ? "Sin SKUs activos con stock cero"
-                  : "SKUs con balance ATS igual a 0"}
-              </span>
-            </div>
-
-            {/* Low stock active positions */}
-            <div
-              className={`${styles.alertItem} ${
-                lowStockActivePositions > 0 ? styles.alertWarning : styles.alertClean
-              }`}
-              data-testid="inventory-low-stock-positions"
-            >
-              <div className={styles.alertItemHeader}>
-                <span className={styles.alertLabel}>Posiciones con stock bajo</span>
-                {lowStockActivePositions === 0 && (
-                  <CheckCircle2 className={styles.cleanIcon} aria-hidden="true" />
-                )}
-              </div>
-              <span className={styles.alertValue}>{formatInteger(lowStockActivePositions)}</span>
-              <span className={styles.alertFooter}>
-                {lowStockActivePositions === 0
+                  : "SKUs con balance ATS igual a 0"
+              }
+              testId="inventory-out-of-stock-skus"
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <MetricWidget
+              label="Posiciones con stock bajo"
+              value={formatInteger(lowStockActivePositions)}
+              size="small"
+              dot={lowStockActivePositions > 0 ? "attention" : "ok"}
+              footnote={
+                lowStockActivePositions === 0
                   ? "Posiciones por encima del punto de reorden"
-                  : "Ubicaciones con ATS menor o igual al reorden"}
-              </span>
-            </div>
-          </div>
-
-          <div className={styles.cardFooter}>
-            Monitoreo en tiempo real de niveles críticos de existencias
-          </div>
-        </div>
-      </div>
-    </section>
+                  : "Ubicaciones con ATS menor o igual al reorden"
+              }
+              testId="inventory-low-stock-positions"
+            />
+          </StaggerItem>
+        </MetricRow>
+      </AdminCard>
+    </AdminSection>
   );
 }

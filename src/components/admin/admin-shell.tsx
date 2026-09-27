@@ -55,14 +55,18 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
             />
 
             <main id="admin-main-content" className={styles.mainContent} tabIndex={-1}>
-              {/* Each screen fades up on arrival, so navigation reads as movement. */}
+              {/*
+                Each screen settles in with a short fade. The exit is instant: under the App
+                Router the outgoing element already renders the next route, so a visible exit
+                would flash the new screen at full opacity before it fades in.
+              */}
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={currentPath}
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                  exit={{ opacity: 0, transition: { duration: 0 } }}
+                  transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
                 >
                   {children}
                 </motion.div>

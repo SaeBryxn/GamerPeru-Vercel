@@ -38,6 +38,8 @@ export default function RootLayout({
     <html
       lang={APP_CONFIG.defaultLocale}
       className={`${plusJakartaSans.variable} ${inter.variable} ${jetBrainsMono.variable}`}
+      // The admin theme script sets data-admin-theme here before hydration, on purpose.
+      suppressHydrationWarning
     >
       <body>{children}</body>
     </html>

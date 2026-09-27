@@ -1,19 +1,17 @@
+/* Trend as quiet text beside the label: an arrow and a percentage, no pill. */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: var(--radius-full, 9999px);
-  font-size: 0.75rem;
-  font-family: var(--font-heading, sans-serif);
+  gap: 3px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
 
 .icon {
-  width: 0.875rem;
-  height: 0.875rem;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
 }
 
@@ -22,42 +20,13 @@
 }
 
 .positive {
-  background-color: var(--color-status-success-background);
-  color: var(--color-status-success-text);
-  border: 1px solid var(--color-status-success-border);
-}
-
-.negative {
-  background-color: var(--color-status-danger-background);
-  color: var(--color-status-danger-text);
-  border: 1px solid var(--color-status-danger-border);
-}
-
-.neutral {
-  background-color: var(--color-surface-secondary, var(--color-surface-secondary));
-  color: var(--color-text-secondary, var(--color-text-secondary));
-  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
-}
-
-/* ---- Premium pass ---- */
-.badge {
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-full);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.positive {
-  background-color: var(--color-status-success-background);
   color: var(--color-status-success-text);
 }
 
 .negative {
-  background-color: var(--color-status-danger-background);
-  color: var(--color-status-danger-text);
+  color: var(--color-text-secondary);
 }
 
 .neutral {
-  background-color: var(--admin-inset);
   color: var(--color-text-muted);
 }

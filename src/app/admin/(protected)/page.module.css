@@ -1,24 +1,25 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: var(--space-10);
   width: 100%;
+  max-width: 1280px;
 }
 
 .dashboardBody {
   display: flex;
   flex-direction: column;
-  gap: 2.25rem;
+  gap: var(--space-10);
 }
 
 .lowerGrid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 2.25rem;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-10);
 }
 
 @media (min-width: 1024px) {
   .lowerGrid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }

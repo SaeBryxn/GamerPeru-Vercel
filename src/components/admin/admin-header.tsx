@@ -41,8 +41,10 @@ export function AdminHeader({
         </button>
 
         <nav aria-label="Ruta de navegación" className={styles.breadcrumbs}>
-          <span>Administración</span>
-          <span aria-hidden="true">/</span>
+          <span className={styles.breadcrumbRoot}>Administración</span>
+          <span className={styles.breadcrumbRoot} aria-hidden="true">
+            /
+          </span>
           <span className={styles.breadcrumbCurrent}>{pageTitle}</span>
         </nav>
       </div>
@@ -53,7 +55,7 @@ export function AdminHeader({
           <span>Ir a la tienda</span>
           <ExternalLink className={styles.navIcon} aria-hidden="true" />
         </Link>
-        <LogoutButton />
+        <LogoutButton appearance="ghost" />
       </div>
     </header>
   );

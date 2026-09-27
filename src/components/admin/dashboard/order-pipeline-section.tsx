@@ -1,8 +1,9 @@
 import React from "react";
 import type { OrderPipelineResult } from "@/lib/admin/dashboard-types";
 import { formatInteger } from "@/lib/admin/dashboard-format";
+import { AdminCard, AdminSection, MetricWidget, StaggerItem, StatusDot } from "../ui";
+import type { StatusDotTone } from "../ui";
 import { CountTrendBadge } from "./trend-badge";
-import { ShoppingCart } from "lucide-react";
 import styles from "./order-pipeline-section.module.css";
 
 interface OrderPipelineSectionProps {
@@ -13,7 +14,9 @@ interface StatusItem {
   id: string;
   label: string;
   count: number;
-  colorClass: string;
+  /** Still moving through the flow (dark bar) or already closed (light bar). */
+  isOpen: boolean;
+  dot: StatusDotTone;
 }
 
 export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProps) {
@@ -22,120 +25,106 @@ export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProp
   }
 
   const { current, trends } = orderPipeline.data;
+  const total = current.totalCreatedOrders;
 
   const statuses: StatusItem[] = [
     {
       id: "pending",
       label: "Pendientes",
       count: current.pendingOrders,
-      colorClass: "statusPending",
+      isOpen: true,
+      // Orders waiting on payment are the one thing here that asks for a person.
+      dot: current.pendingOrders > 0 ? "critical" : "neutral",
     },
     {
       id: "confirmed",
       label: "Confirmados",
       count: current.confirmedOrders,
-      colorClass: "statusConfirmed",
+      isOpen: true,
+      dot: "neutral",
     },
     {
       id: "processing",
       label: "En proceso",
       count: current.processingOrders,
-      colorClass: "statusProcessing",
+      isOpen: true,
+      dot: "neutral",
     },
     {
       id: "fulfilled",
       label: "Completados",
       count: current.fulfilledOrders,
-      colorClass: "statusFulfilled",
+      isOpen: true,
+      dot: "ok",
     },
     {
       id: "cancelled",
       label: "Cancelados",
       count: current.cancelledOrders,
-      colorClass: "statusCancelled",
+      isOpen: false,
+      dot: "neutral",
     },
     {
       id: "expired",
       label: "Expirados",
       count: current.expiredOrders,
-      colorClass: "statusExpired",
+      isOpen: false,
+      dot: "neutral",
     },
     {
       id: "refunded",
       label: "Reembolsados",
       count: current.refundedOrders,
-      colorClass: "statusRefunded",
+      isOpen: false,
+      dot: "neutral",
     },
   ];
 
-  const total = current.totalCreatedOrders;
-
   return (
-    <section className={styles.section} aria-labelledby="orders-heading">
-      <div className={styles.sectionHeader}>
-        <div className={styles.titleWrapper}>
-          <ShoppingCart className={styles.sectionIcon} aria-hidden="true" />
-          <h2 id="orders-heading" className={styles.sectionTitle}>
-            Flujo de Pedidos
-          </h2>
-        </div>
-      </div>
-
-      <div className={styles.containerCard}>
-        <div className={styles.summaryRow}>
-          <div>
-            <span className={styles.summaryLabel}>Total de pedidos creados</span>
-            <div className={styles.summaryValue} data-testid="orders-total-created">
-              {formatInteger(total)}
-            </div>
-          </div>
-          <CountTrendBadge
-            trend={trends.totalCreatedOrders}
-            comparisonLabel="Comparación vs período anterior"
+    <AdminSection id="orders-heading" title="Flujo de Pedidos">
+      <AdminCard>
+        <StaggerItem className={styles.summary}>
+          <MetricWidget
+            label="Total de pedidos creados"
+            value={formatInteger(total)}
+            valueTestId="orders-total-created"
+            size="large"
+            trend={
+              <CountTrendBadge
+                trend={trends.totalCreatedOrders}
+                comparisonLabel="Comparación vs período anterior"
+              />
+            }
           />
-        </div>
+        </StaggerItem>
 
-        {/* Proportional Distribution Bar */}
-        {total > 0 && (
-          <div
-            className={styles.distributionBar}
-            role="progressbar"
-            aria-label="Distribución proporcional de estados de pedidos"
-            aria-valuenow={100}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            {statuses.map((s) => {
-              if (s.count === 0) return null;
-              const pct = (s.count / total) * 100;
-              return (
-                <div
-                  key={s.id}
-                  className={`${styles.barSegment} ${styles[s.colorClass]}`}
-                  style={{ width: `${pct}%` }}
-                  title={`${s.label}: ${s.count} (${pct.toFixed(1)}%)`}
-                />
-              );
-            })}
-          </div>
-        )}
-
-        {/* Status Grid */}
-        <div className={styles.statusGrid}>
-          {statuses.map((s) => (
-            <div key={s.id} className={styles.statusCard} data-testid={`order-status-${s.id}`}>
-              <div className={styles.statusCardHeader}>
-                <span
-                  className={`${styles.statusDot} ${styles[s.colorClass]}`}
-                  aria-hidden="true"
-                />
-                <span className={styles.statusName}>{s.label}</span>
-              </div>
-              <span className={styles.statusCount}>{formatInteger(s.count)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
+        <ol className={styles.steps} aria-label="Pedidos por estado">
+          {statuses.map((status) => {
+            const share = total > 0 ? (status.count / total) * 100 : 0;
+            return (
+              <li key={status.id} className={styles.step} data-testid={`order-status-${status.id}`}>
+                <StaggerItem>
+                  <span className={styles.stepLabel}>
+                    <StatusDot tone={status.dot} />
+                    {status.label}
+                  </span>
+                  <span className={styles.stepCount}>{formatInteger(status.count)}</span>
+                  <span
+                    className={styles.track}
+                    role="img"
+                    aria-label={`${status.label}: ${share.toFixed(0)}% del total`}
+                  >
+                    <span
+                      className={`${styles.fill} ${status.isOpen ? styles.fillOpen : styles.fillClosed}`}
+                      style={{ width: `${share}%` }}
+                    />
+                  </span>
+                </StaggerItem>
+              </li>
+            );
+          })}
+        </ol>
+      </AdminCard>
+    </AdminSection>
   );
 }

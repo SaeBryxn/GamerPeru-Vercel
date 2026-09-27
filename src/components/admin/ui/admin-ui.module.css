@@ -1,0 +1,141 @@
+/*
+ * Admin UI primitives. Sections are separated by type and whitespace, not by
+ * boxes; a card is a single flat surface whose cells are split by hairlines.
+ */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-6);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+}
+
+.sectionCaption {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.card {
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--color-surface-card);
+  box-shadow: var(--admin-card-shadow);
+}
+
+.cardPadded {
+  padding: var(--admin-card-padding);
+}
+
+/*
+ * Every cell draws a hairline on its left and top; the grid sits 1px outside the
+ * card's clip, so the lines only ever show between cells, however they wrap.
+ */
+.cellRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--cell-min, 200px), 1fr));
+  margin: -1px 0 0 -1px;
+}
+
+.cellRow > * {
+  padding: var(--admin-card-padding);
+  box-shadow:
+    -1px 0 0 0 var(--color-border-subtle),
+    0 -1px 0 0 var(--color-border-subtle);
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.metricHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 20px;
+}
+
+.metricLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.metricValue {
+  font-family: var(--font-heading);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.metricValueLarge {
+  font-size: 36px;
+}
+
+.metricValueSmall {
+  font-size: 20px;
+}
+
+.metricFootnote {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--admin-dot-size);
+  height: var(--admin-dot-size);
+  border-radius: 9999px;
+  background-color: var(--color-text-disabled);
+}
+
+.dotCritical {
+  background-color: var(--admin-danger);
+}
+
+.dotOk {
+  background-color: var(--color-status-success-text);
+}
+
+.dotAttention {
+  background-color: var(--color-status-warning-text);
+}
+
+@media (max-width: 639px) {
+  .metricValue {
+    font-size: 24px;
+  }
+
+  .metricValueLarge {
+    font-size: 30px;
+  }
+}

@@ -79,25 +79,16 @@ describe("GP-023 / CHK2-BR3 — Admin Dashboard CSS Module Contract Regression S
     }
   });
 
-  it("2. asserts dynamic order status classes all exist in order-pipeline-section.module.css", () => {
+  it("2. asserts the conditional order flow bar classes exist in order-pipeline-section.module.css", () => {
     const cssPath = path.join(dashboardDir, "order-pipeline-section.module.css");
     const cssContent = fs.readFileSync(cssPath, "utf-8");
     const definedClasses = extractCssClasses(cssContent);
 
-    const expectedOrderStatuses = [
-      "statusPending",
-      "statusConfirmed",
-      "statusProcessing",
-      "statusFulfilled",
-      "statusCancelled",
-      "statusExpired",
-      "statusRefunded",
-    ];
-
-    for (const statusClass of expectedOrderStatuses) {
+    // Open orders draw a dark share bar, closed ones a light one; both are chosen at runtime.
+    for (const fillClass of ["fill", "fillOpen", "fillClosed"]) {
       expect(
-        definedClasses.has(statusClass),
-        `order-pipeline-section.module.css must define dynamic status class .${statusClass}`
+        definedClasses.has(fillClass),
+        `order-pipeline-section.module.css must define conditional class .${fillClass}`
       ).toBe(true);
     }
   });

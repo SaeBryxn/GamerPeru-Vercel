@@ -48,18 +48,16 @@ export function AdminSidebar({ navItems, staff, currentPath = "/admin" }: AdminS
                     className={`${styles.navLink} ${isActive ? styles.navLinkActive : ""}`}
                     aria-current={isActive ? "page" : undefined}
                   >
-                    {/* One shared pill slides between entries instead of blinking. */}
+                    {/* One shared marker glides between entries: a tween, never a bounce. */}
                     {isActive && (
                       <motion.span
                         layoutId="admin-nav-active"
-                        className={styles.navActiveBackdrop}
-                        transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                        className={styles.navActiveMarker}
+                        transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
                         aria-hidden="true"
                       />
                     )}
-                    <span className={styles.navIconChip} aria-hidden="true">
-                      <IconComponent className={styles.navIcon} />
-                    </span>
+                    <IconComponent className={styles.navIcon} aria-hidden="true" />
                     <span className={styles.navLabel}>{item.label}</span>
                   </Link>
                 </li>
