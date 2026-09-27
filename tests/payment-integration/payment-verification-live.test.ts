@@ -1,9 +1,12 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import postgres from "postgres";
+import { S3Client } from "@aws-sdk/client-s3";
 import { generateUuidV7 } from "@/db/utils/uuid";
 import { generateAnonymousSessionToken } from "@/lib/cart/session";
 import { submitCheckout } from "@/lib/checkout";
+import { getPaymentProofViewUrl } from "@/lib/payments/proof-viewer";
 import { submitPaymentProof } from "@/lib/payments/service";
+import { setTestStorageClientOverride } from "@/lib/storage/private-config";
 import {
   approvePayment,
   claimPaymentVerification,
@@ -130,6 +133,7 @@ describe("GP-028 — Live PostgreSQL payment verification", () => {
     await sql`DELETE FROM outbox_events WHERE aggregate_id IN (SELECT id::text FROM payments WHERE payment_method_code = ${paymentMethodCode})`;
     await sql`DELETE FROM outbox_events WHERE aggregate_id IN (SELECT id::text FROM orders WHERE customer_email LIKE ${`%@${emailDomain}`})`;
     await sql`DELETE FROM payment_submissions WHERE payment_id IN (${ourPayments})`;
+    await sql`DELETE FROM media_assets WHERE object_key LIKE 'payment-proofs/final/%/test/proof.png'`;
     await sql`DELETE FROM payment_proof_upload_intents WHERE payment_id IN (${ourPayments})`;
     await sql`DELETE FROM guest_payment_access_grants WHERE payment_id IN (${ourPayments})`;
     await sql`DELETE FROM inventory_ledger_entries WHERE inventory_item_id IN (${inventoryItemId1}, ${inventoryItemId2})`;
@@ -876,6 +880,65 @@ describe("GP-028 — Live PostgreSQL payment verification", () => {
       expect(refunds).toBe(0);
 
       await sql`UPDATE inventory_items SET quantity_on_hand = 100 WHERE id = ${inventoryItemId2}`;
+    });
+  });
+
+  describe("proof viewer", () => {
+    afterEach(() => setTestStorageClientOverride(null));
+
+    async function orderWithProof() {
+      const order = await submittedOrder();
+      const mediaId = generateUuidV7();
+      const objectKey = `payment-proofs/final/${order.paymentId}/test/proof.png`;
+      await sql`
+        INSERT INTO media_assets (id, object_key, security_class, media_type, mime_type, file_size_bytes, checksum_sha256)
+        VALUES (${mediaId}, ${objectKey}, 'PRIVATE_PAYMENT_PROOF', 'IMAGE', 'image/png', 1024, ${"0".repeat(64)})
+      `;
+      await sql`UPDATE payment_submissions SET proof_media_id = ${mediaId} WHERE id = ${order.submissionId}`;
+      return { ...order, objectKey };
+    }
+
+    it("signs a 5-minute, no-store URL only for orders:verify and audits every view", async () => {
+      setTestStorageClientOverride(
+        new S3Client({
+          region: "auto",
+          endpoint: "https://test-account.r2.cloudflarestorage.com",
+          credentials: { accessKeyId: "test-access-key", secretAccessKey: "test-secret-key" },
+        })
+      );
+      const order = await orderWithProof();
+
+      actAs(catalogStaff);
+      expect(await getPaymentProofViewUrl(order.submissionId)).toMatchObject({
+        success: false,
+        code: "UNAUTHORIZED",
+      });
+
+      actAs(operatorA);
+      const result = await getPaymentProofViewUrl(order.submissionId);
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      const url = new URL(result.url);
+      expect(decodeURIComponent(url.pathname)).toContain(order.objectKey);
+      expect(url.searchParams.get("X-Amz-Expires")).toBe("300");
+      expect(url.searchParams.get("response-cache-control")).toBe("private, no-store, max-age=0");
+      expect(result.mimeType).toBe("image/png");
+
+      const audits = await sql`
+        SELECT actor_id FROM audit_events
+        WHERE action = 'orders:view_payment_proof' AND target_id = ${order.submissionId}
+      `;
+      expect(audits.map((row) => row.actor_id)).toEqual([operatorA]);
+    });
+
+    it("reports a submission without a voucher instead of signing anything", async () => {
+      const order = await submittedOrder();
+      actAs(operatorA);
+      expect(await getPaymentProofViewUrl(order.submissionId)).toMatchObject({
+        success: false,
+        code: "NO_PROOF",
+      });
     });
   });
 

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import Link from "next/link";
-import { Bot, LayoutDashboard, Menu, Package, Settings2, Tags, X } from "lucide-react";
+import { Bot, CheckCircle, LayoutDashboard, Menu, Package, Settings2, Tags, X } from "lucide-react";
 import type { AdminNavItem, AdminStaffProfile } from "@/lib/admin/types";
 import styles from "./admin-shell.module.css";
 
@@ -23,7 +23,7 @@ export function AdminMobileNav({
   currentPath = "/admin",
   triggerRef,
 }: AdminMobileNavProps) {
-  const iconMap = { LayoutDashboard, Package, Bot, Settings2, Tags, Menu };
+  const iconMap = { LayoutDashboard, CheckCircle, Package, Bot, Settings2, Tags, Menu };
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 

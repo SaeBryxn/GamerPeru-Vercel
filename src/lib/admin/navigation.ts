@@ -17,6 +17,14 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Panel principal de administración",
   },
   {
+    id: "payment-verification",
+    label: "Pagos",
+    href: "/admin/pagos",
+    iconName: "CheckCircle",
+    requiredPermission: "orders:verify",
+    description: "Cola de comprobantes Yape/Plin por verificar",
+  },
+  {
     id: "products",
     label: "Productos",
     href: "/admin/products",

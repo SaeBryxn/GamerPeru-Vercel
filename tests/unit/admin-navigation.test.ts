@@ -4,28 +4,17 @@ import type { PermissionName } from "@/lib/auth/rbac";
 
 describe("GP-022 / GP-024 / GP-025 — Admin Navigation Filtering & Scope Contract Tests", () => {
   it("D1: only implemented destinations are registered in canonical navigation", () => {
-    expect(CANONICAL_ADMIN_NAV_ITEMS.length).toBe(6);
-    expect(CANONICAL_ADMIN_NAV_ITEMS[0]?.href).toBe("/admin");
-    expect(CANONICAL_ADMIN_NAV_ITEMS[0]?.id).toBe("overview");
-    expect(CANONICAL_ADMIN_NAV_ITEMS[1]?.href).toBe("/admin/products");
-    expect(CANONICAL_ADMIN_NAV_ITEMS[1]?.id).toBe("products");
-    expect(CANONICAL_ADMIN_NAV_ITEMS[1]?.requiredPermission).toBe("catalog:manage");
-    expect(CANONICAL_ADMIN_NAV_ITEMS[2]).toMatchObject({
-      href: "/admin/taxonomia",
-      requiredPermission: "catalog:manage",
-    });
-    expect(CANONICAL_ADMIN_NAV_ITEMS[3]).toMatchObject({
-      href: "/admin/menu",
-      requiredPermission: "catalog:manage",
-    });
-    expect(CANONICAL_ADMIN_NAV_ITEMS[4]).toMatchObject({
-      href: "/admin/products/ai-import",
-      requiredPermission: "catalog:ai_research",
-    });
-    expect(CANONICAL_ADMIN_NAV_ITEMS[5]).toMatchObject({
-      href: "/admin/settings/ai",
-      requiredPermission: "ai:manage_credentials",
-    });
+    expect(
+      CANONICAL_ADMIN_NAV_ITEMS.map((item) => [item.id, item.href, item.requiredPermission ?? null])
+    ).toEqual([
+      ["overview", "/admin", null],
+      ["payment-verification", "/admin/pagos", "orders:verify"],
+      ["products", "/admin/products", "catalog:manage"],
+      ["taxonomy", "/admin/taxonomia", "catalog:manage"],
+      ["storefront-menu", "/admin/menu", "catalog:manage"],
+      ["ai-product-assistant", "/admin/products/ai-import", "catalog:ai_research"],
+      ["ai-settings", "/admin/settings/ai", "ai:manage_credentials"],
+    ]);
   });
 
   it("D2: proves no dead future Admin links exist in navigation", () => {
@@ -33,7 +22,6 @@ describe("GP-022 / GP-024 / GP-025 — Admin Navigation Filtering & Scope Contra
       "/admin/dashboard",
       "/admin/productos",
       "/admin/pedidos",
-      "/admin/pagos",
       "/admin/inventario",
       "/admin/clientes",
       "/admin/asistente-ia",
@@ -69,5 +57,11 @@ describe("GP-022 / GP-024 / GP-025 — Admin Navigation Filtering & Scope Contra
     const navOrders = getAdminNavigation(ordersPerms);
     expect(navOrders.length).toBe(1);
     expect(navOrders[0]?.href).toBe("/admin");
+
+    const verifyPerms = new Set<PermissionName>(["orders:verify"]);
+    expect(getAdminNavigation(verifyPerms).map((item) => item.href)).toEqual([
+      "/admin",
+      "/admin/pagos",
+    ]);
   });
 });
