@@ -21,7 +21,7 @@ import {
 import DireccionesPage, {
   metadata as direccionesMetadata,
   dynamic as direccionesDynamic,
-} from "@/app/cuenta/direcciones/page";
+} from "@/app/(storefront)/cuenta/direcciones/page";
 import { AddressErrorState } from "@/components/account/address-error-state";
 import { AddressForm } from "@/components/account/address-form";
 import * as addressesModule from "@/lib/account/addresses";
@@ -651,18 +651,18 @@ describe("GP-016 ACCT5 — Customer Address Book Suite", () => {
         resolve(process.cwd(), "src/components/account/account-navigation.tsx"),
         "utf8"
       );
-      expect(navSource).toContain('{ label: "Direcciones", href: "/cuenta/direcciones" }');
-      expect(navSource).toContain('{ label: "Pedidos", href: "/cuenta/pedidos" }');
-      expect(navSource).toContain('{ label: "Favoritos", href: "/cuenta/favoritos" }');
-      expect(navSource).toContain('{ label: "Referidos", href: "/cuenta/referidos" }');
+      expect(navSource).toContain('{ label: "Direcciones", href: "/cuenta/direcciones"');
+      expect(navSource).toContain('{ label: "Mis pedidos", href: "/cuenta/pedidos"');
+      expect(navSource).toContain('{ label: "Favoritos", href: "/cuenta/favoritos"');
+      expect(navSource).toContain('{ label: "Referidos", href: "/cuenta/referidos"');
     });
 
     it("40. /cuenta overview has an active link to /cuenta/direcciones", () => {
       const overviewSource = readFileSync(
-        resolve(process.cwd(), "src/app/cuenta/page.tsx"),
+        resolve(process.cwd(), "src/app/(storefront)/cuenta/page.tsx"),
         "utf8"
       );
-      expect(overviewSource).toContain('href="/cuenta/direcciones"');
+      expect(overviewSource).toContain('href: "/cuenta/direcciones"');
       expect(overviewSource).not.toContain(
         "Direcciones</span>\n            <span className={styles.badgeComingSoon}>Próximamente"
       );

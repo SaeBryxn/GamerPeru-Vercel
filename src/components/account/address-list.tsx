@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useTransition } from "react";
+import { AlertTriangle, CheckCircle2, MapPin, Plus } from "lucide-react";
+import { DomeButton } from "@/components/ui";
 import type { CustomerAddressDTO, AddressActionValidationErrors } from "@/lib/account/types";
 import {
   createCustomerAddressAction,
@@ -146,12 +148,12 @@ export function AddressList({ addresses }: AddressListProps) {
         <button
           ref={addAddressButtonRef}
           type="button"
-          className={styles.addButton}
+          className={styles.outlineButton}
           onClick={(e) => handleOpenCreate(e.currentTarget)}
           disabled={isPending}
         >
-          <span aria-hidden="true">＋</span>
-          <span>Agregar dirección</span>
+          <Plus size={14} aria-hidden="true" className={styles.buttonIcon} />
+          Agregar dirección
         </button>
       </div>
 
@@ -163,7 +165,11 @@ export function AddressList({ addresses }: AddressListProps) {
           role={statusMessage.type === "success" ? "status" : "alert"}
           aria-live="polite"
         >
-          <span aria-hidden="true">{statusMessage.type === "success" ? "✓" : "⚠"}</span>
+          {statusMessage.type === "success" ? (
+            <CheckCircle2 size={16} aria-hidden="true" />
+          ) : (
+            <AlertTriangle size={16} aria-hidden="true" />
+          )}
           <span>{statusMessage.text}</span>
         </div>
       )}
@@ -171,31 +177,22 @@ export function AddressList({ addresses }: AddressListProps) {
       {addresses.length === 0 ? (
         <div className={styles.emptyState}>
           <div className={styles.emptyIcon} aria-hidden="true">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
+            <MapPin size={24} />
           </div>
           <h2 className={styles.emptyTitle}>No tienes direcciones guardadas</h2>
           <p className={styles.emptyDesc}>
             Guarda tus direcciones de entrega para agilizar tus futuras compras en Gamer Perú.
           </p>
-          <button
+          <DomeButton
             type="button"
-            className={styles.addButton}
+            tone="dark"
+            className={styles.addDome}
             onClick={(e) => handleOpenCreate(e.currentTarget)}
             disabled={isPending}
           >
-            <span aria-hidden="true">＋</span>
-            <span>Agregar mi primera dirección</span>
-          </button>
+            <Plus size={16} aria-hidden="true" className={styles.buttonIcon} />
+            Agregar mi primera dirección
+          </DomeButton>
         </div>
       ) : (
         <div className={styles.addressGrid} role="list" aria-label="Lista de direcciones">

@@ -13,18 +13,14 @@ export const dynamic = "force-dynamic";
 
 export default function ReferidosPage() {
   return (
-    <div>
+    <div className={styles.sectionStack}>
       <div className={styles.sectionHeader}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-          <h1 className={styles.title} style={{ margin: 0 }}>
-            Programa de referidos
-          </h1>
-          <span className={styles.badgeComingSoon}>Próximamente</span>
-        </div>
+        <h1 className={styles.title}>Programa de referidos</h1>
+        <span className={styles.badgeComingSoon}>Próximamente</span>
       </div>
 
-      <div className={styles.contentCard}>
-        <p className={styles.teaserDesc}>
+      <div className={`${styles.card} ${styles.emptyState}`}>
+        <p className={styles.cardText}>
           Muy pronto podrás acceder desde aquí al programa de referidos de Gamer Perú.
         </p>
       </div>

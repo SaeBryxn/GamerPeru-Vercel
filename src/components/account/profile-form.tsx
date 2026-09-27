@@ -10,9 +10,11 @@ import styles from "./profile-form.module.css";
 
 interface ProfileFormProps {
   initialProfile: ProfileFormDTO;
+  /** Runs after a successful save, e.g. to refresh a summary built from the same data. */
+  onSaved?: () => void;
 }
 
-export function ProfileForm({ initialProfile }: ProfileFormProps) {
+export function ProfileForm({ initialProfile, onSaved }: ProfileFormProps) {
   const [firstName, setFirstName] = useState(initialProfile.firstName);
   const [lastName, setLastName] = useState(initialProfile.lastName);
   const [phone, setPhone] = useState(initialProfile.phone ?? "");
@@ -46,6 +48,7 @@ export function ProfileForm({ initialProfile }: ProfileFormProps) {
         setPhone(result.fields.phone ?? "");
         setDocumentType(result.fields.documentType ?? "");
         setDocumentNumber(result.fields.documentNumber ?? "");
+        onSaved?.();
       } else {
         if (result.errors.form) {
           setFormError(result.errors.form);

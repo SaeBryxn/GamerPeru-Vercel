@@ -6,8 +6,14 @@ import { getCurrentCustomerProfile } from "@/lib/account/profile";
 import { updateCustomerProfileAction } from "@/lib/account/actions";
 import { toProfileFormDTO } from "@/lib/account/types";
 import type { ProfileFormDTO, ServerProfileView, UpdateProfileInput } from "@/lib/account/types";
-import { metadata as cuentaMetadata, dynamic as cuentaDynamic } from "@/app/cuenta/layout";
-import { metadata as perfilMetadata, dynamic as perfilDynamic } from "@/app/cuenta/perfil/page";
+import {
+  metadata as cuentaMetadata,
+  dynamic as cuentaDynamic,
+} from "@/app/(storefront)/cuenta/layout";
+import {
+  metadata as perfilMetadata,
+  dynamic as perfilDynamic,
+} from "@/app/(storefront)/cuenta/perfil/page";
 import * as claimsModule from "@/lib/auth/claims";
 import * as dbModule from "@/db";
 import { logger } from "@/lib/logger";
@@ -432,13 +438,16 @@ describe("GP-016 ACCT4-BR1 — Customer Account Profile Privacy, Client-Boundary
   // ============================================================
   describe("Nested Interactive Control Elimination", () => {
     it("M: /cuenta page edit action uses no nested Link+Button structure", () => {
-      const pageSource = readFileSync(resolve(process.cwd(), "src/app/cuenta/page.tsx"), "utf8");
+      const pageSource = readFileSync(
+        resolve(process.cwd(), "src/app/(storefront)/cuenta/page.tsx"),
+        "utf8"
+      );
       // Must not contain Link wrapping a Button
       expect(pageSource).not.toMatch(/<Link[^>]*>[\s\S]*?<Button[\s\S]*?<\/Link>/);
       // Must not import Button
       expect(pageSource).not.toContain('from "@/components/ui/button"');
-      // Should use a Link with className for editLink styling
-      expect(pageSource).toContain("styles.editLink");
+      // Section shortcuts are rendered as plain links by the quick-link grid.
+      expect(pageSource).toContain("AccountQuickLinks");
     });
   });
 

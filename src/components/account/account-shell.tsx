@@ -1,33 +1,39 @@
 import React from "react";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { AccountNavigation } from "./account-navigation";
+import { AccountSection, AccountTransitionProvider } from "./account-transition";
 import styles from "./account.module.css";
 
 interface AccountShellProps {
-  displayName: string;
   displayEmail: string | null;
+  ordersInTransit: number;
   children: React.ReactNode;
 }
 
-export function AccountShell({ displayName, displayEmail, children }: AccountShellProps) {
+export function AccountShell({ displayEmail, ordersInTransit, children }: AccountShellProps) {
   return (
-    <div className={styles.shell}>
-      <header className={styles.header}>
-        <div className={styles.userMeta}>
-          <span>Hola,</span>
-          <span className={styles.userName}>{displayName || "Cliente"}</span>
-          {displayEmail ? <span className={styles.userEmail}>({displayEmail})</span> : null}
-        </div>
-      </header>
+    <main id="main-content" className={styles.page}>
+      <div className={styles.shell}>
+        <header className={styles.shellHeader}>
+          <div>
+            <p className={styles.eyebrow}>Gamer Perú</p>
+            <p className={styles.shellTitle}>Mi cuenta</p>
+            {displayEmail ? <p className={styles.shellEmail}>{displayEmail}</p> : null}
+          </div>
+          <div className={styles.mobileLogout}>
+            <LogoutButton appearance="link" />
+          </div>
+        </header>
 
-      <div className={styles.layoutGrid}>
-        <aside>
-          <AccountNavigation />
-        </aside>
-
-        <main className={styles.mainContent}>
-          <div className={styles.contentCard}>{children}</div>
-        </main>
+        <AccountTransitionProvider>
+          <div className={styles.layout}>
+            <AccountNavigation ordersInTransit={ordersInTransit} />
+            <div className={styles.content}>
+              <AccountSection>{children}</AccountSection>
+            </div>
+          </div>
+        </AccountTransitionProvider>
       </div>
-    </div>
+    </main>
   );
 }

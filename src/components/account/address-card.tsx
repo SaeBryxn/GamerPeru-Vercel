@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { Phone, Star } from "lucide-react";
+import { DomeButton } from "@/components/ui";
 import type { CustomerAddressDTO } from "@/lib/account/types";
 import styles from "./address.module.css";
 
@@ -36,6 +38,7 @@ export function AddressCard({
         <h3 className={styles.recipientName}>{address.recipientName}</h3>
         {address.isDefault && (
           <span className={styles.defaultBadge} aria-label="Dirección predeterminada">
+            <Star size={11} fill="currentColor" aria-hidden="true" />
             Predeterminada
           </span>
         )}
@@ -45,7 +48,7 @@ export function AddressCard({
         <div className={styles.addressLine}>{fullAddressLine}</div>
         <div className={styles.locationLine}>{locationLine}</div>
         <div className={styles.phoneLine}>
-          <span aria-hidden="true">📞</span>
+          <Phone size={13} aria-hidden="true" />
           <span>{address.phone}</span>
         </div>
         {address.referenceNotes && (
@@ -69,15 +72,16 @@ export function AddressCard({
         </div>
 
         <div className={styles.actionGroup}>
-          <button
+          <DomeButton
             type="button"
-            className={styles.actionButton}
+            tone="light"
+            className={styles.editDome}
             onClick={(e) => onEdit(address, e.currentTarget)}
             disabled={isPending}
             aria-label={`Editar dirección de ${address.recipientName}`}
           >
-            Editar
-          </button>
+            Editar dirección
+          </DomeButton>
           <button
             type="button"
             className={styles.deleteButton}

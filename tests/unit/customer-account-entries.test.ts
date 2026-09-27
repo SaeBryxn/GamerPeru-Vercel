@@ -2,16 +2,22 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { NAVIGATION_CONFIG } from "@/components/navigation/navigation-data";
-import { metadata as pedidosMetadata, dynamic as pedidosDynamic } from "@/app/cuenta/pedidos/page";
+import {
+  metadata as pedidosMetadata,
+  dynamic as pedidosDynamic,
+} from "@/app/(storefront)/cuenta/pedidos/page";
 import {
   metadata as favoritosMetadata,
   dynamic as favoritosDynamic,
-} from "@/app/cuenta/favoritos/page";
+} from "@/app/(storefront)/cuenta/favoritos/page";
 import {
   metadata as referidosMetadata,
   dynamic as referidosDynamic,
-} from "@/app/cuenta/referidos/page";
-import { metadata as cuentaMetadata, dynamic as cuentaDynamic } from "@/app/cuenta/layout";
+} from "@/app/(storefront)/cuenta/referidos/page";
+import {
+  metadata as cuentaMetadata,
+  dynamic as cuentaDynamic,
+} from "@/app/(storefront)/cuenta/layout";
 
 describe("Customer Account Future-Domain Entry Surfaces (GP-016 ACCT6-B)", () => {
   describe("1. Global Wishlist Destination", () => {
@@ -42,41 +48,45 @@ describe("Customer Account Future-Domain Entry Surfaces (GP-016 ACCT6-B)", () =>
 
   describe("3. Overview Page Integration", () => {
     it("verifies /cuenta overview page contains links to all account destinations", () => {
-      const overviewPath = resolve(process.cwd(), "src/app/cuenta/page.tsx");
+      const overviewPath = resolve(process.cwd(), "src/app/(storefront)/cuenta/page.tsx");
       const overviewSource = readFileSync(overviewPath, "utf-8");
 
-      expect(overviewSource).toContain('href="/cuenta/perfil"');
-      expect(overviewSource).toContain('href="/cuenta/direcciones"');
-      expect(overviewSource).toContain('href="/cuenta/pedidos"');
-      expect(overviewSource).toContain('href="/cuenta/favoritos"');
-      expect(overviewSource).toContain('href="/cuenta/referidos"');
+      for (const href of [
+        "/cuenta/perfil",
+        "/cuenta/direcciones",
+        "/cuenta/pedidos",
+        "/cuenta/favoritos",
+        "/cuenta/referidos",
+      ]) {
+        expect(overviewSource).toContain(`href: "${href}"`);
+      }
 
-      // Overview retains truthful "Próximamente" indicators for future domains
-      expect(overviewSource).toContain("badgeComingSoon");
+      // Domains that do not exist yet stay flagged as coming soon.
+      expect(overviewSource).toContain("comingSoon: true");
     });
   });
 
-  describe("4. Orders Entry Surface Truthfulness (/cuenta/pedidos)", () => {
-    it("verifies orders entry page structure and zero fake data", () => {
-      const pagePath = resolve(process.cwd(), "src/app/cuenta/pedidos/page.tsx");
+  describe("4. Orders History (/cuenta/pedidos)", () => {
+    it("reads the signed-in customer's orders through the account reader, never fake data", () => {
+      const pagePath = resolve(process.cwd(), "src/app/(storefront)/cuenta/pedidos/page.tsx");
       const pageSource = readFileSync(pagePath, "utf-8");
 
-      // Heading and truthful badge
       expect(pageSource).toContain("Mis pedidos");
-      expect(pageSource).toContain("badgeComingSoon");
-      expect(pageSource).toContain("Próximamente");
-
-      // Truthful copy explaining future availability
-      expect(pageSource).toMatch(/Aquí podrás consultar el estado y seguimiento de tus pedidos/);
-      expect(pageSource).toMatch(/cuando el flujo de compra/);
-      expect(pageSource).toMatch(/esté habilitado/);
-
-      // Zero fake data or fake query presentation
-      expect(pageSource).not.toContain("No tienes pedidos");
-      expect(pageSource).not.toContain("table");
+      expect(pageSource).toContain("getCurrentCustomerOrders");
+      expect(pageSource).toContain('redirect("/auth/login")');
+      // Rendering stays in components; the page holds no order literals of its own.
       expect(pageSource).not.toContain("total_cents");
       expect(pageSource).not.toContain("order_number");
       expect(pageSource).not.toContain("S/");
+    });
+
+    it("links each order only to the owner-authorized confirmation page", () => {
+      const cardSource = readFileSync(
+        resolve(process.cwd(), "src/components/account/order-card.tsx"),
+        "utf-8"
+      );
+      expect(cardSource).toContain("/checkout/confirmacion/");
+      expect(cardSource).toContain("encodeURIComponent(order.orderNumber)");
     });
 
     it("verifies orders entry SEO and dynamic runtime directives", () => {
@@ -88,7 +98,7 @@ describe("Customer Account Future-Domain Entry Surfaces (GP-016 ACCT6-B)", () =>
 
   describe("5. Wishlist Entry Surface Truthfulness (/cuenta/favoritos)", () => {
     it("verifies wishlist entry page structure and zero fake data", () => {
-      const pagePath = resolve(process.cwd(), "src/app/cuenta/favoritos/page.tsx");
+      const pagePath = resolve(process.cwd(), "src/app/(storefront)/cuenta/favoritos/page.tsx");
       const pageSource = readFileSync(pagePath, "utf-8");
 
       // Heading and truthful badge
@@ -117,7 +127,7 @@ describe("Customer Account Future-Domain Entry Surfaces (GP-016 ACCT6-B)", () =>
 
   describe("6. Referral Entry Surface Truthfulness (/cuenta/referidos)", () => {
     it("verifies referral entry page structure and zero fake data", () => {
-      const pagePath = resolve(process.cwd(), "src/app/cuenta/referidos/page.tsx");
+      const pagePath = resolve(process.cwd(), "src/app/(storefront)/cuenta/referidos/page.tsx");
       const pageSource = readFileSync(pagePath, "utf-8");
 
       // Heading and truthful badge
@@ -148,15 +158,15 @@ describe("Customer Account Future-Domain Entry Surfaces (GP-016 ACCT6-B)", () =>
   describe("7. Zero Database / Server Action Delta", () => {
     it("verifies entry pages do not import db or create new domain actions", () => {
       const pedidosSource = readFileSync(
-        resolve(process.cwd(), "src/app/cuenta/pedidos/page.tsx"),
+        resolve(process.cwd(), "src/app/(storefront)/cuenta/pedidos/page.tsx"),
         "utf-8"
       );
       const favoritosSource = readFileSync(
-        resolve(process.cwd(), "src/app/cuenta/favoritos/page.tsx"),
+        resolve(process.cwd(), "src/app/(storefront)/cuenta/favoritos/page.tsx"),
         "utf-8"
       );
       const referidosSource = readFileSync(
-        resolve(process.cwd(), "src/app/cuenta/referidos/page.tsx"),
+        resolve(process.cwd(), "src/app/(storefront)/cuenta/referidos/page.tsx"),
         "utf-8"
       );
 

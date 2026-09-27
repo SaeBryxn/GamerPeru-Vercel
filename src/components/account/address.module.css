@@ -8,10 +8,60 @@
 }
 
 .title {
-  font-size: 1.5rem;
-  font-weight: 700;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 26px;
+  font-weight: 800;
   color: var(--color-text-primary, #09090b);
   letter-spacing: -0.02em;
+}
+
+.addDome {
+  --dome-height: 42px;
+  --dome-radius: 9999px;
+  --dome-font-size: 14px;
+}
+
+.editDome {
+  --dome-height: 36px;
+  --dome-padding: 0 var(--space-4);
+  --dome-radius: 9999px;
+  --dome-font-size: 13px;
+  --dome-border: var(--color-border-default);
+}
+
+.buttonIcon {
+  margin-right: 6px;
+}
+
+.outlineButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-default);
+  border-radius: 9999px;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.outlineButton:hover:not(:disabled) {
+  border-color: var(--color-text-primary);
+}
+
+.outlineButton:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.outlineButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .addButton {
@@ -55,16 +105,21 @@
   justify-content: center;
   text-align: center;
   padding: 3.5rem 1.5rem;
-  background: var(--color-surface-primary, #ffffff);
-  border: 1px dashed var(--color-border-subtle, #e4e4e7);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg, 0.75rem);
   gap: 1rem;
 }
 
 .emptyIcon {
-  width: 48px;
-  height: 48px;
-  color: var(--color-text-muted, #71717a);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 9999px;
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
 }
 
 .emptyTitle {
@@ -82,7 +137,7 @@
 
 .addressGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1.25rem;
 }
 
@@ -96,20 +151,19 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface-primary, #ffffff);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg, 0.75rem);
-  padding: 1.25rem;
+  padding: 1.75rem;
   gap: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
 }
 
+/* The default address is the one active choice on the page, so it takes the brand accent. */
 .addressCardDefault {
-  border-color: var(--color-brand-primary, #e11d48);
-  background: #ffffff;
+  border-color: var(--color-brand-red);
 }
 
 .cardHeader {
