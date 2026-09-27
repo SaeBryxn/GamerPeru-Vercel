@@ -9,7 +9,6 @@ import type { PaymentInstructionDTO } from "@/lib/payments/reader";
 import { formatCurrency } from "@/lib/utils/currency";
 import { ManualPaymentCard } from "./manual-payment-card";
 import { cancelUnpaidOrderAction } from "@/lib/orders/actions";
-import { generateUuidV7 } from "@/db/utils/uuid";
 import styles from "./checkout-confirmation-view.module.css";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -148,7 +147,7 @@ export function CheckoutConfirmationView({
     setCancelError(null);
 
     try {
-      const attemptId = generateUuidV7();
+      const attemptId = crypto.randomUUID();
       const result = await cancelUnpaidOrderAction({
         orderNumber,
         cancellationAttemptId: attemptId,
