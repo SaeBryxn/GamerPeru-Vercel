@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useId } from "react";
-import Link from "next/link";
-import { CheckCircle2, Clock, MapPin, Package, XCircle, AlertTriangle } from "lucide-react";
-import { Icon } from "@/components/ui";
+import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
+import { AlertTriangle, Clock, MapPin, Package, XCircle } from "lucide-react";
+import { DomeLink, Icon } from "@/components/ui";
 import type { CheckoutConfirmationDTO } from "@/lib/checkout/types";
 import type { PaymentInstructionDTO } from "@/lib/payments/reader";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -12,9 +12,81 @@ import { cancelUnpaidOrderAction } from "@/lib/orders/actions";
 import { generateUuidV7 } from "@/db/utils/uuid";
 import styles from "./checkout-confirmation-view.module.css";
 
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+const PAGE_VARIANTS: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.12, delayChildren: 0.05 } },
+};
+
+const COLUMN_VARIANTS: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
+};
+
 export interface CheckoutConfirmationViewProps {
   confirmation: CheckoutConfirmationDTO;
   paymentInstructions?: PaymentInstructionDTO | null;
+}
+
+/** Circle then tick, drawn in sequence: the purchase lands with a single, quiet flourish. */
+function SuccessMark() {
+  const prefersReducedMotion = useReducedMotion();
+  const draw = (delay: number) =>
+    prefersReducedMotion
+      ? { initial: false as const }
+      : {
+          initial: { pathLength: 0, opacity: 0 },
+          animate: { pathLength: 1, opacity: 1 },
+          transition: { duration: 0.5, delay, ease: EASE },
+        };
+
+  return (
+    <svg className={styles.checkMark} viewBox="0 0 64 64" aria-hidden="true">
+      <motion.circle
+        cx="32"
+        cy="32"
+        r="30"
+        strokeWidth="2"
+        className={styles.checkCircle}
+        {...draw(0.15)}
+      />
+      <motion.path
+        d="M20 33 L28.5 41.5 L44.5 24.5"
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={styles.checkPath}
+        {...draw(0.55)}
+      />
+    </svg>
+  );
+}
+
+/**
+ * Heading for the order's payment state. A submitted receipt is not a confirmed payment: until
+ * the team verifies it, the page says it was received, never that it was paid.
+ */
+function heroCopy(paymentStatus: string): { title: string; lead: string } {
+  switch (paymentStatus) {
+    case "PAID":
+      return {
+        title: "¡Pago confirmado!",
+        lead: "Verificamos tu pago y tu pedido ya pasa a preparación.",
+      };
+    case "SUBMITTED":
+    case "VERIFYING":
+    case "PENDING_VERIFICATION":
+      return {
+        title: "Recibimos tu comprobante",
+        lead: "Nuestro equipo lo está verificando. Te avisaremos apenas quede confirmado.",
+      };
+    default:
+      return {
+        title: "¡Pedido registrado!",
+        lead: "Completa el pago para que empecemos a preparar tu pedido.",
+      };
+  }
 }
 
 export function CheckoutConfirmationView({
@@ -24,6 +96,7 @@ export function CheckoutConfirmationView({
   const {
     orderNumber,
     subtotalCents,
+    discountCents,
     shippingCents,
     totalCents,
     customerEmail,
@@ -34,6 +107,7 @@ export function CheckoutConfirmationView({
     items,
   } = confirmation;
 
+  const prefersReducedMotion = useReducedMotion();
   const [orderStatus, setOrderStatus] = useState<string>(confirmation.status);
   const [paymentStatus, setPaymentStatus] = useState<string>(
     paymentInstructions?.paymentStatus ?? confirmation.paymentStatus
@@ -45,10 +119,17 @@ export function CheckoutConfirmationView({
 
   const modalTitleId = useId();
   const modalDescId = useId();
+  const reasonSelectId = useId();
 
   const isCancelled = orderStatus === "CANCELLED" || orderStatus === "REFUNDED";
   const isEligibleForCancellation =
     !isCancelled && orderStatus === "PENDING" && paymentStatus === "UNPAID";
+  const hero = heroCopy(paymentStatus);
+  const totalLabel = isCancelled
+    ? "Total"
+    : paymentStatus === "PAID"
+      ? "Total pagado"
+      : "Total a pagar";
 
   const handleOpenModal = () => {
     setCancelError(null);
@@ -97,290 +178,317 @@ export function CheckoutConfirmationView({
   };
 
   return (
-    <div className={styles.container} data-testid="checkout-confirmation-view">
-      {/* Header Banner */}
-      <div className={styles.successHeaderCard}>
-        {isCancelled ? (
-          <>
-            <Icon icon={XCircle} size="xl" className={styles.cancelledIcon} aria-hidden="true" />
-            <h1 className={styles.title}>Pedido Cancelado</h1>
-            <div
-              className={`${styles.orderNumberBadge} ${styles.cancelledBadge}`}
-              data-testid="confirmation-order-number"
-            >
-              <span>Pedido #{orderNumber}</span>
-            </div>
-            <p className={styles.statusMessage} data-testid="confirmation-cancelled-message">
-              Este pedido ha sido cancelado. Si deseas adquirir estos productos, puedes realizar una
-              nueva orden desde el catálogo.
-            </p>
-          </>
-        ) : (
-          <>
-            <Icon icon={CheckCircle2} size="xl" className={styles.successIcon} aria-hidden="true" />
-            <h1 className={styles.title}>¡Pedido Registrado con Éxito!</h1>
-            <div className={styles.orderNumberBadge} data-testid="confirmation-order-number">
-              <span>Pedido #{orderNumber}</span>
-            </div>
-            <p className={styles.statusMessage}>
-              Hemos registrado tu compra en nuestro sistema. Hemos enviado una confirmación a{" "}
-              <strong>{customerEmail}</strong>.
-            </p>
-          </>
-        )}
-      </div>
-
-      <div className={styles.grid}>
-        {/* Payment Card / Status Card (Hidden or disabled if cancelled) */}
-        {isCancelled ? (
-          <div className={styles.nextStepsCard} data-testid="confirmation-payment-status-card">
-            <div className={styles.cancelledPaymentBadge} data-testid="confirmation-payment-status">
-              <Icon icon={XCircle} size="sm" aria-hidden="true" />
-              <span>Estado: Cancelado</span>
-            </div>
-            <p className={styles.nextStepsText}>
-              El pedido ha sido cancelado y los productos reservados han sido liberados.
-            </p>
-          </div>
-        ) : paymentInstructions ? (
-          <ManualPaymentCard instructions={paymentInstructions} />
-        ) : (
-          <div className={styles.nextStepsCard} data-testid="confirmation-payment-status-card">
-            <div className={styles.paymentBadge} data-testid="confirmation-payment-status">
-              <Icon icon={Clock} size="sm" aria-hidden="true" />
-              <span>Estado de Pago: Pendiente de Pago</span>
-            </div>
-            <p className={styles.nextStepsText}>
-              Tu pedido se encuentra registrado correctamente. El método seleccionado es{" "}
-              <strong>{paymentMethodName}</strong>. En breve recibirás la coordinación y validación
-              de tu comprobante a través de nuestros canales oficiales de Gamer Perú.
-            </p>
-          </div>
-        )}
-
-        {/* 2-Column Details Grid */}
-        <div className={styles.gridTwoCol}>
-          {/* Delivery & Contact Card */}
-          <div className={styles.card} data-testid="confirmation-delivery-card">
-            <h2 className={styles.cardTitle}>
-              <Icon icon={MapPin} size="sm" aria-hidden="true" style={{ marginRight: "6px" }} />
-              Datos de Entrega
-            </h2>
-            <div className={styles.infoList}>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>Destinatario:</span>
-                <span>{deliveryAddress.recipientName}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>Teléfono:</span>
-                <span>{deliveryAddress.phone || customerPhone}</span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>Dirección:</span>
-                <span>
-                  {deliveryAddress.streetAddress}
-                  {deliveryAddress.apartmentSuite ? `, ${deliveryAddress.apartmentSuite}` : ""}
+    <motion.div
+      className={styles.container}
+      data-testid="checkout-confirmation-view"
+      variants={PAGE_VARIANTS}
+      initial={prefersReducedMotion ? false : "hidden"}
+      animate="visible"
+    >
+      <div className={styles.layout}>
+        <motion.div className={styles.mainColumn} variants={COLUMN_VARIANTS}>
+          <section className={`${styles.card} ${styles.hero}`} aria-live="polite">
+            {isCancelled ? (
+              <>
+                <span className={styles.cancelMark}>
+                  <Icon icon={XCircle} size="xl" aria-hidden="true" />
                 </span>
-              </div>
-              <div className={styles.infoRow}>
-                <span className={styles.infoLabel}>Ubicación:</span>
-                <span>
-                  {deliveryAddress.district}, {deliveryAddress.province},{" "}
-                  {deliveryAddress.department}
-                </span>
-              </div>
-              {deliveryAddress.referenceNotes && (
-                <div className={styles.infoRow}>
-                  <span className={styles.infoLabel}>Referencia:</span>
-                  <span>{deliveryAddress.referenceNotes}</span>
+                <h1 className={styles.title}>Pedido Cancelado</h1>
+                <div
+                  className={`${styles.orderNumberBadge} ${styles.cancelledBadge}`}
+                  data-testid="confirmation-order-number"
+                >
+                  <span>Pedido #{orderNumber}</span>
                 </div>
-              )}
-              <div
-                className={styles.infoRow}
-                style={{
-                  marginTop: "8px",
-                  paddingTop: "8px",
-                  borderTop: "1px solid var(--color-border-primary)",
-                }}
+                <p className={styles.statusMessage} data-testid="confirmation-cancelled-message">
+                  Este pedido ha sido cancelado. Si deseas adquirir estos productos, puedes realizar
+                  una nueva orden desde el catálogo.
+                </p>
+              </>
+            ) : (
+              <>
+                <SuccessMark />
+                <h1 className={styles.title}>{hero.title}</h1>
+                <div className={styles.orderNumberBadge} data-testid="confirmation-order-number">
+                  <span>Pedido #{orderNumber}</span>
+                </div>
+                <p className={styles.statusMessage}>
+                  {hero.lead} Enviamos la confirmación a <strong>{customerEmail}</strong>.
+                </p>
+              </>
+            )}
+          </section>
+
+          {isCancelled ? (
+            <div
+              className={`${styles.card} ${styles.statusRow}`}
+              data-testid="confirmation-payment-status-card"
+            >
+              <span
+                className={`${styles.statusPill} ${styles.statusCancelled}`}
+                data-testid="confirmation-payment-status"
               >
-                <span className={styles.infoLabel}>Método de Envío:</span>
-                <span data-testid="confirmation-shipping-method">{shippingMethodName}</span>
-              </div>
+                <Icon icon={XCircle} size="sm" aria-hidden="true" />
+                Estado: Cancelado
+              </span>
+              <p className={styles.bodyText}>
+                El pedido ha sido cancelado y los productos reservados han sido liberados.
+              </p>
             </div>
+          ) : paymentInstructions ? (
+            <ManualPaymentCard
+              instructions={paymentInstructions}
+              onStatusChange={setPaymentStatus}
+            />
+          ) : (
+            <div
+              className={`${styles.card} ${styles.statusRow}`}
+              data-testid="confirmation-payment-status-card"
+            >
+              <span
+                className={`${styles.statusPill} ${styles.statusPending}`}
+                data-testid="confirmation-payment-status"
+              >
+                <Icon icon={Clock} size="sm" aria-hidden="true" />
+                Estado de Pago: Pendiente de Pago
+              </span>
+              <p className={styles.bodyText}>
+                Tu pedido se encuentra registrado correctamente. El método seleccionado es{" "}
+                <strong>{paymentMethodName}</strong>. En breve recibirás la coordinación y
+                validación de tu comprobante a través de nuestros canales oficiales de Gamer Perú.
+              </p>
+            </div>
+          )}
+
+          <div className={styles.actions}>
+            <DomeLink
+              href="/categorias/mouses"
+              tone="light"
+              className={styles.ghostButton}
+              data-testid="confirmation-continue-shopping"
+            >
+              Seguir explorando
+            </DomeLink>
+            <DomeLink
+              href="/cuenta/pedidos"
+              tone="light"
+              className={styles.ghostButton}
+              data-testid="confirmation-view-orders"
+            >
+              Ver mis pedidos
+            </DomeLink>
           </div>
 
-          {/* Purchased Items & Totals Card */}
-          <div className={styles.card} data-testid="confirmation-summary-card">
-            <h2 className={styles.cardTitle}>
-              <Icon icon={Package} size="sm" aria-hidden="true" style={{ marginRight: "6px" }} />
+          {isEligibleForCancellation && (
+            <div className={styles.cancelRow} data-testid="confirmation-cancellation-section">
+              <p className={styles.cancelPrompt}>¿Deseas anular esta compra antes de pagar?</p>
+              <button
+                type="button"
+                className={styles.cancelOrderButton}
+                onClick={handleOpenModal}
+                data-testid="confirmation-cancel-order-button"
+              >
+                Cancelar Pedido
+              </button>
+            </div>
+          )}
+        </motion.div>
+
+        <motion.aside
+          className={styles.summaryColumn}
+          variants={COLUMN_VARIANTS}
+          aria-label="Resumen del pedido"
+        >
+          <section className={styles.card} data-testid="confirmation-summary-card">
+            <h2 className={styles.summaryTitle}>
+              <Icon icon={Package} size="sm" aria-hidden="true" />
               Resumen de Productos
             </h2>
 
-            <div className={styles.itemsTable}>
+            <ul className={styles.itemsList}>
               {items.map((item, idx) => (
-                <div
+                <li
                   key={`${item.sku}-${idx}`}
                   className={styles.itemRow}
                   data-testid={`confirmation-item-${item.sku}`}
                 >
-                  <div>
-                    <div className={styles.itemName}>
-                      {item.productName} × {item.quantity}
+                  <div className={styles.itemMain}>
+                    <span className={styles.itemQty} aria-label={`Cantidad: ${item.quantity}`}>
+                      {item.quantity}×
+                    </span>
+                    <div>
+                      <div className={styles.itemName}>{item.productName}</div>
+                      <div className={styles.itemSku}>SKU: {item.sku}</div>
                     </div>
-                    <div className={styles.itemSku}>SKU: {item.sku}</div>
                   </div>
-                  <div className={styles.itemTotal}>{formatCurrency(item.lineTotalCents)}</div>
-                </div>
+                  <span className={styles.itemTotal}>{formatCurrency(item.lineTotalCents)}</span>
+                </li>
               ))}
-            </div>
+            </ul>
 
-            <div className={styles.pricingSection}>
-              <div className={styles.infoRow}>
+            <div className={styles.pricing}>
+              <div className={styles.priceRow}>
                 <span>Subtotal</span>
                 <span>{formatCurrency(subtotalCents)}</span>
               </div>
-              <div className={styles.infoRow}>
+              {discountCents > 0 && (
+                <div className={styles.priceRow}>
+                  <span>Descuento</span>
+                  <span>−{formatCurrency(discountCents)}</span>
+                </div>
+              )}
+              <div className={styles.priceRow}>
                 <span>Envío</span>
                 <span>{formatCurrency(shippingCents)}</span>
               </div>
               <div className={styles.totalRow}>
-                <span className={styles.totalLabel}>Total Pagado / Por Pagar</span>
+                <span className={styles.totalLabel}>{totalLabel}</span>
                 <span className={styles.totalValue} data-testid="confirmation-total-value">
                   {formatCurrency(totalCents)}
                 </span>
               </div>
             </div>
-          </div>
-        </div>
+          </section>
 
-        {/* Customer Cancellation Trigger (Only when eligible) */}
-        {isEligibleForCancellation && (
-          <div
-            className={styles.cancellationSection}
-            data-testid="confirmation-cancellation-section"
-          >
-            <p className={styles.infoLabel}>¿Deseas anular esta compra antes de pagar?</p>
-            <button
-              type="button"
-              className={styles.cancelOrderButton}
-              onClick={handleOpenModal}
-              data-testid="confirmation-cancel-order-button"
-            >
-              Cancelar Pedido
-            </button>
-          </div>
-        )}
-
-        {/* Navigation Action Buttons */}
-        <div className={styles.actionButtons}>
-          <Link
-            href="/categorias/mouses"
-            className={styles.primaryLinkButton}
-            data-testid="confirmation-continue-shopping"
-          >
-            Seguir explorando catálogo
-          </Link>
-          <Link
-            href="/cuenta/pedidos"
-            className={styles.secondaryLinkButton}
-            data-testid="confirmation-view-orders"
-          >
-            Ver mis pedidos
-          </Link>
-        </div>
+          <section className={styles.card} data-testid="confirmation-delivery-card">
+            <h2 className={styles.summaryTitle}>
+              <Icon icon={MapPin} size="sm" aria-hidden="true" />
+              Datos de Entrega
+            </h2>
+            <dl className={styles.infoList}>
+              <div className={styles.infoRow}>
+                <dt className={styles.infoLabel}>Destinatario</dt>
+                <dd className={styles.infoValue}>{deliveryAddress.recipientName}</dd>
+              </div>
+              <div className={styles.infoRow}>
+                <dt className={styles.infoLabel}>Teléfono</dt>
+                <dd className={styles.infoValue}>{deliveryAddress.phone || customerPhone}</dd>
+              </div>
+              <div className={styles.infoRow}>
+                <dt className={styles.infoLabel}>Dirección</dt>
+                <dd className={styles.infoValue}>
+                  {deliveryAddress.streetAddress}
+                  {deliveryAddress.apartmentSuite ? `, ${deliveryAddress.apartmentSuite}` : ""}
+                </dd>
+              </div>
+              <div className={styles.infoRow}>
+                <dt className={styles.infoLabel}>Ubicación</dt>
+                <dd className={styles.infoValue}>
+                  {deliveryAddress.district}, {deliveryAddress.province},{" "}
+                  {deliveryAddress.department}
+                </dd>
+              </div>
+              {deliveryAddress.referenceNotes && (
+                <div className={styles.infoRow}>
+                  <dt className={styles.infoLabel}>Referencia</dt>
+                  <dd className={styles.infoValue}>{deliveryAddress.referenceNotes}</dd>
+                </div>
+              )}
+              <div className={styles.infoDivider} aria-hidden="true" />
+              <div className={styles.infoRow}>
+                <dt className={styles.infoLabel}>Envío</dt>
+                <dd className={styles.infoValue} data-testid="confirmation-shipping-method">
+                  {shippingMethodName}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </motion.aside>
       </div>
 
-      {/* Accessible Cancellation Dialog Modal */}
-      {isModalOpen && (
-        <div
-          className={styles.modalBackdrop}
-          onClick={handleCloseModal}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={modalTitleId}
-          aria-describedby={modalDescId}
-        >
-          <div
-            className={styles.modalContent}
-            onClick={(e) => e.stopPropagation()}
-            data-testid="cancel-order-modal"
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div
+            className={styles.modalBackdrop}
+            onClick={handleCloseModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={modalTitleId}
+            aria-describedby={modalDescId}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Icon
-                icon={AlertTriangle}
-                size="md"
-                style={{ color: "#faad14" }}
-                aria-hidden="true"
-              />
-              <h2 id={modalTitleId} className={styles.modalTitle}>
-                ¿Deseas cancelar tu pedido #{orderNumber}?
-              </h2>
-            </div>
+            <motion.div
+              className={styles.modalContent}
+              onClick={(e) => e.stopPropagation()}
+              data-testid="cancel-order-modal"
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.22, ease: EASE }}
+            >
+              <div className={styles.modalHead}>
+                <Icon
+                  icon={AlertTriangle}
+                  size="md"
+                  className={styles.modalIcon}
+                  aria-hidden="true"
+                />
+                <h2 id={modalTitleId} className={styles.modalTitle}>
+                  ¿Deseas cancelar tu pedido #{orderNumber}?
+                </h2>
+              </div>
 
-            <p id={modalDescId} className={styles.modalDescription}>
-              Al cancelar este pedido, los productos reservados serán liberados inmediatamente para
-              otros compradores. Esta acción es definitiva.
-            </p>
-
-            <div>
-              <label
-                htmlFor="cancel-reason-select"
-                style={{
-                  display: "block",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  marginBottom: "4px",
-                  color: "var(--color-text-secondary)",
-                }}
-              >
-                Motivo de cancelación:
-              </label>
-              <select
-                id="cancel-reason-select"
-                className={styles.modalSelect}
-                value={selectedReason}
-                onChange={(e) => setSelectedReason(e.target.value)}
-                disabled={isCancelling}
-                data-testid="cancel-order-reason-select"
-              >
-                <option value="Cambié de opinión">Cambié de opinión</option>
-                <option value="Deseo modificar los productos">Deseo modificar los productos</option>
-                <option value="Deseo cambiar el método de pago">
-                  Deseo cambiar el método de pago
-                </option>
-                <option value="Otro motivo">Otro motivo</option>
-              </select>
-            </div>
-
-            {cancelError && (
-              <p className={styles.modalErrorText} data-testid="cancel-order-error">
-                {cancelError}
+              <p id={modalDescId} className={styles.modalDescription}>
+                Al cancelar este pedido, los productos reservados serán liberados inmediatamente
+                para otros compradores. Esta acción es definitiva.
               </p>
-            )}
 
-            <div className={styles.modalActions}>
-              <button
-                type="button"
-                className={styles.modalDismissButton}
-                onClick={handleCloseModal}
-                disabled={isCancelling}
-                data-testid="dismiss-cancel-order-button"
-              >
-                Mantener pedido
-              </button>
-              <button
-                type="button"
-                className={styles.modalCancelConfirmButton}
-                onClick={handleConfirmCancel}
-                disabled={isCancelling}
-                data-testid="confirm-cancel-order-button"
-              >
-                {isCancelling ? "Cancelando..." : "Sí, cancelar pedido"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+              <div>
+                <label htmlFor={reasonSelectId} className={styles.modalLabel}>
+                  Motivo de cancelación:
+                </label>
+                <select
+                  id={reasonSelectId}
+                  className={styles.modalSelect}
+                  value={selectedReason}
+                  onChange={(e) => setSelectedReason(e.target.value)}
+                  disabled={isCancelling}
+                  data-testid="cancel-order-reason-select"
+                >
+                  <option value="Cambié de opinión">Cambié de opinión</option>
+                  <option value="Deseo modificar los productos">
+                    Deseo modificar los productos
+                  </option>
+                  <option value="Deseo cambiar el método de pago">
+                    Deseo cambiar el método de pago
+                  </option>
+                  <option value="Otro motivo">Otro motivo</option>
+                </select>
+              </div>
+
+              {cancelError && (
+                <p className={styles.modalErrorText} data-testid="cancel-order-error">
+                  {cancelError}
+                </p>
+              )}
+
+              <div className={styles.modalActions}>
+                <button
+                  type="button"
+                  className={styles.modalDismissButton}
+                  onClick={handleCloseModal}
+                  disabled={isCancelling}
+                  data-testid="dismiss-cancel-order-button"
+                >
+                  Mantener pedido
+                </button>
+                <button
+                  type="button"
+                  className={styles.modalCancelConfirmButton}
+                  onClick={handleConfirmCancel}
+                  disabled={isCancelling}
+                  data-testid="confirm-cancel-order-button"
+                >
+                  {isCancelling ? "Cancelando..." : "Sí, cancelar pedido"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
