@@ -28,3 +28,20 @@ export const paymentStatusEnum = pgEnum("payment_status", [
 ]);
 
 export type PaymentStatus = (typeof paymentStatusEnum.enumValues)[number];
+
+/**
+ * Gamer Perú — Canonical Payment Verification Decision Enum
+ *
+ * - APPROVED: Staff confirmed the funds; payment becomes PAID.
+ * - REJECTED_RETRYABLE: Submission unusable (e.g. illegible voucher); payment returns to UNPAID
+ *   and the customer may resubmit within the grace window.
+ * - REJECTED_TERMINAL: Funds not received; payment becomes REJECTED and the order is cancelled.
+ */
+export const paymentVerificationDecisionEnum = pgEnum("payment_verification_decision", [
+  "APPROVED",
+  "REJECTED_RETRYABLE",
+  "REJECTED_TERMINAL",
+]);
+
+export type PaymentVerificationDecision =
+  (typeof paymentVerificationDecisionEnum.enumValues)[number];

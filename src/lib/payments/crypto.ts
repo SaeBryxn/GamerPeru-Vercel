@@ -57,3 +57,32 @@ export function computePaymentSubmissionFingerprint(
     .update(`payment_submission_intent:${content}`)
     .digest("hex");
 }
+
+/**
+ * Computes a domain-separated HMAC-SHA256 request fingerprint for a staff verification decision.
+ * Binds the exact submission being decided, so a retried request can never land on a newer voucher.
+ */
+export function computePaymentVerificationFingerprint(
+  params: {
+    paymentId: string;
+    submissionId: string;
+    decision: string;
+    normalizedReason: string | null;
+    normalizedNotes: string | null;
+    authorityBindingDigest: string;
+  },
+  hmacSecret: string
+): string {
+  const content = [
+    params.paymentId,
+    params.submissionId,
+    params.decision,
+    params.normalizedReason ?? "NO_REASON",
+    params.normalizedNotes ?? "NO_NOTES",
+    params.authorityBindingDigest,
+  ].join("|");
+
+  return createHmac("sha256", hmacSecret)
+    .update(`payment_verification_intent:${content}`)
+    .digest("hex");
+}

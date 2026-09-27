@@ -465,10 +465,10 @@ describe("GP-023 / CHK1 — Admin Dashboard Real PostgreSQL Physical Live Scenar
           (${order2Id}, 'GP023-ORD-Q2', 'test.gp023.q2@gamerperu.pe', '999111222', 'PENDING', 7000, 7000, 'PEN', ${TEST_NOW});
       `;
       await tx`
-        INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, currency, status, created_at)
+        INSERT INTO payments (id, order_id, payment_method_code, instruction_version_id, amount_cents, currency, status, verification_claimed_at, created_at)
         VALUES
-          (${payment1Id}, ${order1Id}, ${paymentMethodCode}, ${instructionVersionId}, 5000, 'PEN', 'SUBMITTED', ${TEST_NOW}),
-          (${payment2Id}, ${order2Id}, ${paymentMethodCode}, ${instructionVersionId}, 7000, 'PEN', 'VERIFYING', ${TEST_NOW});
+          (${payment1Id}, ${order1Id}, ${paymentMethodCode}, ${instructionVersionId}, 5000, 'PEN', 'SUBMITTED', NULL, ${TEST_NOW}),
+          (${payment2Id}, ${order2Id}, ${paymentMethodCode}, ${instructionVersionId}, 7000, 'PEN', 'VERIFYING', ${TEST_NOW}, ${TEST_NOW});
       `;
     });
 

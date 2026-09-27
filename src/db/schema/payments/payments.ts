@@ -11,6 +11,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { generateUuidV7 } from "../../utils/uuid";
+import { authUsers } from "../identity/auth-users";
 import { orders } from "../orders/orders";
 import { paymentStatusEnum } from "./enums";
 import { paymentInstructionVersions } from "./payment-instructions";
@@ -31,6 +32,8 @@ import { paymentMethodConfigurations } from "./payment-methods";
  * 5. Initial Status: Default 'UNPAID'.
  * 6. Money: Integer minor units in PEN cents, non-negative.
  * 7. Refund Check: refunded_amount_cents <= amount_cents.
+ * 8. Verification Claim: a VERIFYING payment is claimed by exactly one reviewer
+ *    (verification_claimed_at is set iff status = VERIFYING); the claimant FK is ON DELETE SET NULL.
  */
 export const payments = pgTable(
   "payments",
@@ -51,6 +54,8 @@ export const payments = pgTable(
     currency: varchar("currency", { length: 3 }).notNull().default("PEN"),
     status: paymentStatusEnum("status").notNull().default("UNPAID"),
     resubmissionGraceExpiresAt: timestamp("resubmission_grace_expires_at", { withTimezone: true }),
+    verificationClaimedByAuthUserId: uuid("verification_claimed_by_auth_user_id"),
+    verificationClaimedAt: timestamp("verification_claimed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -69,7 +74,22 @@ export const payments = pgTable(
       "payments_refunded_amount_lte_total",
       sql`${table.refundedAmountCents} <= ${table.amountCents}`
     ),
+    foreignKey({
+      name: "payments_verification_claimed_by_auth_user_id_fk",
+      columns: [table.verificationClaimedByAuthUserId],
+      foreignColumns: [authUsers.id],
+    }).onDelete("set null"),
+    // A VERIFYING payment always belongs to exactly one reviewer, and no other state keeps a claim.
+    check(
+      "payments_verification_claim_consistency",
+      sql`(${table.status} = 'VERIFYING') = (${table.verificationClaimedAt} IS NOT NULL)`
+    ),
     index("payments_status_created_at_idx").on(table.status, table.createdAt),
+    index("payments_verification_queue_idx").on(
+      table.status,
+      table.resubmissionGraceExpiresAt,
+      table.createdAt
+    ),
   ]
 );
 

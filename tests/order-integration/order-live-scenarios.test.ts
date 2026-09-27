@@ -1651,7 +1651,7 @@ describe("GP-020 — Real Local PostgreSQL Order Management, Cancellation & Refu
     const { orderNumber } = await createTestOrder({ isAuth: true });
     const [dbOrder] = await sqlClient`SELECT id FROM orders WHERE order_number = ${orderNumber}`;
 
-    await sqlClient`UPDATE payments SET status = 'VERIFYING' WHERE order_id = ${dbOrder!.id}`;
+    await sqlClient`UPDATE payments SET status = 'VERIFYING', verification_claimed_at = NOW() WHERE order_id = ${dbOrder!.id}`;
 
     const cancelRes = await cancelUnpaidOrder({
       orderNumber,

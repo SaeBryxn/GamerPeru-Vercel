@@ -40,6 +40,7 @@ export * from "./payments/guest-payment-access-grants";
 export * from "./payments/payment-proof-upload-intents";
 export * from "./payments/payment-submissions";
 export * from "./payments/refunds";
+export * from "./payments/payment-verifications";
 export * from "./idempotency";
 export * from "./inventory/enums";
 export * from "./inventory/inventory-locations";
