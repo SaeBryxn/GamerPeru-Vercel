@@ -42,6 +42,15 @@ vi.mock("@/lib/account/profile", () => ({
   getCurrentCustomerProfile: () => mockGetCurrentCustomerProfile(),
 }));
 
+vi.mock("@/lib/account/orders", () => ({
+  getCurrentCustomerOrders: () => Promise.resolve({ status: "READY", orders: [] }),
+}));
+
+vi.mock("@/lib/account/addresses", () => ({
+  getCurrentCustomerAddresses: () =>
+    Promise.resolve({ status: "READY", addresses: [], defaultShippingAddressId: null }),
+}));
+
 describe("GP-015 AUTH9-A — Account Logout & Session Lifecycle Suite", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -140,7 +149,7 @@ describe("GP-015 AUTH9-A — Account Logout & Session Lifecycle Suite", () => {
       status: "UNAUTHENTICATED",
     });
 
-    const { default: CuentaPage } = await import("@/app/cuenta/page");
+    const { default: CuentaPage } = await import("@/app/(storefront)/cuenta/page");
 
     try {
       await CuentaPage();
@@ -169,7 +178,7 @@ describe("GP-015 AUTH9-A — Account Logout & Session Lifecycle Suite", () => {
       },
     });
 
-    const { default: CuentaPage } = await import("@/app/cuenta/page");
+    const { default: CuentaPage } = await import("@/app/(storefront)/cuenta/page");
     const jsx = await CuentaPage();
 
     expect(mockGetCurrentCustomerProfile).toHaveBeenCalledTimes(1);
