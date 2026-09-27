@@ -4,6 +4,7 @@ import { inventoryReservationExpirationJob } from "@/lib/inngest/functions/inven
 import { aiResearchJob } from "@/lib/inngest/functions/ai-research-job";
 import { aiResearchDispatchReconciliation } from "@/lib/inngest/functions/ai-research-dispatch-reconciliation";
 import { aiResearchLeaseRecovery } from "@/lib/inngest/functions/ai-research-lease-recovery";
+import { outboxEmailDispatcher } from "@/lib/inngest/functions/outbox-dispatcher";
 
 /**
  * Gamer Perú — Inngest Serving Endpoint
@@ -17,5 +18,6 @@ export const { GET, POST, PUT } = serve({
     aiResearchJob,
     aiResearchDispatchReconciliation,
     aiResearchLeaseRecovery,
+    outboxEmailDispatcher,
   ],
 });

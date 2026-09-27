@@ -25,6 +25,7 @@
     "test:order:live": "vitest run --config vitest.order.integration.config.ts",
     "test:inventory:live": "vitest run --config vitest.inventory.integration.config.ts",
     "test:admin:live": "vitest run --config vitest.admin.integration.config.ts",
+    "test:notifications:live": "vitest run --config vitest.notifications.integration.config.ts",
     "test:cart:e2e": "playwright test --config=playwright.cart.config.ts",
     "test:checkout:e2e": "playwright test --config=playwright.checkout.config.ts",
     "test:payment:e2e": "playwright test --config=playwright.payment.config.ts",
