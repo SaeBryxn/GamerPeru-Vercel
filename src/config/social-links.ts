@@ -25,7 +25,7 @@ export const SOCIAL_LINKS: SocialLink[] = [
 ];
 
 export const PROMO_PILL = {
-  label: "GET 5% OFF",
+  label: "5% DE DESCUENTO",
   /** Landing page or form that actually grants the discount. */
   href: "",
 };
