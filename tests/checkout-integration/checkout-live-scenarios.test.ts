@@ -234,7 +234,7 @@ describe("GP-018 / CHK5 — Real Local PostgreSQL Checkout Integration & Concurr
     // 2. Catalog
     await sqlClient`
       INSERT INTO brands (id, name, slug, status, created_at, updated_at)
-      VALUES (${brandId}, 'Test Brand', 'test-brand-chk5', 'PUBLISHED', NOW(), NOW())
+      VALUES (${brandId}, 'Test Brand CHK5', 'test-brand-chk5', 'PUBLISHED', NOW(), NOW())
       ON CONFLICT (id) DO NOTHING;
     `;
 
