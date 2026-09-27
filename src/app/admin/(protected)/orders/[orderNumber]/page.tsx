@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
+import { Stagger, StaggerItem } from "@/components/admin/ui";
 import { getAdminOrderDetail } from "@/lib/admin/orders/reader";
 import type { AdminOrderDetail, OrderIntegrityIssue } from "@/lib/admin/orders/types";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
@@ -73,10 +74,12 @@ function Section({
   id?: string;
 }) {
   return (
-    <section className={styles.section} aria-label={title} id={id}>
-      <h2>{title}</h2>
-      {children}
-    </section>
+    <StaggerItem>
+      <section className={styles.section} aria-label={title} id={id}>
+        <h2>{title}</h2>
+        {children}
+      </section>
+    </StaggerItem>
   );
 }
 
@@ -91,8 +94,8 @@ function DetailBody({ detail }: { detail: AdminOrderDetail }) {
   );
 
   return (
-    <div className={styles.page}>
-      <div className={styles.pageHeading}>
+    <Stagger className={styles.page}>
+      <StaggerItem className={styles.pageHeading}>
         <Link href="/admin/orders" className={styles.backLink}>
           Volver a pedidos
         </Link>
@@ -103,27 +106,31 @@ function DetailBody({ detail }: { detail: AdminOrderDetail }) {
           </div>
           <Status value={order.status} label={orderLabels[order.status]} />
         </div>
-      </div>
+      </StaggerItem>
 
       {detail.integrityIssues.length > 0 && (
-        <section
-          className={styles.integrityAlert}
-          role="alert"
-          aria-label="Advertencias del pedido"
-        >
-          <strong>Este pedido requiere revisión de datos</strong>
-          <ul>
-            {detail.integrityIssues.map((issue) => (
-              <li key={issue}>{integrityLabels[issue]}</li>
-            ))}
-          </ul>
-        </section>
+        <StaggerItem>
+          <section
+            className={styles.integrityAlert}
+            role="alert"
+            aria-label="Advertencias del pedido"
+          >
+            <strong>Este pedido requiere revisión de datos</strong>
+            <ul>
+              {detail.integrityIssues.map((issue) => (
+                <li key={issue}>{integrityLabels[issue]}</li>
+              ))}
+            </ul>
+          </section>
+        </StaggerItem>
       )}
 
-      <OrderFulfillment key={`fulfillment:${order.orderNumber}`} detail={detail} />
+      <StaggerItem>
+        <OrderFulfillment key={`fulfillment:${order.orderNumber}`} detail={detail} />
+      </StaggerItem>
 
       <div className={styles.contentGrid}>
-        <div className={styles.mainColumn}>
+        <Stagger className={styles.mainColumn}>
           <Section title="Resumen del pedido">
             <dl className={styles.factGrid}>
               <Fact label="Número">{order.orderNumber}</Fact>
@@ -246,9 +253,9 @@ function DetailBody({ detail }: { detail: AdminOrderDetail }) {
               </div>
             )}
           </Section>
-        </div>
+        </Stagger>
 
-        <div className={styles.sideColumn}>
+        <Stagger className={styles.sideColumn}>
           <Section title="Contacto de compra">
             <dl className={styles.factGrid}>
               <Fact label="Correo electrónico">{contact.customerEmail}</Fact>
@@ -334,17 +341,22 @@ function DetailBody({ detail }: { detail: AdminOrderDetail }) {
               </div>
             )}
           </Section>
-        </div>
+        </Stagger>
       </div>
 
-      <OrderActivity
-        key={`activity:${order.orderNumber}`}
-        orderNumber={order.orderNumber}
-        initialNotes={detail.notes}
-        initialTimeline={detail.timeline}
-      />
-      <OrderCancellation key={`cancellation:${order.orderNumber}`} detail={detail} />
-    </div>
+      <StaggerItem>
+        <OrderActivity
+          key={`activity:${order.orderNumber}`}
+          orderNumber={order.orderNumber}
+          initialNotes={detail.notes}
+          initialTimeline={detail.timeline}
+        />
+      </StaggerItem>
+      {/* The native dialog opens in the top layer, so this wrapper never offsets it. */}
+      <StaggerItem>
+        <OrderCancellation key={`cancellation:${order.orderNumber}`} detail={detail} />
+      </StaggerItem>
+    </Stagger>
   );
 }
 

@@ -1,7 +1,8 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-6);
+  max-width: 1320px;
   min-width: 0;
 }
 
@@ -9,21 +10,20 @@
   margin: 0;
   color: var(--color-text-primary);
   font-family: var(--font-heading);
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 
 .pageHeader p {
-  margin: 0.3rem 0 0;
-  color: var(--color-text-secondary);
-  font-size: 0.875rem;
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-.filterPanel,
 .tableScroll,
-.orderCard,
-.statePanel {
+.orderCard {
   background: var(--color-surface-card);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--admin-card-radius);
@@ -31,7 +31,8 @@
 }
 
 .filterPanel {
-  padding: 1.25rem;
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .sectionHeading {
@@ -41,16 +42,17 @@
 .sectionHeading h2,
 .resultsHeader h2 {
   margin: 0;
-  font-family: var(--font-heading);
-  font-size: 1rem;
-  font-weight: 700;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .sectionHeading p,
 .resultsHeader p {
-  margin: 0.25rem 0 0;
-  color: var(--color-text-secondary);
-  font-size: 0.8125rem;
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
 }
 
 .filterForm {
@@ -68,8 +70,8 @@
 }
 
 .field label {
-  color: var(--color-text-secondary);
-  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -77,11 +79,14 @@
 .field select {
   width: 100%;
   min-width: 0;
-  min-height: 44px;
+  min-height: 40px;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border-control);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
   background: var(--color-surface-card);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
   color: var(--color-text-primary);
   font: inherit;
   font-size: 0.875rem;
@@ -91,8 +96,13 @@
   color: var(--color-text-muted);
 }
 
-.field input:focus-visible,
-.field select:focus-visible,
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px var(--admin-accent-soft);
+}
+
 .primaryButton:focus-visible,
 .secondaryButton:focus-visible {
   outline: 2px solid var(--color-border-focus);
@@ -130,10 +140,10 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 44px;
+  min-height: 40px;
   padding: 0.55rem 1rem;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-heading);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
   font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.2;
@@ -160,7 +170,7 @@
 }
 
 .secondaryButton:hover {
-  background: var(--color-surface-secondary);
+  border-color: var(--color-border-strong);
 }
 
 .appliedFilters {
@@ -229,16 +239,16 @@
 }
 
 .table th {
-  padding: 0.8rem 0.625rem;
-  background: var(--color-surface-secondary);
-  border-bottom: 1px solid var(--color-border-default);
-  color: var(--color-text-secondary);
-  font-weight: 700;
+  padding: 0.85rem 0.75rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
 .table td {
-  padding: 0.75rem 0.625rem;
+  padding: 0.85rem 0.75rem;
   border-bottom: 1px solid var(--color-border-subtle);
   vertical-align: top;
 }
@@ -247,8 +257,12 @@
   border-bottom: 0;
 }
 
+.table tbody tr {
+  transition: background-color 150ms ease;
+}
+
 .table tbody tr:hover {
-  background: var(--color-surface-secondary);
+  background: var(--admin-accent-soft);
 }
 
 .table td:nth-child(2),
@@ -272,8 +286,12 @@
   min-height: 44px;
   color: var(--color-text-primary);
   font-family: var(--font-mono);
+  text-decoration: none;
+}
+
+.orderNumber a:hover {
   text-decoration: underline;
-  text-underline-offset: 0.15em;
+  text-underline-offset: 0.2em;
 }
 
 .orderNumber a:focus-visible {
@@ -411,18 +429,21 @@
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  padding: 2.5rem 1.25rem;
+  padding: 3.5rem 1.25rem;
+  border-top: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border-subtle);
   text-align: center;
 }
 
 .statePanel > svg {
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
 }
 
 .statePanel h2 {
   margin: 0;
-  font-family: var(--font-heading);
-  font-size: 1.125rem;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .statePanel p {
@@ -479,8 +500,8 @@
     gap: 1.25rem;
   }
 
-  .filterPanel {
-    padding: 1rem;
+  .pageHeader h1 {
+    font-size: 24px;
   }
 
   .filterForm {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import type { AdminNotePage, AdminTimelinePage, AdminTimelineType } from "@/lib/admin/orders/types";
 import { createAdminOrderNoteAction } from "@/lib/admin/orders/actions";
@@ -40,6 +41,13 @@ function prependUniqueEvents(
 
 export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: OrderActivityProps) {
   const router = useRouter();
+  const reduceMotion = useReducedMotion();
+  // Entries already on the page render as-is; only notes and events added afterwards animate in.
+  const entryMotion = {
+    initial: { opacity: 0, y: reduceMotion ? 0 : -4 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: reduceMotion ? 0 : 0.2, ease: [0.25, 0.1, 0.25, 1] as const },
+  };
   const [notes, setNotes] = useState(initialNotes.notes);
   const [noteCursor, setNoteCursor] = useState(initialNotes.olderCursor);
   const [timeline, setTimeline] = useState(initialTimeline.entries);
@@ -184,22 +192,25 @@ export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: Or
           <p className={styles.muted}>Todavía no hay eventos registrados.</p>
         ) : (
           <ol className={styles.timelineList}>
-            {timeline.map((entry) => (
-              <li
-                key={entry.id}
-                className={
-                  entry.type === "INTERNAL_NOTE" ? styles.timelineInternal : styles.timelineEntry
-                }
-              >
-                <div className={styles.timelineHeading}>
-                  <strong>{timelineLabels[entry.type]}</strong>
-                  <time dateTime={entry.timestamp}>{formatLimaDateTime(entry.timestamp)}</time>
-                </div>
-                {entry.type === "INTERNAL_NOTE" && entry.noteBody && (
-                  <p className={styles.multiline}>{entry.noteBody}</p>
-                )}
-              </li>
-            ))}
+            <AnimatePresence initial={false}>
+              {timeline.map((entry) => (
+                <motion.li
+                  key={entry.id}
+                  {...entryMotion}
+                  className={
+                    entry.type === "INTERNAL_NOTE" ? styles.timelineInternal : styles.timelineEntry
+                  }
+                >
+                  <div className={styles.timelineHeading}>
+                    <strong>{timelineLabels[entry.type]}</strong>
+                    <time dateTime={entry.timestamp}>{formatLimaDateTime(entry.timestamp)}</time>
+                  </div>
+                  {entry.type === "INTERNAL_NOTE" && entry.noteBody && (
+                    <p className={styles.multiline}>{entry.noteBody}</p>
+                  )}
+                </motion.li>
+              ))}
+            </AnimatePresence>
           </ol>
         )}
         {timelineCursor && (
@@ -257,12 +268,14 @@ export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: Or
           <p className={styles.muted}>No hay notas internas.</p>
         ) : (
           <div className={styles.noteList}>
-            {notes.map((note) => (
-              <article className={styles.noteCard} key={note.id}>
-                <time dateTime={note.createdAt}>{formatLimaDateTime(note.createdAt)}</time>
-                <p className={styles.multiline}>{note.body}</p>
-              </article>
-            ))}
+            <AnimatePresence initial={false}>
+              {notes.map((note) => (
+                <motion.article className={styles.noteCard} key={note.id} {...entryMotion}>
+                  <time dateTime={note.createdAt}>{formatLimaDateTime(note.createdAt)}</time>
+                  <p className={styles.multiline}>{note.body}</p>
+                </motion.article>
+              ))}
+            </AnimatePresence>
           </div>
         )}
         {noteCursor && (

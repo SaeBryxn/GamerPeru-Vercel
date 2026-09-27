@@ -2,11 +2,10 @@ import Link from "next/link";
 import { AlertCircle, Inbox, RotateCcw } from "lucide-react";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { getAdminOrderList } from "@/lib/admin/orders/reader";
-import type { AdminOrderListRow } from "@/lib/admin/orders/types";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
-import { formatCentsToPen } from "@/lib/admin/dashboard-format";
 import { OrderFilters } from "./order-filters";
-import { ORDER_STATUSES, PAYMENT_STATUSES, SHIPMENT_STATUSES } from "./order-status-options";
+import { orderLabels, paymentLabels, shipmentLabels } from "./order-list-format";
+import { OrderCards, OrderTable } from "./order-results";
 import styles from "./orders.module.css";
 
 export const dynamic = "force-dynamic";
@@ -17,56 +16,9 @@ interface OrdersPageProps {
   searchParams?: Promise<SearchParams>;
 }
 
-const orderLabels = Object.fromEntries(ORDER_STATUSES) as Record<
-  AdminOrderListRow["orderStatus"],
-  string
->;
-const paymentLabels = Object.fromEntries(PAYMENT_STATUSES) as Record<
-  AdminOrderListRow["paymentStatus"],
-  string
->;
-const shipmentLabels = {
-  ...Object.fromEntries(SHIPMENT_STATUSES),
-  MULTIPLE: "Múltiples envíos",
-} as Record<AdminOrderListRow["shipmentStatus"], string>;
-
-const limaDateTime = new Intl.DateTimeFormat("es-PE", {
-  timeZone: "America/Lima",
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
-
 function value(params: SearchParams, name: string): string {
   const raw = params[name];
   return typeof raw === "string" ? raw : "";
-}
-
-function formatMoney(row: AdminOrderListRow): string {
-  if (!Number.isSafeInteger(row.totalCents) || row.totalCents < 0) return "Importe no disponible";
-  if (row.currency === "PEN") return formatCentsToPen(BigInt(row.totalCents));
-  const cents = BigInt(row.totalCents);
-  const whole = (cents / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${row.currency} ${whole}.${(cents % 100n).toString().padStart(2, "0")}`;
-}
-
-function tone(status: string): "neutral" | "success" | "warning" | "danger" | "info" {
-  if (["CONFIRMED", "FULFILLED", "PAID", "DELIVERED"].includes(status)) return "success";
-  if (["CANCELLED", "EXPIRED", "REJECTED"].includes(status)) return "danger";
-  if (["PENDING", "UNPAID", "SUBMITTED"].includes(status)) return "warning";
-  if (["PROCESSING", "VERIFYING", "SHIPPED", "MULTIPLE"].includes(status)) return "info";
-  return "neutral";
-}
-
-function StatusBadge({ label, status }: { label: string; status: string }) {
-  return (
-    <span className={styles.badge} data-tone={tone(status)}>
-      {label}
-    </span>
-  );
 }
 
 function buildListHref(params: SearchParams, cursor?: string): string {
@@ -133,137 +85,6 @@ function StatePanel({
         </Link>
       )}
     </section>
-  );
-}
-
-function OrderTable({ rows }: { rows: AdminOrderListRow[] }) {
-  return (
-    <div className={styles.tableScroll} data-testid="orders-desktop-list">
-      <table className={styles.table}>
-        <caption>Listado de pedidos</caption>
-        <thead>
-          <tr>
-            <th scope="col">Pedido</th>
-            <th scope="col">Cliente</th>
-            <th scope="col">Estado</th>
-            <th scope="col">Pago</th>
-            <th scope="col">Envío</th>
-            <th scope="col">Total</th>
-            <th scope="col">Artículos</th>
-            <th scope="col">Método</th>
-            <th scope="col">Creado</th>
-            <th scope="col">Actividad</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.orderNumber} data-testid={`order-row-${row.orderNumber}`}>
-              <td className={styles.orderNumber}>
-                <Link href={`/admin/orders/${encodeURIComponent(row.orderNumber)}`}>
-                  {row.orderNumber}
-                </Link>
-              </td>
-              <td>
-                <span className={styles.customerEmail}>{row.customerEmailMasked}</span>
-                <span className={styles.secondaryText}>
-                  {row.accountLinkState === "LINKED" ? "Cuenta vinculada" : "Sin cuenta vinculada"}
-                </span>
-              </td>
-              <td>
-                <StatusBadge label={orderLabels[row.orderStatus]} status={row.orderStatus} />
-              </td>
-              <td>
-                <StatusBadge label={paymentLabels[row.paymentStatus]} status={row.paymentStatus} />
-              </td>
-              <td>
-                <StatusBadge
-                  label={shipmentLabels[row.shipmentStatus]}
-                  status={row.shipmentStatus}
-                />
-              </td>
-              <td>
-                <span className={styles.money}>{formatMoney(row)}</span>
-                {row.integrityIssues.length > 0 && (
-                  <span className={styles.integrityWarning}>Revisar datos</span>
-                )}
-              </td>
-              <td className={styles.numeric}>{row.unitCount}</td>
-              <td>{row.paymentMethod?.label ?? "Sin método registrado"}</td>
-              <td className={styles.dateTime}>{limaDateTime.format(new Date(row.createdAt))}</td>
-              <td className={styles.dateTime}>
-                {limaDateTime.format(new Date(row.latestOperationalAt))}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function OrderCards({ rows }: { rows: AdminOrderListRow[] }) {
-  return (
-    <div className={styles.cardList} data-testid="orders-mobile-list">
-      {rows.map((row) => (
-        <article
-          key={row.orderNumber}
-          className={styles.orderCard}
-          data-testid={`order-card-${row.orderNumber}`}
-        >
-          <div className={styles.cardHeader}>
-            <div>
-              <p className={styles.orderNumber}>
-                <Link href={`/admin/orders/${encodeURIComponent(row.orderNumber)}`}>
-                  {row.orderNumber}
-                </Link>
-              </p>
-              <p className={styles.customerEmail}>{row.customerEmailMasked}</p>
-            </div>
-            <StatusBadge label={orderLabels[row.orderStatus]} status={row.orderStatus} />
-          </div>
-          <dl className={styles.cardFacts}>
-            <div>
-              <dt>Pago</dt>
-              <dd>
-                <StatusBadge label={paymentLabels[row.paymentStatus]} status={row.paymentStatus} />
-              </dd>
-            </div>
-            <div>
-              <dt>Envío</dt>
-              <dd>
-                <StatusBadge
-                  label={shipmentLabels[row.shipmentStatus]}
-                  status={row.shipmentStatus}
-                />
-              </dd>
-            </div>
-            <div>
-              <dt>Total</dt>
-              <dd className={styles.money}>{formatMoney(row)}</dd>
-            </div>
-            <div>
-              <dt>Artículos</dt>
-              <dd>{row.unitCount}</dd>
-            </div>
-            <div>
-              <dt>Método</dt>
-              <dd>{row.paymentMethod?.label ?? "Sin método registrado"}</dd>
-            </div>
-            <div>
-              <dt>Creado</dt>
-              <dd>{limaDateTime.format(new Date(row.createdAt))}</dd>
-            </div>
-            <div>
-              <dt>Actividad</dt>
-              <dd>{limaDateTime.format(new Date(row.latestOperationalAt))}</dd>
-            </div>
-          </dl>
-          {row.integrityIssues.length > 0 && (
-            <p className={styles.integrityWarning}>Revisar datos del pedido</p>
-          )}
-        </article>
-      ))}
-    </div>
   );
 }
 
