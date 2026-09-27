@@ -131,31 +131,26 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
     },
   };
 
-  beforeAll(async () => {
-    process.env.CHECKOUT_HMAC_SECRET =
-      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-    process.env.CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE = locationCode;
-    process.env.CHECKOUT_RESERVATION_TTL_MINUTES = "30";
-    process.env.CHECKOUT_IDEMPOTENCY_TTL_MINUTES = "60";
-    process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES = "60";
-    process.env.R2_ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
-    process.env.R2_ACCESS_KEY_ID = "test-r2-access-key-id-12345";
-    process.env.R2_SECRET_ACCESS_KEY = "test-r2-secret-access-key-67890";
-
-    sqlClient = postgres(connectionString, { max: 10 });
-
-    // Clean any prior synthetic fixtures
+  // Runs before and after the suite: its checkout scenarios leave expired reservations on
+  // purposely skewed balances, which the global expiration sweep of the inventory suite would
+  // otherwise pick up.
+  async function cleanFixtures() {
     await sqlClient`DELETE FROM idempotency_keys`;
-    await sqlClient`DELETE FROM payment_submissions WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode})`;
-    await sqlClient`DELETE FROM payment_proof_upload_intents WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode})`;
-    await sqlClient`DELETE FROM guest_payment_access_grants WHERE payment_id IN (SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode})`;
-    await sqlClient`DELETE FROM inventory_ledger_entries WHERE inventory_item_id IN (${inventoryItemId1}, ${inventoryItemId2})`;
-    await sqlClient`DELETE FROM inventory_reservations WHERE inventory_item_id IN (${inventoryItemId1}, ${inventoryItemId2})`;
-    await sqlClient`DELETE FROM payments WHERE payment_method_code = ${paymentMethodCode}`;
-    await sqlClient`DELETE FROM order_pricing_snapshots WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@gamerperu.pe')`;
-    await sqlClient`DELETE FROM order_address_snapshots WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@gamerperu.pe')`;
-    await sqlClient`DELETE FROM shipments WHERE order_id IN (SELECT id FROM orders WHERE customer_email LIKE '%@gamerperu.pe')`;
-    await sqlClient`DELETE FROM order_items WHERE variant_id IN (${variantId1}, ${variantId2})`;
+    // Other live suites share the '%@gamerperu.pe' order space, so every child row of those
+    // orders goes too, not only the rows this suite created; otherwise run order decides success.
+    const sharedOrders = sqlClient`SELECT id FROM orders WHERE customer_email LIKE '%@gamerperu.pe'`;
+    const suitePayments = sqlClient`SELECT id FROM payments WHERE payment_method_code = ${paymentMethodCode} OR order_id IN (${sharedOrders})`;
+    await sqlClient`DELETE FROM refunds WHERE order_id IN (${sharedOrders})`;
+    await sqlClient`DELETE FROM payment_submissions WHERE payment_id IN (${suitePayments})`;
+    await sqlClient`DELETE FROM payment_proof_upload_intents WHERE payment_id IN (${suitePayments})`;
+    await sqlClient`DELETE FROM guest_payment_access_grants WHERE payment_id IN (${suitePayments})`;
+    await sqlClient`DELETE FROM inventory_ledger_entries WHERE inventory_item_id IN (${inventoryItemId1}, ${inventoryItemId2}) OR reference_id IN (SELECT id::text FROM orders WHERE customer_email LIKE '%@gamerperu.pe')`;
+    await sqlClient`DELETE FROM inventory_reservations WHERE inventory_item_id IN (${inventoryItemId1}, ${inventoryItemId2}) OR order_id IN (${sharedOrders})`;
+    await sqlClient`DELETE FROM payments WHERE id IN (${suitePayments})`;
+    await sqlClient`DELETE FROM order_pricing_snapshots WHERE order_id IN (${sharedOrders})`;
+    await sqlClient`DELETE FROM order_address_snapshots WHERE order_id IN (${sharedOrders})`;
+    await sqlClient`DELETE FROM shipments WHERE order_id IN (${sharedOrders})`;
+    await sqlClient`DELETE FROM order_items WHERE variant_id IN (${variantId1}, ${variantId2}) OR order_id IN (${sharedOrders})`;
     await sqlClient`DELETE FROM orders WHERE customer_email LIKE '%@gamerperu.pe'`;
     await sqlClient`DELETE FROM cart_items WHERE variant_id IN (${variantId1}, ${variantId2})`;
     await sqlClient`DELETE FROM carts WHERE customer_id IN (${customerProfileId1}, ${customerProfileId2})`;
@@ -171,6 +166,22 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
     await sqlClient`DELETE FROM categories WHERE id = ${categoryId}`;
     await sqlClient`DELETE FROM brands WHERE id = ${brandId}`;
     await sqlClient`DELETE FROM customer_profiles WHERE id IN (${customerProfileId1}, ${customerProfileId2})`;
+  }
+
+  beforeAll(async () => {
+    process.env.CHECKOUT_HMAC_SECRET =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    process.env.CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE = locationCode;
+    process.env.CHECKOUT_RESERVATION_TTL_MINUTES = "30";
+    process.env.CHECKOUT_IDEMPOTENCY_TTL_MINUTES = "60";
+    process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES = "60";
+    process.env.R2_ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
+    process.env.R2_ACCESS_KEY_ID = "test-r2-access-key-id-12345";
+    process.env.R2_SECRET_ACCESS_KEY = "test-r2-secret-access-key-67890";
+
+    sqlClient = postgres(connectionString, { max: 10 });
+
+    await cleanFixtures();
 
     // Insert Base Fixtures
     await sqlClient`
@@ -252,6 +263,7 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
 
   afterAll(async () => {
     if (sqlClient) {
+      await cleanFixtures();
       await sqlClient.end();
     }
   });
