@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   AlertTriangle,
@@ -12,10 +11,9 @@ import {
   RefreshCw,
   RotateCcw,
   Undo2,
-  X,
   XCircle,
 } from "lucide-react";
-import { StatusDot } from "@/components/admin/ui";
+import { DrawerHeader, SideDrawer, StatusDot } from "@/components/admin/ui";
 import {
   approvePaymentAction,
   getProofViewUrlAction,
@@ -26,7 +24,7 @@ import {
 import type { VerificationDetail, VerificationQueueItem } from "@/lib/payments/verification-queue";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatAttempt, formatLimaDateTime, formatRelative } from "./format";
-import type { NotifyFn } from "./verification-workspace";
+import type { NotifyFn } from "@/components/admin/ui";
 import styles from "./verification.module.css";
 
 type Decision = "approve" | "retry" | "terminal";
@@ -86,7 +84,6 @@ interface ReviewDrawerProps {
 
 export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawerProps) {
   const reduceMotion = useReducedMotion();
-  const panelRef = useRef<HTMLDivElement>(null);
   const titleId = `review-title-${item.paymentId}`;
 
   const [detail, setDetail] = useState<VerificationDetail | null>(null);
@@ -133,49 +130,6 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
     void loadDetail();
     void loadProof();
   }, [loadDetail, loadProof]);
-
-  // Read through refs so the mount effect below never re-runs: re-running it would pull focus
-  // back to the panel every time a decision starts or finishes.
-  const isPendingRef = useRef(isPending);
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    isPendingRef.current = isPending;
-    onCloseRef.current = onClose;
-  });
-
-  useEffect(() => {
-    panelRef.current?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isPendingRef.current) {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab" || !panelRef.current) return;
-      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0]!;
-      const last = focusable[focusable.length - 1]!;
-      if (event.shiftKey && document.activeElement === first) {
-        last.focus();
-        event.preventDefault();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        first.focus();
-        event.preventDefault();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
 
   const chooseDecision = (next: Decision) => {
     setDecision((current) => (current === next ? null : next));
@@ -279,380 +233,343 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
     void loadProof();
   };
 
-  const duration = reduceMotion ? 0 : 0.28;
   const reasons = decision === "terminal" ? TERMINAL_REASONS : RETRY_REASONS;
 
-  // Portaled to <body>: the admin shell animates pages with a transform, which would otherwise
-  // turn this fixed overlay into one positioned inside the page and layered under its content.
-  return createPortal(
-    <div className={styles.drawerRoot}>
-      <motion.div
-        className={styles.scrim}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: reduceMotion ? 0 : 0.2 }}
-        onClick={() => !isPending && onClose()}
-        aria-hidden="true"
+  return (
+    <SideDrawer
+      labelledBy={titleId}
+      onClose={onClose}
+      busy={isPending}
+      size="wide"
+      testId="review-drawer"
+    >
+      <DrawerHeader
+        titleId={titleId}
+        title={`Pedido ${item.orderNumber}`}
+        eyebrow={`${item.methodName} · ${formatAttempt(item.submission.attemptNumber)}`}
+        onClose={onClose}
+        busy={isPending}
       />
-      <motion.div
-        ref={panelRef}
-        className={styles.drawer}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        initial={{ x: reduceMotion ? 0 : "6%", opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        exit={{ x: reduceMotion ? 0 : "4%", opacity: 0 }}
-        transition={{ duration, ease: EASE }}
-        data-testid="review-drawer"
-      >
-        <header className={styles.drawerHeader}>
-          <div>
-            <p className={styles.eyebrow}>
-              {item.methodName} · {formatAttempt(item.submission.attemptNumber)}
-            </p>
-            <h2 id={titleId} className={styles.drawerTitle}>
-              Pedido {item.orderNumber}
-            </h2>
-          </div>
-          <button
-            type="button"
-            className={styles.iconButton}
-            onClick={onClose}
-            disabled={isPending}
-            aria-label="Cerrar revisión"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
 
-        <div className={styles.drawerBody}>
-          <section className={styles.proofPane} aria-label="Comprobante del cliente">
-            <ProofViewer
-              proof={proof}
-              zoomed={zoomed}
-              onToggleZoom={() => setZoomed((value) => !value)}
-              onReload={() => {
-                proofRetriedRef.current = false;
-                void loadProof();
-              }}
-              onImageError={onProofError}
-              orderNumber={item.orderNumber}
-            />
+      <div className={styles.drawerBody}>
+        <section className={styles.proofPane} aria-label="Comprobante del cliente">
+          <ProofViewer
+            proof={proof}
+            zoomed={zoomed}
+            onToggleZoom={() => setZoomed((value) => !value)}
+            onReload={() => {
+              proofRetriedRef.current = false;
+              void loadProof();
+            }}
+            onImageError={onProofError}
+            orderNumber={item.orderNumber}
+          />
+        </section>
+
+        <div className={styles.detailPane}>
+          <section className={styles.amountBlock} aria-label="Monto">
+            <span className={styles.label}>Monto esperado</span>
+            <span className={styles.amount}>{formatCurrency(item.amountCents)}</span>
+            <span className={styles.helpText}>
+              El cliente no declara un monto: compáralo con el importe que muestra la captura.
+            </span>
+            {detail && (
+              <dl className={styles.breakdown}>
+                <div>
+                  <dt>Productos</dt>
+                  <dd>{formatCurrency(detail.subtotalCents)}</dd>
+                </div>
+                {detail.discountCents > 0 && (
+                  <div>
+                    <dt>Descuento</dt>
+                    <dd>−{formatCurrency(detail.discountCents)}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt>Envío</dt>
+                  <dd>{formatCurrency(detail.shippingCents)}</dd>
+                </div>
+              </dl>
+            )}
           </section>
 
-          <div className={styles.detailPane}>
-            <section className={styles.amountBlock} aria-label="Monto">
-              <span className={styles.label}>Monto esperado</span>
-              <span className={styles.amount}>{formatCurrency(item.amountCents)}</span>
-              <span className={styles.helpText}>
-                El cliente no declara un monto: compáralo con el importe que muestra la captura.
-              </span>
-              {detail && (
-                <dl className={styles.breakdown}>
-                  <div>
-                    <dt>Productos</dt>
-                    <dd>{formatCurrency(detail.subtotalCents)}</dd>
-                  </div>
-                  {detail.discountCents > 0 && (
-                    <div>
-                      <dt>Descuento</dt>
-                      <dd>−{formatCurrency(detail.discountCents)}</dd>
-                    </div>
-                  )}
-                  <div>
-                    <dt>Envío</dt>
-                    <dd>{formatCurrency(detail.shippingCents)}</dd>
-                  </div>
-                </dl>
-              )}
-            </section>
-
-            <section className={styles.detailSection} aria-label="Código de operación">
-              <span className={styles.label}>Código de operación</span>
-              <div className={styles.codeRow}>
-                <span className={styles.operationCode}>{item.submission.operationCode}</span>
-                <button
-                  type="button"
-                  className={styles.iconButton}
-                  onClick={copyCode}
-                  aria-label="Copiar código de operación"
-                >
-                  {copied ? (
-                    <Check size={16} aria-hidden="true" />
-                  ) : (
-                    <Copy size={16} aria-hidden="true" />
-                  )}
-                </button>
-              </div>
-              {item.duplicateOrderNumbers.length > 0 && (
-                <p className={styles.alertLine} role="note">
-                  <StatusDot tone="critical" />
-                  <span>
-                    Este código también se usó en{" "}
-                    {item.duplicateOrderNumbers.length === 1 ? "el pedido" : "los pedidos"}{" "}
-                    <strong>{item.duplicateOrderNumbers.join(", ")}</strong>. Verifica que no sea un
-                    comprobante reutilizado.
-                  </span>
-                </p>
-              )}
-              <p className={styles.metaLine}>
-                Enviado {formatRelative(item.submission.submittedAt, renderedAt)} ·{" "}
-                {formatLimaDateTime(item.submission.submittedAt)}
-              </p>
-            </section>
-
-            {(item.submission.isLate || stockBlocked) && (
-              <section
-                className={`${styles.notice} ${stockBlocked ? styles.noticeCritical : ""}`}
-                aria-label="Pago tardío"
+          <section className={styles.detailSection} aria-label="Código de operación">
+            <span className={styles.label}>Código de operación</span>
+            <div className={styles.codeRow}>
+              <span className={styles.operationCode}>{item.submission.operationCode}</span>
+              <button
+                type="button"
+                className={styles.iconButton}
+                onClick={copyCode}
+                aria-label="Copiar código de operación"
               >
-                <AlertTriangle size={16} aria-hidden="true" />
-                <div>
-                  <p className={styles.noticeTitle}>
-                    {stockBlocked
-                      ? "Sin stock disponible - Rechazar y coordinar reembolso"
-                      : "Pago tardío: la reserva ya había vencido"}
-                  </p>
-                  <p className={styles.noticeText}>
-                    {stockBlocked
-                      ? "El stock de este pedido se vendió mientras el pago llegaba. Solo puedes rechazarlo de forma terminal y coordinar la devolución del dinero."
-                      : "Al aprobar se vuelve a tomar el stock; hoy está disponible."}
-                  </p>
-                  {detail?.lateStock?.shortfalls.map((shortfall) => (
-                    <p key={shortfall.sku} className={styles.noticeText}>
-                      {shortfall.sku}: necesita {shortfall.needed}, disponible {shortfall.available}
-                    </p>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <section className={styles.detailSection} aria-label="Cliente">
-              <span className={styles.label}>Cliente</span>
-              <p className={styles.detailPrimary}>{item.customerEmail}</p>
-              <p className={styles.metaLine}>{item.customerPhone}</p>
-              {detail?.submissionNotes && (
-                <p className={styles.quote}>“{detail.submissionNotes}”</p>
-              )}
-            </section>
-
-            {detailError && (
-              <p className={styles.alertLine} role="alert">
-                {detailError}
+                {copied ? (
+                  <Check size={16} aria-hidden="true" />
+                ) : (
+                  <Copy size={16} aria-hidden="true" />
+                )}
+              </button>
+            </div>
+            {item.duplicateOrderNumbers.length > 0 && (
+              <p className={styles.alertLine} role="note">
+                <StatusDot tone="critical" />
+                <span>
+                  Este código también se usó en{" "}
+                  {item.duplicateOrderNumbers.length === 1 ? "el pedido" : "los pedidos"}{" "}
+                  <strong>{item.duplicateOrderNumbers.join(", ")}</strong>. Verifica que no sea un
+                  comprobante reutilizado.
+                </span>
               </p>
             )}
+            <p className={styles.metaLine}>
+              Enviado {formatRelative(item.submission.submittedAt, renderedAt)} ·{" "}
+              {formatLimaDateTime(item.submission.submittedAt)}
+            </p>
+          </section>
 
-            {!detail && !detailError && (
-              <div className={styles.detailSkeleton} aria-hidden="true">
-                <span />
-                <span />
-                <span />
+          {(item.submission.isLate || stockBlocked) && (
+            <section
+              className={`${styles.notice} ${stockBlocked ? styles.noticeCritical : ""}`}
+              aria-label="Pago tardío"
+            >
+              <AlertTriangle size={16} aria-hidden="true" />
+              <div>
+                <p className={styles.noticeTitle}>
+                  {stockBlocked
+                    ? "Sin stock disponible - Rechazar y coordinar reembolso"
+                    : "Pago tardío: la reserva ya había vencido"}
+                </p>
+                <p className={styles.noticeText}>
+                  {stockBlocked
+                    ? "El stock de este pedido se vendió mientras el pago llegaba. Solo puedes rechazarlo de forma terminal y coordinar la devolución del dinero."
+                    : "Al aprobar se vuelve a tomar el stock; hoy está disponible."}
+                </p>
+                {detail?.lateStock?.shortfalls.map((shortfall) => (
+                  <p key={shortfall.sku} className={styles.noticeText}>
+                    {shortfall.sku}: necesita {shortfall.needed}, disponible {shortfall.available}
+                  </p>
+                ))}
               </div>
-            )}
+            </section>
+          )}
 
-            {detail && (
-              <>
-                <section className={styles.detailSection} aria-label="Productos">
-                  <span className={styles.label}>Productos</span>
-                  <ul className={styles.itemList}>
-                    {detail.items.map((line) => (
-                      <li key={line.id} className={styles.itemLine}>
-                        <span className={styles.itemQty}>{line.quantity}×</span>
-                        <span className={styles.itemName}>
-                          {line.productName}
-                          <span className={styles.metaLine}>
-                            {line.variantTitle} · {line.sku}
-                          </span>
+          <section className={styles.detailSection} aria-label="Cliente">
+            <span className={styles.label}>Cliente</span>
+            <p className={styles.detailPrimary}>{item.customerEmail}</p>
+            <p className={styles.metaLine}>{item.customerPhone}</p>
+            {detail?.submissionNotes && <p className={styles.quote}>“{detail.submissionNotes}”</p>}
+          </section>
+
+          {detailError && (
+            <p className={styles.alertLine} role="alert">
+              {detailError}
+            </p>
+          )}
+
+          {!detail && !detailError && (
+            <div className={styles.detailSkeleton} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          )}
+
+          {detail && (
+            <>
+              <section className={styles.detailSection} aria-label="Productos">
+                <span className={styles.label}>Productos</span>
+                <ul className={styles.itemList}>
+                  {detail.items.map((line) => (
+                    <li key={line.id} className={styles.itemLine}>
+                      <span className={styles.itemQty}>{line.quantity}×</span>
+                      <span className={styles.itemName}>
+                        {line.productName}
+                        <span className={styles.metaLine}>
+                          {line.variantTitle} · {line.sku}
                         </span>
-                        <span className={styles.itemTotal}>
-                          {formatCurrency(line.lineTotalCents)}
+                      </span>
+                      <span className={styles.itemTotal}>
+                        {formatCurrency(line.lineTotalCents)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              {detail.address && (
+                <section className={styles.detailSection} aria-label="Entrega">
+                  <span className={styles.label}>Entrega</span>
+                  <p className={styles.detailPrimary}>{detail.address.recipientName}</p>
+                  <p className={styles.metaLine}>
+                    {detail.address.streetAddress}
+                    {detail.address.apartmentSuite ? `, ${detail.address.apartmentSuite}` : ""}
+                  </p>
+                  <p className={styles.metaLine}>
+                    {detail.address.district}, {detail.address.province},{" "}
+                    {detail.address.department}
+                  </p>
+                </section>
+              )}
+
+              {detail.history.length > 1 && (
+                <section className={styles.detailSection} aria-label="Envíos anteriores">
+                  <span className={styles.label}>Envíos anteriores</span>
+                  <ol className={styles.history}>
+                    {detail.history.slice(1).map((entry) => (
+                      <li key={entry.submissionId} className={styles.historyEntry}>
+                        <span className={styles.historyAttempt}>
+                          {formatAttempt(entry.attemptNumber)}
+                        </span>
+                        <span className={styles.historyBody}>
+                          <span className={styles.mono}>{entry.operationCode}</span>
+                          {entry.decision ? (
+                            <span className={styles.metaLine}>
+                              {DECISION_LABEL[entry.decision] ?? entry.decision}
+                              {entry.rejectionReason ? ` · ${entry.rejectionReason}` : ""}
+                              {entry.verifierEmail ? ` · ${entry.verifierEmail}` : ""}
+                            </span>
+                          ) : (
+                            <span className={styles.metaLine}>Sin decisión registrada</span>
+                          )}
                         </span>
                       </li>
                     ))}
-                  </ul>
+                  </ol>
                 </section>
-
-                {detail.address && (
-                  <section className={styles.detailSection} aria-label="Entrega">
-                    <span className={styles.label}>Entrega</span>
-                    <p className={styles.detailPrimary}>{detail.address.recipientName}</p>
-                    <p className={styles.metaLine}>
-                      {detail.address.streetAddress}
-                      {detail.address.apartmentSuite ? `, ${detail.address.apartmentSuite}` : ""}
-                    </p>
-                    <p className={styles.metaLine}>
-                      {detail.address.district}, {detail.address.province},{" "}
-                      {detail.address.department}
-                    </p>
-                  </section>
-                )}
-
-                {detail.history.length > 1 && (
-                  <section className={styles.detailSection} aria-label="Envíos anteriores">
-                    <span className={styles.label}>Envíos anteriores</span>
-                    <ol className={styles.history}>
-                      {detail.history.slice(1).map((entry) => (
-                        <li key={entry.submissionId} className={styles.historyEntry}>
-                          <span className={styles.historyAttempt}>
-                            {formatAttempt(entry.attemptNumber)}
-                          </span>
-                          <span className={styles.historyBody}>
-                            <span className={styles.mono}>{entry.operationCode}</span>
-                            {entry.decision ? (
-                              <span className={styles.metaLine}>
-                                {DECISION_LABEL[entry.decision] ?? entry.decision}
-                                {entry.rejectionReason ? ` · ${entry.rejectionReason}` : ""}
-                                {entry.verifierEmail ? ` · ${entry.verifierEmail}` : ""}
-                              </span>
-                            ) : (
-                              <span className={styles.metaLine}>Sin decisión registrada</span>
-                            )}
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
-                  </section>
-                )}
-              </>
-            )}
-          </div>
+              )}
+            </>
+          )}
         </div>
+      </div>
 
-        <footer className={styles.drawerFooter}>
-          <AnimatePresence initial={false}>
-            {decision && (
-              <motion.div
-                key="decision-form"
-                className={styles.decisionForm}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: reduceMotion ? 0 : 0.22, ease: EASE }}
-              >
-                <div className={styles.decisionInner}>
-                  <p className={styles.decisionTitle}>{DECISION_COPY[decision].title}</p>
-                  <p className={styles.helpText}>{DECISION_COPY[decision].hint}</p>
+      <footer className={styles.drawerFooter}>
+        <AnimatePresence initial={false}>
+          {decision && (
+            <motion.div
+              key="decision-form"
+              className={styles.decisionForm}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.22, ease: EASE }}
+            >
+              <div className={styles.decisionInner}>
+                <p className={styles.decisionTitle}>{DECISION_COPY[decision].title}</p>
+                <p className={styles.helpText}>{DECISION_COPY[decision].hint}</p>
 
-                  {decision !== "approve" && (
-                    <>
-                      <div
-                        className={styles.reasonChips}
-                        role="group"
-                        aria-label="Motivos frecuentes"
-                      >
-                        {reasons.map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            className={styles.chip}
-                            aria-pressed={reason === preset}
-                            onClick={() => setReason(preset)}
-                          >
-                            {preset}
-                          </button>
-                        ))}
-                      </div>
-                      <label className={styles.field}>
-                        <span className={styles.label}>Motivo del rechazo</span>
-                        <input
-                          className={styles.input}
-                          value={reason}
-                          maxLength={255}
-                          onChange={(event) => setReason(event.target.value)}
-                          placeholder="Escribe el motivo del rechazo"
-                        />
-                      </label>
-                    </>
-                  )}
-
-                  <label className={styles.field}>
-                    <span className={styles.label}>Notas internas (opcional)</span>
-                    <textarea
-                      className={styles.textarea}
-                      value={notes}
-                      maxLength={2000}
-                      rows={2}
-                      onChange={(event) => setNotes(event.target.value)}
-                      placeholder="Ej.: verificado en el app a las 10:32"
-                    />
-                  </label>
-
-                  <div className={styles.decisionActions}>
-                    <button
-                      type="button"
-                      className={styles.ghostButton}
-                      onClick={() => setDecision(null)}
-                      disabled={isPending}
+                {decision !== "approve" && (
+                  <>
+                    <div
+                      className={styles.reasonChips}
+                      role="group"
+                      aria-label="Motivos frecuentes"
                     >
-                      Volver
-                    </button>
-                    <button
-                      type="button"
-                      className={
-                        decision === "terminal" ? styles.dangerButton : styles.primaryButton
-                      }
-                      onClick={submitDecision}
-                      disabled={isPending || (decision !== "approve" && !reason.trim())}
-                    >
-                      {isPending ? "Guardando…" : DECISION_COPY[decision].confirm}
-                    </button>
-                  </div>
+                      {reasons.map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          className={styles.chip}
+                          aria-pressed={reason === preset}
+                          onClick={() => setReason(preset)}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                    <label className={styles.field}>
+                      <span className={styles.label}>Motivo del rechazo</span>
+                      <input
+                        className={styles.input}
+                        value={reason}
+                        maxLength={255}
+                        onChange={(event) => setReason(event.target.value)}
+                        placeholder="Escribe el motivo del rechazo"
+                      />
+                    </label>
+                  </>
+                )}
+
+                <label className={styles.field}>
+                  <span className={styles.label}>Notas internas (opcional)</span>
+                  <textarea
+                    className={styles.textarea}
+                    value={notes}
+                    maxLength={2000}
+                    rows={2}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder="Ej.: verificado en el app a las 10:32"
+                  />
+                </label>
+
+                <div className={styles.decisionActions}>
+                  <button
+                    type="button"
+                    className={styles.ghostButton}
+                    onClick={() => setDecision(null)}
+                    disabled={isPending}
+                  >
+                    Volver
+                  </button>
+                  <button
+                    type="button"
+                    className={decision === "terminal" ? styles.dangerButton : styles.primaryButton}
+                    onClick={submitDecision}
+                    disabled={isPending || (decision !== "approve" && !reason.trim())}
+                  >
+                    {isPending ? "Guardando…" : DECISION_COPY[decision].confirm}
+                  </button>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          <div className={styles.actionBar}>
+        <div className={styles.actionBar}>
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={releaseCase}
+            disabled={isPending || !isMine}
+          >
+            <Undo2 size={15} aria-hidden="true" />
+            Soltar caso
+          </button>
+          <div className={styles.actionGroup}>
             <button
               type="button"
-              className={styles.ghostButton}
-              onClick={releaseCase}
-              disabled={isPending || !isMine}
+              className={styles.dangerOutlineButton}
+              onClick={() => chooseDecision("terminal")}
+              aria-pressed={decision === "terminal"}
+              disabled={isPending}
             >
-              <Undo2 size={15} aria-hidden="true" />
-              Soltar caso
+              <XCircle size={15} aria-hidden="true" />
+              Rechazo terminal
             </button>
-            <div className={styles.actionGroup}>
-              <button
-                type="button"
-                className={styles.dangerOutlineButton}
-                onClick={() => chooseDecision("terminal")}
-                aria-pressed={decision === "terminal"}
-                disabled={isPending}
-              >
-                <XCircle size={15} aria-hidden="true" />
-                Rechazo terminal
-              </button>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => chooseDecision("retry")}
-                aria-pressed={decision === "retry"}
-                disabled={isPending || stockBlocked}
-              >
-                <RotateCcw size={15} aria-hidden="true" />
-                Rechazar (reintentar)
-              </button>
-              <button
-                type="button"
-                className={styles.primaryButton}
-                onClick={() => chooseDecision("approve")}
-                aria-pressed={decision === "approve"}
-                disabled={isPending || stockBlocked}
-                title={stockBlocked ? "Sin stock disponible" : undefined}
-              >
-                <Check size={15} aria-hidden="true" />
-                Aprobar
-              </button>
-            </div>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => chooseDecision("retry")}
+              aria-pressed={decision === "retry"}
+              disabled={isPending || stockBlocked}
+            >
+              <RotateCcw size={15} aria-hidden="true" />
+              Rechazar (reintentar)
+            </button>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={() => chooseDecision("approve")}
+              aria-pressed={decision === "approve"}
+              disabled={isPending || stockBlocked}
+              title={stockBlocked ? "Sin stock disponible" : undefined}
+            >
+              <Check size={15} aria-hidden="true" />
+              Aprobar
+            </button>
           </div>
-        </footer>
-      </motion.div>
-    </div>,
-    document.body
+        </div>
+      </footer>
+    </SideDrawer>
   );
 }
 

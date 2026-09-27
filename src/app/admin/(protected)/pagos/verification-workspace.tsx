@@ -2,23 +2,21 @@
 
 import React, { useCallback, useMemo, useState, useTransition } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, CircleCheck, CircleAlert, Inbox } from "lucide-react";
-import { AdminCard, MetricRow, MetricWidget, StatusDot } from "@/components/admin/ui";
+import { ArrowRight, Inbox } from "lucide-react";
+import {
+  AdminCard,
+  MetricRow,
+  MetricWidget,
+  StatusDot,
+  ToastViewport,
+  useToasts,
+} from "@/components/admin/ui";
 import { claimPaymentAction } from "@/lib/payments/verification-actions";
 import type { VerificationQueueItem } from "@/lib/payments/verification-queue";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatAttempt, formatRelative } from "./format";
 import { ReviewDrawer } from "./review-drawer";
 import styles from "./verification.module.css";
-
-export type ToastTone = "success" | "error";
-export type NotifyFn = (tone: ToastTone, message: string) => void;
-
-interface Toast {
-  id: number;
-  tone: ToastTone;
-  message: string;
-}
 
 type Filter = "all" | "pending" | "mine";
 
@@ -39,16 +37,9 @@ export function VerificationWorkspace({
   const [filter, setFilter] = useState<Filter>("all");
   const [activePaymentId, setActivePaymentId] = useState<string | null>(null);
   const [claimingId, setClaimingId] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<Toast[]>([]);
   const [, startTransition] = useTransition();
 
-  const notify = useCallback<NotifyFn>((tone, message) => {
-    const id = Date.now() + Math.random();
-    setToasts((current) => [...current.slice(-2), { id, tone, message }]);
-    window.setTimeout(() => {
-      setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, 5000);
-  }, []);
+  const { toasts, notify } = useToasts();
 
   const pendingCount = queue.filter((item) => item.paymentStatus === "SUBMITTED").length;
   const reviewingCount = queue.length - pendingCount;
@@ -212,28 +203,7 @@ export function VerificationWorkspace({
         )}
       </AnimatePresence>
 
-      <div className={styles.toastViewport} aria-live="polite" aria-atomic="false">
-        <AnimatePresence>
-          {toasts.map((toast) => (
-            <motion.div
-              key={toast.id}
-              role={toast.tone === "error" ? "alert" : "status"}
-              className={`${styles.toast} ${toast.tone === "error" ? styles.toastError : ""}`}
-              initial={{ opacity: 0, y: reduceMotion ? 0 : 12, scale: reduceMotion ? 1 : 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
-              transition={{ duration: reduceMotion ? 0 : 0.2, ease: EASE }}
-            >
-              {toast.tone === "error" ? (
-                <CircleAlert size={16} aria-hidden="true" />
-              ) : (
-                <CircleCheck size={16} aria-hidden="true" />
-              )}
-              <span>{toast.message}</span>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      <ToastViewport toasts={toasts} />
     </div>
   );
 }

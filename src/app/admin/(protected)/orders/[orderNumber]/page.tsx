@@ -6,6 +6,7 @@ import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { ORDER_STATUSES, PAYMENT_STATUSES, SHIPMENT_STATUSES } from "../order-status-options";
 import { OrderActivity } from "./order-activity";
 import { OrderCancellation } from "./order-cancellation";
+import { OrderFulfillment } from "./order-fulfillment";
 import { formatLimaDateTime, formatStoredAmount } from "./order-detail-format";
 import styles from "./order-detail.module.css";
 
@@ -118,6 +119,8 @@ function DetailBody({ detail }: { detail: AdminOrderDetail }) {
           </ul>
         </section>
       )}
+
+      <OrderFulfillment key={`fulfillment:${order.orderNumber}`} detail={detail} />
 
       <div className={styles.contentGrid}>
         <div className={styles.mainColumn}>

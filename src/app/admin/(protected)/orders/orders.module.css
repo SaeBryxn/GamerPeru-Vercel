@@ -26,7 +26,8 @@
 .statePanel {
   background: var(--color-surface-card);
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--admin-card-radius);
+  box-shadow: var(--admin-card-shadow);
 }
 
 .filterPanel {
@@ -142,14 +143,14 @@
 }
 
 .primaryButton {
-  border: 1px solid var(--color-brand-primary);
-  background: var(--color-brand-primary);
-  color: #fff;
+  border: 1px solid var(--admin-accent);
+  background: var(--admin-accent);
+  color: var(--admin-accent-contrast);
 }
 
 .primaryButton:hover {
-  background: var(--color-brand-hover);
-  border-color: var(--color-brand-hover);
+  background: var(--admin-accent-strong);
+  border-color: var(--admin-accent-strong);
 }
 
 .secondaryButton {
@@ -269,7 +270,8 @@
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  color: var(--color-brand-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
@@ -300,41 +302,38 @@
 .badge {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   max-width: 100%;
   min-height: 1.65rem;
-  padding: 0.2rem 0.5rem;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-secondary);
+  padding: 0.2rem 0;
+  border: none;
+  background: none;
   color: var(--color-text-secondary);
-  font-size: 0.6875rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 500;
   line-height: 1.25;
   text-wrap: balance;
 }
 
-.badge[data-tone="success"] {
-  border-color: var(--color-status-success-border);
-  background: var(--color-status-success-background);
-  color: var(--color-status-success-text);
+.badge::before {
+  content: "";
+  flex-shrink: 0;
+  width: var(--admin-dot-size);
+  height: var(--admin-dot-size);
+  border-radius: 9999px;
+  background-color: var(--color-text-disabled);
 }
-
-.badge[data-tone="warning"] {
-  border-color: var(--color-status-warning-border);
-  background: var(--color-status-warning-background);
-  color: var(--color-status-warning-text);
+.badge[data-tone="success"]::before {
+  background-color: var(--color-status-success-text);
 }
-
-.badge[data-tone="danger"] {
-  border-color: var(--color-status-danger-border);
-  background: var(--color-status-danger-background);
-  color: var(--color-status-danger-text);
+.badge[data-tone="warning"]::before {
+  background-color: var(--color-status-warning-text);
 }
-
-.badge[data-tone="info"] {
-  border-color: var(--color-status-info-border);
-  background: var(--color-status-info-background);
-  color: var(--color-status-info-text);
+.badge[data-tone="danger"]::before {
+  background-color: var(--admin-danger);
+}
+.badge[data-tone="info"]::before {
+  background-color: var(--admin-accent);
 }
 
 .money,

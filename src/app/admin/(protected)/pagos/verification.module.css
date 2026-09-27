@@ -363,60 +363,6 @@
   color: var(--color-text-primary);
 }
 
-/* Drawer */
-
-.drawerRoot {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.scrim {
-  position: absolute;
-  inset: 0;
-  background-color: var(--admin-scrim);
-  backdrop-filter: blur(2px);
-}
-
-.drawer {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: min(1080px, 100vw);
-  height: 100%;
-  border-left: 1px solid var(--color-border-subtle);
-  background-color: var(--color-surface-card);
-  box-shadow: var(--admin-shadow);
-  outline: none;
-}
-
-.drawerHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-5) var(--admin-card-padding);
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.eyebrow {
-  margin: 0 0 var(--space-1);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-muted);
-}
-
-.drawerTitle {
-  margin: 0;
-  font-family: var(--font-heading);
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--color-text-primary);
-}
-
 .drawerBody {
   display: grid;
   flex: 1;
@@ -851,44 +797,6 @@
   gap: var(--space-2);
 }
 
-/* Toasts */
-
-.toastViewport {
-  position: fixed;
-  right: var(--space-5);
-  bottom: var(--space-5);
-  z-index: 70;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-2);
-  max-width: min(420px, calc(100vw - 32px));
-  pointer-events: none;
-}
-
-.toast {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background-color: var(--admin-accent);
-  color: var(--admin-accent-contrast);
-  box-shadow: var(--admin-shadow);
-  font-size: 13px;
-  line-height: 1.45;
-  pointer-events: auto;
-}
-
-.toast svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.toastError svg {
-  color: var(--admin-danger);
-}
-
 /* Loading */
 
 .skeleton {
@@ -987,7 +895,6 @@
     padding: var(--space-4);
   }
 
-  .drawerHeader,
   .amountBlock,
   .detailSection,
   .notice,
@@ -1011,12 +918,5 @@
   .actionGroup > button,
   .actionBar > button {
     width: 100%;
-  }
-
-  .toastViewport {
-    right: var(--space-4);
-    bottom: var(--space-4);
-    left: var(--space-4);
-    align-items: stretch;
   }
 }
