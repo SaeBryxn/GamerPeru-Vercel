@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { getMenuEntrySettings } from "@/lib/navigation/menu-settings";
-import { getCategoryCatalogFacts } from "@/lib/navigation/resolve-navigation";
+import { getCategoryCatalogFacts } from "@/lib/navigation/catalog-facts";
 import { MenuWorkspace, type MenuEntryView } from "./menu-workspace";
 
 export const metadata: Metadata = {

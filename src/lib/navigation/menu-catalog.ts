@@ -15,7 +15,7 @@ import { buildCardGallery } from "@/lib/catalog/card-gallery";
 import { buildProductCardSpecs } from "@/lib/catalog/card-specs";
 import { cardCompareAtSql, cardGallerySql, cardSingleVariantSql } from "@/lib/catalog/card-sql";
 import type { ProductCardImage, ProductDiscoveryItem } from "@/lib/catalog/types";
-import type { MegaMenuShelves, NavLink } from "@/components/navigation/types";
+import type { FooterColumn, MegaMenuShelves, NavLink } from "@/components/navigation/types";
 
 /** Cards that fit one shelf row without the panel scrolling. */
 const SHELF_SIZE = 4;
@@ -245,4 +245,34 @@ export function buildProductTiles(
   limit = 4
 ): { title: string; href: string; image: string }[] {
   return buildPromoCards(entries, categorySlug, limit);
+}
+
+const FOOTER_PRODUCT_COLUMNS = 2;
+const FOOTER_PRODUCTS_PER_COLUMN = 6;
+
+/**
+ * Footer product columns: the categories with the most published products, each listing its
+ * products by name. Built from the same entries as the mega menu, so both agree on what is sold.
+ */
+export function buildFooterProductColumns(
+  entries: MenuCatalogEntry[],
+  isCategoryHidden: (categorySlug: string) => boolean
+): FooterColumn[] {
+  const byCategory = new Map<string, { title: string; links: NavLink[] }>();
+  for (const entry of entries) {
+    if (isCategoryHidden(entry.categorySlug)) continue;
+    const column = byCategory.get(entry.categorySlug) ?? { title: entry.categoryName, links: [] };
+    column.links.push({ label: entry.name, href: `/productos/${entry.slug}` });
+    byCategory.set(entry.categorySlug, column);
+  }
+
+  return [...byCategory.values()]
+    .sort((a, b) => b.links.length - a.links.length || a.title.localeCompare(b.title))
+    .slice(0, FOOTER_PRODUCT_COLUMNS)
+    .map((column) => ({
+      title: column.title,
+      links: column.links
+        .sort((a, b) => a.label.localeCompare(b.label))
+        .slice(0, FOOTER_PRODUCTS_PER_COLUMN),
+    }));
 }

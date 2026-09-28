@@ -1,6 +1,6 @@
 import React from "react";
 import { CartDrawer, CartProvider } from "@/components/cart";
-import { ChatWidget, HomeSocialRail } from "@/components/floating";
+import { HomeSocialRail, WhatsAppButton } from "@/components/floating";
 import { AnnouncementBar, SiteFooter, SiteHeader, SkipLink } from "@/components/navigation";
 import { getStorefrontNavigation } from "@/lib/navigation/resolve-navigation";
 
@@ -23,7 +23,7 @@ export default async function StorefrontLayout({
       <SiteFooter columns={navigation.footerColumns} />
       <CartDrawer />
       <HomeSocialRail />
-      <ChatWidget />
+      <WhatsAppButton />
     </CartProvider>
   );
 }

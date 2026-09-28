@@ -105,7 +105,6 @@ export interface NavigationConfig {
   utilityLinks: {
     search: { label: string; href: string };
     account: { label: string; href: string };
-    wishlist: { label: string; href: string };
     cart: { label: string; href: string };
   };
   footerColumns: FooterColumn[];

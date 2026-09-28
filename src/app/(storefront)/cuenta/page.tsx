@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { MessageCircle } from "lucide-react";
-import { publicEnv } from "@/config/public-env";
+import { buildWhatsAppHref } from "@/lib/support/whatsapp";
 import { getCurrentCustomerProfile } from "@/lib/account/profile";
 import { getCurrentCustomerOrders } from "@/lib/account/orders";
 import { getCurrentCustomerAddresses } from "@/lib/account/addresses";
@@ -16,14 +16,6 @@ const MEMBER_SINCE_FORMAT = new Intl.DateTimeFormat("es-PE", {
   year: "numeric",
   timeZone: "America/Lima",
 });
-
-/** wa.me link to the store; without a configured number it only renders outside production. */
-function supportWhatsAppHref(): string | null {
-  const number = publicEnv.NEXT_PUBLIC_WHATSAPP_NUMBER;
-  if (!number && process.env.NODE_ENV === "production") return null;
-  const message = "Hola, necesito ayuda con mi cuenta o un pedido en Gamer Perú.";
-  return `https://wa.me/${number ?? ""}?text=${encodeURIComponent(message)}`;
-}
 
 export default async function CuentaPage() {
   const profileState = await getCurrentCustomerProfile();
@@ -54,7 +46,9 @@ export default async function CuentaPage() {
     addressesState.status === "READY"
       ? addressesState.addresses.find((address) => address.isDefault)
       : undefined;
-  const whatsappHref = supportWhatsAppHref();
+  const whatsappHref = buildWhatsAppHref(
+    "Hola, necesito ayuda con mi cuenta o un pedido en Gamer Perú."
+  );
 
   const quickLinks: QuickLink[] = [
     {
@@ -79,20 +73,6 @@ export default async function CuentaPage() {
       title: "Datos personales",
       text: "Nombre, teléfono, documento y contraseña",
       icon: "profile",
-    },
-    {
-      href: "/cuenta/favoritos",
-      title: "Favoritos",
-      text: "Guarda productos para comprarlos después",
-      icon: "favorites",
-      comingSoon: true,
-    },
-    {
-      href: "/cuenta/referidos",
-      title: "Referidos",
-      text: "Recomienda Gamer Perú a tus amigos",
-      icon: "referrals",
-      comingSoon: true,
     },
   ];
 

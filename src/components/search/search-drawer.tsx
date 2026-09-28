@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useId, useLayoutEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -11,11 +12,12 @@ import {
   type Transition,
   type Variants,
 } from "framer-motion";
-import { Mic, X } from "lucide-react";
+import { Mic, Package, X } from "lucide-react";
 import { CloseButton, Icon } from "@/components/ui";
 import { getQueryCodePointLength } from "@/lib/search/normalization";
 import { MIN_SEARCH_QUERY_LENGTH } from "@/lib/search/types";
-import { getQuickResults } from "./search-quick-results";
+import { formatCurrency } from "@/lib/utils/currency";
+import { usePredictiveSearch, type PredictiveSearchState } from "./use-predictive-search";
 import { useVoiceSearch } from "./use-voice-search";
 import styles from "./search-drawer.module.css";
 
@@ -50,9 +52,9 @@ export interface SearchDrawerProps {
 }
 
 /**
- * Right-hand search panel: header, search field with voice dictation, and
- * quick results grouped by product type. Enter (or "Ver todos") opens the
- * full /buscar results page.
+ * Right-hand search panel: header, search field with voice dictation, and live
+ * suggestions from the catalog. Enter (or "Ver todos") opens the full /buscar
+ * results page.
  */
 export function SearchDrawer({ isOpen, onClose }: SearchDrawerProps) {
   const router = useRouter();
@@ -70,7 +72,7 @@ export function SearchDrawer({ isOpen, onClose }: SearchDrawerProps) {
   const followY = useSpring(pointerY, FOLLOW_SPRING);
 
   const voice = useVoiceSearch(setQuery);
-  const groups = useMemo(() => getQuickResults(query), [query]);
+  const suggestions = usePredictiveSearch(query);
   const cleanQuery = query.trim();
   const canSearchAll = getQueryCodePointLength(cleanQuery) >= MIN_SEARCH_QUERY_LENGTH;
   const searchAllHref = `/buscar?q=${encodeURIComponent(cleanQuery)}`;
@@ -264,32 +266,7 @@ export function SearchDrawer({ isOpen, onClose }: SearchDrawerProps) {
             </motion.form>
 
             <motion.div className={styles.results} variants={SECTION_VARIANTS} aria-live="polite">
-              {groups.length === 0 ? (
-                <p className={styles.emptyText}>
-                  No encontramos productos para &ldquo;{cleanQuery}&rdquo;.
-                </p>
-              ) : (
-                groups.map((group) => (
-                  <section
-                    key={group.id}
-                    className={styles.group}
-                    aria-labelledby={`${titleId}-${group.id}`}
-                  >
-                    <h3 id={`${titleId}-${group.id}`} className={styles.groupTitle}>
-                      {group.label}
-                    </h3>
-                    <ul className={styles.productList}>
-                      {group.products.map((product) => (
-                        <li key={product.id}>
-                          <Link href={product.href} className={styles.productLink} onClick={close}>
-                            {product.name}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ))
-              )}
+              <DrawerSuggestions state={suggestions} query={cleanQuery} onNavigate={close} />
             </motion.div>
 
             {canSearchAll && (
@@ -303,5 +280,134 @@ export function SearchDrawer({ isOpen, onClose }: SearchDrawerProps) {
         )}
       </AnimatePresence>
     </dialog>
+  );
+}
+
+const LIST_VARIANTS: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.04 } },
+};
+
+const ROW_VARIANTS: Variants = {
+  hidden: { opacity: 0, y: 6 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: EASE_OUT_EXPO } },
+};
+
+function DrawerSuggestions({
+  state,
+  query,
+  onNavigate,
+}: {
+  state: PredictiveSearchState;
+  query: string;
+  onNavigate: () => void;
+}) {
+  if (state.status === "idle") {
+    return (
+      <p className={styles.hintText}>
+        Escribe al menos 2 caracteres para buscar productos, marcas o categorías.
+      </p>
+    );
+  }
+
+  if (state.status === "loading") {
+    return (
+      <ul className={styles.skeletonList} aria-label="Buscando productos">
+        {[0, 1, 2].map((row) => (
+          <li key={row} className={styles.skeletonRow} aria-hidden="true">
+            <span className={styles.skeletonThumb} />
+            <span className={styles.skeletonLines}>
+              <span />
+              <span />
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <p className={styles.emptyText}>
+        No pudimos cargar sugerencias. Presiona Enter para ver todos los resultados.
+      </p>
+    );
+  }
+
+  const { products, brands, categories } = state;
+  if (products.length === 0 && brands.length === 0 && categories.length === 0) {
+    return <p className={styles.emptyText}>No encontramos productos para &ldquo;{query}&rdquo;.</p>;
+  }
+
+  return (
+    <motion.div key={query} initial="hidden" animate="visible" variants={LIST_VARIANTS}>
+      {products.length > 0 && (
+        <section className={styles.group} aria-label="Productos sugeridos">
+          <h3 className={styles.groupTitle}>Productos</h3>
+          <motion.ul className={styles.productList} variants={LIST_VARIANTS}>
+            {products.map((product) => (
+              <motion.li key={product.id} variants={ROW_VARIANTS}>
+                <Link
+                  href={`/productos/${product.slug}`}
+                  className={styles.productRow}
+                  onClick={onNavigate}
+                >
+                  <span className={styles.productThumb}>
+                    {product.primaryMedia?.src ? (
+                      <Image
+                        src={product.primaryMedia.src}
+                        alt=""
+                        width={56}
+                        height={56}
+                        className={styles.productImage}
+                      />
+                    ) : (
+                      <Icon icon={Package} size="md" aria-hidden="true" />
+                    )}
+                  </span>
+                  <span className={styles.productText}>
+                    <span className={styles.productBrand}>{product.brand.name}</span>
+                    <span className={styles.productName}>{product.name}</span>
+                  </span>
+                  <span className={styles.productPrice}>
+                    {formatCurrency(product.startingPriceCents)}
+                  </span>
+                </Link>
+              </motion.li>
+            ))}
+          </motion.ul>
+        </section>
+      )}
+
+      {(brands.length > 0 || categories.length > 0) && (
+        <motion.section
+          className={styles.group}
+          aria-label="Marcas y categorías sugeridas"
+          variants={ROW_VARIANTS}
+        >
+          <h3 className={styles.groupTitle}>Explorar</h3>
+          <ul className={styles.chipList}>
+            {brands.map((brand) => (
+              <li key={`brand-${brand.slug}`}>
+                <Link href={`/marcas/${brand.slug}`} className={styles.chip} onClick={onNavigate}>
+                  {brand.name}
+                </Link>
+              </li>
+            ))}
+            {categories.map((category) => (
+              <li key={`category-${category.slug}`}>
+                <Link
+                  href={`/categorias/${category.slug}`}
+                  className={styles.chip}
+                  onClick={onNavigate}
+                >
+                  {category.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </motion.section>
+      )}
+    </motion.div>
   );
 }

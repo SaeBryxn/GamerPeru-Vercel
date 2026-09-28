@@ -3,15 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
-import {
-  Gift,
-  Heart,
-  MapPin,
-  Package,
-  ShoppingBag,
-  UserRound,
-  type LucideIcon,
-} from "lucide-react";
+import { MapPin, Package, ShoppingBag, UserRound, type LucideIcon } from "lucide-react";
 import { useCart } from "@/components/cart/cart-provider";
 import { useAccountNavigate } from "./account-transition";
 import styles from "./account.module.css";
@@ -31,8 +23,6 @@ const QUICK_ICONS = {
   orders: Package,
   addresses: MapPin,
   profile: UserRound,
-  favorites: Heart,
-  referrals: Gift,
 } satisfies Record<string, LucideIcon>;
 
 export interface QuickLink {
@@ -40,19 +30,16 @@ export interface QuickLink {
   title: string;
   text: string;
   icon: keyof typeof QUICK_ICONS;
-  comingSoon?: boolean;
 }
 
 function QuickTileBody({
   icon: Icon,
   title,
   text,
-  comingSoon,
 }: {
   icon: LucideIcon;
   title: string;
   text: string;
-  comingSoon?: boolean;
 }): React.JSX.Element {
   return (
     <>
@@ -60,10 +47,7 @@ function QuickTileBody({
         <Icon size={20} aria-hidden="true" />
       </span>
       <span className={styles.quickBody}>
-        <span className={styles.quickTitle}>
-          {title}
-          {comingSoon && <span className={styles.badgeComingSoon}>Próximamente</span>}
-        </span>
+        <span className={styles.quickTitle}>{title}</span>
         <span className={styles.quickText}>{text}</span>
       </span>
     </>
@@ -111,12 +95,7 @@ export function AccountQuickLinks({ links }: { links: QuickLink[] }) {
               navigate(link.href);
             }}
           >
-            <QuickTileBody
-              icon={QUICK_ICONS[link.icon]}
-              title={link.title}
-              text={link.text}
-              comingSoon={link.comingSoon}
-            />
+            <QuickTileBody icon={QUICK_ICONS[link.icon]} title={link.title} text={link.text} />
           </Link>
         </motion.div>
       ))}

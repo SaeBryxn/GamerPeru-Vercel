@@ -36,29 +36,29 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
       await expect(launcher).toBeFocused();
     });
 
-    test("B: lists grouped quick results, filters them while typing and links to /buscar", async ({
-      page,
-    }) => {
+    test("B: suggests live catalog products and brands, and links to /buscar", async ({ page }) => {
       const launcher = page.getByRole("link", { name: "Buscar productos" });
       await launcher.click();
 
+      const dialog = page.getByRole("dialog", { name: "Búsqueda de productos" });
       const searchInput = page.getByRole("searchbox", {
         name: "Término de búsqueda",
       });
 
-      // Empty query: every group is listed
-      for (const group of ["Mouse", "Mousepad", "Skates"]) {
-        await expect(page.getByRole("heading", { name: group, level: 3 })).toBeVisible();
-      }
+      // Nothing is suggested before a query: the panel says what to type.
+      await expect(dialog.getByText(/Escribe al menos 2 caracteres/)).toBeVisible();
 
-      // Typing narrows the groups and products
-      await searchInput.fill("sky orange");
-      await expect(page.getByRole("heading", { name: "Mouse", level: 3 })).toHaveCount(0);
-      await expect(page.getByRole("link", { name: "ATK Sky Orange (Large Size)" })).toBeVisible();
-      await expect(page.getByRole("link", { name: "ATK Sky Black (Large Size)" })).toHaveCount(0);
+      // Suggestions come from /api/search/predictive, the catalog /buscar reads.
+      await searchInput.fill("lamzu");
+      await expect(dialog.getByRole("link", { name: "Lamzu", exact: true })).toHaveAttribute(
+        "href",
+        "/marcas/lamzu"
+      );
+
+      await searchInput.fill("mouse");
+      await expect(dialog.locator('a[href^="/productos/"]').first()).toBeVisible();
 
       // "Ver todos" opens the full results page
-      await searchInput.fill("mouse");
       const seeAllLink = page.getByRole("link", { name: /Ver todos los resultados para/i });
       await expect(seeAllLink).toBeVisible();
       await seeAllLink.click();
@@ -80,10 +80,10 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
       await clearBtn.click();
       await expect(searchInput).toHaveValue("");
       await expect(searchInput).toBeFocused();
-      await expect(page.getByRole("heading", { name: "Mouse", level: 3 })).toBeVisible();
+      await expect(page.getByText(/Escribe al menos 2 caracteres/)).toBeVisible();
     });
 
-    test("D: clicking the backdrop closes the panel and a product link opens its PDP", async ({
+    test("D: clicking the backdrop closes the panel and a product suggestion opens its PDP", async ({
       page,
     }) => {
       const launcher = page.getByRole("link", { name: "Buscar productos" });
@@ -95,8 +95,11 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
       await expect(dialog).not.toBeVisible();
 
       await launcher.click();
-      await page.getByRole("link", { name: "ATK A9 Plus 2.0 Black" }).click();
-      await expect(page).toHaveURL(/\/productos\/atk-a9-plus-2-0-black/);
+      await page.getByRole("searchbox", { name: "Término de búsqueda" }).fill("mouse");
+      const firstProduct = dialog.locator('a[href^="/productos/"]').first();
+      const href = await firstProduct.getAttribute("href");
+      await firstProduct.click();
+      await expect(page).toHaveURL(new RegExp(`${href}$`));
     });
   });
 

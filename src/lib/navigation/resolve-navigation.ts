@@ -1,93 +1,22 @@
 import "server-only";
-import { and, eq, sql } from "drizzle-orm";
-import { db } from "@/db";
-import { brands, categories, products } from "@/db/schema";
 import { NAVIGATION_CONFIG } from "@/components/navigation/navigation-data";
 import type {
+  FooterColumn,
   MegaMenuCategory,
   MegaMenuSection,
   NavigationConfig,
   NavLink,
 } from "@/components/navigation/types";
+import { getCatalogNavigationFacts } from "./catalog-facts";
 import { getMenuEntrySettings, type MenuEntrySetting } from "./menu-settings";
 import {
   buildBrandColumns,
+  buildFooterProductColumns,
   buildMenuShelves,
   buildProductTiles,
   buildPromoCards,
   getMenuCatalogEntries,
 } from "./menu-catalog";
-
-export interface CategoryCatalogFacts {
-  categorySlug: string;
-  publishedProducts: number;
-  brands: NavLink[];
-}
-
-export interface CatalogNavigationFacts {
-  byCategory: Map<string, CategoryCatalogFacts>;
-  /** Every published brand, used wherever a category has nothing published yet. */
-  allBrands: NavLink[];
-}
-
-/**
- * Published catalog state behind the navigation.
- *
- * Fail-soft: a database problem must not take the navigation down with it, so callers fall back
- * to the declared configuration.
- */
-export async function getCatalogNavigationFacts(): Promise<CatalogNavigationFacts> {
-  const byCategory = new Map<string, CategoryCatalogFacts>();
-  const allBrands: NavLink[] = [];
-
-  try {
-    const [rows, publishedBrands] = await Promise.all([
-      db
-        .select({
-          categorySlug: categories.slug,
-          brandName: brands.name,
-          brandSlug: brands.slug,
-          productCount: sql<number>`count(*)::int`,
-        })
-        .from(products)
-        .innerJoin(categories, eq(categories.id, products.categoryId))
-        .innerJoin(brands, eq(brands.id, products.brandId))
-        .where(and(eq(products.status, "PUBLISHED"), eq(brands.status, "PUBLISHED")))
-        .groupBy(categories.slug, brands.name, brands.slug),
-      db
-        .select({ name: brands.name, slug: brands.slug })
-        .from(brands)
-        .where(eq(brands.status, "PUBLISHED"))
-        .orderBy(brands.name),
-    ]);
-
-    for (const row of rows) {
-      const existing = byCategory.get(row.categorySlug) ?? {
-        categorySlug: row.categorySlug,
-        publishedProducts: 0,
-        brands: [],
-      };
-      existing.publishedProducts += Number(row.productCount);
-      existing.brands.push({ label: row.brandName, href: `/marcas/${row.brandSlug}` });
-      byCategory.set(row.categorySlug, existing);
-    }
-
-    for (const entry of byCategory.values()) {
-      entry.brands.sort((a, b) => a.label.localeCompare(b.label));
-    }
-
-    allBrands.push(...publishedBrands.map((b) => ({ label: b.name, href: `/marcas/${b.slug}` })));
-  } catch {
-    return { byCategory, allBrands };
-  }
-
-  return { byCategory, allBrands };
-}
-
-/** Kept for callers that only need per-category facts. */
-export async function getCategoryCatalogFacts(): Promise<Map<string, CategoryCatalogFacts>> {
-  return (await getCatalogNavigationFacts()).byCategory;
-}
 
 function buildHiddenMatcher(settings: MenuEntrySetting[]): (href: string) => boolean {
   const hiddenPaths = settings
@@ -105,6 +34,35 @@ function filterSections(
   return sections
     .map((section) => ({ ...section, items: section.items.filter((i) => !isHidden(i.href)) }))
     .filter((section) => section.items.length > 0);
+}
+
+const FOOTER_BRAND_LIMIT = 8;
+
+/**
+ * Footer order: catalog products first, then explore, published brands and account. Catalog
+ * columns simply drop out when the catalog cannot be read, so the footer degrades to its static
+ * columns instead of listing products or brands that may not exist.
+ */
+function buildFooterColumns(
+  staticColumns: FooterColumn[],
+  catalog: {
+    productColumns: FooterColumn[];
+    brands: NavLink[];
+    isHidden: (href: string) => boolean;
+  }
+): FooterColumn[] {
+  const [explore, ...rest] = staticColumns;
+  const brandColumn: FooterColumn = {
+    title: "Marcas",
+    links: catalog.brands.slice(0, FOOTER_BRAND_LIMIT),
+  };
+
+  return [...catalog.productColumns, ...(explore ? [explore] : []), brandColumn, ...rest]
+    .map((column) => ({
+      ...column,
+      links: column.links.filter((link) => !catalog.isHidden(link.href)),
+    }))
+    .filter((column) => column.links.length > 0);
 }
 
 /**
@@ -189,8 +147,12 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
     primaryNav,
     shelves: buildMenuShelves(catalogEntries, productTypes),
     productTypes,
-    footerColumns: NAVIGATION_CONFIG.footerColumns
-      .map((column) => ({ ...column, links: column.links.filter((l) => !isHidden(l.href)) }))
-      .filter((column) => column.links.length > 0),
+    footerColumns: buildFooterColumns(NAVIGATION_CONFIG.footerColumns, {
+      productColumns: buildFooterProductColumns(catalogEntries, (slug) =>
+        isHidden(`/categorias/${slug}`)
+      ),
+      brands: facts.allBrands,
+      isHidden,
+    }),
   };
 }

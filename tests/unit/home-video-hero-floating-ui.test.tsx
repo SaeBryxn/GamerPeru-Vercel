@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 
-import fs from "node:fs";
-import path from "node:path";
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { HERO_EMBED_SRC, VideoHero } from "@/components/home/video-hero/video-hero";
 import { ProductCarousel } from "@/components/home/product-carousel/product-carousel";
 import { FeatureVideo, buildFeatureEmbedSrc } from "@/components/home/feature-video/feature-video";
@@ -19,9 +17,13 @@ import {
   TrustStrip,
 } from "@/components/home";
 import type { ProductDiscoveryItem } from "@/lib/catalog/types";
-import { ChatWidget, SocialRail } from "@/components/floating";
+import { SocialRail, WhatsAppButton } from "@/components/floating";
 import { PROMO_PILL, SOCIAL_LINKS } from "@/config/social-links";
-import { STOREFRONT_INVENTORY } from "@/lib/catalog/storefront-inventory";
+
+const publicEnvMock = vi.hoisted(() => ({
+  NEXT_PUBLIC_WHATSAPP_NUMBER: undefined as string | undefined,
+}));
+vi.mock("@/config/public-env", () => ({ publicEnv: publicEnvMock }));
 
 beforeAll(() => {
   // jsdom has no IntersectionObserver; whileInView only needs it to exist.
@@ -79,48 +81,23 @@ describe("Social rail", () => {
   });
 });
 
-describe("Chat widget", () => {
-  it("opens from the launcher and shows the welcome, product card and composer", async () => {
-    const user = userEvent.setup();
-    render(<ChatWidget />);
+describe("WhatsApp button", () => {
+  it("opens a prefilled chat with the store number", () => {
+    publicEnvMock.NEXT_PUBLIC_WHATSAPP_NUMBER = "51987654321";
+    render(<WhatsAppButton />);
 
-    await user.click(screen.getByRole("button", { name: "Chat" }));
-    // The launcher animates out before the window mounts (AnimatePresence).
-    await screen.findByTestId("chat-window");
-
-    expect(screen.getByText(/Bienvenido a Gamer Perú/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Iniciar sesión" }).getAttribute("href")).toBe(
-      "/auth/login"
-    );
-
-    const featured = STOREFRONT_INVENTORY[0]!;
-    const productLink = screen.getByTestId("chat-product-card");
-    expect(productLink.getAttribute("href")).toBe(`/productos/${featured.slug}`);
-    expect(productLink.textContent).toContain(featured.name);
-
-    expect(screen.getByPlaceholderText("Pregunta lo que quieras...")).toBeTruthy();
+    const link = screen.getByRole("link", { name: "Escríbenos por WhatsApp" });
+    const href = new URL(link.getAttribute("href")!);
+    expect(href.origin + href.pathname).toBe("https://wa.me/51987654321");
+    expect(href.searchParams.get("text")).toContain("Gamer Perú");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
   });
 
-  it("answers that the assistant is not connected instead of faking a reply", async () => {
-    const user = userEvent.setup();
-    render(<ChatWidget />);
-
-    await user.click(screen.getByRole("button", { name: "Chat" }));
-    await screen.findByTestId("chat-window");
-    await user.type(screen.getByTestId("chat-input"), "¿Tienen stock?");
-    await user.click(screen.getByRole("button", { name: "Enviar mensaje" }));
-
-    expect(screen.getByText("¿Tienen stock?")).toBeTruthy();
-    expect(screen.getByText(/todavía no está conectado/)).toBeTruthy();
-  });
-
-  it("carries no competitor branding or third-party platform claims", () => {
-    const source = fs.readFileSync(
-      path.resolve(__dirname, "../../src/components/floating/chat-widget/chat-widget.tsx"),
-      "utf8"
-    );
-    expect(source.toLowerCase()).not.toContain("wlmouse");
-    expect(source.toLowerCase()).not.toContain("shopify");
+  it("renders nothing while no store number is configured", () => {
+    publicEnvMock.NEXT_PUBLIC_WHATSAPP_NUMBER = undefined;
+    const { container } = render(<WhatsAppButton />);
+    expect(container.innerHTML).toBe("");
   });
 });
 

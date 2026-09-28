@@ -22,6 +22,10 @@ vi.mock("@/lib/navigation/menu-settings", () => ({
     settingsMock.value.filter((e) => e.isVisible).map((e) => e.id),
 }));
 
+vi.mock("@/lib/navigation/catalog-facts", () => ({
+  getCatalogNavigationFacts: async () => factsMock,
+}));
+
 vi.mock("@/db", () => ({ db: {} }));
 
 function defaultSettings(): MenuEntrySetting[] {
@@ -76,9 +80,6 @@ describe("Resolved storefront navigation", () => {
 
   async function resolve() {
     const mod = await import("@/lib/navigation/resolve-navigation");
-    vi.spyOn(mod, "getCatalogNavigationFacts").mockResolvedValue(
-      factsMock as unknown as Awaited<ReturnType<typeof mod.getCatalogNavigationFacts>>
-    );
     return mod.getStorefrontNavigation();
   }
 

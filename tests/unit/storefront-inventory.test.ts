@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { getQuickResults } from "@/components/search/search-quick-results";
 import {
   STOREFRONT_INVENTORY,
   inventoryByCategory,
@@ -32,28 +31,5 @@ describe("storefront inventory", () => {
     expect(first?.name).toBe("ATK A9 Plus 2.0 Black");
     expect(first?.isPopular).toBe(true);
     expect(first?.priceCents).toBe(18900);
-  });
-});
-
-describe("search quick results", () => {
-  it("groups the whole inventory for an empty query", () => {
-    const groups = getQuickResults("");
-    expect(groups.map((group) => group.label)).toEqual(["Mouse", "Mousepad", "Skates"]);
-    expect(groups.reduce((sum, group) => sum + group.products.length, 0)).toBe(14);
-  });
-
-  it("matches every word, ignoring case and accents", () => {
-    const groups = getQuickResults("SKY órange");
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.products.map((p) => p.name)).toEqual([
-      "ATK Sky Orange (Large Size)",
-      "ATK Sky Orange (Small Size)",
-    ]);
-  });
-
-  it("matches by group label and brand", () => {
-    expect(getQuickResults("skates")[0]?.products).toHaveLength(2);
-    expect(getQuickResults("mchose")[0]?.products).toHaveLength(3);
-    expect(getQuickResults("zzzz")).toEqual([]);
   });
 });

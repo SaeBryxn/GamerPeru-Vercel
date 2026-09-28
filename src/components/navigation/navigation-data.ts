@@ -1,8 +1,3 @@
-import {
-  inventoryFamilies,
-  productHref,
-  type InventoryCategorySlug,
-} from "@/lib/catalog/storefront-inventory";
 import type { FooterColumn, NavigationConfig, NavLink } from "./types";
 
 /**
@@ -22,20 +17,12 @@ const PRODUCT_TYPES: NavLink[] = [
 ];
 
 /**
- * Product columns come from the storefront inventory, so the footer always
- * lists models the store actually sells. Every other link points at a route
- * that exists today.
+ * Footer columns that never depend on the catalog. Product and brand columns are added at request
+ * time from published catalog data (see resolve-navigation), so the footer never names a product
+ * or brand the store does not carry.
  */
-function modelLinks(categorySlug: InventoryCategorySlug): NavLink[] {
-  return inventoryFamilies()
-    .filter((family) => family.categorySlug === categorySlug)
-    .map((family) => ({ label: family.name, href: productHref(family.lead) }));
-}
-
 function buildFooterColumns(): FooterColumn[] {
   return [
-    { title: "Mouses", links: modelLinks("mouses") },
-    { title: "Mousepads", links: modelLinks("mousepads") },
     {
       title: "Explorar",
       links: [
@@ -47,21 +34,11 @@ function buildFooterColumns(): FooterColumn[] {
       ],
     },
     {
-      title: "Marcas",
-      links: [
-        { label: "ATK", href: "/marcas/atk" },
-        { label: "Mchose", href: "/marcas/mchose" },
-        { label: "JINMS", href: "/marcas/jinms" },
-        { label: "X-Raypad", href: "/marcas/x-raypad" },
-      ],
-    },
-    {
       title: "Tu cuenta",
       links: [
         { label: "Iniciar sesión", href: "/auth/login" },
         { label: "Crear cuenta", href: "/auth/registro" },
         { label: "Mis pedidos", href: "/cuenta/pedidos" },
-        { label: "Favoritos", href: "/cuenta/favoritos" },
         { label: "Carrito", href: "/carrito" },
       ],
     },
@@ -454,7 +431,6 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
   utilityLinks: {
     search: { label: "Buscar productos", href: "/buscar" },
     account: { label: "Mi cuenta", href: "/cuenta" },
-    wishlist: { label: "Lista de favoritos", href: "/cuenta/favoritos" },
     cart: { label: "Carrito de compras", href: "/carrito" },
   },
   footerColumns: buildFooterColumns(),

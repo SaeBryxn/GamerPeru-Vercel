@@ -34,8 +34,6 @@ export function SiteHeader({ config, cartCount, className }: SiteHeaderProps) {
               searchLabel={config.utilityLinks.search.label}
               accountHref={config.utilityLinks.account.href}
               accountLabel={config.utilityLinks.account.label}
-              wishlistHref={config.utilityLinks.wishlist.href}
-              wishlistLabel={config.utilityLinks.wishlist.label}
               cartHref={config.utilityLinks.cart.href}
               cartLabel={config.utilityLinks.cart.label}
               cartCount={cartCount}

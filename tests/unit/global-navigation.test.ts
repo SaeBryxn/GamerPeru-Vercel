@@ -58,14 +58,17 @@ describe("GP-009 Global Navigation — Unit Contracts & Drift Protection", () =>
 
     // Utility links
     const utilities = Object.values(NAVIGATION_CONFIG.utilityLinks);
-    expect(utilities.length).toBe(4);
+    expect(utilities.length).toBe(3);
     for (const util of utilities) {
       expect(util.label).toBeTruthy();
       expect(util.href.startsWith("/")).toBe(true);
     }
 
     // Footer columns: product models, catalog entry points, brands and account
-    expect(NAVIGATION_CONFIG.footerColumns.length).toBe(5);
+    expect(NAVIGATION_CONFIG.footerColumns.map((column) => column.title)).toEqual([
+      "Explorar",
+      "Tu cuenta",
+    ]);
     for (const col of NAVIGATION_CONFIG.footerColumns) {
       expect(col.title).toBeTruthy();
       for (const link of col.links) {

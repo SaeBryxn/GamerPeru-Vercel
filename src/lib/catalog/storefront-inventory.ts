@@ -1,7 +1,9 @@
+import "server-only";
+
 /**
- * Real storefront inventory used by the local catalog preview
- * (DEV_CATALOG_PREVIEW=1), the mega-menu shelves and the search panel's quick
- * results. Client-safe: plain data, no server imports.
+ * Seed inventory for the local catalog preview (DEV_CATALOG_PREVIEW=1) only. The public store
+ * reads the database; nothing here may reach a storefront bundle, which the server-only import
+ * enforces.
  *
  * Product photos: drop each file at `public${imagePlaceholder}` (e.g.
  * public/media/productos/atk-a9-plus-2-0-black.jpg). `/media` is the local
@@ -205,47 +207,4 @@ export function inventoryByCategory(categorySlug: InventoryCategorySlug): Invent
   return STOREFRONT_INVENTORY.filter((item) => item.categorySlug === categorySlug).sort(
     (a, b) => Number(b.isPopular) - Number(a.isPopular)
   );
-}
-
-export function productHref(item: InventoryItem): string {
-  return `/productos/${item.slug}`;
-}
-
-export interface InventoryFamily {
-  id: string;
-  name: string;
-  brand: { name: string; slug: string };
-  categorySlug: InventoryCategorySlug;
-  /** Listings of this model, popular first. */
-  items: InventoryItem[];
-  /** Listing opened from the family card. */
-  lead: InventoryItem;
-  fromPriceCents: number;
-}
-
-/**
- * One entry per model: the colorways of a model collapse into a single card,
- * and their count is what the superscript on that card means.
- */
-export function inventoryFamilies(): InventoryFamily[] {
-  const byFamily = new Map<string, InventoryItem[]>();
-  for (const item of STOREFRONT_INVENTORY) {
-    const current = byFamily.get(item.family);
-    if (current) current.push(item);
-    else byFamily.set(item.family, [item]);
-  }
-
-  return [...byFamily.entries()].map(([name, items]) => {
-    const sorted = [...items].sort((a, b) => Number(b.isPopular) - Number(a.isPopular));
-    const lead = sorted[0]!;
-    return {
-      id: slugifyProductName(name),
-      name,
-      brand: lead.brand,
-      categorySlug: lead.categorySlug,
-      items: sorted,
-      lead,
-      fromPriceCents: Math.min(...items.map((item) => item.priceCents)),
-    };
-  });
 }

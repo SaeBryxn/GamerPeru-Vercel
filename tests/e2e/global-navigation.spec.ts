@@ -80,11 +80,13 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await page.goto("/");
 
     const searchLink = page.getByRole("link", { name: "Buscar productos" });
-    const wishlistLink = page.getByRole("link", { name: "Lista de favoritos" });
     const accountLink = page.getByRole("link", { name: "Mi cuenta" });
     const cartLink = page.getByRole("link", { name: "Carrito de compras" });
 
-    const links = [searchLink, wishlistLink, accountLink, cartLink];
+    // No wishlist entry until favorites have a backend.
+    await expect(page.getByRole("link", { name: "Lista de favoritos" })).toHaveCount(0);
+
+    const links = [searchLink, accountLink, cartLink];
 
     for (const link of links) {
       await expect(link).toBeVisible();

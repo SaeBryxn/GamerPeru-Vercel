@@ -11,7 +11,6 @@ import styles from "./account.module.css";
 interface NavDestination {
   label: string;
   href: string;
-  comingSoon?: boolean;
 }
 
 const NAV_DESTINATIONS: NavDestination[] = [
@@ -19,8 +18,6 @@ const NAV_DESTINATIONS: NavDestination[] = [
   { label: "Mis pedidos", href: "/cuenta/pedidos" },
   { label: "Direcciones", href: "/cuenta/direcciones" },
   { label: "Datos personales", href: "/cuenta/perfil" },
-  { label: "Favoritos", href: "/cuenta/favoritos", comingSoon: true },
-  { label: "Referidos", href: "/cuenta/referidos", comingSoon: true },
 ];
 
 const PILL_TRANSITION = { type: "spring", stiffness: 420, damping: 36, mass: 0.8 } as const;
@@ -86,7 +83,6 @@ export function AccountNavigation({ ordersInTransit }: AccountNavigationProps) {
                     {ordersInTransit}
                   </span>
                 )}
-                {item.comingSoon && <span className={styles.navSoon}>Pronto</span>}
               </Link>
             </li>
           );
