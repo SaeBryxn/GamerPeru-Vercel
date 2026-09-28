@@ -1,16 +1,18 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import type { User } from "@supabase/supabase-js";
 import { CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { loginSchema } from "@/lib/auth/validation";
 import { mapAuthError } from "@/lib/auth/errors";
 import { initiateGoogleOAuth } from "@/lib/auth/google-oauth";
-import { TextField } from "@/components/ui/input/text-field";
+import { AuthField } from "./auth-field";
+import { AuthSubmitButton } from "./auth-submit-button";
 import { AUTH_ITEM_VARIANTS, AUTH_LIST_VARIANTS } from "./auth-motion";
 import { GoogleIcon } from "./google-icon";
 import styles from "./auth.module.css";
@@ -122,36 +124,40 @@ export function LoginForm() {
 
   return (
     <>
-      <AnimatePresence>
-        {welcomeName !== null ? (
-          <motion.div
-            key="welcome"
-            className={styles.welcome}
-            role="status"
-            aria-live="polite"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
-          >
-            <motion.p
-              className={styles.welcomeTitle}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, ease: "easeOut", delay: 0.1 }}
+      {/*
+        Portaled to <body>: the auth column animates with a transform, which would otherwise
+        make this fixed layer size itself to the column instead of the viewport.
+      */}
+      {welcomeName !== null
+        ? createPortal(
+            <motion.div
+              className={styles.welcome}
+              role="status"
+              aria-live="polite"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
             >
-              {welcomeName ? `Bienvenido, ${welcomeName}` : "Bienvenido"}
-            </motion.p>
-            <motion.p
-              className={styles.welcomeHint}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, ease: "easeOut", delay: 0.25 }}
-            >
-              Preparando tu cuenta…
-            </motion.p>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+              <motion.p
+                className={styles.welcomeTitle}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+              >
+                {welcomeName ? `Bienvenido, ${welcomeName}` : "Bienvenido"}
+              </motion.p>
+              <motion.p
+                className={styles.welcomeHint}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
+              >
+                Preparando tu cuenta…
+              </motion.p>
+            </motion.div>,
+            document.body
+          )
+        : null}
 
       <motion.div
         variants={AUTH_LIST_VARIANTS}
@@ -195,7 +201,7 @@ export function LoginForm() {
 
         <form onSubmit={handleSubmit} noValidate className={styles.form}>
           <motion.div variants={AUTH_ITEM_VARIANTS}>
-            <TextField
+            <AuthField
               id="login-email"
               name="email"
               type="email"
@@ -210,7 +216,7 @@ export function LoginForm() {
           </motion.div>
 
           <motion.div variants={AUTH_ITEM_VARIANTS}>
-            <TextField
+            <AuthField
               id="login-password"
               name="password"
               type="password"
@@ -224,16 +230,9 @@ export function LoginForm() {
             />
           </motion.div>
 
-          <motion.button
-            type="submit"
-            variants={AUTH_ITEM_VARIANTS}
-            disabled={isBusy}
-            className={styles.primaryButton}
-            whileHover={isBusy ? undefined : { scale: 1.01 }}
-            whileTap={isBusy ? undefined : { scale: 0.98 }}
-          >
+          <AuthSubmitButton disabled={isBusy} variants={AUTH_ITEM_VARIANTS}>
             {isSubmitting ? "Iniciando sesión..." : "Iniciar sesión"}
-          </motion.button>
+          </AuthSubmitButton>
         </form>
 
         <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.footerLinks}>

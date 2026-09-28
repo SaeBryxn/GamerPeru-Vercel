@@ -3,7 +3,7 @@
 import React, { useActionState } from "react";
 import Link from "next/link";
 import { verifyConfirmationOtpAction, type VerifyOtpState } from "@/lib/auth/actions";
-import { Button } from "@/components/ui/button";
+import { AuthSubmitButton } from "./auth-submit-button";
 import styles from "./auth.module.css";
 
 export interface ConfirmFormProps {
@@ -44,15 +44,7 @@ export function ConfirmForm({ tokenHash, type }: ConfirmFormProps) {
         <input type="hidden" name="token_hash" value={tokenHash} />
         <input type="hidden" name="type" value={type} />
 
-        <Button
-          type="submit"
-          variant="primary"
-          fullWidth
-          disabled={isPending}
-          className={styles.submitButton}
-        >
-          {buttonLabel}
-        </Button>
+        <AuthSubmitButton disabled={isPending}>{buttonLabel}</AuthSubmitButton>
       </form>
 
       <div className={styles.footerLinks}>

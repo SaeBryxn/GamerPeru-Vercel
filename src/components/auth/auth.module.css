@@ -1,78 +1,58 @@
+/* Full-screen canvas: auth screens have no card, only a centered column on the page background. */
 .pageContainer {
   display: flex;
-  min-height: calc(100vh - 160px);
-  align-items: center;
-  justify-content: center;
-  padding: 48px 16px;
-  background-color: var(--color-surface-canvas);
-}
-
-/* Flat card: a hairline border and a barely-there shadow separate it from the canvas. */
-.authCard {
-  position: relative;
-  overflow: hidden;
   width: 100%;
-  max-width: 420px;
-  padding: 40px 36px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 16px;
-  background-color: var(--color-surface-card);
-  box-shadow: 0 1px 2px rgba(9, 9, 11, 0.04);
-}
-
-/* Covers the whole card after a successful sign-in, title included, until the redirect. */
-.welcome {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 32px;
+  padding: 48px 20px;
   background-color: var(--color-surface-card);
-  text-align: center;
 }
 
-.welcomeTitle {
-  margin: 0;
+.authColumn {
+  width: 100%;
+  max-width: 380px;
+}
+
+.wordmark {
+  display: inline-block;
+  margin-bottom: 40px;
   font-family: var(--font-heading), sans-serif;
-  font-size: 26px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #171717;
+  text-decoration: none;
 }
 
-.welcomeHint {
-  margin: 0;
-  font-size: 14px;
-  color: var(--color-text-muted);
+.wordmarkDot {
+  color: var(--color-brand-primary);
 }
 
-@media (max-width: 480px) {
-  .authCard {
-    padding: 32px 20px;
-  }
+.wordmark:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #171717;
+  outline-offset: 4px;
 }
 
 .header {
-  margin-bottom: 28px;
-  text-align: center;
+  margin-bottom: 32px;
 }
 
 .title {
   margin: 0 0 8px;
   font-family: var(--font-heading), sans-serif;
-  font-size: 24px;
+  font-size: 30px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--color-text-primary);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: #171717;
 }
 
 .subtitle {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
   color: var(--color-text-muted);
 }
@@ -80,7 +60,7 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .nameRow {
@@ -96,58 +76,62 @@
 }
 
 /*
- * Inputs inside auth cards: a near-white fill instead of a hard white box, and a focus state that
- * darkens the border instead of drawing the browser's blue ring. The doubled edge (border plus a
- * 1px shadow) keeps focus clearly visible for keyboard users.
+ * Inputs: white, a neutral-200 hairline and a placeholder instead of a visible label. Focus darkens
+ * the border (doubled with a 1px shadow so keyboard focus stays obvious) instead of a blue ring.
  */
-.authCard input {
-  background-color: var(--color-surface-canvas);
-  border-color: var(--color-border-subtle);
+.authColumn input {
+  height: 48px;
+  padding: 0 16px;
+  border-color: #e5e5e5;
   border-radius: 10px;
+  background-color: var(--color-surface-card);
+  font-size: 15px;
   transition:
     border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease;
+    box-shadow 0.2s ease;
 }
 
-.authCard input:hover:not(:disabled) {
-  border-color: var(--color-border-default);
+.authColumn input::placeholder {
+  color: #a3a3a3;
 }
 
-.authCard input:focus,
-.authCard input:focus-visible {
+.authColumn input:hover:not(:disabled) {
+  border-color: #d4d4d4;
+}
+
+.authColumn input:focus,
+.authColumn input:focus-visible {
   outline: none;
-  border-color: var(--color-text-primary);
-  background-color: var(--color-surface-card);
-  box-shadow: 0 0 0 1px var(--color-text-primary);
+  border-color: #171717;
+  box-shadow: 0 0 0 1px #171717;
 }
 
-/* Chrome paints autofilled fields light blue; an inset shadow repaints them with our fill. */
-.authCard input:-webkit-autofill {
-  -webkit-text-fill-color: var(--color-text-primary);
-  box-shadow: 0 0 0 1000px var(--color-surface-canvas) inset;
-  caret-color: var(--color-text-primary);
+/* Chrome paints autofilled fields light blue; an inset shadow repaints them white. */
+.authColumn input:-webkit-autofill {
+  -webkit-text-fill-color: #171717;
+  box-shadow: 0 0 0 1000px var(--color-surface-card) inset;
+  caret-color: #171717;
 }
 
-.authCard input:-webkit-autofill:focus {
+.authColumn input:-webkit-autofill:focus {
   box-shadow:
     0 0 0 1000px var(--color-surface-card) inset,
-    0 0 0 1px var(--color-text-primary);
+    0 0 0 1px #171717;
 }
 
 .alerts {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .alert {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 12px 14px;
   margin-bottom: 16px;
+  padding: 12px 14px;
   border-radius: 10px;
   font-size: 14px;
   line-height: 1.45;
@@ -182,12 +166,11 @@
 .footerLinks {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
-  margin-top: 24px;
-  font-size: 13px;
+  margin-top: 28px;
+  font-size: 14px;
   color: var(--color-text-muted);
-  text-align: center;
 }
 
 .footerLinks p {
@@ -207,22 +190,17 @@
 
 .link:focus-visible {
   border-radius: 4px;
-  outline: 2px solid var(--color-text-primary);
+  outline: 2px solid #171717;
   outline-offset: 2px;
 }
 
-.submitButton {
-  margin-top: 8px;
-  width: 100%;
-}
-
-/* Solid crimson with no border or glow; white on --color-brand-primary keeps AA contrast. */
+/* Solid crimson, no border or glow; white on --color-brand-primary keeps AA contrast. */
 .primaryButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 46px;
+  height: 48px;
   margin-top: 8px;
   border: none;
   border-radius: 10px;
@@ -240,7 +218,7 @@
 }
 
 .primaryButton:focus-visible {
-  outline: 2px solid var(--color-text-primary);
+  outline: 2px solid #171717;
   outline-offset: 2px;
 }
 
@@ -252,41 +230,42 @@
 .divider {
   display: flex;
   align-items: center;
-  margin: 20px 0;
+  margin: 24px 0;
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: #a3a3a3;
 }
 
 .divider::before,
 .divider::after {
   content: "";
   flex: 1;
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .divider::before {
-  margin-right: 12px;
+  margin-right: 14px;
 }
 
 .divider::after {
-  margin-left: 12px;
+  margin-left: 14px;
 }
 
+/* Wide, transparent, one hairline: the Google mark carries the button. */
 .googleButton {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  height: 46px;
+  height: 48px;
   padding: 0 16px;
-  border: 1px solid var(--color-border-default);
+  border: 1px solid #e5e5e5;
   border-radius: 10px;
-  background-color: var(--color-surface-card);
+  background-color: transparent;
   font-family: var(--font-body), sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
-  color: var(--color-text-primary);
+  color: #171717;
   cursor: pointer;
   transition:
     background-color 0.2s ease,
@@ -294,12 +273,12 @@
 }
 
 .googleButton:hover:not(:disabled) {
-  background-color: var(--color-surface-canvas);
-  border-color: var(--color-border-default);
+  border-color: #d4d4d4;
+  background-color: #fafafa;
 }
 
 .googleButton:focus-visible {
-  outline: 2px solid var(--color-text-primary);
+  outline: 2px solid #171717;
   outline-offset: 2px;
 }
 
@@ -310,12 +289,46 @@
 
 .googleIcon {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+}
+
+/* Post sign-in: the greeting takes the whole viewport until the redirect. */
+.welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  padding: 24px;
+  background-color: var(--color-surface-card);
+  text-align: center;
+}
+
+.welcomeTitle {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(32px, 6vw, 56px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: #171717;
+}
+
+.welcomeHint {
+  margin: 0;
+  font-size: 15px;
+  color: var(--color-text-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .authCard input,
+  .authColumn input,
   .primaryButton,
   .googleButton {
     transition: none;

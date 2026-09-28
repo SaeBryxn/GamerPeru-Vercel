@@ -600,9 +600,11 @@ describe("GP-015 AUTH7-AR1: CustomerProfile Behavioral Runtime Suite", () => {
       mockState.selectResultsQueue.push([]); // No profile
       mockState.authUser.user_metadata = {}; // No usable names
 
+      const { AuthCard } = await import("@/components/auth/auth-card");
       const jsx = await CompletarPerfilPage();
       expect(jsx).toBeDefined();
-      expect(jsx.type).toBe("main");
+      // AuthCard renders the single <main>; the page must not wrap it in another one.
+      expect(jsx.type).toBe(AuthCard);
     });
   });
 });

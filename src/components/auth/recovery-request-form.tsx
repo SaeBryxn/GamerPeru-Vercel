@@ -5,8 +5,8 @@ import Link from "next/link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { recoveryRequestSchema } from "@/lib/auth/validation";
 import { mapAuthError } from "@/lib/auth/errors";
-import { TextField } from "@/components/ui/input/text-field";
-import { Button } from "@/components/ui/button";
+import { AuthField } from "./auth-field";
+import { AuthSubmitButton } from "./auth-submit-button";
 import styles from "./auth.module.css";
 
 export function RecoveryRequestForm() {
@@ -83,7 +83,7 @@ export function RecoveryRequestForm() {
       ) : null}
 
       <form onSubmit={handleSubmit} noValidate className={styles.form}>
-        <TextField
+        <AuthField
           id="recovery-email"
           name="email"
           type="email"
@@ -96,15 +96,9 @@ export function RecoveryRequestForm() {
           disabled={isSubmitting}
         />
 
-        <Button
-          type="submit"
-          variant="primary"
-          fullWidth
-          disabled={isSubmitting}
-          className={styles.submitButton}
-        >
+        <AuthSubmitButton disabled={isSubmitting}>
           {isSubmitting ? "Enviando instrucciones..." : "Recuperar contraseña"}
-        </Button>
+        </AuthSubmitButton>
       </form>
 
       <div className={styles.footerLinks}>

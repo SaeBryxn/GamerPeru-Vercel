@@ -3,8 +3,8 @@
 import React, { useState } from "react";
 import { profileCompletionSchema } from "@/lib/auth/validation";
 import { completeCustomerProfileAction } from "@/lib/auth/actions";
-import { TextField } from "@/components/ui/input/text-field";
-import { Button } from "@/components/ui/button";
+import { AuthField } from "./auth-field";
+import { AuthSubmitButton } from "./auth-submit-button";
 import styles from "./auth.module.css";
 
 export function ProfileCompletionForm() {
@@ -55,7 +55,7 @@ export function ProfileCompletionForm() {
       ) : null}
 
       <form onSubmit={handleSubmit} noValidate className={styles.form}>
-        <TextField
+        <AuthField
           id="profile-firstName"
           name="firstName"
           type="text"
@@ -68,7 +68,7 @@ export function ProfileCompletionForm() {
           disabled={isSubmitting}
         />
 
-        <TextField
+        <AuthField
           id="profile-lastName"
           name="lastName"
           type="text"
@@ -81,15 +81,9 @@ export function ProfileCompletionForm() {
           disabled={isSubmitting}
         />
 
-        <Button
-          type="submit"
-          variant="primary"
-          fullWidth
-          disabled={isSubmitting}
-          className={styles.submitButton}
-        >
+        <AuthSubmitButton disabled={isSubmitting}>
           {isSubmitting ? "Guardando perfil..." : "Continuar"}
-        </Button>
+        </AuthSubmitButton>
       </form>
     </div>
   );

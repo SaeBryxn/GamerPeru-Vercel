@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { passwordChangeSchema } from "@/lib/auth/validation";
 import { mapAuthError } from "@/lib/auth/errors";
-import { TextField } from "@/components/ui/input/text-field";
-import { Button } from "@/components/ui/button";
+import { AuthField } from "./auth-field";
+import { AuthSubmitButton } from "./auth-submit-button";
 import styles from "./auth.module.css";
 
 export function PasswordChangeForm() {
@@ -67,7 +67,7 @@ export function PasswordChangeForm() {
       ) : null}
 
       <form onSubmit={handleSubmit} noValidate className={styles.form}>
-        <TextField
+        <AuthField
           id="change-password"
           name="password"
           type="password"
@@ -81,7 +81,7 @@ export function PasswordChangeForm() {
           disabled={isSubmitting}
         />
 
-        <TextField
+        <AuthField
           id="change-confirmPassword"
           name="confirmPassword"
           type="password"
@@ -94,15 +94,9 @@ export function PasswordChangeForm() {
           disabled={isSubmitting}
         />
 
-        <Button
-          type="submit"
-          variant="primary"
-          fullWidth
-          disabled={isSubmitting}
-          className={styles.submitButton}
-        >
+        <AuthSubmitButton disabled={isSubmitting}>
           {isSubmitting ? "Actualizando contraseña..." : "Guardar contraseña"}
-        </Button>
+        </AuthSubmitButton>
       </form>
     </div>
   );

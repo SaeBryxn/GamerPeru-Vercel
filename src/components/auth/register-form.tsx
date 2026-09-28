@@ -8,7 +8,8 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { signupSchema } from "@/lib/auth/validation";
 import { mapAuthError } from "@/lib/auth/errors";
 import { initiateGoogleOAuth } from "@/lib/auth/google-oauth";
-import { TextField } from "@/components/ui/input/text-field";
+import { AuthField } from "./auth-field";
+import { AuthSubmitButton } from "./auth-submit-button";
 import { AUTH_ITEM_VARIANTS, AUTH_LIST_VARIANTS } from "./auth-motion";
 import { GoogleIcon } from "./google-icon";
 import styles from "./auth.module.css";
@@ -130,7 +131,7 @@ export function RegisterForm() {
 
       <form onSubmit={handleSubmit} noValidate className={styles.form}>
         <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.nameRow}>
-          <TextField
+          <AuthField
             id="register-firstName"
             name="firstName"
             type="text"
@@ -143,7 +144,7 @@ export function RegisterForm() {
             disabled={isSubmitting || isGoogleSubmitting}
           />
 
-          <TextField
+          <AuthField
             id="register-lastName"
             name="lastName"
             type="text"
@@ -158,7 +159,7 @@ export function RegisterForm() {
         </motion.div>
 
         <motion.div variants={AUTH_ITEM_VARIANTS}>
-          <TextField
+          <AuthField
             id="register-email"
             name="email"
             type="email"
@@ -173,7 +174,7 @@ export function RegisterForm() {
         </motion.div>
 
         <motion.div variants={AUTH_ITEM_VARIANTS}>
-          <TextField
+          <AuthField
             id="register-password"
             name="password"
             type="password"
@@ -189,7 +190,7 @@ export function RegisterForm() {
         </motion.div>
 
         <motion.div variants={AUTH_ITEM_VARIANTS}>
-          <TextField
+          <AuthField
             id="register-confirmPassword"
             name="confirmPassword"
             type="password"
@@ -203,16 +204,9 @@ export function RegisterForm() {
           />
         </motion.div>
 
-        <motion.button
-          type="submit"
-          variants={AUTH_ITEM_VARIANTS}
-          disabled={isBusy}
-          className={styles.primaryButton}
-          whileHover={isBusy ? undefined : { scale: 1.01 }}
-          whileTap={isBusy ? undefined : { scale: 0.98 }}
-        >
+        <AuthSubmitButton disabled={isBusy} variants={AUTH_ITEM_VARIANTS}>
           {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}
-        </motion.button>
+        </AuthSubmitButton>
       </form>
 
       <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.footerLinks}>

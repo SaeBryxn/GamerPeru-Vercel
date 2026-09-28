@@ -7,6 +7,8 @@ export interface TextFieldProps extends Omit<InputProps, "hasError"> {
   description?: React.ReactNode;
   error?: React.ReactNode;
   containerClassName?: string;
+  /** Keeps the label for assistive technology while the placeholder carries it visually. */
+  hideLabel?: boolean;
 }
 
 export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
@@ -18,6 +20,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(func
     required,
     disabled,
     containerClassName,
+    hideLabel = false,
     className,
     "aria-describedby": customDescribedBy,
     ...rest
@@ -35,9 +38,9 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(func
 
   return (
     <div className={[styles.container, containerClassName].filter(Boolean).join(" ")}>
-      <label htmlFor={inputId} className={styles.label}>
+      <label htmlFor={inputId} className={hideLabel ? styles.visuallyHidden : styles.label}>
         {label}
-        {required ? (
+        {required && !hideLabel ? (
           <span className={styles.requiredIndicator} aria-hidden="true">
             *
           </span>

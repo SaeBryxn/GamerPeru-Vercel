@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { ensureCustomerProfile } from "@/lib/auth/profile";
 import { AuthCard } from "@/components/auth/auth-card";
 import { ProfileCompletionForm } from "@/components/auth/profile-completion-form";
-import styles from "@/components/auth/auth.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +21,11 @@ export default async function CompletarPerfilPage() {
   }
 
   return (
-    <main className={styles.pageContainer}>
-      <AuthCard
-        title="Completa tu perfil"
-        subtitle="Ingresa tu nombre y apellido para continuar en Gamer Perú."
-      >
-        <ProfileCompletionForm />
-      </AuthCard>
-    </main>
+    <AuthCard
+      title="Completa tu perfil"
+      subtitle="Ingresa tu nombre y apellido para continuar en Gamer Perú."
+    >
+      <ProfileCompletionForm />
+    </AuthCard>
   );
 }
