@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { publicEnv, validatePublicEnv } from "@/config/public-env";
+import { publicEnv, resolvePublicEnv, validatePublicEnv } from "@/config/public-env";
 import { validateServerEnv } from "@/config/server-env";
 import { R2_BUCKETS } from "@/lib/storage/r2";
 import { inngest } from "@/lib/inngest/client";
@@ -26,6 +26,53 @@ describe("GP-005 Smoke Tests", () => {
         NEXT_PUBLIC_SITE_URL: "invalid-url-format",
       })
     ).toThrow();
+  });
+
+  describe("public environment on deployments", () => {
+    const deployed = {
+      NEXT_PUBLIC_SITE_URL: "https://gamerperu.com",
+      NEXT_PUBLIC_CDN_URL: "https://media.gamerperu.com",
+      NEXT_PUBLIC_SUPABASE_URL: "https://xyzcompany.supabase.co",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_token_123",
+    };
+
+    it("falls back to local defaults for absent or blank values outside a deployment", () => {
+      const env = resolvePublicEnv(
+        { NEXT_PUBLIC_SITE_URL: "", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "  " },
+        { requireDeploymentValues: false }
+      );
+      expect(env.NEXT_PUBLIC_SITE_URL).toBe("http://localhost:3000");
+      expect(env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY).toBe("sb_publishable_placeholder_key");
+    });
+
+    it("names every absent or blank required variable on a deployment", () => {
+      expect(() =>
+        resolvePublicEnv(
+          { ...deployed, NEXT_PUBLIC_CDN_URL: undefined, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "" },
+          { requireDeploymentValues: true }
+        )
+      ).toThrow(
+        "Missing public environment variables for this deployment: NEXT_PUBLIC_CDN_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
+      );
+    });
+
+    it("accepts complete deployment values, trimming surrounding whitespace", () => {
+      const env = resolvePublicEnv(
+        { ...deployed, NEXT_PUBLIC_SITE_URL: " https://gamerperu.com " },
+        { requireDeploymentValues: true }
+      );
+      expect(env.NEXT_PUBLIC_SITE_URL).toBe("https://gamerperu.com");
+      expect(env.NEXT_PUBLIC_WHATSAPP_NUMBER).toBeUndefined();
+    });
+
+    it("still rejects malformed URLs on a deployment", () => {
+      expect(() =>
+        resolvePublicEnv(
+          { ...deployed, NEXT_PUBLIC_SITE_URL: "gamerperu.com" },
+          { requireDeploymentValues: true }
+        )
+      ).toThrow();
+    });
   });
 
   it("validates real server environment parser succeeds with AI config absent or with placeholders and enforces production constraints", () => {
