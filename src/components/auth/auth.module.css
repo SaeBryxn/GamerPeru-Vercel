@@ -7,32 +7,42 @@
   background-color: var(--color-surface-canvas);
 }
 
+/* Flat card: a hairline border and a barely-there shadow separate it from the canvas. */
 .authCard {
   width: 100%;
-  max-width: 440px;
-  background-color: var(--color-surface-card);
+  max-width: 420px;
+  padding: 40px 36px;
   border: 1px solid var(--color-border-subtle);
-  border-radius: 12px;
-  padding: 32px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-radius: 16px;
+  background-color: var(--color-surface-card);
+  box-shadow: 0 1px 2px rgba(9, 9, 11, 0.04);
+}
+
+@media (max-width: 480px) {
+  .authCard {
+    padding: 32px 20px;
+  }
 }
 
 .header {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
   text-align: center;
 }
 
 .title {
+  margin: 0 0 8px;
+  font-family: var(--font-heading), sans-serif;
   font-size: 24px;
   font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--color-text-primary);
-  margin-bottom: 8px;
 }
 
 .subtitle {
+  margin: 0;
   font-size: 14px;
-  color: var(--color-text-secondary);
   line-height: 1.5;
+  color: var(--color-text-muted);
 }
 
 .form {
@@ -53,51 +63,120 @@
   }
 }
 
+/*
+ * Inputs inside auth cards: a near-white fill instead of a hard white box, and a focus state that
+ * darkens the border instead of drawing the browser's blue ring. The doubled edge (border plus a
+ * 1px shadow) keeps focus clearly visible for keyboard users.
+ */
+.authCard input {
+  background-color: var(--color-surface-canvas);
+  border-color: var(--color-border-subtle);
+  border-radius: 10px;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.authCard input:hover:not(:disabled) {
+  border-color: var(--color-border-default);
+}
+
+.authCard input:focus,
+.authCard input:focus-visible {
+  outline: none;
+  border-color: var(--color-text-primary);
+  background-color: var(--color-surface-card);
+  box-shadow: 0 0 0 1px var(--color-text-primary);
+}
+
+/* Chrome paints autofilled fields light blue; an inset shadow repaints them with our fill. */
+.authCard input:-webkit-autofill {
+  -webkit-text-fill-color: var(--color-text-primary);
+  box-shadow: 0 0 0 1000px var(--color-surface-canvas) inset;
+  caret-color: var(--color-text-primary);
+}
+
+.authCard input:-webkit-autofill:focus {
+  box-shadow:
+    0 0 0 1000px var(--color-surface-card) inset,
+    0 0 0 1px var(--color-text-primary);
+}
+
+.alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
 .alert {
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
   margin-bottom: 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.alerts .alert {
+  margin-bottom: 0;
+}
+
+.alertIcon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
 }
 
 .alertError {
-  background-color: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
+  background-color: var(--color-status-danger-background);
+  color: #9f1239;
 }
 
 .alertSuccess {
-  background-color: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background-color: var(--color-status-success-background);
   color: #166534;
 }
 
 .alertInfo {
   background-color: #f0f9ff;
-  border: 1px solid #bae6fd;
-  color: #0369a1;
+  color: #075985;
 }
 
 .footerLinks {
-  margin-top: 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  font-size: 14px;
-  color: var(--color-text-secondary);
+  gap: 10px;
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--color-text-muted);
   text-align: center;
 }
 
+.footerLinks p {
+  margin: 0;
+}
+
 .link {
-  color: var(--color-brand-primary);
   font-weight: 600;
+  color: var(--color-brand-primary);
   text-decoration: none;
+  text-underline-offset: 3px;
 }
 
 .link:hover {
   text-decoration: underline;
+}
+
+.link:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
 }
 
 .submitButton {
@@ -105,13 +184,45 @@
   width: 100%;
 }
 
+/* Solid crimson with no border or glow; white on --color-brand-primary keeps AA contrast. */
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 46px;
+  margin-top: 8px;
+  border: none;
+  border-radius: 10px;
+  background-color: var(--color-brand-primary);
+  font-family: var(--font-body), sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background-color: var(--color-brand-hover);
+}
+
+.primaryButton:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+.primaryButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .divider {
   display: flex;
   align-items: center;
   margin: 20px 0;
-  text-align: center;
-  color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: 12px;
+  color: var(--color-text-muted);
 }
 
 .divider::before,
@@ -135,22 +246,29 @@
   justify-content: center;
   gap: 10px;
   width: 100%;
-  padding: 10px 16px;
+  height: 46px;
+  padding: 0 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 10px;
   background-color: var(--color-surface-card);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
-  color: var(--color-text-primary);
+  font-family: var(--font-body), sans-serif;
   font-size: 14px;
   font-weight: 500;
+  color: var(--color-text-primary);
   cursor: pointer;
   transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease;
+    background-color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .googleButton:hover:not(:disabled) {
   background-color: var(--color-surface-canvas);
-  border-color: var(--color-border-hover, #cbd5e1);
+  border-color: var(--color-border-default);
+}
+
+.googleButton:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
 }
 
 .googleButton:disabled {
@@ -159,7 +277,15 @@
 }
 
 .googleIcon {
+  flex-shrink: 0;
   width: 18px;
   height: 18px;
-  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .authCard input,
+  .primaryButton,
+  .googleButton {
+    transition: none;
+  }
 }

@@ -3,12 +3,14 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
+import { CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { loginSchema } from "@/lib/auth/validation";
 import { mapAuthError } from "@/lib/auth/errors";
 import { initiateGoogleOAuth } from "@/lib/auth/google-oauth";
 import { TextField } from "@/components/ui/input/text-field";
-import { Button } from "@/components/ui/button";
+import { AUTH_ITEM_VARIANTS, AUTH_LIST_VARIANTS } from "./auth-motion";
 import styles from "./auth.module.css";
 
 function GoogleIcon({ className }: { className?: string }) {
@@ -102,90 +104,97 @@ export function LoginForm() {
     }
   };
 
+  const isBusy = isSubmitting || isGoogleSubmitting;
+  const successMessage = isConfirmed
+    ? "Tu cuenta ha sido confirmada exitosamente. Ya puedes iniciar sesión."
+    : isReset
+      ? "Tu contraseña ha sido actualizada exitosamente. Inicia sesión con tu nueva contraseña."
+      : isSignedOut
+        ? "Sesión cerrada correctamente."
+        : null;
+  const errorMessage =
+    serverError ??
+    (hasOAuthError ? "No pudimos iniciar sesión con Google. Inténtalo nuevamente." : null);
+
   return (
-    <div>
-      {isConfirmed ? (
-        <div role="status" className={`${styles.alert} ${styles.alertSuccess}`}>
-          Tu cuenta ha sido confirmada exitosamente. Ya puedes iniciar sesión.
-        </div>
+    <motion.div variants={AUTH_LIST_VARIANTS} initial="hidden" animate="visible">
+      {successMessage || errorMessage ? (
+        <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.alerts}>
+          {successMessage ? (
+            <div role="status" className={`${styles.alert} ${styles.alertSuccess}`}>
+              <CheckCircle2 className={styles.alertIcon} aria-hidden="true" />
+              <span>{successMessage}</span>
+            </div>
+          ) : null}
+          {errorMessage ? (
+            <div role="alert" className={`${styles.alert} ${styles.alertError}`}>
+              {errorMessage}
+            </div>
+          ) : null}
+        </motion.div>
       ) : null}
 
-      {isReset ? (
-        <div role="status" className={`${styles.alert} ${styles.alertSuccess}`}>
-          Tu contraseña ha sido actualizada exitosamente. Inicia sesión con tu nueva contraseña.
-        </div>
-      ) : null}
+      <motion.div variants={AUTH_ITEM_VARIANTS}>
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          disabled={isBusy}
+          className={styles.googleButton}
+          aria-label="Continuar con Google"
+        >
+          <GoogleIcon className={styles.googleIcon} />
+          <span>{isGoogleSubmitting ? "Conectando con Google..." : "Continuar con Google"}</span>
+        </button>
+      </motion.div>
 
-      {isSignedOut ? (
-        <div role="status" className={`${styles.alert} ${styles.alertSuccess}`}>
-          Sesión cerrada correctamente.
-        </div>
-      ) : null}
-
-      {hasOAuthError ? (
-        <div role="alert" className={`${styles.alert} ${styles.alertError}`}>
-          No pudimos iniciar sesión con Google. Inténtalo nuevamente.
-        </div>
-      ) : null}
-
-      {serverError ? (
-        <div role="alert" className={`${styles.alert} ${styles.alertError}`}>
-          {serverError}
-        </div>
-      ) : null}
-
-      <button
-        type="button"
-        onClick={handleGoogleLogin}
-        disabled={isSubmitting || isGoogleSubmitting}
-        className={styles.googleButton}
-        aria-label="Continuar con Google"
-      >
-        <GoogleIcon className={styles.googleIcon} />
-        <span>{isGoogleSubmitting ? "Conectando con Google..." : "Continuar con Google"}</span>
-      </button>
-
-      <div className={styles.divider}>o</div>
+      <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.divider}>
+        o
+      </motion.div>
 
       <form onSubmit={handleSubmit} noValidate className={styles.form}>
-        <TextField
-          id="login-email"
-          name="email"
-          type="email"
-          label="Correo electrónico"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          error={fieldErrors.email}
-          disabled={isSubmitting || isGoogleSubmitting}
-        />
+        <motion.div variants={AUTH_ITEM_VARIANTS}>
+          <TextField
+            id="login-email"
+            name="email"
+            type="email"
+            label="Correo electrónico"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            error={fieldErrors.email}
+            disabled={isBusy}
+          />
+        </motion.div>
 
-        <TextField
-          id="login-password"
-          name="password"
-          type="password"
-          label="Contraseña"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          error={fieldErrors.password}
-          disabled={isSubmitting || isGoogleSubmitting}
-        />
+        <motion.div variants={AUTH_ITEM_VARIANTS}>
+          <TextField
+            id="login-password"
+            name="password"
+            type="password"
+            label="Contraseña"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            error={fieldErrors.password}
+            disabled={isBusy}
+          />
+        </motion.div>
 
-        <Button
+        <motion.button
           type="submit"
-          variant="primary"
-          fullWidth
-          disabled={isSubmitting || isGoogleSubmitting}
-          className={styles.submitButton}
+          variants={AUTH_ITEM_VARIANTS}
+          disabled={isBusy}
+          className={styles.primaryButton}
+          whileHover={isBusy ? undefined : { scale: 1.01 }}
+          whileTap={isBusy ? undefined : { scale: 0.98 }}
         >
           {isSubmitting ? "Iniciando sesión..." : "Iniciar sesión"}
-        </Button>
+        </motion.button>
       </form>
 
-      <div className={styles.footerLinks}>
+      <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.footerLinks}>
         <Link href="/auth/olvide-password" className={styles.link}>
           ¿Olvidaste tu contraseña?
         </Link>
@@ -195,7 +204,7 @@ export function LoginForm() {
             Regístrate aquí
           </Link>
         </p>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
