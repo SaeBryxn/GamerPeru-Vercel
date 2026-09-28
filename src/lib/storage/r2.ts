@@ -50,6 +50,10 @@ export function buildStorageClient(connection: StorageConnection): S3Client {
     region: explicitEndpoint ? (nonEmpty(connection.region) ?? "auto") : "auto",
     endpoint,
     forcePathStyle: Boolean(explicitEndpoint),
+    // Default checksums are computed at signing time over an empty body, so a presigned PUT
+    // would carry a CRC32 that never matches the file the browser uploads and R2 rejects it.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
     credentials: {
       accessKeyId: connection.accessKeyId.trim(),
       secretAccessKey: connection.secretAccessKey.trim(),

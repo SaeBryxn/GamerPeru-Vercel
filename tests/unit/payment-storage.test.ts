@@ -80,6 +80,36 @@ describe("Payment Storage Security & Structural Validation Unit Tests", () => {
       }
     });
 
+    it("signs R2 upload URLs without a precomputed body checksum", async () => {
+      const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+      const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+      const res = validatePrivateStorageCapability("PROOF_UPLOAD", {
+        accountId: "real-cloudflare-account-id",
+        accessKeyId: "real-access-key-id-12345",
+        secretAccessKey: "real-secret-access-key-67890",
+        proofsBucket: "private-proofs",
+      });
+      expect(res.isAvailable).toBe(true);
+      if (res.isAvailable) {
+        const url = new URL(
+          await getSignedUrl(
+            res.client,
+            new PutObjectCommand({
+              Bucket: "private-proofs",
+              Key: "k.png",
+              ContentType: "image/png",
+            }),
+            { expiresIn: 60 }
+          )
+        );
+        expect(url.hostname).toBe(
+          "private-proofs.real-cloudflare-account-id.r2.cloudflarestorage.com"
+        );
+        expect(url.searchParams.has("x-amz-checksum-crc32")).toBe(false);
+        expect(url.searchParams.has("x-amz-sdk-checksum-algorithm")).toBe(false);
+      }
+    });
+
     it("names the missing variables when storage is unavailable", () => {
       const res = validatePrivateStorageCapability("PROOF_UPLOAD", {
         accountId: "placeholder_r2_account_id",
