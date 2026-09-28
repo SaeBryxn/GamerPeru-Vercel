@@ -11,6 +11,8 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { R2_BUCKETS } from "./r2";
 import { generateUuidV7 } from "@/db/utils/uuid";
+import { logger } from "@/lib/logger";
+import { describeStorageError } from "./storage-error";
 
 export const MAX_PROOF_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
@@ -488,7 +490,12 @@ export async function validateAndFinalizeStagingProof(params: {
       })
     );
     contentLength = headRes.ContentLength ?? 0;
-  } catch {
+  } catch (error) {
+    logger.error({
+      event: "payment_proof_staging_head_failed",
+      bucket,
+      ...describeStorageError(error),
+    });
     return {
       success: false,
       error: "No se encontró el comprobante en almacenamiento temporal.",
@@ -518,7 +525,12 @@ export async function validateAndFinalizeStagingProof(params: {
 
     const byteArray = await getRes.Body.transformToByteArray();
     buffer = Buffer.from(byteArray);
-  } catch {
+  } catch (error) {
+    logger.error({
+      event: "payment_proof_staging_read_failed",
+      bucket,
+      ...describeStorageError(error),
+    });
     return {
       success: false,
       error: "Error al leer el comprobante para validación de seguridad.",
@@ -555,7 +567,12 @@ export async function validateAndFinalizeStagingProof(params: {
         ContentType: validation.mimeType,
       })
     );
-  } catch {
+  } catch (error) {
+    logger.error({
+      event: "payment_proof_finalize_copy_failed",
+      bucket,
+      ...describeStorageError(error),
+    });
     return {
       success: false,
       error: "Error al registrar el comprobante definitivo.",
@@ -588,7 +605,8 @@ export async function bestEffortDeleteR2Object(params: {
         Key: params.key,
       })
     );
-  } catch {
-    // Non-blocking best-effort cleanup
+  } catch (error) {
+    // Cleanup is best-effort; the failure is logged so orphaned objects can be traced.
+    logger.warn({ event: "payment_proof_cleanup_failed", ...describeStorageError(error) });
   }
 }

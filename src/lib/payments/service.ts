@@ -16,6 +16,8 @@ import {
 import { getPaymentSubmissionConfig } from "./config";
 import { generateUuidV7 } from "@/db/utils/uuid";
 import { validatePrivateStorageCapability } from "@/lib/storage/private-config";
+import { logger } from "@/lib/logger";
+import { describeStorageError } from "@/lib/storage/storage-error";
 import {
   bestEffortDeleteR2Object,
   generateProofUploadPresignedPutUrl,
@@ -84,6 +86,7 @@ export async function createPaymentProofUploadIntent(
   // Check Private R2 Storage Capability
   const storageCap = validatePrivateStorageCapability("PROOF_UPLOAD");
   if (!storageCap.isAvailable) {
+    logger.error({ event: "payment_proof_storage_unavailable", reason: storageCap.reason });
     return {
       success: false,
       code: "STORAGE_UNAVAILABLE",
@@ -178,7 +181,8 @@ export async function createPaymentProofUploadIntent(
     if (!txResult.success) {
       return txResult;
     }
-  } catch (_err) {
+  } catch (error) {
+    logger.error({ event: "payment_proof_intent_create_failed", ...describeStorageError(error) });
     return {
       success: false,
       code: "SYSTEM_ERROR",
@@ -196,7 +200,12 @@ export async function createPaymentProofUploadIntent(
       contentType: mime,
       expiresInSeconds: 60,
     });
-  } catch {
+  } catch (error) {
+    logger.error({
+      event: "payment_proof_presign_failed",
+      bucket: storageCap.bucketName,
+      ...describeStorageError(error),
+    });
     return {
       success: false,
       code: "STORAGE_ERROR",
@@ -434,6 +443,7 @@ export async function submitPaymentProof(
   if (input.uploadIntentId) {
     const storageCap = validatePrivateStorageCapability("PROOF_UPLOAD");
     if (!storageCap.isAvailable) {
+      logger.error({ event: "payment_proof_storage_unavailable", reason: storageCap.reason });
       return {
         success: false,
         code: "PROOF_VALIDATION_FAILED",
@@ -894,7 +904,8 @@ export async function submitPaymentProof(
     }
 
     return transactionResult;
-  } catch (_error) {
+  } catch (error) {
+    logger.error({ event: "payment_proof_submit_failed", ...describeStorageError(error) });
     return {
       success: false,
       code: "SYSTEM_ERROR",

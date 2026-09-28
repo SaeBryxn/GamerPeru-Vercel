@@ -61,6 +61,37 @@ describe("Payment Storage Security & Structural Validation Unit Tests", () => {
         expect(res.client).toBeDefined();
       }
     });
+
+    it("accepts an explicit S3 endpoint without an R2 account id", async () => {
+      const res = validatePrivateStorageCapability("PROOF_UPLOAD", {
+        accountId: "placeholder_r2_account_id",
+        accessKeyId: "real-access-key-id-12345",
+        secretAccessKey: "real-secret-access-key-67890",
+        proofsBucket: "private-proofs",
+        endpoint: "https://project.storage.supabase.co/storage/v1/s3",
+        region: "sa-east-1",
+      });
+      expect(res.isAvailable).toBe(true);
+      if (res.isAvailable) {
+        const endpoint = await res.client.config.endpoint?.();
+        expect(endpoint?.hostname).toBe("project.storage.supabase.co");
+        expect(await res.client.config.region()).toBe("sa-east-1");
+        expect(res.client.config.forcePathStyle).toBe(true);
+      }
+    });
+
+    it("names the missing variables when storage is unavailable", () => {
+      const res = validatePrivateStorageCapability("PROOF_UPLOAD", {
+        accountId: "placeholder_r2_account_id",
+        accessKeyId: "real-access-key-id-12345",
+        secretAccessKey: "real-secret-access-key-67890",
+      });
+      expect(res.isAvailable).toBe(false);
+      if (!res.isAvailable) {
+        expect(res.reason).toContain("R2_ACCOUNT_ID (or S3_ENDPOINT)");
+        expect(res.reason).not.toContain("R2_SECRET_ACCESS_KEY");
+      }
+    });
   });
 
   describe("validateImageStructure & Container Endings (Strict V1 Image Container Profile)", () => {

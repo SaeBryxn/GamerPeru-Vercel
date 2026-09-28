@@ -1,7 +1,7 @@
 import "server-only";
-import { S3Client } from "@aws-sdk/client-s3";
+import type { S3Client } from "@aws-sdk/client-s3";
 import { serverEnv } from "@/config/server-env";
-import { R2_BUCKETS } from "./r2";
+import { buildStorageClient, R2_BUCKETS } from "./r2";
 
 export type PrivateStorageCapability = "PROOF_UPLOAD" | "QR_READ";
 
@@ -37,6 +37,8 @@ export function validatePrivateStorageCapability(
     secretAccessKey?: string;
     proofsBucket?: string;
     paymentMediaBucket?: string;
+    endpoint?: string;
+    region?: string;
   }
 ): StorageCapabilityResult {
   if (testStorageClientOverride) {
@@ -53,15 +55,21 @@ export function validatePrivateStorageCapability(
   const accountId = customEnv?.accountId ?? serverEnv.R2_ACCOUNT_ID;
   const accessKeyId = customEnv?.accessKeyId ?? serverEnv.R2_ACCESS_KEY_ID;
   const secretAccessKey = customEnv?.secretAccessKey ?? serverEnv.R2_SECRET_ACCESS_KEY;
+  const endpoint = customEnv ? customEnv.endpoint : serverEnv.S3_ENDPOINT;
+  const region = customEnv ? customEnv.region : serverEnv.S3_REGION;
 
-  if (
-    isPlaceholderOrEmpty(accountId) ||
-    isPlaceholderOrEmpty(accessKeyId) ||
-    isPlaceholderOrEmpty(secretAccessKey)
-  ) {
+  // The account id only names the Cloudflare host; an explicit S3_ENDPOINT already carries it.
+  const needsAccountId = isPlaceholderOrEmpty(endpoint);
+  const missing = [
+    needsAccountId && isPlaceholderOrEmpty(accountId) ? "R2_ACCOUNT_ID (or S3_ENDPOINT)" : null,
+    isPlaceholderOrEmpty(accessKeyId) ? "R2_ACCESS_KEY_ID" : null,
+    isPlaceholderOrEmpty(secretAccessKey) ? "R2_SECRET_ACCESS_KEY" : null,
+  ].filter((name): name is string => name !== null);
+
+  if (missing.length > 0) {
     return {
       isAvailable: false,
-      reason: `Storage credentials not configured or placeholder detected for ${capability}.`,
+      reason: `Storage credentials not configured or placeholder detected for ${capability}: ${missing.join(", ")}.`,
     };
   }
 
@@ -84,13 +92,12 @@ export function validatePrivateStorageCapability(
     }
   }
 
-  const client = new S3Client({
-    region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: accessKeyId!,
-      secretAccessKey: secretAccessKey!,
-    },
+  const client = buildStorageClient({
+    accountId,
+    accessKeyId: accessKeyId!,
+    secretAccessKey: secretAccessKey!,
+    endpoint,
+    region,
   });
 
   return {

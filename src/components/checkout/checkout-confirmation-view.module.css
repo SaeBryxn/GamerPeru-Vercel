@@ -58,6 +58,10 @@
   gap: var(--space-4);
 }
 
+.markSlot {
+  display: inline-flex;
+}
+
 .checkMark {
   width: 64px;
   height: 64px;

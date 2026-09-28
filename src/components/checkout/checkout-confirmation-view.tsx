@@ -13,15 +13,20 @@ import styles from "./checkout-confirmation-view.module.css";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-const PAGE_VARIANTS: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.12, delayChildren: 0.05 } },
+/**
+ * One entrance, ordered by `custom` step rather than DOM nesting, so the cascade reads mark,
+ * heading, payment form and then the summary column even though they sit in different columns.
+ */
+const RISE_VARIANTS: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (step: number = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: EASE, delay: 0.05 + step * 0.09 },
+  }),
 };
 
-const COLUMN_VARIANTS: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
-};
+const STEP = { mark: 0, title: 1, lead: 2, payment: 3, actions: 4, summary: 5, delivery: 6 };
 
 export interface CheckoutConfirmationViewProps {
   confirmation: CheckoutConfirmationDTO;
@@ -180,86 +185,117 @@ export function CheckoutConfirmationView({
     <motion.div
       className={styles.container}
       data-testid="checkout-confirmation-view"
-      variants={PAGE_VARIANTS}
       initial={prefersReducedMotion ? false : "hidden"}
       animate="visible"
     >
       <div className={styles.layout}>
-        <motion.div className={styles.mainColumn} variants={COLUMN_VARIANTS}>
+        <div className={styles.mainColumn}>
           <section className={`${styles.card} ${styles.hero}`} aria-live="polite">
             {isCancelled ? (
               <>
-                <span className={styles.cancelMark}>
+                <motion.span
+                  className={styles.cancelMark}
+                  variants={RISE_VARIANTS}
+                  custom={STEP.mark}
+                >
                   <Icon icon={XCircle} size="xl" aria-hidden="true" />
-                </span>
-                <h1 className={styles.title}>Pedido Cancelado</h1>
-                <div
+                </motion.span>
+                <motion.h1 className={styles.title} variants={RISE_VARIANTS} custom={STEP.title}>
+                  Pedido Cancelado
+                </motion.h1>
+                <motion.div
                   className={`${styles.orderNumberBadge} ${styles.cancelledBadge}`}
                   data-testid="confirmation-order-number"
+                  variants={RISE_VARIANTS}
+                  custom={STEP.lead}
                 >
                   <span>Pedido #{orderNumber}</span>
-                </div>
-                <p className={styles.statusMessage} data-testid="confirmation-cancelled-message">
+                </motion.div>
+                <motion.p
+                  className={styles.statusMessage}
+                  data-testid="confirmation-cancelled-message"
+                  variants={RISE_VARIANTS}
+                  custom={STEP.lead}
+                >
                   Este pedido ha sido cancelado. Si deseas adquirir estos productos, puedes realizar
                   una nueva orden desde el catálogo.
-                </p>
+                </motion.p>
               </>
             ) : (
               <>
-                <SuccessMark />
-                <h1 className={styles.title}>{hero.title}</h1>
-                <div className={styles.orderNumberBadge} data-testid="confirmation-order-number">
+                <motion.span
+                  className={styles.markSlot}
+                  variants={RISE_VARIANTS}
+                  custom={STEP.mark}
+                >
+                  <SuccessMark />
+                </motion.span>
+                <motion.h1 className={styles.title} variants={RISE_VARIANTS} custom={STEP.title}>
+                  {hero.title}
+                </motion.h1>
+                <motion.div
+                  className={styles.orderNumberBadge}
+                  data-testid="confirmation-order-number"
+                  variants={RISE_VARIANTS}
+                  custom={STEP.lead}
+                >
                   <span>Pedido #{orderNumber}</span>
-                </div>
-                <p className={styles.statusMessage}>
+                </motion.div>
+                <motion.p
+                  className={styles.statusMessage}
+                  variants={RISE_VARIANTS}
+                  custom={STEP.lead}
+                >
                   {hero.lead} Enviamos la confirmación a <strong>{customerEmail}</strong>.
-                </p>
+                </motion.p>
               </>
             )}
           </section>
 
-          {isCancelled ? (
-            <div
-              className={`${styles.card} ${styles.statusRow}`}
-              data-testid="confirmation-payment-status-card"
-            >
-              <span
-                className={`${styles.statusPill} ${styles.statusCancelled}`}
-                data-testid="confirmation-payment-status"
+          <motion.div variants={RISE_VARIANTS} custom={STEP.payment}>
+            {isCancelled ? (
+              <div
+                className={`${styles.card} ${styles.statusRow}`}
+                data-testid="confirmation-payment-status-card"
               >
-                <Icon icon={XCircle} size="sm" aria-hidden="true" />
-                Estado: Cancelado
-              </span>
-              <p className={styles.bodyText}>
-                El pedido ha sido cancelado y los productos reservados han sido liberados.
-              </p>
-            </div>
-          ) : paymentInstructions ? (
-            <ManualPaymentCard
-              instructions={paymentInstructions}
-              onStatusChange={setPaymentStatus}
-            />
-          ) : (
-            <div
-              className={`${styles.card} ${styles.statusRow}`}
-              data-testid="confirmation-payment-status-card"
-            >
-              <span
-                className={`${styles.statusPill} ${styles.statusPending}`}
-                data-testid="confirmation-payment-status"
+                <span
+                  className={`${styles.statusPill} ${styles.statusCancelled}`}
+                  data-testid="confirmation-payment-status"
+                >
+                  <Icon icon={XCircle} size="sm" aria-hidden="true" />
+                  Estado: Cancelado
+                </span>
+                <p className={styles.bodyText}>
+                  El pedido ha sido cancelado y los productos reservados han sido liberados.
+                </p>
+              </div>
+            ) : paymentInstructions ? (
+              <ManualPaymentCard
+                instructions={paymentInstructions}
+                onStatusChange={setPaymentStatus}
+              />
+            ) : (
+              <div
+                className={`${styles.card} ${styles.statusRow}`}
+                data-testid="confirmation-payment-status-card"
               >
-                <Icon icon={Clock} size="sm" aria-hidden="true" />
-                Estado de Pago: Pendiente de Pago
-              </span>
-              <p className={styles.bodyText}>
-                Tu pedido se encuentra registrado correctamente. El método seleccionado es{" "}
-                <strong>{paymentMethodName}</strong>. En breve recibirás la coordinación y
-                validación de tu comprobante a través de nuestros canales oficiales de Gamer Perú.
-              </p>
-            </div>
-          )}
+                <span
+                  className={`${styles.statusPill} ${styles.statusPending}`}
+                  data-testid="confirmation-payment-status"
+                >
+                  <Icon icon={Clock} size="sm" aria-hidden="true" />
+                  Estado de Pago: Pendiente de Pago
+                </span>
+                <p className={styles.bodyText}>
+                  Tu pedido se encuentra registrado correctamente. El método seleccionado es{" "}
+                  <strong>{paymentMethodName}</strong>. En breve recibirás la coordinación y
+                  validación de tu comprobante a través de nuestros canales oficiales de Gamer Perú.
+                </p>
+              </div>
+            )}
+          </motion.div>
 
-          <div className={styles.actions}>
+          <motion.div className={styles.actions} variants={RISE_VARIANTS} custom={STEP.actions}>
             <DomeLink
               href="/categorias/mouses"
               tone="light"
@@ -276,7 +312,7 @@ export function CheckoutConfirmationView({
             >
               Ver mis pedidos
             </DomeLink>
-          </div>
+          </motion.div>
 
           {isEligibleForCancellation && (
             <div className={styles.cancelRow} data-testid="confirmation-cancellation-section">
@@ -291,14 +327,15 @@ export function CheckoutConfirmationView({
               </button>
             </div>
           )}
-        </motion.div>
+        </div>
 
-        <motion.aside
-          className={styles.summaryColumn}
-          variants={COLUMN_VARIANTS}
-          aria-label="Resumen del pedido"
-        >
-          <section className={styles.card} data-testid="confirmation-summary-card">
+        <aside className={styles.summaryColumn} aria-label="Resumen del pedido">
+          <motion.section
+            className={styles.card}
+            data-testid="confirmation-summary-card"
+            variants={RISE_VARIANTS}
+            custom={STEP.summary}
+          >
             <h2 className={styles.summaryTitle}>
               <Icon icon={Package} size="sm" aria-hidden="true" />
               Resumen de Productos
@@ -347,9 +384,14 @@ export function CheckoutConfirmationView({
                 </span>
               </div>
             </div>
-          </section>
+          </motion.section>
 
-          <section className={styles.card} data-testid="confirmation-delivery-card">
+          <motion.section
+            className={styles.card}
+            data-testid="confirmation-delivery-card"
+            variants={RISE_VARIANTS}
+            custom={STEP.delivery}
+          >
             <h2 className={styles.summaryTitle}>
               <Icon icon={MapPin} size="sm" aria-hidden="true" />
               Datos de Entrega
@@ -391,8 +433,8 @@ export function CheckoutConfirmationView({
                 </dd>
               </div>
             </dl>
-          </section>
-        </motion.aside>
+          </motion.section>
+        </aside>
       </div>
 
       <AnimatePresence>

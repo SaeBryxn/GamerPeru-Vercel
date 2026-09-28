@@ -2,7 +2,7 @@
 
 import React, { useId, useRef, useState } from "react";
 import Image from "next/image";
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
 import {
   AlertCircle,
   CheckCircle2,
@@ -27,6 +27,21 @@ import styles from "./manual-payment-card.module.css";
 
 const ACCEPTED_PROOF_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PROOF_BYTES = 5 * 1024 * 1024;
+
+const SPRING = { type: "spring", stiffness: 420, damping: 28 } as const;
+
+// Named states let the icon inherit the dropzone's hover/drag state without its own handlers.
+const DROPZONE_VARIANTS: Variants = {
+  rest: { scale: 1 },
+  hover: { scale: 1.005 },
+  drag: { scale: 1.015 },
+};
+
+const DROPZONE_ICON_VARIANTS: Variants = {
+  rest: { y: 0, scale: 1 },
+  hover: { y: -2, scale: 1.04 },
+  drag: { y: -5, scale: 1.1 },
+};
 
 export interface ManualPaymentCardProps {
   instructions: PaymentInstructionDTO;
@@ -214,15 +229,17 @@ export function ManualPaymentCard({
 
           uploadIntentId = intentRes.uploadIntentId;
 
+          // The PUT goes straight to the storage provider, so a CORS or network rejection
+          // surfaces here as a thrown TypeError rather than a non-OK response.
           const uploadRes = await fetch(intentRes.presignedPutUrl, {
             method: "PUT",
             body: selectedFile,
             headers: {
               "Content-Type": selectedFile.type,
             },
-          });
+          }).catch(() => null);
 
-          if (!uploadRes.ok) {
+          if (!uploadRes?.ok) {
             setErrorMessage(
               "Error al subir el comprobante. Por favor intente nuevamente o envíe solo el código de operación."
             );
@@ -420,36 +437,47 @@ export function ManualPaymentCard({
         <form onSubmit={handleSubmit} className={styles.form} noValidate>
           <h3 className={styles.formTitle}>Registra tu pago</h3>
 
-          {errorMessage && (
-            <div
-              id={errorAlertId}
-              role="alert"
-              className={`${styles.notice} ${styles.noticeError}`}
-              data-testid="manual-payment-error-alert"
-            >
-              <Icon icon={AlertCircle} size="sm" aria-hidden="true" />
-              <div className={styles.noticeBody}>
-                <span>{errorMessage}</span>
-                {isExpiredError && (
-                  <button
-                    type="button"
-                    onClick={handleRefreshStatus}
-                    disabled={isRefreshing}
-                    className={styles.ghostSmallButton}
-                    data-testid="manual-payment-refresh-status-button"
-                  >
-                    <Icon
-                      icon={isRefreshing ? Loader2 : RefreshCw}
-                      size="sm"
-                      className={isRefreshing ? styles.spinner : undefined}
-                      aria-hidden="true"
-                    />
-                    <span>{isRefreshing ? "Actualizando..." : "Actualizar estado"}</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+          <AnimatePresence initial={false}>
+            {errorMessage && (
+              <motion.div
+                key="error"
+                className={styles.noticeMotion}
+                initial={prefersReducedMotion ? false : { opacity: 0, height: 0, y: -4 }}
+                animate={{ opacity: 1, height: "auto", y: 0 }}
+                exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, height: 0, y: -4 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div
+                  id={errorAlertId}
+                  role="alert"
+                  className={`${styles.notice} ${styles.noticeError}`}
+                  data-testid="manual-payment-error-alert"
+                >
+                  <Icon icon={AlertCircle} size="sm" aria-hidden="true" />
+                  <div className={styles.noticeBody}>
+                    <span>{errorMessage}</span>
+                    {isExpiredError && (
+                      <button
+                        type="button"
+                        onClick={handleRefreshStatus}
+                        disabled={isRefreshing}
+                        className={styles.ghostSmallButton}
+                        data-testid="manual-payment-refresh-status-button"
+                      >
+                        <Icon
+                          icon={isRefreshing ? Loader2 : RefreshCw}
+                          size="sm"
+                          className={isRefreshing ? styles.spinner : undefined}
+                          aria-hidden="true"
+                        />
+                        <span>{isRefreshing ? "Actualizando..." : "Actualizar estado"}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {successMessage && (
             <div className={`${styles.notice} ${styles.noticeSuccess}`}>
@@ -486,10 +514,15 @@ export function ManualPaymentCard({
             </span>
 
             {!selectedFile ? (
-              <label
+              <motion.label
                 htmlFor={fileInputId}
                 className={`${styles.dropzone} ${isDragging ? styles.dropzoneActive : ""}`}
                 data-testid="manual-payment-dropzone"
+                variants={prefersReducedMotion ? undefined : DROPZONE_VARIANTS}
+                initial="rest"
+                animate={isDragging ? "drag" : "rest"}
+                whileHover={isSubmitting ? undefined : "hover"}
+                transition={SPRING}
                 onDragEnter={(e) => {
                   e.preventDefault();
                   setIsDragging(true);
@@ -513,12 +546,8 @@ export function ManualPaymentCard({
                 />
                 <motion.span
                   className={styles.dropzoneIcon}
-                  animate={
-                    isDragging && !prefersReducedMotion
-                      ? { y: -4, scale: 1.08 }
-                      : { y: 0, scale: 1 }
-                  }
-                  transition={{ type: "spring", stiffness: 420, damping: 24 }}
+                  variants={prefersReducedMotion ? undefined : DROPZONE_ICON_VARIANTS}
+                  transition={SPRING}
                   aria-hidden="true"
                 >
                   <UploadCloud size={26} />
@@ -529,7 +558,7 @@ export function ManualPaymentCard({
                     : "Arrastra tu comprobante o haz clic para adjuntarlo"}
                 </span>
                 <span className={styles.helperText}>JPG, PNG o WebP · máximo 5 MB</span>
-              </label>
+              </motion.label>
             ) : (
               <div className={styles.filePreview} data-testid="manual-payment-file-preview">
                 <div className={styles.filePreviewInfo}>

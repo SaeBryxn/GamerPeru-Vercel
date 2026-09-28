@@ -23,28 +23,46 @@ export const R2_BUCKETS = {
   },
 } as const;
 
-/**
- * Server-Only Cloudflare R2 Client (S3 Compatible)
- *
- * Configured with custom R2 endpoint and credentials.
- */
-export function createR2Client() {
-  const accountId = serverEnv.R2_ACCOUNT_ID ?? "placeholder_r2_account_id";
-  const accessKeyId = serverEnv.R2_ACCESS_KEY_ID ?? "placeholder_r2_access_key";
-  const secretAccessKey = serverEnv.R2_SECRET_ACCESS_KEY ?? "placeholder_r2_secret";
+export interface StorageConnection {
+  accountId?: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  endpoint?: string;
+  region?: string;
+}
 
-  // S3_ENDPOINT points the same client at Supabase Storage (S3 compatible) or
-  // any other provider; without it we keep talking to Cloudflare R2.
-  const endpoint = serverEnv.S3_ENDPOINT ?? `https://${accountId}.r2.cloudflarestorage.com`;
+function nonEmpty(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+/**
+ * Builds the S3 client for either provider. An explicit endpoint (Supabase Storage, MinIO) is
+ * used as-is with path-style buckets; without one the Cloudflare R2 host is derived from the
+ * account id and R2's required "auto" region.
+ */
+export function buildStorageClient(connection: StorageConnection): S3Client {
+  const explicitEndpoint = nonEmpty(connection.endpoint);
+  const endpoint =
+    explicitEndpoint ?? `https://${connection.accountId?.trim()}.r2.cloudflarestorage.com`;
 
   return new S3Client({
-    region: serverEnv.S3_REGION ?? "auto",
+    region: explicitEndpoint ? (nonEmpty(connection.region) ?? "auto") : "auto",
     endpoint,
-    // Supabase serves buckets as a path, not as a host prefix.
-    forcePathStyle: Boolean(serverEnv.S3_ENDPOINT),
+    forcePathStyle: Boolean(explicitEndpoint),
     credentials: {
-      accessKeyId,
-      secretAccessKey,
+      accessKeyId: connection.accessKeyId.trim(),
+      secretAccessKey: connection.secretAccessKey.trim(),
     },
+  });
+}
+
+export function createR2Client() {
+  return buildStorageClient({
+    accountId: serverEnv.R2_ACCOUNT_ID ?? "placeholder_r2_account_id",
+    accessKeyId: serverEnv.R2_ACCESS_KEY_ID ?? "placeholder_r2_access_key",
+    secretAccessKey: serverEnv.R2_SECRET_ACCESS_KEY ?? "placeholder_r2_secret",
+    endpoint: serverEnv.S3_ENDPOINT,
+    region: serverEnv.S3_REGION,
   });
 }

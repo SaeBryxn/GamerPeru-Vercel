@@ -217,9 +217,23 @@
   color: var(--color-status-success-text);
 }
 
+/* Errors stay quiet: a hairline and tinted text, so a failed upload reads as recoverable. */
 .noticeError {
-  background-color: var(--color-status-danger-background);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-status-danger-border);
+  border-radius: 10px;
+  background-color: transparent;
+  font-size: 13px;
   color: var(--color-status-danger-text);
+}
+
+.noticeError > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.noticeMotion {
+  overflow: hidden;
 }
 
 /* ---------- Form ---------- */
@@ -301,7 +315,7 @@
   justify-content: center;
   gap: var(--space-2);
   padding: var(--space-8) var(--space-5);
-  border: 1.5px dashed var(--color-border-default);
+  border: 1px dashed var(--color-border-default);
   border-radius: 14px;
   background-color: var(--color-surface-card);
   text-align: center;
@@ -312,15 +326,21 @@
 }
 
 .dropzone:hover,
-.dropzone:focus-within,
+.dropzone:focus-within {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-secondary);
+}
+
 .dropzoneActive {
-  border-color: var(--color-brand-red);
-  background-color: var(--color-status-danger-background);
+  border-style: solid;
+  border-color: var(--color-text-primary);
+  background-color: var(--color-surface-secondary);
 }
 
 .dropzone:hover .dropzoneIcon,
 .dropzoneActive .dropzoneIcon {
-  color: var(--color-brand-primary);
+  background-color: var(--color-surface-card);
+  color: var(--color-text-primary);
 }
 
 .dropzoneIcon {
@@ -332,7 +352,9 @@
   border-radius: 9999px;
   background-color: var(--color-surface-secondary);
   color: var(--color-text-secondary);
-  transition: color 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .dropzoneTitle {
