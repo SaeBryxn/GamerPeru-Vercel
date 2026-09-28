@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { brands, categories, products } from "@/db/schema";
 import type { NavLink } from "@/components/navigation/types";
+import { cacheCatalogQuery } from "@/lib/catalog/catalog-cache";
 
 export interface CategoryCatalogFacts {
   categorySlug: string;
@@ -16,6 +17,29 @@ export interface CatalogNavigationFacts {
   allBrands: NavLink[];
 }
 
+/** Raw rows only: the cache stores JSON, so the Map below is rebuilt from them per request. */
+const readCatalogNavigationRows = cacheCatalogQuery("catalog-navigation-rows", async () =>
+  Promise.all([
+    db
+      .select({
+        categorySlug: categories.slug,
+        brandName: brands.name,
+        brandSlug: brands.slug,
+        productCount: sql<number>`count(*)::int`,
+      })
+      .from(products)
+      .innerJoin(categories, eq(categories.id, products.categoryId))
+      .innerJoin(brands, eq(brands.id, products.brandId))
+      .where(and(eq(products.status, "PUBLISHED"), eq(brands.status, "PUBLISHED")))
+      .groupBy(categories.slug, brands.name, brands.slug),
+    db
+      .select({ name: brands.name, slug: brands.slug })
+      .from(brands)
+      .where(eq(brands.status, "PUBLISHED"))
+      .orderBy(brands.name),
+  ])
+);
+
 /**
  * Published catalog state behind the navigation.
  *
@@ -27,25 +51,7 @@ export async function getCatalogNavigationFacts(): Promise<CatalogNavigationFact
   const allBrands: NavLink[] = [];
 
   try {
-    const [rows, publishedBrands] = await Promise.all([
-      db
-        .select({
-          categorySlug: categories.slug,
-          brandName: brands.name,
-          brandSlug: brands.slug,
-          productCount: sql<number>`count(*)::int`,
-        })
-        .from(products)
-        .innerJoin(categories, eq(categories.id, products.categoryId))
-        .innerJoin(brands, eq(brands.id, products.brandId))
-        .where(and(eq(products.status, "PUBLISHED"), eq(brands.status, "PUBLISHED")))
-        .groupBy(categories.slug, brands.name, brands.slug),
-      db
-        .select({ name: brands.name, slug: brands.slug })
-        .from(brands)
-        .where(eq(brands.status, "PUBLISHED"))
-        .orderBy(brands.name),
-    ]);
+    const [rows, publishedBrands] = await readCatalogNavigationRows();
 
     for (const row of rows) {
       const existing = byCategory.get(row.categorySlug) ?? {

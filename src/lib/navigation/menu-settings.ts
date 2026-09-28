@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/db";
 import { storefrontMenuEntries } from "@/db/schema";
+import { cacheCatalogQuery } from "@/lib/catalog/catalog-cache";
 import { MENU_ENTRY_DESCRIPTORS, isKnownMenuEntry, type MenuEntryDescriptor } from "./menu-entries";
 
 export interface MenuEntrySetting extends MenuEntryDescriptor {
@@ -16,17 +17,21 @@ export interface MenuEntrySetting extends MenuEntryDescriptor {
  * Reads are fail-soft: if the settings table cannot be reached the storefront still renders its
  * declared defaults rather than losing its navigation.
  */
+const readStoredMenuEntries = cacheCatalogQuery("menu-entry-settings", async () =>
+  db
+    .select({
+      entryId: storefrontMenuEntries.entryId,
+      isVisible: storefrontMenuEntries.isVisible,
+      displayOrder: storefrontMenuEntries.displayOrder,
+    })
+    .from(storefrontMenuEntries)
+);
+
 export async function getMenuEntrySettings(): Promise<MenuEntrySetting[]> {
   let stored: { entryId: string; isVisible: boolean; displayOrder: number }[] = [];
 
   try {
-    stored = await db
-      .select({
-        entryId: storefrontMenuEntries.entryId,
-        isVisible: storefrontMenuEntries.isVisible,
-        displayOrder: storefrontMenuEntries.displayOrder,
-      })
-      .from(storefrontMenuEntries);
+    stored = await readStoredMenuEntries();
   } catch {
     stored = [];
   }

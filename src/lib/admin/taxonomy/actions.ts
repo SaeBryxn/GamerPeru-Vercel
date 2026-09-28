@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import type { ActionResult } from "@/lib/admin/catalog/actions";
 import { createTaxonomy, updateTaxonomy, type TaxonomyInput, type TaxonomyKind } from "./service";
@@ -29,7 +30,7 @@ function revalidateTaxonomy(kind: TaxonomyKind) {
   revalidatePath("/admin/taxonomia");
   revalidatePath("/admin/products/new");
   revalidatePath(kind === "category" ? "/categorias" : "/marcas");
-  revalidatePath("/", "layout");
+  revalidateStorefrontCatalog();
 }
 
 export async function createTaxonomyAction(

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { getVerifiedAuthContext, type PermissionName } from "@/lib/auth/rbac";
 import { mapDomainErrorToUi } from "./error-mapping";
 import {
@@ -158,7 +159,7 @@ async function runStoryAction<TInput>(
     const result = await operation(input, { authContext });
     revalidateAdminPaths(result.productId);
     if (revalidatePublicPath) {
-      revalidatePath(`/productos/${result.productSlug}`);
+      revalidateStorefrontCatalog();
     }
     return { success: true, data: result };
   } catch (error) {

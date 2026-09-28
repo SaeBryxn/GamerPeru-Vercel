@@ -1,6 +1,8 @@
 import "server-only";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { logger } from "@/lib/logger";
+import { resolvePoolMax, usesSupabaseSessionPooler } from "./pool-config";
 import * as schema from "./schema";
 
 /**
@@ -18,6 +20,13 @@ if (isProduction && !rawUrl) {
 }
 
 const connectionString = rawUrl ?? "postgres://postgres:postgres@127.0.0.1:54322/postgres";
+
+if (isProduction && usesSupabaseSessionPooler(connectionString)) {
+  logger.warn({
+    event: "database_session_pooler_in_production",
+    hint: "Use the transaction pooler (port 6543) for DATABASE_URL on serverless deployments.",
+  });
+}
 
 /*
  * One pool per module instance, cached on globalThis so a single dev compilation
@@ -42,7 +51,7 @@ const client =
   globalForDb.conn ??
   postgres(connectionString, {
     prepare: false, // Required for Supavisor transaction pooler
-    max: isProduction ? 10 : 3,
+    max: resolvePoolMax(process.env.DATABASE_POOL_MAX),
     idle_timeout: 20,
     connect_timeout: 10,
     // Supavisor recycles pooled sessions on its own. Without these bounds a

@@ -1,4 +1,9 @@
 import "server-only";
+import {
+  withCatalogCache,
+  withProductDetailCache,
+  withStoryRelatedProductsCache,
+} from "./cached-readers";
 import { DevCatalogPreviewReader } from "./dev-preview-reader";
 import { FixtureCatalogDiscoveryReader } from "./fixture-reader";
 import { PostgresCatalogDiscoveryReader } from "./postgres-reader";
@@ -25,7 +30,7 @@ export function getCatalogReader(): CatalogDiscoveryReader {
       return new DevCatalogPreviewReader();
     case "postgres":
     default:
-      cachedPostgresReader ??= new PostgresCatalogDiscoveryReader();
+      cachedPostgresReader ??= withCatalogCache(new PostgresCatalogDiscoveryReader());
       return cachedPostgresReader;
   }
 }
@@ -40,7 +45,7 @@ export function getProductDetailReader(): ProductDetailReader {
       return new DevCatalogPreviewReader();
     case "postgres":
     default:
-      cachedPostgresDetailReader ??= new PostgresProductDetailReader();
+      cachedPostgresDetailReader ??= withProductDetailCache(new PostgresProductDetailReader());
       return cachedPostgresDetailReader;
   }
 }
@@ -55,7 +60,9 @@ export function getStoryRelatedProductsReader(): StoryRelatedProductsReader {
       return new DevPreviewStoryRelatedProductsReader();
     case "postgres":
     default:
-      cachedPostgresStoryRelatedReader ??= new PostgresStoryRelatedProductsReader();
+      cachedPostgresStoryRelatedReader ??= withStoryRelatedProductsCache(
+        new PostgresStoryRelatedProductsReader()
+      );
       return cachedPostgresStoryRelatedReader;
   }
 }

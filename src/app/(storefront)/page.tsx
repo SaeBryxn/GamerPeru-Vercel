@@ -17,6 +17,10 @@ import styles from "./page.module.css";
 /** Page H1: kept for SEO and screen readers while the stage stays wordless. */
 const HOME_HEADING = "Periféricos gaming de alto rendimiento";
 
+// Must be a literal for static analysis; keep in step with CATALOG_REVALIDATE_SECONDS. Without it
+// the home page would keep the products read at build time until the next deploy.
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: "Gamer Perú | Periféricos Gaming de Alto Rendimiento",
   description:

@@ -21,10 +21,8 @@ import type {
  * Request-Scoped Cached Catalog Queries
  *
  * Uses React cache() for request-level deduplication between generateMetadata()
- * and page component rendering within a single HTTP request cycle.
- *
- * Invariant:
- * Does NOT introduce cross-request business caching.
+ * and page component rendering within a single HTTP request cycle. Cross-request
+ * caching lives one level down, in the readers (see cached-readers.ts).
  */
 export const getCachedCategory = cache(
   async (slug: string): Promise<CategoryDiscoveryEntity | null> => {

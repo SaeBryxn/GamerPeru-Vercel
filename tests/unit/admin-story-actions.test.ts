@@ -5,6 +5,7 @@ import type * as StoryService from "@/lib/admin/catalog/story-service";
 const mocks = vi.hoisted(() => ({
   getVerifiedAuthContext: vi.fn(),
   revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
   saveProductStoryDraft: vi.fn(),
   discardProductStoryDraft: vi.fn(),
   publishProductStory: vi.fn(),
@@ -12,7 +13,11 @@ const mocks = vi.hoisted(() => ({
   searchStoryRelatedProducts: vi.fn(),
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
+vi.mock("next/cache", () => ({
+  revalidatePath: mocks.revalidatePath,
+  revalidateTag: mocks.revalidateTag,
+  unstable_cache: <T>(fn: T) => fn,
+}));
 
 vi.mock("@/lib/admin/catalog/story-reader", () => ({
   searchStoryRelatedProducts: mocks.searchStoryRelatedProducts,
@@ -151,7 +156,11 @@ describe("GP-026 CHK1 thin Story Server Actions", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith(`/admin/products/${productId}/story`);
     expect(mocks.revalidatePath).toHaveBeenCalledTimes(entry.publicPath ? 3 : 2);
     if (entry.publicPath) {
-      expect(mocks.revalidatePath).toHaveBeenCalledWith("/productos/producto-story");
+      // Publishing changes the public product page, so the whole storefront catalog is refreshed.
+      expect(mocks.revalidateTag).toHaveBeenCalledWith("storefront-catalog", { expire: 0 });
+      expect(mocks.revalidatePath).toHaveBeenCalledWith("/", "layout");
+    } else {
+      expect(mocks.revalidateTag).not.toHaveBeenCalled();
     }
   });
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import {
   createProduct,
@@ -27,14 +28,11 @@ import { type CatalogStatus, type VariantStatus } from "./types";
 import type { Product, ProductVariant } from "@/db/schema";
 
 /**
- * Drops the cached storefront after a catalog write.
- *
- * Storefront routes render from the database without their own revalidation window, so without
- * this an edit stays invisible to customers until the next deploy. Invalidating the root layout
- * covers the product page, its category and brand listings, and the navigation at once.
+ * Drops the cached storefront after a catalog write, so the edit is visible on the next request
+ * instead of after the catalog cache window: the product page, its listings and the navigation.
  */
 function revalidateStorefront() {
-  revalidatePath("/", "layout");
+  revalidateStorefrontCatalog();
 }
 
 export interface ActionResult<T = unknown> {

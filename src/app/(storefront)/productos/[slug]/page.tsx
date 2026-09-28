@@ -22,6 +22,15 @@ interface ProductPageProps {
   params: Promise<{ slug: string }>;
 }
 
+// Must be a literal for static analysis; keep in step with CATALOG_REVALIDATE_SECONDS. Admin
+// catalog writes revalidate on demand, so this only bounds staleness when nothing invalidates.
+export const revalidate = 300;
+
+/** No product is prerendered at build: each page is generated on first visit, then cached (ISR). */
+export function generateStaticParams(): { slug: string }[] {
+  return [];
+}
+
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
   const product = await getCachedProduct(slug);

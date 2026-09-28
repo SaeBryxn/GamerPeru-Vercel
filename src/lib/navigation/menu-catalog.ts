@@ -11,6 +11,7 @@ import {
   products,
 } from "@/db/schema";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
+import { cacheCatalogQuery } from "@/lib/catalog/catalog-cache";
 import { buildCardGallery } from "@/lib/catalog/card-gallery";
 import { buildProductCardSpecs } from "@/lib/catalog/card-specs";
 import { cardCompareAtSql, cardGallerySql, cardSingleVariantSql } from "@/lib/catalog/card-sql";
@@ -45,7 +46,7 @@ type ProductCardSpecList = ReturnType<typeof buildProductCardSpecs>;
  * product's own image, falling back to its first global photo when no primary is designated —
  * the same resolution the category grid uses, so the menu and the listing never disagree.
  */
-export async function getMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
+async function queryMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
   const cheapestActiveVariant = sql<number>`(
     SELECT MIN(pv.price_cents)
     FROM product_variants pv
@@ -66,78 +67,84 @@ export async function getMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
     )
   )`;
 
-  try {
-    const rows = await db
-      .selectDistinct({
-        productId: products.id,
-        name: products.name,
-        slug: products.slug,
-        subtitle: products.subtitle,
-        priceCents: cheapestActiveVariant,
-        compareAtPriceCents: cardCompareAtSql(cheapestActiveVariant),
-        gallery: cardGallerySql,
-        singleVariantId: cardSingleVariantSql,
-        categoryName: categories.name,
-        categorySlug: categories.slug,
-        specValues: productSpecifications.specValues,
-        specFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
-        brandName: brands.name,
-        brandSlug: brands.slug,
-        objectKey: mediaAssets.objectKey,
-        altText: mediaAssets.altText,
-        updatedAt: products.updatedAt,
-      })
-      .from(products)
-      .innerJoin(
-        categories,
-        and(eq(categories.id, products.categoryId), eq(categories.status, "PUBLISHED"))
+  const rows = await db
+    .selectDistinct({
+      productId: products.id,
+      name: products.name,
+      slug: products.slug,
+      subtitle: products.subtitle,
+      priceCents: cheapestActiveVariant,
+      compareAtPriceCents: cardCompareAtSql(cheapestActiveVariant),
+      gallery: cardGallerySql,
+      singleVariantId: cardSingleVariantSql,
+      categoryName: categories.name,
+      categorySlug: categories.slug,
+      specValues: productSpecifications.specValues,
+      specFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
+      brandName: brands.name,
+      brandSlug: brands.slug,
+      objectKey: mediaAssets.objectKey,
+      altText: mediaAssets.altText,
+      updatedAt: products.updatedAt,
+    })
+    .from(products)
+    .innerJoin(
+      categories,
+      and(eq(categories.id, products.categoryId), eq(categories.status, "PUBLISHED"))
+    )
+    .innerJoin(brands, and(eq(brands.id, products.brandId), eq(brands.status, "PUBLISHED")))
+    .innerJoin(
+      productVariants,
+      and(eq(productVariants.productId, products.id), eq(productVariants.status, "ACTIVE"))
+    )
+    .leftJoin(
+      mediaAssets,
+      and(
+        sql`${mediaAssets.id} = ${displayMediaId}`,
+        eq(mediaAssets.securityClass, "PUBLIC_MEDIA"),
+        eq(mediaAssets.mediaType, "IMAGE")
       )
-      .innerJoin(brands, and(eq(brands.id, products.brandId), eq(brands.status, "PUBLISHED")))
-      .innerJoin(
-        productVariants,
-        and(eq(productVariants.productId, products.id), eq(productVariants.status, "ACTIVE"))
+    )
+    .leftJoin(productSpecifications, eq(productSpecifications.productId, products.id))
+    .leftJoin(
+      categorySpecificationSchemas,
+      and(
+        eq(categorySpecificationSchemas.categoryId, products.categoryId),
+        eq(categorySpecificationSchemas.isActive, true)
       )
-      .leftJoin(
-        mediaAssets,
-        and(
-          sql`${mediaAssets.id} = ${displayMediaId}`,
-          eq(mediaAssets.securityClass, "PUBLIC_MEDIA"),
-          eq(mediaAssets.mediaType, "IMAGE")
-        )
-      )
-      .leftJoin(productSpecifications, eq(productSpecifications.productId, products.id))
-      .leftJoin(
-        categorySpecificationSchemas,
-        and(
-          eq(categorySpecificationSchemas.categoryId, products.categoryId),
-          eq(categorySpecificationSchemas.isActive, true)
-        )
-      )
-      .where(eq(products.status, "PUBLISHED"))
-      .orderBy(desc(products.updatedAt), asc(products.name));
+    )
+    .where(eq(products.status, "PUBLISHED"))
+    .orderBy(desc(products.updatedAt), asc(products.name));
 
-    return rows
-      .filter((row) => row.priceCents !== null)
-      .map((row) => ({
-        productId: row.productId,
-        name: row.name,
-        slug: row.slug,
-        subtitle: row.subtitle,
-        priceCents: Number(row.priceCents),
-        categoryName: row.categoryName,
-        categorySlug: row.categorySlug,
-        brandName: row.brandName,
-        brandSlug: row.brandSlug,
-        objectKey: row.objectKey,
-        altText: row.altText,
-        compareAtPriceCents: row.compareAtPriceCents,
-        gallery: buildCardGallery(
-          row.objectKey ? { objectKey: row.objectKey, altText: row.altText } : null,
-          row.gallery
-        ),
-        singleVariantId: row.singleVariantId,
-        specs: buildProductCardSpecs(row.specValues, row.specFieldDefinitions),
-      }));
+  return rows
+    .filter((row) => row.priceCents !== null)
+    .map((row) => ({
+      productId: row.productId,
+      name: row.name,
+      slug: row.slug,
+      subtitle: row.subtitle,
+      priceCents: Number(row.priceCents),
+      categoryName: row.categoryName,
+      categorySlug: row.categorySlug,
+      brandName: row.brandName,
+      brandSlug: row.brandSlug,
+      objectKey: row.objectKey,
+      altText: row.altText,
+      compareAtPriceCents: row.compareAtPriceCents,
+      gallery: buildCardGallery(
+        row.objectKey ? { objectKey: row.objectKey, altText: row.altText } : null,
+        row.gallery
+      ),
+      singleVariantId: row.singleVariantId,
+      specs: buildProductCardSpecs(row.specValues, row.specFieldDefinitions),
+    }));
+}
+
+const readMenuCatalogEntries = cacheCatalogQuery("menu-catalog-entries", queryMenuCatalogEntries);
+
+export async function getMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
+  try {
+    return await readMenuCatalogEntries();
   } catch {
     // The navigation must survive a database problem; an empty catalog renders an empty shelf.
     return [];
