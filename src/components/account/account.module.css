@@ -49,6 +49,46 @@
   display: none;
 }
 
+.shellActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.adminLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 9999px;
+  background-color: var(--color-surface-card);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.adminLink:hover {
+  border-color: var(--color-text-primary);
+  background-color: var(--color-surface-canvas);
+}
+
+.adminLink:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+.adminLinkIcon {
+  width: 16px;
+  height: 16px;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);

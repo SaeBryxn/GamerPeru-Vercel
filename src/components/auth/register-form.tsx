@@ -3,36 +3,15 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { signupSchema } from "@/lib/auth/validation";
 import { mapAuthError } from "@/lib/auth/errors";
 import { initiateGoogleOAuth } from "@/lib/auth/google-oauth";
 import { TextField } from "@/components/ui/input/text-field";
-import { Button } from "@/components/ui/button";
+import { AUTH_ITEM_VARIANTS, AUTH_LIST_VARIANTS } from "./auth-motion";
+import { GoogleIcon } from "./google-icon";
 import styles from "./auth.module.css";
-
-function GoogleIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-      />
-    </svg>
-  );
-}
 
 export function RegisterForm() {
   const router = useRouter();
@@ -120,29 +99,37 @@ export function RegisterForm() {
     }
   };
 
+  const isBusy = isSubmitting || isGoogleSubmitting;
+
   return (
-    <div>
+    <motion.div variants={AUTH_LIST_VARIANTS} initial="hidden" animate="visible">
       {serverError ? (
-        <div role="alert" className={`${styles.alert} ${styles.alertError}`}>
-          {serverError}
-        </div>
+        <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.alerts}>
+          <div role="alert" className={`${styles.alert} ${styles.alertError}`}>
+            {serverError}
+          </div>
+        </motion.div>
       ) : null}
 
-      <button
-        type="button"
-        onClick={handleGoogleRegister}
-        disabled={isSubmitting || isGoogleSubmitting}
-        className={styles.googleButton}
-        aria-label="Continuar con Google"
-      >
-        <GoogleIcon className={styles.googleIcon} />
-        <span>{isGoogleSubmitting ? "Conectando con Google..." : "Continuar con Google"}</span>
-      </button>
+      <motion.div variants={AUTH_ITEM_VARIANTS}>
+        <button
+          type="button"
+          onClick={handleGoogleRegister}
+          disabled={isSubmitting || isGoogleSubmitting}
+          className={styles.googleButton}
+          aria-label="Continuar con Google"
+        >
+          <GoogleIcon className={styles.googleIcon} />
+          <span>{isGoogleSubmitting ? "Conectando con Google..." : "Continuar con Google"}</span>
+        </button>
+      </motion.div>
 
-      <div className={styles.divider}>o</div>
+      <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.divider}>
+        o
+      </motion.div>
 
       <form onSubmit={handleSubmit} noValidate className={styles.form}>
-        <div className={styles.nameRow}>
+        <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.nameRow}>
           <TextField
             id="register-firstName"
             name="firstName"
@@ -168,67 +155,74 @@ export function RegisterForm() {
             error={fieldErrors.lastName}
             disabled={isSubmitting || isGoogleSubmitting}
           />
-        </div>
+        </motion.div>
 
-        <TextField
-          id="register-email"
-          name="email"
-          type="email"
-          label="Correo electrónico"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          error={fieldErrors.email}
-          disabled={isSubmitting || isGoogleSubmitting}
-        />
+        <motion.div variants={AUTH_ITEM_VARIANTS}>
+          <TextField
+            id="register-email"
+            name="email"
+            type="email"
+            label="Correo electrónico"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            error={fieldErrors.email}
+            disabled={isSubmitting || isGoogleSubmitting}
+          />
+        </motion.div>
 
-        <TextField
-          id="register-password"
-          name="password"
-          type="password"
-          label="Contraseña"
-          description="Mínimo 8 caracteres"
-          autoComplete="new-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          error={fieldErrors.password}
-          disabled={isSubmitting || isGoogleSubmitting}
-        />
+        <motion.div variants={AUTH_ITEM_VARIANTS}>
+          <TextField
+            id="register-password"
+            name="password"
+            type="password"
+            label="Contraseña"
+            description="Mínimo 8 caracteres"
+            autoComplete="new-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            error={fieldErrors.password}
+            disabled={isSubmitting || isGoogleSubmitting}
+          />
+        </motion.div>
 
-        <TextField
-          id="register-confirmPassword"
-          name="confirmPassword"
-          type="password"
-          label="Confirmar contraseña"
-          autoComplete="new-password"
-          required
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          error={fieldErrors.confirmPassword}
-          disabled={isSubmitting || isGoogleSubmitting}
-        />
+        <motion.div variants={AUTH_ITEM_VARIANTS}>
+          <TextField
+            id="register-confirmPassword"
+            name="confirmPassword"
+            type="password"
+            label="Confirmar contraseña"
+            autoComplete="new-password"
+            required
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            error={fieldErrors.confirmPassword}
+            disabled={isSubmitting || isGoogleSubmitting}
+          />
+        </motion.div>
 
-        <Button
+        <motion.button
           type="submit"
-          variant="primary"
-          fullWidth
-          disabled={isSubmitting || isGoogleSubmitting}
-          className={styles.submitButton}
+          variants={AUTH_ITEM_VARIANTS}
+          disabled={isBusy}
+          className={styles.primaryButton}
+          whileHover={isBusy ? undefined : { scale: 1.01 }}
+          whileTap={isBusy ? undefined : { scale: 0.98 }}
         >
           {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}
-        </Button>
+        </motion.button>
       </form>
 
-      <div className={styles.footerLinks}>
+      <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.footerLinks}>
         <p>
           ¿Ya tienes una cuenta?{" "}
           <Link href="/auth/login" className={styles.link}>
             Inicia sesión aquí
           </Link>
         </p>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

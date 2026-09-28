@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { AnimatePresence, MotionConfig, motion } from "framer-motion";
+import { MotionConfig } from "framer-motion";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import { getAdminNavigation } from "@/lib/admin/navigation";
 import { AdminSidebar, resolveActiveNavId } from "./admin-sidebar";
@@ -54,23 +54,13 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
               onToggleTheme={toggle}
             />
 
+            {/*
+              Screen transitions live in app/admin/(protected)/template.tsx. Keying a wrapper
+              here by pathname remounted the router's own segment tree on every navigation,
+              which could leave the new screen blank until a full reload.
+            */}
             <main id="admin-main-content" className={styles.mainContent} tabIndex={-1}>
-              {/*
-                Each screen settles in with a short fade. The exit is instant: under the App
-                Router the outgoing element already renders the next route, so a visible exit
-                would flash the new screen at full opacity before it fades in.
-              */}
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={currentPath}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, transition: { duration: 0 } }}
-                  transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-                >
-                  {children}
-                </motion.div>
-              </AnimatePresence>
+              {children}
             </main>
           </div>
         </div>

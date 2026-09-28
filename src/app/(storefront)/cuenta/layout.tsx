@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentCustomerProfile } from "@/lib/account/profile";
 import { getCurrentCustomerOrders } from "@/lib/account/orders";
+import { getVerifiedAuthContext, hasAdminShellAccess } from "@/lib/auth/rbac";
 import { AccountShell } from "@/components/account/account-shell";
 import styles from "@/components/account/account.module.css";
 
@@ -16,9 +17,10 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function CuentaLayout({ children }: { children: React.ReactNode }) {
-  const [profileState, ordersState] = await Promise.all([
+  const [profileState, ordersState, authContext] = await Promise.all([
     getCurrentCustomerProfile(),
     getCurrentCustomerOrders(),
+    getVerifiedAuthContext(),
   ]);
 
   if (profileState.status === "UNAUTHENTICATED") {
@@ -49,7 +51,11 @@ export default async function CuentaLayout({ children }: { children: React.React
       : 0;
 
   return (
-    <AccountShell displayEmail={profileState.profile.email} ordersInTransit={ordersInTransit}>
+    <AccountShell
+      displayEmail={profileState.profile.email}
+      ordersInTransit={ordersInTransit}
+      showAdminLink={hasAdminShellAccess(authContext)}
+    >
       {children}
     </AccountShell>
   );
