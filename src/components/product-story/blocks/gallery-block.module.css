@@ -1,6 +1,7 @@
+/* Fills the story's full-width frame (see product-story-renderer.module.css). */
 .section {
   width: 100%;
-  margin: var(--space-8, 32px) 0;
+  margin-block: var(--space-8, 32px);
   display: flex;
   flex-direction: column;
   gap: var(--space-6, 24px);
@@ -12,25 +13,25 @@
   font-weight: 700;
   color: var(--color-text-primary, #09090b);
   margin: 0;
+  padding-inline: var(--gutter-mobile, 20px);
   text-align: center;
 }
 
 .grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--space-4, 16px);
+  gap: var(--space-1, 4px);
 }
 
 @media (min-width: 640px) {
   .grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-6, 24px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1024px) {
   .grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -44,10 +45,8 @@
   position: relative;
   width: 100%;
   aspect-ratio: 4 / 3;
-  border-radius: var(--radius-md, 8px);
   overflow: hidden;
   background-color: var(--color-surface-secondary, #f4f4f5);
-  border: 1px solid var(--color-border-subtle, #e4e4e7);
 }
 
 .image {
@@ -58,5 +57,6 @@
   font-family: var(--font-family-body, Inter, sans-serif);
   font-size: var(--type-body-small-size, 0.8125rem);
   color: var(--color-text-secondary, #52525b);
+  padding-inline: var(--space-3, 12px);
   text-align: center;
 }

@@ -1,7 +1,8 @@
+/* Fills the story's full-width frame (see product-story-renderer.module.css). */
 .figureContainer {
   position: relative;
   width: 100%;
-  margin: var(--space-8, 32px) 0;
+  margin-block: var(--space-8, 32px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -11,8 +12,8 @@
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
+  max-height: 88svh;
   overflow: hidden;
-  border-radius: var(--radius-lg, 12px);
   background-color: var(--color-surface-secondary, #f4f4f5);
 }
 
@@ -25,5 +26,6 @@
   font-size: var(--type-body-small-size, 0.8125rem);
   color: var(--color-text-secondary, #52525b);
   margin-top: var(--space-3, 12px);
+  padding-inline: var(--gutter-mobile, 20px);
   text-align: center;
 }

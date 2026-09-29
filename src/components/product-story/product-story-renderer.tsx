@@ -17,6 +17,13 @@ import { FaqBlock } from "./blocks/faq-block";
 import { RelatedProductsBlock } from "./blocks/related-products-block";
 import styles from "./product-story-renderer.module.css";
 
+/** Image-led blocks run edge to edge; every other block keeps a centered reading frame. */
+const FULL_WIDTH_BLOCKS: ReadonlySet<ValidatedStoryBlock["type"]> = new Set([
+  "hero_media",
+  "full_bleed_image",
+  "gallery",
+]);
+
 function renderStoryBlock(
   block: ValidatedStoryBlock,
   productName: string,
@@ -77,7 +84,14 @@ export function ProductStoryRenderer({
     .map((block) => {
       const element = renderStoryBlock(block, productName, currentProductId, relatedProductsMap);
       if (!element) return null;
-      return <React.Fragment key={block.blockId}>{element}</React.Fragment>;
+      return (
+        <div
+          key={block.blockId}
+          className={FULL_WIDTH_BLOCKS.has(block.type) ? styles.fullWidthFrame : styles.blockFrame}
+        >
+          {element}
+        </div>
+      );
     })
     .filter(Boolean);
 

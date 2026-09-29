@@ -139,23 +139,25 @@ export default async function ProductDetailPage({
   }
 
   return (
-    <main className={styles.pageWrapper} data-testid="product-detail-page">
-      <ProductJsonLd product={product} />
+    <main className={styles.page} data-testid="product-detail-page">
+      <div className={styles.pageWrapper}>
+        <ProductJsonLd product={product} />
 
-      <CommerceHeroContainer
-        projection={heroProjection}
-        specHighlights={specRows}
-        accessories={
-          previewExtras && previewExtras.accessories.length > 0
-            ? previewExtras.accessories
-            : undefined
-        }
-        details={
-          accordionItems.length > 0 ? (
-            <PdpAccordion key="pdp-details" items={accordionItems} />
-          ) : undefined
-        }
-      />
+        <CommerceHeroContainer
+          projection={heroProjection}
+          specHighlights={specRows}
+          accessories={
+            previewExtras && previewExtras.accessories.length > 0
+              ? previewExtras.accessories
+              : undefined
+          }
+          details={
+            accordionItems.length > 0 ? (
+              <PdpAccordion key="pdp-details" items={accordionItems} />
+            ) : undefined
+          }
+        />
+      </div>
 
       {product.story && (
         <ProductStoryRenderer

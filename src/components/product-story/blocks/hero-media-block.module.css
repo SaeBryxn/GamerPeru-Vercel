@@ -1,3 +1,4 @@
+/* Fills the story's full-width frame (see product-story-renderer.module.css). */
 .heroContainer {
   position: relative;
   width: 100%;
@@ -7,8 +8,7 @@
   justify-content: center;
   overflow: hidden;
   background-color: var(--color-surface-dark-canvas, #09090b);
-  border-radius: var(--radius-lg, 12px);
-  margin: var(--space-8, 32px) 0;
+  margin-block: var(--space-8, 32px);
   padding: var(--space-8, 32px) var(--space-4, 16px);
 }
 

@@ -30,13 +30,7 @@ export function FullBleedImageBlock({
   return (
     <figure className={styles.figureContainer} data-testid="story-full-bleed-image-block">
       <div className={styles.imageStage}>
-        <Image
-          src={mediaUrl}
-          alt={alt}
-          fill
-          sizes="(max-width: 768px) 100vw, (max-width: 1440px) 100vw, 1440px"
-          className={styles.image}
-        />
+        <Image src={mediaUrl} alt={alt} fill sizes="100vw" className={styles.image} />
       </div>
       {payload.caption && (
         <figcaption className={styles.caption} data-testid="full-bleed-caption">

@@ -224,6 +224,20 @@ describe("ProductStoryRenderer — Core Architecture & Test Inventory", () => {
     expect(html).toContain("story-technical-specs-block");
     expect(html).toContain("story-faq-block");
     expect(html).toContain("story-related-products-block");
+
+    // Image-led blocks sit in the full-width frame; every other block in the centered one.
+    const frameOf = (testId: string) =>
+      html.match(new RegExp(`<div class="([^"]*)"><[a-z]+[^>]*data-testid="${testId}"`))?.[1] ?? "";
+    for (const testId of [
+      "story-hero-media-block",
+      "story-full-bleed-image-block",
+      "story-gallery-block",
+    ]) {
+      expect(frameOf(testId), testId).toMatch(/fullWidthFrame/);
+    }
+    for (const testId of ["story-image-text-block", "story-faq-block", "story-comparison-block"]) {
+      expect(frameOf(testId), testId).toMatch(/blockFrame/);
+    }
   });
 
   // Test AJ & AK: No raw HTML and correct heading hierarchy
