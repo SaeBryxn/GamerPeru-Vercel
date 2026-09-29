@@ -24,6 +24,16 @@ describe("GP-022 / BR1 — Admin Error & Security Rendering Tests", () => {
     expect(html).not.toContain("Connection refused");
   });
 
+  it("describes a failed screen load as a load failure, not as an authorization block", () => {
+    const sensitiveError = new Error("canceling statement due to statement timeout");
+
+    const html = renderToString(<AdminError error={sensitiveError} reason="load" />);
+
+    expect(html).toContain("No pudimos cargar esta sección");
+    expect(html).not.toContain("autorización");
+    expect(html).not.toContain("statement timeout");
+  });
+
   it("proves AdminError includes safe navigation actions (retry link and storefront link)", () => {
     const html = renderToString(<AdminError />);
 

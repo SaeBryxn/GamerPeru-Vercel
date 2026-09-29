@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { roles, permissions, rolePermissions, userRoles } from "@/db/schema";
 import { getVerifiedIdentity } from "@/lib/auth/claims";
 import { logger } from "@/lib/logger";
+import { describeDatabaseError } from "@/db/describe-error";
 
 /**
  * Canonical Gamer Perú v1 Roles (ADR-003)
@@ -178,9 +179,12 @@ export const getVerifiedAuthContext = cache(async (): Promise<VerifiedAuthContex
       roles: userRoleList,
       permissions: userPermSet,
     };
-  } catch {
+  } catch (error) {
+    // Almost always a database problem (timeout, pool exhaustion), not a session one: the admin
+    // shows "Servicio no disponible", so the cause has to be readable in the logs.
     logger.error({
       event: "rbac_resolution_failed",
+      ...describeDatabaseError(error),
     });
     return {
       status: "ERROR",

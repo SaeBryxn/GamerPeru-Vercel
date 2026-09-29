@@ -332,8 +332,10 @@ describe("GP-015 AUTH8-BR1 — RBAC Server Authorization Runtime Tests", () => {
     // Verify error logging is completely sanitized
     expect(loggerSpy).toHaveBeenCalledTimes(1);
     const loggedPayload = loggerSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    // Only the error's class and code are logged, never its message.
     expect(loggedPayload).toEqual({
       event: "rbac_resolution_failed",
+      errorName: "Error",
     });
     // Ensure no driver details, table names, credentials, or auth user IDs were logged
     const loggedString = JSON.stringify(loggedPayload);
@@ -348,6 +350,27 @@ describe("GP-015 AUTH8-BR1 — RBAC Server Authorization Runtime Tests", () => {
       AuthorizationUnavailableError
     );
     await expect(getUserPermissions()).rejects.toThrow(AuthorizationUnavailableError);
+  });
+
+  it("logs the database error code of an RBAC failure so its cause is diagnosable", async () => {
+    const loggerSpy = vi.spyOn(logger, "error");
+    const { getVerifiedAuthContext } = await import("@/lib/auth/rbac");
+
+    mockState.shouldDbThrow = true;
+    mockState.thrownDbError = Object.assign(
+      new Error("canceling statement due to statement timeout on secret_internal_table"),
+      { name: "PostgresError", code: "57014" }
+    );
+
+    const context = await getVerifiedAuthContext();
+    expect(context.status).toBe("ERROR");
+    const loggedPayload = loggerSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(loggedPayload).toEqual({
+      event: "rbac_resolution_failed",
+      errorName: "PostgresError",
+      errorCode: "57014",
+    });
+    expect(JSON.stringify(loggedPayload)).not.toContain("secret_internal_table");
   });
 
   it("O: denies unknown arbitrary permission strings", async () => {

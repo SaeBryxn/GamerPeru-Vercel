@@ -15,5 +15,5 @@ export default function AdminProtectedError({
     Sentry.captureException(error);
   }, [error]);
 
-  return <AdminError error={error} reset={reset} />;
+  return <AdminError error={error} reset={reset} reason="load" />;
 }
