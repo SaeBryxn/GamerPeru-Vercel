@@ -1,10 +1,8 @@
 .container {
   width: 100%;
-  max-width: 1180px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.5rem;
   color: var(--color-text-primary, var(--color-text-primary));
 }
 
@@ -45,7 +43,7 @@
 .iconButton:focus-visible,
 .libraryOption:focus-visible,
 .blockCard:focus-visible {
-  outline: 2px solid var(--color-brand-primary, var(--color-brand-primary));
+  outline: 2px solid var(--color-border-focus);
   outline-offset: 2px;
 }
 
@@ -73,8 +71,9 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md, 0.5rem);
-  color: var(--color-brand-active, var(--color-brand-active));
-  background-color: var(--color-brand-subtle-light, var(--color-status-danger-background));
+  color: var(--color-text-primary);
+  background-color: var(--admin-inset);
+  border: 1px solid var(--admin-inset-border);
 }
 
 .title {
@@ -126,9 +125,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
   overflow: hidden;
-  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
-  border-radius: var(--radius-lg, 0.75rem);
-  background-color: var(--color-border-subtle, var(--color-border-subtle));
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--admin-panel-border);
+  box-shadow: var(--admin-card-shadow);
 }
 
 .statusRegion > div {
@@ -137,7 +137,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  background-color: var(--color-surface-card, var(--admin-panel));
+  background-color: var(--admin-panel);
 }
 
 .statusRegion strong {
@@ -151,21 +151,28 @@
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.5rem;
   align-items: start;
+}
+
+@media (min-width: 1440px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
 }
 
 .documentPanel,
 .actionPanel {
   min-width: 0;
-  background-color: var(--color-surface-card, var(--admin-panel));
-  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
-  border-radius: var(--radius-lg, 0.75rem);
+  background-color: var(--admin-panel);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  box-shadow: var(--admin-card-shadow);
 }
 
 .documentPanel {
-  padding: 1.25rem;
+  padding: var(--admin-card-padding);
 }
 
 .documentHeader {
@@ -222,20 +229,20 @@
 }
 
 .primaryButton {
-  color: var(--admin-panel);
-  background-color: var(--color-brand-primary, var(--color-brand-primary));
-  border: 1px solid var(--color-brand-primary, var(--color-brand-primary));
+  color: var(--admin-accent-contrast);
+  background-color: var(--admin-accent);
+  border: 1px solid var(--admin-accent);
 }
 
 .primaryButton:hover:not(:disabled) {
-  background-color: var(--color-brand-hover, var(--color-brand-hover));
-  border-color: var(--color-brand-hover, var(--color-brand-hover));
+  background-color: var(--admin-accent-strong);
+  border-color: var(--admin-accent-strong);
 }
 
 .secondaryButton {
-  color: var(--color-text-primary, var(--color-text-primary));
-  background-color: var(--color-surface-card, var(--admin-panel));
-  border: 1px solid var(--color-border-subtle, var(--color-border-default));
+  color: var(--color-text-primary);
+  background-color: var(--admin-panel);
+  border: 1px solid var(--color-border-default);
 }
 
 .secondaryButton:hover:not(:disabled),
@@ -250,13 +257,14 @@
 }
 
 .dangerButton {
-  color: var(--color-status-danger-text);
-  background-color: var(--color-status-danger-background);
-  border: 1px solid var(--color-status-danger-border);
+  color: var(--admin-danger);
+  background-color: transparent;
+  border: 1px solid var(--color-border-default);
 }
 
 .dangerButton:hover:not(:disabled) {
-  background-color: #fee2e2;
+  border-color: var(--admin-danger);
+  background-color: var(--admin-accent-soft);
 }
 
 .primaryButton:disabled,
@@ -309,15 +317,19 @@
 }
 
 .blockCard {
-  border: 1px solid var(--color-border-subtle, var(--color-border-default));
-  border-radius: var(--radius-md, 0.5rem);
-  padding: 1rem;
-  background-color: var(--color-surface-card, var(--admin-panel));
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-inset-radius);
+  padding: 1.25rem;
+  background-color: var(--admin-panel);
+  transition: border-color 0.15s ease;
+}
+
+.blockCard:hover {
+  border-color: var(--color-border-default);
 }
 
 .blockCardIncomplete {
-  border-color: #f59e0b;
-  background-color: var(--color-status-warning-background);
+  border-color: var(--color-status-warning-text);
 }
 
 .blockHeader {
@@ -383,7 +395,7 @@
 }
 
 .incompleteExplanation {
-  color: #78350f;
+  color: var(--color-status-warning-text);
   background-color: var(--color-status-warning-background);
 }
 
@@ -405,29 +417,30 @@
   justify-content: center;
   gap: 0.375rem;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border-subtle, var(--color-border-default));
+  border: 1px solid var(--admin-panel-border);
   border-radius: var(--radius-md, 0.5rem);
-  color: var(--color-text-primary, var(--color-text-primary));
-  background-color: var(--color-surface-card, var(--admin-panel));
+  color: var(--color-text-primary);
+  background-color: transparent;
   font-size: 0.75rem;
   font-weight: 600;
 }
 
 .blockAction:hover:not(:disabled) {
-  background-color: var(--color-surface-secondary, var(--admin-inset));
+  border-color: var(--color-border-default);
+  background-color: var(--admin-inset);
 }
 
 .deleteAction {
-  color: var(--color-status-danger-text);
+  color: var(--admin-danger);
 }
 
 .actionPanel {
   position: sticky;
-  top: 84px;
+  top: calc(var(--admin-header-height) + 1.5rem);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 1.125rem;
+  padding: 1.25rem;
 }
 
 .localState {
@@ -435,8 +448,9 @@
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.75rem;
-  border-radius: var(--radius-md, 0.5rem);
-  background-color: var(--color-surface-secondary, var(--admin-inset));
+  border: 1px solid var(--admin-inset-border);
+  border-radius: var(--admin-inset-radius);
+  background-color: var(--admin-inset);
 }
 
 .localState strong {
@@ -589,8 +603,8 @@
 }
 
 .libraryOption:hover {
-  border-color: var(--color-brand-primary, var(--color-brand-primary));
-  background-color: var(--color-brand-subtle-light, var(--color-status-danger-background));
+  border-color: var(--admin-accent);
+  background-color: var(--admin-accent-soft);
 }
 
 .libraryOption strong {
@@ -656,7 +670,7 @@
 }
 
 .requiredIndicator {
-  color: var(--color-brand-primary, var(--color-brand-primary));
+  color: var(--admin-danger);
 }
 
 .fieldHelp {
@@ -670,7 +684,7 @@
   margin: 0;
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--color-brand-primary, var(--color-brand-primary));
+  color: var(--admin-danger);
 }
 
 .textInput,
@@ -687,13 +701,13 @@
 
 .textInput:focus-visible,
 .textareaInput:focus-visible {
-  outline: 2px solid var(--color-brand-primary, var(--color-brand-primary));
+  outline: 2px solid var(--color-border-focus);
   outline-offset: 1px;
 }
 
 .textInput[aria-invalid="true"],
 .textareaInput[aria-invalid="true"] {
-  border-color: var(--color-brand-primary, var(--color-brand-primary));
+  border-color: var(--color-border-focus);
 }
 
 .textareaInput {
@@ -726,7 +740,7 @@
 }
 
 .radioInput {
-  accent-color: var(--color-brand-primary, var(--color-brand-primary));
+  accent-color: var(--admin-accent);
   width: 18px;
   height: 18px;
 }
@@ -758,12 +772,12 @@
 }
 
 .mediaSelectTrigger:focus-visible {
-  outline: 2px solid var(--color-brand-primary, var(--color-brand-primary));
+  outline: 2px solid var(--color-border-focus);
   outline-offset: 2px;
 }
 
 .mediaFieldError .mediaSelectTrigger {
-  border-color: var(--color-brand-primary, var(--color-brand-primary));
+  border-color: var(--color-border-focus);
 }
 
 .selectedMediaCard {
@@ -819,8 +833,8 @@
   border-radius: 9999px;
   font-size: 0.6875rem;
   font-weight: 600;
-  color: var(--color-brand-active, var(--color-brand-active));
-  background-color: var(--color-brand-subtle-light, var(--color-status-danger-background));
+  color: var(--color-text-secondary);
+  background-color: var(--admin-inset);
 }
 
 .mediaAltText {
@@ -1054,7 +1068,7 @@
 }
 
 .comparisonTableScrollRegion:focus-visible {
-  outline: 2px solid var(--color-brand-primary, var(--color-brand-primary));
+  outline: 2px solid var(--color-border-focus);
 }
 
 .comparisonRowsStack {
@@ -1124,7 +1138,7 @@
 }
 
 .searchInput:focus-visible {
-  outline: 2px solid var(--color-brand-primary, var(--color-brand-primary));
+  outline: 2px solid var(--color-border-focus);
 }
 
 .pickerActionsRow {
@@ -1159,13 +1173,13 @@
 }
 
 .mediaOption:focus-visible {
-  outline: 2px solid var(--color-brand-primary, var(--color-brand-primary));
+  outline: 2px solid var(--color-border-focus);
   outline-offset: 1px;
 }
 
 .mediaOptionSelected {
-  border-color: var(--color-brand-primary, var(--color-brand-primary));
-  background-color: var(--color-status-danger-background);
+  border-color: var(--admin-accent);
+  background-color: var(--admin-accent-soft);
 }
 
 .mediaThumbnailWrapper {
@@ -1206,7 +1220,7 @@
 
 .selectionStateActive {
   font-weight: 600;
-  color: var(--color-brand-primary, var(--color-brand-primary));
+  color: var(--color-text-primary);
 }
 
 .emptySearchMessage {
@@ -1236,7 +1250,7 @@
 }
 
 .searchErrorMessage {
-  color: var(--color-brand-primary, var(--color-brand-primary));
+  color: var(--admin-danger);
   font-size: 0.8125rem;
   margin: 0.5rem 0;
 }
@@ -1289,7 +1303,7 @@
   font-size: 0.6875rem;
   font-weight: 600;
   color: var(--color-status-danger-text);
-  background-color: #fee2e2;
+  background-color: var(--color-status-danger-background);
 }
 
 .relatedProductDisplay {
@@ -1305,10 +1319,10 @@
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border: 1px solid var(--color-brand-primary, var(--color-brand-primary));
-  border-radius: var(--radius-md, 0.5rem);
+  border: 1px solid var(--admin-danger);
+  border-radius: var(--admin-inset-radius);
   background-color: var(--color-status-danger-background);
-  color: var(--color-brand-active);
+  color: var(--color-status-danger-text);
 }
 
 .validationSummaryHeader {
@@ -1347,17 +1361,17 @@
   padding: 0;
   font-size: 0.8125rem;
   text-align: left;
-  color: var(--color-brand-active);
+  color: var(--color-status-danger-text);
   text-decoration: underline;
   cursor: pointer;
 }
 
 .validationIssueLink:hover {
-  color: #881337;
+  color: var(--admin-danger);
 }
 
 .validationIssueLink:focus-visible {
-  outline: 2px solid var(--color-brand-primary, var(--color-brand-primary));
+  outline: 2px solid var(--color-border-focus);
   outline-offset: 2px;
 }
 
@@ -1415,7 +1429,7 @@
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--color-status-danger-text);
-  background-color: #fee2e2;
+  background-color: var(--color-status-danger-background);
 }
 
 /* ==========================================================================
