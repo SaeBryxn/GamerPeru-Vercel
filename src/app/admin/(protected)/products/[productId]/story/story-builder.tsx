@@ -1370,6 +1370,168 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
       />
 
       <div className={styles.workspace}>
+        <aside className={styles.actionPanel} aria-labelledby="story-actions-title">
+          <div className={styles.actionStatus}>
+            <h2 id="story-actions-title" className={styles.actionTitle}>
+              Acciones del borrador
+            </h2>
+            <div className={styles.localState}>
+              <span className={styles.statusLabel}>Estado local</span>
+              <strong>{dirty ? "Cambios sin guardar" : "Sin cambios pendientes"}</strong>
+              {incompleteCount > 0 && (
+                <span id="story-save-blocker" className={styles.saveBlocker}>
+                  {incompleteCount}{" "}
+                  {incompleteCount === 1 ? "bloque pendiente impide" : "bloques pendientes impiden"}{" "}
+                  guardar.
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.actionButtons}>
+            {/* Short visible labels keep the bar on one row; the full action name stays accessible. */}
+            <button
+              type="button"
+              className={styles.tertiaryButton}
+              onClick={requestServerReload}
+              aria-label="Recargar desde servidor"
+              title="Recargar desde servidor"
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+              Recargar
+            </button>
+            {dirty && (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={(event) => openConfirmation(event, { kind: "RESET_LOCAL" })}
+                aria-label="Restablecer cambios locales"
+                title="Restablecer cambios locales"
+              >
+                <RotateCcw size={16} aria-hidden="true" />
+                Restablecer
+              </button>
+            )}
+            {durableStory.draftRevisionId !== null && (
+              <button
+                type="button"
+                className={styles.dangerButton}
+                disabled={discardDisabled}
+                onClick={(event) => openConfirmation(event, { kind: "DISCARD_DRAFT" })}
+                data-testid="story-discard-draft"
+              >
+                {isDiscarding ? (
+                  <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
+                ) : (
+                  <Trash2 size={16} aria-hidden="true" />
+                )}
+                Descartar borrador guardado
+              </button>
+            )}
+            {durableStory.publishedRevisionId !== null && (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                disabled={unpublishDisabled}
+                onClick={(event) => {
+                  if (ambiguousUnpublish) {
+                    void executeUnpublish();
+                  } else {
+                    openConfirmation(event, { kind: "UNPUBLISH" });
+                  }
+                }}
+                data-testid="story-unpublish-button"
+              >
+                {isUnpublishing ? (
+                  <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
+                ) : (
+                  <EyeOff size={16} aria-hidden="true" />
+                )}
+                {isUnpublishing
+                  ? "Despublicando…"
+                  : ambiguousUnpublish
+                    ? "Reintentar despublicación"
+                    : "Despublicar historia"}
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              disabled={previewDisabled}
+              onClick={openPreview}
+              aria-describedby={previewDisabledReason ? "story-preview-reason" : undefined}
+              title={previewDisabledReason ?? undefined}
+              data-testid="story-preview-button"
+            >
+              <Eye size={16} aria-hidden="true" />
+              Vista previa
+            </button>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              disabled={publishDisabled}
+              onClick={(event) => {
+                if (ambiguousPublish) {
+                  void executePublish();
+                } else {
+                  openConfirmation(event, { kind: "PUBLISH" });
+                }
+              }}
+              data-testid="story-publish-button"
+            >
+              {isPublishing ? (
+                <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
+              ) : (
+                <UploadCloud size={16} aria-hidden="true" />
+              )}
+              {isPublishing
+                ? "Publicando…"
+                : ambiguousPublish
+                  ? "Reintentar publicación"
+                  : "Publicar historia"}
+            </button>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              disabled={saveDisabled}
+              aria-describedby={incompleteCount > 0 ? "story-save-blocker" : undefined}
+              onClick={() => void saveDraft()}
+              data-testid="story-save-draft"
+            >
+              {isSaving ? (
+                <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
+              ) : (
+                <Save size={17} aria-hidden="true" />
+              )}
+              {isSaving ? "Guardando…" : ambiguousSave ? "Reintentar guardado" : "Guardar borrador"}
+            </button>
+          </div>
+
+          <div className={styles.actionNotes}>
+            {previewDisabledReason && (
+              <span id="story-preview-reason" className={styles.actionSubtext}>
+                {previewDisabledReason}
+              </span>
+            )}
+            {!canPublish && (
+              <p
+                className={styles.permissionWarning}
+                data-testid="story-publish-permission-warning"
+              >
+                Se requiere el permiso <code>catalog:publish</code> para publicar o despublicar la
+                historia.
+              </p>
+            )}
+            <details className={styles.actionHelpDetails}>
+              <summary>¿Qué hace cada acción?</summary>
+              <p className={styles.actionHelp}>
+                Guardar crea una revisión inmutable. Publicar promociona el borrador a la tienda
+                pública. Descartar archiva el borrador actual sin afectar la versión publicada.
+              </p>
+            </details>
+          </div>
+        </aside>
+
         <section className={styles.documentPanel} aria-labelledby="story-document-title">
           <div className={styles.documentHeader}>
             <div>
@@ -1550,151 +1712,6 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
             </ol>
           )}
         </section>
-
-        <aside className={styles.actionPanel} aria-labelledby="story-actions-title">
-          <h2 id="story-actions-title">Acciones del borrador</h2>
-          <div className={styles.localState}>
-            <span className={styles.statusLabel}>Estado local</span>
-            <strong>{dirty ? "Cambios sin guardar" : "Sin cambios pendientes"}</strong>
-            {incompleteCount > 0 && (
-              <span id="story-save-blocker" className={styles.saveBlocker}>
-                {incompleteCount}{" "}
-                {incompleteCount === 1 ? "bloque pendiente impide" : "bloques pendientes impiden"}{" "}
-                guardar.
-              </span>
-            )}
-          </div>
-
-          <button
-            type="button"
-            className={styles.primaryButton}
-            disabled={saveDisabled}
-            aria-describedby={incompleteCount > 0 ? "story-save-blocker" : undefined}
-            onClick={() => void saveDraft()}
-            data-testid="story-save-draft"
-          >
-            {isSaving ? (
-              <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
-            ) : (
-              <Save size={17} aria-hidden="true" />
-            )}
-            {isSaving ? "Guardando…" : ambiguousSave ? "Reintentar guardado" : "Guardar borrador"}
-          </button>
-
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            disabled={previewDisabled}
-            onClick={openPreview}
-            aria-describedby={previewDisabledReason ? "story-preview-reason" : undefined}
-            data-testid="story-preview-button"
-          >
-            <Eye size={16} aria-hidden="true" />
-            Vista previa
-          </button>
-          {previewDisabledReason && (
-            <span id="story-preview-reason" className={styles.actionSubtext}>
-              {previewDisabledReason}
-            </span>
-          )}
-
-          <button
-            type="button"
-            className={styles.primaryButton}
-            disabled={publishDisabled}
-            onClick={(event) => {
-              if (ambiguousPublish) {
-                void executePublish();
-              } else {
-                openConfirmation(event, { kind: "PUBLISH" });
-              }
-            }}
-            data-testid="story-publish-button"
-          >
-            {isPublishing ? (
-              <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
-            ) : (
-              <UploadCloud size={16} aria-hidden="true" />
-            )}
-            {isPublishing
-              ? "Publicando…"
-              : ambiguousPublish
-                ? "Reintentar publicación"
-                : "Publicar historia"}
-          </button>
-
-          {durableStory.publishedRevisionId !== null && (
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              disabled={unpublishDisabled}
-              onClick={(event) => {
-                if (ambiguousUnpublish) {
-                  void executeUnpublish();
-                } else {
-                  openConfirmation(event, { kind: "UNPUBLISH" });
-                }
-              }}
-              data-testid="story-unpublish-button"
-            >
-              {isUnpublishing ? (
-                <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
-              ) : (
-                <EyeOff size={16} aria-hidden="true" />
-              )}
-              {isUnpublishing
-                ? "Despublicando…"
-                : ambiguousUnpublish
-                  ? "Reintentar despublicación"
-                  : "Despublicar historia"}
-            </button>
-          )}
-
-          {!canPublish && (
-            <p className={styles.permissionWarning} data-testid="story-publish-permission-warning">
-              Se requiere el permiso <code>catalog:publish</code> para publicar o despublicar la
-              historia.
-            </p>
-          )}
-
-          {dirty && (
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={(event) => openConfirmation(event, { kind: "RESET_LOCAL" })}
-            >
-              <RotateCcw size={16} aria-hidden="true" />
-              Restablecer cambios locales
-            </button>
-          )}
-
-          {durableStory.draftRevisionId !== null && (
-            <button
-              type="button"
-              className={styles.dangerButton}
-              disabled={discardDisabled}
-              onClick={(event) => openConfirmation(event, { kind: "DISCARD_DRAFT" })}
-              data-testid="story-discard-draft"
-            >
-              {isDiscarding ? (
-                <Loader2 size={17} className={styles.spinner} aria-hidden="true" />
-              ) : (
-                <Trash2 size={16} aria-hidden="true" />
-              )}
-              Descartar borrador guardado
-            </button>
-          )}
-
-          <button type="button" className={styles.tertiaryButton} onClick={requestServerReload}>
-            <RefreshCw size={16} aria-hidden="true" />
-            Recargar desde servidor
-          </button>
-
-          <p className={styles.actionHelp}>
-            Guardar crea una revisión inmutable. Publicar promociona el borrador a la tienda
-            pública. Descartar archiva el borrador actual sin afectar la versión publicada.
-          </p>
-        </aside>
       </div>
 
       {isBlockLibraryOpen && (
