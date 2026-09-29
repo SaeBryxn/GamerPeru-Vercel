@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  postgres@3.4.9: 99ab752db775a897799f20fbfdb7c6b8fcb086d3c8f727ece2f87e7be75a9d78
+
 importers:
 
   .:
@@ -28,7 +31,7 @@ importers:
         version: 2.112.3(@opentelemetry/api@1.9.1)
       drizzle-orm:
         specifier: 0.45.2
-        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(postgres@3.4.9)
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(postgres@3.4.9(patch_hash=99ab752db775a897799f20fbfdb7c6b8fcb086d3c8f727ece2f87e7be75a9d78))
       framer-motion:
         specifier: 13.4.0
         version: 13.4.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -49,7 +52,7 @@ importers:
         version: 10.3.1
       postgres:
         specifier: 3.4.9
-        version: 3.4.9
+        version: 3.4.9(patch_hash=99ab752db775a897799f20fbfdb7c6b8fcb086d3c8f727ece2f87e7be75a9d78)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -6905,11 +6908,11 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.23.12
 
-  drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(postgres@3.4.9):
+  drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(postgres@3.4.9(patch_hash=99ab752db775a897799f20fbfdb7c6b8fcb086d3c8f727ece2f87e7be75a9d78)):
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
       '@types/pg': 8.15.6
-      postgres: 3.4.9
+      postgres: 3.4.9(patch_hash=99ab752db775a897799f20fbfdb7c6b8fcb086d3c8f727ece2f87e7be75a9d78)
 
   eastasianwidth@0.2.0: {}
 
@@ -7778,7 +7781,7 @@ snapshots:
     dependencies:
       xtend: 4.0.2
 
-  postgres@3.4.9: {}
+  postgres@3.4.9(patch_hash=99ab752db775a897799f20fbfdb7c6b8fcb086d3c8f727ece2f87e7be75a9d78): {}
 
   prelude-ls@1.2.1: {}
 

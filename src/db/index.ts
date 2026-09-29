@@ -52,6 +52,11 @@ const client =
   postgres(connectionString, {
     prepare: false, // Required for Supavisor transaction pooler
     max: resolvePoolMax(process.env.DATABASE_POOL_MAX),
+    // Never stack a query onto a busy connection: Supavisor's transaction mode returns only the
+    // first reply of a pipelined batch, so the rest waited forever (Vercel 300 s timeouts, admin
+    // skeletons). Extra queries now wait for a free connection. Transactions keep working through
+    // patches/postgres@3.4.9.patch, which lets sql.begin reserve its connection without pipelining.
+    max_pipeline: 0,
     idle_timeout: 20,
     connect_timeout: 10,
     // Supavisor recycles pooled sessions on its own. Without these bounds a
