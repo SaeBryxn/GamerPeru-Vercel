@@ -260,16 +260,6 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
           error: "El identificador de solicitud de mutación es obligatorio.",
           code: "INVALID_MUTATION_REQUEST_ID",
         };
-      case "MEDIA_UPLOAD_INTENT_CONSUMPTION_INTEGRITY_ERROR":
-        return {
-          error: "Error de integridad en el registro de consumo de la intención de subida.",
-          code: "MEDIA_UPLOAD_INTENT_CONSUMPTION_INTEGRITY_ERROR",
-        };
-      case "MEDIA_FILE_EMPTY":
-        return {
-          error: "El archivo de imagen no tiene contenido.",
-          code: "MEDIA_FILE_EMPTY",
-        };
       case "MEDIA_FILE_TOO_LARGE":
         return {
           error: "El archivo excede el tamaño máximo permitido de 10 MiB.",
