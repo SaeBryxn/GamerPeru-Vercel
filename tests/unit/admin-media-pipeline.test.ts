@@ -22,6 +22,7 @@ import {
   InMemoryCatalogStorageAdapter,
 } from "@/lib/admin/catalog/media-storage";
 import { ALLOWED_IMAGE_MIME_TYPES } from "@/lib/admin/catalog/publish-readiness";
+import { sharpImageProcessor } from "../fixtures/sharp-image-processor";
 
 const TEST_SECRET = "a1b2c3d4e5f67890123456789abcdef0a1b2c3d4e5f67890123456789abcdef0";
 
@@ -167,7 +168,9 @@ describe("GP-024 Byte Inspection, 10 MiB Boundary & Normalization", () => {
     const magic = detectMagicMimeType(emptyBuf);
     expect(magic).toBeNull();
 
-    await expect(validateAndNormalizeCatalogImage(emptyBuf, "image/png")).rejects.toThrow(/vacío/i);
+    await expect(
+      validateAndNormalizeCatalogImage(emptyBuf, "image/png", sharpImageProcessor)
+    ).rejects.toThrow(/vacío/i);
   });
 
   it("rejects buffer exceeding 10485760 bytes (10 MiB + 1 byte)", async () => {
@@ -177,9 +180,9 @@ describe("GP-024 Byte Inspection, 10 MiB Boundary & Normalization", () => {
     oversizeBuf[2] = 0x4e;
     oversizeBuf[3] = 0x47;
 
-    await expect(validateAndNormalizeCatalogImage(oversizeBuf, "image/png")).rejects.toThrow(
-      /10485760 bytes/i
-    );
+    await expect(
+      validateAndNormalizeCatalogImage(oversizeBuf, "image/png", sharpImageProcessor)
+    ).rejects.toThrow(/10485760 bytes/i);
   });
 
   it("detects magic bytes for JPEG, PNG, and WebP", async () => {
@@ -216,7 +219,11 @@ describe("GP-024 Byte Inspection, 10 MiB Boundary & Normalization", () => {
     const detected = detectMagicMimeType(avifBuf);
     expect(detected).toBe("image/avif");
 
-    const normalized = await validateAndNormalizeCatalogImage(avifBuf, "image/avif");
+    const normalized = await validateAndNormalizeCatalogImage(
+      avifBuf,
+      "image/avif",
+      sharpImageProcessor
+    );
     expect(normalized.mimeType).toBe("image/webp");
     expect(normalized.width).toBe(4);
     expect(normalized.height).toBe(4);
@@ -231,14 +238,16 @@ describe("GP-024 Byte Inspection, 10 MiB Boundary & Normalization", () => {
       .png()
       .toBuffer();
 
-    await expect(validateAndNormalizeCatalogImage(pngBuf, "image/jpeg")).rejects.toThrow(
-      /Discrepancia/i
-    );
+    await expect(
+      validateAndNormalizeCatalogImage(pngBuf, "image/jpeg", sharpImageProcessor)
+    ).rejects.toThrow(/Discrepancia/i);
   });
 
   it("rejects non-image corrupt payload", async () => {
     const corruptBuf = Buffer.from("Not a real image header data payload at all");
-    await expect(validateAndNormalizeCatalogImage(corruptBuf, "image/png")).rejects.toThrow();
+    await expect(
+      validateAndNormalizeCatalogImage(corruptBuf, "image/png", sharpImageProcessor)
+    ).rejects.toThrow();
   });
 
   it("normalizes PNG to WebP with deterministic SHA-256 content address", async () => {
@@ -248,14 +257,66 @@ describe("GP-024 Byte Inspection, 10 MiB Boundary & Normalization", () => {
       .png()
       .toBuffer();
 
-    const res1 = await validateAndNormalizeCatalogImage(pngBuf, "image/png");
-    const res2 = await validateAndNormalizeCatalogImage(pngBuf, "image/png");
+    const res1 = await validateAndNormalizeCatalogImage(pngBuf, "image/png", sharpImageProcessor);
+    const res2 = await validateAndNormalizeCatalogImage(pngBuf, "image/png", sharpImageProcessor);
 
     expect(res1.checksumSha256).toBe(res2.checksumSha256);
     expect(res1.checksumSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(res1.mimeType).toBe("image/webp");
     const calculatedHash = createHash("sha256").update(res1.normalizedWebpBuffer).digest("hex");
     expect(calculatedHash).toBe(res1.checksumSha256);
+  });
+
+  it("takes dimensions from the encoded output, after EXIF orientation", async () => {
+    // A 4x2 landscape JPEG tagged "rotate 90° clockwise" is a 2x4 portrait once oriented.
+    const jpegBuf = await sharp({
+      create: { width: 4, height: 2, channels: 3, background: { r: 10, g: 20, b: 30 } },
+    })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+
+    const normalized = await validateAndNormalizeCatalogImage(
+      jpegBuf,
+      "image/jpeg",
+      sharpImageProcessor
+    );
+    expect(normalized.width).toBe(2);
+    expect(normalized.height).toBe(4);
+  });
+
+  it("rejects a decoded format outside the allowed set", async () => {
+    const pngBuf = await sharp({
+      create: { width: 2, height: 2, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    })
+      .png()
+      .toBuffer();
+    const gifReportingProcessor = {
+      inspect: async () => ({ mimeType: "image/gif", width: 2, height: 2 }),
+      encodeWebp: async () => new Uint8Array(),
+    };
+
+    await expect(
+      validateAndNormalizeCatalogImage(pngBuf, "image/png", gifReportingProcessor)
+    ).rejects.toMatchObject({ code: "MEDIA_UNSUPPORTED_TYPE" });
+  });
+
+  it("maps an encoder failure to a normalization error", async () => {
+    const pngBuf = await sharp({
+      create: { width: 2, height: 2, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    })
+      .png()
+      .toBuffer();
+    const failingEncoder = {
+      inspect: sharpImageProcessor.inspect,
+      encodeWebp: async () => {
+        throw new Error("binding unavailable");
+      },
+    };
+
+    await expect(
+      validateAndNormalizeCatalogImage(pngBuf, "image/png", failingEncoder)
+    ).rejects.toMatchObject({ code: "MEDIA_CORRUPT_OR_SPOOFED", httpStatus: 500 });
   });
 });
 

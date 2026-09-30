@@ -1,0 +1,61 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gamerperu",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+  },
+  // Lets queued ISR regenerations call back into this same Worker.
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "gamerperu",
+    },
+  ],
+  // Catalog photo normalization (replaces sharp) and next/image optimization.
+  "images": {
+    "binding": "IMAGES",
+  },
+  // Next.js incremental cache (ISR pages and unstable_cache data). Catalog media and payment
+  // proofs stay on their own R2 buckets, reached through the S3 API (src/lib/storage/r2.ts).
+  "r2_buckets": [
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "gamerperu-next-cache",
+    },
+  ],
+  // revalidateTag state and the ISR revalidation queue.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NEXT_CACHE_DO_QUEUE",
+        "class_name": "DOQueueHandler",
+      },
+      {
+        "name": "NEXT_TAG_CACHE_DO_SHARDED",
+        "class_name": "DOShardedTagCache",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DOQueueHandler", "DOShardedTagCache"],
+    },
+  ],
+  // Optional: pool Supabase connections through Cloudflare instead of opening one per request.
+  // Create it with `npx wrangler hyperdrive create gamerperu-db --connection-string=<session or
+  // direct Supabase URL>` and uncomment; src/db/index.ts prefers it over DATABASE_URL.
+  // "hyperdrive": [
+  //   {
+  //     "binding": "HYPERDRIVE",
+  //     "id": "<hyperdrive-id>",
+  //   },
+  // ],
+  "observability": {
+    "enabled": true,
+  },
+}

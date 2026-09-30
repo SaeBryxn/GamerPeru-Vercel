@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import * as Sentry from "@sentry/nextjs";
 import Link from "next/link";
 import { Button, Card, Container, Stack } from "@/components/ui";
+import { reportClientError } from "@/lib/observability/report-client-error";
 
 export default function ErrorBoundary({
   error,
@@ -13,8 +13,7 @@ export default function ErrorBoundary({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log client-side error to Sentry if configured
-    Sentry.captureException(error);
+    reportClientError(error);
   }, [error]);
 
   return (

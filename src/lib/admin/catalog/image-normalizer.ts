@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import sharp, { type Metadata } from "sharp";
 import { CatalogDomainError } from "./types";
+import { cloudflareImageProcessor } from "./cloudflare-image-processor";
+import type { ImageProcessor } from "./image-processor";
 import { type AllowedMediaUploadMimeType, MAX_MEDIA_FILE_SIZE_BYTES } from "./media-crypto";
 
 export interface NormalizedImageResult {
@@ -82,10 +83,10 @@ export function detectMagicMimeType(buffer: Buffer): AllowedMediaUploadMimeType 
  * Strict invariants:
  * - Buffer length > 0 and <= 10485760 (10 MiB)
  * - Magic bytes match supported set
- * - Sharp decoder verifies image structure (rejects corruption & disguised non-images)
+ * - The image processor decodes the header (rejects corruption & disguised non-images)
  * - Decoded format must be compatible with expectedIncomingMimeType (rejects MIME spoofing)
  * - Auto-orients from EXIF, strips unnecessary metadata, preserves alpha
- * - WebP quality 85, effort 4, non-lossless
+ * - Lossy WebP at quality 85
  * - Derives authoritative width and height from normalized WebP
  * - Derives SHA-256 content hash from final WebP bytes
  */
@@ -107,9 +108,23 @@ export function validateCatalogImageSize(byteLength: number): void {
   }
 }
 
+const WEBP_QUALITY = 85;
+
+const ALLOWED_DECODED_MIME_TYPES: readonly AllowedMediaUploadMimeType[] = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+];
+
+function isAllowedDecodedMime(mime: string): mime is AllowedMediaUploadMimeType {
+  return (ALLOWED_DECODED_MIME_TYPES as readonly string[]).includes(mime);
+}
+
 export async function validateAndNormalizeCatalogImage(
   buffer: Buffer,
-  expectedMime: AllowedMediaUploadMimeType
+  expectedMime: AllowedMediaUploadMimeType,
+  processor: ImageProcessor = cloudflareImageProcessor
 ): Promise<NormalizedImageResult> {
   // 1. Exact byte length boundary
   validateCatalogImageSize(buffer.length);
@@ -124,32 +139,17 @@ export async function validateAndNormalizeCatalogImage(
     );
   }
 
-  // 3. Decode & inspect via Sharp
-  let metadata: Metadata;
+  // 3. Decode & inspect
+  let decodedMime: AllowedMediaUploadMimeType | null = null;
   try {
-    const pipeline = sharp(buffer, { failOn: "error" });
-    metadata = await pipeline.metadata();
+    const inspection = await processor.inspect(buffer);
+    decodedMime = isAllowedDecodedMime(inspection.mimeType) ? inspection.mimeType : null;
   } catch {
     throw new CatalogDomainError(
       "La imagen contiene datos corruptos o no se pudo decodificar.",
       "MEDIA_CORRUPT_OR_SPOOFED",
       400
     );
-  }
-
-  // Map Sharp format to canonical MIME
-  let decodedMime: AllowedMediaUploadMimeType | null = null;
-  if (metadata.format === "jpeg") {
-    decodedMime = "image/jpeg";
-  } else if (metadata.format === "png") {
-    decodedMime = "image/png";
-  } else if (metadata.format === "webp") {
-    decodedMime = "image/webp";
-  } else if (
-    metadata.mediaType === "image/avif" ||
-    (metadata.format === "heif" && metadata.compression === "av1")
-  ) {
-    decodedMime = "image/avif";
   }
 
   if (!decodedMime) {
@@ -169,23 +169,19 @@ export async function validateAndNormalizeCatalogImage(
     );
   }
 
-  // 5. Deterministic WebP normalization
+  // 5. Deterministic WebP normalization; dimensions come from the encoded output, so they
+  // reflect the EXIF orientation that was applied.
   let normalizedData: Buffer;
   let normalizedWidth: number;
   let normalizedHeight: number;
   try {
-    const normalized = await sharp(buffer)
-      .rotate() // auto-orient based on safe EXIF orientation
-      .webp({
-        quality: 85,
-        effort: 4,
-        lossless: false,
-      })
-      .toBuffer({ resolveWithObject: true });
-
-    normalizedData = Buffer.from(normalized.data);
-    normalizedWidth = normalized.info.width;
-    normalizedHeight = normalized.info.height;
+    normalizedData = Buffer.from(await processor.encodeWebp(buffer, { quality: WEBP_QUALITY }));
+    const output = await processor.inspect(normalizedData);
+    if (output.mimeType !== "image/webp") {
+      throw new Error(`Unexpected normalized format: ${output.mimeType}`);
+    }
+    normalizedWidth = output.width;
+    normalizedHeight = output.height;
   } catch {
     throw new CatalogDomainError(
       "Error al normalizar la imagen al formato estándar WebP.",

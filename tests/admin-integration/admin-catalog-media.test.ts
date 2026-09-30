@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import postgres from "postgres";
 import sharp from "sharp";
+import { sharpImageProcessor } from "../fixtures/sharp-image-processor";
 import { assertLocalDatabaseTarget } from "@/lib/admin/test-target-guard";
 import {
   requestCatalogMediaUploadIntent,
@@ -219,6 +220,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const baseServiceOptions = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
     const intent = await requestCatalogMediaUploadIntent(
@@ -337,6 +339,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authUnauthorized,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -403,6 +406,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -608,6 +612,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -689,6 +694,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -765,6 +771,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -830,6 +837,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -883,6 +891,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -952,6 +961,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -994,6 +1004,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: new InMemoryCatalogStorageAdapter(),
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -1178,6 +1189,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -1283,6 +1295,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -1331,6 +1344,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -1394,6 +1408,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -1447,6 +1462,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
 
@@ -1518,6 +1534,7 @@ describe("GP-024 / CHK3 — Admin Catalog Media Pipeline Live Integration", () =
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: new InMemoryCatalogStorageAdapter(),
+      imageProcessor: sharpImageProcessor,
       intentSecret: TEST_HMAC_SECRET,
     };
     const primaryMutationId = "018f0024-br2-race-primary-000001";

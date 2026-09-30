@@ -57,3 +57,9 @@ package-lock.json
 
 # Timestamped copies written by scripts/rotate-secrets.mjs; they hold previous secrets
 .env*.backup-*
+
+# Cloudflare Workers (OpenNext build output, Wrangler state, local secrets)
+.open-next/
+.wrangler/
+.dev.vars
+.dev.vars.*

@@ -45,6 +45,7 @@ import {
 import { R2_BUCKETS } from "@/lib/storage/r2";
 import { getCatalogMediaIntentSecret } from "@/config/server-env";
 import { validateAndNormalizeCatalogImage } from "./image-normalizer";
+import type { ImageProcessor } from "./image-processor";
 import { ALLOWED_IMAGE_MIME_TYPES } from "./publish-readiness";
 
 export interface MediaServiceOptions {
@@ -53,6 +54,8 @@ export interface MediaServiceOptions {
   intentSecret?: string;
   currentServerTimeSeconds?: number;
   db?: typeof db;
+  /** Defaults to the Cloudflare Images binding; tests inject a local decoder. */
+  imageProcessor?: ImageProcessor;
 }
 
 export interface RequestCatalogMediaUploadIntentInput {
@@ -661,7 +664,8 @@ export async function finalizeCatalogMediaUpload(
 
   const normalized = await validateAndNormalizeCatalogImage(
     stagingBytes,
-    payload.expectedIncomingMimeType
+    payload.expectedIncomingMimeType,
+    options?.imageProcessor
   );
 
   // Canonical Content-Hashed Key: products/{brandSlug}/{productSlug}/{sha256}.webp

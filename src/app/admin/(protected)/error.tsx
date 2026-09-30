@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect } from "react";
-import * as Sentry from "@sentry/nextjs";
 import { AdminError } from "@/components/admin/admin-error";
+import { reportClientError } from "@/lib/observability/report-client-error";
 
 export default function AdminProtectedError({
   error,
@@ -12,7 +12,7 @@ export default function AdminProtectedError({
   reset: () => void;
 }) {
   useEffect(() => {
-    Sentry.captureException(error);
+    reportClientError(error);
   }, [error]);
 
   return <AdminError error={error} reset={reset} reason="load" />;

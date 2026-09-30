@@ -1,5 +1,12 @@
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
+
+// Exposes the wrangler.jsonc bindings (IMAGES, R2, Durable Objects) to `next dev` through
+// getCloudflareContext(), so local development runs against the same interfaces as the Worker.
+if (process.env.NODE_ENV === "development") {
+  void initOpenNextCloudflareForDev();
+}
 
 const securityHeaders = [
   {
@@ -50,7 +57,16 @@ function resolveCdnRemotePattern() {
 
 const cdnRemotePattern = resolveCdnRemotePattern();
 
+// Set by open-next.config.ts. The Sentry server SDK compiles WebAssembly when it loads, which
+// Workers forbid, so Cloudflare builds leave out both the Sentry wrapper and the instrumentation
+// hook. The hook lives in `instrumentation.node.ts` and is only picked up where `node.ts` is a
+// page extension.
+const isCloudflareBuild = process.env.GP_DEPLOY_TARGET === "cloudflare";
+
 const nextConfig: NextConfig = {
+  pageExtensions: isCloudflareBuild
+    ? ["tsx", "ts", "jsx", "js"]
+    : ["tsx", "ts", "jsx", "js", "node.ts"],
   reactStrictMode: true,
   poweredByHeader: false,
   images: {
@@ -90,18 +106,20 @@ const hasSentryBuildCredentials = Boolean(
   process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
 );
 
-export default withSentryConfig(nextConfig, {
-  silent: !hasSentryBuildCredentials,
-  telemetry: false,
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
-  widenClientFileUpload: true,
-  tunnelRoute: "/monitoring",
-  sourcemaps: {
-    disable: !hasSentryBuildCredentials,
-  },
-  release: {
-    create: hasSentryBuildCredentials,
-  },
-});
+export default isCloudflareBuild
+  ? nextConfig
+  : withSentryConfig(nextConfig, {
+      silent: !hasSentryBuildCredentials,
+      telemetry: false,
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      widenClientFileUpload: true,
+      tunnelRoute: "/monitoring",
+      sourcemaps: {
+        disable: !hasSentryBuildCredentials,
+      },
+      release: {
+        create: hasSentryBuildCredentials,
+      },
+    });
