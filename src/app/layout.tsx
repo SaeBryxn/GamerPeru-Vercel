@@ -1,25 +1,27 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { APP_CONFIG } from "@/config/app";
 import "./globals.css";
 
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
+// Self-hosted (SIL OFL, latin subset of the variable fonts from Google Fonts) so builds do not
+// depend on downloading them: an intermittent Google Fonts failure breaks `next/font/google`.
+const plusJakartaSans = localFont({
+  src: "./fonts/plus-jakarta-sans-latin.woff2",
+  weight: "500 800",
   variable: "--font-heading",
   display: "swap",
 });
 
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+const inter = localFont({
+  src: "./fonts/inter-latin.woff2",
+  weight: "400 600",
   variable: "--font-body",
   display: "swap",
 });
 
-const jetBrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
+const jetBrainsMono = localFont({
+  src: "./fonts/jetbrains-mono-latin.woff2",
+  weight: "400 500",
   variable: "--font-mono",
   display: "swap",
 });
