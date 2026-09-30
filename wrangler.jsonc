@@ -46,15 +46,14 @@
       "new_sqlite_classes": ["DOQueueHandler", "DOShardedTagCache"],
     },
   ],
-  // Optional: pool Supabase connections through Cloudflare instead of opening one per request.
-  // Create it with `npx wrangler hyperdrive create gamerperu-db --connection-string=<session or
-  // direct Supabase URL>` and uncomment; src/db/index.ts prefers it over DATABASE_URL.
-  // "hyperdrive": [
-  //   {
-  //     "binding": "HYPERDRIVE",
-  //     "id": "<hyperdrive-id>",
-  //   },
-  // ],
+  // Pools Supabase connections instead of opening one per request; src/db/index.ts prefers it
+  // over DATABASE_URL. It must point at the session pooler (5432) or the direct connection.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "fb6ec363710d49b89227d30f346f1ef6",
+    },
+  ],
   "observability": {
     "enabled": true,
   },

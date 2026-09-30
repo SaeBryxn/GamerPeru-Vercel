@@ -25,7 +25,9 @@ npx wrangler r2 bucket create gamerperu-next-cache
   npx wrangler hyperdrive create gamerperu-db --connection-string="postgresql://..."
   ```
 
-  Then uncomment the `hyperdrive` block in `wrangler.jsonc` with the returned id.
+  Put the returned id in the `hyperdrive` block of `wrangler.jsonc` (already done for
+  `gamerperu-db`). For `next dev`, `.env.local` needs
+  `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=$DATABASE_URL` (see `.env.example`).
 
 ## 2. Environment variables
 
@@ -75,12 +77,12 @@ Not needed on the Worker: `DATABASE_MIGRATION_URL` (migrations run from a workst
 
 With Workers Builds (Workers & Pages → Create → Import a repository):
 
-| Setting        | Value                              |
-| -------------- | ---------------------------------- |
-| Branch         | the branch that should go live     |
-| Build command  | `npx opennextjs-cloudflare build`  |
-| Deploy command | `npx opennextjs-cloudflare deploy` |
-| `NODE_VERSION` | `24`                               |
+| Setting        | Value                                                    |
+| -------------- | -------------------------------------------------------- |
+| Branch         | `feat/cloudflare-workers` until it is merged into `main` |
+| Build command  | `npx opennextjs-cloudflare build`                        |
+| Deploy command | `npx opennextjs-cloudflare deploy`                       |
+| `NODE_VERSION` | `24`                                                     |
 
 From WSL or CI:
 
