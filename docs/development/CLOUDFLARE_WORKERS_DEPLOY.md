@@ -45,8 +45,8 @@ Values without quotes, with `https://`:
 | `NEXT_PUBLIC_WHATSAPP_NUMBER`          | digits only, e.g. `51XXXXXXXXX`   |
 | `NEXT_PUBLIC_SENTRY_DSN`               | optional, browser error reporting |
 
-The build-time guard in `src/config/public-env.ts` only fails fast on Vercel (`VERCEL=1`). On
-Cloudflare, check these are set before building, or the site builds against `localhost`.
+The build fails with the list of missing names if a required one is not set
+(`src/config/public-env.ts`), and with a ZodError if a value is not a valid URL.
 
 ### Runtime secrets (Worker)
 

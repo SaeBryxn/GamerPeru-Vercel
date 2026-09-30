@@ -78,9 +78,13 @@ function parsePublicEnv(): PublicEnv {
       NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
       NEXT_PUBLIC_WHATSAPP_NUMBER: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER,
     },
-    // VERCEL is set on Vercel builds and servers, never in the browser bundle, so the check runs
-    // where it can stop a bad deployment and local builds (including `next start`) keep defaults.
-    { requireDeploymentValues: process.env.VERCEL === "1" }
+    // VERCEL (Vercel) and GP_DEPLOY_TARGET (set by open-next.config.ts for Cloudflare builds) never
+    // reach the browser bundle, so the check runs where it can stop a bad deployment and local
+    // builds (including `next start`) keep defaults.
+    {
+      requireDeploymentValues:
+        process.env.VERCEL === "1" || process.env.GP_DEPLOY_TARGET === "cloudflare",
+    }
   );
 }
 
