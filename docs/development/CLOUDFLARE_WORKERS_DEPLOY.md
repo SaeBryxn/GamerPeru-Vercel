@@ -48,6 +48,13 @@ Values without quotes, with `https://`:
 The build fails with the list of missing names if a required one is not set
 (`src/config/public-env.ts`), and with a ZodError if a value is not a valid URL.
 
+### Build secret
+
+`next build` prerenders the ISR pages (home, ADR-010), so it reads the database. Add
+`DATABASE_URL` (transaction pooler, port 6543) as a **Secret** under Settings → Builds →
+Variables and secrets as well. It is not a `NEXT_PUBLIC_*` name, so it is never inlined into
+the bundle.
+
 ### Runtime secrets (Worker)
 
 Set each one with `npx wrangler secret put <NAME>` (the value is prompted, not echoed) or in the
