@@ -1,7 +1,7 @@
 # Deploying to Cloudflare Workers
 
 Runbook for [ADR-011](../decisions/ADR-011-cloudflare-workers-hosting.md). The app is built by
-OpenNext (`@opennextjs/cloudflare`) and runs as the `gamerperu` Worker.
+OpenNext (`@opennextjs/cloudflare`) and runs as the `gamerperu-vercel` Worker.
 
 > OpenNext does not build reliably on Windows. Build and deploy from Linux: Cloudflare Workers
 > Builds (recommended), WSL, or CI.
