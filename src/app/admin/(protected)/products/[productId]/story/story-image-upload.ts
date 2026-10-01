@@ -1,11 +1,10 @@
 "use client";
 
-import {
-  finalizeMediaUploadAction,
-  requestMediaUploadIntentAction,
-} from "@/lib/admin/catalog/actions";
-import type { AllowedMediaUploadMimeType } from "@/lib/admin/catalog/media-crypto";
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
+import {
+  confirmStoryImageUploadAction,
+  requestStoryImageUploadAction,
+} from "@/lib/admin/catalog/story-media-actions";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 
 export type StoryImageUploadStage = "authorizing" | "uploading" | "processing";
@@ -13,22 +12,30 @@ export type StoryImageUploadStage = "authorizing" | "uploading" | "processing";
 export type StoryImageUploadResult =
   { ok: true; media: AdminStorySelectableMedia } | { ok: false; error: string };
 
-// Mirrors ALLOWED_MEDIA_UPLOAD_MIME_TYPES and MAX_MEDIA_FILE_SIZE_BYTES: media-crypto pulls in
-// node:crypto, so only its types are imported here. The server enforces both again.
-const ALLOWED_TYPES: readonly AllowedMediaUploadMimeType[] = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/avif",
-];
+// Mirrors STORY_IMAGE_MIME_TYPES and STORY_IMAGE_MAX_BYTES (the service module is server-only).
+// The server checks both again, against the uploaded object itself.
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 const MAX_BYTES = 10485760;
 
 export const STORY_IMAGE_ACCEPT = ALLOWED_TYPES.join(",");
 
+/** Reads the pixel size in the browser; display metadata only. */
+async function measure(file: File): Promise<{ width: number | null; height: number | null }> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const size = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return size;
+  } catch {
+    return { width: null, height: null };
+  }
+}
+
 /**
- * Uploads an image for the product story only: the same signed intent, direct R2 transfer and
- * server-side WebP normalization as gallery photos, but the intent carries placement STORY, so
- * the image is attached to the product without ever joining its gallery, cards or thumbnails.
+ * Direct upload for a story image: the server only signs a URL (step 1), the browser PUTs the
+ * file straight into the public R2 bucket (step 2), and the server registers it after a HEAD
+ * check (step 3). The bytes never pass through the Worker, which keeps every request within the
+ * Workers Free CPU budget regardless of the image size.
  */
 export async function uploadStoryImage(
   productId: string,
@@ -36,7 +43,7 @@ export async function uploadStoryImage(
   onStage: (stage: StoryImageUploadStage) => void
 ): Promise<StoryImageUploadResult> {
   if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
-    return { ok: false, error: "Formato no admitido. Usa JPEG, PNG, WebP o AVIF." };
+    return { ok: false, error: "Formato no admitido. Usa JPEG, PNG o WebP." };
   }
   if (file.size > MAX_BYTES) {
     return {
@@ -46,20 +53,19 @@ export async function uploadStoryImage(
   }
 
   onStage("authorizing");
-  const intent = await requestMediaUploadIntentAction({
-    productId,
-    mimeType: file.type as AllowedMediaUploadMimeType,
-    placement: "STORY",
-  });
-  if (!intent.success || !intent.data) {
-    return { ok: false, error: intent.error ?? "No se pudo autorizar la subida." };
+  const [request, size] = await Promise.all([
+    requestStoryImageUploadAction({ productId, mimeType: file.type, fileSizeBytes: file.size }),
+    measure(file),
+  ]);
+  if (!request.success || !request.data) {
+    return { ok: false, error: request.error ?? "No se pudo autorizar la subida." };
   }
 
   onStage("uploading");
   try {
-    const put = await fetch(intent.data.presignedPutUrl, {
+    const put = await fetch(request.data.presignedPutUrl, {
       method: "PUT",
-      headers: intent.data.requiredHeaders,
+      headers: request.data.requiredHeaders,
       body: file,
     });
     if (!put.ok) {
@@ -70,16 +76,17 @@ export async function uploadStoryImage(
   }
 
   onStage("processing");
-  const finalized = await finalizeMediaUploadAction({
+  const confirmed = await confirmStoryImageUploadAction({
     productId,
-    signedIntentToken: intent.data.signedIntentToken,
-    mutationRequestId: crypto.randomUUID(),
+    uploadToken: request.data.uploadToken,
+    width: size.width,
+    height: size.height,
   });
-  if (!finalized.success || !finalized.data) {
-    return { ok: false, error: finalized.error ?? "No se pudo registrar la imagen." };
+  if (!confirmed.success || !confirmed.data) {
+    return { ok: false, error: confirmed.error ?? "No se pudo registrar la imagen." };
   }
 
-  const publicUrl = resolvePublicMediaUrl(finalized.data.objectKey);
+  const publicUrl = resolvePublicMediaUrl(confirmed.data.objectKey);
   if (!publicUrl) {
     return { ok: false, error: "La imagen se subió, pero no tiene una URL pública." };
   }
@@ -87,17 +94,17 @@ export async function uploadStoryImage(
   return {
     ok: true,
     media: {
-      productMediaId: finalized.data.productMediaId,
-      mediaAssetId: finalized.data.mediaAssetId,
+      productMediaId: confirmed.data.productMediaId,
+      mediaAssetId: confirmed.data.mediaAssetId,
       variantId: null,
       variantTitle: null,
       displayOrder: 0,
       placement: "STORY",
       mediaType: "IMAGE",
-      mimeType: "image/webp",
+      mimeType: confirmed.data.mimeType,
       publicUrl,
-      width: finalized.data.width,
-      height: finalized.data.height,
+      width: confirmed.data.width,
+      height: confirmed.data.height,
       altText: null,
     },
   };

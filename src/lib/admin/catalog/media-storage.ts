@@ -59,6 +59,8 @@ export interface CatalogStorageAdapter {
     key: string;
     contentType: string;
     expiresInSeconds: number;
+    /** Signed into the URL; the uploader must send the same Cache-Control header. */
+    cacheControl?: string;
   }): Promise<string>;
 
   headObject(params: { bucket: string; key: string }): Promise<StagingHeadResult | null>;
@@ -100,14 +102,21 @@ export class R2CatalogStorageAdapter implements CatalogStorageAdapter {
     key: string;
     contentType: string;
     expiresInSeconds: number;
+    cacheControl?: string;
   }): Promise<string> {
     const command = new PutObjectCommand({
       Bucket: params.bucket,
       Key: params.key,
       ContentType: params.contentType,
+      ...(params.cacheControl ? { CacheControl: params.cacheControl } : {}),
     });
+    // The SDK leaves these headers out of the signature by default; signing them makes R2 refuse
+    // an upload whose type or caching differs from what the server authorized.
     return getSignedUrl(this.client, command, {
       expiresIn: params.expiresInSeconds,
+      signableHeaders: new Set(
+        params.cacheControl ? ["content-type", "cache-control"] : ["content-type"]
+      ),
     });
   }
 

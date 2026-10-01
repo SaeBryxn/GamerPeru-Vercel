@@ -14,7 +14,7 @@ import styles from "./story-builder.module.css";
 const STAGE_LABEL: Record<StoryImageUploadStage, string> = {
   authorizing: "Preparando la subida…",
   uploading: "Subiendo imagen…",
-  processing: "Optimizando imagen…",
+  processing: "Registrando imagen…",
 };
 
 const FOCUSABLE_SELECTOR =
@@ -204,7 +204,7 @@ export function MediaPickerDialog({
             </button>
             <p className={styles.storyUploadHint} aria-live="polite">
               {uploadError ??
-                "JPEG, PNG, WebP o AVIF hasta 10 MB. Para banners a todo lo ancho, usa al menos 2400 px de ancho."}
+                "JPEG, PNG o WebP hasta 10 MB. Para banners a todo lo ancho, usa al menos 2400 px de ancho."}
             </p>
           </div>
         )}

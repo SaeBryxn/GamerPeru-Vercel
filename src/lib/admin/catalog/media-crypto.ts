@@ -25,8 +25,6 @@ export const catalogMediaUploadIntentPayloadSchema = z
     maximumBytes: z.literal(MAX_MEDIA_FILE_SIZE_BYTES),
     issuedAt: z.number().int().positive(),
     expiresAt: z.number().int().positive(),
-    /** Absent on gallery uploads, so tokens issued before story uploads existed stay valid. */
-    placement: z.literal("STORY").optional(),
   })
   .strict()
   .refine((data) => data.stagingObjectKey === `temp/catalog/${data.intentId}`, {

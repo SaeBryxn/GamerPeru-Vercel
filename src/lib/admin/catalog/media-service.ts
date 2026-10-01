@@ -63,8 +63,6 @@ export interface RequestCatalogMediaUploadIntentInput {
   productId: string;
   variantId?: string | null;
   mimeType: AllowedMediaUploadMimeType;
-  /** STORY uploads belong to the product story only and never join the gallery. */
-  placement?: ProductMediaPlacement;
 }
 
 export interface RequestCatalogMediaUploadIntentResult {
@@ -371,15 +369,6 @@ export async function requestCatalogMediaUploadIntent(
     );
   }
 
-  const placement: ProductMediaPlacement = input.placement ?? "GALLERY";
-  if (placement === "STORY" && input.variantId) {
-    throw new CatalogDomainError(
-      "Las imágenes de la historia no se asignan a una variante.",
-      "MEDIA_STORY_VARIANT_NOT_ALLOWED",
-      422
-    );
-  }
-
   // 2. Authoritative Variant Ownership Binding
   if (input.variantId) {
     const [variant] = await db
@@ -418,8 +407,6 @@ export async function requestCatalogMediaUploadIntent(
     maximumBytes: MAX_MEDIA_FILE_SIZE_BYTES,
     issuedAt: now,
     expiresAt,
-    // Signed with the rest, so the browser cannot move a story upload into the gallery.
-    ...(placement === "STORY" ? { placement } : {}),
   };
 
   const secret = getCatalogMediaIntentSecret(options?.intentSecret);
@@ -867,8 +854,9 @@ export async function finalizeCatalogMediaUpload(
       asset = winner;
     }
 
-    // Gallery and story keep separate orders, so story uploads never shift gallery positions.
-    const placement: ProductMediaPlacement = payload.placement ?? "GALLERY";
+    // This pipeline only attaches gallery photos (story images use story-media-service); the
+    // order is counted within the gallery so story images never shift gallery positions.
+    const placement: ProductMediaPlacement = "GALLERY";
     const [orderRow] = await tx
       .select({
         maxOrder: sql<number>`COALESCE(MAX(${productMedia.displayOrder}), -1)`,
