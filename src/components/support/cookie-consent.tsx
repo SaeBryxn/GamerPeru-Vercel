@@ -22,8 +22,8 @@ function hasAcknowledged(): boolean {
 /**
  * Cookie notice. The store sets only strictly necessary cookies, so this informs rather than
  * asks for consent to optional tracking; acknowledging it is remembered per notice version.
- * It slides up from the bottom a moment after the page loads, so it never competes with the
- * first paint.
+ * It slides up into the bottom-left corner a moment after the page loads, so it never competes
+ * with the first paint.
  */
 export function CookieConsent() {
   const [isVisible, setIsVisible] = useState(false);
@@ -56,19 +56,24 @@ export function CookieConsent() {
           exit={reduceMotion ? { opacity: 0 } : { y: 100, opacity: 0 }}
           transition={{ type: "spring", stiffness: 260, damping: 30 }}
         >
-          <span className={styles.icon} aria-hidden="true">
-            <Cookie size={20} />
-          </span>
+          <p className={styles.head}>
+            <span className={styles.icon} aria-hidden="true">
+              <Cookie size={18} />
+            </span>
+            Cookies
+          </p>
           <p className={styles.text}>
             Usamos solo cookies necesarias para mantener tu sesión y tu carrito. No usamos cookies
-            de publicidad.{" "}
+            de publicidad.
+          </p>
+          <div className={styles.actions}>
             <Link href="/legal/cookies" className={styles.link}>
               Política de cookies
             </Link>
-          </p>
-          <DomeButton tone="dark" className={styles.accept} onClick={acknowledge}>
-            Entendido
-          </DomeButton>
+            <DomeButton tone="dark" className={styles.accept} onClick={acknowledge}>
+              Entendido
+            </DomeButton>
+          </div>
         </motion.section>
       )}
     </AnimatePresence>
