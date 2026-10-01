@@ -21,35 +21,16 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await expect(mainContent).toBeVisible();
   });
 
-  test("B: verifies AnnouncementBar dimensions, typography (13px Inter 500), and colors", async ({
+  test("B: renders the site header as the topmost element, with no announcement bar", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
 
-    const announcement = page.locator("aside[aria-label='Anuncio']");
-    await expect(announcement).toBeVisible();
-
-    const box = await announcement.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.height).toBe(36);
-
-    const styles = await announcement.evaluate((el) => {
-      const computed = window.getComputedStyle(el);
-      return {
-        fontSize: computed.fontSize,
-        fontWeight: computed.fontWeight,
-        color: computed.color,
-        backgroundColor: computed.backgroundColor,
-      };
-    });
-
-    expect(styles.fontSize).toBe("13px");
-    expect(styles.fontWeight).toBe("500");
-    // #F4F4F5 -> rgb(244, 244, 245)
-    expect(styles.color).toBe("rgb(244, 244, 245)");
-    // #09090B -> rgb(9, 9, 11)
-    expect(styles.backgroundColor).toBe("rgb(9, 9, 11)");
+    await expect(page.locator("aside[aria-label='Anuncio']")).toHaveCount(0);
+    const header = await page.locator("header").first().boundingBox();
+    expect(header).not.toBeNull();
+    expect(header!.y).toBe(0);
   });
 
   test("C: verifies Desktop Header 68px height, non-sticky positioning, and BrandMark link", async ({
@@ -401,14 +382,14 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await expect(footer.locator("ul[aria-label='Redes sociales de Gamer Perú']")).toBeVisible();
 
     // Payment representation stays truthful and unauthorized methods never appear
-    await expect(footer.getByText("YAPE")).toBeVisible();
-    await expect(footer.getByText("PLIN")).toBeVisible();
-    await expect(footer.getByText("TRANSFERENCIA")).toHaveCount(0);
-    await expect(footer.getByText("en soles (PEN / S/).")).toBeVisible();
+    const payments = footer.locator("ul[aria-label='Métodos de pago aceptados']");
+    await expect(payments.getByText("Yape", { exact: true })).toBeVisible();
+    await expect(payments.getByText("Plin", { exact: true })).toBeVisible();
+    await expect(payments.locator("li")).toHaveCount(2);
+    await expect(footer.getByText("Pagos en soles")).toBeVisible();
 
-    await expect(
-      footer.getByText("© 2026 Gamer Perú. Todos los derechos reservados.")
-    ).toBeVisible();
+    await expect(footer.getByText("© 2026 Experiencia Creativa SAC")).toBeVisible();
+    await expect(footer.locator("ul[aria-label='Información legal']")).toBeVisible();
   });
 
   test("L: verifies reduced-motion collapses MobileDrawer transition duration to <= 0.01ms", async ({

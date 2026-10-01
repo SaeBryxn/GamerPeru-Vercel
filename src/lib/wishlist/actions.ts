@@ -3,9 +3,9 @@
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { customerProfiles, products, wishlistItems } from "@/db/schema";
-import { getVerifiedIdentity } from "@/lib/auth/claims";
+import { products, wishlistItems } from "@/db/schema";
 import { logger } from "@/lib/logger";
+import { resolveCurrentCustomerId } from "./customer";
 
 export type WishlistState =
   { authenticated: false } | { authenticated: true; productIds: string[] };
@@ -19,24 +19,10 @@ const setWishlistItemSchema = z.object({
   saved: z.boolean(),
 });
 
-/** The customer profile id comes only from the verified session, never from the caller. */
-async function resolveCustomerId(): Promise<string | null> {
-  const verified = await getVerifiedIdentity();
-  if (!verified.success) return null;
-
-  const [profile] = await db
-    .select({ id: customerProfiles.id })
-    .from(customerProfiles)
-    .where(eq(customerProfiles.authUserId, verified.identity.authUserId))
-    .limit(1);
-
-  return profile?.id ?? null;
-}
-
 /** Product ids the signed-in customer saved, newest first. */
 export async function getWishlistAction(): Promise<WishlistState> {
   try {
-    const customerId = await resolveCustomerId();
+    const customerId = await resolveCurrentCustomerId();
     if (!customerId) return { authenticated: false };
 
     const rows = await db
@@ -62,7 +48,7 @@ export async function setWishlistItemAction(input: unknown): Promise<SetWishlist
   const { productId, saved } = parsed.data;
 
   try {
-    const customerId = await resolveCustomerId();
+    const customerId = await resolveCurrentCustomerId();
     if (!customerId) return { ok: false, reason: "UNAUTHENTICATED" };
 
     if (!saved) {

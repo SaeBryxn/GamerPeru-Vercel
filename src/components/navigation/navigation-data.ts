@@ -46,9 +46,6 @@ function buildFooterColumns(): FooterColumn[] {
 }
 
 export const NAVIGATION_CONFIG: NavigationConfig = {
-  announcement: {
-    message: "Periféricos gaming multimarca para Perú",
-  },
   brandMark: {
     label: "Gamer Perú",
     href: "/",

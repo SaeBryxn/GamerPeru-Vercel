@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { BrandGlyph, Container } from "@/components/ui";
+import { LEGAL_ENTITY_NAME, LEGAL_LINKS } from "@/config/legal-links";
 import { SOCIAL_LINKS } from "@/config/social-links";
 import { BrandMark } from "../brand-mark";
 import type { FooterColumn } from "../types";
@@ -11,7 +12,17 @@ export interface SiteFooterProps {
   className?: string;
 }
 
-/** Dark footer: brand and social profiles on the left, link columns beside it. */
+/** Payment methods the store accepts, drawn as brand-colored badges. */
+const PAYMENT_METHODS = [
+  { id: "yape", label: "Yape" },
+  { id: "plin", label: "Plin" },
+] as const;
+
+/**
+ * Dark footer: brand and social profiles on the left, link columns beside it, and a bottom bar
+ * with the legal line on the left and accepted payment methods on the right. A red glow fades
+ * down from the top edge.
+ */
 export function SiteFooter({ columns = [], className }: SiteFooterProps) {
   const classNames = [styles.siteFooter, className].filter(Boolean).join(" ");
 
@@ -65,11 +76,33 @@ export function SiteFooter({ columns = [], className }: SiteFooterProps) {
         </div>
 
         <div className={styles.bottomBar}>
-          <span>© 2026 Gamer Perú. Todos los derechos reservados.</span>
-          <span className={styles.paymentNote}>
-            Pagos con <strong className={styles.paymentBadge}>YAPE</strong> o{" "}
-            <strong className={styles.paymentBadge}>PLIN</strong> en soles (PEN / S/).
-          </span>
+          <div className={styles.legal}>
+            <p className={styles.copyright}>{`© 2026 ${LEGAL_ENTITY_NAME}`}</p>
+            <ul className={styles.legalList} aria-label="Información legal">
+              {LEGAL_LINKS.map((link) => (
+                <li key={link.label}>
+                  {link.href ? (
+                    <Link href={link.href} className={styles.legalLink}>
+                      {link.label}
+                    </Link>
+                  ) : (
+                    <span className={styles.legalPending}>{link.label}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className={styles.payments}>
+            <span className={styles.paymentsLabel}>Pagos en soles</span>
+            <ul className={styles.paymentList} aria-label="Métodos de pago aceptados">
+              {PAYMENT_METHODS.map((method) => (
+                <li key={method.id} className={styles.paymentBadge} data-method={method.id}>
+                  {method.label}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </Container>
     </footer>

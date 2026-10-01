@@ -275,7 +275,7 @@ const UNFILTERED_STATE: Omit<DiscoveryFilterState, "page"> = {
 };
 
 interface DiscoveryProductsQueryOptions {
-  scope: { categoryId?: string; brandId?: string };
+  scope: { categoryId?: string; brandId?: string; productIds?: readonly string[] };
   surface: DiscoverySurface;
   page: number;
   pageSize: number;
@@ -409,5 +409,15 @@ export function buildShowcaseProductsQuery(limit: number) {
     page: 1,
     pageSize: limit,
     leadingOrder: [desc(products.isFeatured)],
+  });
+}
+
+/** Card rows for specific products (e.g. a customer's wishlist), still limited to published ones. */
+export function buildPublishedProductsByIdsQuery(productIds: readonly string[]) {
+  return buildDiscoveryProductsQuery({
+    scope: { productIds },
+    surface: "search",
+    page: 1,
+    pageSize: productIds.length,
   });
 }

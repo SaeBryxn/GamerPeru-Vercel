@@ -27,7 +27,7 @@ test.describe("GP-010 Homepage — Sections, Hierarchy, Responsiveness & Accessi
 
     const box = await hero.boundingBox();
     expect(box).not.toBeNull();
-    // Full viewport minus the announcement bar and header stack.
+    // Full viewport minus the header.
     expect(box!.height).toBeGreaterThanOrEqual(600);
 
     // The embed is a muted, chromeless, looping background on the privacy host.

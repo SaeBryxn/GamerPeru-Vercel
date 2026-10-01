@@ -168,6 +168,7 @@ export function buildProductDiscoveryWhereClause(
   options?: {
     categoryId?: string;
     brandId?: string;
+    productIds?: readonly string[];
     validatedSchema?: ValidatedSpecificationSchema | null;
   }
 ): SQL {
@@ -184,6 +185,10 @@ export function buildProductDiscoveryWhereClause(
 
   if (options?.brandId) {
     conditions.push(eq(products.brandId, options.brandId));
+  }
+
+  if (options?.productIds) {
+    conditions.push(inArray(products.id, [...options.productIds]));
   }
 
   if (filterState.brands.length > 0) {

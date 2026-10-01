@@ -16,6 +16,7 @@ interface NavDestination {
 const NAV_DESTINATIONS: NavDestination[] = [
   { label: "Resumen", href: "/cuenta" },
   { label: "Mis pedidos", href: "/cuenta/pedidos" },
+  { label: "Favoritos", href: "/cuenta/favoritos" },
   { label: "Direcciones", href: "/cuenta/direcciones" },
   { label: "Datos personales", href: "/cuenta/perfil" },
 ];

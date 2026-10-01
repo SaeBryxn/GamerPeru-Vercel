@@ -28,10 +28,15 @@ describe("Customer Account Future-Domain Entry Surfaces (GP-016 ACCT6-B)", () =>
       const navPath = resolve(process.cwd(), "src/components/account/account-navigation.tsx");
       const navSource = readFileSync(navPath, "utf-8");
 
-      for (const href of ["/cuenta", "/cuenta/perfil", "/cuenta/direcciones", "/cuenta/pedidos"]) {
+      for (const href of [
+        "/cuenta",
+        "/cuenta/perfil",
+        "/cuenta/direcciones",
+        "/cuenta/pedidos",
+        "/cuenta/favoritos",
+      ]) {
         expect(navSource).toContain(`href: "${href}"`);
       }
-      expect(navSource).not.toContain("/cuenta/favoritos");
       expect(navSource).not.toContain("/cuenta/referidos");
       expect(navSource).not.toContain("comingSoon");
       expect(navSource).not.toContain("navDisabled");
@@ -83,11 +88,16 @@ describe("Customer Account Future-Domain Entry Surfaces (GP-016 ACCT6-B)", () =>
   });
 
   describe("5. Unbuilt Domains Have No Routes", () => {
-    it("serves no placeholder pages for favorites or referrals", () => {
-      for (const route of ["favoritos", "referidos"]) {
-        const pagePath = resolve(process.cwd(), `src/app/(storefront)/cuenta/${route}/page.tsx`);
-        expect(existsSync(pagePath)).toBe(false);
-      }
+    it("serves no placeholder page for referrals", () => {
+      const pagePath = resolve(process.cwd(), "src/app/(storefront)/cuenta/referidos/page.tsx");
+      expect(existsSync(pagePath)).toBe(false);
+    });
+
+    it("backs the favorites page with the customer's real wishlist", () => {
+      const pagePath = resolve(process.cwd(), "src/app/(storefront)/cuenta/favoritos/page.tsx");
+      const source = readFileSync(pagePath, "utf-8");
+      expect(source).toContain("getCurrentWishlistProducts");
+      expect(source).toContain('redirect("/auth/login")');
     });
   });
 

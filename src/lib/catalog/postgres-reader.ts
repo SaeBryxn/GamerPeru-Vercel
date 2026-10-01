@@ -113,7 +113,7 @@ export function deriveTechnicalFacets(
 
 type ProductRow = Awaited<ReturnType<typeof buildCategoryFilteredProductsQuery>>[number];
 
-function toDiscoveryItem(row: ProductRow): ProductDiscoveryItem {
+export function toDiscoveryItem(row: ProductRow): ProductDiscoveryItem {
   const primaryMedia = row.primaryMediaKey
     ? {
         objectKey: row.primaryMediaKey,

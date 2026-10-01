@@ -1,10 +1,48 @@
 .siteFooter {
+  position: relative;
+  isolation: isolate;
   background-color: var(--color-surface-dark-canvas);
   color: var(--color-text-dark-secondary);
-  border-top: 1px solid var(--color-border-dark-subtle);
   padding-top: var(--space-12);
   padding-bottom: var(--space-8);
   font-family: var(--font-body);
+  overflow: hidden;
+}
+
+/*
+ * Red neon edge: a hairline that is brightest at the center and fades out toward the sides, and
+ * under it a soft glow that dissolves into the canvas. Both are low-alpha so the red reads as
+ * light on the edge rather than a colored band.
+ */
+.siteFooter::before,
+.siteFooter::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.siteFooter::before {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--color-accent-red-soft) 85%, transparent) 50%,
+    transparent
+  );
+  box-shadow: 0 0 12px 1px color-mix(in srgb, var(--color-accent-red-soft) 55%, transparent);
+}
+
+.siteFooter::after {
+  height: 220px;
+  background: radial-gradient(
+    ellipse 55% 100% at 50% 0%,
+    color-mix(in srgb, var(--color-accent-red-soft) 22%, transparent),
+    transparent 72%
+  );
 }
 
 .footerGrid {
@@ -112,39 +150,116 @@
   border-radius: var(--radius-xs);
 }
 
-.paymentNote {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-}
-
-.paymentBadge {
-  color: var(--color-text-dark-primary);
-  font-family: var(--font-heading);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-/* Bottom Bar */
+/* Bottom bar: legal line on the left, payment methods on the right. */
 .bottomBar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
   margin-top: var(--space-12);
   padding-top: var(--space-6);
   border-top: 1px solid var(--color-border-dark-subtle);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  align-items: center;
-  text-align: center;
   font-size: 13px;
   color: var(--color-text-dark-muted);
+}
+
+.legal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.copyright {
+  margin: 0;
+  color: var(--color-text-dark-secondary);
+}
+
+.legalList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legalLink,
+.legalPending {
+  display: inline-block;
+  padding: 2px 0;
+  color: var(--color-text-dark-muted);
+  text-decoration: none;
+}
+
+.legalLink {
+  transition: color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.legalLink:hover {
+  color: var(--color-text-dark-primary);
+}
+
+.legalLink:focus-visible {
+  outline: 2px solid var(--color-border-dark-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.payments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.paymentsLabel {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.paymentList {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Brand-colored badges sized like card-network marks; the wordmark keeps them recognizable. */
+.paymentBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--color-surface-card);
+}
+
+.paymentBadge[data-method="yape"] {
+  background-color: var(--color-payment-yape);
+}
+
+.paymentBadge[data-method="plin"] {
+  background: linear-gradient(
+    135deg,
+    var(--color-payment-plin-start),
+    var(--color-payment-plin-end)
+  );
 }
 
 @media (min-width: 768px) {
   .bottomBar {
     flex-direction: row;
+    align-items: flex-end;
     justify-content: space-between;
-    text-align: left;
+  }
+
+  .payments {
+    flex-shrink: 0;
   }
 }

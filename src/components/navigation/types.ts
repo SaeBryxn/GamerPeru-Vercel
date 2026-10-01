@@ -91,10 +91,6 @@ export interface FooterColumn {
 export interface NavigationConfig {
   /** Live product shelves for the "products" mega-menu, resolved from the catalog. */
   shelves?: MegaMenuShelves;
-  announcement?: {
-    message: string;
-    href?: string;
-  };
   brandMark: {
     label: string;
     href: string;

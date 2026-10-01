@@ -7,6 +7,8 @@ import { WishlistToasts, type WishlistToast } from "./wishlist-toasts";
 const TOAST_VISIBLE_MS = 3200;
 
 export interface WishlistContextValue {
+  /** True once the saved ids are known (or known to be none), so absence means "not saved". */
+  isReady: boolean;
   isSaved: (productId: string) => boolean;
   isPending: (productId: string) => boolean;
   toggle: (productId: string, productName: string) => Promise<void>;
@@ -33,11 +35,13 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
   const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const [toasts, setToasts] = useState<WishlistToast[]>([]);
+  const [isReady, setIsReady] = useState(false);
   const isAuthenticatedRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     if (!hasSessionCookie()) {
       isAuthenticatedRef.current = false;
+      setIsReady(true);
       return;
     }
     let cancelled = false;
@@ -45,6 +49,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
       isAuthenticatedRef.current = state.authenticated;
       if (state.authenticated) setSavedIds(new Set(state.productIds));
+      setIsReady(true);
     });
     return () => {
       cancelled = true;
@@ -127,6 +132,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value: WishlistContextValue = {
+    isReady,
     isSaved: (productId) => savedIds.has(productId),
     isPending: (productId) => pendingIds.has(productId),
     toggle,

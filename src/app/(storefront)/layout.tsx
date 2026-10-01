@@ -1,7 +1,7 @@
 import React from "react";
 import { CartDrawer, CartProvider } from "@/components/cart";
 import { HomeSocialRail, WhatsAppButton } from "@/components/floating";
-import { AnnouncementBar, SiteFooter, SiteHeader, SkipLink } from "@/components/navigation";
+import { SiteFooter, SiteHeader, SkipLink } from "@/components/navigation";
 import { WishlistProvider } from "@/components/wishlist";
 import { getStorefrontNavigation } from "@/lib/navigation/resolve-navigation";
 
@@ -16,10 +16,6 @@ export default async function StorefrontLayout({
     <CartProvider>
       <WishlistProvider>
         <SkipLink />
-        <AnnouncementBar
-          message={navigation.announcement?.message}
-          href={navigation.announcement?.href}
-        />
         <SiteHeader config={navigation} />
         {children}
         <SiteFooter columns={navigation.footerColumns} />

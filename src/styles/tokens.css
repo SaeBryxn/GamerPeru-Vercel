@@ -98,8 +98,8 @@
   /* -------------------------------------------------------------------------
    * 9. Spacing Scale (Base-4 / Base-8 Geometric Scale)
    * ------------------------------------------------------------------------- */
-  /* Announcement bar (36px) + site header (68px): what a full-screen stage sits below. */
-  --header-stack-height: 104px;
+  /* Site header (68px): what a full-screen stage sits below. */
+  --header-stack-height: 68px;
 
   --space-0: 0px;
   --space-1: 4px;
@@ -192,4 +192,12 @@
   --color-accent-violet-muted: #6b667f;
   --color-feature-indigo: #4f46e5;
   --color-feature-indigo-hover: #4338ca;
+
+  /* -------------------------------------------------------------------------
+   * 18. Payment Method Marks
+   * Background of each accepted method's badge; white text on each meets WCAG AA.
+   * ------------------------------------------------------------------------- */
+  --color-payment-yape: #742284;
+  --color-payment-plin-start: #00708a;
+  --color-payment-plin-end: #2f4fc6;
 }

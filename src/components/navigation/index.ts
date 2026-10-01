@@ -1,7 +1,6 @@
 export * from "./types";
 export * from "./navigation-data";
 export * from "./skip-link";
-export * from "./announcement-bar";
 export * from "./brand-mark";
 export * from "./header-utilities";
 export * from "./desktop-nav";
