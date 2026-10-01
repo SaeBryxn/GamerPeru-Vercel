@@ -96,7 +96,7 @@ export function buildProductMediaByProductIdQuery(productId: string) {
       createdAt: productMedia.createdAt,
     })
     .from(productMedia)
-    .where(eq(productMedia.productId, productId))
+    .where(and(eq(productMedia.productId, productId), eq(productMedia.placement, "GALLERY")))
     .orderBy(asc(productMedia.displayOrder), asc(productMedia.createdAt), asc(productMedia.id));
 }
 

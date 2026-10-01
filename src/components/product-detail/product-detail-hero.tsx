@@ -6,7 +6,11 @@ import type { ProductVariantDetail } from "@/lib/catalog/product-detail-types";
 import type { FormattedSpecRow } from "./hardware-specifications";
 import type { PdpAccessory } from "./pdp-accessories";
 import type { CommerceHeroProjection } from "./types";
-import { ProductMediaGallery } from "./product-media-gallery";
+import {
+  buildEligibleGallery,
+  ProductMediaGallery,
+  resolveDefaultFocusedIndex,
+} from "./product-media-gallery";
 import { ProductCommercePanel } from "./product-commerce-panel";
 import styles from "./product-detail-hero.module.css";
 
@@ -58,6 +62,13 @@ export function ProductDetailHero({
   const defaultVariant = useMemo(() => resolveCanonicalDefaultVariant(variants), [variants]);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariantDetail>(defaultVariant);
 
+  // The photo the gallery opens on for this variant, reused as the sticky bar's thumbnail.
+  const thumbnailKey = useMemo(() => {
+    const gallery = buildEligibleGallery(media, primaryMedia, selectedVariant.id);
+    const index = resolveDefaultFocusedIndex(gallery, primaryMedia, selectedVariant.id);
+    return index >= 0 ? (gallery[index]?.asset.objectKey ?? null) : null;
+  }, [media, primaryMedia, selectedVariant.id]);
+
   return (
     <MotionConfig reducedMotion="user">
       <section
@@ -82,6 +93,7 @@ export function ProductDetailHero({
             variants={variants}
             selectedVariant={selectedVariant}
             onSelectVariant={setSelectedVariant}
+            thumbnailKey={thumbnailKey}
             specHighlights={specHighlights}
             accessories={accessories}
             details={details}

@@ -539,6 +539,8 @@ export interface RequestMediaUploadIntentActionInput {
   productId: string;
   variantId?: string | null;
   mimeType: AllowedMediaUploadMimeType;
+  /** "STORY" for images uploaded from the story builder; they never join the gallery. */
+  placement?: "GALLERY" | "STORY";
 }
 
 /**
@@ -570,6 +572,7 @@ export async function requestMediaUploadIntentAction(
         productId: input.productId,
         variantId: input.variantId,
         mimeType: input.mimeType,
+        placement: input.placement === "STORY" ? "STORY" : "GALLERY",
       },
       { authContext }
     );
@@ -590,9 +593,16 @@ export interface FinalizeMediaUploadActionInput {
 /**
  * Server Action: Finalize a staged media upload, normalize to WebP, and commit ProductMedia attachment.
  */
-export async function finalizeMediaUploadAction(
-  input: FinalizeMediaUploadActionInput
-): Promise<ActionResult<{ productMediaId: string; mediaAssetId: string; replayed: boolean }>> {
+export async function finalizeMediaUploadAction(input: FinalizeMediaUploadActionInput): Promise<
+  ActionResult<{
+    productMediaId: string;
+    mediaAssetId: string;
+    objectKey: string;
+    width: number | null;
+    height: number | null;
+    replayed: boolean;
+  }>
+> {
   const authContext = await getVerifiedAuthContext();
   if (authContext.status !== "READY") {
     return {
@@ -628,6 +638,9 @@ export async function finalizeMediaUploadAction(
       data: {
         productMediaId: result.productMedia.id,
         mediaAssetId: result.mediaAsset.id,
+        objectKey: result.mediaAsset.objectKey,
+        width: result.mediaAsset.width,
+        height: result.mediaAsset.height,
         replayed: result.replayed,
       },
     };

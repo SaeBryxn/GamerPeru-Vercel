@@ -1,7 +1,9 @@
 .button {
   position: fixed;
   right: var(--space-5);
-  bottom: var(--space-5);
+  bottom: calc(var(--space-5) + var(--floating-stack-offset, 0px));
+  /* Rises with the product page sticky buy bar instead of sitting under it. */
+  transition: bottom var(--motion-duration-moderate) var(--motion-easing-snappy);
   z-index: 70;
   display: inline-flex;
   align-items: center;
@@ -27,7 +29,7 @@
 @media (max-width: 639px) {
   .button {
     right: var(--space-4);
-    bottom: var(--space-4);
+    bottom: calc(var(--space-4) + var(--floating-stack-offset, 0px));
     width: 48px;
     padding: 0;
     justify-content: center;

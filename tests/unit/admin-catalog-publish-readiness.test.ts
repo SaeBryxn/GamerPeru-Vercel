@@ -117,6 +117,7 @@ describe("Admin Catalog Publish Readiness Pure Evaluator", () => {
     mediaAssetId: baseMediaAsset.id,
     variantId: null, // Global
     displayOrder: 0,
+    placement: "GALLERY",
     createdAt: new Date(),
     mediaAsset: baseMediaAsset,
   };

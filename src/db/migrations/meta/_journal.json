@@ -141,6 +141,13 @@
       "when": 1790817613056,
       "tag": "0019_wishlist_items",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790882536236,
+      "tag": "0020_product_media_placement",
+      "breakpoints": true
     }
   ]
 }

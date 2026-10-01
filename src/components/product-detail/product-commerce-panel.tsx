@@ -15,6 +15,7 @@ import { PdpAccessories, type PdpAccessory } from "./pdp-accessories";
 import { PdpQuantityStepper } from "./pdp-quantity-stepper";
 import { PdpSpecGrid } from "./pdp-spec-grid";
 import { VariantSelector } from "./variant-selector";
+import { StickyBuyBar } from "./sticky-buy-bar";
 import { WhatsAppIcon } from "./whatsapp-icon";
 import styles from "./product-commerce-panel.module.css";
 
@@ -31,6 +32,8 @@ export interface ProductCommercePanelProps {
   variants: ProductVariantDetail[];
   selectedVariant: ProductVariantDetail;
   onSelectVariant: (variant: ProductVariantDetail) => void;
+  /** Object key of the photo shown for the selected variant, for the sticky buy bar. */
+  thumbnailKey?: string | null;
   /** Formatted spec rows for the highlights grid (already display-ready). */
   specHighlights?: FormattedSpecRow[];
   /** Optional add-on list; omitted when the catalog has no accessories to offer. */
@@ -58,6 +61,7 @@ export function ProductCommercePanel({
   variants,
   selectedVariant,
   onSelectVariant,
+  thumbnailKey = null,
   specHighlights = [],
   accessories,
   details,
@@ -76,13 +80,19 @@ export function ProductCommercePanel({
     onSelectVariant(variant);
   };
 
-  const handleAddToCart = async () => {
+  const handleAddToCart = async (returnFocusTo: HTMLElement | null = addButtonRef.current) => {
     setHasAttemptedAdd(true);
     const success = await addItem(selectedVariant.id, quantity);
     if (success) {
-      openDrawer({ returnFocusTo: addButtonRef.current });
+      openDrawer({ returnFocusTo });
     }
   };
+
+  const addLabel = !isAvailable
+    ? "No disponible"
+    : isPending
+      ? "Añadiendo..."
+      : "Añadir al carrito";
 
   const showCompareAt =
     selectedVariant.compareAtPriceCents !== null &&
@@ -175,11 +185,11 @@ export function ProductCommercePanel({
               ref={addButtonRef}
               tone="dark"
               className={styles.primaryAction}
-              onClick={handleAddToCart}
+              onClick={() => void handleAddToCart()}
               disabled={!isAvailable || isPending}
               data-testid="pdp-add-to-cart-button"
             >
-              {!isAvailable ? "No disponible" : isPending ? "Añadiendo..." : "Añadir al carrito"}
+              {addLabel}
             </DomeButton>
             <WishlistButton productId={product.id} productName={product.name} variant="inline" />
           </div>
@@ -229,6 +239,19 @@ export function ProductCommercePanel({
           </li>
         )}
       </ul>
+
+      {!isProfileRequired && (
+        <StickyBuyBar
+          anchorRef={addButtonRef}
+          productName={product.name}
+          variantTitle={selectedVariant.title}
+          thumbnailKey={thumbnailKey}
+          priceCents={selectedVariant.priceCents}
+          label={addLabel}
+          disabled={!isAvailable || isPending}
+          onAdd={(button) => void handleAddToCart(button)}
+        />
+      )}
     </div>
   );
 }

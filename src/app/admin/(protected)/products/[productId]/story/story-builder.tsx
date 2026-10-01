@@ -227,6 +227,8 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
   const [durableStory, setDurableStory] = useState<DurableStoryView>(() =>
     durableViewFromStory(initialStory)
   );
+  // Grows when an image is uploaded from the picker, so blocks can show it without a reload.
+  const [selectableMedia, setSelectableMedia] = useState(initialStory.selectableMedia);
   const [knownProductOptions, setKnownProductOptions] = useState<
     Map<string, AdminStoryRelatedProductOption>
   >(() => new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p])));
@@ -1129,7 +1131,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
           <HeroMediaEditor
             blockId={block.blockId}
             payload={block.payload}
-            selectableMedia={initialStory.selectableMedia}
+            selectableMedia={selectableMedia}
             issues={blockIssues}
             onChange={(payload) => updateBlockPayload<"hero_media">(index, payload)}
             onOpenMediaPicker={handleOpenMediaPicker}
@@ -1140,7 +1142,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
           <FullBleedImageEditor
             blockId={block.blockId}
             payload={block.payload}
-            selectableMedia={initialStory.selectableMedia}
+            selectableMedia={selectableMedia}
             issues={blockIssues}
             onChange={(payload) => updateBlockPayload<"full_bleed_image">(index, payload)}
             onOpenMediaPicker={handleOpenMediaPicker}
@@ -1151,7 +1153,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
           <ImageTextEditor
             blockId={block.blockId}
             payload={block.payload}
-            selectableMedia={initialStory.selectableMedia}
+            selectableMedia={selectableMedia}
             issues={blockIssues}
             onChange={(payload) => updateBlockPayload<"image_text">(index, payload)}
             onOpenMediaPicker={handleOpenMediaPicker}
@@ -1172,7 +1174,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
           <SpecFeatureEditor
             blockId={block.blockId}
             payload={block.payload}
-            selectableMedia={initialStory.selectableMedia}
+            selectableMedia={selectableMedia}
             issues={blockIssues}
             onChange={(payload) => updateBlockPayload<"spec_feature">(index, payload)}
             onOpenMediaPicker={handleOpenMediaPicker}
@@ -1183,7 +1185,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
           <VideoEditor
             blockId={block.blockId}
             payload={block.payload}
-            selectableMedia={initialStory.selectableMedia}
+            selectableMedia={selectableMedia}
             issues={blockIssues}
             onChange={(payload) => updateBlockPayload<"video">(index, payload)}
             onOpenMediaPicker={handleOpenMediaPicker}
@@ -1194,7 +1196,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
           <GalleryEditor
             blockId={block.blockId}
             payload={block.payload}
-            selectableMedia={initialStory.selectableMedia}
+            selectableMedia={selectableMedia}
             issues={blockIssues}
             onChange={(payload) => updateBlockPayload<"gallery">(index, payload)}
             onOpenMediaPicker={handleOpenMediaPicker}
@@ -1216,7 +1218,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
           <DimensionsEditor
             blockId={block.blockId}
             payload={block.payload}
-            selectableMedia={initialStory.selectableMedia}
+            selectableMedia={selectableMedia}
             issues={blockIssues}
             onChange={(payload) => updateBlockPayload<"dimensions">(index, payload)}
             onOpenMediaPicker={handleOpenMediaPicker}
@@ -1228,7 +1230,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
           <BoxContentsEditor
             blockId={block.blockId}
             payload={block.payload}
-            selectableMedia={initialStory.selectableMedia}
+            selectableMedia={selectableMedia}
             issues={blockIssues}
             onChange={(payload) => updateBlockPayload<"box_contents">(index, payload)}
             onOpenMediaPicker={handleOpenMediaPicker}
@@ -1762,9 +1764,11 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
       {mediaPickerState && (
         <MediaPickerDialog
           isOpen={mediaPickerState.isOpen}
+          productId={initialStory.product.id}
+          onUploaded={(media) => setSelectableMedia((current) => [media, ...current])}
           title={mediaPickerState.title}
           mediaType={mediaPickerState.mediaType}
-          selectableMedia={initialStory.selectableMedia}
+          selectableMedia={selectableMedia}
           selectedMediaId={mediaPickerState.selectedMediaId}
           allowClear={mediaPickerState.allowClear}
           triggerRef={mediaPickerState.triggerRef}

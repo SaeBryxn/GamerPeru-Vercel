@@ -1,31 +1,25 @@
-/* Fills the story's full-width frame (see product-story-renderer.module.css). */
+/*
+ * Edge to edge with no margin, padding, border or radius: consecutive images stack flush. The
+ * image keeps its own proportions (no crop), so tall marketing banners show whole.
+ */
 .figureContainer {
-  position: relative;
   width: 100%;
-  margin-block: var(--space-8, 32px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.imageStage {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  max-height: 88svh;
-  overflow: hidden;
-  background-color: var(--color-surface-secondary, #f4f4f5);
+  margin: 0;
+  padding: 0;
 }
 
 .image {
-  object-fit: cover;
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0;
 }
 
 .caption {
   font-family: var(--font-family-body, Inter, sans-serif);
   font-size: var(--type-body-small-size, 0.8125rem);
   color: var(--color-text-secondary, #52525b);
-  margin-top: var(--space-3, 12px);
-  padding-inline: var(--gutter-mobile, 20px);
+  margin: 0;
+  padding: var(--space-3, 12px) var(--gutter-mobile, 20px);
   text-align: center;
 }

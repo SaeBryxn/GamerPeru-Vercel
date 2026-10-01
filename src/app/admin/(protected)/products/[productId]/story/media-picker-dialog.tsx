@@ -2,15 +2,29 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Check, Search, Video, X } from "lucide-react";
+import { Check, ImageUp, LoaderCircle, Search, Video, X } from "lucide-react";
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
+import {
+  STORY_IMAGE_ACCEPT,
+  uploadStoryImage,
+  type StoryImageUploadStage,
+} from "./story-image-upload";
 import styles from "./story-builder.module.css";
+
+const STAGE_LABEL: Record<StoryImageUploadStage, string> = {
+  authorizing: "Preparando la subida…",
+  uploading: "Subiendo imagen…",
+  processing: "Optimizando imagen…",
+};
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 interface MediaPickerDialogProps {
   isOpen: boolean;
+  productId: string;
+  /** Called with an image uploaded from the picker, before it is selected. */
+  onUploaded: (media: AdminStorySelectableMedia) => void;
   title: string;
   mediaType: "IMAGE" | "VIDEO";
   selectableMedia: readonly AdminStorySelectableMedia[];
@@ -23,6 +37,8 @@ interface MediaPickerDialogProps {
 
 export function MediaPickerDialog({
   isOpen,
+  productId,
+  onUploaded,
   title,
   mediaType,
   selectableMedia,
@@ -34,6 +50,25 @@ export function MediaPickerDialog({
 }: MediaPickerDialogProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
+  const [uploadStage, setUploadStage] = useState<StoryImageUploadStage | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    setUploadError(null);
+    const result = await uploadStoryImage(productId, file, setUploadStage);
+    setUploadStage(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (!result.ok) {
+      setUploadError(result.error);
+      return;
+    }
+    onUploaded(result.media);
+    onSelect(result.media.productMediaId);
+    onClose();
+    window.setTimeout(() => triggerRef.current?.focus(), 10);
+  };
 
   const filteredMedia = selectableMedia.filter((media) => {
     if (media.mediaType !== mediaType) return false;
@@ -122,7 +157,7 @@ export function MediaPickerDialog({
             <h2 id="media-picker-title">{title}</h2>
             <p>
               {mediaType === "IMAGE"
-                ? "Selecciona una imagen adjunta al producto."
+                ? "Sube una imagen solo para la historia o elige una existente. Las imágenes que subas aquí no aparecen en la galería del producto."
                 : "Selecciona un video público MP4 adjunto al producto."}
             </p>
           </div>
@@ -138,6 +173,41 @@ export function MediaPickerDialog({
             <X size={20} aria-hidden="true" />
           </button>
         </div>
+
+        {mediaType === "IMAGE" && (
+          <div className={styles.storyUpload}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={STORY_IMAGE_ACCEPT}
+              className={styles.visuallyHiddenInput}
+              onChange={(event) => void handleFile(event.target.files?.[0])}
+              data-testid="story-image-upload-input"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+            <button
+              type="button"
+              className={styles.storyUploadButton}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadStage !== null}
+              data-testid="story-image-upload-button"
+            >
+              {uploadStage ? (
+                <LoaderCircle size={18} className={styles.spinner} aria-hidden="true" />
+              ) : (
+                <ImageUp size={18} aria-hidden="true" />
+              )}
+              <span>
+                {uploadStage ? STAGE_LABEL[uploadStage] : "Subir imagen para la historia"}
+              </span>
+            </button>
+            <p className={styles.storyUploadHint} aria-live="polite">
+              {uploadError ??
+                "JPEG, PNG, WebP o AVIF hasta 10 MB. Para banners a todo lo ancho, usa al menos 2400 px de ancho."}
+            </p>
+          </div>
+        )}
 
         <div className={styles.pickerSearch}>
           <Search size={16} aria-hidden="true" className={styles.searchIcon} />
@@ -225,6 +295,9 @@ export function MediaPickerDialog({
                     )}
                   </div>
                   <div className={styles.mediaDetails}>
+                    {media.placement === "STORY" && (
+                      <span className={styles.storyBadge}>Solo historia</span>
+                    )}
                     {media.variantTitle && (
                       <span className={styles.variantBadge}>Variante: {media.variantTitle}</span>
                     )}

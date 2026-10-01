@@ -34,6 +34,8 @@ export interface AdminStorySelectableMedia {
   variantId: string | null;
   variantTitle: string | null;
   displayOrder: number;
+  /** STORY: uploaded for the story only; GALLERY: part of the product gallery. */
+  placement: "GALLERY" | "STORY";
   mediaType: "IMAGE" | "VIDEO";
   mimeType: string;
   publicUrl: string;
@@ -87,6 +89,7 @@ interface StoryMediaReadRow {
   variant_product_id: string | null;
   variant_title: string | null;
   display_order: number;
+  placement: "GALLERY" | "STORY";
   object_key: string;
   security_class: string;
   media_type: string;
@@ -219,6 +222,7 @@ export async function getAdminProductStory(
       product_variants.product_id AS variant_product_id,
       product_variants.title AS variant_title,
       product_media.display_order,
+      product_media.placement,
       media_assets.object_key,
       media_assets.security_class,
       media_assets.media_type,
@@ -230,7 +234,11 @@ export async function getAdminProductStory(
     INNER JOIN media_assets ON media_assets.id = product_media.media_asset_id
     LEFT JOIN product_variants ON product_variants.id = product_media.variant_id
     WHERE product_media.product_id = ${productId}::uuid
-    ORDER BY product_media.display_order, product_media.created_at, product_media.id;
+    ORDER BY
+      (product_media.placement = 'STORY') DESC,
+      product_media.display_order,
+      product_media.created_at,
+      product_media.id;
   `)) as unknown as StoryMediaReadRow[];
 
   const selectableMedia = mediaRows.flatMap((row): AdminStorySelectableMedia[] => {
@@ -257,6 +265,7 @@ export async function getAdminProductStory(
         variantId: row.variant_id,
         variantTitle: row.variant_title,
         displayOrder: Number(row.display_order),
+        placement: row.placement,
         mediaType: row.media_type as "IMAGE" | "VIDEO",
         mimeType: row.mime_type,
         publicUrl,

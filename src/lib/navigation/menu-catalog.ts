@@ -60,6 +60,7 @@ async function queryMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
       FROM product_media pm
       JOIN media_assets a ON a.id = pm.media_asset_id
       WHERE pm.product_id = ${products.id}
+        AND pm.placement = 'GALLERY'
         AND a.security_class = 'PUBLIC_MEDIA'
         AND a.media_type = 'IMAGE'
       ORDER BY (pm.variant_id IS NULL) DESC, pm.display_order ASC, pm.created_at ASC

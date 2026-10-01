@@ -64,6 +64,7 @@ const itemPreviewsSql = sql<CustomerOrderItemPreview[] | null>`(
             FROM product_media pm
             JOIN media_assets ma ON ma.id = pm.media_asset_id
             WHERE pm.product_id = p.id
+              AND pm.placement = 'GALLERY'
               AND ma.security_class = 'PUBLIC_MEDIA'
               AND ma.media_type = 'IMAGE'
             ORDER BY (pm.variant_id IS NULL) DESC, pm.display_order ASC, pm.created_at ASC

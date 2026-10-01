@@ -29,9 +29,8 @@ export function FullBleedImageBlock({
 
   return (
     <figure className={styles.figureContainer} data-testid="story-full-bleed-image-block">
-      <div className={styles.imageStage}>
-        <Image src={mediaUrl} alt={alt} fill sizes="100vw" className={styles.image} />
-      </div>
+      {/* Story payloads carry no dimensions; width/height 0 with CSS sizing keeps the natural ratio. */}
+      <Image src={mediaUrl} alt={alt} width={0} height={0} sizes="100vw" className={styles.image} />
       {payload.caption && (
         <figcaption className={styles.caption} data-testid="full-bleed-caption">
           {payload.caption}

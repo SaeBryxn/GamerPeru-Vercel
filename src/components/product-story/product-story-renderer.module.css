@@ -1,34 +1,35 @@
 /*
- * The section spans its container (the full page width on the product page). Widths are set
- * per block: image-led blocks fill it, the rest sit in a centered frame. Using 100% instead of
- * 100vw keeps the scrollbar out of the width, so nothing overflows horizontally.
+ * The section spans its container (the full page width on the product page). Image-led blocks
+ * fill it edge to edge with no gap, so consecutive images read as one continuous scroll; only
+ * the reading blocks carry vertical breathing room. Using 100% instead of 100vw keeps the
+ * scrollbar out of the width, so nothing overflows horizontally.
  */
 .storySection {
   width: 100%;
   margin-top: var(--space-12, 48px);
   display: flex;
   flex-direction: column;
-  gap: var(--space-8, 32px);
 }
 
 .fullWidthFrame {
   width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 .blockFrame {
   width: 100%;
   max-width: 1440px;
   margin-inline: auto;
-  padding-inline: var(--gutter-mobile, 20px);
+  padding: var(--space-8, 32px) var(--gutter-mobile, 20px);
 }
 
 @media (min-width: 768px) {
   .storySection {
     margin-top: var(--space-16, 64px);
-    gap: var(--space-12, 48px);
   }
 
   .blockFrame {
-    padding-inline: var(--space-8, 32px);
+    padding: var(--space-12, 48px) var(--space-8, 32px);
   }
 }

@@ -13,6 +13,7 @@ import {
   productMedia,
   auditEvents,
   type ProductMedia,
+  type ProductMediaPlacement,
   type MediaAsset,
 } from "@/db/schema";
 import {
@@ -62,6 +63,8 @@ export interface RequestCatalogMediaUploadIntentInput {
   productId: string;
   variantId?: string | null;
   mimeType: AllowedMediaUploadMimeType;
+  /** STORY uploads belong to the product story only and never join the gallery. */
+  placement?: ProductMediaPlacement;
 }
 
 export interface RequestCatalogMediaUploadIntentResult {
@@ -368,6 +371,15 @@ export async function requestCatalogMediaUploadIntent(
     );
   }
 
+  const placement: ProductMediaPlacement = input.placement ?? "GALLERY";
+  if (placement === "STORY" && input.variantId) {
+    throw new CatalogDomainError(
+      "Las imágenes de la historia no se asignan a una variante.",
+      "MEDIA_STORY_VARIANT_NOT_ALLOWED",
+      422
+    );
+  }
+
   // 2. Authoritative Variant Ownership Binding
   if (input.variantId) {
     const [variant] = await db
@@ -406,6 +418,8 @@ export async function requestCatalogMediaUploadIntent(
     maximumBytes: MAX_MEDIA_FILE_SIZE_BYTES,
     issuedAt: now,
     expiresAt,
+    // Signed with the rest, so the browser cannot move a story upload into the gallery.
+    ...(placement === "STORY" ? { placement } : {}),
   };
 
   const secret = getCatalogMediaIntentSecret(options?.intentSecret);
@@ -853,13 +867,16 @@ export async function finalizeCatalogMediaUpload(
       asset = winner;
     }
 
-    // Compute next display_order for product under product row lock
+    // Gallery and story keep separate orders, so story uploads never shift gallery positions.
+    const placement: ProductMediaPlacement = payload.placement ?? "GALLERY";
     const [orderRow] = await tx
       .select({
         maxOrder: sql<number>`COALESCE(MAX(${productMedia.displayOrder}), -1)`,
       })
       .from(productMedia)
-      .where(eq(productMedia.productId, payload.productId));
+      .where(
+        and(eq(productMedia.productId, payload.productId), eq(productMedia.placement, placement))
+      );
 
     const nextDisplayOrder = Number(orderRow?.maxOrder ?? -1) + 1;
 
@@ -871,6 +888,7 @@ export async function finalizeCatalogMediaUpload(
         mediaAssetId: asset.id,
         variantId: payload.variantId,
         displayOrder: nextDisplayOrder,
+        placement,
       })
       .returning();
 
@@ -887,6 +905,7 @@ export async function finalizeCatalogMediaUpload(
         media_intent_digest: mediaIntentDigest,
         product_id: payload.productId,
         variant_id: payload.variantId,
+        placement,
       },
     });
 
@@ -1152,7 +1171,12 @@ export async function detachProductMedia(
     const remaining = await tx
       .select()
       .from(productMedia)
-      .where(eq(productMedia.productId, input.productId))
+      .where(
+        and(
+          eq(productMedia.productId, input.productId),
+          eq(productMedia.placement, target.placement)
+        )
+      )
       .orderBy(asc(productMedia.displayOrder), asc(productMedia.createdAt), asc(productMedia.id));
 
     for (let i = 0; i < remaining.length; i++) {
@@ -1270,7 +1294,9 @@ export async function reorderProductMedia(
     const currentRows = await tx
       .select()
       .from(productMedia)
-      .where(eq(productMedia.productId, input.productId));
+      .where(
+        and(eq(productMedia.productId, input.productId), eq(productMedia.placement, "GALLERY"))
+      );
 
     const currentMap = new Map(currentRows.map((r) => [r.id, r]));
     if (
@@ -1462,6 +1488,14 @@ export async function setProductPrimaryMedia(
       expectedUpdatedAt: normalizedExpectedUpdatedAt,
     });
 
+    if (pmRow.pm.placement !== "GALLERY") {
+      throw new CatalogDomainError(
+        "Una imagen de la historia no puede ser la imagen principal del producto.",
+        "PRIMARY_MEDIA_MUST_BE_GALLERY",
+        422
+      );
+    }
+
     // Invariant 1: Must be GLOBAL (variant_id IS NULL)
     if (pmRow.pm.variantId !== null) {
       throw new CatalogDomainError(
@@ -1624,6 +1658,14 @@ export async function reassignProductMediaVariant(
         "El medio multimedia no pertenece a este producto.",
         "PRODUCT_MEDIA_NOT_FOUND",
         404
+      );
+    }
+
+    if (pm.placement !== "GALLERY") {
+      throw new CatalogDomainError(
+        "Las imágenes de la historia no se asignan a una variante.",
+        "MEDIA_STORY_VARIANT_NOT_ALLOWED",
+        422
       );
     }
 

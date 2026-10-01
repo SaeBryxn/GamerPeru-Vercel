@@ -5,7 +5,9 @@
 .banner {
   position: fixed;
   left: var(--space-4);
-  bottom: var(--space-4);
+  bottom: calc(var(--space-4) + var(--floating-stack-offset, 0px));
+  /* Rises with the product page sticky buy bar instead of sitting under it. */
+  transition: bottom var(--motion-duration-moderate) var(--motion-easing-snappy);
   z-index: 75;
   display: flex;
   flex-direction: column;

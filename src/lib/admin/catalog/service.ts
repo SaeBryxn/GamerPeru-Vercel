@@ -1758,6 +1758,7 @@ export async function duplicateProduct(
         media_asset_id: string;
         variant_id: string | null;
         display_order: number;
+        placement: "GALLERY" | "STORY";
       }[];
 
       let newPrimaryMediaId: string | null = null;
@@ -1776,21 +1777,22 @@ export async function duplicateProduct(
           }
           targetVariantId = mapped;
         } else {
-          // Global media: check if this was the primary media
-          if (source.primaryMediaId === sm.media_asset_id) {
+          // Global gallery media: check if this was the primary media
+          if (sm.placement === "GALLERY" && source.primaryMediaId === sm.media_asset_id) {
             newPrimaryMediaId = sm.media_asset_id;
           }
         }
 
         await tx.execute(sql`
           INSERT INTO product_media (
-            id, product_id, media_asset_id, variant_id, display_order, created_at
+            id, product_id, media_asset_id, variant_id, display_order, placement, created_at
           ) VALUES (
             ${generateUuidV7()}::uuid,
             ${newProductId}::uuid,
             ${sm.media_asset_id}::uuid,
             ${targetVariantId ? sql`${targetVariantId}::uuid` : sql`NULL`},
             ${sm.display_order},
+            ${sm.placement}::product_media_placement,
             NOW()
           );
         `);

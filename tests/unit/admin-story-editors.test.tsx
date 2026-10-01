@@ -51,6 +51,7 @@ const selectableMediaFixture: AdminStorySelectableMedia[] = [
     variantId: "018f0026-8000-7000-8000-000000000001",
     variantTitle: "Negro / 4K",
     displayOrder: 1,
+    placement: "GALLERY",
     mediaType: "IMAGE",
     mimeType: "image/webp",
     publicUrl: "https://example.com/mouse-black.webp",
@@ -64,6 +65,7 @@ const selectableMediaFixture: AdminStorySelectableMedia[] = [
     variantId: null,
     variantTitle: null,
     displayOrder: 2,
+    placement: "GALLERY",
     mediaType: "VIDEO",
     mimeType: "video/mp4",
     publicUrl: "https://example.com/mouse-trailer.mp4",
@@ -269,6 +271,8 @@ describe("GP-026 CHK3 MediaPickerDialog Component", () => {
     // Render picker requesting IMAGE only
     const { rerender } = render(
       <MediaPickerDialog
+        productId="018f0026-7000-7000-8000-000000000001"
+        onUploaded={vi.fn()}
         isOpen={true}
         title="Seleccionar imagen"
         mediaType="IMAGE"
@@ -303,6 +307,8 @@ describe("GP-026 CHK3 MediaPickerDialog Component", () => {
     // Now re-render requesting VIDEO only
     rerender(
       <MediaPickerDialog
+        productId="018f0026-7000-7000-8000-000000000001"
+        onUploaded={vi.fn()}
         isOpen={true}
         title="Seleccionar video"
         mediaType="VIDEO"
@@ -333,6 +339,8 @@ describe("GP-026 CHK3 MediaPickerDialog Component", () => {
 
     render(
       <MediaPickerDialog
+        productId="018f0026-7000-7000-8000-000000000001"
+        onUploaded={vi.fn()}
         isOpen={true}
         title="Seleccionar imagen"
         mediaType="IMAGE"

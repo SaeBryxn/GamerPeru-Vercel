@@ -360,6 +360,7 @@ export async function loadInternalProductDetail(
     FROM product_media pm
     INNER JOIN media_assets ma ON pm.media_asset_id = ma.id
     WHERE pm.product_id = ${productId}::uuid
+      AND pm.placement = 'GALLERY'
     ORDER BY pm.display_order ASC, pm.created_at ASC;
   `)) as Record<string, unknown>[];
 
@@ -409,6 +410,8 @@ export async function loadInternalProductDetail(
     mediaAssetId: m.mediaAssetId,
     variantId: m.variantId,
     displayOrder: m.displayOrder,
+    // The list above is read with placement = 'GALLERY'.
+    placement: "GALLERY" as const,
     createdAt: m.createdAt,
     mediaAsset: {
       id: m.mediaAssetId,
