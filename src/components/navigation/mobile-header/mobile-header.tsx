@@ -4,7 +4,7 @@ import React, { useRef, useState } from "react";
 import { Menu } from "lucide-react";
 import { CartLauncher } from "@/components/cart";
 import { IconButton } from "@/components/ui";
-import { SearchLauncherButton } from "@/components/search";
+import { SearchLauncherButton, type SearchSuggestionGroup } from "@/components/search";
 import { BrandMark } from "../brand-mark";
 import { MobileDrawer } from "../mobile-drawer";
 import type { MegaMenuCategory } from "../types";
@@ -13,9 +13,10 @@ import styles from "./mobile-header.module.css";
 export interface MobileHeaderProps {
   items: MegaMenuCategory[];
   className?: string;
+  searchSuggestions?: SearchSuggestionGroup[];
 }
 
-export function MobileHeader({ items, className }: MobileHeaderProps) {
+export function MobileHeader({ items, className, searchSuggestions }: MobileHeaderProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -40,7 +41,7 @@ export function MobileHeader({ items, className }: MobileHeaderProps) {
         </div>
 
         <div className={styles.rightGroup}>
-          <SearchLauncherButton label="Buscar productos" />
+          <SearchLauncherButton label="Buscar productos" suggestions={searchSuggestions} />
           <CartLauncher label="Carrito de compras" data-testid="mobile-cart-launcher" />
         </div>
       </div>

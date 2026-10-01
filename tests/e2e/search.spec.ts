@@ -45,8 +45,13 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
         name: "Término de búsqueda",
       });
 
-      // Nothing is suggested before a query: the panel says what to type.
-      await expect(dialog.getByText(/Escribe al menos 2 caracteres/)).toBeVisible();
+      // Before a query the panel lists featured products by collection (or a hint without a catalog).
+      await expect(
+        dialog
+          .locator("h3 a[href^='/categorias/']")
+          .first()
+          .or(dialog.getByText(/Busca por producto, marca o categoría/))
+      ).toBeVisible();
 
       // Suggestions come from /api/search/predictive, the catalog /buscar reads.
       await searchInput.fill("lamzu");
@@ -80,7 +85,7 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
       await clearBtn.click();
       await expect(searchInput).toHaveValue("");
       await expect(searchInput).toBeFocused();
-      await expect(page.getByText(/Escribe al menos 2 caracteres/)).toBeVisible();
+      await expect(page.getByText(/No encontramos productos para/)).toHaveCount(0);
     });
 
     test("D: clicking the backdrop closes the panel and a product suggestion opens its PDP", async ({

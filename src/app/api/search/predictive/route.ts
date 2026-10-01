@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { describeDatabaseError } from "@/db/describe-error";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import { getSearchReader } from "@/lib/search/get-reader";
 import { getQueryCodePointLength, normalizeSearchQuery } from "@/lib/search/normalization";
@@ -66,8 +67,10 @@ export async function GET(request: NextRequest) {
       },
       { status: 200, headers: NO_STORE_HEADERS }
     );
-  } catch {
-    // Privacy invariant: Never log raw query string to telemetry or console
+  } catch (error) {
+    // Privacy invariant: never log the raw query. Name and code tell a timeout, a lost
+    // connection or a broken query apart. console.error is what Workers Logs captures.
+    console.error("search_predictive_failed", describeDatabaseError(error));
     return NextResponse.json(
       { error: "SEARCH_UNAVAILABLE" },
       { status: 500, headers: NO_STORE_HEADERS }

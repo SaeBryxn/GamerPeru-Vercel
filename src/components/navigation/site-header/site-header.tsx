@@ -1,4 +1,5 @@
 import React from "react";
+import { buildSearchSuggestions } from "@/components/search";
 import { Container } from "@/components/ui";
 import { BrandMark } from "../brand-mark";
 import { DesktopNav } from "../desktop-nav";
@@ -15,6 +16,7 @@ export interface SiteHeaderProps {
 
 export function SiteHeader({ config, cartCount, className }: SiteHeaderProps) {
   const classNames = [styles.siteHeader, className].filter(Boolean).join(" ");
+  const searchSuggestions = buildSearchSuggestions(config.primaryNav, config.shelves);
 
   return (
     <header className={classNames}>
@@ -37,11 +39,12 @@ export function SiteHeader({ config, cartCount, className }: SiteHeaderProps) {
               cartHref={config.utilityLinks.cart.href}
               cartLabel={config.utilityLinks.cart.label}
               cartCount={cartCount}
+              searchSuggestions={searchSuggestions}
             />
           </div>
 
           {/* Mobile Layout (< 1024px) */}
-          <MobileHeader items={config.primaryNav} />
+          <MobileHeader items={config.primaryNav} searchSuggestions={searchSuggestions} />
         </div>
       </Container>
     </header>

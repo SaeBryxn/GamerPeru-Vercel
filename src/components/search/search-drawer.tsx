@@ -12,22 +12,25 @@ import {
   type Transition,
   type Variants,
 } from "framer-motion";
-import { Mic, Package, X } from "lucide-react";
+import { Mic, Package, Search, X } from "lucide-react";
 import { CloseButton, Icon } from "@/components/ui";
 import { getQueryCodePointLength } from "@/lib/search/normalization";
 import { MIN_SEARCH_QUERY_LENGTH } from "@/lib/search/types";
 import { formatCurrency } from "@/lib/utils/currency";
 import { usePredictiveSearch, type PredictiveSearchState } from "./use-predictive-search";
+import type { SearchSuggestionGroup } from "./search-suggestions";
 import { useVoiceSearch } from "./use-voice-search";
 import styles from "./search-drawer.module.css";
 
 const EASE_OUT_EXPO = [0.22, 1, 0.36, 1] as const;
 
-// Anchored to the right edge: slides in toward the center and back out.
+// Floats inset from the right edge: slides in from past it (110% clears the side margin), with a
+// slight scale so it settles rather than docks.
 const PANEL_VARIANTS: Variants = {
-  hidden: { x: "100%", transition: { duration: 0.45, ease: [0.4, 0, 1, 1] } },
+  hidden: { x: "110%", scale: 0.98, transition: { duration: 0.4, ease: [0.4, 0, 1, 1] } },
   visible: {
     x: 0,
+    scale: 1,
     transition: {
       duration: 0.6,
       ease: EASE_OUT_EXPO,
@@ -49,14 +52,16 @@ const FLOATING_FADE: Transition = { duration: 0.22, ease: EASE_OUT_EXPO };
 export interface SearchDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Collections and products listed before anything is typed. */
+  suggestions?: SearchSuggestionGroup[];
 }
 
 /**
- * Right-hand search panel: header, search field with voice dictation, and live
- * suggestions from the catalog. Enter (or "Ver todos") opens the full /buscar
- * results page.
+ * Floating search panel on the right: header, search field with voice dictation, and live
+ * suggestions from the catalog. Before anything is typed it lists featured products by
+ * collection. Enter (or "Ver todos") opens the full /buscar results page.
  */
-export function SearchDrawer({ isOpen, onClose }: SearchDrawerProps) {
+export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawerProps) {
   const router = useRouter();
   const titleId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -72,7 +77,7 @@ export function SearchDrawer({ isOpen, onClose }: SearchDrawerProps) {
   const followY = useSpring(pointerY, FOLLOW_SPRING);
 
   const voice = useVoiceSearch(setQuery);
-  const suggestions = usePredictiveSearch(query);
+  const predictive = usePredictiveSearch(query);
   const cleanQuery = query.trim();
   const canSearchAll = getQueryCodePointLength(cleanQuery) >= MIN_SEARCH_QUERY_LENGTH;
   const searchAllHref = `/buscar?q=${encodeURIComponent(cleanQuery)}`;
@@ -229,6 +234,9 @@ export function SearchDrawer({ isOpen, onClose }: SearchDrawerProps) {
                   maxLength={100}
                   aria-label="Término de búsqueda"
                 />
+                {query.length === 0 && (
+                  <Icon icon={Search} size="sm" className={styles.searchGlyph} aria-hidden="true" />
+                )}
                 {query.length > 0 && (
                   <button
                     type="button"
@@ -266,7 +274,12 @@ export function SearchDrawer({ isOpen, onClose }: SearchDrawerProps) {
             </motion.form>
 
             <motion.div className={styles.results} variants={SECTION_VARIANTS} aria-live="polite">
-              <DrawerSuggestions state={suggestions} query={cleanQuery} onNavigate={close} />
+              <DrawerSuggestions
+                state={predictive}
+                query={cleanQuery}
+                defaults={suggestions}
+                onNavigate={close}
+              />
             </motion.div>
 
             {canSearchAll && (
@@ -293,21 +306,58 @@ const ROW_VARIANTS: Variants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: EASE_OUT_EXPO } },
 };
 
+function DefaultSuggestions({
+  groups,
+  onNavigate,
+}: {
+  groups: SearchSuggestionGroup[];
+  onNavigate: () => void;
+}) {
+  if (groups.length === 0) {
+    return <p className={styles.hintText}>Busca por producto, marca o categoría.</p>;
+  }
+  return (
+    <motion.div initial="hidden" animate="visible" variants={LIST_VARIANTS}>
+      {groups.map((group) => (
+        <motion.section
+          key={group.href}
+          className={styles.suggestGroup}
+          aria-label={group.title}
+          variants={ROW_VARIANTS}
+        >
+          <h3 className={styles.suggestTitle}>
+            <Link href={group.href} onClick={onNavigate} className={styles.suggestTitleLink}>
+              {group.title}
+            </Link>
+          </h3>
+          <ul className={styles.suggestList}>
+            {group.links.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className={styles.suggestLink} onClick={onNavigate}>
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </motion.section>
+      ))}
+    </motion.div>
+  );
+}
+
 function DrawerSuggestions({
   state,
   query,
+  defaults,
   onNavigate,
 }: {
   state: PredictiveSearchState;
   query: string;
+  defaults: SearchSuggestionGroup[];
   onNavigate: () => void;
 }) {
   if (state.status === "idle") {
-    return (
-      <p className={styles.hintText}>
-        Escribe al menos 2 caracteres para buscar productos, marcas o categorías.
-      </p>
-    );
+    return <DefaultSuggestions groups={defaults} onNavigate={onNavigate} />;
   }
 
   if (state.status === "loading") {

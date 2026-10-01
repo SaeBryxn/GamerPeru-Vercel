@@ -5,16 +5,20 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { Icon } from "@/components/ui";
 import { SearchDrawer } from "./search-drawer";
+import type { SearchSuggestionGroup } from "./search-suggestions";
 import styles from "./search-launcher-button.module.css";
 
 export interface SearchLauncherButtonProps {
   label?: string;
   className?: string;
+  /** Shown in the panel before anything is typed. */
+  suggestions?: SearchSuggestionGroup[];
 }
 
 export function SearchLauncherButton({
   label = "Buscar productos",
   className,
+  suggestions = [],
 }: SearchLauncherButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -34,7 +38,7 @@ export function SearchLauncherButton({
         <Icon icon={Search} size="lg" aria-hidden="true" />
       </Link>
 
-      <SearchDrawer isOpen={isOpen} onClose={handleClose} />
+      <SearchDrawer isOpen={isOpen} onClose={handleClose} suggestions={suggestions} />
     </>
   );
 }
