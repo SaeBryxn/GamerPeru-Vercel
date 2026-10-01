@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, type Transition, type Variants } from "framer-motion";
 import { Eye } from "lucide-react";
 import { DomeButton, DomeLink } from "@/components/ui";
+import { WishlistButton } from "@/components/wishlist";
 import type { ProductCardImage, ProductDiscoveryItem } from "@/lib/catalog/types";
 import { formatCurrency } from "@/lib/utils/currency";
 import { CardAddToCartButton } from "./card-add-to-cart-button";
@@ -160,6 +161,9 @@ export function ProductCard({
         isActive={isActive}
         swipe={gallerySwipe && !canHover}
       >
+        <div className={styles.wishlistSlot}>
+          <WishlistButton productId={product.id} productName={product.name} />
+        </div>
         {overlays}
       </ScrubGallery>
 

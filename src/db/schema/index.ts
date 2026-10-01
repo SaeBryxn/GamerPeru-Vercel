@@ -23,6 +23,7 @@ export * from "./identity/permissions";
 export * from "./identity/role-permissions";
 export * from "./identity/user-roles";
 export * from "./cart";
+export * from "./wishlist";
 export * from "./orders/enums";
 export * from "./orders/orders";
 export * from "./orders/order-items";

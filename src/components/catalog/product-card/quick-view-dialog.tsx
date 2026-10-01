@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { CloseButton, DomeLink } from "@/components/ui";
+import { WishlistButton } from "@/components/wishlist";
 import type { ProductCardImage, ProductDiscoveryItem } from "@/lib/catalog/types";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -91,11 +92,9 @@ export function QuickViewDialog({
               exit={{ opacity: 0, y: 12, scale: 0.98, transition: PANEL_EXIT }}
               transition={PANEL_ENTER}
             >
-              <CloseButton
-                className={styles.closeButton}
-                aria-label="Cerrar vista rápida"
-                onClick={requestClose}
-              />
+              <div className={styles.closeSlot}>
+                <CloseButton aria-label="Cerrar vista rápida" onClick={requestClose} />
+              </div>
 
               <div className={styles.gallery}>
                 <div className={styles.stage}>
@@ -173,21 +172,28 @@ export function QuickViewDialog({
                 )}
 
                 <div className={styles.actions}>
-                  {product.singleVariantId ? (
-                    <CardAddToCartButton
-                      variantId={product.singleVariantId}
+                  <div className={styles.actionRow}>
+                    {product.singleVariantId ? (
+                      <CardAddToCartButton
+                        variantId={product.singleVariantId}
+                        productName={product.name}
+                        className={styles.primaryAction}
+                        onBeforeDrawer={() => {
+                          dialogRef.current?.close();
+                          onClose();
+                        }}
+                      />
+                    ) : (
+                      <DomeLink href={href} tone="dark" className={styles.primaryAction}>
+                        Elegir opciones
+                      </DomeLink>
+                    )}
+                    <WishlistButton
+                      productId={product.id}
                       productName={product.name}
-                      className={styles.primaryAction}
-                      onBeforeDrawer={() => {
-                        dialogRef.current?.close();
-                        onClose();
-                      }}
+                      variant="inline"
                     />
-                  ) : (
-                    <DomeLink href={href} tone="dark" className={styles.primaryAction}>
-                      Elegir opciones
-                    </DomeLink>
-                  )}
+                  </div>
                   <Link href={href} className={styles.detailsLink}>
                     Ver detalles del producto
                     <ArrowRight size={16} aria-hidden="true" />

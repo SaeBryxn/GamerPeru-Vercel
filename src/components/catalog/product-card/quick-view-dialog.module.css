@@ -39,7 +39,12 @@
   box-shadow: 0 30px 80px -20px rgb(9 9 11 / 40%);
 }
 
-.closeButton {
+/*
+ * Positioned through its own wrapper: DomeButton sets `position: relative` in another module with
+ * the same specificity, and whichever stylesheet loads last would otherwise decide whether the
+ * button leaves the grid or becomes its first cell.
+ */
+.closeSlot {
   position: absolute;
   top: var(--space-4);
   right: var(--space-4);
@@ -186,10 +191,17 @@
   padding-top: var(--space-6);
 }
 
+.actionRow {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
 .primaryAction {
   --dome-height: 48px;
   --dome-radius: var(--radius-md);
-  width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 
 .detailsLink {

@@ -1,0 +1,60 @@
+/* The UA popover styles center a bordered box; this resets them to a bottom-centered stack. */
+.viewport {
+  position: fixed;
+  inset: auto 0 var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 var(--space-4);
+  border: none;
+  background: transparent;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: min(440px, 100%);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-dark-canvas);
+  color: var(--color-text-dark-primary);
+  box-shadow: 0 18px 40px -16px rgb(9 9 11 / 45%);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  pointer-events: auto;
+}
+
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.icon[data-tone="success"] {
+  color: var(--color-accent-red-soft);
+}
+
+.message {
+  min-width: 0;
+}
+
+.action {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}

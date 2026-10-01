@@ -53,7 +53,7 @@
 }
 
 .dark .dome {
-  background-color: var(--dome-fill, var(--color-surface-card));
+  background-color: var(--dome-fill, var(--color-accent-red-soft));
 }
 
 .accentRing {

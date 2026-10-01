@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertCircle, MessageCircle, ShieldCheck, Tag } from "lucide-react";
 import { useCart } from "@/components/cart";
 import { DomeButton, DomeLink, Icon } from "@/components/ui";
+import { WishlistButton } from "@/components/wishlist";
 import { publicEnv } from "@/config/public-env";
 import { MAX_CART_LINE_QUANTITY } from "@/lib/cart/constants";
 import type { ProductVariantDetail } from "@/lib/catalog/product-detail-types";
@@ -180,6 +181,7 @@ export function ProductCommercePanel({
             >
               {!isAvailable ? "No disponible" : isPending ? "Añadiendo..." : "Añadir al carrito"}
             </DomeButton>
+            <WishlistButton productId={product.id} productName={product.name} variant="inline" />
           </div>
         )}
 

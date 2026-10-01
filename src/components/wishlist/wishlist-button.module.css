@@ -1,0 +1,69 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: var(--radius-full);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  isolation: isolate;
+}
+
+.overlay {
+  border: 1px solid transparent;
+  background-color: color-mix(in srgb, var(--color-surface-card) 86%, transparent);
+  box-shadow: 0 4px 14px -6px rgb(9 9 11 / 35%);
+  backdrop-filter: blur(6px);
+}
+
+/* Sized by --wishlist-size so a row of actions can match its own button height. */
+.inline {
+  width: var(--wishlist-size, 48px);
+  height: var(--wishlist-size, 48px);
+  border: 1px solid var(--color-border-default);
+  background-color: var(--color-surface-card);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.button[data-saved] {
+  color: var(--color-accent-red-soft);
+}
+
+.button[aria-busy] {
+  cursor: progress;
+}
+
+.glyph {
+  position: relative;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+}
+
+.outline {
+  display: block;
+}
+
+.fill {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  color: var(--color-accent-red-soft);
+}
+
+.burst {
+  position: absolute;
+  inset: -6px;
+  z-index: -1;
+  border: 2px solid var(--color-accent-red-soft);
+  border-radius: var(--radius-full);
+  pointer-events: none;
+}

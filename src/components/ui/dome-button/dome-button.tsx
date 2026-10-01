@@ -18,11 +18,11 @@ export type DomeTone = "light" | "dark";
 
 const TONE_COLORS: Record<DomeTone, { rest: string; hover: string }> = {
   light: { rest: "var(--color-text-primary)", hover: "var(--color-surface-card)" },
-  dark: { rest: "var(--color-surface-card)", hover: "var(--color-text-primary)" },
+  dark: { rest: "var(--color-surface-card)", hover: "var(--color-surface-card)" },
 };
 
 export interface DomeButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {
-  /** `light`: white base, black dome. `dark`: black base, white dome. */
+  /** `light`: white base, black dome. `dark`: black base, brand-red dome with a white label. */
   tone?: DomeTone;
   /**
    * How far the dome rises on hover, as a fraction of its own diameter (the
@@ -51,13 +51,12 @@ function domeVariantsFor(domeRise: string): Variants {
 }
 
 /**
- * Dark buttons answer hover with the brand red: the border turns red and a faint inner glow fades
- * in, in the dome's own timing. The fill and label stay black and white, so red only ever reads
- * as the interface responding.
+ * Dark buttons fill with the same red the social icons use on hover, so primary actions and the
+ * social rail answer the pointer in one color. The label stays white on it (5:1 contrast).
  */
 const DARK_ROOT_VARIANTS: Variants = {
   rest: { borderColor: "var(--color-surface-dark-canvas)", transition: DOME_TRANSITION },
-  hover: { borderColor: "var(--color-brand-red)", transition: DOME_TRANSITION },
+  hover: { borderColor: "var(--color-accent-red-soft)", transition: DOME_TRANSITION },
 };
 
 const ACCENT_RING_VARIANTS: Variants = {

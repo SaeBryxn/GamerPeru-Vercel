@@ -106,8 +106,9 @@
 /* Quantity stepper and add-to-cart share one row; the button takes the rest. */
 .purchaseRow {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--space-3);
+  --wishlist-size: 58px;
 }
 
 .primaryAction,
