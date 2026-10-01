@@ -88,7 +88,7 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
 
       <motion.div className={styles.promoGrid} variants={PROMO_VARIANTS}>
         {promos.map((promo) => (
-          <motion.div key={promo.href} variants={RISE_FROM_BELOW}>
+          <motion.div key={promo.href} className={styles.promoItem} variants={RISE_FROM_BELOW}>
             <MotionLink
               href={promo.href}
               className={styles.promoCard}

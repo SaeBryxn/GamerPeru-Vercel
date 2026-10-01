@@ -103,12 +103,19 @@
   gap: var(--space-6);
 }
 
+/* Cards stretch to the row, so they always fill the height the series column sets. */
+.promoItem {
+  display: flex;
+  min-width: 0;
+}
+
 .promoCard {
   position: relative;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  aspect-ratio: 1 / 1;
-  padding: var(--space-5) var(--space-8) var(--space-8);
+  min-height: clamp(320px, 28vw, 460px);
+  padding: var(--space-4) var(--space-6) var(--space-6);
   border-radius: var(--radius-lg);
   background-color: var(--color-surface-secondary);
   color: var(--color-text-primary);
@@ -140,6 +147,7 @@
   position: relative;
   flex: 1;
   min-height: 0;
+  margin: 0 calc(-1 * var(--space-2));
 }
 
 .promoImage {
@@ -168,10 +176,15 @@
   background-size: 0% 2px;
   transition: background-size var(--motion-duration-moderate) var(--motion-easing-snappy);
   font-family: var(--font-heading);
-  font-size: 26px;
+  font-size: clamp(22px, 1.9vw, 28px);
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.1;
+  /* Long catalog names stay on two lines so the photo keeps most of the card. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .promoCard:hover .promoTitle,
