@@ -1,0 +1,141 @@
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 100%;
+  min-height: min(720px, calc(100svh - var(--header-stack-height)));
+  display: flex;
+  align-items: center;
+  background-color: var(--color-surface-dark-canvas);
+  color: var(--color-text-dark-primary);
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.photo {
+  object-fit: cover;
+  opacity: 0.45;
+}
+
+/* Red glow from the lower right plus a fade on the left so the copy always reads. */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(
+      ellipse 55% 70% at 78% 70%,
+      color-mix(in srgb, var(--color-accent-red-soft) 30%, transparent),
+      transparent 70%
+    ),
+    linear-gradient(
+      90deg,
+      var(--color-surface-dark-canvas) 25%,
+      color-mix(in srgb, var(--color-surface-dark-canvas) 40%, transparent)
+    );
+  pointer-events: none;
+}
+
+.inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-10);
+  width: 100%;
+  max-width: var(--container-default);
+  margin: 0 auto;
+  padding: var(--space-16) var(--space-4);
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-accent-red-soft);
+}
+
+.title {
+  max-width: 16ch;
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(2.25rem, 1.5rem + 3.6vw, 4.25rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+
+.lead {
+  max-width: 52ch;
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--color-text-dark-secondary);
+}
+
+.cta {
+  --dome-height: 52px;
+  --dome-radius: var(--radius-md);
+  --dome-border: transparent;
+  --dome-fill: var(--color-accent-red-soft);
+}
+
+.stage {
+  position: relative;
+  aspect-ratio: 1;
+  width: 100%;
+  max-width: 520px;
+  justify-self: center;
+}
+
+/* Catalog photos are shot on white, so each floats as a lit tile, like a card lifted off the grid. */
+.floatItem {
+  isolation: isolate;
+  position: absolute;
+  width: 54%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-product-stage);
+  box-shadow:
+    0 40px 60px -24px rgb(0 0 0 / 70%),
+    0 0 0 1px color-mix(in srgb, var(--color-surface-card) 8%, transparent);
+}
+
+.productImage {
+  object-fit: contain;
+  padding: 10%;
+  mix-blend-mode: multiply;
+}
+
+@media (min-width: 1024px) {
+  .inner {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    padding: var(--space-20) var(--space-8);
+  }
+}
+
+@media (max-width: 1023px) {
+  .stage {
+    max-width: 360px;
+  }
+}
+
+@media (max-width: 639px) {
+  .stage {
+    display: none;
+  }
+}

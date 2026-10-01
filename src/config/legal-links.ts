@@ -11,9 +11,10 @@ export interface LegalLink {
 }
 
 export const LEGAL_LINKS: LegalLink[] = [
+  { label: "Política de privacidad", href: "/legal/privacidad" },
+  { label: "Términos de servicio", href: "/legal/terminos" },
+  { label: "Política de cookies", href: "/legal/cookies" },
   { label: "Política de reembolsos", href: "" },
-  { label: "Política de privacidad", href: "" },
-  { label: "Términos de servicio", href: "" },
   { label: "Política de envíos", href: "" },
 ];
 

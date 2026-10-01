@@ -1,0 +1,103 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.label {
+  font-family: var(--font-heading), sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* Sunken control: a recessed surface with a soft inner shadow instead of a hard outline. */
+.control {
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-secondary);
+  box-shadow: inset 0 1px 2px rgb(9 9 11 / 8%);
+  color: var(--color-text-primary);
+  font-family: var(--font-body), sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-easing-snappy),
+    background-color var(--motion-duration-fast) var(--motion-easing-snappy),
+    box-shadow var(--motion-duration-fast) var(--motion-easing-snappy);
+}
+
+.control::placeholder {
+  color: var(--color-text-muted);
+}
+
+.control:hover:not(:focus) {
+  border-color: var(--color-border-subtle);
+}
+
+.control:focus {
+  outline: none;
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-card);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-red-soft) 18%, transparent);
+}
+
+.controlError {
+  border-color: var(--color-status-danger-text);
+}
+
+.textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
+.select {
+  appearance: none;
+  padding-right: var(--space-10);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%),
+    linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) 50%,
+    calc(100% - 15px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.select:invalid {
+  color: var(--color-text-muted);
+}
+
+.hint,
+.error {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.hint {
+  color: var(--color-text-secondary);
+}
+
+.error {
+  font-weight: 500;
+  color: var(--color-status-danger-text);
+}
+
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
