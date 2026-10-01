@@ -52,16 +52,17 @@
   pointer-events: none;
 }
 
-/* Floating card inset from the right, top and bottom edges, clearly lifted off the dimmed page. */
+/* Docked to the right edge at full height, over the header; only the leading corners are rounded. */
 .panel {
   position: fixed;
-  top: var(--space-4);
-  right: var(--space-4);
-  bottom: var(--space-4);
+  top: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  width: min(440px, calc(100vw - 2 * var(--space-4)));
-  border-radius: var(--radius-xl);
+  width: min(440px, 100vw);
+  height: 100%;
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
   background-color: var(--color-surface-card);
   box-shadow: 0 25px 50px -12px rgb(9 9 11 / 45%);
   overflow: hidden;

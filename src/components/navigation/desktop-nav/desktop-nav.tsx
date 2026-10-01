@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { Plus } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion, type Variants } from "framer-motion";
 import { Container, Icon, MagneticWrapper } from "@/components/ui";
 import type { MegaMenuCategory, MegaMenuShelves, NavLink } from "../types";
@@ -144,7 +144,7 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
 
             return (
               <li key={category.id} className={styles.navItem}>
-                {/* Label and chevron form a single disclosure trigger. */}
+                {/* Label and icon form a single disclosure trigger. */}
                 <button
                   ref={(el) => {
                     if (el) triggerRefs.current.set(category.id, el);
@@ -169,13 +169,15 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
                 >
                   <MagneticWrapper className={styles.triggerContent}>
                     <span>{category.label}</span>
+                    {/* 45° turns the plus into an x, matching the FAQ accordion. */}
                     <motion.span
                       className={styles.chevron}
                       initial={false}
-                      animate={{ rotate: isExpanded ? 180 : 0, y: isExpanded ? 1 : 0 }}
-                      transition={{ type: "spring", stiffness: 420, damping: 26 }}
+                      animate={{ rotate: isExpanded ? 45 : 0 }}
+                      transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
+                      aria-hidden="true"
                     >
-                      <Icon icon={ChevronDown} size="sm" aria-hidden="true" />
+                      <Icon icon={Plus} size="sm" aria-hidden="true" />
                     </motion.span>
                   </MagneticWrapper>
                   <AnimatePresence>{underlineId === category.id && underline}</AnimatePresence>

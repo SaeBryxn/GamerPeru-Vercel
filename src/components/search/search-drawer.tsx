@@ -24,13 +24,10 @@ import styles from "./search-drawer.module.css";
 
 const EASE_OUT_EXPO = [0.22, 1, 0.36, 1] as const;
 
-// Floats inset from the right edge: slides in from past it (110% clears the side margin), with a
-// slight scale so it settles rather than docks.
 const PANEL_VARIANTS: Variants = {
-  hidden: { x: "110%", scale: 0.98, transition: { duration: 0.4, ease: [0.4, 0, 1, 1] } },
+  hidden: { x: "100%", transition: { duration: 0.4, ease: [0.4, 0, 1, 1] } },
   visible: {
     x: 0,
-    scale: 1,
     transition: {
       duration: 0.6,
       ease: EASE_OUT_EXPO,
@@ -57,7 +54,7 @@ export interface SearchDrawerProps {
 }
 
 /**
- * Floating search panel on the right: header, search field with voice dictation, and live
+ * Full-height search panel docked to the right edge: header, search field with voice dictation, and live
  * suggestions from the catalog. Before anything is typed it lists featured products by
  * collection. Enter (or "Ver todos") opens the full /buscar results page.
  */
@@ -67,6 +64,8 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const isOpenRef = useRef(isOpen);
+  isOpenRef.current = isOpen;
 
   const [query, setQuery] = useState("");
   const [showFloatingClose, setShowFloatingClose] = useState(false);
@@ -100,7 +99,9 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
     onClose();
   };
 
+  // Guarded so a late exit callback can never close a dialog that was reopened in the meantime.
   const handleExitComplete = () => {
+    if (isOpenRef.current) return;
     dialogRef.current?.close();
     setQuery("");
     triggerRef.current?.focus();
@@ -170,25 +171,6 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
             aria-hidden="true"
             data-testid="search-drawer-overlay"
           />
-        )}
-
-        {/*
-          Decorative: clicks pass through to the backdrop, which closes the
-          panel. Keyboard and screen reader users get the header close button.
-        */}
-        {isOpen && showFloatingClose && (
-          <motion.div
-            key="floating-close"
-            className={styles.floatingClose}
-            style={{ x: followX, y: followY }}
-            initial={{ opacity: 0, scale: 0.6 }}
-            animate={{ opacity: 1, scale: 1, transition: FLOATING_FADE }}
-            exit={{ opacity: 0, scale: 0.6, transition: FLOATING_FADE }}
-            aria-hidden="true"
-            data-testid="search-drawer-floating-close"
-          >
-            <Icon icon={X} size="lg" />
-          </motion.div>
         )}
 
         {isOpen && (
@@ -289,6 +271,29 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
                 </Link>
               </motion.div>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/*
+        Decorative: clicks pass through to the backdrop, which closes the panel.
+        Keyboard and screen reader users get the header close button. It has its
+        own presence because it toggles while the panel is open (the panel sliding
+        under the cursor fires pointerleave); sharing the panel's presence made its
+        exit run handleExitComplete and close the dialog mid-entrance.
+      */}
+      <AnimatePresence>
+        {isOpen && showFloatingClose && (
+          <motion.div
+            key="floating-close"
+            className={styles.floatingClose}
+            style={{ x: followX, y: followY }}
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1, transition: FLOATING_FADE }}
+            exit={{ opacity: 0, scale: 0.6, transition: FLOATING_FADE }}
+            aria-hidden="true"
+            data-testid="search-drawer-floating-close"
+          >
+            <Icon icon={X} size="lg" />
           </motion.div>
         )}
       </AnimatePresence>
