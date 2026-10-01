@@ -4,6 +4,7 @@ export * from "./button";
 export * from "./card";
 export * from "./container";
 export * from "./dome-button";
+export * from "./floating-close";
 export * from "./icon";
 export * from "./icon-button";
 export * from "./input";

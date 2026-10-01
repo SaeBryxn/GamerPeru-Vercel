@@ -28,7 +28,7 @@ export interface MegaMenuSeriesProps {
 
 /**
  * Series lists on the left (with a guide link underneath) and large promo
- * cards on the right. Used by "Mouses" and "Teclados".
+ * cards on the right. Used by "Mouses", "Teclados" and "Mousepads".
  */
 export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesProps) {
   const openCount = useOpenCount(isOpen);

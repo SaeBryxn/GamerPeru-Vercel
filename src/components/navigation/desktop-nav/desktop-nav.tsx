@@ -3,9 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Plus } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion, type Variants } from "framer-motion";
-import { Container, Icon, MagneticWrapper } from "@/components/ui";
+import { Container, FloatingClose, MagneticWrapper, useFloatingClose } from "@/components/ui";
 import type { MegaMenuCategory, MegaMenuShelves, NavLink } from "../types";
 import { MegaMenuGrid } from "./mega-menu-grid";
 import { MegaMenuLinks } from "./mega-menu-links";
@@ -62,6 +61,8 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
   const pathname = usePathname() ?? "";
   const navRef = useRef<HTMLElement>(null);
   const triggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+  const floatingClose = useFloatingClose();
 
   const closeMenu = () => setActiveCategoryId(null);
 
@@ -144,7 +145,6 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
 
             return (
               <li key={category.id} className={styles.navItem}>
-                {/* Label and icon form a single disclosure trigger. */}
                 <button
                   ref={(el) => {
                     if (el) triggerRefs.current.set(category.id, el);
@@ -167,19 +167,7 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
                     setActiveCategoryId(isExpanded ? null : category.id);
                   }}
                 >
-                  <MagneticWrapper className={styles.triggerContent}>
-                    <span>{category.label}</span>
-                    {/* 45° turns the plus into an x, matching the FAQ accordion. */}
-                    <motion.span
-                      className={styles.chevron}
-                      initial={false}
-                      animate={{ rotate: isExpanded ? 45 : 0 }}
-                      transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
-                      aria-hidden="true"
-                    >
-                      <Icon icon={Plus} size="sm" aria-hidden="true" />
-                    </motion.span>
-                  </MagneticWrapper>
+                  <MagneticWrapper>{category.label}</MagneticWrapper>
                   <AnimatePresence>{underlineId === category.id && underline}</AnimatePresence>
                 </button>
 
@@ -232,7 +220,8 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
           {activeCategoryId && (
             <motion.div
               key="mega-menu-backdrop"
-              className={styles.megaMenuBackdrop}
+              {...floatingClose.targetProps}
+              className={`${styles.megaMenuBackdrop} ${floatingClose.targetProps.className}`}
               aria-hidden="true"
               onClick={closeMenu}
               initial={{ opacity: 0 }}
@@ -241,6 +230,12 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
             />
           )}
         </AnimatePresence>
+        <FloatingClose
+          state={floatingClose}
+          active={activeCategoryId !== null}
+          portal
+          data-testid="mega-menu-floating-close"
+        />
       </nav>
     </MotionConfig>
   );

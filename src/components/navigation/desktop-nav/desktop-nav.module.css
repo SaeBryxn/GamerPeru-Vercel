@@ -54,7 +54,7 @@
 }
 
 /*
- * Seven items (six with chevrons) must fit between the logo and utilities on
+ * Seven items must fit between the logo and utilities on
  * small desktops, so the larger 16px label only applies from 1280px.
  */
 @media (max-width: 1279px) {
@@ -72,27 +72,6 @@
   outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
   outline-offset: 2px;
   border-radius: var(--radius-xs);
-}
-
-.triggerContent {
-  gap: var(--space-1);
-}
-
-@media (max-width: 1279px) {
-  .triggerContent {
-    gap: 2px;
-  }
-}
-
-/* Rotation is driven by Framer Motion; only the color change is CSS. */
-.chevron {
-  display: inline-flex;
-  color: var(--color-text-secondary);
-  transition: color var(--motion-duration-fast) var(--motion-easing-standard);
-}
-
-.categoryTriggerActive .chevron {
-  color: var(--color-text-primary);
 }
 
 /* Brand-red line that glides between items; the label itself stays ink. */

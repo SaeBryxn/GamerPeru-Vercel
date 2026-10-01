@@ -28,30 +28,6 @@
   cursor: pointer;
 }
 
-/* With a mouse, the floating close button stands in for the cursor. */
-@media (hover: hover) and (pointer: fine) {
-  .overlay {
-    cursor: none;
-  }
-}
-
-.floatingClose {
-  position: fixed;
-  top: 0;
-  left: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 56px;
-  margin: -28px 0 0 -28px;
-  border-radius: var(--radius-full);
-  background-color: var(--color-surface-card);
-  color: var(--color-text-primary);
-  box-shadow: var(--elevation-high);
-  pointer-events: none;
-}
-
 /* Docked to the right edge at full height, over the header; only the leading corners are rounded. */
 .panel {
   position: fixed;

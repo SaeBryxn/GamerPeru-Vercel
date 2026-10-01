@@ -1,0 +1,24 @@
+.floatingClose {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-card);
+  color: var(--color-text-primary);
+  box-shadow: var(--elevation-high);
+  pointer-events: none;
+}
+
+/* With a mouse, the floating button stands in for the cursor over the area it closes. */
+@media (hover: hover) and (pointer: fine) {
+  .hideCursor {
+    cursor: none;
+  }
+}

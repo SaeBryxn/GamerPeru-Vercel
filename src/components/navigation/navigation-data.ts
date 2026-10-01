@@ -298,8 +298,35 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
       id: "mousepads",
       label: "Mousepads",
       href: "/categorias/mousepads",
-      menuLayout: "grid",
-      tiles: [
+      menuLayout: "series",
+      series: [
+        {
+          title: "Superficie",
+          items: [
+            { label: "Vidrio (Glass)", href: "/categorias/mousepads?superficie=vidrio" },
+            { label: "Poron / Control", href: "/categorias/mousepads?superficie=control" },
+            { label: "Speed / Cordura", href: "/categorias/mousepads?superficie=speed" },
+          ],
+        },
+        {
+          title: "Tamaños",
+          items: [
+            { label: "XL (490 × 420 mm)", href: "/categorias/mousepads?tamano=xl" },
+            { label: "Deskmat XXL", href: "/categorias/mousepads?tamano=xxl" },
+          ],
+        },
+        {
+          title: "Marcas",
+          items: [
+            { label: "Artisan", href: "/marcas/artisan" },
+            { label: "Lethal Gaming Gear", href: "/marcas/lgg" },
+            { label: "Pulsar Superglide", href: "/marcas/pulsar" },
+            { label: "Lamzu", href: "/marcas/lamzu" },
+          ],
+        },
+      ],
+      guide: { label: "Guía de compra", href: "/guia-de-compra/mousepads" },
+      promos: [
         {
           title: "Vidrio",
           href: "/categorias/mousepads?superficie=vidrio",
@@ -309,16 +336,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
           title: "Control",
           href: "/categorias/mousepads?superficie=control",
           image: "/media/mega-menu/mousepad/producto-2-angulo-1.png",
-        },
-        {
-          title: "Speed",
-          href: "/categorias/mousepads?superficie=speed",
-          image: "/media/mega-menu/mousepad/producto-3-angulo-1.png",
-        },
-        {
-          title: "Deskmat XXL",
-          href: "/categorias/mousepads?tamano=xxl",
-          image: "/media/mega-menu/mousepad/producto-4-angulo-1.png",
+          badge: "Nuevo",
         },
       ],
       sections: [

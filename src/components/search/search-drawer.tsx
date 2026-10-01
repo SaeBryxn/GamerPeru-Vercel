@@ -4,16 +4,9 @@ import React, { useId, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  AnimatePresence,
-  motion,
-  useMotionValue,
-  useSpring,
-  type Transition,
-  type Variants,
-} from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Mic, Package, Search, X } from "lucide-react";
-import { CloseButton, Icon } from "@/components/ui";
+import { CloseButton, FloatingClose, Icon, useFloatingClose } from "@/components/ui";
 import { getQueryCodePointLength } from "@/lib/search/normalization";
 import { MIN_SEARCH_QUERY_LENGTH } from "@/lib/search/types";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -42,10 +35,6 @@ const SECTION_VARIANTS: Variants = {
   visible: { opacity: 1, x: 0, transition: { duration: 0.5, ease: EASE_OUT_EXPO } },
 };
 
-// The floating close button trails the cursor with a light, quick spring.
-const FOLLOW_SPRING = { stiffness: 700, damping: 45, mass: 0.35 } as const;
-const FLOATING_FADE: Transition = { duration: 0.22, ease: EASE_OUT_EXPO };
-
 export interface SearchDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -68,12 +57,7 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
   isOpenRef.current = isOpen;
 
   const [query, setQuery] = useState("");
-  const [showFloatingClose, setShowFloatingClose] = useState(false);
-
-  const pointerX = useMotionValue(0);
-  const pointerY = useMotionValue(0);
-  const followX = useSpring(pointerX, FOLLOW_SPRING);
-  const followY = useSpring(pointerY, FOLLOW_SPRING);
+  const floatingClose = useFloatingClose();
 
   const voice = useVoiceSearch(setQuery);
   const predictive = usePredictiveSearch(query);
@@ -95,7 +79,7 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
 
   const close = () => {
     voice.stop();
-    setShowFloatingClose(false);
+    floatingClose.hide();
     onClose();
   };
 
@@ -133,21 +117,6 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
     inputRef.current?.focus();
   };
 
-  // Mouse only: the floating button replaces the cursor over the backdrop.
-  const handleOverlayPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== "mouse") return;
-    if (!showFloatingClose) {
-      pointerX.jump(e.clientX);
-      pointerY.jump(e.clientY);
-      followX.jump(e.clientX);
-      followY.jump(e.clientY);
-      setShowFloatingClose(true);
-      return;
-    }
-    pointerX.set(e.clientX);
-    pointerY.set(e.clientY);
-  };
-
   return (
     <dialog
       ref={dialogRef}
@@ -161,10 +130,9 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
         {isOpen && (
           <motion.div
             key="overlay"
-            className={styles.overlay}
+            {...floatingClose.targetProps}
+            className={`${styles.overlay} ${floatingClose.targetProps.className}`}
             onClick={close}
-            onPointerMove={handleOverlayPointerMove}
-            onPointerLeave={() => setShowFloatingClose(false)}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, transition: { duration: 0.4 } }}
             exit={{ opacity: 0, transition: { duration: 0.4, delay: 0.05 } }}
@@ -275,28 +243,15 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
         )}
       </AnimatePresence>
       {/*
-        Decorative: clicks pass through to the backdrop, which closes the panel.
-        Keyboard and screen reader users get the header close button. It has its
-        own presence because it toggles while the panel is open (the panel sliding
-        under the cursor fires pointerleave); sharing the panel's presence made its
-        exit run handleExitComplete and close the dialog mid-entrance.
+        Kept outside the panel's AnimatePresence: it toggles while the panel is open (the panel
+        sliding under the cursor fires pointerleave), and its exit must not run
+        handleExitComplete and close the dialog mid-entrance.
       */}
-      <AnimatePresence>
-        {isOpen && showFloatingClose && (
-          <motion.div
-            key="floating-close"
-            className={styles.floatingClose}
-            style={{ x: followX, y: followY }}
-            initial={{ opacity: 0, scale: 0.6 }}
-            animate={{ opacity: 1, scale: 1, transition: FLOATING_FADE }}
-            exit={{ opacity: 0, scale: 0.6, transition: FLOATING_FADE }}
-            aria-hidden="true"
-            data-testid="search-drawer-floating-close"
-          >
-            <Icon icon={X} size="lg" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <FloatingClose
+        state={floatingClose}
+        active={isOpen}
+        data-testid="search-drawer-floating-close"
+      />
     </dialog>
   );
 }
