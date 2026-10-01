@@ -1,0 +1,65 @@
+.container {
+  width: 100%;
+  max-width: var(--container-default);
+  margin: 0 auto;
+  padding: 0 var(--space-4) var(--space-20);
+}
+
+/* Content takes roughly 70% and the side column 30%; on mobile the column follows the content. */
+.asymmetric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-10);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.aside {
+  min-width: 0;
+}
+
+.asideCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.asideTitle {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+}
+
+.asideText {
+  margin: 0 0 var(--space-4);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+@media (min-width: 1024px) {
+  .container {
+    padding-left: var(--space-8);
+    padding-right: var(--space-8);
+  }
+
+  .asymmetric {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+    gap: var(--space-12);
+    align-items: start;
+  }
+
+  /* Rides along while the long column scrolls; the header is not sticky, so a small gap is enough. */
+  .aside {
+    position: sticky;
+    top: var(--space-8);
+  }
+}

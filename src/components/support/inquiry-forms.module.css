@@ -1,4 +1,6 @@
+/* Rows answer the form's own width, so it works in a page column or a narrow side column. */
 .form {
+  container-type: inline-size;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -9,6 +11,15 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-5);
+}
+
+.compact {
+  gap: var(--space-3);
+}
+
+.compact .submit {
+  align-self: stretch;
+  min-width: 0;
 }
 
 .submit {
@@ -63,12 +74,13 @@
   line-height: 1.6;
 }
 
-@media (max-width: 639px) {
+@container (max-width: 480px) {
   .row {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .submit {
     align-self: stretch;
+    min-width: 0;
   }
 }

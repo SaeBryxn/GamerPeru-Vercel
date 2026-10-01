@@ -3,10 +3,10 @@
 import React, { useId, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Plus } from "lucide-react";
-import type { FaqItem } from "@/content/support/faq";
+import type { FaqGroup, FaqItem } from "@/content/support/faq";
 import styles from "./faq-accordion.module.css";
 
-const OPEN_TRANSITION = { duration: 0.32, ease: [0.16, 1, 0.3, 1] } as const;
+const OPEN_TRANSITION = { duration: 0.34, ease: [0.16, 1, 0.3, 1] } as const;
 
 function FaqRow({ item }: { item: FaqItem }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -14,7 +14,7 @@ function FaqRow({ item }: { item: FaqItem }) {
   const panelId = useId();
 
   return (
-    <div className={styles.row} data-open={isOpen || undefined}>
+    <div className={styles.row}>
       <h3 className={styles.heading}>
         <button
           type="button"
@@ -24,13 +24,14 @@ function FaqRow({ item }: { item: FaqItem }) {
           onClick={() => setIsOpen((open) => !open)}
         >
           <span>{item.question}</span>
+          {/* A quarter of a turn would only redraw the plus; 45° turns it into an x. */}
           <motion.span
             className={styles.icon}
             animate={{ rotate: isOpen ? 45 : 0 }}
             transition={reduceMotion ? { duration: 0 } : OPEN_TRANSITION}
             aria-hidden="true"
           >
-            <Plus size={18} />
+            <Plus size={16} strokeWidth={2} />
           </motion.span>
         </button>
       </h3>
@@ -57,13 +58,18 @@ function FaqRow({ item }: { item: FaqItem }) {
   );
 }
 
-/** Questions of one group; each opens independently so answers can be compared side by side. */
-export function FaqAccordion({ items }: { items: FaqItem[] }) {
+/** One category: an overline title and its questions, each opening on its own. */
+export function FaqAccordion({ group }: { group: FaqGroup }) {
   return (
-    <div className={styles.list}>
-      {items.map((item) => (
-        <FaqRow key={item.id} item={item} />
-      ))}
-    </div>
+    <section className={styles.group} aria-labelledby={`faq-${group.id}`}>
+      <h2 id={`faq-${group.id}`} className={styles.groupTitle}>
+        {group.title}
+      </h2>
+      <div className={styles.list}>
+        {group.items.map((item) => (
+          <FaqRow key={item.id} item={item} />
+        ))}
+      </div>
+    </section>
   );
 }

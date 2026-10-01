@@ -5,10 +5,6 @@
   padding: var(--space-16) var(--space-4);
 }
 
-.narrow {
-  max-width: var(--container-prose);
-}
-
 .sectionHeading {
   margin: 0 0 var(--space-3);
   font-family: var(--font-heading), sans-serif;
@@ -25,65 +21,32 @@
   color: var(--color-text-secondary);
 }
 
-/* Contact: company details on the left, the form on a raised card on the right. */
-.split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-12);
-}
-
 .formCard {
   padding: var(--space-8);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
   background-color: var(--color-surface-card);
-  box-shadow: 0 24px 60px -36px rgb(9 9 11 / 35%);
 }
 
-/* FAQ */
-.faqGroup + .faqGroup {
-  margin-top: var(--space-12);
+.moreLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
-.faqGroupTitle {
-  margin: 0 0 var(--space-2);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.moreLink:hover {
   color: var(--color-accent-red-soft);
 }
 
-.helpCard {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
-  margin-top: var(--space-16);
-  padding: var(--space-8);
-  border-radius: var(--radius-lg);
-  background-color: var(--color-surface-dark-canvas);
-  color: var(--color-text-dark-secondary);
-}
-
-.helpTitle {
-  margin: 0 0 var(--space-1);
-  font-family: var(--font-heading), sans-serif;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-text-dark-primary);
-}
-
-.helpText {
-  margin: 0;
-}
-
-.helpAction {
-  --dome-height: 48px;
-  --dome-radius: var(--radius-md);
-  --dome-border: transparent;
-  --dome-fill: var(--color-accent-red-soft);
+.moreLink:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 4px;
+  border-radius: var(--radius-xs);
 }
 
 /* Distributors */
@@ -166,12 +129,6 @@
     padding: var(--space-20) var(--space-8);
   }
 
-  .split {
-    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-    gap: var(--space-16);
-    align-items: start;
-  }
-
   .benefits {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -186,9 +143,5 @@
 @media (max-width: 639px) {
   .formCard {
     padding: var(--space-5);
-  }
-
-  .helpCard {
-    padding: var(--space-6);
   }
 }

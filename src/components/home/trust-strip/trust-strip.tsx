@@ -1,5 +1,5 @@
 import React from "react";
-import { BadgeCheck, Landmark, MessageCircle, Store, type LucideIcon } from "lucide-react";
+import { BadgeCheck, Landmark, MessageCircle, Store, Truck, type LucideIcon } from "lucide-react";
 import { Icon } from "@/components/ui";
 import styles from "./trust-strip.module.css";
 
@@ -8,6 +8,7 @@ const ICONS: Record<string, LucideIcon> = {
   payment: BadgeCheck,
   currency: Landmark,
   catalog: Store,
+  shipping: Truck,
 };
 
 export interface TrustItem {

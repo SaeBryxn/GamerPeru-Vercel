@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
-import { MessageCircle } from "lucide-react";
 import { FaqAccordion } from "@/components/support/faq-accordion";
-import { PageHero } from "@/components/support/page-hero";
+import { ContactForm } from "@/components/support/inquiry-forms";
 import { Reveal } from "@/components/support/reveal";
-import { DomeLink } from "@/components/ui";
+import { SupportAsideCard, SupportShell } from "@/components/support/support-shell";
 import { FAQ_GROUPS } from "@/content/support/faq";
-import styles from "@/components/support/support-pages.module.css";
 
 export const metadata: Metadata = {
   title: "Preguntas frecuentes | Gamer Perú",
   description:
-    "Pagos con Yape y Plin, verificación de comprobantes, seguimiento de pedidos, envíos y tu cuenta en Gamer Perú.",
+    "Compras con Yape y Plin, envíos y seguimiento, cambios y devoluciones, y soporte en Gamer Perú.",
   alternates: { canonical: "/soporte/preguntas-frecuentes" },
 };
 
@@ -38,44 +36,29 @@ function FaqJsonLd() {
 
 export default function PreguntasFrecuentesPage() {
   return (
-    <main id="main-content">
-      <FaqJsonLd />
-      <PageHero
-        eyebrow="Soporte"
-        title="Preguntas frecuentes"
-        description="Lo que más nos preguntan sobre pagos, pedidos, productos y tu cuenta."
-      />
-      <div className={`${styles.section} ${styles.narrow}`}>
-        {FAQ_GROUPS.map((group, index) => (
-          <Reveal
-            key={group.id}
-            as="section"
-            delay={index === 0 ? 0.1 : 0}
-            className={styles.faqGroup}
+    <SupportShell
+      hero={{
+        title: "¿Tienes una pregunta?",
+        description:
+          "Reunimos aquí lo que más nos consultan sobre compras, envíos, devoluciones y soporte. Si no encuentras tu respuesta, escríbenos.",
+      }}
+      aside={
+        <Reveal delay={0.15}>
+          <SupportAsideCard
+            title="¿No encontraste tu respuesta?"
+            text="Escríbenos y te respondemos al correo que nos dejes."
           >
-            <h2 id={group.id} className={styles.faqGroupTitle}>
-              {group.title}
-            </h2>
-            <FaqAccordion items={group.items} />
-          </Reveal>
-        ))}
-
-        <Reveal className={styles.helpCard}>
-          <div>
-            <p className={styles.helpTitle}>¿No encontraste tu respuesta?</p>
-            <p className={styles.helpText}>Escríbenos y te ayudamos con tu caso.</p>
-          </div>
-          <DomeLink
-            href="/soporte/contacto"
-            tone="light"
-            domeRise="-60%"
-            className={styles.helpAction}
-          >
-            <MessageCircle size={16} aria-hidden="true" />
-            Ir a contacto
-          </DomeLink>
+            <ContactForm variant="compact" />
+          </SupportAsideCard>
         </Reveal>
-      </div>
-    </main>
+      }
+    >
+      <FaqJsonLd />
+      {FAQ_GROUPS.map((group, index) => (
+        <Reveal key={group.id} delay={index === 0 ? 0.1 : 0}>
+          <FaqAccordion group={group} />
+        </Reveal>
+      ))}
+    </SupportShell>
   );
 }

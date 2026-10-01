@@ -78,8 +78,13 @@ function TrapAndTimer() {
   );
 }
 
-export function ContactForm() {
+/**
+ * `full` for the contact page; `compact` for side columns: name, email and message only, labels
+ * carried by the placeholders, and the topic fixed to a general inquiry.
+ */
+export function ContactForm({ variant = "full" }: { variant?: "full" | "compact" }) {
   const [state, formAction, isPending] = useActionState(submitContactInquiryAction, INITIAL_STATE);
+  const isCompact = variant === "compact";
 
   if (state.status === "success") {
     return (
@@ -91,49 +96,88 @@ export function ContactForm() {
   }
 
   return (
-    <form action={formAction} className={styles.form} noValidate>
+    <form
+      action={formAction}
+      className={isCompact ? `${styles.form} ${styles.compact}` : styles.form}
+      noValidate
+    >
       <TrapAndTimer />
-      <div className={styles.row}>
-        <InquiryInput
-          label="Nombre"
-          name="name"
-          autoComplete="name"
-          required
-          error={fieldError(state, "name")}
-        />
-        <InquiryInput
-          label="Correo electrónico"
-          name="email"
-          type="email"
-          autoComplete="email"
-          required
-          error={fieldError(state, "email")}
-        />
-      </div>
-      <div className={styles.row}>
-        <InquiryInput
-          label="Teléfono"
-          name="phone"
-          type="tel"
-          autoComplete="tel"
-          error={fieldError(state, "phone")}
-        />
-        <InquirySelect
-          label="Tema"
-          name="topic"
-          required
-          placeholder="Elige un tema"
-          options={CONTACT_TOPICS}
-          error={fieldError(state, "topic")}
-        />
-      </div>
-      <InquiryTextarea
-        label="Mensaje"
-        name="message"
-        required
-        placeholder="Cuéntanos en qué te ayudamos. Si es sobre un pedido, incluye su número."
-        error={fieldError(state, "message")}
-      />
+      {isCompact ? (
+        <>
+          <input type="hidden" name="topic" value={CONTACT_TOPICS[CONTACT_TOPICS.length - 1]} />
+          <InquiryInput
+            label="Nombre"
+            placeholder="Nombre"
+            name="name"
+            autoComplete="name"
+            required
+            hideLabel
+            error={fieldError(state, "name")}
+          />
+          <InquiryInput
+            label="Correo electrónico"
+            placeholder="Correo electrónico"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            hideLabel
+            error={fieldError(state, "email")}
+          />
+          <InquiryTextarea
+            label="Mensaje"
+            placeholder="Mensaje"
+            name="message"
+            required
+            hideLabel
+            error={fieldError(state, "message")}
+          />
+        </>
+      ) : (
+        <>
+          <div className={styles.row}>
+            <InquiryInput
+              label="Nombre"
+              name="name"
+              autoComplete="name"
+              required
+              error={fieldError(state, "name")}
+            />
+            <InquiryInput
+              label="Correo electrónico"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              error={fieldError(state, "email")}
+            />
+          </div>
+          <div className={styles.row}>
+            <InquiryInput
+              label="Teléfono"
+              name="phone"
+              type="tel"
+              autoComplete="tel"
+              error={fieldError(state, "phone")}
+            />
+            <InquirySelect
+              label="Tema"
+              name="topic"
+              required
+              placeholder="Elige un tema"
+              options={CONTACT_TOPICS}
+              error={fieldError(state, "topic")}
+            />
+          </div>
+          <InquiryTextarea
+            label="Mensaje"
+            name="message"
+            required
+            placeholder="Cuéntanos en qué te ayudamos. Si es sobre un pedido, incluye su número."
+            error={fieldError(state, "message")}
+          />
+        </>
+      )}
       <FormError state={state} />
       <DomeButton tone="dark" type="submit" className={styles.submit} disabled={isPending}>
         {isPending ? "Enviando..." : "Enviar mensaje"}

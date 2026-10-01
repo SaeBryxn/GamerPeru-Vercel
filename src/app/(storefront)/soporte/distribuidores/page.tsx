@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { Boxes, Handshake, Headset, LineChart, PackageCheck, Sparkles } from "lucide-react";
 import { loadShowcaseProducts } from "@/components/home/home-catalog";
+import { TrustStrip } from "@/components/home/trust-strip/trust-strip";
 import { DistributorHero } from "@/components/support/distributor-hero";
 import { DistributorForm } from "@/components/support/inquiry-forms";
 import { Reveal } from "@/components/support/reveal";
+import { SUPPORT_TRUST_ITEMS } from "@/content/support/trust";
 import styles from "@/components/support/support-pages.module.css";
 
 export const metadata: Metadata = {
@@ -97,6 +99,8 @@ export default async function DistribuidoresPage() {
           </Reveal>
         </div>
       </section>
+
+      <TrustStrip items={SUPPORT_TRUST_ITEMS} />
     </main>
   );
 }

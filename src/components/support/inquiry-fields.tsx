@@ -7,6 +7,8 @@ interface FieldShellProps {
   required?: boolean;
   hint?: string;
   className?: string;
+  /** Keeps the label for assistive technology while the placeholder carries it visually. */
+  hideLabel?: boolean;
   children: (props: {
     id: string;
     "aria-invalid"?: true;
@@ -16,7 +18,15 @@ interface FieldShellProps {
 }
 
 /** Label, sunken control and error line, wired for assistive technology. */
-function FieldShell({ label, error, required, hint, className, children }: FieldShellProps) {
+function FieldShell({
+  label,
+  error,
+  required,
+  hint,
+  className,
+  hideLabel,
+  children,
+}: FieldShellProps) {
   const id = useId();
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
@@ -24,7 +34,7 @@ function FieldShell({ label, error, required, hint, className, children }: Field
 
   return (
     <div className={[styles.field, className].filter(Boolean).join(" ")}>
-      <label htmlFor={id} className={styles.label}>
+      <label htmlFor={id} className={hideLabel ? styles.visuallyHidden : styles.label}>
         {label}
         {!required && <span className={styles.optional}> (opcional)</span>}
       </label>
@@ -48,7 +58,13 @@ function FieldShell({ label, error, required, hint, className, children }: Field
   );
 }
 
-type BaseProps = { label: string; error?: string; hint?: string; className?: string };
+type BaseProps = {
+  label: string;
+  error?: string;
+  hint?: string;
+  className?: string;
+  hideLabel?: boolean;
+};
 
 export function InquiryInput({
   label,
@@ -56,10 +72,18 @@ export function InquiryInput({
   hint,
   className,
   required,
+  hideLabel,
   ...rest
 }: BaseProps & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <FieldShell label={label} error={error} hint={hint} required={required} className={className}>
+    <FieldShell
+      label={label}
+      error={error}
+      hint={hint}
+      required={required}
+      className={className}
+      hideLabel={hideLabel}
+    >
       {(control) => <input {...rest} {...control} required={required} />}
     </FieldShell>
   );
@@ -71,10 +95,18 @@ export function InquiryTextarea({
   hint,
   className,
   required,
+  hideLabel,
   ...rest
 }: BaseProps & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
-    <FieldShell label={label} error={error} hint={hint} required={required} className={className}>
+    <FieldShell
+      label={label}
+      error={error}
+      hint={hint}
+      required={required}
+      className={className}
+      hideLabel={hideLabel}
+    >
       {(control) => (
         <textarea
           rows={5}

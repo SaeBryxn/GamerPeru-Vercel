@@ -18,15 +18,22 @@ export interface FaqGroup {
 
 export const FAQ_GROUPS: FaqGroup[] = [
   {
-    id: "compras-y-pagos",
-    title: "Compras y pagos",
+    id: "compras",
+    title: "Compras",
     items: [
+      {
+        id: "como-comprar",
+        question: "¿Cómo hago un pedido?",
+        answer: [
+          "Elige tu producto y su variante, añádelo al carrito y finaliza la compra con tus datos y tu dirección de entrega. Al terminar verás las instrucciones de pago.",
+        ],
+      },
       {
         id: "metodos-de-pago",
         question: "¿Qué métodos de pago aceptan?",
         answer: [
           "Aceptamos Yape y Plin. Todos los precios de la tienda están en soles (S/).",
-          "Al finalizar tu compra verás las instrucciones de pago y podrás subir la captura de tu comprobante desde la misma página.",
+          "Al finalizar tu compra podrás subir la captura de tu comprobante desde la misma página.",
         ],
       },
       {
@@ -34,7 +41,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         question: "¿Cuándo queda confirmado mi pago?",
         answer: [
           "Nuestro equipo revisa cada comprobante manualmente. Subir la captura no confirma el pago por sí solo: tu pedido avanza cuando verificamos que el monto llegó a nuestra cuenta.",
-          "Puedes seguir el estado en la página de confirmación de tu pedido o, si tienes cuenta, en Mis pedidos. Si dejaste tu correo, también te avisamos por ahí.",
+          "Si dejaste tu correo, te avisamos cuando el pago queda aprobado.",
         ],
       },
       {
@@ -44,26 +51,12 @@ export const FAQ_GROUPS: FaqGroup[] = [
           "No es obligatorio. Con una cuenta guardas tus direcciones, ves el historial de tus pedidos y puedes guardar productos en Favoritos.",
         ],
       },
-      {
-        id: "comprobante-rechazado",
-        question: "¿Qué pasa si hay un problema con mi comprobante?",
-        answer: [
-          "Si no podemos verificarlo (por ejemplo, el monto no coincide o la imagen no se lee), te lo indicaremos para que envíes uno nuevo. Si tienes dudas, escríbenos desde la página de Contacto con el número de tu pedido.",
-        ],
-      },
     ],
   },
   {
-    id: "pedidos-y-envios",
-    title: "Pedidos y envíos",
+    id: "envios",
+    title: "Envíos",
     items: [
-      {
-        id: "seguimiento",
-        question: "¿Cómo sigo mi pedido?",
-        answer: [
-          "Cada pedido tiene un número y una página con su estado: pago en verificación, preparación y envío. Con cuenta lo encuentras en Mis pedidos.",
-        ],
-      },
       {
         id: "envios",
         question: "¿Hacen envíos?",
@@ -72,50 +65,78 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ],
       },
       {
+        id: "cuando-se-envia",
+        question: "¿Cuándo se envía mi pedido?",
+        answer: [
+          "Preparamos el pedido una vez que verificamos tu pago. A partir de ahí, su estado se actualiza en la página del pedido.",
+        ],
+      },
+      {
+        id: "seguimiento",
+        question: "¿Cómo sigo mi pedido?",
+        answer: [
+          "Cada pedido tiene un número y una página con su estado: pago en verificación, preparación y envío. Con cuenta lo encuentras en Mis pedidos.",
+        ],
+      },
+      {
         id: "cambiar-pedido",
         question: "¿Puedo modificar o cancelar un pedido?",
         answer: [
-          "Escríbenos lo antes posible desde Contacto con el número del pedido. Mientras el pedido no se haya preparado, es más sencillo ajustarlo.",
+          "Escríbenos lo antes posible con el número del pedido. Mientras no se haya preparado, es más sencillo ajustarlo.",
         ],
       },
     ],
   },
   {
-    id: "productos",
-    title: "Productos",
+    id: "devoluciones",
+    title: "Devoluciones",
     items: [
       {
-        id: "marcas",
-        question: "¿Qué marcas venden?",
+        id: "solicitar-devolucion",
+        question: "¿Cómo solicito un cambio o una devolución?",
         answer: [
-          "Somos una tienda multimarca de periféricos gaming: mouses, mousepads y accesorios. Puedes ver todas las marcas disponibles en el menú Productos.",
+          "Escríbenos con el número de tu pedido y el motivo. Revisamos cada caso y te indicamos los pasos, conforme al Código de Protección y Defensa del Consumidor.",
+        ],
+      },
+      {
+        id: "producto-defectuoso",
+        question: "¿Qué hago si mi producto llegó dañado o no funciona?",
+        answer: [
+          "Escríbenos lo antes posible con el número del pedido, una descripción del problema y fotos o un video. Con eso revisamos el caso contigo.",
+        ],
+      },
+      {
+        id: "comprobante-rechazado",
+        question: "¿Qué pasa si hay un problema con mi comprobante?",
+        answer: [
+          "Si no podemos verificarlo (por ejemplo, el monto no coincide o la imagen no se lee), te lo indicaremos para que envíes uno nuevo.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "soporte",
+    title: "Soporte",
+    items: [
+      {
+        id: "contacto",
+        question: "¿Cómo contacto al equipo?",
+        answer: [
+          "Con el formulario de esta página o desde la página de Contacto. Si tu consulta es sobre un pedido, incluye su número.",
+        ],
+      },
+      {
+        id: "elegir-producto",
+        question: "¿Me ayudan a elegir un producto?",
+        answer: [
+          "Sí. Cuéntanos qué juegas, el tamaño de tu mano y tu forma de agarre, y te recomendamos opciones del catálogo.",
         ],
       },
       {
         id: "stock",
         question: "¿Cómo sé si un producto está disponible?",
         answer: [
-          "La página de cada producto indica si puedes añadirlo al carrito. Si una variante no está disponible, el botón lo indica. Para consultas de reposición, escríbenos.",
-        ],
-      },
-      {
-        id: "elegir-producto",
-        question: "¿Me ayudan a elegir?",
-        answer: [
-          "Sí. Cuéntanos qué juegas, el tamaño de tu mano y tu forma de agarre desde Contacto o por WhatsApp, y te recomendamos opciones del catálogo.",
-        ],
-      },
-    ],
-  },
-  {
-    id: "cuenta",
-    title: "Tu cuenta",
-    items: [
-      {
-        id: "favoritos",
-        question: "¿Cómo guardo productos para después?",
-        answer: [
-          "Toca el corazón en cualquier producto. Con tu sesión iniciada, los encontrarás en Mi cuenta → Favoritos.",
+          "La página de cada producto indica si puedes añadirlo al carrito. Para consultas de reposición, escríbenos.",
         ],
       },
       {

@@ -1,9 +1,22 @@
-.list {
-  border-top: 1px solid var(--color-border-subtle);
+.group {
+  padding: var(--space-8) var(--space-8) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-card);
 }
 
-.row {
-  border-bottom: 1px solid var(--color-border-subtle);
+.groupTitle {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-heading), sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+}
+
+.row + .row {
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .heading {
@@ -14,23 +27,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-6);
   width: 100%;
   padding: var(--space-5) 0;
   border: none;
   background: transparent;
   color: var(--color-text-primary);
-  font-family: var(--font-heading), sans-serif;
-  font-size: 1.0625rem;
+  font-family: var(--font-body), sans-serif;
+  font-size: 0.9375rem;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.45;
   text-align: left;
   cursor: pointer;
   transition: color var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
 .trigger:hover,
-.row[data-open] .trigger {
+.trigger[aria-expanded="true"] {
   color: var(--color-accent-red-soft);
 }
 
@@ -43,12 +56,6 @@
 .icon {
   display: inline-flex;
   flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-full);
-  background-color: var(--color-surface-secondary);
   color: var(--color-text-primary);
 }
 
@@ -60,10 +67,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: 0 var(--space-12) var(--space-6) 0;
-  color: var(--color-text-secondary);
+  padding: 0 var(--space-10) var(--space-5) 0;
   font-size: 0.9375rem;
   line-height: 1.7;
+  color: var(--color-text-secondary);
 }
 
 .answer p {
@@ -71,8 +78,8 @@
 }
 
 @media (max-width: 639px) {
-  .trigger {
-    font-size: 1rem;
+  .group {
+    padding: var(--space-6) var(--space-5) var(--space-2);
   }
 
   .answer {
