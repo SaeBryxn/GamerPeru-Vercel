@@ -333,7 +333,7 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
 
     // Summary clears live
     await expect(summary).toHaveCount(0);
-    await expect(card).toContainText("Contenido guardado");
+    await expect(card).toContainText("Bloque completo");
 
     // Save succeeds
     await saveBtn.click();

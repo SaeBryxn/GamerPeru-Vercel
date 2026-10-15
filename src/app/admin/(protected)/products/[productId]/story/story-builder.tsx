@@ -43,7 +43,6 @@ import {
   normalizeEditorStoryDocument,
   removeEditorBlock,
   resolveTargetFromIssuePath,
-  STORY_BLOCK_LIBRARY,
   STORY_BUILDER_MAX_BLOCKS,
   type EditorStoryBlock,
   type StoryBlockType,
@@ -59,6 +58,13 @@ import type {
   AuthoringStoryDocument,
   StoryValidationIssue,
 } from "@/lib/admin/catalog/story-validation";
+import {
+  BLOCK_LIBRARY_GROUPS,
+  BLOCK_REQUIREMENTS,
+  STARTER_BLOCK_TYPES,
+  STORY_FLOW_STEPS,
+} from "./block-library-guide";
+import { BlockWireframe } from "./block-wireframe";
 import { MediaPickerDialog } from "./media-picker-dialog";
 import { RelatedProductPickerDialog } from "./related-product-picker-dialog";
 import { ValidationSummary } from "./validation-summary";
@@ -1567,9 +1573,10 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
               <FileText size={30} aria-hidden="true" />
               <h3>La historia está vacía</h3>
               <p>
-                Puedes guardar un borrador vacío o agregar el primer bloque para configurar su
-                contenido estructurado.
+                La historia es la parte de la página del producto que cuenta sus ventajas con
+                imágenes y texto. Se arma apilando bloques, en tres pasos:
               </p>
+              <FlowSteps activeStep={0} />
               <button
                 type="button"
                 className={styles.primaryButton}
@@ -1581,6 +1588,24 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
                 <Plus size={17} aria-hidden="true" />
                 Agregar primer bloque
               </button>
+              <p className={styles.starterHint}>O empieza con uno de los más usados:</p>
+              <div className={styles.starterGrid}>
+                {STARTER_BLOCK_TYPES.map((type) => {
+                  const definition = getStoryBlockDefinition(type);
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      className={styles.starterOption}
+                      onClick={() => addBlock(type)}
+                      aria-label={`Empezar con ${definition.label}`}
+                    >
+                      <BlockWireframe type={type} />
+                      <strong>{definition.label}</strong>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <ol className={styles.blockList} data-testid="story-block-list">
@@ -1610,12 +1635,15 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
                       data-block-id={blockId}
                     >
                       <div className={styles.blockHeader}>
-                        <div>
-                          <span className={styles.blockPosition}>
-                            Bloque {position} de {document.length}
-                          </span>
-                          <h3>{definition.label}</h3>
-                          <p>{definition.description}</p>
+                        <div className={styles.blockIdentity}>
+                          <BlockWireframe type={type} className={styles.blockThumb} />
+                          <div>
+                            <span className={styles.blockPosition}>
+                              Bloque {position} de {document.length}
+                            </span>
+                            <h3>{definition.label}</h3>
+                            <p>{definition.description}</p>
+                          </div>
                         </div>
                         <div className={styles.blockHeaderToggle}>
                           <span
@@ -1627,7 +1655,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
                           >
                             {incompleteBlockIds.has(blockId)
                               ? "Configuración pendiente"
-                              : "Contenido guardado"}
+                              : "Bloque completo"}
                           </span>
                           <button
                             type="button"
@@ -1729,7 +1757,9 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
             <div className={styles.modalHeader}>
               <div>
                 <h2 id="story-library-title">Agregar bloque</h2>
-                <p>Elige un tipo de bloque estructurado para agregarlo a la historia.</p>
+                <p>
+                  Elige cómo quieres mostrar el producto. Cada dibujo es un boceto del resultado.
+                </p>
               </div>
               <button
                 type="button"
@@ -1743,20 +1773,35 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
                 <X size={20} aria-hidden="true" />
               </button>
             </div>
-            <div className={styles.libraryGrid}>
-              {STORY_BLOCK_LIBRARY.map((definition) => (
-                <button
-                  key={definition.type}
-                  type="button"
-                  className={styles.libraryOption}
-                  data-story-block-type={definition.type}
-                  onClick={() => addBlock(definition.type)}
-                >
-                  <strong>{definition.label}</strong>
-                  <span>{definition.description}</span>
-                </button>
-              ))}
-            </div>
+            <FlowSteps activeStep={0} />
+            {BLOCK_LIBRARY_GROUPS.map((group) => (
+              <section key={group.title} className={styles.libraryGroup} aria-label={group.title}>
+                <h3 className={styles.libraryGroupTitle}>{group.title}</h3>
+                <div className={styles.libraryGrid}>
+                  {group.types.map((type) => {
+                    const definition = getStoryBlockDefinition(type);
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        className={styles.libraryOption}
+                        data-story-block-type={type}
+                        onClick={() => addBlock(type)}
+                      >
+                        <BlockWireframe type={type} className={styles.libraryWireframe} />
+                        <span className={styles.libraryOptionText}>
+                          <strong>{definition.label}</strong>
+                          <span>{definition.description}</span>
+                          <span className={styles.libraryNeeds}>
+                            Necesitas: {BLOCK_REQUIREMENTS[type]}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
         </div>
       )}
@@ -1859,5 +1904,25 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
         </div>
       )}
     </div>
+  );
+}
+
+function FlowSteps({ activeStep }: { activeStep: number }): React.JSX.Element {
+  return (
+    <ol className={styles.flowSteps} aria-label="Pasos para armar la historia">
+      {STORY_FLOW_STEPS.map((step, index) => (
+        <li
+          key={step.title}
+          className={index === activeStep ? styles.flowStepActive : styles.flowStep}
+          aria-current={index === activeStep ? "step" : undefined}
+        >
+          <span className={styles.flowStepNumber}>{index + 1}</span>
+          <span className={styles.flowStepText}>
+            <strong>{step.title}</strong>
+            <span>{step.detail}</span>
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }

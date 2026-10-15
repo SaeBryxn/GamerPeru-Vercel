@@ -672,25 +672,102 @@
   background-color: var(--color-surface-card, var(--admin-panel));
 }
 
+.flowSteps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+  margin: 1rem 0 0;
+  padding: 0;
+  text-align: left;
+}
+
+.flowStep,
+.flowStepActive {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-subtle, var(--color-border-default));
+  border-radius: var(--radius-md, 0.5rem);
+  color: var(--color-text-secondary);
+}
+
+.flowStepActive {
+  border-color: var(--admin-accent);
+  background-color: var(--admin-accent-soft);
+  color: var(--color-text-primary);
+}
+
+.flowStepNumber {
+  flex: 0 0 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.flowStepActive .flowStepNumber {
+  border-color: var(--admin-accent);
+  background-color: var(--admin-accent);
+  color: var(--color-surface-card, var(--admin-panel));
+}
+
+.flowStepText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.flowStepText strong {
+  font-size: 0.8125rem;
+}
+
+.flowStepText span {
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.libraryGroup {
+  margin-top: 1.25rem;
+}
+
+.libraryGroupTitle {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .libraryGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 0.625rem;
-  margin-top: 1rem;
+  margin-top: 0.625rem;
 }
 
 .libraryOption {
-  min-height: 92px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.375rem;
-  padding: 0.875rem;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.75rem;
   text-align: left;
   color: var(--color-text-primary, var(--color-text-primary));
   background-color: var(--color-surface-card, var(--admin-panel));
   border: 1px solid var(--color-border-subtle, var(--color-border-default));
   border-radius: var(--radius-md, 0.5rem);
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .libraryOption:hover {
@@ -698,14 +775,78 @@
   background-color: var(--admin-accent-soft);
 }
 
-.libraryOption strong {
+.libraryWireframe {
+  background-color: var(--color-surface-card, var(--admin-panel));
+}
+
+.libraryOptionText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.libraryOptionText strong {
   font-size: 0.875rem;
 }
 
-.libraryOption span {
+.libraryOptionText span {
   color: var(--color-text-secondary, var(--color-text-secondary));
   font-size: 0.75rem;
   line-height: 1.45;
+}
+
+.libraryOptionText .libraryNeeds {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.starterHint {
+  margin: 0.75rem 0 0;
+}
+
+.starterGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 140px));
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.starterOption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  font: inherit;
+  font-size: 0.75rem;
+  text-align: center;
+  color: var(--color-text-primary);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 0.5rem);
+  cursor: pointer;
+}
+
+.starterOption:hover {
+  border-color: var(--admin-accent);
+  background-color: var(--admin-accent-soft);
+}
+
+.starterOption:focus-visible {
+  outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
+  outline-offset: 2px;
+}
+
+.blockIdentity {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+}
+
+.blockThumb {
+  flex: 0 0 84px;
+  width: 84px;
 }
 
 .modalActions {
@@ -1590,8 +1731,17 @@
   }
 
   .statusRegion,
-  .libraryGrid {
+  .libraryGrid,
+  .flowSteps {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .libraryOption {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .blockThumb {
+    display: none;
   }
 
   .documentPanel,
