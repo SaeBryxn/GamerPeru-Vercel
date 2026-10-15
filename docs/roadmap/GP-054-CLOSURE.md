@@ -64,6 +64,23 @@ período" with their selector, and every indicator with a destination is a link.
   invalid sections), links (inclusive Lima dates, permission filtering), attention items and
   links, all-clear state, quick action links and wireframes, health rows, unavailable home;
   reader permission gating for the new sections (`orders:manage` only vs. `catalog:manage` only).
+- **Production (`3648bcd`, Workers build completed 14:20:56 UTC), owner session, read-only:**
+  - Attention shows the live state: 1 order to prepare (`/admin/orders?orderStatus=CONFIRMED`),
+    2 unpaid (`?orderStatus=PENDING`), 1 out-of-stock SKU (`/admin/products?pending=stock`); the
+    payment item is omitted because the queue is 0.
+  - Quick actions link to `/admin/home`, `/admin/products`, `/admin/menu`, `/admin/orders`.
+  - Home status: 10 of 10 visible, 7 images to upload, 10 never edited (matches `home_sections`).
+  - Catalog health: 13 of 14 products with pending items, 1 with blockers; JINMS X7 Ultra Black
+    first ("Sube al menos una foto" → `#imagenes`), then warnings and story suggestions, each with
+    a descriptive link name ("Editar JINMS X7 Ultra Black en Fotos").
+  - Period links: "Pedidos pagados" opens
+    `/admin/orders?paymentStatus=PAID&from=2026-09-16&to=2026-10-15`, which lists exactly the 2
+    paid orders the dashboard counts.
+  - No console errors; no horizontal overflow at 409 px (mobile) or 1280 px (desktop); dark
+    (system preference) and light (attribute set in memory, preference not stored) both legible.
+  - **Defect found:** on phones each quick-action card showed a full-width schematic and the
+    block was 1332 px tall. Fixed with a 96 px thumbnail beside the text (494 px, verified by
+    injecting the CSS in memory); shipped in the follow-up commit.
 - E2E admin specs stay excluded from the default suite (they need a seeded database), as before;
   E13 (no fabricated metrics) is unaffected: every new figure is read from the database.
 
@@ -80,16 +97,14 @@ período" with their selector, and every indicator with a destination is a link.
   own commits: the story video control could miss a "play" event fired between hydration and
   its listener effect (now it reads the element state when it subscribes), and the bootstrap
   Axe audit sampled the social rail mid fade-in (it now waits for the rail to settle).
-- "Ver los N productos con pendientes" opens the full product list: the product list has no
-  filter for "any readiness issue".
+- "Ver los N productos con pendientes" opened the full product list in `3648bcd`; the follow-up
+  commit adds the `pending=issues` filter to `/admin/products` (same evaluation as the dashboard)
+  and points the link to it.
 
 ## Risks / Follow-ups
 
-- Visual QA on production (desktop and mobile, light and dark) after the owner pushes this
-  commit; the page needs an admin session and real data, so it was verified with unit tests and
-  component rendering only.
-- Follow-up: a product list filter for readiness issues, so the dashboard footer can link to
-  exactly those products.
+- The mobile quick-actions fix and the `pending=issues` filter need one more push to reach
+  production.
 
 ## Repository Status
 
@@ -97,4 +112,4 @@ Clean after the GP-054 commit; not pushed.
 
 ## Final Status
 
-PASS WITH NOTES (production visual QA pending the push).
+PASS (verified in production; the two follow-up fixes are committed and pending push).

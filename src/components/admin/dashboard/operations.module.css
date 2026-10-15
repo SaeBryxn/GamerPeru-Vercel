@@ -261,6 +261,21 @@ a.attentionCard:hover .attentionCta {
 }
 
 @media (max-width: 639px) {
+  /* A full-width schematic per card made the block over 1300px tall on phones. */
+  .actionCard {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    column-gap: var(--space-3);
+    row-gap: 2px;
+    align-items: start;
+  }
+
+  .actionThumb {
+    grid-row: 1 / span 2;
+    margin-bottom: 0;
+  }
+
   .healthRow {
     flex-direction: column;
     align-items: flex-start;
