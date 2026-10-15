@@ -1,22 +1,8 @@
 import { z } from "zod";
 import { logger } from "@/lib/logger";
+import { SafeString } from "@/lib/validation/safe-string";
 
 export const MAX_STORY_BLOCKS_PER_REVISION = 30;
-
-const NO_HTML_SCRIPT_REGEX = /<[^>]*>/;
-
-function isSafePlainText(val: string): boolean {
-  return !NO_HTML_SCRIPT_REGEX.test(val);
-}
-
-export const SafeString = (minLen: number, maxLen: number) =>
-  z
-    .string()
-    .min(minLen)
-    .max(maxLen)
-    .refine((val) => isSafePlainText(val), {
-      message: "Forbidden HTML tags or characters in text payload",
-    });
 
 // 1. HeroMedia (hero_media)
 export const HeroMediaPayloadSchema = z.object({

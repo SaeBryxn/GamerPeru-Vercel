@@ -57,6 +57,10 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
   }
 
   if (err instanceof CatalogDomainError) {
+    // Direct uploads and home sections write operator-facing Spanish messages at the source.
+    if (err.code.startsWith("DIRECT_UPLOAD_") || err.code.startsWith("HOME_SECTION_")) {
+      return { error: err.message, code: err.code };
+    }
     switch (err.code) {
       case "SLUG_CONFLICT":
         return {

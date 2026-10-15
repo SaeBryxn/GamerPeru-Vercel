@@ -1,21 +1,11 @@
 import React from "react";
 import type { StoryBlockType } from "@/lib/admin/catalog/story-builder-model";
-import styles from "./block-wireframe.module.css";
-
-/**
- * Shape kinds: `img` media placeholder, `play` video placeholder, `h` heading bar, `t` text
- * line, `btn` accent pill (button or badge), `box` outlined container, and `ho`/`to` heading and
- * text drawn on top of media.
- */
-type ShapeKind = "img" | "play" | "h" | "t" | "btn" | "box" | "ho" | "to";
-type Shape = readonly [kind: ShapeKind, x: number, y: number, width: number, height: number];
-
-const WIDTH = 120;
-const HEIGHT = 80;
-
-const columns = (xs: readonly number[], build: (x: number) => Shape[]): Shape[] =>
-  xs.flatMap(build);
-const rows = (ys: readonly number[], build: (y: number) => Shape[]): Shape[] => ys.flatMap(build);
+import {
+  Wireframe,
+  columns,
+  rows,
+  type WireframeShape as Shape,
+} from "@/components/admin/wireframe/wireframe";
 
 /** Schematic of how each block lays out on the published product page. */
 const WIREFRAMES: Record<StoryBlockType, readonly Shape[]> = {
@@ -107,53 +97,6 @@ const WIREFRAMES: Record<StoryBlockType, readonly Shape[]> = {
   ]),
 };
 
-function renderShape([kind, x, y, width, height]: Shape, index: number): React.JSX.Element {
-  switch (kind) {
-    case "img":
-    case "play":
-      return (
-        <g key={index}>
-          <rect x={x} y={y} width={width} height={height} rx={3} className={styles.media} />
-          {kind === "img" ? (
-            <path
-              d={`M${x} ${y + height} L${x + width * 0.36} ${y + height * 0.5} L${x + width * 0.56} ${y + height * 0.74} L${x + width * 0.72} ${y + height * 0.58} L${x + width} ${y + height} Z`}
-              className={styles.mediaDetail}
-            />
-          ) : (
-            <path
-              d={`M${x + width / 2 - 5} ${y + height / 2 - 7} L${x + width / 2 + 8} ${y + height / 2} L${x + width / 2 - 5} ${y + height / 2 + 7} Z`}
-              className={styles.mediaDetail}
-            />
-          )}
-        </g>
-      );
-    case "box":
-      return (
-        <rect
-          key={index}
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          rx={3}
-          className={styles.outline}
-        />
-      );
-    default:
-      return (
-        <rect
-          key={index}
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          rx={Math.min(height / 2, 3)}
-          className={styles[kind]}
-        />
-      );
-  }
-}
-
 export interface BlockWireframeProps {
   type: StoryBlockType;
   className?: string;
@@ -161,14 +104,5 @@ export interface BlockWireframeProps {
 
 /** Decorative: the block's label and description carry the meaning for assistive tech. */
 export function BlockWireframe({ type, className }: BlockWireframeProps): React.JSX.Element {
-  return (
-    <svg
-      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      className={[styles.wireframe, className].filter(Boolean).join(" ")}
-      aria-hidden="true"
-      focusable="false"
-    >
-      {WIREFRAMES[type].map(renderShape)}
-    </svg>
-  );
+  return <Wireframe shapes={WIREFRAMES[type]} className={className} />;
 }

@@ -89,13 +89,13 @@ describe("story image direct upload", () => {
         { productId: PRODUCT_ID, mimeType: "image/gif", fileSizeBytes: 10 },
         options
       )
-    ).rejects.toMatchObject({ code: "MEDIA_UNSUPPORTED_TYPE" });
+    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_UNSUPPORTED_TYPE" });
     await expect(
       requestStoryImageUpload(
         { productId: PRODUCT_ID, mimeType: "image/png", fileSizeBytes: 10485761 },
         options
       )
-    ).rejects.toMatchObject({ code: "MEDIA_SIZE_LIMIT_EXCEEDED" });
+    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_SIZE_LIMIT_EXCEEDED" });
     expect(adapter.generatePresignedPutUrl).not.toHaveBeenCalled();
   });
 

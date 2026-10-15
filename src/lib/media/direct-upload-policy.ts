@@ -81,18 +81,21 @@ function formatList(values: string[]): string {
 export function checkDirectUpload(
   purpose: DirectUploadPurpose,
   file: { type: string; size: number }
-): { code: "MEDIA_UNSUPPORTED_TYPE" | "MEDIA_SIZE_LIMIT_EXCEEDED"; message: string } | null {
+): {
+  code: "DIRECT_UPLOAD_UNSUPPORTED_TYPE" | "DIRECT_UPLOAD_SIZE_LIMIT_EXCEEDED";
+  message: string;
+} | null {
   const policy = DIRECT_UPLOAD_POLICIES[purpose];
   if (!Object.hasOwn(policy.mimeTypes, file.type)) {
     const formats = Object.values(policy.mimeTypes).map((ext) => ext.toUpperCase());
     return {
-      code: "MEDIA_UNSUPPORTED_TYPE",
+      code: "DIRECT_UPLOAD_UNSUPPORTED_TYPE",
       message: `Formato no admitido. Usa ${formatList(formats)}.`,
     };
   }
   if (!Number.isInteger(file.size) || file.size <= 0 || file.size > policy.maxBytes) {
     return {
-      code: "MEDIA_SIZE_LIMIT_EXCEEDED",
+      code: "DIRECT_UPLOAD_SIZE_LIMIT_EXCEEDED",
       message: `${policy.label} debe pesar como máximo ${policy.maxBytes / MB} MB.`,
     };
   }

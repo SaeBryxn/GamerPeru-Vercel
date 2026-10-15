@@ -12,6 +12,7 @@ import {
 } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { Icon, useCanHover } from "@/components/ui";
+import { useAutoplayAllowed, type HomeVideoSource } from "../home-video";
 import styles from "./video-hero.module.css";
 
 /** Background playback: muted, looping, chromeless, and privacy-enhanced host. */
@@ -47,7 +48,7 @@ export interface VideoHeroProps {
   heading: string;
   /** Label of the control that reveals the store. */
   scrollHintLabel: string;
-  youtubeVideoId: string;
+  video: HomeVideoSource;
   /** Element scrolled to when the hero is swiped or the chevron is used. */
   revealTargetId: string;
 }
@@ -56,14 +57,10 @@ export interface VideoHeroProps {
  * Full-viewport video stage. It behaves like a curtain: dragging it up (or
  * scrolling) lifts it away and reveals the store underneath.
  */
-export function VideoHero({
-  heading,
-  scrollHintLabel,
-  youtubeVideoId,
-  revealTargetId,
-}: VideoHeroProps) {
+export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: VideoHeroProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const prefersReducedMotion = useReducedMotion();
+  const autoplayAllowed = useAutoplayAllowed();
   // Touch screens scroll the curtain away natively: a drag gesture would fight the page scroll,
   // and a scroll-linked dim costs a paint per frame on the devices least able to afford it.
   const isTouch = !useCanHover();
@@ -131,15 +128,31 @@ export function VideoHero({
           Reduced-motion visitors get the still stage instead of the loop.
         */}
         <div className={styles.videoFrame} aria-hidden="true">
-          {!prefersReducedMotion && !isCovered && (
+          {video.kind === "youtube" && !prefersReducedMotion && !isCovered && (
             <iframe
               className={styles.video}
-              src={buildHeroEmbedSrc(youtubeVideoId)}
+              src={buildHeroEmbedSrc(video.videoId)}
               title="Video de portada de Gamer Perú"
               allow="autoplay; encrypted-media"
               referrerPolicy="strict-origin-when-cross-origin"
               tabIndex={-1}
               data-testid="video-hero-frame"
+            />
+          )}
+          {video.kind === "upload" && (
+            // The poster is the first paint; the file only plays while the stage is uncovered.
+            <video
+              key={autoplayAllowed && !isCovered ? "playing" : "still"}
+              className={styles.videoFile}
+              src={autoplayAllowed && !isCovered ? (video.src ?? undefined) : undefined}
+              poster={video.posterSrc ?? undefined}
+              autoPlay={autoplayAllowed}
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              tabIndex={-1}
+              data-testid="video-hero-file"
             />
           )}
         </div>

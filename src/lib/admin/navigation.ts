@@ -49,6 +49,14 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Árbol del catálogo: categorías y marcas",
   },
   {
+    id: "storefront-home",
+    label: "Home de la tienda",
+    href: "/admin/home",
+    iconName: "House",
+    requiredPermission: "catalog:manage",
+    description: "Secciones, textos, imágenes y videos de la portada",
+  },
+  {
     id: "storefront-menu",
     label: "Menú de la tienda",
     href: "/admin/menu",

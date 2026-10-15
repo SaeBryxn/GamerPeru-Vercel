@@ -194,6 +194,26 @@ test.describe("GP-010 Homepage — Sections, Hierarchy, Responsiveness & Accessi
     expect(hasHorizontalOverflow).toBe(false);
   });
 
+  test("L2: requests no hardcoded home images, so empty slots never produce 400s", async ({
+    page,
+  }) => {
+    const homeImageRequests: string[] = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      const imageParam = url.searchParams.get("url") ?? "";
+      if (url.pathname.startsWith("/images/home/") || imageParam.startsWith("/images/home/")) {
+        homeImageRequests.push(request.url());
+      }
+    });
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForLoadState("networkidle");
+
+    expect(homeImageRequests).toEqual([]);
+  });
+
   test("L: verifies zero runtime network requests to WLMOUSE or external media CDNs", async ({
     page,
   }) => {

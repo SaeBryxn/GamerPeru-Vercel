@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import styles from "./ai-admin.module.css";
 
@@ -13,6 +13,8 @@ interface ConfirmationDialogProps {
   tone?: "danger" | "warning";
   onConfirm: () => void;
   onClose: () => void;
+  /** Extra context shown under the description, such as a preview of the result. */
+  children?: ReactNode;
 }
 
 export function ConfirmationDialog({
@@ -24,6 +26,7 @@ export function ConfirmationDialog({
   tone = "danger",
   onConfirm,
   onClose,
+  children,
 }: ConfirmationDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -86,6 +89,7 @@ export function ConfirmationDialog({
         </button>
         <h2 id="confirmation-title">{title}</h2>
         <p id="confirmation-description">{description}</p>
+        {children}
         <div className={styles.dialogActions}>
           <button
             ref={cancelRef}

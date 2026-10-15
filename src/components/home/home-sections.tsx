@@ -2,7 +2,12 @@ import "server-only";
 import React from "react";
 import type { ProductDiscoveryItem } from "@/lib/catalog/types";
 import type { StorefrontHome } from "@/lib/home/read-home-sections";
-import type { HomeImageSlot, HomeSection } from "@/lib/home/section-schemas";
+import type {
+  HomeImageSlot,
+  HomeSection,
+  HomeVideoSourceContent,
+} from "@/lib/home/section-schemas";
+import type { HomeVideoSource } from "./home-video";
 import { BentoShowcase } from "./bento-showcase/bento-showcase";
 import { CatalogRail } from "./catalog-rail/catalog-rail";
 import { CommunityBanner } from "./community-banner/community-banner";
@@ -54,6 +59,11 @@ export async function HomeSections({ home, storeLayerClassName }: HomeSectionsPr
     src: slot.mediaAssetId ? (mediaUrls[slot.mediaAssetId] ?? null) : null,
     alt: slot.alt,
   });
+  const url = (assetId: string) => mediaUrls[assetId] ?? null;
+  const video = (source: HomeVideoSourceContent): HomeVideoSource =>
+    source.kind === "youtube"
+      ? source
+      : { kind: "upload", src: url(source.videoAssetId), posterSrc: url(source.posterAssetId) };
   const anchor = createAnchorAllocator();
   const storeLayerId = "tienda";
 
@@ -67,7 +77,7 @@ export async function HomeSections({ home, storeLayerClassName }: HomeSectionsPr
         <VideoHero
           heading={hero.content.heading}
           scrollHintLabel={hero.content.scrollHintLabel}
-          youtubeVideoId={hero.content.video.videoId}
+          video={video(hero.content.video)}
           revealTargetId={storeLayerId}
         />
       )}
@@ -92,7 +102,7 @@ export async function HomeSections({ home, storeLayerClassName }: HomeSectionsPr
               return (
                 <FeatureVideo
                   key={section.id}
-                  videoId={section.content.video.videoId}
+                  video={video(section.content.video)}
                   eyebrow={section.content.eyebrow}
                   title={section.content.title}
                   subtitle={section.content.subtitle}

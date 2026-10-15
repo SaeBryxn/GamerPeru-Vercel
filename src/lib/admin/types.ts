@@ -16,7 +16,8 @@ export interface AdminNavItem {
     | "Bot"
     | "Settings2"
     | "Tags"
-    | "Menu";
+    | "Menu"
+    | "House";
   requiredPermission?: PermissionName;
   description?: string;
 }

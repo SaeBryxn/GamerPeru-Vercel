@@ -60,7 +60,7 @@ describe("Video hero", () => {
       <VideoHero
         heading="Periféricos gaming de alto rendimiento"
         scrollHintLabel="Desliza para ver la tienda"
-        youtubeVideoId="2gX-vyQwHsA"
+        video={{ kind: "youtube", videoId: "2gX-vyQwHsA" }}
         revealTargetId="destacado"
       />
     );
@@ -182,7 +182,7 @@ describe("Feature video", () => {
     const user = userEvent.setup();
     render(
       <FeatureVideo
-        videoId="3nAqLAV8JN0"
+        video={{ kind: "youtube", videoId: "3nAqLAV8JN0" }}
         eyebrow="Nueva generación"
         title="ATK A9 PRO MAX"
         subtitle="El mouse insignia de ATK, disponible en Gamer Perú."

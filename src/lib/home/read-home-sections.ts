@@ -1,6 +1,6 @@
 import "server-only";
 import { asc, eq, inArray } from "drizzle-orm";
-import { unstable_cache } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { db } from "@/db";
 import { homeSectionMedia, homeSections, mediaAssets, type HomeSectionType } from "@/db/schema";
 import { CATALOG_REVALIDATE_SECONDS, isCatalogCacheEnabled } from "@/lib/catalog/catalog-cache";
@@ -16,6 +16,12 @@ import {
 } from "./section-schemas";
 
 export const HOME_CACHE_TAG = "storefront-home";
+
+/** Makes an operator change visible at once: expires the cached sections and the home page. */
+export function revalidateStorefrontHome(): void {
+  revalidateTag(HOME_CACHE_TAG, { expire: 0 });
+  revalidatePath("/");
+}
 
 export interface StorefrontHome {
   /** Visible sections in render order; the hero, when present, is first. */

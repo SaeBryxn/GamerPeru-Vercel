@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Bot,
   CheckCircle,
+  House,
   LayoutDashboard,
   Menu,
   Package,
@@ -42,6 +43,7 @@ export function AdminMobileNav({
     Settings2,
     Tags,
     Menu,
+    House,
   };
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);

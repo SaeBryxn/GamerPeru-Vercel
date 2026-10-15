@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SafeString } from "@/lib/catalog/story-validation";
+import { SafeString } from "@/lib/validation/safe-string";
 import type { HomeSectionType } from "@/db/schema";
 
 export const HOME_CONTENT_SCHEMA_VERSION = 1;
@@ -59,9 +59,19 @@ export const HomeImageSlotSchema = z
   })
   .strict();
 
+/** A self-hosted video always has a poster: it is the first paint and the reduced-motion still. */
 export const HomeVideoSourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("youtube"), videoId: z.string().regex(YOUTUBE_ID_REGEX) }).strict(),
+  z
+    .object({
+      kind: z.literal("upload"),
+      videoAssetId: z.string().uuid(),
+      posterAssetId: z.string().uuid(),
+    })
+    .strict(),
 ]);
+
+export type HomeVideoSourceContent = z.infer<typeof HomeVideoSourceSchema>;
 
 export const VideoHeroContentSchema = z
   .object({
@@ -217,6 +227,11 @@ export function parseHomeSectionContent<K extends HomeSectionType>(
   >;
 }
 
+/** Media type an asset must have to fill a slot. */
+export function homeSlotMediaType(slot: string): "IMAGE" | "VIDEO" {
+  return slot === "video.file" ? "VIDEO" : "IMAGE";
+}
+
 /**
  * Every media slot a section's content references, keyed by the slot name stored in
  * `home_section_media`. Empty slots are omitted.
@@ -226,8 +241,17 @@ export function listHomeSectionMediaSlots(section: HomeSection): Map<string, str
   const add = (slot: string, image: HomeImageSlot) => {
     if (image.mediaAssetId) slots.set(slot, image.mediaAssetId);
   };
+  const addVideo = (video: HomeVideoSourceContent) => {
+    if (video.kind !== "upload") return;
+    slots.set("video.file", video.videoAssetId);
+    slots.set("video.poster", video.posterAssetId);
+  };
 
   switch (section.type) {
+    case "video_hero":
+    case "feature_video":
+      addVideo(section.content.video);
+      break;
     case "split_showcase":
       add("image", section.content.image);
       break;

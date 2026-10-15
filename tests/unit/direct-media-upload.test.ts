@@ -76,20 +76,20 @@ describe("Direct upload policies", () => {
     expect(directUploadAccept("home_video")).toBe("video/mp4,video/webm");
     expect(checkDirectUpload("home_video", { type: "video/webm", size: 25 * MB })).toBeNull();
     expect(checkDirectUpload("home_video", { type: "video/quicktime", size: MB })?.code).toBe(
-      "MEDIA_UNSUPPORTED_TYPE"
+      "DIRECT_UPLOAD_UNSUPPORTED_TYPE"
     );
     expect(checkDirectUpload("home_video", { type: "video/mp4", size: 25 * MB + 1 })?.code).toBe(
-      "MEDIA_SIZE_LIMIT_EXCEEDED"
+      "DIRECT_UPLOAD_SIZE_LIMIT_EXCEEDED"
     );
   });
 
   it("keep posters small and still", () => {
     expect(checkDirectUpload("home_video_poster", { type: "image/png", size: MB })?.code).toBe(
-      "MEDIA_UNSUPPORTED_TYPE"
+      "DIRECT_UPLOAD_UNSUPPORTED_TYPE"
     );
     expect(
       checkDirectUpload("home_video_poster", { type: "image/webp", size: 2 * MB + 1 })?.code
-    ).toBe("MEDIA_SIZE_LIMIT_EXCEEDED");
+    ).toBe("DIRECT_UPLOAD_SIZE_LIMIT_EXCEEDED");
     expect(DIRECT_UPLOAD_POLICIES.home_video_poster.maxImageDimension).toBe(1920);
   });
 
@@ -121,10 +121,10 @@ describe("Direct upload signing", () => {
   it("refuses a disallowed type or size before signing", async () => {
     const adapter = storage();
     await expect(sign("home_video", "video/avi", MB, adapter)).rejects.toMatchObject({
-      code: "MEDIA_UNSUPPORTED_TYPE",
+      code: "DIRECT_UPLOAD_UNSUPPORTED_TYPE",
     });
     await expect(sign("home_video", "video/mp4", 26 * MB, adapter)).rejects.toMatchObject({
-      code: "MEDIA_SIZE_LIMIT_EXCEEDED",
+      code: "DIRECT_UPLOAD_SIZE_LIMIT_EXCEEDED",
     });
     expect(adapter.generatePresignedPutUrl).not.toHaveBeenCalled();
   });

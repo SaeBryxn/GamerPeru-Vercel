@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import {
   Bot,
   CheckCircle,
+  House,
   LayoutDashboard,
   Menu,
   Package,
@@ -31,6 +32,7 @@ const ICONS = {
   Settings2,
   Tags,
   Menu,
+  House,
 };
 
 /** Longest matching nav href wins, so nested screens keep their parent active. */

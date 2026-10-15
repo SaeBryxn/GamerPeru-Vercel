@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { Pause, Play } from "lucide-react";
 import { DomeLink, Icon } from "@/components/ui";
+import { useAutoplayAllowed, type HomeVideoSource } from "../home-video";
 import styles from "./feature-video.module.css";
 
 const YOUTUBE_ORIGIN = "https://www.youtube-nocookie.com";
@@ -45,7 +46,7 @@ const OVERLAY_VARIANTS: Variants = {
 };
 
 export interface FeatureVideoProps {
-  videoId: string;
+  video: HomeVideoSource;
   eyebrow: string;
   /** Rendered as outlined display type. */
   title: string;
@@ -57,14 +58,32 @@ export interface FeatureVideoProps {
  * Full-bleed product film with an outlined headline over the bottom-left
  * corner and its own play control.
  */
-export function FeatureVideo({ videoId, eyebrow, title, subtitle, cta }: FeatureVideoProps) {
+export function FeatureVideo({ video, eyebrow, title, subtitle, cta }: FeatureVideoProps) {
   const prefersReducedMotion = useReducedMotion();
+  const autoplayAllowed = useAutoplayAllowed();
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const fileRef = useRef<HTMLVideoElement>(null);
   // Reduced-motion visitors get a still stage until they start it themselves.
   const [isMounted, setIsMounted] = useState(!prefersReducedMotion);
   const [isPlaying, setIsPlaying] = useState(!prefersReducedMotion);
 
+  // Save-Data is only known after hydration: stop a file that started before it was read.
+  useEffect(() => {
+    if (video.kind === "upload" && !autoplayAllowed) {
+      fileRef.current?.pause();
+      setIsPlaying(false);
+    }
+  }, [autoplayAllowed, video.kind]);
+
   const togglePlayback = () => {
+    if (video.kind === "upload") {
+      const file = fileRef.current;
+      if (!file) return;
+      if (isPlaying) file.pause();
+      else void file.play().catch(() => setIsPlaying(false));
+      setIsPlaying(!isPlaying);
+      return;
+    }
     if (!isMounted) {
       setIsMounted(true);
       setIsPlaying(true);
@@ -90,11 +109,26 @@ export function FeatureVideo({ videoId, eyebrow, title, subtitle, cta }: Feature
     >
       <div className={styles.stage}>
         <div className={styles.videoFrame} aria-hidden="true">
-          {isMounted && (
+          {video.kind === "upload" && (
+            <video
+              ref={fileRef}
+              className={styles.videoFile}
+              src={video.src ?? undefined}
+              poster={video.posterSrc ?? undefined}
+              autoPlay={isPlaying}
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              tabIndex={-1}
+              data-testid="feature-video-file"
+            />
+          )}
+          {video.kind === "youtube" && isMounted && (
             <iframe
               ref={frameRef}
               className={styles.video}
-              src={buildFeatureEmbedSrc(videoId)}
+              src={buildFeatureEmbedSrc(video.videoId)}
               title={title}
               allow="autoplay; encrypted-media"
               referrerPolicy="strict-origin-when-cross-origin"

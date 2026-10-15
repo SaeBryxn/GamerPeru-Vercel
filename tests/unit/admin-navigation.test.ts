@@ -12,6 +12,7 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
       ["payment-verification", "/admin/pagos", "orders:verify"],
       ["products", "/admin/products", "catalog:manage"],
       ["taxonomy", "/admin/taxonomia", "catalog:manage"],
+      ["storefront-home", "/admin/home", "catalog:manage"],
       ["storefront-menu", "/admin/menu", "catalog:manage"],
       ["ai-product-assistant", "/admin/products/ai-import", "catalog:ai_research"],
       ["ai-settings", "/admin/settings/ai", "ai:manage_credentials"],
@@ -36,11 +37,12 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
   it("D3: returns destinations filtered by authorized staff permissions", () => {
     const catalogPerms = new Set<PermissionName>(["catalog:manage"]);
     const navCatalog = getAdminNavigation(catalogPerms);
-    expect(navCatalog.length).toBe(4);
+    expect(navCatalog.length).toBe(5);
     expect(navCatalog[0]?.href).toBe("/admin");
     expect(navCatalog[1]?.href).toBe("/admin/products");
     expect(navCatalog[2]?.href).toBe("/admin/taxonomia");
-    expect(navCatalog[3]?.href).toBe("/admin/menu");
+    expect(navCatalog[3]?.href).toBe("/admin/home");
+    expect(navCatalog[4]?.href).toBe("/admin/menu");
 
     const researchPerms = new Set<PermissionName>(["catalog:ai_research"]);
     expect(getAdminNavigation(researchPerms).map((item) => item.href)).toEqual([
