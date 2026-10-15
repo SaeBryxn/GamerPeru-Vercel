@@ -443,6 +443,20 @@
   margin: 0;
 }
 
+.inlineLink {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 /* --------------------------------------------------------------------------
  * Variants Table
  * -------------------------------------------------------------------------- */

@@ -10,6 +10,7 @@ import type {
 } from "@/db/schema";
 import type { PublishBlocker, PublishWarning, PublishReadinessResult } from "./types";
 import { validateProductSpecificationValues } from "./specifications";
+import { hasSpecWeight } from "./weight-spec";
 import { isValidStringRecord } from "./record";
 
 export const PRODUCT_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -308,8 +309,13 @@ export function evaluatePublishReadiness(input: PublishReadinessInput): PublishR
     });
   }
 
+  // A weight recorded in the technical sheet covers every variant.
+  const weightInSpecs = hasSpecWeight(
+    currentSpecSchema?.fieldDefinitions,
+    specifications?.specValues
+  );
   const activeWithoutWeight = activeVariants.filter((v) => !v.weightGrams);
-  if (activeWithoutWeight.length > 0) {
+  if (!weightInSpecs && activeWithoutWeight.length > 0) {
     warnings.push({
       code: "MISSING_WEIGHT",
       message: "Algunas variantes no tienen peso registrado en gramos.",

@@ -67,6 +67,7 @@ import type {
 } from "@/lib/admin/catalog/types";
 import { VariantStockCell } from "@/components/admin/inventory/variant-stock-cell";
 import type { VariantStockRow } from "@/lib/admin/inventory/readers";
+import { findWeightSpecField } from "@/lib/admin/catalog/weight-spec";
 import styles from "./product-editor.module.css";
 
 interface ProductEditorProps {
@@ -146,6 +147,8 @@ export function ProductEditor({
 
   // A deep link from the product list ("#imagenes") should open that tab, not scroll a long page.
   useEffect(() => {
+  // When the category's technical sheet has a weight field, weight is edited only there.
+  const weightSpecField = findWeightSpecField(currentSpecSchema?.fieldDefinitions);
     const hash = window.location.hash.replace("#", "");
     if (EDITOR_SECTION_ORDER.includes(hash as ProductEditorSection)) {
       setActiveSection(hash as ProductEditorSection);
@@ -2111,9 +2114,11 @@ export function ProductEditor({
                       <th scope="col" className={styles.numeric}>
                         Costo
                       </th>
-                      <th scope="col" className={styles.numeric}>
-                        Peso
-                      </th>
+                      {!weightSpecField && (
+                        <th scope="col" className={styles.numeric}>
+                          Peso
+                        </th>
+                      )}
                       <th scope="col">Stock</th>
                       <th scope="col">Estado</th>
                       <th scope="col" className={styles.actionsCol}>
@@ -2166,13 +2171,15 @@ export function ProductEditor({
                             <span className={styles.empty}>—</span>
                           )}
                         </td>
-                        <td className={styles.numeric}>
-                          {v.weightGrams ? (
-                            <span className={styles.muted}>{v.weightGrams} g</span>
-                          ) : (
-                            <span className={styles.empty}>—</span>
-                          )}
-                        </td>
+                        {!weightSpecField && (
+                          <td className={styles.numeric}>
+                            {v.weightGrams ? (
+                              <span className={styles.muted}>{v.weightGrams} g</span>
+                            ) : (
+                              <span className={styles.empty}>—</span>
+                            )}
+                          </td>
+                        )}
                         <td>
                           <VariantStockCell
                             productId={product.id}
@@ -2624,22 +2631,41 @@ export function ProductEditor({
               </div>
 
               <div className={styles.grid2}>
-                <div className={styles.field}>
-                  <label htmlFor="modal-weight" className={styles.label}>
-                    Peso (gramos)
-                  </label>
-                  <input
-                    id="modal-weight"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={newVarWeight}
-                    onChange={(e) => setNewVarWeight(e.target.value)}
-                    placeholder="Ej: 39"
-                    className={styles.input}
-                    data-testid="input-new-weight"
-                  />
-                </div>
+                {weightSpecField ? (
+                  <div className={styles.field}>
+                    <span className={styles.label}>Peso</span>
+                    <p className={styles.helpText}>
+                      Se edita una sola vez en la Ficha técnica, campo «{weightSpecField.label}».
+                    </p>
+                    <button
+                      type="button"
+                      className={styles.inlineLink}
+                      onClick={() => {
+                        setShowCreateVariantModal(false);
+                        setActiveSection("especificaciones");
+                      }}
+                    >
+                      Ir a Ficha técnica
+                    </button>
+                  </div>
+                ) : (
+                  <div className={styles.field}>
+                    <label htmlFor="modal-weight" className={styles.label}>
+                      Peso (gramos)
+                    </label>
+                    <input
+                      id="modal-weight"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={newVarWeight}
+                      onChange={(e) => setNewVarWeight(e.target.value)}
+                      placeholder="Ej: 39"
+                      className={styles.input}
+                      data-testid="input-new-weight"
+                    />
+                  </div>
+                )}
 
                 <div className={styles.field}>
                   <label htmlFor="modal-status" className={styles.label}>
@@ -2807,21 +2833,40 @@ export function ProductEditor({
               </div>
 
               <div className={styles.grid2}>
-                <div className={styles.field}>
-                  <label htmlFor="edit-var-weight" className={styles.label}>
-                    Peso (gramos)
-                  </label>
-                  <input
-                    id="edit-var-weight"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={editVarWeight}
-                    onChange={(e) => setEditVarWeight(e.target.value)}
-                    className={styles.input}
-                    data-testid="input-edit-weight"
-                  />
-                </div>
+                {weightSpecField ? (
+                  <div className={styles.field}>
+                    <span className={styles.label}>Peso</span>
+                    <p className={styles.helpText}>
+                      Se edita una sola vez en la Ficha técnica, campo «{weightSpecField.label}».
+                    </p>
+                    <button
+                      type="button"
+                      className={styles.inlineLink}
+                      onClick={() => {
+                        setEditingVariant(null);
+                        setActiveSection("especificaciones");
+                      }}
+                    >
+                      Ir a Ficha técnica
+                    </button>
+                  </div>
+                ) : (
+                  <div className={styles.field}>
+                    <label htmlFor="edit-var-weight" className={styles.label}>
+                      Peso (gramos)
+                    </label>
+                    <input
+                      id="edit-var-weight"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={editVarWeight}
+                      onChange={(e) => setEditVarWeight(e.target.value)}
+                      className={styles.input}
+                      data-testid="input-edit-weight"
+                    />
+                  </div>
+                )}
 
                 <div className={styles.field}>
                   <label htmlFor="edit-var-status" className={styles.label}>
