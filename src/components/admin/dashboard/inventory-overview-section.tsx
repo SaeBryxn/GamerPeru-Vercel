@@ -6,9 +6,13 @@ import styles from "./inventory-overview-section.module.css";
 
 interface InventoryOverviewSectionProps {
   inventoryOverview: InventoryOverviewResult;
+  outOfStockHref?: string;
 }
 
-export function InventoryOverviewSection({ inventoryOverview }: InventoryOverviewSectionProps) {
+export function InventoryOverviewSection({
+  inventoryOverview,
+  outOfStockHref,
+}: InventoryOverviewSectionProps) {
   if (inventoryOverview.status === "UNAUTHORIZED") {
     return null;
   }
@@ -73,6 +77,7 @@ export function InventoryOverviewSection({ inventoryOverview }: InventoryOvervie
                   : "SKUs con balance ATS igual a 0"
               }
               testId="inventory-out-of-stock-skus"
+              href={outOfStockHref}
             />
           </StaggerItem>
           <StaggerItem>

@@ -8,11 +8,16 @@ import styles from "./financial-cohort-section.module.css";
 
 interface FinancialCohortSectionProps {
   financialCohort: CohortFinancialsResult;
+  /** Paid orders of the period in the orders list. */
+  paidOrdersHref?: string;
 }
 
 const COMPARISON = "Comparación vs período anterior";
 
-export function FinancialCohortSection({ financialCohort }: FinancialCohortSectionProps) {
+export function FinancialCohortSection({
+  financialCohort,
+  paidOrdersHref,
+}: FinancialCohortSectionProps) {
   if (financialCohort.status === "UNAUTHORIZED") {
     return null;
   }
@@ -51,6 +56,7 @@ export function FinancialCohortSection({ financialCohort }: FinancialCohortSecti
               label="Valor neto de pedidos"
               value={formatCentsToPen(current.cohortNetCents)}
               valueTestId="kpi-net-cents"
+              href={paidOrdersHref}
               trend={<MonetaryTrendBadge trend={trends.net} comparisonLabel={COMPARISON} />}
               footnote="Neto realizado después de devoluciones"
             />
@@ -60,6 +66,7 @@ export function FinancialCohortSection({ financialCohort }: FinancialCohortSecti
               label="Valor bruto confirmado"
               value={formatCentsToPen(current.cohortGrossCents)}
               valueTestId="kpi-gross-cents"
+              href={paidOrdersHref}
               trend={<MonetaryTrendBadge trend={trends.gross} comparisonLabel={COMPARISON} />}
               footnote="Bruto total de pedidos con pago confirmado"
             />
@@ -69,6 +76,7 @@ export function FinancialCohortSection({ financialCohort }: FinancialCohortSecti
               label="Pedidos pagados"
               value={formatInteger(current.cohortPaidOrders)}
               valueTestId="kpi-paid-orders"
+              href={paidOrdersHref}
               trend={<CountTrendBadge trend={trends.paidOrders} comparisonLabel={COMPARISON} />}
               footnote={`${current.cohortActivePaidOrders} pedidos pagados activos`}
             />
@@ -78,6 +86,7 @@ export function FinancialCohortSection({ financialCohort }: FinancialCohortSecti
               label="Ticket promedio"
               value={formatCentsToPen(current.aovCents)}
               valueTestId="kpi-aov-cents"
+              href={paidOrdersHref}
               trend={<MonetaryTrendBadge trend={trends.aov} comparisonLabel={COMPARISON} />}
               footnote="Valor neto por pedido pagado activo"
             />

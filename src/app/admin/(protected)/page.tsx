@@ -4,13 +4,18 @@ import {
   type DashboardPeriodSelector,
 } from "@/lib/admin/dashboard-period";
 import { getAdminDashboardData } from "@/lib/admin/dashboard-reader";
-import { DashboardHeader } from "@/components/admin/dashboard/dashboard-header";
+import { DashboardHeader, PeriodSelector } from "@/components/admin/dashboard/dashboard-header";
 import { FinancialCohortSection } from "@/components/admin/dashboard/financial-cohort-section";
 import { OrderPipelineSection } from "@/components/admin/dashboard/order-pipeline-section";
 import { PaymentVerificationSection } from "@/components/admin/dashboard/payment-verification-section";
 import { CatalogOverviewSection } from "@/components/admin/dashboard/catalog-overview-section";
 import { InventoryOverviewSection } from "@/components/admin/dashboard/inventory-overview-section";
 import { NoMetricsAssigned } from "@/components/admin/dashboard/no-metrics-assigned";
+import { AttentionSection } from "@/components/admin/dashboard/attention-section";
+import { QuickActions } from "@/components/admin/dashboard/quick-actions";
+import { HomeStatusSection } from "@/components/admin/dashboard/home-status-section";
+import { CatalogHealthSection } from "@/components/admin/dashboard/catalog-health-section";
+import { buildDashboardLinks } from "@/components/admin/dashboard/dashboard-links";
 import { Stagger } from "@/components/admin/ui";
 import styles from "./page.module.css";
 
@@ -41,6 +46,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     payload.paymentVerification.status !== "UNAUTHORIZED" ||
     payload.catalogOverview.status !== "UNAUTHORIZED" ||
     payload.inventoryOverview.status !== "UNAUTHORIZED";
+  const links = buildDashboardLinks(payload.actor.permissions, payload.period);
 
   return (
     <div className={styles.container}>
@@ -48,16 +54,45 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
         selectedPeriod={selectedPeriod}
         actorEmail={payload.actor.email}
         actorRoles={payload.actor.roles}
+        showPeriodSelector={!hasAnyMetricAccess}
       />
 
       {hasAnyMetricAccess ? (
         <Stagger className={styles.dashboardBody}>
-          <FinancialCohortSection financialCohort={payload.financialCohort} />
-          <OrderPipelineSection orderPipeline={payload.orderPipeline} />
-          <PaymentVerificationSection paymentVerification={payload.paymentVerification} />
+          <AttentionSection payload={payload} links={links} />
+          <QuickActions links={links} />
           <div className={styles.lowerGrid}>
-            <CatalogOverviewSection catalogOverview={payload.catalogOverview} />
-            <InventoryOverviewSection inventoryOverview={payload.inventoryOverview} />
+            <HomeStatusSection homeStatus={payload.homeStatus} href={links.home} />
+            <CatalogHealthSection
+              catalogHealth={payload.catalogHealth}
+              productsHref={links.products?.() ?? null}
+            />
+          </div>
+          <div className={styles.metricsDivider}>
+            <h2 className={styles.metricsTitle}>Métricas del período</h2>
+            <PeriodSelector selectedPeriod={selectedPeriod} />
+          </div>
+          <FinancialCohortSection
+            financialCohort={payload.financialCohort}
+            paidOrdersHref={links.periodOrders?.({ paymentStatus: "PAID" })}
+          />
+          <OrderPipelineSection
+            orderPipeline={payload.orderPipeline}
+            periodOrdersHref={links.periodOrders}
+          />
+          <PaymentVerificationSection
+            paymentVerification={payload.paymentVerification}
+            queueHref={links.payments ?? undefined}
+          />
+          <div className={styles.lowerGrid}>
+            <CatalogOverviewSection
+              catalogOverview={payload.catalogOverview}
+              productsHref={links.products}
+            />
+            <InventoryOverviewSection
+              inventoryOverview={payload.inventoryOverview}
+              outOfStockHref={links.products?.({ pending: "stock" })}
+            />
           </div>
         </Stagger>
       ) : (

@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { PermissionName, RoleName } from "@/lib/auth/rbac";
+import type { CatalogStatus } from "./catalog/types";
+import type { ProductEditorSection } from "./catalog/readiness-guidance";
 import type { ResolvedDashboardPeriod } from "./dashboard-period";
 
 export type TrendSemanticState = "POSITIVE" | "NEGATIVE" | "FLAT" | "NEW" | "ZERO_BASELINE";
@@ -170,6 +172,66 @@ export type InventoryOverviewResult =
       status: "UNAUTHORIZED";
     };
 
+export interface OrderQueueSnapshot {
+  /** Created and not paid yet. */
+  awaitingPayment: number;
+  /** Paid and waiting to be prepared. */
+  toPrepare: number;
+  inProgress: number;
+}
+
+export type OrderQueueResult =
+  { status: "READY"; data: OrderQueueSnapshot } | { status: "UNAUTHORIZED" };
+
+export interface HomeStatusData {
+  total: number;
+  visible: number;
+  hidden: number;
+  /** Sections still exactly as seeded (version 1). */
+  neverEdited: number;
+  /** Image slots in visible sections still waiting for an upload. */
+  emptyImageSlots: number;
+  /** Sections the storefront skips because their content no longer validates. */
+  invalid: number;
+}
+
+export type HomeStatusResult =
+  | { status: "READY"; data: HomeStatusData }
+  | { status: "UNAVAILABLE" }
+  | { status: "UNAUTHORIZED" };
+
+export interface CatalogHealthIssue {
+  code: string;
+  severity: "blocker" | "warning" | "suggestion";
+  section: ProductEditorSection;
+  action: string;
+}
+
+export interface CatalogHealthItem {
+  productId: string;
+  name: string;
+  status: CatalogStatus;
+  blockers: number;
+  warnings: number;
+  storyPublished: boolean;
+  /** Most severe first, at most three. */
+  issues: CatalogHealthIssue[];
+  /** Product editor, on the tab that resolves the first issue. */
+  href: string;
+}
+
+export type CatalogHealthResult =
+  | {
+      status: "READY";
+      data: {
+        evaluatedProducts: number;
+        productsWithIssues: number;
+        productsWithBlockers: number;
+        items: CatalogHealthItem[];
+      };
+    }
+  | { status: "UNAUTHORIZED" };
+
 export interface AdminDashboardPayload {
   period: ResolvedDashboardPeriod;
   actor: {
@@ -183,4 +245,7 @@ export interface AdminDashboardPayload {
   paymentVerification: PaymentVerificationResult;
   catalogOverview: CatalogOverviewResult;
   inventoryOverview: InventoryOverviewResult;
+  orderQueue: OrderQueueResult;
+  homeStatus: HomeStatusResult;
+  catalogHealth: CatalogHealthResult;
 }

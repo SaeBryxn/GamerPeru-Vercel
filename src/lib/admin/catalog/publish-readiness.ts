@@ -10,7 +10,7 @@ import type {
 } from "@/db/schema";
 import type { PublishBlocker, PublishWarning, PublishReadinessResult } from "./types";
 import { validateProductSpecificationValues } from "./specifications";
-import { hasSpecWeight } from "./weight-spec";
+import { findWeightSpecField, hasSpecWeight } from "./weight-spec";
 import { isValidStringRecord } from "./record";
 
 export const PRODUCT_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -309,13 +309,19 @@ export function evaluatePublishReadiness(input: PublishReadinessInput): PublishR
     });
   }
 
-  // A weight recorded in the technical sheet covers every variant.
-  const weightInSpecs = hasSpecWeight(
-    currentSpecSchema?.fieldDefinitions,
-    specifications?.specValues
-  );
+  // When the category's technical sheet has a weight field, that is the only place it is edited
+  // and it covers every variant; otherwise each active variant needs its own weight.
+  const weightSpecField = findWeightSpecField(currentSpecSchema?.fieldDefinitions);
   const activeWithoutWeight = activeVariants.filter((v) => !v.weightGrams);
-  if (!weightInSpecs && activeWithoutWeight.length > 0) {
+  if (weightSpecField) {
+    if (!hasSpecWeight(currentSpecSchema?.fieldDefinitions, specifications?.specValues)) {
+      warnings.push({
+        code: "MISSING_SPEC_WEIGHT",
+        message: `Falta el peso en la ficha técnica («${weightSpecField.label}»).`,
+        field: `specifications.${weightSpecField.key}`,
+      });
+    }
+  } else if (activeWithoutWeight.length > 0) {
     warnings.push({
       code: "MISSING_WEIGHT",
       message: "Algunas variantes no tienen peso registrado en gramos.",

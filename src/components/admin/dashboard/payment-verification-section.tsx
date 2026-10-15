@@ -7,6 +7,7 @@ import styles from "./payment-verification-section.module.css";
 
 interface PaymentVerificationSectionProps {
   paymentVerification: PaymentVerificationResult;
+  queueHref?: string;
 }
 
 function Unavailable({ testId }: { testId?: string }) {
@@ -20,6 +21,7 @@ function Unavailable({ testId }: { testId?: string }) {
 
 export function PaymentVerificationSection({
   paymentVerification,
+  queueHref,
 }: PaymentVerificationSectionProps) {
   if (paymentVerification.status === "UNAUTHORIZED") {
     return null;
@@ -45,6 +47,7 @@ export function PaymentVerificationSection({
               label="Pagos en cola"
               value={formatInteger(snapshotQueue.queueCount)}
               valueTestId="payment-queue-count"
+              href={queueHref}
               size="large"
             />
             {snapshotQueue.queueAmount.status === "READY" ? (
@@ -52,6 +55,7 @@ export function PaymentVerificationSection({
                 label="Importe por verificar"
                 value={formatCentsToPen(snapshotQueue.queueAmount.amountCents)}
                 valueTestId="payment-queue-amount"
+                href={queueHref}
                 size="large"
               />
             ) : (

@@ -7,6 +7,8 @@ interface DashboardHeaderProps {
   selectedPeriod: DashboardPeriodSelector;
   actorEmail: string | null;
   actorRoles: string[];
+  /** Leave the selector out when the page places it next to the metrics it drives. */
+  showPeriodSelector?: boolean;
 }
 
 const PERIOD_OPTIONS: Array<{ id: DashboardPeriodSelector; label: string }> = [
@@ -16,13 +18,38 @@ const PERIOD_OPTIONS: Array<{ id: DashboardPeriodSelector; label: string }> = [
   { id: "THIS_MONTH", label: "Este mes" },
 ];
 
-export function DashboardHeader({ selectedPeriod, actorEmail, actorRoles }: DashboardHeaderProps) {
+export function PeriodSelector({ selectedPeriod }: { selectedPeriod: DashboardPeriodSelector }) {
+  return (
+    <div className={styles.periodNav} role="group" aria-label="Seleccionar período de reporte">
+      {PERIOD_OPTIONS.map((option) => {
+        const isActive = selectedPeriod === option.id;
+        return (
+          <Link
+            key={option.id}
+            href={`/admin?period=${option.id}`}
+            className={`${styles.periodBtn} ${isActive ? styles.periodBtnActive : ""}`}
+            aria-current={isActive ? "page" : undefined}
+          >
+            {option.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+export function DashboardHeader({
+  selectedPeriod,
+  actorEmail,
+  actorRoles,
+  showPeriodSelector = true,
+}: DashboardHeaderProps) {
   return (
     <header className={styles.header}>
       <div className={styles.titleBlock}>
         <h1 className={styles.title}>Resumen</h1>
         <p className={styles.subtitle}>
-          Métricas comerciales, pedidos, pagos e inventario de Gamer Perú.
+          Lo que requiere tu atención, accesos rápidos y las métricas de Gamer Perú.
         </p>
         <p className={styles.session}>
           {actorEmail ?? "Personal Autorizado"}
@@ -31,21 +58,7 @@ export function DashboardHeader({ selectedPeriod, actorEmail, actorRoles }: Dash
         </p>
       </div>
 
-      <div className={styles.periodNav} role="group" aria-label="Seleccionar período de reporte">
-        {PERIOD_OPTIONS.map((option) => {
-          const isActive = selectedPeriod === option.id;
-          return (
-            <Link
-              key={option.id}
-              href={`/admin?period=${option.id}`}
-              className={`${styles.periodBtn} ${isActive ? styles.periodBtnActive : ""}`}
-              aria-current={isActive ? "page" : undefined}
-            >
-              {option.label}
-            </Link>
-          );
-        })}
-      </div>
+      {showPeriodSelector && <PeriodSelector selectedPeriod={selectedPeriod} />}
     </header>
   );
 }

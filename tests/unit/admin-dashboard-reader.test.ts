@@ -24,6 +24,20 @@ vi.mock("@/db", () => ({
   },
 }));
 
+const operations = vi.hoisted(() => ({
+  fetchOrderQueue: vi.fn(async () => ({ awaitingPayment: 1, toPrepare: 2, inProgress: 0 })),
+  fetchHomeStatus: vi.fn(async () => ({
+    status: "READY" as const,
+    data: { total: 10, visible: 10, hidden: 0, neverEdited: 10, emptyImageSlots: 7, invalid: 0 },
+  })),
+  fetchCatalogHealth: vi.fn(async () => ({
+    status: "READY" as const,
+    data: { evaluatedProducts: 0, productsWithIssues: 0, productsWithBlockers: 0, items: [] },
+  })),
+}));
+
+vi.mock("@/lib/admin/dashboard-operations", () => operations);
+
 const mockDbExecute = db.execute as unknown as ReturnType<typeof vi.fn>;
 
 function getQueryText(query: unknown): string {
@@ -234,6 +248,14 @@ describe("GP-023 / CHK1 — Admin Dashboard Reader Unit Tests", () => {
       expect(payload.paymentVerification.status).toBe("READY");
       expect(payload.catalogOverview.status).toBe("UNAUTHORIZED");
       expect(payload.inventoryOverview.status).toBe("UNAUTHORIZED");
+      expect(payload.orderQueue).toEqual({
+        status: "READY",
+        data: { awaitingPayment: 1, toPrepare: 2, inProgress: 0 },
+      });
+      expect(payload.homeStatus.status).toBe("UNAUTHORIZED");
+      expect(payload.catalogHealth.status).toBe("UNAUTHORIZED");
+      expect(operations.fetchHomeStatus).not.toHaveBeenCalled();
+      expect(operations.fetchCatalogHealth).not.toHaveBeenCalled();
     });
 
     it("18. Catalog capability for ADMIN_CATALOG: queries catalog, not financial, orders, or inventory", async () => {
@@ -254,6 +276,10 @@ describe("GP-023 / CHK1 — Admin Dashboard Reader Unit Tests", () => {
       expect(payload.paymentVerification.status).toBe("UNAUTHORIZED");
       expect(payload.catalogOverview.status).toBe("READY");
       expect(payload.inventoryOverview.status).toBe("UNAUTHORIZED");
+      expect(payload.orderQueue.status).toBe("UNAUTHORIZED");
+      expect(payload.homeStatus.status).toBe("READY");
+      expect(payload.catalogHealth.status).toBe("READY");
+      expect(operations.fetchOrderQueue).not.toHaveBeenCalled();
     });
 
     it("19. Inventory capability only where canonical inventory:manage exists", async () => {

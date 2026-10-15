@@ -15,17 +15,21 @@ import {
   calculateCountTrend,
   calculateMonetaryTrend,
 } from "./dashboard-metrics";
+import { fetchCatalogHealth, fetchHomeStatus, fetchOrderQueue } from "./dashboard-operations";
 import type {
   AdminDashboardPayload,
+  CatalogHealthResult,
   CatalogOverviewResult,
   CohortFinancialsResult,
   CohortFinancialSummary,
   CohortFinancialTrends,
+  HomeStatusResult,
   InventoryOverviewResult,
   MonetaryQueueAmountResult,
   MonetaryRefundOutflowResult,
   OrderPipelineResult,
   OrderPipelineSummary,
+  OrderQueueResult,
   PaymentVerificationResult,
 } from "./dashboard-types";
 
@@ -543,26 +547,45 @@ export async function getAdminDashboardData(params?: {
   const canViewCatalog =
     auth.permissions.has("catalog:manage") || auth.permissions.has("catalog:publish");
   const canViewInventory = auth.permissions.has("inventory:manage");
+  // The home and catalog health link to editors that require catalog:manage.
+  const canManageCatalog = auth.permissions.has("catalog:manage");
 
   // Concurrently execute ONLY authorized queries. Unauthorized sections do not run.
-  const [financialCohort, orderPipeline, paymentVerification, catalogOverview, inventoryOverview] =
-    await Promise.all([
-      canViewFinancials
-        ? fetchCohortFinancials(period)
-        : Promise.resolve<CohortFinancialsResult>({ status: "UNAUTHORIZED" }),
-      canViewOrders
-        ? fetchOrderPipeline(period)
-        : Promise.resolve<OrderPipelineResult>({ status: "UNAUTHORIZED" }),
-      canViewPaymentQueue
-        ? fetchPaymentVerification(period)
-        : Promise.resolve<PaymentVerificationResult>({ status: "UNAUTHORIZED" }),
-      canViewCatalog
-        ? fetchCatalogOverview()
-        : Promise.resolve<CatalogOverviewResult>({ status: "UNAUTHORIZED" }),
-      canViewInventory
-        ? fetchInventoryOverview()
-        : Promise.resolve<InventoryOverviewResult>({ status: "UNAUTHORIZED" }),
-    ]);
+  const [
+    financialCohort,
+    orderPipeline,
+    paymentVerification,
+    catalogOverview,
+    inventoryOverview,
+    orderQueue,
+    homeStatus,
+    catalogHealth,
+  ] = await Promise.all([
+    canViewFinancials
+      ? fetchCohortFinancials(period)
+      : Promise.resolve<CohortFinancialsResult>({ status: "UNAUTHORIZED" }),
+    canViewOrders
+      ? fetchOrderPipeline(period)
+      : Promise.resolve<OrderPipelineResult>({ status: "UNAUTHORIZED" }),
+    canViewPaymentQueue
+      ? fetchPaymentVerification(period)
+      : Promise.resolve<PaymentVerificationResult>({ status: "UNAUTHORIZED" }),
+    canViewCatalog
+      ? fetchCatalogOverview()
+      : Promise.resolve<CatalogOverviewResult>({ status: "UNAUTHORIZED" }),
+    canViewInventory
+      ? fetchInventoryOverview()
+      : Promise.resolve<InventoryOverviewResult>({ status: "UNAUTHORIZED" }),
+    canViewOrders
+      ? fetchOrderQueue().then((data): OrderQueueResult => ({ status: "READY", data }))
+      : Promise.resolve<OrderQueueResult>({ status: "UNAUTHORIZED" }),
+    canManageCatalog
+      ? fetchHomeStatus()
+      : Promise.resolve<HomeStatusResult>({ status: "UNAUTHORIZED" }),
+    canManageCatalog
+      ? fetchCatalogHealth()
+      : Promise.resolve<CatalogHealthResult>({ status: "UNAUTHORIZED" }),
+  ]);
 
   return {
     period,
@@ -577,5 +600,8 @@ export async function getAdminDashboardData(params?: {
     paymentVerification,
     catalogOverview,
     inventoryOverview,
+    orderQueue,
+    homeStatus,
+    catalogHealth,
   };
 }

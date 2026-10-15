@@ -1,0 +1,268 @@
+/* Operational blocks of the dashboard: attention, quick actions, home status, catalog health. */
+
+.allClear,
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-4) var(--admin-card-padding);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--color-surface-card);
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.allClear svg {
+  color: var(--color-status-success-text);
+}
+
+.attentionGrid,
+.actionGrid,
+.healthList,
+.issueList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attentionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--space-3);
+}
+
+.attentionCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  height: 100%;
+  padding: var(--admin-card-padding);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--color-surface-card);
+  box-shadow: var(--admin-card-shadow);
+  color: inherit;
+  text-decoration: none;
+}
+
+a.attentionCard:hover {
+  border-color: var(--color-border-default);
+}
+
+.attentionLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.attentionCount {
+  font-family: var(--font-heading);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.attentionHint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.attentionCta,
+.sectionLink,
+.rowAction,
+.healthFooter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.attentionCta {
+  margin-top: auto;
+}
+
+.sectionLink,
+.rowAction,
+.healthFooter {
+  text-decoration: none;
+}
+
+.sectionLink:hover,
+.rowAction:hover,
+.healthFooter:hover,
+a.attentionCard:hover .attentionCta {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.actionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.actionCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  height: 100%;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--color-surface-card);
+  box-shadow: var(--admin-card-shadow);
+  color: inherit;
+  text-decoration: none;
+}
+
+.actionCard:hover {
+  border-color: var(--color-border-default);
+}
+
+.actionCard:hover .actionTitle {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.actionThumb {
+  margin-bottom: var(--space-1);
+}
+
+.actionTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.actionDescription {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.healthCard {
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--color-surface-card);
+  box-shadow: var(--admin-card-shadow);
+}
+
+.healthRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--admin-card-padding);
+}
+
+.healthRow + .healthRow {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.healthMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.healthHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.healthName {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.healthStatus {
+  padding: 1px 8px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.issueList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.issue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.issueSection {
+  color: var(--color-text-muted);
+}
+
+.severity {
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.blocker {
+  background-color: var(--color-status-danger-background);
+  color: var(--color-status-danger-text);
+}
+
+.warning {
+  background-color: var(--color-status-warning-background);
+  color: var(--color-status-warning-text);
+}
+
+.suggestion {
+  background-color: var(--admin-inset, var(--color-surface-secondary));
+  color: var(--color-text-secondary);
+}
+
+.rowAction {
+  flex-shrink: 0;
+}
+
+.healthFooter {
+  width: 100%;
+  padding: var(--space-3) var(--admin-card-padding);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.attentionCard:focus-visible,
+.actionCard:focus-visible,
+.sectionLink:focus-visible,
+.rowAction:focus-visible,
+.healthFooter:focus-visible {
+  outline: 2px solid var(--admin-focus-ring, var(--admin-accent));
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  .healthRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

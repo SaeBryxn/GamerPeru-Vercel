@@ -5,9 +5,13 @@ import { AdminCard, AdminSection, MetricRow, MetricWidget, StaggerItem } from ".
 
 interface CatalogOverviewSectionProps {
   catalogOverview: CatalogOverviewResult;
+  productsHref?: ((filters?: Record<string, string>) => string) | null;
 }
 
-export function CatalogOverviewSection({ catalogOverview }: CatalogOverviewSectionProps) {
+export function CatalogOverviewSection({
+  catalogOverview,
+  productsHref,
+}: CatalogOverviewSectionProps) {
   if (catalogOverview.status === "UNAUTHORIZED") {
     return null;
   }
@@ -32,6 +36,7 @@ export function CatalogOverviewSection({ catalogOverview }: CatalogOverviewSecti
               value={formatInteger(publishedProducts)}
               footnote="Visibles en tienda pública"
               testId="catalog-published-products"
+              href={productsHref?.({ status: "PUBLISHED" })}
             />
           </StaggerItem>
           <StaggerItem>
@@ -40,6 +45,7 @@ export function CatalogOverviewSection({ catalogOverview }: CatalogOverviewSecti
               value={formatInteger(draftProducts)}
               footnote="En preparación interna"
               testId="catalog-draft-products"
+              href={productsHref?.({ status: "DRAFT" })}
             />
           </StaggerItem>
           <StaggerItem>
@@ -48,6 +54,7 @@ export function CatalogOverviewSection({ catalogOverview }: CatalogOverviewSecti
               value={formatInteger(activeSellableSkus)}
               footnote={`De ${formatInteger(totalActiveVariants)} variantes activas`}
               testId="catalog-active-skus"
+              href={productsHref?.()}
             />
           </StaggerItem>
           <StaggerItem>
@@ -61,6 +68,7 @@ export function CatalogOverviewSection({ catalogOverview }: CatalogOverviewSecti
                   : "Todos los productos tienen variantes"
               }
               testId="catalog-published-no-skus"
+              href={productsHref?.({ status: "PUBLISHED", pending: "variants" })}
             />
           </StaggerItem>
         </MetricRow>

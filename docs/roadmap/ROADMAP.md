@@ -72,3 +72,4 @@ Report before dependent work is authorized.
 - [GP-051](./GP-051.md) --- Search Engine Launch
 - [GP-052](./GP-052.md) --- Gamer Perú v1 Launch
 - [GP-053](./GP-053.md) --- Administrable Homepage (added after the v1.2 index)
+- [GP-054](./GP-054.md) --- Actionable Admin Dashboard (added after the v1.2 index)

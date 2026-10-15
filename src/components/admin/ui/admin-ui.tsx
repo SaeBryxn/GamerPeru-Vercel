@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import styles from "./admin-ui.module.css";
 
 interface AdminSectionProps {
@@ -85,6 +86,8 @@ interface MetricWidgetProps {
   footnote?: React.ReactNode;
   dot?: StatusDotTone;
   testId?: string;
+  /** Where the number is resolved; the whole cell becomes a link. */
+  href?: string;
 }
 
 /** Label in quiet gray, the number large and tabular, context underneath. */
@@ -97,12 +100,13 @@ export function MetricWidget({
   footnote,
   dot,
   testId,
+  href,
 }: MetricWidgetProps) {
   const sizeClass =
     size === "large" ? styles.metricValueLarge : size === "small" ? styles.metricValueSmall : "";
 
-  return (
-    <div className={styles.metric} data-testid={testId}>
+  const body = (
+    <>
       <div className={styles.metricHead}>
         <span className={styles.metricLabel}>
           {dot ? <StatusDot tone={dot} /> : null}
@@ -117,6 +121,16 @@ export function MetricWidget({
         {value}
       </span>
       {footnote ? <span className={styles.metricFootnote}>{footnote}</span> : null}
+    </>
+  );
+
+  return href ? (
+    <Link href={href} className={`${styles.metric} ${styles.metricLink}`} data-testid={testId}>
+      {body}
+    </Link>
+  ) : (
+    <div className={styles.metric} data-testid={testId}>
+      {body}
     </div>
   );
 }

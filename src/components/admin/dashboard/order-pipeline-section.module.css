@@ -72,3 +72,20 @@
     transition: none;
   }
 }
+
+.stepLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.stepLink:hover {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.stepLink:focus-visible {
+  outline: 2px solid var(--admin-focus-ring, var(--admin-accent));
+  outline-offset: 2px;
+  border-radius: var(--radius-sm, 4px);
+}

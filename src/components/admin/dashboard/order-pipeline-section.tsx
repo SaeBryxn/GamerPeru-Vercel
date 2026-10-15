@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import type { OrderPipelineResult } from "@/lib/admin/dashboard-types";
 import { formatInteger } from "@/lib/admin/dashboard-format";
 import { AdminCard, AdminSection, MetricWidget, StaggerItem, StatusDot } from "../ui";
@@ -8,10 +9,14 @@ import styles from "./order-pipeline-section.module.css";
 
 interface OrderPipelineSectionProps {
   orderPipeline: OrderPipelineResult;
+  /** Orders of the period in the orders list, optionally narrowed to one status. */
+  periodOrdersHref?: ((filters?: Record<string, string>) => string) | null;
 }
 
 interface StatusItem {
   id: string;
+  /** Value of the orders list `orderStatus` filter. */
+  orderStatus: string;
   label: string;
   count: number;
   /** Still moving through the flow (dark bar) or already closed (light bar). */
@@ -19,7 +24,10 @@ interface StatusItem {
   dot: StatusDotTone;
 }
 
-export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProps) {
+export function OrderPipelineSection({
+  orderPipeline,
+  periodOrdersHref,
+}: OrderPipelineSectionProps) {
   if (orderPipeline.status === "UNAUTHORIZED") {
     return null;
   }
@@ -30,6 +38,7 @@ export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProp
   const statuses: StatusItem[] = [
     {
       id: "pending",
+      orderStatus: "PENDING",
       label: "Pendientes",
       count: current.pendingOrders,
       isOpen: true,
@@ -38,6 +47,7 @@ export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProp
     },
     {
       id: "confirmed",
+      orderStatus: "CONFIRMED",
       label: "Confirmados",
       count: current.confirmedOrders,
       isOpen: true,
@@ -45,6 +55,7 @@ export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProp
     },
     {
       id: "processing",
+      orderStatus: "PROCESSING",
       label: "En proceso",
       count: current.processingOrders,
       isOpen: true,
@@ -52,6 +63,7 @@ export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProp
     },
     {
       id: "fulfilled",
+      orderStatus: "FULFILLED",
       label: "Completados",
       count: current.fulfilledOrders,
       isOpen: true,
@@ -59,6 +71,7 @@ export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProp
     },
     {
       id: "cancelled",
+      orderStatus: "CANCELLED",
       label: "Cancelados",
       count: current.cancelledOrders,
       isOpen: false,
@@ -66,6 +79,7 @@ export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProp
     },
     {
       id: "expired",
+      orderStatus: "EXPIRED",
       label: "Expirados",
       count: current.expiredOrders,
       isOpen: false,
@@ -73,6 +87,7 @@ export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProp
     },
     {
       id: "refunded",
+      orderStatus: "REFUNDED",
       label: "Reembolsados",
       count: current.refundedOrders,
       isOpen: false,
@@ -88,6 +103,7 @@ export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProp
             label="Total de pedidos creados"
             value={formatInteger(total)}
             valueTestId="orders-total-created"
+            href={periodOrdersHref?.()}
             size="large"
             trend={
               <CountTrendBadge
@@ -104,10 +120,20 @@ export function OrderPipelineSection({ orderPipeline }: OrderPipelineSectionProp
             return (
               <li key={status.id} className={styles.step} data-testid={`order-status-${status.id}`}>
                 <StaggerItem>
-                  <span className={styles.stepLabel}>
-                    <StatusDot tone={status.dot} />
-                    {status.label}
-                  </span>
+                  {periodOrdersHref ? (
+                    <Link
+                      href={periodOrdersHref({ orderStatus: status.orderStatus })}
+                      className={`${styles.stepLabel} ${styles.stepLink}`}
+                    >
+                      <StatusDot tone={status.dot} />
+                      {status.label}
+                    </Link>
+                  ) : (
+                    <span className={styles.stepLabel}>
+                      <StatusDot tone={status.dot} />
+                      {status.label}
+                    </span>
+                  )}
                   <span className={styles.stepCount}>{formatInteger(status.count)}</span>
                   <span
                     className={styles.track}

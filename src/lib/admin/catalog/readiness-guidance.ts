@@ -76,6 +76,10 @@ const GUIDANCE: Record<string, ReadinessGuidance> = {
   SHORT_DESCRIPTION: { section: "informacion", action: "Amplía la descripción" },
   NO_COMPARE_AT_PRICE: { section: "variantes", action: "Agrega el precio tachado" },
   MISSING_WEIGHT: { section: "variantes", action: "Registra el peso en gramos" },
+  MISSING_SPEC_WEIGHT: {
+    section: "especificaciones",
+    action: "Registra el peso en la ficha técnica",
+  },
 };
 
 const FALLBACK: ReadinessGuidance = { section: "resumen", action: "Revisa este punto" };
