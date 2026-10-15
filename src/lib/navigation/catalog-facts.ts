@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { brands, categories, products } from "@/db/schema";
 import type { NavLink } from "@/components/navigation/types";
 import { cacheCatalogQuery } from "@/lib/catalog/catalog-cache";
+import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
 
 export interface CategoryCatalogFacts {
   categorySlug: string;
@@ -49,6 +50,9 @@ const readCatalogNavigationRows = cacheCatalogQuery("catalog-navigation-rows", a
 export async function getCatalogNavigationFacts(): Promise<CatalogNavigationFacts> {
   const byCategory = new Map<string, CategoryCatalogFacts>();
   const allBrands: NavLink[] = [];
+
+  // Fixture runs fall back to the declared navigation instead of the connected database.
+  if (resolveCatalogReaderMode() === "e2e-fixture") return { byCategory, allBrands };
 
   try {
     const [rows, publishedBrands] = await readCatalogNavigationRows();

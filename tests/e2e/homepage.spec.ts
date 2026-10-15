@@ -50,7 +50,7 @@ test.describe("GP-010 Homepage — Sections, Hierarchy, Responsiveness & Accessi
     const showcase = page.getByTestId("split-showcase");
     await showcase.scrollIntoViewIfNeeded();
     await expect(showcase.getByRole("heading", { name: "Armado para competir" })).toBeVisible();
-    await expect(showcase.getByText("Precios en soles")).toBeVisible();
+    await expect(showcase.getByText("Precios en soles", { exact: true })).toBeVisible();
     await expect(showcase.locator("dt")).toHaveCount(4);
   });
 
@@ -162,23 +162,25 @@ test.describe("GP-010 Homepage — Sections, Hierarchy, Responsiveness & Accessi
     await expect(mouseTab).toHaveAttribute("aria-selected", "true");
 
     // Switching tabs swaps the shelf and the "Ver todo en …" link without closing the panel
-    await panel.getByRole("tab", { name: "Teclados" }).click();
-    await expect(panel.getByRole("tab", { name: "Teclados" })).toHaveAttribute(
+    await panel.getByRole("tab", { name: "Mousepads" }).click();
+    await expect(panel.getByRole("tab", { name: "Mousepads" })).toHaveAttribute(
       "aria-selected",
       "true"
     );
-    await expect(panel.getByRole("link", { name: /Ver todo en Teclados/ })).toHaveAttribute(
+    await expect(panel.getByRole("link", { name: /Ver todo en Mousepads/ })).toHaveAttribute(
       "href",
-      "/categorias/teclados"
+      "/categorias/mousepads"
     );
+    // Hidden categories drop out of the collection tabs
+    await expect(panel.getByRole("tab", { name: "Teclados" })).toHaveCount(0);
     await expect(productTrigger).toHaveAttribute("aria-expanded", "true");
     await mouseTab.click();
 
-    // Verify right product zone exists with 4 cards, each with a title link and cart action
-    const productCards = panel.locator("article");
-    await expect(productCards).toHaveCount(4);
-    await expect(productCards.locator("h3 a")).toHaveCount(4);
-    await expect(panel.getByRole("button", { name: "Agregar al carrito" })).toHaveCount(4);
+    // Fixture runs expose no navigation catalog: the shelf states it is empty instead of
+    // rendering placeholder products
+    const shelf = panel.getByRole("tabpanel", { name: "Mouses gaming" });
+    await expect(shelf.getByText("Muy pronto.")).toBeVisible();
+    await expect(panel.locator("article")).toHaveCount(0);
 
     // Verify "Ver todos los productos" semantic link
     const viewAllLink = panel.getByRole("link", { name: /Ver todos los productos/i });

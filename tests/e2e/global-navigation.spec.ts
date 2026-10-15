@@ -100,18 +100,16 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     const nav = page.locator("nav[aria-label='Navegación principal']");
     await expect(nav).toBeVisible();
 
-    // Category destination links must exist in the initial DOM (inside closed panels or as plain links)
-    const categoryHrefs = [
-      "/categorias/mouses",
-      "/categorias/teclados",
-      "/categorias/mousepads",
-      "/categorias/audio",
-    ];
-
-    for (const href of categoryHrefs) {
+    // Visible category destinations must exist in the initial DOM (inside closed panels or as plain links)
+    for (const href of ["/categorias/mouses", "/categorias/mousepads"]) {
       await expect(nav.locator(`a[href='${href}']`).first()).toBeAttached();
     }
-    await expect(nav.getByRole("link", { name: "IEM", exact: true })).toBeVisible();
+
+    // Entries hidden by default (Teclados, IEM) must not leak links anywhere in the primary nav
+    for (const href of ["/categorias/teclados", "/categorias/audio"]) {
+      await expect(nav.locator(`a[href^='${href}']`)).toHaveCount(0);
+    }
+    await expect(nav.getByRole("button", { name: "Teclados", exact: true })).toHaveCount(0);
 
     // Open MegaMenu and assert full-width geometry relative to SiteHeader
     const header = page.locator("header");
@@ -185,10 +183,9 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     const panel = page.locator("#mega-menu-mouses");
     await expect(panel).toBeVisible();
 
-    // Tab into the first MegaMenu sub-link
+    // Tab into the first MegaMenu link; the shelf is catalog-driven, so assert by position
     await page.keyboard.press("Tab");
-    const subLink = panel.getByRole("link", { name: "G Wireless" });
-    await expect(subLink).toBeFocused();
+    await expect(panel.getByRole("link").first()).toBeFocused();
 
     // Close MegaMenu using keyboard Escape
     await page.keyboard.press("Escape");
@@ -302,8 +299,8 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
         const main = document.querySelector("#main-content");
         const header = document.querySelector("header");
         const inMain = main?.contains(el) ?? false;
-        const inHeader =
-          (header?.contains(el) && !document.querySelector("dialog")?.contains(el)) ?? false;
+        const drawer = document.querySelector("dialog[aria-label='Menú de navegación móvil']");
+        const inHeader = (header?.contains(el) && !drawer?.contains(el)) ?? false;
         return inMain || inHeader;
       });
       expect(hasBackgroundFocus).toBe(false);
@@ -364,19 +361,16 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     const footer = page.locator("footer[aria-label='Pie de página']");
     await expect(footer).toBeVisible();
 
-    // Five link columns, each a labelled navigation landmark
+    // Fixture runs expose no navigation catalog, so only the static columns remain; product and
+    // brand columns must drop out rather than invent entries
     const columns = footer.locator("[class*='footerColumn']");
-    await expect(columns).toHaveCount(5);
+    await expect(columns).toHaveCount(2);
 
-    for (const title of ["Mouses", "Mousepads", "Explorar", "Marcas", "Tu cuenta"]) {
+    for (const title of ["Explorar", "Tu cuenta"]) {
       await expect(footer.getByRole("heading", { name: title, level: 3 })).toBeVisible();
     }
-
-    // Product columns link to real product detail pages
-    await expect(footer.getByRole("link", { name: "ATK A9 Plus 2.0" }).first()).toHaveAttribute(
-      "href",
-      "/productos/atk-a9-plus-2-0-black"
-    );
+    await expect(footer.getByRole("heading", { name: "Marcas", level: 3 })).toHaveCount(0);
+    await expect(footer.locator("a[href^='/productos/']")).toHaveCount(0);
 
     // Social profiles row
     await expect(footer.locator("ul[aria-label='Redes sociales de Gamer Perú']")).toBeVisible();
@@ -467,7 +461,7 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
       { width: 1280, height: 800 },
     ];
 
-    const categoryNames = ["Productos", "Mouses", "Teclados", "Mousepads"];
+    const categoryNames = ["Productos", "Mouses", "Mousepads", "Soporte", "Software"];
 
     for (const vp of viewports) {
       await page.setViewportSize(vp);

@@ -1,6 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { installGp014MediaFixtures } from "./helpers/gp014-media-fixtures";
+
+// The stage cross-slides between images, so two <img> coexist mid-transition; only a lone image
+// is a settled stage.
+function settledStageSrc(page: Page): Promise<string | null> {
+  return page
+    .getByTestId("gallery-main-stage")
+    .locator("img")
+    .evaluateAll(([img, ...rest]) => (img && rest.length === 0 ? img.getAttribute("src") : null));
+}
 
 test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
   test.beforeEach(async ({ page }) => {
@@ -14,7 +23,7 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     await expect(firstCard).toBeVisible();
 
     // 2. Click title link to navigate to PDP
-    const titleLink = firstCard.getByRole("link", { name: "Mouse Pro Mod 01" });
+    const titleLink = firstCard.getByRole("link", { name: "Mouse Pro Mod 01", exact: true });
     await titleLink.click();
 
     // 3. Verify URL and Page H1
@@ -81,8 +90,7 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     await expect(page.getByTestId("variant-sku")).toContainText("SKU-MOUSE-PRO-MOD-01-BLK");
 
     // Verify initial gallery main image shows black variant
-    const mainImg = page.getByTestId("gallery-main-stage").locator("img");
-    await expect(mainImg).toHaveAttribute("src", /variant-black/);
+    await expect.poll(() => settledStageSrc(page)).toMatch(/variant-black/);
 
     // Track network requests during variant selection
     const apiRequests: string[] = [];
@@ -110,7 +118,7 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     await expect(page.getByTestId("variant-sku")).toContainText("SKU-MOUSE-PRO-MOD-01-WHT");
 
     // Verify main gallery image changes to white variant
-    await expect(mainImg).toHaveAttribute("src", /variant-white/);
+    await expect.poll(() => settledStageSrc(page)).toMatch(/variant-white/);
 
     // Zero data/API network requests made
     expect(apiRequests).toHaveLength(0);
@@ -169,8 +177,7 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     await expect(page.getByTestId("variant-sku")).toContainText("SKU-MOUSE-PRO-MOD-01-WHT");
 
     // Verify gallery update
-    const mainImg = page.getByTestId("gallery-main-stage").locator("img");
-    await expect(mainImg).toHaveAttribute("src", /variant-white/);
+    await expect.poll(() => settledStageSrc(page)).toMatch(/variant-white/);
 
     // Verify accessibility audit remains clean under reduced motion
     const results = await new AxeBuilder({ page })
@@ -296,8 +303,8 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     const startY = box.y + box.height * 0.5;
 
     // 1. Horizontal dominant swipe left (deltaX = -80px, deltaY = 0px) -> navigates to next image
-    const initialImg = stage.locator("img");
-    const initialSrc = await initialImg.getAttribute("src");
+    let initialSrc: string | null = null;
+    await expect.poll(async () => (initialSrc = await settledStageSrc(page))).not.toBeNull();
 
     await page.mouse.move(startX, startY);
     await page.mouse.down();
@@ -305,21 +312,26 @@ test.describe("GP-014 DB3B — Product Detail Storefront E2E Suite", () => {
     await page.mouse.up();
 
     // Verify stage image changed
-    await expect(stage.locator("img")).not.toHaveAttribute("src", initialSrc ?? "");
+    let currentSrc: string | null = null;
+    await expect
+      .poll(async () => {
+        currentSrc = await settledStageSrc(page);
+        return currentSrc !== null && currentSrc !== initialSrc;
+      })
+      .toBe(true);
 
     // 2. Vertical dominant gesture (deltaX = 10px, deltaY = 60px) -> no navigation
-    const currentSrc = await stage.locator("img").getAttribute("src");
     await page.mouse.move(startX, startY);
     await page.mouse.down();
     await page.mouse.move(startX + 10, startY + 60, { steps: 5 });
     await page.mouse.up();
-    await expect(stage.locator("img")).toHaveAttribute("src", currentSrc ?? "");
+    await expect.poll(() => settledStageSrc(page)).toBe(currentSrc);
 
     // 3. Sub-threshold horizontal gesture (deltaX = 15px < 40px) -> no navigation
     await page.mouse.move(startX, startY);
     await page.mouse.down();
     await page.mouse.move(startX - 15, startY, { steps: 5 });
     await page.mouse.up();
-    await expect(stage.locator("img")).toHaveAttribute("src", currentSrc ?? "");
+    await expect.poll(() => settledStageSrc(page)).toBe(currentSrc);
   });
 });

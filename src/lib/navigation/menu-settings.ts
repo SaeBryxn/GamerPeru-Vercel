@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/db";
 import { storefrontMenuEntries } from "@/db/schema";
 import { cacheCatalogQuery } from "@/lib/catalog/catalog-cache";
+import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
 import { MENU_ENTRY_DESCRIPTORS, isKnownMenuEntry, type MenuEntryDescriptor } from "./menu-entries";
 
 export interface MenuEntrySetting extends MenuEntryDescriptor {
@@ -30,10 +31,13 @@ const readStoredMenuEntries = cacheCatalogQuery("menu-entry-settings", async () 
 export async function getMenuEntrySettings(): Promise<MenuEntrySetting[]> {
   let stored: { entryId: string; isVisible: boolean; displayOrder: number }[] = [];
 
-  try {
-    stored = await readStoredMenuEntries();
-  } catch {
-    stored = [];
+  // Fixture runs must not inherit whatever the operator configured in the connected database.
+  if (resolveCatalogReaderMode() !== "e2e-fixture") {
+    try {
+      stored = await readStoredMenuEntries();
+    } catch {
+      stored = [];
+    }
   }
 
   const byId = new Map(

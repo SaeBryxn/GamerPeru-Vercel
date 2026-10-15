@@ -6,6 +6,8 @@ test.describe("GP-008 Design System — Foundational Visual & Architectural Cont
     const googleFontRequests: string[] = [];
 
     page.on("request", (request) => {
+      // Third-party embeds (the YouTube hero) load their own fonts inside their frame
+      if (request.frame() !== page.mainFrame()) return;
       const url = request.url();
       if (url.includes("fonts.googleapis.com") || url.includes("fonts.gstatic.com")) {
         googleFontRequests.push(url);
@@ -37,7 +39,7 @@ test.describe("GP-008 Design System — Foundational Visual & Architectural Cont
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
 
-    const primaryBtn = page.getByRole("link", { name: "Ver mouses" });
+    const primaryBtn = page.getByTestId("video-hero-scroll-hint");
     await expect(primaryBtn).toBeVisible();
 
     // Verify touch target height (minimum 44px)
@@ -109,7 +111,7 @@ test.describe("GP-008 Design System — Foundational Visual & Architectural Cont
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
 
-    const heroCta = page.getByRole("link", { name: "Ver mouses" });
+    const heroCta = page.getByTestId("video-hero-scroll-hint");
 
     let isFocused = false;
     for (let i = 0; i < 30; i++) {
@@ -141,7 +143,7 @@ test.describe("GP-008 Design System — Foundational Visual & Architectural Cont
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
 
-    const primaryCta = page.getByRole("link", { name: "Ver mouses" });
+    const primaryCta = page.getByTestId("video-hero-scroll-hint");
     const computedTransition = await primaryCta.evaluate((el) => {
       return window.getComputedStyle(el).transitionDuration;
     });

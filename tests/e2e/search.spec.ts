@@ -146,7 +146,7 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
       await expect(page.getByText(/16 resultados para/i)).toBeVisible();
 
       // Verify 12 cards on page 1
-      const page1Cards = page.locator('article[data-testid="product-card"]');
+      const page1Cards = page.locator('main article[data-testid="product-card"]');
       await expect(page1Cards).toHaveCount(12);
 
       // Verify pagination control is visible
@@ -159,7 +159,7 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
       await expect(page).toHaveURL(/\/buscar\?q=mouse&page=2$/);
 
       // Verify remaining 4 cards on page 2
-      const page2Cards = page.locator('article[data-testid="product-card"]');
+      const page2Cards = page.locator('main article[data-testid="product-card"]');
       await expect(page2Cards).toHaveCount(4);
     });
 
@@ -279,6 +279,23 @@ test.describe("GP-012 — Search Experience E2E Suite", () => {
       );
       await searchInput.fill("mouse");
       await predictiveResponse;
+
+      // Axe samples rendered colors, so mid-fade rows would report blended contrast values
+      await expect
+        .poll(() =>
+          dialog.evaluate((root) =>
+            [root, ...root.querySelectorAll<HTMLElement>("[style]")].every((node) => {
+              const { opacity, transform } = (node as HTMLElement).style;
+              const settledOpacity = !opacity || opacity === "1";
+              const settledTransform =
+                !transform ||
+                transform === "none" ||
+                /^translate[XY]?\(0(px|%)?\)$/.test(transform);
+              return settledOpacity && settledTransform;
+            })
+          )
+        )
+        .toBe(true);
 
       const accessibilityScanResults = await new AxeBuilder({ page }).analyze();
       expect(accessibilityScanResults.violations).toEqual([]);

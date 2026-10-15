@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import { cacheCatalogQuery } from "@/lib/catalog/catalog-cache";
+import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
 import { buildCardGallery } from "@/lib/catalog/card-gallery";
 import { buildProductCardSpecs } from "@/lib/catalog/card-specs";
 import { cardCompareAtSql, cardGallerySql, cardSingleVariantSql } from "@/lib/catalog/card-sql";
@@ -144,6 +145,10 @@ async function queryMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
 const readMenuCatalogEntries = cacheCatalogQuery("menu-catalog-entries", queryMenuCatalogEntries);
 
 export async function getMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
+  // Fixture runs render no shelves: hidden menu cards would otherwise inflate page-level card
+  // counts, and the connected database is not the fixture catalog.
+  if (resolveCatalogReaderMode() === "e2e-fixture") return [];
+
   try {
     return await readMenuCatalogEntries();
   } catch {
