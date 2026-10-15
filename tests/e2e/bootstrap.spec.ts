@@ -69,6 +69,8 @@ test.describe("GP-007 Application Foundation E2E & Contract Verification", () =>
 
   test("E: passes baseline automated accessibility audit on storefront home", async ({ page }) => {
     await page.goto("/");
+    // The floating social rail fades in; Axe samples rendered colors, so audit it once settled.
+    await expect(page.getByTestId("social-rail")).toHaveCSS("opacity", "1");
     const accessibilityScanResults = await new AxeBuilder({ page }).analyze();
     expect(accessibilityScanResults.violations).toEqual([]);
   });
