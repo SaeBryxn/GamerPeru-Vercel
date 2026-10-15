@@ -73,9 +73,10 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
     : undefined;
   const page = Math.max(1, parseInt(resolvedParams.page ?? "1", 10) || 1);
 
-  // "Con pendientes" runs the publish validator over the catalog (same rules as the dashboard),
-  // so it is resolved here and handed to the list as a set of product ids.
-  const issueProductIds = await getProductIdsWithIssues();
+  // "Con pendientes" runs the publish validator over the whole catalog (same rules as the
+  // dashboard). On the Workers Free CPU budget that is too heavy for every list view, so it only
+  // runs when the filter is selected, and the chip shows its count only then.
+  const issueProductIds = pending === "issues" ? await getProductIdsWithIssues() : undefined;
 
   const [listResult, brands, categories, allProducts] = await Promise.all([
     getAdminProductList(
@@ -83,7 +84,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
         search,
         status,
         pending: pending === "issues" ? undefined : pending,
-        productIds: pending === "issues" ? issueProductIds : undefined,
+        productIds: issueProductIds,
         brandId,
         categoryId,
         page,
@@ -142,7 +143,7 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
       label: "Con pendientes",
       href: buildUrl({ pending: "issues", status: undefined, page: undefined }),
       active: pending === "issues",
-      count: issueProductIds.length,
+      count: issueProductIds?.length,
     },
     {
       label: "Sin foto",

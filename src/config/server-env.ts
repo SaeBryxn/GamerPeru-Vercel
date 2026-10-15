@@ -69,8 +69,8 @@ export function validateServerEnv(input: Record<string, unknown>): ServerEnv {
   return serverEnvSchema.parse(input);
 }
 
-function parseServerEnv(): ServerEnv {
-  return serverEnvSchema.parse({
+function readRawServerEnv(): Record<string, string | undefined> {
+  return {
     NODE_ENV: process.env.NODE_ENV,
     DATABASE_URL: process.env.DATABASE_URL,
     DATABASE_MIGRATION_URL: process.env.DATABASE_MIGRATION_URL,
@@ -96,7 +96,27 @@ function parseServerEnv(): ServerEnv {
     PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES:
       process.env.PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES,
     DEV_CATALOG_PREVIEW: process.env.DEV_CATALOG_PREVIEW,
-  });
+  };
+}
+
+let cachedRaw: Record<string, string | undefined> | null = null;
+let cachedEnv: ServerEnv | null = null;
+
+/**
+ * Parses once and reuses the result while the inputs are unchanged. process.env can be populated
+ * after module load (Workers bindings) or changed by tests, so the inputs are compared on every
+ * read instead of caching for the lifetime of the isolate; the comparison is far cheaper than a
+ * schema parse on the Workers CPU budget.
+ */
+function parseServerEnv(): ServerEnv {
+  const raw = readRawServerEnv();
+  if (cachedEnv && cachedRaw && Object.keys(raw).every((key) => raw[key] === cachedRaw![key])) {
+    return cachedEnv;
+  }
+  const env = serverEnvSchema.parse(raw);
+  cachedRaw = raw;
+  cachedEnv = env;
+  return env;
 }
 
 export const serverEnv = new Proxy({} as ServerEnv, {
