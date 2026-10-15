@@ -30,7 +30,7 @@ export interface CompareSide {
   /** Small line above the name. */
   kicker: string;
   name: string;
-  image: { src: string; alt: string };
+  image: { src: string | null; alt: string };
 }
 
 export interface CompareSliderProps {

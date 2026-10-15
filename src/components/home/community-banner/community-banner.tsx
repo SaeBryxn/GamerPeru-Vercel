@@ -29,7 +29,9 @@ export interface CommunityBannerProps {
   title: [string, string];
   description: string;
   ctaLabel: string;
-  background: { src: string; alt: string };
+  /** Community link; falls back to the configured Discord profile. */
+  ctaHref?: string | null;
+  background: { src: string | null; alt: string };
 }
 
 /** Dark community banner over an illustrated backdrop. */
@@ -38,9 +40,10 @@ export function CommunityBanner({
   title,
   description,
   ctaLabel,
+  ctaHref,
   background,
 }: CommunityBannerProps) {
-  const discordHref = SOCIAL_LINKS.find((link) => link.id === "discord")?.href ?? "";
+  const discordHref = ctaHref ?? SOCIAL_LINKS.find((link) => link.id === "discord")?.href ?? "";
 
   return (
     <motion.section

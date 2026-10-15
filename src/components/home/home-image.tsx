@@ -4,7 +4,8 @@ import React, { useState } from "react";
 import Image from "next/image";
 
 export interface HomeImageProps {
-  src: string;
+  /** Missing until the operator uploads the image; the slot then collapses to its surface. */
+  src: string | null;
   alt: string;
   sizes: string;
   className?: string;
@@ -18,7 +19,7 @@ export interface HomeImageProps {
  */
 export function HomeImage({ src, alt, sizes, className, priority }: HomeImageProps) {
   const [hasFailed, setHasFailed] = useState(false);
-  if (hasFailed) return null;
+  if (!src || hasFailed) return null;
 
   return (
     <Image

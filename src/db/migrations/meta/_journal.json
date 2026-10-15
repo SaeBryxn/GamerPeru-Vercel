@@ -148,6 +148,13 @@
       "when": 1790882536236,
       "tag": "0020_product_media_placement",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792044999427,
+      "tag": "0021_home_sections",
+      "breakpoints": true
     }
   ]
 }

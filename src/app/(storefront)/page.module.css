@@ -7,3 +7,16 @@
   z-index: 1;
   background-color: var(--color-surface-canvas);
 }
+
+/* Keeps the page H1 for search engines and screen readers when the hero is hidden. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

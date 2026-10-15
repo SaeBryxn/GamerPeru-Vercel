@@ -30,7 +30,7 @@ export interface SplitShowcaseProps {
   eyebrow: string;
   title: string;
   features: ShowcaseFeature[];
-  image: { src: string; alt: string };
+  image: { src: string | null; alt: string };
 }
 
 /**

@@ -5,7 +5,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { HERO_EMBED_SRC, VideoHero } from "@/components/home/video-hero/video-hero";
+import { VideoHero, buildHeroEmbedSrc } from "@/components/home/video-hero/video-hero";
 import { ProductCarousel } from "@/components/home/product-carousel/product-carousel";
 import { FeatureVideo, buildFeatureEmbedSrc } from "@/components/home/feature-video/feature-video";
 import {
@@ -44,7 +44,7 @@ beforeAll(() => {
 
 describe("Video hero", () => {
   it("embeds the background video muted, looping and chromeless on the privacy host", () => {
-    const url = new URL(HERO_EMBED_SRC);
+    const url = new URL(buildHeroEmbedSrc("2gX-vyQwHsA"));
     expect(url.host).toBe("www.youtube-nocookie.com");
     expect(url.pathname).toBe("/embed/2gX-vyQwHsA");
     expect(url.searchParams.get("autoplay")).toBe("1");
@@ -57,7 +57,12 @@ describe("Video hero", () => {
 
   it("keeps the page H1 and exposes the reveal control", () => {
     const html = renderToStaticMarkup(
-      <VideoHero heading="Periféricos gaming de alto rendimiento" revealTargetId="destacado" />
+      <VideoHero
+        heading="Periféricos gaming de alto rendimiento"
+        scrollHintLabel="Desliza para ver la tienda"
+        youtubeVideoId="2gX-vyQwHsA"
+        revealTargetId="destacado"
+      />
     );
     expect(html).toContain("<h1");
     expect(html).toContain("Periféricos gaming de alto rendimiento");

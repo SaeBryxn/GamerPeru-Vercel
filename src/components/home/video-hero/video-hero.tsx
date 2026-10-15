@@ -14,24 +14,23 @@ import { ChevronDown } from "lucide-react";
 import { Icon, useCanHover } from "@/components/ui";
 import styles from "./video-hero.module.css";
 
-const YOUTUBE_VIDEO_ID = "2gX-vyQwHsA";
-
-// Background playback: muted, looping, chromeless, and privacy-enhanced host.
-const EMBED_PARAMS = new URLSearchParams({
-  autoplay: "1",
-  mute: "1",
-  loop: "1",
-  playlist: YOUTUBE_VIDEO_ID,
-  controls: "0",
-  playsinline: "1",
-  rel: "0",
-  modestbranding: "1",
-  disablekb: "1",
-  iv_load_policy: "3",
-  fs: "0",
-});
-
-export const HERO_EMBED_SRC = `https://www.youtube-nocookie.com/embed/${YOUTUBE_VIDEO_ID}?${EMBED_PARAMS.toString()}`;
+/** Background playback: muted, looping, chromeless, and privacy-enhanced host. */
+export function buildHeroEmbedSrc(videoId: string): string {
+  const params = new URLSearchParams({
+    autoplay: "1",
+    mute: "1",
+    loop: "1",
+    playlist: videoId,
+    controls: "0",
+    playsinline: "1",
+    rel: "0",
+    modestbranding: "1",
+    disablekb: "1",
+    iv_load_policy: "3",
+    fs: "0",
+  });
+  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+}
 
 // Past either threshold the curtain opens instead of springing back.
 // The chevron under "Desliza" flashes brand red while the curtain is held, confirming the grab.
@@ -46,6 +45,9 @@ const DRAG_VELOCITY_THRESHOLD = -450;
 export interface VideoHeroProps {
   /** Heading kept for SEO and screen readers; the stage itself stays wordless. */
   heading: string;
+  /** Label of the control that reveals the store. */
+  scrollHintLabel: string;
+  youtubeVideoId: string;
   /** Element scrolled to when the hero is swiped or the chevron is used. */
   revealTargetId: string;
 }
@@ -54,7 +56,12 @@ export interface VideoHeroProps {
  * Full-viewport video stage. It behaves like a curtain: dragging it up (or
  * scrolling) lifts it away and reveals the store underneath.
  */
-export function VideoHero({ heading, revealTargetId }: VideoHeroProps) {
+export function VideoHero({
+  heading,
+  scrollHintLabel,
+  youtubeVideoId,
+  revealTargetId,
+}: VideoHeroProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const prefersReducedMotion = useReducedMotion();
   // Touch screens scroll the curtain away natively: a drag gesture would fight the page scroll,
@@ -127,7 +134,7 @@ export function VideoHero({ heading, revealTargetId }: VideoHeroProps) {
           {!prefersReducedMotion && !isCovered && (
             <iframe
               className={styles.video}
-              src={HERO_EMBED_SRC}
+              src={buildHeroEmbedSrc(youtubeVideoId)}
               title="Video de portada de Gamer Perú"
               allow="autoplay; encrypted-media"
               referrerPolicy="strict-origin-when-cross-origin"
@@ -155,7 +162,7 @@ export function VideoHero({ heading, revealTargetId }: VideoHeroProps) {
           transition={{ type: "spring", stiffness: 420, damping: 26 }}
           data-testid="video-hero-scroll-hint"
         >
-          <span className={styles.scrollHintLabel}>Desliza para ver la tienda</span>
+          <span className={styles.scrollHintLabel}>{scrollHintLabel}</span>
           <motion.span className={styles.scrollHintTint} variants={HINT_TINT_VARIANTS}>
             <motion.span
               className={styles.scrollHintIcon}

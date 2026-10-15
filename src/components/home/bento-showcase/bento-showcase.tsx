@@ -28,9 +28,9 @@ export interface BentoShowcaseProps {
   title: [string, string];
   description: string;
   images: [
-    { src: string; alt: string },
-    { src: string; alt: string },
-    { src: string; alt: string },
+    { src: string | null; alt: string },
+    { src: string | null; alt: string },
+    { src: string | null; alt: string },
   ];
 }
 

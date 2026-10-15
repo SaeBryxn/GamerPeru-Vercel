@@ -9,7 +9,7 @@ function isSafePlainText(val: string): boolean {
   return !NO_HTML_SCRIPT_REGEX.test(val);
 }
 
-const SafeString = (minLen: number, maxLen: number) =>
+export const SafeString = (minLen: number, maxLen: number) =>
   z
     .string()
     .min(minLen)

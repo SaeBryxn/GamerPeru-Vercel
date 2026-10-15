@@ -54,4 +54,5 @@ export * from "./notifications/notification-deliveries";
 export * from "./audit/enums";
 export * from "./audit/audit-events";
 export * from "./navigation/menu-entries";
+export * from "./content/home-sections";
 export * from "./ai";
