@@ -1,12 +1,11 @@
 import type { S3Client } from "@aws-sdk/client-s3";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  InMemoryCatalogStorageAdapter,
   R2CatalogStorageAdapter,
   isAuthoritativeStorageNotFoundError,
 } from "@/lib/admin/catalog/media-storage";
 
-const HEAD_PARAMS = { bucket: "catalog-staging-test", key: "temp/catalog/test-object" };
+const HEAD_PARAMS = { bucket: "public-media-test", key: "products/brand/product/test-object" };
 
 function createAdapter(send: ReturnType<typeof vi.fn>): R2CatalogStorageAdapter {
   return new R2CatalogStorageAdapter({ send } as unknown as S3Client);
@@ -18,7 +17,6 @@ describe("GP-024 R2 catalog HEAD semantics", () => {
     vi.stubEnv("R2_ACCESS_KEY_ID", "unit-test-access-key");
     vi.stubEnv("R2_SECRET_ACCESS_KEY", "unit-test-secret-key");
     vi.stubEnv("R2_PUBLIC_MEDIA_BUCKET", "unit-test-public-media");
-    vi.stubEnv("R2_CATALOG_STAGING_BUCKET", "unit-test-catalog-staging");
     vi.stubEnv(
       "CATALOG_MEDIA_INTENT_HMAC_SECRET",
       "b1b2c3d4e5f67890123456789abcdef0a1b2c3d4e5f67890123456789abcdef0"
@@ -83,17 +81,5 @@ describe("GP-024 R2 catalog HEAD semantics", () => {
       })
     ).toBe(false);
     expect(isAuthoritativeStorageNotFoundError(new Error("network failure"))).toBe(false);
-  });
-
-  it("emits an authoritative NoSuchKey from bounded in-memory reads", async () => {
-    const storage = new InMemoryCatalogStorageAdapter();
-
-    try {
-      await storage.getObjectBytesBounded({ ...HEAD_PARAMS, maxBytes: 1024 });
-      expect.fail("bounded read should fail for a missing object");
-    } catch (error: unknown) {
-      expect((error as Error).name).toBe("NoSuchKey");
-      expect(isAuthoritativeStorageNotFoundError(error)).toBe(true);
-    }
   });
 });

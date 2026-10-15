@@ -1,7 +1,6 @@
 import "server-only";
 import {
   DeleteObjectCommand,
-  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   type S3Client,
@@ -9,26 +8,8 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createR2Client } from "@/lib/storage/r2";
 import { requireCatalogMediaRuntimeConfig } from "@/config/server-env";
-import { CatalogDomainError } from "./types";
 
-export function derivePresignedPutLifetime(
-  intentExpiresAtSeconds: number,
-  currentServerTimeSeconds: number,
-  maximumSigningDurationSeconds: number
-): number {
-  const remainingSeconds = intentExpiresAtSeconds - currentServerTimeSeconds;
-  if (remainingSeconds <= 0) {
-    throw new CatalogDomainError(
-      "La autorización temporal para subir el archivo ha expirado.",
-      "MEDIA_INTENT_TOKEN_EXPIRED",
-      410
-    );
-  }
-
-  return Math.min(remainingSeconds, maximumSigningDurationSeconds);
-}
-
-export interface StagingHeadResult {
+export interface StorageHeadResult {
   contentLength: number;
   contentType?: string;
 }
@@ -43,16 +24,6 @@ export function isAuthoritativeStorageNotFoundError(err: unknown): boolean {
   return e.name === "NotFound" || e.name === "NoSuchKey";
 }
 
-function isPreconditionFailedError(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
-  const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
-  return (
-    e.name === "PreconditionFailed" ||
-    e.name === "AtLeastOneConditionalRequestParameterFailed" ||
-    e.$metadata?.httpStatusCode === 412
-  );
-}
-
 export interface CatalogStorageAdapter {
   generatePresignedPutUrl(params: {
     bucket: string;
@@ -65,27 +36,7 @@ export interface CatalogStorageAdapter {
     contentLength?: number;
   }): Promise<string>;
 
-  headObject(params: { bucket: string; key: string }): Promise<StagingHeadResult | null>;
-
-  getObjectBytes(params: { bucket: string; key: string }): Promise<Buffer>;
-
-  getObjectBytesBounded(params: { bucket: string; key: string; maxBytes: number }): Promise<Buffer>;
-
-  putObject(params: {
-    bucket: string;
-    key: string;
-    body: Buffer;
-    contentType: string;
-    cacheControl?: string;
-  }): Promise<void>;
-
-  putObjectIfNotExists(params: {
-    bucket: string;
-    key: string;
-    body: Buffer;
-    contentType: string;
-    cacheControl?: string;
-  }): Promise<{ created: boolean }>;
+  headObject(params: { bucket: string; key: string }): Promise<StorageHeadResult | null>;
 
   deleteObject(params: { bucket: string; key: string }): Promise<void>;
 }
@@ -125,7 +76,7 @@ export class R2CatalogStorageAdapter implements CatalogStorageAdapter {
     });
   }
 
-  async headObject(params: { bucket: string; key: string }): Promise<StagingHeadResult | null> {
+  async headObject(params: { bucket: string; key: string }): Promise<StorageHeadResult | null> {
     try {
       const res = await this.client.send(
         new HeadObjectCommand({
@@ -145,131 +96,6 @@ export class R2CatalogStorageAdapter implements CatalogStorageAdapter {
         return null;
       }
       // Re-throw non-404 storage failures (e.g. auth, network, 5xx) so service fails closed
-      throw err;
-    }
-  }
-
-  async getObjectBytes(params: { bucket: string; key: string }): Promise<Buffer> {
-    const res = await this.client.send(
-      new GetObjectCommand({
-        Bucket: params.bucket,
-        Key: params.key,
-      })
-    );
-    if (!res.Body) {
-      throw new Error(`Empty body returned for object ${params.key}`);
-    }
-    const bytes = await res.Body.transformToByteArray();
-    return Buffer.from(bytes);
-  }
-
-  async getObjectBytesBounded(params: {
-    bucket: string;
-    key: string;
-    maxBytes: number;
-  }): Promise<Buffer> {
-    const res = await this.client.send(
-      new GetObjectCommand({
-        Bucket: params.bucket,
-        Key: params.key,
-      })
-    );
-    if (!res.Body) {
-      throw new Error(`Empty body returned for object ${params.key}`);
-    }
-
-    const stream = res.Body as unknown as {
-      [Symbol.asyncIterator]?: () => AsyncIterator<Uint8Array | Buffer>;
-      destroy?: () => void;
-      transformToByteArray?: () => Promise<Uint8Array>;
-    };
-
-    if (typeof stream[Symbol.asyncIterator] === "function") {
-      const chunks: Buffer[] = [];
-      let totalBytes = 0;
-      for await (const chunk of stream as AsyncIterable<Uint8Array | Buffer>) {
-        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        totalBytes += buf.length;
-        if (totalBytes > params.maxBytes) {
-          if (typeof stream.destroy === "function") {
-            stream.destroy();
-          }
-          const err = new Error(
-            `MEDIA_FILE_TOO_LARGE: Object ${params.key} exceeded maximum allowed bytes of ${params.maxBytes}`
-          );
-          (err as unknown as { code: string }).code = "PAYLOAD_TOO_LARGE";
-          throw err;
-        }
-        chunks.push(buf);
-      }
-      return Buffer.concat(chunks);
-    }
-
-    if (typeof stream.transformToByteArray === "function") {
-      const bytes = await stream.transformToByteArray();
-      if (bytes.byteLength > params.maxBytes) {
-        const err = new Error(
-          `Object ${params.key} exceeded maximum allowed bytes of ${params.maxBytes}`
-        );
-        (err as unknown as { code: string }).code = "PAYLOAD_TOO_LARGE";
-        throw err;
-      }
-      return Buffer.from(bytes);
-    }
-
-    throw new Error(`Unsupported body type for object ${params.key}`);
-  }
-
-  async putObject(params: {
-    bucket: string;
-    key: string;
-    body: Buffer;
-    contentType: string;
-    cacheControl?: string;
-  }): Promise<void> {
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: params.bucket,
-        Key: params.key,
-        Body: params.body,
-        ContentType: params.contentType,
-        CacheControl: params.cacheControl,
-      })
-    );
-  }
-
-  async putObjectIfNotExists(params: {
-    bucket: string;
-    key: string;
-    body: Buffer;
-    contentType: string;
-    cacheControl?: string;
-  }): Promise<{ created: boolean }> {
-    // Supabase Storage accepts and ignores If-None-Match, so a conditional PUT alone would
-    // report every write as a creation and skip the caller's integrity verification branch.
-    // The HEAD probe restores that signal; the conditional header still wins genuine races on
-    // providers that honor it. Keys are content-addressed, so a lost race rewrites identical bytes.
-    const existing = await this.headObject({ bucket: params.bucket, key: params.key });
-    if (existing) {
-      return { created: false };
-    }
-
-    try {
-      await this.client.send(
-        new PutObjectCommand({
-          Bucket: params.bucket,
-          Key: params.key,
-          Body: params.body,
-          ContentType: params.contentType,
-          CacheControl: params.cacheControl,
-          IfNoneMatch: "*",
-        })
-      );
-      return { created: true };
-    } catch (err: unknown) {
-      if (isPreconditionFailedError(err)) {
-        return { created: false };
-      }
       throw err;
     }
   }
@@ -309,7 +135,7 @@ export class InMemoryCatalogStorageAdapter implements CatalogStorageAdapter {
     return `https://fake-r2-staging.test/${params.bucket}/${params.key}?expiresIn=${params.expiresInSeconds}&contentType=${encodeURIComponent(params.contentType)}`;
   }
 
-  async headObject(params: { bucket: string; key: string }): Promise<StagingHeadResult | null> {
+  async headObject(params: { bucket: string; key: string }): Promise<StorageHeadResult | null> {
     const simulated = this.headFailures.get(params.key);
     if (simulated) {
       throw simulated;
@@ -320,70 +146,6 @@ export class InMemoryCatalogStorageAdapter implements CatalogStorageAdapter {
       contentLength: item.body.length,
       contentType: item.contentType,
     };
-  }
-
-  async getObjectBytes(params: { bucket: string; key: string }): Promise<Buffer> {
-    const item = this.store.get(this.makeStoreKey(params.bucket, params.key));
-    if (!item) {
-      const error = new Error(`NoSuchKey: ${params.key} in bucket ${params.bucket}`);
-      error.name = "NoSuchKey";
-      throw error;
-    }
-    return Buffer.from(item.body);
-  }
-
-  async getObjectBytesBounded(params: {
-    bucket: string;
-    key: string;
-    maxBytes: number;
-  }): Promise<Buffer> {
-    const item = this.store.get(this.makeStoreKey(params.bucket, params.key));
-    if (!item) {
-      const error = new Error(`NoSuchKey: ${params.key} in bucket ${params.bucket}`);
-      error.name = "NoSuchKey";
-      throw error;
-    }
-    if (item.body.length > params.maxBytes) {
-      const err = new Error(
-        `MEDIA_FILE_TOO_LARGE: Object ${params.key} exceeded maximum allowed bytes of ${params.maxBytes}`
-      );
-      (err as unknown as { code: string }).code = "PAYLOAD_TOO_LARGE";
-      throw err;
-    }
-    return Buffer.from(item.body);
-  }
-
-  async putObject(params: {
-    bucket: string;
-    key: string;
-    body: Buffer;
-    contentType: string;
-    cacheControl?: string;
-  }): Promise<void> {
-    this.store.set(this.makeStoreKey(params.bucket, params.key), {
-      body: Buffer.from(params.body),
-      contentType: params.contentType,
-      cacheControl: params.cacheControl,
-    });
-  }
-
-  async putObjectIfNotExists(params: {
-    bucket: string;
-    key: string;
-    body: Buffer;
-    contentType: string;
-    cacheControl?: string;
-  }): Promise<{ created: boolean }> {
-    const storeKey = this.makeStoreKey(params.bucket, params.key);
-    if (this.store.has(storeKey)) {
-      return { created: false };
-    }
-    this.store.set(storeKey, {
-      body: Buffer.from(params.body),
-      contentType: params.contentType,
-      cacheControl: params.cacheControl,
-    });
-    return { created: true };
   }
 
   async deleteObject(params: { bucket: string; key: string }): Promise<void> {

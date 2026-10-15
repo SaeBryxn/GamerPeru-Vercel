@@ -356,7 +356,6 @@ describe("R2 presigned PUT", () => {
     vi.stubEnv("R2_ACCESS_KEY_ID", "unit-test-access-key");
     vi.stubEnv("R2_SECRET_ACCESS_KEY", "unit-test-secret-key");
     vi.stubEnv("R2_PUBLIC_MEDIA_BUCKET", "unit-test-public-media");
-    vi.stubEnv("R2_CATALOG_STAGING_BUCKET", "unit-test-catalog-staging");
     vi.stubEnv("CATALOG_MEDIA_INTENT_HMAC_SECRET", SECRET);
   });
   afterAll(() => vi.unstubAllEnvs());

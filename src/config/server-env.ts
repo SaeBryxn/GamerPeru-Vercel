@@ -22,7 +22,6 @@ export const serverEnvSchema = z
     R2_ACCESS_KEY_ID: z.string().optional(),
     R2_SECRET_ACCESS_KEY: z.string().optional(),
     R2_PUBLIC_MEDIA_BUCKET: z.string().default("gamerperu-public-media"),
-    R2_CATALOG_STAGING_BUCKET: z.string().default("gamerperu-catalog-staging-private"),
     R2_PRIVATE_PROOFS_BUCKET: z.string().default("gamerperu-private-proofs"),
     R2_PRIVATE_PAYMENT_MEDIA_BUCKET: z.string().default("gamerperu-private-payment-media"),
     R2_DB_BACKUPS_BUCKET: z.string().default("gamerperu-db-backups-private"),
@@ -83,7 +82,6 @@ function parseServerEnv(): ServerEnv {
     R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
     R2_PUBLIC_MEDIA_BUCKET: process.env.R2_PUBLIC_MEDIA_BUCKET,
-    R2_CATALOG_STAGING_BUCKET: process.env.R2_CATALOG_STAGING_BUCKET,
     R2_PRIVATE_PROOFS_BUCKET: process.env.R2_PRIVATE_PROOFS_BUCKET,
     R2_PRIVATE_PAYMENT_MEDIA_BUCKET: process.env.R2_PRIVATE_PAYMENT_MEDIA_BUCKET,
     R2_DB_BACKUPS_BUCKET: process.env.R2_DB_BACKUPS_BUCKET,
@@ -114,7 +112,6 @@ export interface CatalogMediaRuntimeConfig {
   r2AccessKeyId: string;
   r2SecretAccessKey: string;
   r2PublicMediaBucket: string;
-  r2CatalogStagingBucket: string;
   catalogMediaIntentHmacSecret: string;
 }
 
@@ -130,7 +127,6 @@ export function requireCatalogMediaRuntimeConfig(): CatalogMediaRuntimeConfig {
   const accessKeyId = serverEnv.R2_ACCESS_KEY_ID;
   const secretAccessKey = serverEnv.R2_SECRET_ACCESS_KEY;
   const publicMediaBucket = serverEnv.R2_PUBLIC_MEDIA_BUCKET;
-  const catalogStagingBucket = serverEnv.R2_CATALOG_STAGING_BUCKET;
   const secret = serverEnv.CATALOG_MEDIA_INTENT_HMAC_SECRET;
 
   // R2 derives its endpoint from the account id; an explicit S3_ENDPOINT (Supabase Storage,
@@ -160,11 +156,6 @@ export function requireCatalogMediaRuntimeConfig(): CatalogMediaRuntimeConfig {
       "R2_PUBLIC_MEDIA_BUCKET is required for real catalog media storage operations."
     );
   }
-  if (!catalogStagingBucket || catalogStagingBucket.trim() === "") {
-    throw new Error(
-      "R2_CATALOG_STAGING_BUCKET is required for real catalog media storage operations."
-    );
-  }
   if (!secret || secret.trim() === "") {
     throw new Error("CATALOG_MEDIA_INTENT_HMAC_SECRET is required for catalog media operations.");
   }
@@ -188,7 +179,6 @@ export function requireCatalogMediaRuntimeConfig(): CatalogMediaRuntimeConfig {
     r2AccessKeyId: accessKeyId.trim(),
     r2SecretAccessKey: secretAccessKey.trim(),
     r2PublicMediaBucket: publicMediaBucket.trim(),
-    r2CatalogStagingBucket: catalogStagingBucket.trim(),
     catalogMediaIntentHmacSecret: trimmedSecret,
   };
 }

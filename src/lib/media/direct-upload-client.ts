@@ -1,4 +1,4 @@
-import { compressImageForUpload } from "./compress-image";
+import { ImagePreparationError, compressImageForUpload } from "./compress-image";
 import {
   DIRECT_UPLOAD_POLICIES,
   checkDirectUpload,
@@ -86,13 +86,25 @@ export async function uploadDirect<Confirmed>({
   onStage,
 }: DirectUploadClientOptions<Confirmed>): Promise<DirectUploadClientResult<Confirmed>> {
   const policy = DIRECT_UPLOAD_POLICIES[purpose];
-  const unsupported = checkDirectUpload(purpose, { type: file.type, size: 1 });
-  if (unsupported) return { ok: false, error: unsupported.message };
+  // Re-encoded purposes accept any decodable still image: what is checked is the prepared output.
+  if (!policy.alwaysReencode) {
+    const unsupported = checkDirectUpload(purpose, { type: file.type, size: 1 });
+    if (unsupported) return { ok: false, error: unsupported.message };
+  }
 
   onStage?.("preparing");
-  const prepared = policy.maxImageDimension
-    ? await compressImageForUpload(file, { maxDimension: policy.maxImageDimension })
-    : file;
+  let prepared: File;
+  try {
+    prepared = policy.maxImageDimension
+      ? await compressImageForUpload(file, {
+          maxDimension: policy.maxImageDimension,
+          alwaysReencode: policy.alwaysReencode,
+        })
+      : file;
+  } catch (error) {
+    if (error instanceof ImagePreparationError) return { ok: false, error: error.message };
+    throw error;
+  }
   const problem = checkDirectUpload(purpose, { type: prepared.type, size: prepared.size });
   if (problem) return { ok: false, error: problem.message };
 

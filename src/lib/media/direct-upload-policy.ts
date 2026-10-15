@@ -5,6 +5,7 @@
  */
 
 export const DIRECT_UPLOAD_PURPOSES = [
+  "gallery_image",
   "story_image",
   "home_image",
   "home_video",
@@ -22,6 +23,8 @@ export interface DirectUploadPolicy {
   maxImageDimension: number | null;
   /** Spanish label used in validation messages. */
   label: string;
+  /** Upload only the browser's re-encoded image, never the original file (strips metadata). */
+  alwaysReencode?: boolean;
 }
 
 const MB = 1024 * 1024;
@@ -29,6 +32,14 @@ const MB = 1024 * 1024;
 const STILL_IMAGE_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
 export const DIRECT_UPLOAD_POLICIES: Readonly<Record<DirectUploadPurpose, DirectUploadPolicy>> = {
+  gallery_image: {
+    mimeTypes: { "image/webp": "webp", "image/jpeg": "jpg" },
+    maxBytes: 4 * MB,
+    mediaType: "IMAGE",
+    maxImageDimension: 2000,
+    label: "La foto",
+    alwaysReencode: true,
+  },
   story_image: {
     mimeTypes: STILL_IMAGE_TYPES,
     maxBytes: 10 * MB,

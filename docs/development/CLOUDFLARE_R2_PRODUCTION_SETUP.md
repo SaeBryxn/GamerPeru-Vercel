@@ -5,33 +5,12 @@ Verified against the code at commit `4ce72de` (`@aws-sdk/client-s3` 3.1111.0).
 
 ---
 
-## 0. Blocker to resolve before go-live: SDK checksum on presigned uploads
+## 0. SDK checksum on presigned uploads (resolved)
 
-Since v3.729 the AWS SDK adds a CRC32 checksum to every signed `PutObject`. With the current
-client config, a presigned upload URL generated for R2 contains:
-
-```
-...&x-amz-checksum-crc32=AAAAAA==&x-amz-sdk-checksum-algorithm=CRC32&...
-```
-
-That checksum is computed at signing time over an **empty body**, not over the file the browser
-later uploads. Supabase Storage ignored it (which is why local uploads work), but R2 validates
-checksums it receives, so a real image upload will be rejected (typically `400 BadDigest` /
-checksum mismatch). This affects both browser upload flows (payment proofs and admin catalog
-media).
-
-Fix (one line in `buildStorageClient`, `src/lib/storage/r2.ts`), to be applied as a code change
-before deploying:
-
-```ts
-new S3Client({
-  // ...
-  requestChecksumCalculation: "WHEN_REQUIRED",
-  responseChecksumValidation: "WHEN_REQUIRED",
-});
-```
-
-Do the smoke test in section 6 after deploying either way.
+Since v3.729 the AWS SDK adds a CRC32 checksum, computed over an empty body, to every signed
+`PutObject`; R2 validates it and rejects the real upload (`400 BadDigest`). The storage client
+in `src/lib/storage/r2.ts` sets `requestChecksumCalculation` and `responseChecksumValidation`
+to `"WHEN_REQUIRED"`, so presigned URLs no longer carry that checksum. Keep it that way.
 
 ---
 
@@ -66,7 +45,6 @@ R2_ACCESS_KEY_ID=<R2 token access key id>
 R2_SECRET_ACCESS_KEY=<R2 token secret>
 
 R2_PUBLIC_MEDIA_BUCKET=gamerperu-public-media
-R2_CATALOG_STAGING_BUCKET=gamerperu-catalog-staging-private
 R2_PRIVATE_PROOFS_BUCKET=gamerperu-private-proofs
 R2_PRIVATE_PAYMENT_MEDIA_BUCKET=gamerperu-private-payment-media
 R2_DB_BACKUPS_BUCKET=gamerperu-db-backups-private
@@ -91,8 +69,8 @@ Create all buckets in the same account, location hint **South America (SAM)** or
 
 | #   | Bucket                              | Access                     | Written by                                                                                                     | Read by                                                     | CORS         |
 | --- | ----------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------ |
-| 1   | `gamerperu-public-media`            | **Public** (custom domain) | Server (finalize step copies from staging)                                                                     | Everyone, via `https://media.gamerperu.com/<key>`           | Not needed   |
-| 2   | `gamerperu-catalog-staging-private` | **Private**                | **Browser** (admin, presigned PUT to `temp/catalog/…`)                                                         | Server (validation)                                         | **Required** |
+| 1   | `gamerperu-public-media`            | **Public** (custom domain) | **Browser** (admin, presigned PUT straight to the final key: gallery, story and home media)                    | Everyone, via `https://media.gamerperu.com/<key>`           | **Required** |
+| 2   | `gamerperu-catalog-staging-private` | Retired (ADR-013)          | Nothing since GP-055; empty it and delete it                                                                   | —                                                           | —            |
 | 3   | `gamerperu-private-proofs`          | **Private**                | **Browser** (customer, presigned PUT to `payment-proofs/staging/…`); server copies to `payment-proofs/final/…` | Server; admins via 5-minute presigned GET                   | **Required** |
 | 4   | `gamerperu-private-payment-media`   | **Private**                | Operator (Yape/Plin QR images registered as media assets)                                                      | Customers via short-lived presigned GET rendered in `<img>` | Not needed   |
 | 5   | `gamerperu-db-backups-private`      | **Private**                | Backup tooling (not referenced by app code today)                                                              | Operators only                                              | Not needed   |
@@ -121,11 +99,10 @@ server-issued presigned URLs.
 
 Staging objects that are never finalized (abandoned uploads) accumulate otherwise.
 
-| Bucket                              | Prefix                    | Rule                                           |
-| ----------------------------------- | ------------------------- | ---------------------------------------------- |
-| `gamerperu-catalog-staging-private` | `temp/catalog/`           | Delete objects after 1 day                     |
-| `gamerperu-private-proofs`          | `payment-proofs/staging/` | Delete objects after 1 day                     |
-| all                                 | (none)                    | Abort incomplete multipart uploads after 1 day |
+| Bucket                     | Prefix                    | Rule                                           |
+| -------------------------- | ------------------------- | ---------------------------------------------- |
+| `gamerperu-private-proofs` | `payment-proofs/staging/` | Delete objects after 1 day                     |
+| all                        | (none)                    | Abort incomplete multipart uploads after 1 day |
 
 Never add an expiry rule on `payment-proofs/final/` — those are the evidence behind approved
 payments.
@@ -135,7 +112,7 @@ payments.
 R2 → Manage R2 API Tokens → Create API token:
 
 - Permission: **Object Read & Write**.
-- Specify buckets: `gamerperu-public-media`, `gamerperu-catalog-staging-private`,
+- Specify buckets: `gamerperu-public-media`,
   `gamerperu-private-proofs`, `gamerperu-private-payment-media` (add the backups bucket only if
   the app will ever write backups; otherwise give backup tooling its own token).
 - TTL: forever (rotate manually), optional client IP filtering is not practical on serverless.
@@ -144,7 +121,7 @@ R2 → Manage R2 API Tokens → Create API token:
 
 ## 3. CORS rules
 
-Only the two buckets that receive **direct browser uploads** need CORS. Uploads are a single
+Only the two buckets that receive **direct browser uploads** need CORS: proofs and public media. Uploads are a single
 `PUT` to a presigned URL with a `Content-Type` header; there is no multipart and no response
 header the page needs to read.
 
@@ -163,14 +140,18 @@ R2 → bucket → Settings → **CORS Policy** → Edit, paste JSON.
 ]
 ```
 
-### `gamerperu-catalog-staging-private` (admin product editor)
+### `gamerperu-public-media` (admin: gallery, story and home media)
+
+Admin uploads go from the browser straight to their final key (ADR-012, ADR-013). The presigned
+URL signs `Content-Type`, `Cache-Control` and the exact `Content-Length`; the browser sets the
+length itself, so only the first two need to be allowed.
 
 ```json
 [
   {
     "AllowedOrigins": ["https://gamerperu.com", "https://www.gamerperu.com"],
     "AllowedMethods": ["PUT"],
-    "AllowedHeaders": ["content-type"],
+    "AllowedHeaders": ["content-type", "cache-control"],
     "MaxAgeSeconds": 3600
   }
 ]
@@ -181,8 +162,8 @@ Notes:
 - Origins must match exactly: scheme + host, no trailing slash, no path.
 - Keep only the origin(s) that actually serve the site. If `www` redirects to the apex, the
   `www` entry is harmless but unnecessary.
-- If the admin ever moves to a subdomain (e.g. `admin.gamerperu.com`), add it to the staging
-  bucket's list.
+- If the admin ever moves to a subdomain (e.g. `admin.gamerperu.com`), add it to the public
+  media bucket's list.
 - Preview deployments (e.g. `*.vercel.app`) are **not** covered. Give previews their own buckets
   and token rather than widening production CORS to wildcard origins.
 - Do not add `GET`: presigned reads are rendered as `<img src>`, which does not need CORS.
@@ -195,7 +176,7 @@ Notes:
 
 1. Create the five buckets (section 2).
 2. Connect `media.gamerperu.com` to `gamerperu-public-media`.
-3. Apply CORS on the proofs and catalog-staging buckets.
+3. Apply CORS on the proofs and public-media buckets.
 4. Add lifecycle rules.
 5. Create the scoped R2 API token; copy the Access Key ID and Secret (the secret is shown once).
 6. Apply the section 0 client change and deploy it.
@@ -232,8 +213,9 @@ the copy.
 3. Upload a proof image on the confirmation page. In the browser DevTools Network tab the
    `PUT` to `gamerperu-private-proofs.<account>.r2.cloudflarestorage.com` must return **200**,
    preceded by a successful `OPTIONS` preflight.
-4. In admin, upload a product image: `PUT` to the catalog staging bucket returns 200 and the
-   finalized image appears.
+4. In admin, upload a product photo: the `PUT` to the public-media bucket returns 200 (after an
+   `OPTIONS` preflight), the photo appears in the gallery, and Workers Logs show no
+   `Error 1102` for the confirm request.
 5. In the server logs, there must be no `payment_proof_*` error events.
 
 ### Reading failures

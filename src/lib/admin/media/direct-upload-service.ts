@@ -43,6 +43,8 @@ const tokenSchema = z
     actorId: z.string().min(1),
     /** Entity the upload belongs to (a product for story images), when there is one. */
     subjectId: z.string().uuid().nullable(),
+    /** Variant the upload belongs to (gallery photos), when there is one. */
+    variantId: z.string().uuid().nullable().default(null),
     objectKey: z.string().min(1).max(500),
     mimeType: z.string().min(1),
     fileSizeBytes: z.number().int().positive(),
@@ -69,6 +71,7 @@ export interface RequestDirectUploadInput {
   purpose: DirectUploadPurpose;
   actorId: string;
   subjectId: string | null;
+  variantId?: string | null;
   /** Folder of the final key, e.g. `home/videos`; the file name is generated here. */
   keyPrefix: string;
   mimeType: string;
@@ -140,6 +143,7 @@ export async function requestDirectUpload(
       purpose: input.purpose,
       actorId: input.actorId,
       subjectId: input.subjectId,
+      variantId: input.variantId ?? null,
       objectKey,
       mimeType: input.mimeType,
       fileSizeBytes: input.fileSizeBytes,

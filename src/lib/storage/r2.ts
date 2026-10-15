@@ -9,9 +9,6 @@ export const R2_BUCKETS = {
   get PUBLIC_MEDIA() {
     return serverEnv.R2_PUBLIC_MEDIA_BUCKET;
   },
-  get CATALOG_STAGING() {
-    return serverEnv.R2_CATALOG_STAGING_BUCKET;
-  },
   get PRIVATE_PROOFS() {
     return serverEnv.R2_PRIVATE_PROOFS_BUCKET;
   },

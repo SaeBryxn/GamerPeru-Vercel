@@ -28,27 +28,20 @@ import {
   updateVariantAction,
   duplicateProductAction,
   transitionProductStatusAction,
-  requestMediaUploadIntentAction,
-  finalizeMediaUploadAction,
+  requestGalleryImageUploadAction,
+  confirmGalleryImageUploadAction,
   updateMediaAltTextAction,
   reorderProductMediaAction,
   detachProductMediaAction,
   setPrimaryMediaAction,
   reassignProductMediaVariantAction,
 } from "@/lib/admin/catalog/actions";
-import type { AllowedMediaUploadMimeType } from "@/lib/admin/catalog/media-crypto";
 import { formatCentsToPenDisplay } from "@/lib/admin/catalog/money";
 import { MutationRequestTracker } from "@/lib/admin/catalog/mutation-request";
 import {
   getStoryLifecycleText,
   type StoryLifecycleSummary,
 } from "@/lib/admin/catalog/story-builder-model";
-import {
-  buildMediaFinalizationRetryRequest,
-  transitionPendingFinalization,
-  type MediaFinalizationIdentity,
-  type PendingFinalizationState,
-} from "@/lib/admin/catalog/media-finalization-retry";
 import {
   getReadinessGuidance,
   type ProductEditorSection,
@@ -68,7 +61,7 @@ import type {
 import { VariantStockCell } from "@/components/admin/inventory/variant-stock-cell";
 import type { VariantStockRow } from "@/lib/admin/inventory/readers";
 import { findWeightSpecField } from "@/lib/admin/catalog/weight-spec";
-import { compressImageForUpload } from "@/lib/media/compress-image";
+import { uploadDirect, type DirectUploadStage } from "@/lib/media/direct-upload-client";
 import styles from "./product-editor.module.css";
 
 interface ProductEditorProps {
@@ -109,8 +102,6 @@ interface UploadQueueItem {
 }
 
 const MAX_MEDIA_BYTES = 10485760;
-// Longest side kept for gallery photos; the storefront never displays them larger.
-const GALLERY_MAX_DIMENSION = 2000;
 const ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
 
 const EDITOR_SECTION_ORDER: ProductEditorSection[] = [
@@ -244,21 +235,12 @@ export function ProductEditor({
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
   const [uploadTargetVariantId, setUploadTargetVariantId] = useState<string>("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
-  const [uploadStage, setUploadStage] = useState<
-    | "idle"
-    | "compressing"
-    | "requesting_intent"
-    | "uploading_staging"
-    | "finalizing"
-    | "success"
-    | "error"
-  >("idle");
+  const [uploadStage, setUploadStage] = useState<DirectUploadStage | "idle" | "success" | "error">(
+    "idle"
+  );
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [clientFileError, setClientFileError] = useState<string | null>(null);
-  const [pendingFinalization, setPendingFinalization] = useState<PendingFinalizationState | null>(
-    null
-  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Media Operation Feedback State
@@ -411,7 +393,6 @@ export function ProductEditor({
   const editVarTracker = useRef(new MutationRequestTracker());
   const duplicateTracker = useRef(new MutationRequestTracker());
   const transitionTracker = useRef(new MutationRequestTracker());
-  const mediaUploadTracker = useRef(new MutationRequestTracker());
   const mediaAltTracker = useRef(new MutationRequestTracker());
   const mediaReorderTracker = useRef(new MutationRequestTracker());
   const mediaPrimaryTracker = useRef(new MutationRequestTracker());
@@ -877,9 +858,6 @@ export function ProductEditor({
     setUploadError(null);
     setUploadSuccess(null);
     setUploadQueue([]);
-    setPendingFinalization((current) =>
-      transitionPendingFinalization(current, { type: "new_logical_operation" })
-    );
 
     if (files.length === 0) {
       setSelectedFiles([]);
@@ -921,108 +899,28 @@ export function ProductEditor({
   };
 
   /**
-   * Runs one file through the full authorize -> transfer -> finalize pipeline.
-   *
-   * Returns the outcome instead of driving page-level state so the queue above can decide whether
-   * to continue; a transport failure during finalization is reported separately because the bytes
-   * already reached storage and only the confirmation needs retrying.
+   * Uploads one photo straight to R2 (ADR-013): the browser re-encodes it (no EXIF, upright, at
+   * most 2000 px), the server signs the PUT and then attaches the stored object after a HEAD
+   * check. Confirm is idempotent, so a retry never adds the photo twice.
    */
-  const uploadSingleFile = async (
-    file: File
-  ): Promise<{ ok: boolean; error?: string; needsFinalizationRetry?: boolean }> => {
-    // Shrinking in the browser keeps the server-side normalization within the Worker CPU budget.
-    setUploadStage("compressing");
-    const upload = await compressImageForUpload(file, { maxDimension: GALLERY_MAX_DIMENSION });
-
-    setUploadStage("requesting_intent");
-
-    let signedToken = "";
-    let putUrl = "";
-    let reqHeaders: Record<string, string> = {};
-
-    try {
-      const intentRes = await requestMediaUploadIntentAction({
-        productId: product.id,
-        variantId: uploadTargetVariantId ? uploadTargetVariantId : null,
-        mimeType: upload.type as AllowedMediaUploadMimeType,
-      });
-
-      if (!intentRes.success || !intentRes.data) {
-        return { ok: false, error: intentRes.error ?? "No se pudo autorizar la subida." };
-      }
-
-      signedToken = intentRes.data.signedIntentToken;
-      putUrl = intentRes.data.presignedPutUrl;
-      reqHeaders = intentRes.data.requiredHeaders;
-    } catch {
-      return { ok: false, error: "Error al solicitar autorización de subida." };
-    }
-
-    try {
-      setUploadStage("uploading_staging");
-      const putRes = await fetch(putUrl, { method: "PUT", headers: reqHeaders, body: upload });
-      if (!putRes.ok) {
-        return { ok: false, error: "Error al transferir el archivo al almacenamiento temporal." };
-      }
-    } catch {
-      return { ok: false, error: "Error de conexión durante la transferencia." };
-    }
-
-    setUploadStage("finalizing");
-    const mutationRequestId = mediaUploadTracker.current.getRequestId({
-      productId: product.id,
-      signedIntentToken: signedToken,
+  const uploadSingleFile = async (file: File): Promise<{ ok: boolean; error?: string }> => {
+    const variantId = uploadTargetVariantId ? uploadTargetVariantId : null;
+    const mutationRequestId = crypto.randomUUID();
+    const result = await uploadDirect({
+      purpose: "gallery_image",
+      file,
+      request: (input) =>
+        requestGalleryImageUploadAction({ productId: product.id, variantId, ...input }),
+      confirm: (input) =>
+        confirmGalleryImageUploadAction({ productId: product.id, mutationRequestId, ...input }),
+      onStage: setUploadStage,
     });
-
-    const finalizationIdentity: MediaFinalizationIdentity = {
-      signedIntentToken: signedToken,
-      mutationRequestId,
-      productId: product.id,
-      targetVariantId: uploadTargetVariantId ? uploadTargetVariantId : null,
-    };
-
-    try {
-      const finalRes = await finalizeMediaUploadAction({
-        productId: product.id,
-        signedIntentToken: signedToken,
-        mutationRequestId,
-      });
-
-      mediaUploadTracker.current.complete();
-
-      if (finalRes.success) {
-        setPendingFinalization((current) =>
-          transitionPendingFinalization(current, { type: "structured_success" })
-        );
-        return { ok: true };
-      }
-
-      setPendingFinalization((current) =>
-        transitionPendingFinalization(current, { type: "structured_domain_rejection" })
-      );
-      return { ok: false, error: finalRes.error ?? "No se pudo registrar la imagen." };
-    } catch {
-      setPendingFinalization((current) =>
-        transitionPendingFinalization(current, {
-          type: "transport_failed",
-          identity: finalizationIdentity,
-        })
-      );
-      return {
-        ok: false,
-        error:
-          "Se cortó la conexión al confirmar. Puedes reintentar sin volver a subir el archivo.",
-        needsFinalizationRetry: true,
-      };
-    }
+    return result.ok ? { ok: true } : { ok: false, error: result.error };
   };
 
   const handleStartUpload = async () => {
     if (selectedFiles.length === 0) return;
 
-    setPendingFinalization((current) =>
-      transitionPendingFinalization(current, { type: "new_logical_operation" })
-    );
     setIsUploadingMedia(true);
     setUploadError(null);
     setUploadSuccess(null);
@@ -1034,7 +932,6 @@ export function ProductEditor({
     setUploadQueue(queue);
 
     let uploaded = 0;
-    let stoppedForRetry = false;
 
     for (const [index, file] of selectedFiles.entries()) {
       setUploadQueue((current) =>
@@ -1051,17 +948,7 @@ export function ProductEditor({
         )
       );
 
-      if (result.ok) {
-        uploaded += 1;
-        continue;
-      }
-
-      // A finalization that failed in transit keeps recoverable state, so the queue stops and
-      // lets the operator retry that exact file before continuing.
-      if (result.needsFinalizationRetry) {
-        stoppedForRetry = true;
-        break;
-      }
+      if (result.ok) uploaded += 1;
     }
 
     const failed = selectedFiles.length - uploaded;
@@ -1073,9 +960,7 @@ export function ProductEditor({
     }
     if (failed > 0) {
       setUploadError(
-        stoppedForRetry
-          ? "Se interrumpió la subida. Reintenta la confirmación para continuar."
-          : `${failed} foto${failed === 1 ? "" : "s"} no se pudo subir. Revisa el detalle debajo.`
+        `${failed} foto${failed === 1 ? "" : "s"} no se pudo subir. Revisa el detalle debajo.`
       );
       setUploadStage("error");
     }
@@ -1087,60 +972,6 @@ export function ProductEditor({
     }
 
     setIsUploadingMedia(false);
-  };
-
-  const handleRetryFinalization = async () => {
-    if (!pendingFinalization) return;
-    const retryRequest = buildMediaFinalizationRetryRequest(pendingFinalization);
-    setIsUploadingMedia(true);
-    setUploadError(null);
-    setUploadSuccess(null);
-    setUploadStage("finalizing");
-    setPendingFinalization((current) =>
-      transitionPendingFinalization(current, { type: "retry_started" })
-    );
-
-    try {
-      const finalRes = await finalizeMediaUploadAction({
-        productId: retryRequest.productId,
-        signedIntentToken: retryRequest.signedIntentToken,
-        mutationRequestId: retryRequest.mutationRequestId,
-      });
-
-      if (finalRes.success) {
-        mediaUploadTracker.current.complete();
-        setPendingFinalization((current) =>
-          transitionPendingFinalization(current, { type: "structured_success" })
-        );
-        setUploadSuccess("Imagen subida y normalizada a WebP exitosamente.");
-        setUploadStage("success");
-        setSelectedFiles([]);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-        router.refresh();
-      } else {
-        mediaUploadTracker.current.complete();
-        setPendingFinalization((current) =>
-          transitionPendingFinalization(current, { type: "structured_domain_rejection" })
-        );
-        setUploadError(finalRes.error ?? "Error al finalizar el registro del activo multimedia.");
-        setUploadStage("error");
-      }
-    } catch {
-      setPendingFinalization((current) =>
-        transitionPendingFinalization(current, {
-          type: "transport_failed",
-          identity: retryRequest,
-        })
-      );
-      setUploadError(
-        "Error de conexión durante el reintento de finalización. Puede volver a intentar."
-      );
-      setUploadStage("error");
-    } finally {
-      setIsUploadingMedia(false);
-    }
   };
 
   const handleSetPrimary = async (item: AdminProductUiDetail["media"][number]) => {
@@ -1847,9 +1678,6 @@ export function ProductEditor({
                     value={uploadTargetVariantId}
                     onChange={(e) => {
                       setUploadTargetVariantId(e.target.value);
-                      setPendingFinalization((current) =>
-                        transitionPendingFinalization(current, { type: "new_logical_operation" })
-                      );
                     }}
                     className={styles.mediaVariantSelect}
                     data-testid="select-media-upload-variant"
@@ -1874,15 +1702,13 @@ export function ProductEditor({
                       <>
                         <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
                         <span>
-                          {uploadStage === "compressing"
-                            ? "Comprimiendo..."
-                            : uploadStage === "requesting_intent"
+                          {uploadStage === "preparing"
+                            ? "Preparando foto..."
+                            : uploadStage === "authorizing"
                               ? "Autorizando..."
-                              : uploadStage === "uploading_staging"
+                              : uploadStage === "uploading"
                                 ? "Subiendo..."
-                                : uploadStage === "finalizing"
-                                  ? "Normalizando WebP..."
-                                  : "Procesando..."}
+                                : "Registrando..."}
                         </span>
                       </>
                     ) : (
@@ -1961,27 +1787,6 @@ export function ProductEditor({
                       </li>
                     ))}
                   </ul>
-                )}
-
-                {pendingFinalization && (
-                  <div style={{ marginTop: "0.5rem" }}>
-                    <button
-                      type="button"
-                      onClick={handleRetryFinalization}
-                      disabled={isUploadingMedia}
-                      className={styles.secondaryButton}
-                      data-testid="btn-retry-finalization"
-                    >
-                      {isUploadingMedia && uploadStage === "finalizing" ? (
-                        <>
-                          <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-                          <span>Reintentando finalización...</span>
-                        </>
-                      ) : (
-                        <span>Reintentar Finalización</span>
-                      )}
-                    </button>
-                  </div>
                 )}
 
                 {clientFileError && (

@@ -12,16 +12,18 @@ import {
   transitionProductStatus,
 } from "./service";
 import {
-  requestCatalogMediaUploadIntent,
-  finalizeCatalogMediaUpload,
   updateMediaAssetAltText,
   reorderProductMedia,
   detachProductMedia,
   setProductPrimaryMedia,
   reassignProductMediaVariant,
-  type RequestCatalogMediaUploadIntentResult,
 } from "./media-service";
-import type { AllowedMediaUploadMimeType } from "./media-crypto";
+import type { DirectUploadRequest } from "@/lib/admin/media/direct-upload-service";
+import {
+  confirmGalleryImageUpload,
+  requestGalleryImageUpload,
+  type ConfirmGalleryImageUploadResult,
+} from "./gallery-media-service";
 import { parsePenInputToCents } from "./money";
 import { mapDomainErrorToUi } from "./error-mapping";
 import { type CatalogStatus, type VariantStatus } from "./types";
@@ -535,106 +537,83 @@ export async function transitionProductStatusAction(
   }
 }
 
-export interface RequestMediaUploadIntentActionInput {
+export interface RequestGalleryImageUploadActionInput {
   productId: string;
   variantId?: string | null;
-  mimeType: AllowedMediaUploadMimeType;
+  mimeType: string;
+  fileSizeBytes: number;
 }
 
-/**
- * Server Action: Request a signed media upload intent and presigned PUT URL.
- */
-export async function requestMediaUploadIntentAction(
-  input: RequestMediaUploadIntentActionInput
-): Promise<ActionResult<RequestCatalogMediaUploadIntentResult>> {
-  const authContext = await getVerifiedAuthContext();
-  if (authContext.status !== "READY") {
-    return {
-      success: false,
-      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
-      code: "AUTHENTICATION_REQUIRED",
-    };
-  }
-
-  if (!authContext.permissions.has("catalog:manage")) {
-    return {
-      success: false,
-      error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
-      code: "FORBIDDEN",
-    };
-  }
+/** Step 1: signs a direct browser-to-R2 upload for one gallery photo. No file data reaches the server. */
+export async function requestGalleryImageUploadAction(
+  input: RequestGalleryImageUploadActionInput
+): Promise<ActionResult<DirectUploadRequest>> {
+  const denied = await requireCatalogMediaManager();
+  if (denied.error) return denied.error;
 
   try {
-    const result = await requestCatalogMediaUploadIntent(
-      {
-        productId: input.productId,
-        variantId: input.variantId,
-        mimeType: input.mimeType,
-      },
-      { authContext }
-    );
-
-    return { success: true, data: result };
+    const data = await requestGalleryImageUpload(input, { authContext: denied.authContext });
+    return { success: true, data };
   } catch (err) {
-    const uiError = mapDomainErrorToUi(err);
-    return { success: false, ...uiError };
+    return { success: false, ...mapDomainErrorToUi(err) };
   }
 }
 
-export interface FinalizeMediaUploadActionInput {
+export interface ConfirmGalleryImageUploadActionInput {
   productId: string;
-  signedIntentToken: string;
-  mutationRequestId: string;
+  uploadToken: string;
+  width?: number | null;
+  height?: number | null;
+  mutationRequestId?: string | null;
 }
 
-/**
- * Server Action: Finalize a staged media upload, normalize to WebP, and commit ProductMedia attachment.
- */
-export async function finalizeMediaUploadAction(
-  input: FinalizeMediaUploadActionInput
-): Promise<ActionResult<{ productMediaId: string; mediaAssetId: string; replayed: boolean }>> {
-  const authContext = await getVerifiedAuthContext();
-  if (authContext.status !== "READY") {
-    return {
-      success: false,
-      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
-      code: "AUTHENTICATION_REQUIRED",
-    };
-  }
-
-  if (!authContext.permissions.has("catalog:manage")) {
-    return {
-      success: false,
-      error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
-      code: "FORBIDDEN",
-    };
-  }
+/** Step 3: after the browser's PUT, checks the object with a HEAD and attaches it to the gallery. */
+export async function confirmGalleryImageUploadAction(
+  input: ConfirmGalleryImageUploadActionInput
+): Promise<ActionResult<ConfirmGalleryImageUploadResult>> {
+  const denied = await requireCatalogMediaManager();
+  if (denied.error) return denied.error;
 
   try {
-    const result = await finalizeCatalogMediaUpload(
+    const data = await confirmGalleryImageUpload(
       {
-        signedIntentToken: input.signedIntentToken,
+        uploadToken: input.uploadToken,
+        width: input.width,
+        height: input.height,
         mutationRequestId: input.mutationRequestId,
       },
-      { authContext }
+      { authContext: denied.authContext }
     );
-
     revalidatePath("/admin/products");
     revalidatePath(`/admin/products/${input.productId}`);
     revalidateStorefront();
+    return { success: true, data };
+  } catch (err) {
+    return { success: false, ...mapDomainErrorToUi(err) };
+  }
+}
 
+async function requireCatalogMediaManager() {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
     return {
-      success: true,
-      data: {
-        productMediaId: result.productMedia.id,
-        mediaAssetId: result.mediaAsset.id,
-        replayed: result.replayed,
+      error: {
+        success: false as const,
+        error: "Debes iniciar sesión con una cuenta de personal autorizada.",
+        code: "AUTHENTICATION_REQUIRED",
       },
     };
-  } catch (err) {
-    const uiError = mapDomainErrorToUi(err);
-    return { success: false, ...uiError };
   }
+  if (!authContext.permissions.has("catalog:manage")) {
+    return {
+      error: {
+        success: false as const,
+        error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
+        code: "FORBIDDEN",
+      },
+    };
+  }
+  return { error: null, authContext };
 }
 
 export interface UpdateMediaAltTextActionInput {
