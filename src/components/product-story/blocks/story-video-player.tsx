@@ -70,6 +70,9 @@ export function StoryVideoPlayer({
 
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
+    // Playback can start between hydration and this effect (an early click), before anyone was
+    // listening for "play"; read the element's state so the control never shows the wrong action.
+    setIsPlaying(!video.paused);
 
     return () => {
       video.removeEventListener("play", onPlay);
