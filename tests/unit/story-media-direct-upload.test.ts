@@ -112,7 +112,7 @@ describe("story image direct upload", () => {
           nowSeconds: NOW,
         }
       )
-    ).rejects.toMatchObject({ code: "STORY_UPLOAD_TOKEN_INVALID" });
+    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_TOKEN_INVALID" });
   });
 
   it("refuses a token issued to another session", async () => {
@@ -127,7 +127,7 @@ describe("story image direct upload", () => {
           nowSeconds: NOW,
         }
       )
-    ).rejects.toMatchObject({ code: "STORY_UPLOAD_ACTOR_MISMATCH" });
+    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_ACTOR_MISMATCH" });
   });
 
   it("reports a missing object without registering anything", async () => {
@@ -142,7 +142,7 @@ describe("story image direct upload", () => {
           nowSeconds: NOW,
         }
       )
-    ).rejects.toMatchObject({ code: "STORY_UPLOAD_NOT_FOUND" });
+    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_NOT_FOUND" });
   });
 
   it("deletes an object whose type or size does not match what was signed", async () => {
@@ -153,7 +153,7 @@ describe("story image direct upload", () => {
         { uploadToken },
         { authContext: admin(), storageAdapter: wrongType, intentSecret: SECRET, nowSeconds: NOW }
       )
-    ).rejects.toMatchObject({ code: "STORY_UPLOAD_MISMATCH" });
+    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_MISMATCH" });
     expect(wrongType.deleteObject).toHaveBeenCalledTimes(1);
 
     const tooLarge = storage({ contentLength: 10485761, contentType: "image/jpeg" });
@@ -162,7 +162,7 @@ describe("story image direct upload", () => {
         { uploadToken },
         { authContext: admin(), storageAdapter: tooLarge, intentSecret: SECRET, nowSeconds: NOW }
       )
-    ).rejects.toMatchObject({ code: "STORY_UPLOAD_MISMATCH" });
+    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_MISMATCH" });
     expect(tooLarge.deleteObject).toHaveBeenCalledTimes(1);
   });
 
@@ -178,6 +178,6 @@ describe("story image direct upload", () => {
           nowSeconds: NOW + 16 * 60,
         }
       )
-    ).rejects.toMatchObject({ code: "STORY_UPLOAD_TOKEN_EXPIRED" });
+    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_TOKEN_EXPIRED" });
   });
 });

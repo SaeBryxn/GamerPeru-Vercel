@@ -144,12 +144,13 @@ test.describe("GP-008 Design System — Foundational Visual & Architectural Cont
     await page.goto("/");
 
     const primaryCta = page.getByTestId("video-hero-scroll-hint");
-    const computedTransition = await primaryCta.evaluate((el) => {
-      return window.getComputedStyle(el).transitionDuration;
-    });
+    await expect(primaryCta).toBeVisible();
 
-    // In reduced motion, transition duration is effectively 0.01ms / 0s / 1e-05s
-    expect(["0s", "0.00001s", "0.01ms", "1e-05s"]).toContain(computedTransition);
+    // In reduced motion, transition duration is effectively 0.01ms / 0s / 1e-05s. Polled because
+    // the button can be read while hydration swaps it, before its styles apply.
+    await expect
+      .poll(() => primaryCta.evaluate((el) => window.getComputedStyle(el).transitionDuration))
+      .toMatch(/^(0s|0\.00001s|0\.01ms|1e-05s)$/);
   });
 
   test("H: verifies responsive viewports with zero horizontal overflow", async ({ page }) => {
