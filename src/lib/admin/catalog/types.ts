@@ -33,7 +33,11 @@ export interface AdminProductListItem {
 }
 
 /** Readiness gaps an operator can filter the catalog by. */
-export type AdminProductPendingFilter = "media" | "stock" | "price" | "variants";
+/**
+ * `issues` covers every product the publish validator flags (blockers or warnings) or whose story
+ * is not published; it is resolved in application code, see `catalog-health.ts`.
+ */
+export type AdminProductPendingFilter = "media" | "stock" | "price" | "variants" | "issues";
 
 export interface AdminProductListQuery {
   status?: CatalogStatus | null;
@@ -41,6 +45,8 @@ export interface AdminProductListQuery {
   brandId?: string | null;
   categoryId?: string | null;
   search?: string | null;
+  /** Restricts the list to these products; how the page applies the `issues` filter. */
+  productIds?: readonly string[] | null;
   page?: number;
   pageSize?: number;
 }

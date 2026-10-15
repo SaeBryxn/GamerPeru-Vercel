@@ -65,7 +65,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
             <HomeStatusSection homeStatus={payload.homeStatus} href={links.home} />
             <CatalogHealthSection
               catalogHealth={payload.catalogHealth}
-              productsHref={links.products?.() ?? null}
+              productsHref={links.products?.({ pending: "issues" }) ?? null}
             />
           </div>
           <div className={styles.metricsDivider}>

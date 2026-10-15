@@ -70,6 +70,15 @@ export async function getAdminProductList(
     ), 0) <= 0`;
   }
 
+  const idFilter = query.productIds
+    ? query.productIds.length > 0
+      ? sql`p.id IN (${sql.join(
+          query.productIds.map((id) => sql`${id}::uuid`),
+          sql`, `
+        )})`
+      : sql`FALSE`
+    : sql`TRUE`;
+
   let searchFilter = sql`TRUE`;
   if (query.search && query.search.trim()) {
     const term = `%${query.search.trim()}%`;
@@ -84,6 +93,7 @@ export async function getAdminProductList(
       AND ${brandFilter}
       AND ${categoryFilter}
       AND ${pendingFilter}
+      AND ${idFilter}
       AND ${searchFilter};
   `;
 
@@ -140,6 +150,7 @@ export async function getAdminProductList(
       AND ${brandFilter}
       AND ${categoryFilter}
       AND ${pendingFilter}
+      AND ${idFilter}
       AND ${searchFilter}
     ORDER BY p.updated_at DESC, p.id DESC
     LIMIT ${pageSize} OFFSET ${offset};

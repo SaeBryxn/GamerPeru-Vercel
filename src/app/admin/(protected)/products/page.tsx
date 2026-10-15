@@ -16,6 +16,7 @@ import {
   getPublishedBrands,
   getPublishedCategories,
 } from "@/lib/admin/catalog/readers";
+import { getProductIdsWithIssues } from "@/lib/admin/catalog/catalog-health";
 import { formatCentsToPenDisplay } from "@/lib/admin/catalog/money";
 import { getProductReadinessGaps, isReadyToPublish } from "@/lib/admin/catalog/list-readiness";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
@@ -59,7 +60,11 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
       : undefined;
   const rawPending = resolvedParams.pending;
   const pending: AdminProductPendingFilter | undefined =
-    rawPending === "media" || rawPending === "stock" || rawPending === "price"
+    rawPending === "media" ||
+    rawPending === "stock" ||
+    rawPending === "price" ||
+    rawPending === "variants" ||
+    rawPending === "issues"
       ? rawPending
       : undefined;
   const brandId = resolvedParams.brandId?.trim() ? resolvedParams.brandId.trim() : undefined;
@@ -68,9 +73,22 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
     : undefined;
   const page = Math.max(1, parseInt(resolvedParams.page ?? "1", 10) || 1);
 
+  // "Con pendientes" runs the publish validator over the catalog (same rules as the dashboard),
+  // so it is resolved here and handed to the list as a set of product ids.
+  const issueProductIds = await getProductIdsWithIssues();
+
   const [listResult, brands, categories, allProducts] = await Promise.all([
     getAdminProductList(
-      { search, status, pending, brandId, categoryId, page, pageSize: 20 },
+      {
+        search,
+        status,
+        pending: pending === "issues" ? undefined : pending,
+        productIds: pending === "issues" ? issueProductIds : undefined,
+        brandId,
+        categoryId,
+        page,
+        pageSize: 20,
+      },
       { authContext }
     ),
     getPublishedBrands({ authContext }),
@@ -119,6 +137,12 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
       href: buildUrl({ status: "DRAFT", pending: undefined, page: undefined }),
       active: status === "DRAFT" && !pending,
       count: hiddenCount,
+    },
+    {
+      label: "Con pendientes",
+      href: buildUrl({ pending: "issues", status: undefined, page: undefined }),
+      active: pending === "issues",
+      count: issueProductIds.length,
     },
     {
       label: "Sin foto",

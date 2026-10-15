@@ -17,6 +17,7 @@ const STATUS_LABEL = { PUBLISHED: "En la tienda", DRAFT: "Oculto", ARCHIVED: "Ar
 
 interface CatalogHealthSectionProps {
   catalogHealth: CatalogHealthResult;
+  /** Product list filtered to products with any pending item. */
   productsHref: string | null;
 }
 
