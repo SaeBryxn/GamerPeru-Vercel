@@ -5,6 +5,7 @@ import {
   confirmStoryImageUploadAction,
   requestStoryImageUploadAction,
 } from "@/lib/admin/catalog/story-media-actions";
+import { compressImageForUpload } from "@/lib/media/compress-image";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 
 export type StoryImageUploadStage = "authorizing" | "uploading" | "processing";
@@ -16,6 +17,8 @@ export type StoryImageUploadResult =
 // The server checks both again, against the uploaded object itself.
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 const MAX_BYTES = 10485760;
+// Wide enough for a full-bleed banner on a large desktop at 2x.
+const STORY_MAX_DIMENSION = 2560;
 
 export const STORY_IMAGE_ACCEPT = ALLOWED_TYPES.join(",");
 
@@ -39,12 +42,16 @@ async function measure(file: File): Promise<{ width: number | null; height: numb
  */
 export async function uploadStoryImage(
   productId: string,
-  file: File,
+  original: File,
   onStage: (stage: StoryImageUploadStage) => void
 ): Promise<StoryImageUploadResult> {
-  if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
+  if (!(ALLOWED_TYPES as readonly string[]).includes(original.type)) {
     return { ok: false, error: "Formato no admitido. Usa JPEG, PNG o WebP." };
   }
+
+  onStage("authorizing");
+  // The story image is served as uploaded, so this is also what the customer downloads.
+  const file = await compressImageForUpload(original, { maxDimension: STORY_MAX_DIMENSION });
   if (file.size > MAX_BYTES) {
     return {
       ok: false,
@@ -52,7 +59,6 @@ export async function uploadStoryImage(
     };
   }
 
-  onStage("authorizing");
   const [request, size] = await Promise.all([
     requestStoryImageUploadAction({ productId, mimeType: file.type, fileSizeBytes: file.size }),
     measure(file),

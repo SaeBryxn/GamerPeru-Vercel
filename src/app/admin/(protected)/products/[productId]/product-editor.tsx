@@ -68,6 +68,7 @@ import type {
 import { VariantStockCell } from "@/components/admin/inventory/variant-stock-cell";
 import type { VariantStockRow } from "@/lib/admin/inventory/readers";
 import { findWeightSpecField } from "@/lib/admin/catalog/weight-spec";
+import { compressImageForUpload } from "@/lib/media/compress-image";
 import styles from "./product-editor.module.css";
 
 interface ProductEditorProps {
@@ -108,6 +109,8 @@ interface UploadQueueItem {
 }
 
 const MAX_MEDIA_BYTES = 10485760;
+// Longest side kept for gallery photos; the storefront never displays them larger.
+const GALLERY_MAX_DIMENSION = 2000;
 const ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
 
 const EDITOR_SECTION_ORDER: ProductEditorSection[] = [
@@ -144,11 +147,11 @@ export function ProductEditor({
   const hasPublishPermission = actorPermissions.includes("catalog:publish");
 
   const [activeSection, setActiveSection] = useState<ProductEditorSection>("resumen");
+  // When the category's technical sheet has a weight field, weight is edited only there.
+  const weightSpecField = findWeightSpecField(currentSpecSchema?.fieldDefinitions);
 
   // A deep link from the product list ("#imagenes") should open that tab, not scroll a long page.
   useEffect(() => {
-  // When the category's technical sheet has a weight field, weight is edited only there.
-  const weightSpecField = findWeightSpecField(currentSpecSchema?.fieldDefinitions);
     const hash = window.location.hash.replace("#", "");
     if (EDITOR_SECTION_ORDER.includes(hash as ProductEditorSection)) {
       setActiveSection(hash as ProductEditorSection);
@@ -242,7 +245,13 @@ export function ProductEditor({
   const [uploadTargetVariantId, setUploadTargetVariantId] = useState<string>("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [uploadStage, setUploadStage] = useState<
-    "idle" | "requesting_intent" | "uploading_staging" | "finalizing" | "success" | "error"
+    | "idle"
+    | "compressing"
+    | "requesting_intent"
+    | "uploading_staging"
+    | "finalizing"
+    | "success"
+    | "error"
   >("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
@@ -921,6 +930,10 @@ export function ProductEditor({
   const uploadSingleFile = async (
     file: File
   ): Promise<{ ok: boolean; error?: string; needsFinalizationRetry?: boolean }> => {
+    // Shrinking in the browser keeps the server-side normalization within the Worker CPU budget.
+    setUploadStage("compressing");
+    const upload = await compressImageForUpload(file, { maxDimension: GALLERY_MAX_DIMENSION });
+
     setUploadStage("requesting_intent");
 
     let signedToken = "";
@@ -931,7 +944,7 @@ export function ProductEditor({
       const intentRes = await requestMediaUploadIntentAction({
         productId: product.id,
         variantId: uploadTargetVariantId ? uploadTargetVariantId : null,
-        mimeType: file.type as AllowedMediaUploadMimeType,
+        mimeType: upload.type as AllowedMediaUploadMimeType,
       });
 
       if (!intentRes.success || !intentRes.data) {
@@ -947,7 +960,7 @@ export function ProductEditor({
 
     try {
       setUploadStage("uploading_staging");
-      const putRes = await fetch(putUrl, { method: "PUT", headers: reqHeaders, body: file });
+      const putRes = await fetch(putUrl, { method: "PUT", headers: reqHeaders, body: upload });
       if (!putRes.ok) {
         return { ok: false, error: "Error al transferir el archivo al almacenamiento temporal." };
       }
@@ -1861,13 +1874,15 @@ export function ProductEditor({
                       <>
                         <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
                         <span>
-                          {uploadStage === "requesting_intent"
-                            ? "Autorizando..."
-                            : uploadStage === "uploading_staging"
-                              ? "Subiendo..."
-                              : uploadStage === "finalizing"
-                                ? "Normalizando WebP..."
-                                : "Procesando..."}
+                          {uploadStage === "compressing"
+                            ? "Comprimiendo..."
+                            : uploadStage === "requesting_intent"
+                              ? "Autorizando..."
+                              : uploadStage === "uploading_staging"
+                                ? "Subiendo..."
+                                : uploadStage === "finalizing"
+                                  ? "Normalizando WebP..."
+                                  : "Procesando..."}
                         </span>
                       </>
                     ) : (
