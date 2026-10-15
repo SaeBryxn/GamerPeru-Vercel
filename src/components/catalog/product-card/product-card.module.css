@@ -193,12 +193,12 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   line-height: 1.3;
 }
 
 .brandLink {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   text-decoration: none;
   display: inline-block;
   border-radius: var(--radius-xs);
@@ -257,7 +257,7 @@
   font-family: var(--font-body), sans-serif;
   font-size: 0.75rem;
   font-weight: 400;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .priceValue {
@@ -276,7 +276,7 @@
 .compareAt {
   font-family: var(--font-body), sans-serif;
   font-size: 0.875rem;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   text-decoration-thickness: 1px;
 }
 

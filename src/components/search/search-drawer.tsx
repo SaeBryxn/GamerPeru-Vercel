@@ -150,7 +150,7 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
             animate="visible"
             exit="hidden"
           >
-            <header className={styles.header}>
+            <div className={styles.header}>
               <h2 id={titleId} className={styles.title}>
                 Buscar
               </h2>
@@ -160,7 +160,7 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
                 onClick={close}
                 aria-label="Cerrar búsqueda"
               />
-            </header>
+            </div>
 
             <motion.form
               role="search"
