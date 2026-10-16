@@ -60,10 +60,10 @@ describe("Menu entry registry", () => {
     expect(isKnownMenuEntry("no-existe")).toBe(false);
   });
 
-  it("records the destinations that have no page yet", () => {
-    expect(getMenuEntryDescriptor("soporte")?.missingDestinations?.length).toBeGreaterThan(0);
-    expect(getMenuEntryDescriptor("software")?.missingDestinations?.length).toBeGreaterThan(0);
-    expect(getMenuEntryDescriptor("mousepads")?.missingDestinations).toBeUndefined();
+  it("has no menu entry pointing at a page that is not built", () => {
+    for (const entry of MENU_ENTRY_DESCRIPTORS) {
+      expect(entry.missingDestinations ?? [], entry.id).toEqual([]);
+    }
   });
 });
 

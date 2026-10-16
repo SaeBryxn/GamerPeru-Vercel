@@ -74,3 +74,4 @@ Report before dependent work is authorized.
 - [GP-053](./GP-053.md) --- Administrable Homepage (added after the v1.2 index)
 - [GP-054](./GP-054.md) --- Actionable Admin Dashboard (added after the v1.2 index)
 - [GP-055](./GP-055.md) --- Product Gallery Direct Upload (added after the v1.2 index)
+- [GP-056](./GP-056.md) --- Mega-Menu Destinations (added after the v1.2 index)

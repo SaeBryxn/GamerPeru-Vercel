@@ -7,6 +7,9 @@ import type { FooterColumn, NavigationConfig, NavLink } from "./types";
  * 1. This file contains presentation seed configuration for the Storefront navigation shell.
  * 2. It emits canonical GP-013 parameter destinations.
  * 3. Modifying this seed does not mutate catalog state.
+ * 4. `series`, `promos` and `brands` are declared empty on purpose: their presence asks
+ *    getStorefrontNavigation() to fill them from published catalog data, so the seed never names
+ *    a brand, product line or photo the store does not carry.
  */
 const PRODUCT_TYPES: NavLink[] = [
   { label: "Mouses gaming", href: "/categorias/mouses" },
@@ -63,48 +66,9 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
       label: "Mouses",
       href: "/categorias/mouses",
       menuLayout: "series",
-      series: [
-        {
-          title: "Serie G",
-          items: [
-            { label: "G Wireless", href: "/buscar?q=serie%20g" },
-            { label: "G Edición Especial", href: "/buscar?q=serie%20g%20edicion" },
-          ],
-        },
-        {
-          title: "Serie X",
-          items: [
-            { label: "X Mini", href: "/buscar?q=serie%20x%20mini" },
-            { label: "X Pro", href: "/buscar?q=serie%20x%20pro" },
-            { label: "X Max", href: "/buscar?q=serie%20x%20max" },
-          ],
-        },
-        {
-          title: "Ediciones Limitadas",
-          items: [{ label: "Colección Magnesio", href: "/buscar?q=edicion%20limitada" }],
-        },
-        {
-          title: "Serie M",
-          items: [
-            { label: "M Standard", href: "/buscar?q=serie%20m" },
-            { label: "M Magnesio", href: "/buscar?q=serie%20m%20magnesio" },
-          ],
-        },
-      ],
+      series: [],
       guide: { label: "Guía de compra", href: "/guia-de-compra/mouses" },
-      promos: [
-        {
-          title: "Serie G",
-          href: "/buscar?q=serie%20g",
-          image: "/media/mega-menu/angulo-1.png",
-        },
-        {
-          title: "Serie M",
-          href: "/buscar?q=serie%20m",
-          image: "/media/mega-menu/angulo-3.png",
-          badge: "Nuevo",
-        },
-      ],
+      promos: [],
       sections: [
         {
           title: "Por Tipo",
@@ -127,13 +91,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
           ],
         },
       ],
-      brands: [
-        { label: "WLMOUSE", href: "/marcas/wlmouse" },
-        { label: "Pulsar", href: "/marcas/pulsar" },
-        { label: "Lamzu", href: "/marcas/lamzu" },
-        { label: "ATK / VXE", href: "/marcas/atk" },
-        { label: "Ninjutso", href: "/marcas/ninjutso" },
-      ],
+      brands: [],
       previews: [
         {
           title: "Ultraligeros",
@@ -162,44 +120,9 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
       label: "Teclados",
       href: "/categorias/teclados",
       menuLayout: "series",
-      series: [
-        {
-          title: "Serie 63 HE",
-          items: [
-            { label: "63 HE Magnético", href: "/buscar?q=63%20he" },
-            { label: "63 HE Edición Aluminio", href: "/buscar?q=63%20he%20aluminio" },
-          ],
-        },
-        {
-          title: "Serie 75 HE",
-          items: [
-            { label: "75 HE Rapid Trigger", href: "/buscar?q=75%20he" },
-            { label: "75 HE Wireless", href: "/buscar?q=75%20he%20wireless" },
-          ],
-        },
-        {
-          title: "Accesorios",
-          items: [
-            { label: "Keycaps PBT", href: "/categorias/accesorios?tipo_accesorio=keycaps" },
-            { label: "Switches", href: "/categorias/accesorios?tipo_accesorio=switches" },
-          ],
-        },
-      ],
+      series: [],
       guide: { label: "Guía de compra", href: "/guia-de-compra/teclados" },
-      promos: [
-        {
-          title: "Serie 63 HE",
-          href: "/buscar?q=63%20he",
-          image: "/media/mega-menu/keyboard/producto-1-angulo-1.png",
-          badge: "Agotado",
-        },
-        {
-          title: "Serie 75 HE",
-          href: "/buscar?q=75%20he",
-          image: "/media/mega-menu/keyboard/producto-2-angulo-1.png",
-          badge: "Nuevo",
-        },
-      ],
+      promos: [],
       sections: [
         {
           title: "Por Formato",
@@ -227,12 +150,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
           ],
         },
       ],
-      brands: [
-        { label: "Wooting", href: "/marcas/wooting" },
-        { label: "DrunkDeer", href: "/marcas/drunkdeer" },
-        { label: "ATK", href: "/marcas/atk" },
-        { label: "MelGeek", href: "/marcas/melgeek" },
-      ],
+      brands: [],
       previews: [
         {
           title: "Rapid Trigger",
@@ -270,12 +188,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
           ],
         },
       ],
-      brands: [
-        { label: "Moondrop", href: "/marcas/moondrop" },
-        { label: "Tangzu", href: "/marcas/tangzu" },
-        { label: "Truthear", href: "/marcas/truthear" },
-        { label: "Sennheiser", href: "/marcas/sennheiser" },
-      ],
+      brands: [],
       previews: [
         {
           title: "IEMs Gaming",
@@ -299,46 +212,9 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
       label: "Mousepads",
       href: "/categorias/mousepads",
       menuLayout: "series",
-      series: [
-        {
-          title: "Superficie",
-          items: [
-            { label: "Vidrio (Glass)", href: "/categorias/mousepads?superficie=vidrio" },
-            { label: "Poron / Control", href: "/categorias/mousepads?superficie=control" },
-            { label: "Speed / Cordura", href: "/categorias/mousepads?superficie=speed" },
-          ],
-        },
-        {
-          title: "Tamaños",
-          items: [
-            { label: "XL (490 × 420 mm)", href: "/categorias/mousepads?tamano=xl" },
-            { label: "Deskmat XXL", href: "/categorias/mousepads?tamano=xxl" },
-          ],
-        },
-        {
-          title: "Marcas",
-          items: [
-            { label: "Artisan", href: "/marcas/artisan" },
-            { label: "Lethal Gaming Gear", href: "/marcas/lgg" },
-            { label: "Pulsar Superglide", href: "/marcas/pulsar" },
-            { label: "Lamzu", href: "/marcas/lamzu" },
-          ],
-        },
-      ],
+      series: [],
       guide: { label: "Guía de compra", href: "/guia-de-compra/mousepads" },
-      promos: [
-        {
-          title: "Vidrio",
-          href: "/categorias/mousepads?superficie=vidrio",
-          image: "/media/mega-menu/mousepad/producto-1-angulo-1.png",
-        },
-        {
-          title: "Control",
-          href: "/categorias/mousepads?superficie=control",
-          image: "/media/mega-menu/mousepad/producto-2-angulo-1.png",
-          badge: "Nuevo",
-        },
-      ],
+      promos: [],
       sections: [
         {
           title: "Por Superficie",
@@ -365,12 +241,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
           ],
         },
       ],
-      brands: [
-        { label: "Artisan", href: "/marcas/artisan" },
-        { label: "Lethal Gaming Gear", href: "/marcas/lgg" },
-        { label: "Pulsar Superglide", href: "/marcas/pulsar" },
-        { label: "Lamzu", href: "/marcas/lamzu" },
-      ],
+      brands: [],
       previews: [
         {
           title: "Vidrio (Glass)",
