@@ -16,6 +16,7 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
       ["storefront-menu", "/admin/menu", "catalog:manage"],
       ["ai-product-assistant", "/admin/products/ai-import", "catalog:ai_research"],
       ["ai-settings", "/admin/settings/ai", "ai:manage_credentials"],
+      ["team", "/admin/equipo", "staff:manage"],
     ]);
   });
 
@@ -65,5 +66,21 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
       "/admin",
       "/admin/pagos",
     ]);
+  });
+
+  it("shows the team screen only with staff:manage", () => {
+    const operational = new Set<PermissionName>([
+      "catalog:manage",
+      "catalog:publish",
+      "catalog:ai_research",
+      "orders:manage",
+      "orders:verify",
+      "support:manage",
+      "support:review_rma",
+    ]);
+    expect(getAdminNavigation(operational).map((item) => item.href)).not.toContain("/admin/equipo");
+    expect(
+      getAdminNavigation(new Set<PermissionName>(["staff:manage"])).map((item) => item.href)
+    ).toEqual(["/admin", "/admin/equipo"]);
   });
 });

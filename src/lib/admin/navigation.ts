@@ -80,6 +80,14 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     requiredPermission: "ai:manage_credentials",
     description: "Proveedores, credenciales y perfiles de IA",
   },
+  {
+    id: "team",
+    label: "Equipo",
+    href: "/admin/equipo",
+    iconName: "Users",
+    requiredPermission: "staff:manage",
+    description: "Quién accede al panel y con qué nivel",
+  },
 ];
 
 /**

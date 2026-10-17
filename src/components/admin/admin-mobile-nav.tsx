@@ -6,6 +6,7 @@ import {
   Bot,
   CheckCircle,
   House,
+  Users,
   LayoutDashboard,
   Menu,
   Package,
@@ -44,6 +45,7 @@ export function AdminMobileNav({
     Tags,
     Menu,
     House,
+    Users,
   };
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);

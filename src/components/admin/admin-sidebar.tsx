@@ -7,6 +7,7 @@ import {
   Bot,
   CheckCircle,
   House,
+  Users,
   LayoutDashboard,
   Menu,
   Package,
@@ -33,6 +34,7 @@ const ICONS = {
   Tags,
   Menu,
   House,
+  Users,
 };
 
 /** Longest matching nav href wins, so nested screens keep their parent active. */

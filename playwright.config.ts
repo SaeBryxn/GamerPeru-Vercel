@@ -13,6 +13,7 @@ export default defineConfig({
     "**/admin-orders-list.spec.ts",
     "**/admin-z-orders-detail.spec.ts",
     "**/admin-payment-verification.spec.ts",
+    "**/admin-team.spec.ts",
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
