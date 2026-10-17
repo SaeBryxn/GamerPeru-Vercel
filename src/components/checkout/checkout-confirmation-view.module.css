@@ -107,7 +107,7 @@
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-brand-primary);
+  color: var(--color-status-danger-text);
 }
 
 .cancelledBadge {

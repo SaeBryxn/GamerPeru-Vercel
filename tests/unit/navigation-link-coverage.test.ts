@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { NAVIGATION_CONFIG } from "@/components/navigation/navigation-data";
@@ -27,20 +27,20 @@ function collectRoutePatterns(dir: string): RegExp[] {
   return patterns;
 }
 
-function collectHrefs(value: unknown, out: string[] = []): string[] {
+function collectStrings(field: string, value: unknown, out: string[] = []): string[] {
   if (Array.isArray(value)) {
-    value.forEach((item) => collectHrefs(item, out));
+    value.forEach((item) => collectStrings(field, item, out));
   } else if (value && typeof value === "object") {
     for (const [key, child] of Object.entries(value)) {
-      if (key === "href" && typeof child === "string") out.push(child);
-      else collectHrefs(child, out);
+      if (key === field && typeof child === "string") out.push(child);
+      else collectStrings(field, child, out);
     }
   }
   return out;
 }
 
 const routes = collectRoutePatterns(APP_DIR);
-const hrefs = [...new Set(collectHrefs(NAVIGATION_CONFIG))];
+const hrefs = [...new Set(collectStrings("href", NAVIGATION_CONFIG))];
 const paths = hrefs.map((href) => new URL(href, "https://gamerperu.com").pathname);
 
 describe("Navigation link coverage", () => {
@@ -70,5 +70,11 @@ describe("Navigation link coverage", () => {
   it("declares no brand pages: brands come from the published catalog", () => {
     expect(paths.filter((path) => path.startsWith("/marcas/"))).toEqual([]);
     expect(JSON.stringify(NAVIGATION_CONFIG).toLowerCase()).not.toContain("wlmouse");
+  });
+
+  it("declares only images that exist in public/", () => {
+    for (const image of collectStrings("image", NAVIGATION_CONFIG)) {
+      expect(existsSync(join(process.cwd(), "public", image)), image).toBe(true);
+    }
   });
 });

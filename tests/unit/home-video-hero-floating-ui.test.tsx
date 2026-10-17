@@ -67,7 +67,26 @@ describe("Video hero", () => {
     expect(html).toContain("<h1");
     expect(html).toContain("Periféricos gaming de alto rendimiento");
     expect(html).toContain("Desliza para ver la tienda");
-    expect(html).toContain("youtube-nocookie.com");
+    // The motion preference is unknown on the server, so the embed starts after hydration.
+    expect(html).not.toContain("youtube-nocookie.com");
+  });
+
+  it("mounts the embed in the browser when motion is welcome", () => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+    });
+    render(
+      <VideoHero
+        heading="Periféricos gaming de alto rendimiento"
+        scrollHintLabel="Desliza para ver la tienda"
+        video={{ kind: "youtube", videoId: "2gX-vyQwHsA" }}
+        revealTargetId="destacado"
+      />
+    );
+    expect(screen.getByTestId("video-hero-frame").getAttribute("src")).toContain(
+      "youtube-nocookie.com"
+    );
   });
 });
 

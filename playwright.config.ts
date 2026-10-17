@@ -12,6 +12,7 @@ export default defineConfig({
     "**/admin-story-builder.spec.ts",
     "**/admin-orders-list.spec.ts",
     "**/admin-z-orders-detail.spec.ts",
+    "**/admin-payment-verification.spec.ts",
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

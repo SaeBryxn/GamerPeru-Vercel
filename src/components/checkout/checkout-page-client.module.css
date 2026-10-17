@@ -178,7 +178,7 @@
 
 .input:disabled {
   background-color: #fafafa;
-  color: #8a8a8a;
+  color: var(--color-text-muted);
 }
 
 .inputError {
@@ -198,7 +198,7 @@
 }
 
 .helpText {
-  color: #8a8a8a;
+  color: var(--color-text-muted);
   font-family: var(--font-body);
   font-size: 12px;
   line-height: 1.5;
@@ -271,7 +271,7 @@
 }
 
 .optionDescription {
-  color: #8a8a8a;
+  color: var(--color-text-muted);
   font-family: var(--font-body);
   font-size: 12.5px;
   line-height: 1.5;
@@ -428,7 +428,7 @@
 }
 
 .itemMeta {
-  color: #8a8a8a;
+  color: var(--color-text-muted);
   font-family: var(--font-body);
   font-size: 12px;
 }
@@ -529,7 +529,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  color: #8a8a8a;
+  color: var(--color-text-muted);
   font-family: var(--font-body);
   font-size: 12px;
   text-align: center;
@@ -633,7 +633,7 @@
 .discountNotice {
   overflow: hidden;
   margin: 0;
-  color: #8a8a8a;
+  color: var(--color-text-muted);
   font-family: var(--font-body);
   font-size: 12.5px;
   line-height: 1.5;

@@ -19,6 +19,7 @@ import {
   getProofViewUrlAction,
   loadVerificationDetailAction,
   rejectPaymentAction,
+  recordLatePaymentRefundAction,
   releasePaymentAction,
 } from "@/lib/payments/verification-actions";
 import type { VerificationDetail, VerificationQueueItem } from "@/lib/payments/verification-queue";
@@ -27,7 +28,7 @@ import { formatAttempt, formatLimaDateTime, formatRelative } from "./format";
 import type { NotifyFn } from "@/components/admin/ui";
 import styles from "./verification.module.css";
 
-type Decision = "approve" | "retry" | "terminal";
+type Decision = "approve" | "retry" | "terminal" | "refund";
 
 type ProofState =
   | { status: "loading" }
@@ -43,12 +44,9 @@ const RETRY_REASONS = [
   "El monto no coincide con el pedido",
 ];
 
-const STOCK_REFUND_REASON = "Sin stock: coordinar reembolso con el cliente";
-
 const TERMINAL_REASONS = [
   "El pago no aparece en la cuenta",
   "Comprobante adulterado o reutilizado",
-  STOCK_REFUND_REASON,
 ];
 
 const DECISION_COPY: Record<Decision, { title: string; confirm: string; hint: string }> = {
@@ -65,7 +63,12 @@ const DECISION_COPY: Record<Decision, { title: string; confirm: string; hint: st
   terminal: {
     title: "Rechazo terminal",
     confirm: "Rechazar definitivamente",
-    hint: "Cancela el pedido y libera el stock. No se puede deshacer.",
+    hint: "Úsalo solo si confirmaste que no llegaron fondos. Cancela el pedido y libera el stock.",
+  },
+  refund: {
+    title: "Registrar devolución externa completada",
+    confirm: "Registrar pago y reembolso",
+    hint: "Solo si verificaste los fondos recibidos y ya devolviste el importe total fuera de Gamer Perú. No confirma el pedido ni asigna stock.",
   },
 };
 
@@ -94,6 +97,8 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
   const [zoomed, setZoomed] = useState(false);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [reason, setReason] = useState("");
+  const [externalReference, setExternalReference] = useState("");
+  const [externalRefundCompleted, setExternalRefundCompleted] = useState(false);
   const [notes, setNotes] = useState("");
   const [stockBlocked, setStockBlocked] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -109,7 +114,7 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
     if (result.success) {
       setDetail(result.detail);
       setDetailError(null);
-      if (result.detail.lateStock && !result.detail.lateStock.available) setStockBlocked(true);
+      setStockBlocked(result.detail.lateStock ? !result.detail.lateStock.available : false);
     } else {
       setDetailError(result.error);
     }
@@ -133,7 +138,8 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
 
   const chooseDecision = (next: Decision) => {
     setDecision((current) => (current === next ? null : next));
-    setReason(next === "terminal" && stockBlocked ? STOCK_REFUND_REASON : "");
+    setReason("");
+    setExternalRefundCompleted(false);
   };
 
   // One attempt id per exact payload: a retry after a network failure replays safely, while an
@@ -149,13 +155,18 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
     if (!decision) return;
     const trimmedReason = reason.trim();
     const trimmedNotes = notes.trim() || null;
-    if (decision !== "approve" && !trimmedReason) {
+    const trimmedReference = externalReference.trim();
+    if ((decision === "retry" || decision === "terminal") && !trimmedReason) {
       notify("error", "Indica el motivo del rechazo.");
+      return;
+    }
+    if (decision === "refund" && (!externalRefundCompleted || !trimmedReference)) {
+      notify("error", "Confirma la devolución externa e ingresa su referencia.");
       return;
     }
 
     const verificationAttemptId = attemptIdFor(
-      [decision, submissionId, trimmedReason, trimmedNotes ?? ""].join("|")
+      [decision, submissionId, trimmedReason, trimmedReference, trimmedNotes ?? ""].join("|")
     );
 
     startTransition(async () => {
@@ -167,22 +178,33 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
               verificationAttemptId,
               notes: trimmedNotes,
             })
-          : await rejectPaymentAction({
-              paymentId: item.paymentId,
-              submissionId,
-              verificationAttemptId,
-              mode: decision === "terminal" ? "TERMINAL" : "RETRYABLE",
-              reason: trimmedReason,
-              notes: trimmedNotes,
-            });
+          : decision === "refund"
+            ? await recordLatePaymentRefundAction({
+                paymentId: item.paymentId,
+                submissionId,
+                verificationAttemptId,
+                externalRefundCompleted,
+                externalReference: trimmedReference,
+                notes: trimmedNotes,
+              })
+            : await rejectPaymentAction({
+                paymentId: item.paymentId,
+                submissionId,
+                verificationAttemptId,
+                mode: decision === "terminal" ? "TERMINAL" : "RETRYABLE",
+                reason: trimmedReason,
+                notes: trimmedNotes,
+              });
 
       if (result.success) {
         const message =
-          result.decision === "APPROVED"
-            ? `Pago aprobado · pedido ${item.orderNumber} confirmado`
-            : result.decision === "REJECTED_RETRYABLE"
-              ? `Rechazado · ${item.orderNumber} puede reenviar su comprobante`
-              : `Rechazo terminal · pedido ${item.orderNumber} cancelado`;
+          result.paymentStatus === "REFUNDED"
+            ? `Pago recibido y reembolso registrado · pedido ${item.orderNumber}`
+            : result.decision === "APPROVED"
+              ? `Pago aprobado · pedido ${item.orderNumber} confirmado`
+              : result.decision === "REJECTED_RETRYABLE"
+                ? `Rechazado · ${item.orderNumber} puede reenviar su comprobante`
+                : `Rechazo terminal · pedido ${item.orderNumber} cancelado`;
         notify("success", message);
         onClose();
         return;
@@ -191,8 +213,7 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
       notify("error", result.error);
       if (result.code === "LATE_PAYMENT_STOCK_UNAVAILABLE") {
         setStockBlocked(true);
-        setDecision("terminal");
-        setReason(STOCK_REFUND_REASON);
+        setDecision(null);
       } else if (result.code === "CLAIMED_BY_OTHER" || result.code === "INVALID_PAYMENT_STATE") {
         onClose();
       } else if (result.code === "STALE_SUBMISSION") {
@@ -336,12 +357,12 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
               <div>
                 <p className={styles.noticeTitle}>
                   {stockBlocked
-                    ? "Sin stock disponible - Rechazar y coordinar reembolso"
+                    ? "Sin stock disponible para este pago tardío"
                     : "Pago tardío: la reserva ya había vencido"}
                 </p>
                 <p className={styles.noticeText}>
                   {stockBlocked
-                    ? "El stock de este pedido se vendió mientras el pago llegaba. Solo puedes rechazarlo de forma terminal y coordinar la devolución del dinero."
+                    ? "Si recibiste los fondos y ya completaste la devolución externa, registra su referencia. Si no llegaron fondos, usa el rechazo terminal. No rechaces como impago un dinero recibido."
                     : "Al aprobar se vuelve a tomar el stock; hoy está disponible."}
                 </p>
                 {detail?.lateStock?.shortfalls.map((shortfall) => (
@@ -457,7 +478,7 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
                 <p className={styles.decisionTitle}>{DECISION_COPY[decision].title}</p>
                 <p className={styles.helpText}>{DECISION_COPY[decision].hint}</p>
 
-                {decision !== "approve" && (
+                {(decision === "retry" || decision === "terminal") && (
                   <>
                     <div
                       className={styles.reasonChips}
@@ -489,6 +510,40 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
                   </>
                 )}
 
+                {decision === "refund" && (
+                  <>
+                    <label className={styles.field}>
+                      <span className={styles.label}>Referencia de la devolución externa</span>
+                      <input
+                        className={styles.input}
+                        value={externalReference}
+                        maxLength={100}
+                        required
+                        onChange={(event) => setExternalReference(event.target.value)}
+                        placeholder="Código de operación del banco o billetera"
+                      />
+                    </label>
+                    <label className={styles.refundDeclaration}>
+                      <input
+                        type="checkbox"
+                        checked={externalRefundCompleted}
+                        required
+                        onChange={(event) => setExternalRefundCompleted(event.target.checked)}
+                      />
+                      <span>
+                        Declaro que verifiqué la recepción del pago, que faltaba stock al decidir la
+                        devolución y que el importe total ya fue devuelto al cliente fuera de Gamer
+                        Perú.
+                      </span>
+                    </label>
+                    <p className={styles.helpText}>
+                      El sistema registrará tu identidad, el importe y la referencia. Avisa al
+                      cliente por un canal seguro: este registro no envía un correo automático de
+                      reembolso.
+                    </p>
+                  </>
+                )}
+
                 <label className={styles.field}>
                   <span className={styles.label}>Notas internas (opcional)</span>
                   <textarea
@@ -514,7 +569,12 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
                     type="button"
                     className={decision === "terminal" ? styles.dangerButton : styles.primaryButton}
                     onClick={submitDecision}
-                    disabled={isPending || (decision !== "approve" && !reason.trim())}
+                    disabled={
+                      isPending ||
+                      ((decision === "retry" || decision === "terminal") && !reason.trim()) ||
+                      (decision === "refund" &&
+                        (!externalRefundCompleted || !externalReference.trim()))
+                    }
                   >
                     {isPending ? "Guardando…" : DECISION_COPY[decision].confirm}
                   </button>
@@ -535,6 +595,18 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
             Soltar caso
           </button>
           <div className={styles.actionGroup}>
+            {(item.submission.isLate || stockBlocked) && (
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => chooseDecision("refund")}
+                aria-pressed={decision === "refund"}
+                disabled={isPending}
+              >
+                <Check size={15} aria-hidden="true" />
+                Pago recibido · reembolso completado
+              </button>
+            )}
             <button
               type="button"
               className={styles.dangerOutlineButton}

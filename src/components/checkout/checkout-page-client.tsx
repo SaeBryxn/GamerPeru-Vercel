@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -51,6 +51,9 @@ export function CheckoutPageClient({
   context: initialContext,
 }: CheckoutPageClientProps): React.JSX.Element {
   const router = useRouter();
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => setIsHydrated(true), []);
 
   // 1. Authoritative Dynamic Context State
   const [currentContext, setCurrentContext] = useState<CheckoutContextDTO>(initialContext);
@@ -444,7 +447,7 @@ export function CheckoutPageClient({
     !selectedPaymentCode;
 
   return (
-    <div className={styles.pageWrapper} data-testid="checkout-page">
+    <div className={styles.pageWrapper} data-testid="checkout-page" data-hydrated={isHydrated}>
       <div className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>Finalizar Compra</h1>
         <p className={styles.pageSubtitle}>

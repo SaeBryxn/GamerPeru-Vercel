@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import postgres from "postgres";
 import { S3Client } from "@aws-sdk/client-s3";
 import { generateUuidV7 } from "@/db/utils/uuid";
+import { logger } from "@/lib/logger";
 import { generateAnonymousSessionToken } from "@/lib/cart/session";
 import { submitCheckout } from "@/lib/checkout";
 import { getPaymentProofViewUrl } from "@/lib/payments/proof-viewer";
@@ -11,6 +12,7 @@ import {
   approvePayment,
   claimPaymentVerification,
   LATE_PAYMENT_STOCK_UNAVAILABLE_MESSAGE,
+  recordLatePaymentRefund,
   rejectPayment,
   releasePaymentVerificationClaim,
   __setTestPaymentVerificationTransactionHook,
@@ -132,6 +134,7 @@ describe("GP-028 — Live PostgreSQL payment verification", () => {
     await sql`DELETE FROM audit_events WHERE target_id IN (SELECT id::text FROM orders WHERE customer_email LIKE ${`%@${emailDomain}`})`;
     await sql`DELETE FROM outbox_events WHERE aggregate_id IN (SELECT id::text FROM payments WHERE payment_method_code = ${paymentMethodCode})`;
     await sql`DELETE FROM outbox_events WHERE aggregate_id IN (SELECT id::text FROM orders WHERE customer_email LIKE ${`%@${emailDomain}`})`;
+    await sql`DELETE FROM refunds WHERE payment_id IN (${ourPayments})`;
     await sql`DELETE FROM payment_submissions WHERE payment_id IN (${ourPayments})`;
     await sql`DELETE FROM media_assets WHERE object_key LIKE 'payment-proofs/final/%/test/proof.png'`;
     await sql`DELETE FROM payment_proof_upload_intents WHERE payment_id IN (${ourPayments})`;
@@ -348,6 +351,15 @@ describe("GP-028 — Live PostgreSQL payment verification", () => {
           paymentId: order.paymentId,
           submissionId: order.submissionId,
           verificationAttemptId: generateUuidV7(),
+        })
+      ).toMatchObject({ success: false, code: "UNAUTHORIZED" });
+      expect(
+        await recordLatePaymentRefund({
+          paymentId: order.paymentId,
+          submissionId: order.submissionId,
+          verificationAttemptId: generateUuidV7(),
+          externalRefundCompleted: true,
+          externalReference: "REF-UNAUTHORIZED-028",
         })
       ).toMatchObject({ success: false, code: "UNAUTHORIZED" });
 
@@ -813,7 +825,7 @@ describe("GP-028 — Live PostgreSQL payment verification", () => {
       expect(after.reserved).toBe(before.reserved);
     });
 
-    it("blocks approval without stock, writes nothing, and still allows a terminal rejection", async () => {
+    it("records received late funds and the completed external refund without allocating stock", async () => {
       const order = await lateSubmittedOrder(variantId2);
 
       // Someone else bought the last units while this payment was late.
@@ -838,7 +850,7 @@ describe("GP-028 — Live PostgreSQL payment verification", () => {
         error: LATE_PAYMENT_STOCK_UNAVAILABLE_MESSAGE,
       });
       expect(LATE_PAYMENT_STOCK_UNAVAILABLE_MESSAGE).toBe(
-        "Sin stock disponible - Rechazar y coordinar reembolso"
+        "Sin stock disponible. Si recibiste los fondos, registra la devolución externa confirmada."
       );
 
       const row = await paymentRow(order.paymentId);
@@ -863,23 +875,203 @@ describe("GP-028 — Live PostgreSQL payment verification", () => {
       `);
       expect(approvals).toBe(0);
 
-      const rejection = await rejectPayment({
+      const refundInput = {
         paymentId: order.paymentId,
         submissionId: order.submissionId,
         verificationAttemptId: generateUuidV7(),
-        mode: "TERMINAL",
-        reason: "Sin stock: coordinar reembolso con el cliente",
+        externalRefundCompleted: true,
+        externalReference: "  REEMB-OP-49281  ",
+      };
+      const refund = await recordLatePaymentRefund(refundInput);
+      expect(refund).toMatchObject({
+        success: true,
+        decision: "APPROVED",
+        paymentStatus: "REFUNDED",
+        orderStatus: "REFUNDED",
+        replayed: false,
       });
-      expect(rejection).toMatchObject({ success: true, paymentStatus: "REJECTED" });
-      expect(await orderStatus(order.orderId)).toBe("CANCELLED");
+      expect(await orderStatus(order.orderId)).toBe("REFUNDED");
+      expect(await reservationStatuses(order.orderId)).toEqual(["RELEASED"]);
       expect(await inventory(inventoryItemId2)).toEqual(before);
 
-      const refunds = await scalar(sql`
-        SELECT count(*)::int AS refunds FROM refunds WHERE payment_id = ${order.paymentId}
-      `);
-      expect(refunds).toBe(0);
+      const [record] = await sql`
+        SELECT r.amount_cents, r.external_reference, r.actor_auth_user_id,
+               p.refunded_amount_cents, p.amount_cents, p.status
+        FROM refunds r JOIN payments p ON p.id = r.payment_id
+        WHERE r.payment_id = ${order.paymentId}
+      `;
+      expect(record).toMatchObject({
+        external_reference: "REEMB-OP-49281",
+        actor_auth_user_id: operatorA,
+        status: "REFUNDED",
+      });
+      expect(record!.amount_cents).toBeGreaterThan(0);
+      expect(record!.refunded_amount_cents).toBe(record!.amount_cents);
+      const [verification] = await sql`
+        SELECT decision FROM payment_verifications WHERE payment_id = ${order.paymentId}
+      `;
+      expect(verification!.decision).toBe("APPROVED");
+      const [audit] = await sql`
+        SELECT metadata FROM audit_events WHERE action = 'orders:late_refund'
+        AND metadata->>'paymentId' = ${order.paymentId}
+      `;
+      expect(audit!.metadata).toMatchObject({ externalRefundCompleted: true });
+      const events = await sql`
+        SELECT event_name, payload FROM outbox_events
+        WHERE aggregate_id = ${order.paymentId}
+          AND event_name IN ('PaymentApproved', 'RefundIssued')
+      `;
+      expect(events.map((event) => event.event_name).sort()).toEqual([
+        "PaymentApproved",
+        "RefundIssued",
+      ]);
+      expect(events.find((event) => event.event_name === "PaymentApproved")!.payload).toMatchObject(
+        { immediatelyRefunded: true }
+      );
+
+      const replay = await recordLatePaymentRefund(refundInput);
+      expect(replay).toMatchObject({ success: true, replayed: true });
+      const changed = await recordLatePaymentRefund({
+        ...refundInput,
+        externalReference: "OTHER-REF",
+      });
+      expect(changed).toMatchObject({ success: false, code: "IDEMPOTENCY_CONFLICT" });
+      expect(
+        await scalar(sql`SELECT count(*)::int FROM refunds WHERE payment_id = ${order.paymentId}`)
+      ).toBe(1);
+      const secondAttempt = await recordLatePaymentRefund({
+        ...refundInput,
+        verificationAttemptId: generateUuidV7(),
+      });
+      expect(secondAttempt).toMatchObject({ success: false, code: "INVALID_PAYMENT_STATE" });
 
       await sql`UPDATE inventory_items SET quantity_on_hand = 100 WHERE id = ${inventoryItemId2}`;
+    });
+
+    it("rolls back every refund write when finalization fails and permits a safe retry", async () => {
+      const order = await lateSubmittedOrder(variantId2);
+      actAs(operatorA);
+      await claimPaymentVerification({ paymentId: order.paymentId });
+      const input = {
+        paymentId: order.paymentId,
+        submissionId: order.submissionId,
+        verificationAttemptId: generateUuidV7(),
+        externalRefundCompleted: true,
+        externalReference: "REF-ROLLBACK-028",
+      };
+
+      const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
+      __setTestPaymentVerificationTransactionHook(async (stage) => {
+        if (stage === "before_commit") throw new Error("simulated commit failure");
+      });
+      try {
+        expect(await recordLatePaymentRefund(input)).toMatchObject({
+          success: false,
+          code: "SYSTEM_ERROR",
+        });
+        expect(errorLog).toHaveBeenCalledOnce();
+      } finally {
+        __setTestPaymentVerificationTransactionHook(null);
+        errorLog.mockRestore();
+      }
+
+      expect((await paymentRow(order.paymentId)).status).toBe("VERIFYING");
+      expect(await orderStatus(order.orderId)).toBe("PENDING");
+      expect(await reservationStatuses(order.orderId)).toEqual(["RELEASED"]);
+      expect(
+        await scalar(sql`SELECT count(*)::int FROM refunds WHERE payment_id = ${order.paymentId}`)
+      ).toBe(0);
+      expect(
+        await scalar(
+          sql`SELECT count(*)::int FROM payment_verifications WHERE payment_id = ${order.paymentId}`
+        )
+      ).toBe(0);
+      expect(
+        await scalar(
+          sql`SELECT count(*)::int FROM outbox_events WHERE aggregate_id = ${order.paymentId} AND event_name IN ('PaymentApproved', 'RefundIssued')`
+        )
+      ).toBe(0);
+      expect(
+        await scalar(
+          sql`SELECT count(*)::int FROM audit_events WHERE action = 'orders:late_refund' AND metadata->>'paymentId' = ${order.paymentId}`
+        )
+      ).toBe(0);
+      expect(
+        await scalar(
+          sql`SELECT count(*)::int FROM idempotency_keys WHERE idempotency_key = ${`PAYMENT_VERIFICATION:${input.verificationAttemptId}`}`
+        )
+      ).toBe(0);
+
+      expect(await recordLatePaymentRefund(input)).toMatchObject({
+        success: true,
+        paymentStatus: "REFUNDED",
+        replayed: false,
+      });
+    });
+
+    it("requires declaration and reference, but records a completed refund if stock later returns", async () => {
+      const order = await lateSubmittedOrder(variantId2);
+      await sql`
+        UPDATE inventory_items SET quantity_on_hand = quantity_reserved + quantity_allocated
+        WHERE id = ${inventoryItemId2}
+      `;
+      await sql`UPDATE inventory_items SET quantity_on_hand = 100 WHERE id = ${inventoryItemId2}`;
+      actAs(operatorA);
+      await claimPaymentVerification({ paymentId: order.paymentId });
+      const input = {
+        paymentId: order.paymentId,
+        submissionId: order.submissionId,
+        verificationAttemptId: generateUuidV7(),
+        externalRefundCompleted: true,
+        externalReference: "REF-50010",
+      };
+      expect(
+        await recordLatePaymentRefund({ ...input, externalRefundCompleted: false })
+      ).toMatchObject({ success: false, code: "INVALID_INPUT" });
+      expect(await recordLatePaymentRefund({ ...input, externalReference: "  " })).toMatchObject({
+        success: false,
+        code: "INVALID_INPUT",
+      });
+      expect((await paymentRow(order.paymentId)).status).toBe("VERIFYING");
+      expect(
+        await scalar(sql`SELECT count(*)::int FROM refunds WHERE payment_id = ${order.paymentId}`)
+      ).toBe(0);
+      expect(await recordLatePaymentRefund(input)).toMatchObject({
+        success: true,
+        paymentStatus: "REFUNDED",
+        orderStatus: "REFUNDED",
+      });
+      expect(await reservationStatuses(order.orderId)).toEqual(["RELEASED"]);
+      expect(
+        await scalar(sql`SELECT count(*)::int FROM refunds WHERE payment_id = ${order.paymentId}`)
+      ).toBe(1);
+    });
+
+    it("serializes concurrent retries of one external refund intent", async () => {
+      const order = await lateSubmittedOrder(variantId2);
+      actAs(operatorA);
+      await claimPaymentVerification({ paymentId: order.paymentId });
+      const input = {
+        paymentId: order.paymentId,
+        submissionId: order.submissionId,
+        verificationAttemptId: generateUuidV7(),
+        externalRefundCompleted: true,
+        externalReference: "REF-CONCURRENT-018",
+      };
+      const results = await Promise.all([
+        recordLatePaymentRefund(input),
+        recordLatePaymentRefund(input),
+      ]);
+      expect(results.every((result) => result.success)).toBe(true);
+      expect(results.filter((result) => result.success && result.replayed)).toHaveLength(1);
+      expect(
+        await scalar(sql`SELECT count(*)::int FROM refunds WHERE payment_id = ${order.paymentId}`)
+      ).toBe(1);
+      expect(
+        await scalar(
+          sql`SELECT count(*)::int FROM payment_verifications WHERE payment_id = ${order.paymentId}`
+        )
+      ).toBe(1);
     });
   });
 

@@ -285,6 +285,12 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
 
     const dialog = page.locator("dialog[aria-label='Menú de navegación móvil']");
     await expect(dialog).toBeVisible();
+    // The panel slides in; a coordinate click during the transition can land on the backdrop.
+    await dialog
+      .locator("div[role='document']")
+      .evaluate((panel) =>
+        Promise.all(panel.getAnimations().map((animation) => animation.finished))
+      );
 
     // 1. Clicking inside drawerPanel does NOT close the drawer
     await page.mouse.click(100, 200);
@@ -394,10 +400,12 @@ test.describe("GP-009 Global Navigation — Shell, Header, MegaMenu, Drawer & Ac
     await page.goto("/");
 
     const menuBtn = page.getByRole("button", { name: "Abrir menú de navegación" });
-    await menuBtn.click();
-
     const dialog = page.locator("dialog[aria-label='Menú de navegación móvil']");
-    await expect(dialog).toBeVisible();
+    // A click that lands before hydration attaches the handler is lost; retry until it opens.
+    await expect(async () => {
+      if (!(await dialog.isVisible())) await menuBtn.click();
+      await expect(dialog).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 10000 });
 
     const drawerPanel = dialog.locator("div[role='document']");
     const transitionDuration = await drawerPanel.evaluate((el) => {

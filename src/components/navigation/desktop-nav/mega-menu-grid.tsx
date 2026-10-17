@@ -3,7 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import type { MegaMenuCategory } from "../types";
+import { Cpu, Keyboard, Mouse, Usb, type LucideIcon } from "lucide-react";
+import type { MegaMenuCategory, MegaMenuTileIcon } from "../types";
 import { MegaMenuArrow, MegaMenuArrowLink } from "./mega-menu-arrow-link";
 import { MegaMenuImage } from "./mega-menu-image";
 import {
@@ -15,6 +16,13 @@ import {
 import styles from "./mega-menu-grid.module.css";
 
 const MotionLink = motion.create(Link);
+
+const TILE_ICONS: Record<MegaMenuTileIcon, LucideIcon> = {
+  mouse: Mouse,
+  keyboard: Keyboard,
+  usb: Usb,
+  cpu: Cpu,
+};
 
 const LAYOUT_VARIANTS = staggerVariants(0.1, 0.12);
 
@@ -53,11 +61,15 @@ export function MegaMenuGrid({ category, isOpen, onNavigate }: MegaMenuGridProps
               whileFocus="hover"
             >
               <span className={styles.tileMedia}>
-                <MegaMenuImage
-                  src={tile.image}
-                  sizes="(min-width: 1536px) 20vw, 25vw"
-                  className={styles.tileImage}
-                />
+                {tile.image ? (
+                  <MegaMenuImage
+                    src={tile.image}
+                    sizes="(min-width: 1536px) 20vw, 25vw"
+                    className={styles.tileImage}
+                  />
+                ) : tile.icon ? (
+                  <TileIcon icon={tile.icon} />
+                ) : null}
               </span>
               <span className={styles.tileFooter}>
                 <span className={styles.tileTitle}>{tile.title}</span>
@@ -68,5 +80,14 @@ export function MegaMenuGrid({ category, isOpen, onNavigate }: MegaMenuGridProps
         ))}
       </div>
     </motion.div>
+  );
+}
+
+function TileIcon({ icon }: { icon: MegaMenuTileIcon }) {
+  const Glyph = TILE_ICONS[icon];
+  return (
+    <span className={styles.tileIcon} aria-hidden="true">
+      <Glyph size={56} strokeWidth={1.5} />
+    </span>
   );
 }

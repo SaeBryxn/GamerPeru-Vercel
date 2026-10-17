@@ -121,7 +121,7 @@ All colors are defined as canonical semantic hex tokens.
 | --------------------------- | --------------- | ------------------------------------------------------------------------------------ |
 | `color.text.primary`        | `#09090B`       | Primary headings, product titles, and body copy on light surfaces                    |
 | `color.text.secondary`      | `#52525B`       | Subheadings, descriptions, and metadata on light surfaces                            |
-| `color.text.muted`          | `#71717A`       | Secondary spec pills, breadcrumbs, placeholder text (large/spec contexts)            |
+| `color.text.muted`          | `#6B6B74`       | Secondary text on light surfaces, including product stages                           |
 | `color.text.disabled`       | `#A1A1AA`       | Disabled button and input labels                                                     |
 | `color.text.link`           | `#E11D48`       | Inline text hyperlinks on light surfaces                                             |
 | `color.text.dark_primary`   | `#F4F4F5`       | Primary text and headlines on dark/inverted surfaces                                 |
@@ -370,7 +370,7 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 | `color.text.primary` (`#09090B`)             | `color.surface.card` (`#FFFFFF`)              | Body on White Card          | **19.89:1** | $\ge 4.5:1$ | **PASS** |
 | `color.text.secondary` (`#52525B`)           | `color.surface.canvas` (`#FAFAFA`)            | Secondary Text on Light     | **7.41:1**  | $\ge 4.5:1$ | **PASS** |
 | `color.text.secondary` (`#52525B`)           | `color.surface.card` (`#FFFFFF`)              | Secondary on Card           | **7.73:1**  | $\ge 4.5:1$ | **PASS** |
-| `color.text.muted` (`#71717A`)               | `color.surface.canvas` (`#FAFAFA`)            | Spec Text (Large/Pill)      | **4.63:1**  | $\ge 3.0:1$ | **PASS** |
+| `color.text.muted` (`#6B6B74`)               | `color.surface.canvas` (`#FAFAFA`)            | Secondary Text              | **5.05:1**  | $\ge 4.5:1$ | **PASS** |
 | `color.brand.primary` (`#E11D48`)            | `color.surface.canvas` (`#FAFAFA`)            | Brand Accent / Big Price    | **4.50:1**  | $\ge 3.0:1$ | **PASS** |
 | `color.brand.hover` (`#BE123C`)              | `color.surface.canvas` (`#FAFAFA`)            | Hover Brand Link            | **6.02:1**  | $\ge 4.5:1$ | **PASS** |
 | `color.brand.text_on_accent` (`#FFFFFF`)     | `color.brand.primary` (`#E11D48`)             | White on Primary Button     | **4.70:1**  | $\ge 4.5:1$ | **PASS** |
@@ -425,7 +425,7 @@ Gamer Perú's motion philosophy is **tactile, snappy, and non-blocking**. Animat
 - Height: `40px` (Admin / Desktop) / `44px` (Mobile)
 - Background: `color.surface.card`, Border: 1px `color.border.control` (`#71717A` - 4.6:1 contrast), Radius: `radius.sm`
 - Typography: `type.body.default` (`15px`), Text: `color.text.primary`
-- Placeholder: `color.text.muted` (`#71717A`)
+- Placeholder: `color.text.muted` (`#6B6B74`)
 - Hover: Border `color.border.strong` (`#52525B`)
 - Focus: Border `color.border.focus` (1px solid `#09090B`), 2px subtle ring
 - Error State: Border `color.status.danger.border` / `color.status.danger.text`, inline error caption in `color.status.danger.text` (13px `type.body.small`)
@@ -779,7 +779,7 @@ Color Surface   color.surface.dark_tertiary     #27272A                         
 
 Color Text      color.text.primary              #09090B                         Primary text on light (19.1:1)
 Color Text      color.text.secondary            #52525B                         Secondary text on light (7.4:1)
-Color Text      color.text.muted                #71717A                         Spec/placeholder text (4.6:1)
+Color Text      color.text.muted                #6B6B74                         Secondary text on product stage (4.72:1)
 Color Text      color.text.disabled             #A1A1AA                         Disabled control text
 Color Text      color.text.link                 #E11D48                         Link on light canvas (4.5:1)
 Color Text      color.text.dark_primary         #F4F4F5                         Primary text on dark (18.1:1)

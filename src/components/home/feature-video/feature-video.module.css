@@ -107,6 +107,7 @@
 }
 
 .cta {
+  --focus-ring-color: var(--color-border-dark-focus);
   --dome-height: 52px;
   --dome-radius: var(--radius-sm);
   --dome-font-size: 15px;

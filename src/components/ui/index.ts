@@ -13,3 +13,4 @@ export * from "./magnetic-wrapper";
 export * from "./stack";
 export * from "./visually-hidden";
 export * from "./use-can-hover";
+export * from "./use-prefers-reduced-motion";

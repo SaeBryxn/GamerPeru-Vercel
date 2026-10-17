@@ -43,6 +43,7 @@ export default defineConfig({
     "**/admin-product-manager.spec.ts",
     "**/admin-orders-list.spec.ts",
     "**/admin-z-orders-detail.spec.ts",
+    "**/admin-payment-verification.spec.ts",
     "**/admin-ai-product-assistant.spec.ts",
     "**/admin-story-builder.spec.ts",
   ],

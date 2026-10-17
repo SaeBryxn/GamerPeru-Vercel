@@ -1153,7 +1153,11 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
       `;
 
       const countBefore = await sqlClient`
-        SELECT COUNT(*)::int as count FROM payment_submissions
+        SELECT COUNT(*)::int AS count
+        FROM payment_submissions ps
+        JOIN payments p ON p.id = ps.payment_id
+        JOIN orders o ON o.id = p.order_id
+        WHERE o.order_number = ${order.orderNumber}
       `;
 
       // 3. Replay with expired key + upload intent -> should exit fast path before R2
@@ -1170,7 +1174,11 @@ describe("GP-019 / CHK2-BR1 — Real Local PostgreSQL Payment Integration & Conc
       }
 
       const countAfter = await sqlClient`
-        SELECT COUNT(*)::int as count FROM payment_submissions
+        SELECT COUNT(*)::int AS count
+        FROM payment_submissions ps
+        JOIN payments p ON p.id = ps.payment_id
+        JOIN orders o ON o.id = p.order_id
+        WHERE o.order_number = ${order.orderNumber}
       `;
       expect(countAfter[0]!.count).toBe(countBefore[0]!.count);
     });

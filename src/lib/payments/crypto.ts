@@ -70,9 +70,25 @@ export function computePaymentVerificationFingerprint(
     normalizedReason: string | null;
     normalizedNotes: string | null;
     authorityBindingDigest: string;
+    refundExternalReference?: string | null;
   },
   hmacSecret: string
 ): string {
+  if (params.refundExternalReference) {
+    return createHmac("sha256", hmacSecret)
+      .update(
+        `payment_verification_refund_intent:${JSON.stringify({
+          paymentId: params.paymentId,
+          submissionId: params.submissionId,
+          decision: params.decision,
+          normalizedReason: params.normalizedReason,
+          normalizedNotes: params.normalizedNotes,
+          authorityBindingDigest: params.authorityBindingDigest,
+          refundExternalReference: params.refundExternalReference,
+        })}`
+      )
+      .digest("hex");
+  }
   const content = [
     params.paymentId,
     params.submissionId,

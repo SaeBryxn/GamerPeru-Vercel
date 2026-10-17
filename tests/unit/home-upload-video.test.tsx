@@ -31,8 +31,18 @@ beforeAll(() => {
   Object.defineProperty(window, "IntersectionObserver", { writable: true, value: StubObserver });
   Object.defineProperty(window, "matchMedia", {
     writable: true,
-    value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+    value: (query: string) => ({
+      matches: query.includes("prefers-reduced-motion") ? motion.reduced : false,
+      addEventListener() {},
+      removeEventListener() {},
+    }),
   });
+  // jsdom does not implement media playback.
+  Object.defineProperty(HTMLMediaElement.prototype, "play", {
+    writable: true,
+    value: () => Promise.resolve(),
+  });
+  Object.defineProperty(HTMLMediaElement.prototype, "pause", { writable: true, value: () => {} });
 });
 
 const VIDEO_ID = "01a1c000-0000-7000-8000-0000000000b1";

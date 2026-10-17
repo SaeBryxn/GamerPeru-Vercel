@@ -4,14 +4,13 @@ import React, { useLayoutEffect, useRef, useState } from "react";
 import {
   motion,
   useMotionValueEvent,
-  useReducedMotion,
   useScroll,
   useTransform,
   type PanInfo,
   type Variants,
 } from "framer-motion";
 import { ChevronDown } from "lucide-react";
-import { Icon, useCanHover } from "@/components/ui";
+import { Icon, useCanHover, usePrefersReducedMotion } from "@/components/ui";
 import { useAutoplayAllowed, type HomeVideoSource } from "../home-video";
 import styles from "./video-hero.module.css";
 
@@ -59,12 +58,14 @@ export interface VideoHeroProps {
  */
 export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: VideoHeroProps) {
   const sectionRef = useRef<HTMLElement>(null);
-  const prefersReducedMotion = useReducedMotion();
+  // Unknown on the server and during hydration: the embed and the drag gesture start once the
+  // preference is known, so both renders produce the same tree.
+  const allowMotion = usePrefersReducedMotion() === false;
   const autoplayAllowed = useAutoplayAllowed();
   // Touch screens scroll the curtain away natively: a drag gesture would fight the page scroll,
   // and a scroll-linked dim costs a paint per frame on the devices least able to afford it.
   const isTouch = !useCanHover();
-  const isLite = Boolean(prefersReducedMotion) || isTouch;
+  const isLite = !allowMotion || isTouch;
 
   // The stage is pinned (sticky) while the store slides over it, so scroll is
   // measured against the page, not against the element's own box.
@@ -92,7 +93,7 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
   const reveal = () => {
     const target = document.getElementById(revealTargetId);
     target?.scrollIntoView({
-      behavior: prefersReducedMotion ? "auto" : "smooth",
+      behavior: allowMotion ? "smooth" : "auto",
       block: "start",
     });
   };
@@ -128,7 +129,7 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
           Reduced-motion visitors get the still stage instead of the loop.
         */}
         <div className={styles.videoFrame} aria-hidden="true">
-          {video.kind === "youtube" && !prefersReducedMotion && !isCovered && (
+          {video.kind === "youtube" && allowMotion && !isCovered && (
             <iframe
               className={styles.video}
               src={buildHeroEmbedSrc(video.videoId)}
@@ -179,7 +180,7 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
           <motion.span className={styles.scrollHintTint} variants={HINT_TINT_VARIANTS}>
             <motion.span
               className={styles.scrollHintIcon}
-              animate={prefersReducedMotion ? undefined : { y: [0, 8, 0] }}
+              animate={allowMotion ? { y: [0, 8, 0] } : undefined}
               transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
             >
               <Icon icon={ChevronDown} size="md" aria-hidden="true" />

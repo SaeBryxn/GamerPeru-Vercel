@@ -110,7 +110,11 @@ export function ProductCommercePanel({
   const whatsappHref = buildWhatsAppHref(product.name, selectedVariant.title);
 
   return (
-    <div className={styles.panelContainer} data-testid="product-commerce-panel">
+    <div
+      className={styles.panelContainer}
+      data-testid="product-commerce-panel"
+      data-cart-status={status}
+    >
       <div className={styles.titleBlock}>
         <Link href={`/marcas/${brand.slug}`} className={styles.brandLink}>
           {brand.name}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useReducedMotion } from "framer-motion";
+import { usePrefersReducedMotion } from "@/components/ui/use-prefers-reduced-motion";
 
 /** A home video as the storefront renders it: a YouTube embed or a self-hosted file. */
 export type HomeVideoSource =
@@ -17,7 +17,7 @@ interface NetworkInformationLike {
  * asking to save data get the still poster until they press play.
  */
 export function useAutoplayAllowed(): boolean {
-  const prefersReducedMotion = useReducedMotion();
+  const reducedMotion = usePrefersReducedMotion();
   const [saveData, setSaveData] = useState(false);
 
   useEffect(() => {
@@ -26,5 +26,6 @@ export function useAutoplayAllowed(): boolean {
     setSaveData(Boolean(connection?.saveData));
   }, []);
 
-  return !prefersReducedMotion && !saveData;
+  // Unknown until hydration, so the server never ships a playing file.
+  return reducedMotion === false && !saveData;
 }

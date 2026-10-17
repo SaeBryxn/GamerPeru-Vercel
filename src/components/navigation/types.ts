@@ -45,10 +45,15 @@ export interface MegaMenuPromo {
   badge?: string;
 }
 
+/** Glyphs a tile can show instead of a photo; names, so the config stays serializable. */
+export type MegaMenuTileIcon = "mouse" | "keyboard" | "usb" | "cpu";
+
 export interface MegaMenuTile {
   title: string;
   href: string;
-  image: string;
+  /** Product photo; tiles without one show their icon. */
+  image?: string;
+  icon?: MegaMenuTileIcon;
   /** `feature` renders the tile on the indigo highlight surface. */
   tone?: "feature";
 }

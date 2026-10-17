@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { motion, useReducedMotion, type Transition } from "framer-motion";
+import { motion, type Transition } from "framer-motion";
+import { usePrefersReducedMotion } from "@/components/ui/use-prefers-reduced-motion";
 import styles from "./count-pulse.module.css";
 
 const BEAT: Transition = { duration: 0.55, times: [0, 0.35, 0.7, 1], ease: "easeOut" };
@@ -20,17 +21,17 @@ export interface CountPulseProps {
  * edge. Keying on the value remounts the element, which replays the beat without an effect.
  */
 export function CountPulse({ value, label, className }: CountPulseProps): React.JSX.Element {
-  const prefersReducedMotion = useReducedMotion();
+  const allowMotion = usePrefersReducedMotion() === false;
 
   return (
     <motion.span
       key={value}
       className={[styles.root, className].filter(Boolean).join(" ")}
       initial={false}
-      animate={prefersReducedMotion ? undefined : { scale: [1, 1.3, 0.94, 1] }}
+      animate={allowMotion ? { scale: [1, 1.3, 0.94, 1] } : undefined}
       transition={BEAT}
     >
-      {!prefersReducedMotion && (
+      {allowMotion && (
         <motion.span
           className={styles.ring}
           initial={{ opacity: 0.6, scale: 1 }}

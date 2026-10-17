@@ -312,14 +312,14 @@ jobs:
       - name: Seed Deterministic Checkout E2E Fixtures
         run: node scripts/test/seed-checkout-e2e.mjs
 
-      - name: Seed Deterministic Admin E2E Fixtures
-        run: node scripts/test/seed-admin-e2e.mjs
-
       - name: Run Real Checkout E2E Tests
         run: pnpm test:checkout:e2e
 
       - name: Run Real Payment E2E Tests
         run: pnpm test:payment:e2e
+
+      - name: Seed Deterministic Admin E2E Fixtures
+        run: node scripts/test/seed-admin-e2e.mjs
 
       - name: Run Real Admin E2E Tests
         run: pnpm test:admin:e2e

@@ -1,14 +1,16 @@
 import "server-only";
-import { desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditEvents,
   idempotencyKeys,
+  inventoryReservations,
   orders,
   outboxEvents,
   paymentSubmissions,
   paymentVerifications,
   payments,
+  refunds,
   type PaymentVerificationDecision,
 } from "@/db/schema";
 import { generateUuidV7 } from "@/db/utils/uuid";
@@ -25,11 +27,14 @@ import {
   createOrderAdvisoryLockKey,
 } from "@/lib/orders/crypto";
 import { applyTerminalPaymentRejectionConsequences } from "@/lib/orders/service";
+import { validateRefundExternalReference } from "@/lib/orders/validation";
 import { getPaymentVerificationConfig } from "./config";
 import { computePaymentVerificationFingerprint } from "./crypto";
 
 export const LATE_PAYMENT_STOCK_UNAVAILABLE_MESSAGE =
-  "Sin stock disponible - Rechazar y coordinar reembolso";
+  "Sin stock disponible. Si recibiste los fondos, registra la devolución externa confirmada.";
+
+const LATE_REFUND_REASON = "Pago tardío sin stock; operador declara reembolso externo completado";
 
 const MAX_REASON_LENGTH = 255;
 const MAX_NOTES_LENGTH = 2000;
@@ -75,8 +80,8 @@ export type PaymentVerificationDecisionResult =
       success: true;
       verificationId: string;
       decision: PaymentVerificationDecision;
-      paymentStatus: "PAID" | "UNPAID" | "REJECTED";
-      orderStatus: "CONFIRMED" | "PENDING" | "EXPIRED" | "CANCELLED";
+      paymentStatus: "PAID" | "UNPAID" | "REJECTED" | "REFUNDED";
+      orderStatus: "CONFIRMED" | "PENDING" | "EXPIRED" | "CANCELLED" | "REFUNDED";
       resubmissionGraceExpiresAt: string | null;
       replayed: boolean;
     }
@@ -95,6 +100,15 @@ export type RejectPaymentInput = {
   verificationAttemptId: string;
   mode: "RETRYABLE" | "TERMINAL";
   reason: string;
+  notes?: string | null;
+};
+
+export type RecordLatePaymentRefundInput = {
+  paymentId: string;
+  submissionId: string;
+  verificationAttemptId: string;
+  externalRefundCompleted: boolean;
+  externalReference: string;
   notes?: string | null;
 };
 
@@ -317,9 +331,8 @@ export async function releasePaymentVerificationClaim(input: {
  * Approves a claimed payment: PAID, order CONFIRMED, reserved stock allocated for good.
  *
  * A late submission already had its reservations released, so its stock is reacquired instead;
- * if that stock is gone the approval is refused and nothing is written. Paying for units the
- * store no longer has would oversell, so the only way out is a terminal rejection and a manual
- * refund.
+ * if that stock is gone the approval is refused and nothing is written. Funds received without
+ * available stock must use the separately attested refund path.
  */
 export async function approvePayment(
   input: ApprovePaymentInput
@@ -368,6 +381,31 @@ export async function rejectPayment(
   });
 }
 
+export async function recordLatePaymentRefund(
+  input: RecordLatePaymentRefundInput
+): Promise<PaymentVerificationDecisionResult> {
+  if (input.externalRefundCompleted !== true) {
+    return fail("INVALID_INPUT", "Confirma que la devolución externa ya se completó.");
+  }
+  const reference = validateRefundExternalReference(input.externalReference);
+  if (!reference.valid) return fail("INVALID_INPUT", reference.error);
+  if (!reference.normalized) {
+    return fail("INVALID_INPUT", "Ingresa la referencia de la devolución externa completada.");
+  }
+  const notes = normalizeFreeText(input.notes, MAX_NOTES_LENGTH, "Las notas");
+  if (!notes.valid) return fail("INVALID_INPUT", notes.error);
+
+  return decidePayment({
+    paymentId: input.paymentId,
+    submissionId: input.submissionId,
+    verificationAttemptId: input.verificationAttemptId,
+    decision: "APPROVED",
+    reason: null,
+    notes: notes.value,
+    refundExternalReference: reference.normalized,
+  });
+}
+
 type DecisionCommand = {
   paymentId: string;
   submissionId: string;
@@ -375,6 +413,7 @@ type DecisionCommand = {
   decision: PaymentVerificationDecision;
   reason: string | null;
   notes: string | null;
+  refundExternalReference?: string;
 };
 
 type ReplayPayload = Omit<
@@ -386,6 +425,9 @@ async function decidePayment(command: DecisionCommand): Promise<PaymentVerificat
   const staff = await resolveVerifierContext();
   if (!staff) {
     return fail("UNAUTHORIZED", "No tienes permisos para verificar pagos.");
+  }
+  if (command.refundExternalReference && !staff.permissions.has("orders:manage")) {
+    return fail("UNAUTHORIZED", "No tienes permisos para registrar reembolsos.");
   }
 
   const paymentIdCheck = validateUuid(command.paymentId, "paymentId");
@@ -428,6 +470,7 @@ async function decidePayment(command: DecisionCommand): Promise<PaymentVerificat
       normalizedReason: command.reason,
       normalizedNotes: command.notes,
       authorityBindingDigest,
+      refundExternalReference: command.refundExternalReference,
     },
     hmacSecret
   );
@@ -526,8 +569,8 @@ async function decidePayment(command: DecisionCommand): Promise<PaymentVerificat
 
       const now = new Date();
       const actorId = staff.authUserId;
-      let paymentStatus: "PAID" | "UNPAID" | "REJECTED";
-      let orderStatus: "CONFIRMED" | "PENDING" | "EXPIRED" | "CANCELLED";
+      let paymentStatus: "PAID" | "UNPAID" | "REJECTED" | "REFUNDED";
+      let orderStatus: "CONFIRMED" | "PENDING" | "EXPIRED" | "CANCELLED" | "REFUNDED";
       let resubmissionGraceExpiresAt: Date | null = null;
 
       if (command.decision === "APPROVED") {
@@ -535,48 +578,160 @@ async function decidePayment(command: DecisionCommand): Promise<PaymentVerificat
           return fail("INVALID_ORDER_STATE", "El pedido no admite aprobar este pago.");
         }
 
-        await commitApprovalInventory(tx, {
-          orderId: order.id,
-          paymentId,
-          actorId,
-          isLate: latestSubmission.isLate,
-        });
+        if (command.refundExternalReference) {
+          if (
+            !latestSubmission.isLate ||
+            payment.refundedAmountCents !== 0 ||
+            payment.amountCents <= 0
+          ) {
+            return fail(
+              "INVALID_PAYMENT_STATE",
+              "Este pago no admite la devolución por falta de stock."
+            );
+          }
+          if (!(await hasOnlyReleasedReservations(tx, order.id))) {
+            return fail(
+              "INVENTORY_STATE_CONFLICT",
+              "Las reservas del pedido requieren revisión manual."
+            );
+          }
 
-        await tx
-          .update(payments)
-          .set({
-            status: "PAID",
-            verificationClaimedByAuthUserId: null,
-            verificationClaimedAt: null,
-            resubmissionGraceExpiresAt: null,
-            updatedAt: now,
-          })
-          .where(eq(payments.id, paymentId));
+          await tx
+            .update(payments)
+            .set({
+              status: "PAID",
+              verificationClaimedByAuthUserId: null,
+              verificationClaimedAt: null,
+              resubmissionGraceExpiresAt: null,
+              updatedAt: now,
+            })
+            .where(eq(payments.id, paymentId));
 
-        await tx
-          .update(orders)
-          .set({ status: "CONFIRMED", updatedAt: now })
-          .where(eq(orders.id, order.id));
-
-        paymentStatus = "PAID";
-        orderStatus = "CONFIRMED";
-
-        await tx.insert(outboxEvents).values({
-          id: generateUuidV7(),
-          eventName: "PaymentApproved",
-          eventVersion: 1,
-          aggregateType: "Payment",
-          aggregateId: paymentId,
-          payload: {
+          const refundId = generateUuidV7();
+          await tx.insert(refunds).values({
+            id: refundId,
             orderId: order.id,
-            orderNumber: order.orderNumber,
             paymentId,
-            submissionId,
+            amountCents: payment.amountCents,
+            reason: LATE_REFUND_REASON,
+            externalReference: command.refundExternalReference,
+            actorAuthUserId: actorId,
+            createdAt: now,
+          });
+          await tx
+            .update(payments)
+            .set({
+              status: "REFUNDED",
+              refundedAmountCents: payment.amountCents,
+              updatedAt: now,
+            })
+            .where(eq(payments.id, paymentId));
+          await tx
+            .update(orders)
+            .set({
+              status: "REFUNDED",
+              cancelledAt: now,
+              cancelReason: LATE_REFUND_REASON,
+              updatedAt: now,
+            })
+            .where(eq(orders.id, order.id));
+
+          paymentStatus = "REFUNDED";
+          orderStatus = "REFUNDED";
+          await tx.insert(outboxEvents).values({
+            id: generateUuidV7(),
+            eventName: "PaymentApproved",
+            eventVersion: 1,
+            aggregateType: "Payment",
+            aggregateId: paymentId,
+            payload: {
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              paymentId,
+              submissionId,
+              isLate: true,
+              immediatelyRefunded: true,
+              approvedAt: now.toISOString(),
+            },
+            status: "PENDING",
+          });
+          await tx.insert(outboxEvents).values({
+            id: generateUuidV7(),
+            eventName: "RefundIssued",
+            eventVersion: 1,
+            aggregateType: "Payment",
+            aggregateId: paymentId,
+            payload: {
+              orderId: order.id,
+              paymentId,
+              refundId,
+              refundAmountCents: payment.amountCents,
+              totalRefundedCents: payment.amountCents,
+              currency: payment.currency,
+              reason: LATE_REFUND_REASON,
+              issuedAt: now.toISOString(),
+            },
+            status: "PENDING",
+          });
+          await tx.insert(auditEvents).values({
+            id: generateUuidV7(),
+            timestamp: now,
+            actorType: "ADMIN",
+            actorId,
+            action: "orders:late_refund",
+            targetType: "Refund",
+            targetId: refundId,
+            metadata: {
+              orderId: order.id,
+              paymentId,
+              submissionId,
+              externalRefundCompleted: true,
+            },
+          });
+        } else {
+          await commitApprovalInventory(tx, {
+            orderId: order.id,
+            paymentId,
+            actorId,
             isLate: latestSubmission.isLate,
-            approvedAt: now.toISOString(),
-          },
-          status: "PENDING",
-        });
+          });
+
+          await tx
+            .update(payments)
+            .set({
+              status: "PAID",
+              verificationClaimedByAuthUserId: null,
+              verificationClaimedAt: null,
+              resubmissionGraceExpiresAt: null,
+              updatedAt: now,
+            })
+            .where(eq(payments.id, paymentId));
+
+          await tx
+            .update(orders)
+            .set({ status: "CONFIRMED", updatedAt: now })
+            .where(eq(orders.id, order.id));
+
+          paymentStatus = "PAID";
+          orderStatus = "CONFIRMED";
+
+          await tx.insert(outboxEvents).values({
+            id: generateUuidV7(),
+            eventName: "PaymentApproved",
+            eventVersion: 1,
+            aggregateType: "Payment",
+            aggregateId: paymentId,
+            payload: {
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              paymentId,
+              submissionId,
+              isLate: latestSubmission.isLate,
+              approvedAt: now.toISOString(),
+            },
+            status: "PENDING",
+          });
+        }
       } else if (command.decision === "REJECTED_RETRYABLE") {
         resubmissionGraceExpiresAt = new Date(now.getTime() + resubmissionGraceHours * 3_600_000);
 
@@ -683,6 +838,7 @@ async function decidePayment(command: DecisionCommand): Promise<PaymentVerificat
           decision: command.decision,
           isLate: latestSubmission.isLate,
           hasNotes: command.notes !== null,
+          immediatelyRefunded: !!command.refundExternalReference,
         },
       });
 
@@ -699,7 +855,9 @@ async function decidePayment(command: DecisionCommand): Promise<PaymentVerificat
         idempotencyKey: namespacedKey,
         operationType:
           command.decision === "APPROVED"
-            ? "PAYMENT_VERIFICATION_APPROVE"
+            ? command.refundExternalReference
+              ? "REFUND_RECORDING"
+              : "PAYMENT_VERIFICATION_APPROVE"
             : "PAYMENT_VERIFICATION_REJECT",
         authorityBindingDigest,
         sourceCartId: null,
@@ -727,6 +885,16 @@ async function decidePayment(command: DecisionCommand): Promise<PaymentVerificat
     });
     return fail("SYSTEM_ERROR", "No se pudo registrar la decisión sobre el pago.");
   }
+}
+
+async function hasOnlyReleasedReservations(tx: DbTransaction, orderId: string): Promise<boolean> {
+  const reservations = await tx
+    .select()
+    .from(inventoryReservations)
+    .where(eq(inventoryReservations.orderId, orderId))
+    .orderBy(asc(inventoryReservations.id))
+    .for("update");
+  return reservations.length > 0 && reservations.every((row) => row.status === "RELEASED");
 }
 
 async function commitApprovalInventory(

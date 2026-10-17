@@ -123,7 +123,7 @@ export function DrawerHeader({
   busy?: boolean;
 }) {
   return (
-    <header className={styles.header}>
+    <div className={styles.header}>
       <div>
         {eyebrow ? <p className={styles.eyebrow}>{eyebrow}</p> : null}
         <h2 id={titleId} className={styles.title}>
@@ -139,6 +139,6 @@ export function DrawerHeader({
       >
         <X size={18} aria-hidden="true" />
       </button>
-    </header>
+    </div>
   );
 }

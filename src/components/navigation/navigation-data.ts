@@ -292,23 +292,23 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
         {
           title: "MOUSE",
           href: "/software/mouse",
-          image: "/media/mega-menu/software/mouse.png",
+          icon: "mouse",
           tone: "feature",
         },
         {
           title: "TECLADO",
           href: "/software/teclado",
-          image: "/media/mega-menu/software/keyboard.png",
+          icon: "keyboard",
         },
         {
           title: "DONGLE 8K",
           href: "/software/dongle",
-          image: "/media/mega-menu/software/dongle.png",
+          icon: "usb",
         },
         {
           title: "FIRMWARE",
           href: "/software/firmware",
-          image: "/media/mega-menu/software/firmware.png",
+          icon: "cpu",
         },
       ],
     },

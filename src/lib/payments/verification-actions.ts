@@ -9,11 +9,13 @@ import {
   approvePayment,
   claimPaymentVerification,
   rejectPayment,
+  recordLatePaymentRefund,
   releasePaymentVerificationClaim,
   type ApprovePaymentInput,
   type ClaimPaymentVerificationResult,
   type PaymentVerificationDecisionResult,
   type RejectPaymentInput,
+  type RecordLatePaymentRefundInput,
   type ReleasePaymentVerificationClaimResult,
 } from "./verification-service";
 
@@ -77,4 +79,10 @@ export async function rejectPaymentAction(
   input: RejectPaymentInput
 ): Promise<PaymentVerificationDecisionResult> {
   return refreshAfter(await rejectPayment(input));
+}
+
+export async function recordLatePaymentRefundAction(
+  input: RecordLatePaymentRefundInput
+): Promise<PaymentVerificationDecisionResult> {
+  return refreshAfter(await recordLatePaymentRefund(input));
 }

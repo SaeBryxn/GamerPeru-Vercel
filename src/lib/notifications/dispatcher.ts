@@ -121,6 +121,14 @@ export async function deliverOutboxEvent(
   const templates = TEMPLATES[event.eventName];
   if (!templates) return "NOT_PENDING";
 
+  if (
+    event.eventName === "PaymentApproved" &&
+    (event.payload as { immediatelyRefunded?: boolean } | null)?.immediatelyRefunded === true
+  ) {
+    await markDelivered(eventId, "immediate refund: approval email suppressed");
+    return "DELIVERED";
+  }
+
   if (Date.now() - event.createdAt.getTime() > MAX_EVENT_AGE_HOURS * 3_600_000) {
     await markDelivered(eventId, "stale: not sent");
     return "STALE_SKIPPED";

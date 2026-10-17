@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { motion, useReducedMotion, type Variants } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Pause, Play } from "lucide-react";
-import { DomeLink, Icon } from "@/components/ui";
+import { DomeLink, Icon, usePrefersReducedMotion } from "@/components/ui";
 import { useAutoplayAllowed, type HomeVideoSource } from "../home-video";
 import styles from "./feature-video.module.css";
 
@@ -59,34 +59,36 @@ export interface FeatureVideoProps {
  * corner and its own play control.
  */
 export function FeatureVideo({ video, eyebrow, title, subtitle, cta }: FeatureVideoProps) {
-  const prefersReducedMotion = useReducedMotion();
+  const autoStart = usePrefersReducedMotion() === false;
   const autoplayAllowed = useAutoplayAllowed();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const fileRef = useRef<HTMLVideoElement>(null);
-  // Reduced-motion visitors get a still stage until they start it themselves.
-  const [isMounted, setIsMounted] = useState(!prefersReducedMotion);
-  const [isPlaying, setIsPlaying] = useState(!prefersReducedMotion);
+  // Until the visitor uses the control, playback follows the motion preference. It is unknown on
+  // the server and during hydration, so the embed is never part of the server HTML and
+  // reduced-motion visitors get a still stage until they start it themselves.
+  const [choice, setChoice] = useState<{ mounted: boolean; playing: boolean } | null>(null);
+  const isMounted = choice?.mounted ?? autoStart;
+  const isPlaying =
+    choice?.playing ?? (video.kind === "upload" ? autoStart && autoplayAllowed : autoStart);
 
-  // Save-Data is only known after hydration: stop a file that started before it was read.
+  // The file follows the state instead of the autoplay attribute, which only applies on load.
   useEffect(() => {
-    if (video.kind === "upload" && !autoplayAllowed) {
-      fileRef.current?.pause();
-      setIsPlaying(false);
+    const file = fileRef.current;
+    if (video.kind !== "upload" || !file) return;
+    if (isPlaying) {
+      Promise.resolve(file.play()).catch(() => setChoice({ mounted: true, playing: false }));
+    } else {
+      file.pause();
     }
-  }, [autoplayAllowed, video.kind]);
+  }, [isPlaying, video.kind]);
 
   const togglePlayback = () => {
-    if (video.kind === "upload") {
-      const file = fileRef.current;
-      if (!file) return;
-      if (isPlaying) file.pause();
-      else void file.play().catch(() => setIsPlaying(false));
-      setIsPlaying(!isPlaying);
+    if (!isMounted) {
+      setChoice({ mounted: true, playing: true });
       return;
     }
-    if (!isMounted) {
-      setIsMounted(true);
-      setIsPlaying(true);
+    if (video.kind === "upload") {
+      setChoice({ mounted: true, playing: !isPlaying });
       return;
     }
     const command = isPlaying ? "pauseVideo" : "playVideo";
@@ -94,7 +96,7 @@ export function FeatureVideo({ video, eyebrow, title, subtitle, cta }: FeatureVi
       JSON.stringify({ event: "command", func: command, args: [] }),
       YOUTUBE_ORIGIN
     );
-    setIsPlaying(!isPlaying);
+    setChoice({ mounted: true, playing: !isPlaying });
   };
 
   return (
@@ -115,7 +117,6 @@ export function FeatureVideo({ video, eyebrow, title, subtitle, cta }: FeatureVi
               className={styles.videoFile}
               src={video.src ?? undefined}
               poster={video.posterSrc ?? undefined}
-              autoPlay={isPlaying}
               muted
               loop
               playsInline

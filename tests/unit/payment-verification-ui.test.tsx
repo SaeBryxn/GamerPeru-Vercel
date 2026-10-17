@@ -10,6 +10,7 @@ const actions = vi.hoisted(() => ({
   releasePaymentAction: vi.fn(),
   approvePaymentAction: vi.fn(),
   rejectPaymentAction: vi.fn(),
+  recordLatePaymentRefundAction: vi.fn(),
   loadVerificationDetailAction: vi.fn(),
   getProofViewUrlAction: vi.fn(),
 }));
@@ -153,7 +154,7 @@ describe("GP-028 — payment verification queue UI", () => {
     expect(screen.queryByTestId("review-drawer")).toBeNull();
   });
 
-  it("locks approval when a late payment has no stock and keeps terminal rejection", async () => {
+  it("requires attestation and an external reference for a late sold-out refund", async () => {
     actions.loadVerificationDetailAction.mockResolvedValue({
       success: true,
       detail: detail({
@@ -177,7 +178,7 @@ describe("GP-028 — payment verification queue UI", () => {
     const drawer = await screen.findByTestId("review-drawer");
 
     expect(
-      await within(drawer).findByText("Sin stock disponible - Rechazar y coordinar reembolso")
+      await within(drawer).findByText("Sin stock disponible para este pago tardío")
     ).toBeTruthy();
     expect(within(drawer).getByRole("button", { name: /^Aprobar$/ })).toHaveProperty(
       "disabled",
@@ -188,16 +189,41 @@ describe("GP-028 — payment verification queue UI", () => {
       true
     );
 
-    fireEvent.click(within(drawer).getByRole("button", { name: /Rechazo terminal/ }));
-    const reason = within(drawer).getByLabelText("Motivo del rechazo");
-    expect(reason).toHaveProperty("value", "Sin stock: coordinar reembolso con el cliente");
+    fireEvent.click(
+      within(drawer).getByRole("button", { name: /Pago recibido · reembolso completado/ })
+    );
+    const confirm = within(drawer).getByRole("button", { name: "Registrar pago y reembolso" });
+    expect(confirm).toHaveProperty("disabled", true);
+    fireEvent.change(within(drawer).getByLabelText("Referencia de la devolución externa"), {
+      target: { value: "REF-92001" },
+    });
+    expect(confirm).toHaveProperty("disabled", true);
+    fireEvent.click(within(drawer).getByLabelText(/Declaro que verifiqué la recepción del pago/));
+    expect(confirm).toHaveProperty("disabled", false);
+
+    actions.recordLatePaymentRefundAction.mockResolvedValue({
+      success: true,
+      decision: "APPROVED",
+      paymentStatus: "REFUNDED",
+      orderStatus: "REFUNDED",
+    });
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(actions.recordLatePaymentRefundAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          externalRefundCompleted: true,
+          externalReference: "REF-92001",
+        })
+      )
+    );
   });
 
-  it("surfaces the stock error from the server and switches to terminal rejection", async () => {
+  it("surfaces a concurrent stock loss without selecting a terminal rejection", async () => {
     actions.approvePaymentAction.mockResolvedValue({
       success: false,
       code: "LATE_PAYMENT_STOCK_UNAVAILABLE",
-      error: "Sin stock disponible - Rechazar y coordinar reembolso",
+      error:
+        "Sin stock disponible. Si recibiste los fondos, registra la devolución externa confirmada.",
     });
     renderWorkspace([queueItem({ paymentStatus: "VERIFYING", claimedByAuthUserId: ME })]);
 
@@ -214,7 +240,10 @@ describe("GP-028 — payment verification queue UI", () => {
       "disabled",
       true
     );
-    expect(within(drawer).getByText("Rechazo terminal", { selector: "p" })).toBeTruthy();
+    expect(
+      within(drawer).getByRole("button", { name: /Pago recibido · reembolso completado/ })
+    ).toBeTruthy();
+    expect(within(drawer).queryByText("Rechazo terminal", { selector: "p" })).toBeNull();
   });
 
   it("requires a reason before a rejection can be confirmed", async () => {

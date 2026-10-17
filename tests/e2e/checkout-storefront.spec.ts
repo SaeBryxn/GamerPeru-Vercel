@@ -10,6 +10,10 @@ const sql = postgres(databaseUrl, { max: 1 });
  */
 async function addProductAndGoToCheckout(page: Page) {
   await page.goto("/productos/mouse-cart-e2e");
+  await expect(page.getByTestId("product-commerce-panel")).toHaveAttribute(
+    "data-cart-status",
+    "READY"
+  );
   const addBtn = page.getByTestId("pdp-add-to-cart-button");
   await expect(addBtn).toBeVisible();
   await addBtn.click();
@@ -22,8 +26,10 @@ async function addProductAndGoToCheckout(page: Page) {
   await checkoutBtn.click();
 
   await expect(page).toHaveURL(/\/checkout/);
+  await page.reload();
   const checkoutPage = page.getByTestId("checkout-page");
   await expect(checkoutPage).toBeVisible();
+  await expect(checkoutPage).toHaveAttribute("data-hydrated", "true");
 }
 
 test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Suite", () => {
@@ -67,6 +73,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     // 5. Fill Contact Information
     const emailInput = page.getByTestId("checkout-input-email");
     await emailInput.fill("guest.e2e@testchk6.pe");
+    await expect(emailInput).toHaveValue("guest.e2e@testchk6.pe");
 
     // 6. Fill Peru Delivery Address
     await page.getByTestId("checkout-input-recipient-name").fill("Carlos Rodriguez");
@@ -79,16 +86,19 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     await page
       .getByTestId("checkout-input-reference")
       .fill("Frente al parque Kennedy, tocar timbre 502");
+    await expect(emailInput).toHaveValue("guest.e2e@testchk6.pe");
 
     // 7. Select Shipping Method
     const shippingMethod = page.getByTestId("shipping-method-LIMA_EXPRESS");
     await expect(shippingMethod).toBeVisible();
     await shippingMethod.click();
+    await expect(emailInput).toHaveValue("guest.e2e@testchk6.pe");
 
     // 8. Select Payment Method
     const paymentMethod = page.getByTestId("payment-method-YAPE_MANUAL");
     await expect(paymentMethod).toBeVisible();
     await paymentMethod.click();
+    await expect(emailInput).toHaveValue("guest.e2e@testchk6.pe");
 
     // 9. Verify Authoritative Financial Totals
     const subtotalEl = page.getByTestId("checkout-subtotal-value");
@@ -98,6 +108,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     await expect(subtotalEl).toContainText("129.90");
     await expect(shippingEl).toContainText("15.00");
     await expect(totalEl).toContainText("144.90");
+    await expect(emailInput).toHaveValue("guest.e2e@testchk6.pe");
 
     // 10. Run Accessibility Audit on Checkout Surface
     const axeResultsCheckout = await new AxeBuilder({ page })
@@ -108,6 +119,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
       (v) => v.impact === "serious" || v.impact === "critical"
     );
     expect(seriousCheckoutViolations).toEqual([]);
+    await expect(emailInput).toHaveValue("guest.e2e@testchk6.pe");
 
     // 11. Submit Checkout
     const submitBtn = page.getByTestId("checkout-submit-button");
@@ -167,6 +179,14 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     expect(outbox[0]!.event_name).toBe("OrderPlaced");
 
     // 16. Run Accessibility Audit on Confirmation Page
+    await page.mouse.move(0, 0);
+    await expect
+      .poll(() =>
+        page
+          .getByTestId("confirmation-delivery-card")
+          .evaluate((element) => getComputedStyle(element).opacity)
+      )
+      .toBe("1");
     const axeResultsConfirmation = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();
@@ -174,7 +194,15 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     const seriousConfViolations = axeResultsConfirmation.violations.filter(
       (v) => v.impact === "serious" || v.impact === "critical"
     );
-    expect(seriousConfViolations).toEqual([]);
+    expect(
+      seriousConfViolations.map((violation) => ({
+        id: violation.id,
+        nodes: violation.nodes.map((node) => ({
+          target: node.target,
+          summary: node.failureSummary,
+        })),
+      }))
+    ).toEqual([]);
   });
 
   test("Scenario B: Confirmation URL Authorization Protection (Foreign authority receives unauthorized state)", async ({

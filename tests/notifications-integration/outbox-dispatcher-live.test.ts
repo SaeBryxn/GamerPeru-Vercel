@@ -347,6 +347,24 @@ describe("GP-NOTIF — Live PostgreSQL outbox email dispatcher", () => {
     expect((await deliveries(eventId)).map((d) => d.template)).toEqual(["payment_approved"]);
   });
 
+  it("suppresses the preparation email for a payment immediately refunded", async () => {
+    const order = await placeOrder();
+    const eventId = generateUuidV7();
+    await sql`
+      INSERT INTO outbox_events (id, event_name, event_version, aggregate_type, aggregate_id, payload, status)
+      VALUES (${eventId}, 'PaymentApproved', 1, 'Payment', ${order.paymentId},
+              ${sql.json({ orderId: order.orderId, immediatelyRefunded: true })}, 'PENDING')
+    `;
+
+    expect(await deliverOutboxEvent(eventId, { provider, config })).toBe("DELIVERED");
+    expect(provider.calls).toHaveLength(0);
+    expect(await deliveries(eventId)).toHaveLength(0);
+    expect(await eventRow(eventId)).toMatchObject({
+      status: "DELIVERED",
+      last_error: "immediate refund: approval email suppressed",
+    });
+  });
+
   it("lets concurrent claims split the queue so no event is claimed twice", async () => {
     // Sequential: checkout reads the mocked cart cookie, which parallel orders would share.
     const orders = [await placeOrder(), await placeOrder(), await placeOrder()];
