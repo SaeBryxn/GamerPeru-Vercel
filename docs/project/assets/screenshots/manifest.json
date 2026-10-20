@@ -1,0 +1,218 @@
+[
+  {
+    "viewport": "desktop",
+    "screen": "home",
+    "status": "OK",
+    "detail": "/"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "plp",
+    "status": "PENDIENTE",
+    "detail": "Ruta local no disponible: /productos"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "pdp",
+    "status": "OK",
+    "detail": "/productos/prod-e2e-ready-publish"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "busqueda",
+    "status": "OK",
+    "detail": "/buscar"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "login",
+    "status": "OK",
+    "detail": "/auth/login"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "carrito",
+    "status": "OK",
+    "detail": "/productos/prod-e2e-ready-publish"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "checkout",
+    "status": "OK",
+    "detail": "/checkout"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "pago-manual",
+    "status": "PENDIENTE",
+    "detail": "expect(locator).toBeVisible() failed"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "cuenta",
+    "status": "OK",
+    "detail": "/cuenta"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "admin-dashboard",
+    "status": "OK",
+    "detail": "/admin"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "admin-productos",
+    "status": "OK",
+    "detail": "/admin/products"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "admin-editor",
+    "status": "OK",
+    "detail": "/admin/products/018f0000-0000-7000-8000-000000001a01"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "admin-historia",
+    "status": "OK",
+    "detail": "/admin/products/018f0000-0000-7000-8000-000000001a01/story"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "admin-home",
+    "status": "OK",
+    "detail": "/admin/home"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "admin-pedidos",
+    "status": "OK",
+    "detail": "/admin/orders"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "admin-pagos",
+    "status": "OK",
+    "detail": "/admin/pagos"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "admin-equipo",
+    "status": "OK",
+    "detail": "/admin/equipo"
+  },
+  {
+    "viewport": "desktop",
+    "screen": "admin-subida",
+    "status": "OK",
+    "detail": "/admin/products/018f0000-0000-7000-8000-000000001a01"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "home",
+    "status": "OK",
+    "detail": "/"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "plp",
+    "status": "PENDIENTE",
+    "detail": "Ruta local no disponible: /productos"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "pdp",
+    "status": "OK",
+    "detail": "/productos/prod-e2e-ready-publish"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "busqueda",
+    "status": "OK",
+    "detail": "/buscar"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "login",
+    "status": "OK",
+    "detail": "/auth/login"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "carrito",
+    "status": "OK",
+    "detail": "/productos/prod-e2e-ready-publish"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "checkout",
+    "status": "OK",
+    "detail": "/checkout"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "pago-manual",
+    "status": "PENDIENTE",
+    "detail": "expect(locator).toBeVisible() failed"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "cuenta",
+    "status": "OK",
+    "detail": "/cuenta"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "admin-dashboard",
+    "status": "OK",
+    "detail": "/admin"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "admin-productos",
+    "status": "OK",
+    "detail": "/admin/products"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "admin-editor",
+    "status": "OK",
+    "detail": "/admin/products/018f0000-0000-7000-8000-000000001a01"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "admin-historia",
+    "status": "OK",
+    "detail": "/admin/products/018f0000-0000-7000-8000-000000001a01/story"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "admin-home",
+    "status": "OK",
+    "detail": "/admin/home"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "admin-pedidos",
+    "status": "OK",
+    "detail": "/admin/orders"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "admin-pagos",
+    "status": "OK",
+    "detail": "/admin/pagos"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "admin-equipo",
+    "status": "OK",
+    "detail": "/admin/equipo"
+  },
+  {
+    "viewport": "mobile",
+    "screen": "admin-subida",
+    "status": "OK",
+    "detail": "/admin/products/018f0000-0000-7000-8000-000000001a01"
+  }
+]
