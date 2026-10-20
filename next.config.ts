@@ -32,7 +32,7 @@ const securityHeaders = [
 ];
 
 /**
- * The media CDN host is environment-specific (Supabase Storage today, a custom domain later).
+ * The media CDN uses the public R2 custom domain in production and local fixtures in tests.
  * Deriving it from NEXT_PUBLIC_CDN_URL keeps next/image from rejecting catalog photos whenever
  * that bucket changes, instead of requiring a hardcoded hostname per environment.
  */

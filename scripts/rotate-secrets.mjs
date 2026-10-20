@@ -26,7 +26,6 @@ const KNOWN_INSECURE =
 const MANAGED = [
   { key: "CHECKOUT_HMAC_SECRET", bytes: 32, note: "firma carritos, checkout, pedidos y pagos" },
   { key: "INVENTORY_HMAC_SECRET", bytes: 32, note: "firma los ajustes de inventario" },
-  { key: "CATALOG_MEDIA_INTENT_HMAC_SECRET", bytes: 32, note: "firma las subidas de imágenes" },
 ];
 
 const args = process.argv.slice(2);

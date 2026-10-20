@@ -56,3 +56,4 @@ export * from "./audit/audit-events";
 export * from "./navigation/menu-entries";
 export * from "./content/home-sections";
 export * from "./ai";
+export * from "./catalog/media-uploads";

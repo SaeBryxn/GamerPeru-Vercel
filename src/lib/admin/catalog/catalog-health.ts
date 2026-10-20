@@ -1,4 +1,5 @@
 import "server-only";
+import { listUnreferencedAssets } from "@/lib/admin/media/orphans";
 
 import { eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -203,5 +204,12 @@ export async function getProductIdsWithIssues(): Promise<string[]> {
 }
 
 export async function fetchCatalogHealth(): Promise<CatalogHealthResult> {
-  return { status: "READY", data: buildCatalogHealth(await loadCatalogHealthInputs()) };
+  const [inputs, orphans] = await Promise.all([
+    loadCatalogHealthInputs(),
+    listUnreferencedAssets(),
+  ]);
+  return {
+    status: "READY",
+    data: { ...buildCatalogHealth(inputs), unreferencedAssetCount: orphans.length },
+  };
 }

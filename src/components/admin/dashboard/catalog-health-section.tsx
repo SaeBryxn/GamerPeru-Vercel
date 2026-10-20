@@ -32,6 +32,12 @@ export function CatalogHealthSection({ catalogHealth, productsHref }: CatalogHea
 
   return (
     <AdminSection id="catalog-health-heading" title="Salud del catálogo" caption={caption}>
+      {catalogHealth.data.unreferencedAssetCount !== undefined && (
+        <p data-testid="media-orphans-count">
+          {formatInteger(catalogHealth.data.unreferencedAssetCount)} medios sin referencias desde
+          hace más de 30 días. Informe de solo lectura.
+        </p>
+      )}
       {items.length === 0 ? (
         <p className={styles.allClear} data-testid="catalog-health-all-clear">
           <CheckCircle2 size={16} aria-hidden="true" />

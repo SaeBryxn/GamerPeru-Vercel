@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { uploadDirect } from "@/lib/media/direct-upload-client";
 import { completeUpload } from "@/lib/media/upload-api-client";
 vi.mock("@/lib/media/compress-image", () => ({
-  compressImageForUpload: async (file: File) => file,
+  compressImageForUpload: async (file: File) =>
+    file.name === "20mb.png" ? new File(["prepared"], "out.webp", { type: "image/webp" }) : file,
   ImagePreparationError: class extends Error {},
 }));
 let statuses: number[];
@@ -62,6 +63,28 @@ function options() {
   };
 }
 describe("reintentos de subida directa", () => {
+  it("admite el original de 20 MiB y autoriza únicamente la salida preparada", async () => {
+    const opts = options();
+    const promise = uploadDirect({
+      ...opts,
+      purpose: "gallery_image",
+      file: new File([new Uint8Array(20 * 1024 * 1024)], "20mb.png", { type: "image/png" }),
+    });
+    await vi.runAllTimersAsync();
+    expect((await promise).ok).toBe(true);
+    expect(opts.request).toHaveBeenCalledWith({ mimeType: "image/webp", fileSizeBytes: 8 });
+  });
+  it("HEIC se rechaza antes de autorizar con un mensaje claro", async () => {
+    const opts = options();
+    const result = await uploadDirect({
+      ...opts,
+      purpose: "gallery_image",
+      file: new File(["heic"], "foto.heic", { type: "image/heic" }),
+    });
+    expect(result).toMatchObject({ ok: false, error: expect.stringContaining("HEIC") });
+    expect(opts.request).not.toHaveBeenCalled();
+  });
+
   it("un 403 HTML en complete conserva el estado y no se reintenta", async () => {
     vi.stubGlobal(
       "fetch",

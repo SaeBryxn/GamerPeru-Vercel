@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { test, expect, type Page } from "@playwright/test";
 import postgres from "postgres";
 import {
@@ -51,6 +52,56 @@ async function loginAndNavigateTo(page: Page, email: string, targetPath: string)
 }
 
 test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integration Suite", () => {
+  test("GP-059: cancelar durante PUT libera el presupuesto y no adjunta imagen", async ({
+    page,
+  }) => {
+    const product = ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct;
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${product.id}`
+    );
+    await openSection(page, "imagenes");
+    const [before] =
+      await sql`SELECT used_bytes, reserved_bytes FROM media_storage_budget WHERE id=1`;
+    const [countBefore] =
+      await sql`SELECT count(*)::int AS count FROM product_media WHERE product_id=${product.id}`;
+    await page.route("http://127.0.0.1:9000/**", async (route) => {
+      if (route.request().method() === "PUT") await route.request().response();
+      else await route.continue();
+    });
+    await page.getByTestId("input-media-file").setInputFiles("tests/fixtures/gp014-media/hero.png");
+    const authorized = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/admin/media/uploads" &&
+        response.request().method() === "POST"
+    );
+    await page.getByTestId("btn-upload-media").click();
+    const response = await authorized;
+    expect(response.status()).toBe(200);
+    const { uploadId } = z.object({ uploadId: z.string().uuid() }).parse(await response.json());
+    const [pending] = await sql`SELECT status FROM media_uploads WHERE id=${uploadId}`;
+    expect(pending?.status).toBe("PENDING");
+    const [reserved] = await sql`SELECT reserved_bytes FROM media_storage_budget WHERE id=1`;
+    expect(Number(reserved?.reserved_bytes)).toBeGreaterThan(Number(before?.reserved_bytes));
+    const cancel = page.getByRole("button", { name: "Cancelar subida" });
+    await cancel.focus();
+    await cancel.press("Enter");
+    await expect
+      .poll(
+        async () => (await sql`SELECT status FROM media_uploads WHERE id=${uploadId}`)[0]?.status
+      )
+      .toBe("ABORTED");
+    const [after] =
+      await sql`SELECT used_bytes, reserved_bytes FROM media_storage_budget WHERE id=1`;
+    expect(after?.reserved_bytes).toBe(before?.reserved_bytes);
+    expect(after?.used_bytes).toBe(before?.used_bytes);
+    const [countAfter] =
+      await sql`SELECT count(*)::int AS count FROM product_media WHERE product_id=${product.id}`;
+    expect(countAfter?.count).toBe(countBefore?.count);
+    await sql`DELETE FROM media_uploads WHERE id=${uploadId}`;
+  });
+
   test("GP-058: cancelar subida es accesible y no confirma el archivo", async ({ page }) => {
     const product = ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct;
     await loginAndNavigateTo(

@@ -11,6 +11,7 @@ import {
   type DirectUploadOptions,
   type DirectUploadRequest,
 } from "@/lib/admin/media/direct-upload-service";
+import { completeUpload, setUploadAsset } from "@/lib/admin/media/upload-ledger";
 import { CatalogDomainError } from "./types";
 
 /**
@@ -33,7 +34,7 @@ export interface RequestGalleryImageUploadInput {
 }
 
 export interface ConfirmGalleryImageUploadInput {
-  uploadToken: string;
+  uploadId: string;
   /** Measured by the browser; display metadata only, so it is bounds-checked, not trusted. */
   width?: number | null;
   height?: number | null;
@@ -136,14 +137,14 @@ export async function confirmGalleryImageUpload(
   const actorId = await authorize(options);
   const database = options?.database ?? db;
   const token = await verifyDirectUpload(
-    { uploadToken: input.uploadToken, purpose: "gallery_image", actorId },
+    { uploadId: input.uploadId, purpose: "gallery_image", actorId },
     options
   );
   const productId = token.subjectId;
   if (!productId) {
     throw new CatalogDomainError(
       "La autorización de subida no indica el producto.",
-      "DIRECT_UPLOAD_TOKEN_INVALID",
+      "DIRECT_UPLOAD_INVALID_SUBJECT",
       400
     );
   }
@@ -159,7 +160,9 @@ export async function confirmGalleryImageUpload(
     }
     if (token.variantId) await assertVariantOfProduct(tx, productId, token.variantId);
 
-    const { asset } = await registerDirectUploadAsset(tx, token, input);
+    await completeUpload(tx, token.id, actorId);
+    const { asset } = await registerDirectUploadAsset(tx, token);
+    await setUploadAsset(tx, token.id, asset);
 
     const metadata = {
       objectKey: asset.objectKey,

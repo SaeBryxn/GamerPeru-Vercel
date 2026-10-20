@@ -1,3 +1,4 @@
+import { mediaUploadsSweep } from "@/lib/inngest/functions/media-uploads-sweep";
 import { serve } from "inngest/next";
 import { inngest } from "@/lib/inngest/client";
 import { inventoryReservationExpirationJob } from "@/lib/inngest/functions/inventory-expiration";
@@ -14,6 +15,7 @@ import { outboxEmailDispatcher } from "@/lib/inngest/functions/outbox-dispatcher
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
+    mediaUploadsSweep,
     inventoryReservationExpirationJob,
     aiResearchJob,
     aiResearchDispatchReconciliation,

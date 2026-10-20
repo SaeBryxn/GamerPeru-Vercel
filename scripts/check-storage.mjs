@@ -10,12 +10,16 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "node:crypto";
 
-const endpoint = process.env.S3_ENDPOINT;
-const region = process.env.S3_REGION ?? "auto";
+const explicitEndpoint = process.env.S3_ENDPOINT?.trim();
+const endpoint =
+  explicitEndpoint ?? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+const region = explicitEndpoint ? (process.env.S3_REGION ?? "auto") : "auto";
 const client = new S3Client({
   region,
   endpoint,
-  forcePathStyle: true,
+  forcePathStyle: Boolean(explicitEndpoint),
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
   credentials: {
     accessKeyId: process.env.R2_ACCESS_KEY_ID,
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
@@ -23,7 +27,7 @@ const client = new S3Client({
 });
 
 const PUBLIC = process.env.R2_PUBLIC_MEDIA_BUCKET;
-const STAGING = process.env.R2_CATALOG_STAGING_BUCKET;
+const PRIVATE = process.env.R2_PRIVATE_PROOFS_BUCKET;
 const PROOFS = process.env.R2_PRIVATE_PROOFS_BUCKET;
 
 let pass = 0,
@@ -44,45 +48,45 @@ async function step(name, fn) {
 console.log(`endpoint: ${endpoint}\nregion:   ${region}\n`);
 
 console.log("1) Buckets accesibles");
-for (const b of [PUBLIC, STAGING, PROOFS]) {
+for (const b of [PUBLIC, PROOFS]) {
   await step(`HeadBucket ${b}`, async () => {
     await client.send(new HeadBucketCommand({ Bucket: b }));
   });
 }
 
-const key = `temp/catalog/_selftest-${crypto.randomUUID()}`;
+const key = `storage-selftest/_selftest-${crypto.randomUUID()}`;
 const body = Buffer.from("gamerperu-storage-selftest");
 
-console.log("\n2) Escritura/lectura directa (bucket staging)");
+console.log("\n2) Escritura/lectura directa (bucket privado de pruebas)");
 await step("PutObject", async () => {
   await client.send(
-    new PutObjectCommand({ Bucket: STAGING, Key: key, Body: body, ContentType: "text/plain" })
+    new PutObjectCommand({ Bucket: PRIVATE, Key: key, Body: body, ContentType: "text/plain" })
   );
 });
 await step("HeadObject", async () => {
-  const r = await client.send(new HeadObjectCommand({ Bucket: STAGING, Key: key }));
+  const r = await client.send(new HeadObjectCommand({ Bucket: PRIVATE, Key: key }));
   return `${r.ContentLength} bytes, ${r.ContentType}`;
 });
 await step("GetObject integridad", async () => {
-  const r = await client.send(new GetObjectCommand({ Bucket: STAGING, Key: key }));
+  const r = await client.send(new GetObjectCommand({ Bucket: PRIVATE, Key: key }));
   const got = Buffer.from(await r.Body.transformToByteArray());
   if (!got.equals(body)) throw new Error("bytes no coinciden");
   return "bytes identicos";
 });
 await step("ListObjectsV2", async () => {
   const r = await client.send(
-    new ListObjectsV2Command({ Bucket: STAGING, Prefix: "temp/catalog/", MaxKeys: 5 })
+    new ListObjectsV2Command({ Bucket: PRIVATE, Prefix: "storage-selftest/", MaxKeys: 5 })
   );
   return `${r.KeyCount ?? 0} objetos con ese prefijo`;
 });
 
 console.log("\n3) Presigned PUT (la ruta real del panel: el navegador sube directo)");
-const presignKey = `temp/catalog/_selftest-presign-${crypto.randomUUID()}`;
+const presignKey = `storage-selftest/_selftest-presign-${crypto.randomUUID()}`;
 const presigned = await step("generar URL firmada", async () => {
   const url = await getSignedUrl(
     client,
     new PutObjectCommand({
-      Bucket: STAGING,
+      Bucket: PRIVATE,
       Key: presignKey,
       ContentType: "image/png",
     }),
@@ -94,7 +98,7 @@ if (presigned) {
   const url = await getSignedUrl(
     client,
     new PutObjectCommand({
-      Bucket: STAGING,
+      Bucket: PRIVATE,
       Key: presignKey,
       ContentType: "image/png",
     }),
@@ -106,7 +110,7 @@ if (presigned) {
     return `HTTP ${res.status}`;
   });
   await step("verificar objeto subido", async () => {
-    const r = await client.send(new HeadObjectCommand({ Bucket: STAGING, Key: presignKey }));
+    const r = await client.send(new HeadObjectCommand({ Bucket: PRIVATE, Key: presignKey }));
     return `${r.ContentLength} bytes`;
   });
 }
@@ -160,13 +164,13 @@ await step(`GET ${cdn}/<objeto>`, async () => {
 });
 
 console.log("\n6) Bucket privado NO debe ser legible sin credenciales");
-const privKey = `temp/catalog/_selftest-private-${crypto.randomUUID()}`;
+const privKey = `storage-selftest/_selftest-private-${crypto.randomUUID()}`;
 await client.send(
-  new PutObjectCommand({ Bucket: STAGING, Key: privKey, Body: body, ContentType: "text/plain" })
+  new PutObjectCommand({ Bucket: PRIVATE, Key: privKey, Body: body, ContentType: "text/plain" })
 );
 await step("GET publico al bucket privado (debe fallar)", async () => {
   const res = await fetch(
-    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${STAGING}/${privKey}`
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${PRIVATE}/${privKey}`
   );
   if (res.ok) throw new Error("FUGA: el bucket privado respondio 200 sin credenciales");
   return `bloqueado (HTTP ${res.status})`;
@@ -174,9 +178,9 @@ await step("GET publico al bucket privado (debe fallar)", async () => {
 
 console.log("\n7) Limpieza");
 for (const [b, k] of [
-  [STAGING, key],
-  [STAGING, presignKey],
-  [STAGING, privKey],
+  [PRIVATE, key],
+  [PRIVATE, presignKey],
+  [PRIVATE, privKey],
   [PUBLIC, condKey],
 ]) {
   await step(`DeleteObject ${b}/${k.slice(0, 40)}...`, async () => {

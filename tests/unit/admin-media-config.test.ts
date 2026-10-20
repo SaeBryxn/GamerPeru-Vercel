@@ -1,45 +1,17 @@
-import { describe, expect, it } from "vitest";
-import {
-  KNOWN_INSECURE_EXAMPLE_HMAC_SECRET,
-  getCatalogMediaIntentSecret,
-  requireCatalogMediaRuntimeConfig,
-} from "@/config/server-env";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { requireCatalogMediaRuntimeConfig } from "@/config/server-env";
 import { ALLOWED_IMAGE_MIME_TYPES } from "@/lib/admin/catalog/publish-readiness";
-
-describe("Catalog media configuration", () => {
-  it("keeps the canonical image MIME authority used by publish readiness", () => {
-    expect(ALLOWED_IMAGE_MIME_TYPES).toEqual(["image/webp", "image/png", "image/jpeg"]);
-  });
-
-  it("fails closed on the repository example HMAC secret", () => {
-    expect(KNOWN_INSECURE_EXAMPLE_HMAC_SECRET).toBe(
-      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-    );
-
-    const origEnv = { ...process.env };
-    try {
-      process.env.R2_ACCOUNT_ID = "test-account-id";
-      process.env.R2_ACCESS_KEY_ID = "test-access-key";
-      process.env.R2_SECRET_ACCESS_KEY = "test-secret-key";
-      process.env.R2_PUBLIC_MEDIA_BUCKET = "test-public";
-      process.env.CATALOG_MEDIA_INTENT_HMAC_SECRET = KNOWN_INSECURE_EXAMPLE_HMAC_SECRET;
-
-      expect(() => requireCatalogMediaRuntimeConfig()).toThrow(
-        /insecure repository example placeholder/i
-      );
-      expect(() => getCatalogMediaIntentSecret()).toThrow(
-        /insecure repository example placeholder/i
-      );
-    } finally {
-      process.env = origEnv;
-    }
-  });
-
-  it("rejects the non-hex placeholder from .env.example", () => {
-    expect(() =>
-      getCatalogMediaIntentSecret(
-        "replace-with-64-character-hexadecimal-hmac-secret-min-32-bytes-long"
-      )
-    ).toThrow(/64-character hexadecimal/i);
+afterEach(() => vi.unstubAllEnvs());
+describe("Configuración de medios", () => {
+  it("mantiene los MIME publicables", () =>
+    expect(ALLOWED_IMAGE_MIME_TYPES).toEqual(["image/webp", "image/png", "image/jpeg"]));
+  it("requiere credenciales y ya no requiere secreto HMAC", () => {
+    vi.stubEnv("S3_ENDPOINT", "http://127.0.0.1:9000");
+    vi.stubEnv("R2_ACCESS_KEY_ID", "local");
+    vi.stubEnv("R2_SECRET_ACCESS_KEY", "secret");
+    vi.stubEnv("CATALOG_MEDIA_INTENT_HMAC_SECRET", "");
+    expect(requireCatalogMediaRuntimeConfig().r2AccessKeyId).toBe("local");
+    vi.stubEnv("R2_ACCESS_KEY_ID", "placeholder_key");
+    expect(() => requireCatalogMediaRuntimeConfig()).toThrow("R2_ACCESS_KEY_ID");
   });
 });

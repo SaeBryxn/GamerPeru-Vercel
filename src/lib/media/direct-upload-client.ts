@@ -1,3 +1,4 @@
+import { abortUpload, trackPendingUpload, forgetPendingUpload } from "./upload-api-client";
 import { ImagePreparationError, compressImageForUpload } from "./compress-image";
 import {
   DIRECT_UPLOAD_POLICIES,
@@ -140,6 +141,9 @@ export async function uploadDirect<Confirmed>({
     return { ok: false, error: signed.error ?? "No se pudo autorizar la subida." };
   }
 
+  const uploadId = signed.data.uploadId;
+  trackPendingUpload(uploadId);
+  let committed = false;
   let progress = 0;
   const report = (pct: number) => {
     progress = Math.max(progress, Math.min(100, pct));
@@ -178,8 +182,10 @@ export async function uploadDirect<Confirmed>({
         await retryDelay(attempt, signal);
         continue;
       }
-      if (confirmed.success && confirmed.data !== undefined)
+      if (confirmed.success && confirmed.data !== undefined) {
+        committed = true;
         return { ok: true, data: confirmed.data };
+      }
       if (
         attempt >= 2 ||
         (confirmed.status !== 0 && !(confirmed.status && confirmed.status >= 500))
@@ -197,6 +203,8 @@ export async function uploadDirect<Confirmed>({
           ? error.message
           : "No se pudo completar la subida. Vuelve a intentarlo.",
     };
+  } finally {
+    if (committed || (await abortUpload(uploadId))) forgetPendingUpload(uploadId);
   }
 }
 

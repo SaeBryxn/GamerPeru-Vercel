@@ -1,3 +1,4 @@
+import { POST as abort } from "@/app/api/admin/media/uploads/abort/route";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as init } from "@/app/api/admin/media/uploads/route";
 import { POST as complete } from "@/app/api/admin/media/uploads/complete/route";
@@ -34,6 +35,8 @@ vi.mock("@/lib/home/home-media-service", () => ({
   confirmHomeMediaUpload: mocks.homeComplete,
 }));
 vi.mock("next/cache", () => ({ revalidateTag: mocks.tag, revalidatePath: mocks.path }));
+vi.mock("@/db", () => ({ db: { transaction: async (fn: (tx: object) => unknown) => fn({}) } }));
+vi.mock("@/lib/admin/media/upload-ledger", () => ({ abortUpload: async () => undefined }));
 const productId = "0190f4c2-7a1b-7c3d-8e4f-5a6b7c8d9e0f";
 const body = { purpose: "gallery_image", productId, mimeType: "image/webp", fileSizeBytes: 10 };
 function request(payload: unknown = body, origin = "https://gamerperu.test") {
@@ -51,8 +54,8 @@ beforeEach(() => {
     permissions: new Set(["catalog:manage"]),
   } satisfies Partial<VerifiedAuthContext>);
   const signed = {
-    uploadToken: "token",
-    presignedPutUrl: "https://r2.test/x",
+    uploadId: productId,
+    putUrl: "https://r2.test/x",
     requiredHeaders: {},
     expiresAt: 100,
   };
@@ -61,6 +64,12 @@ beforeEach(() => {
   mocks.home.mockResolvedValue(signed);
 });
 describe("rutas de control de medios", () => {
+  it("abort responde 204 sin body y valida el UUID", async () => {
+    const response = await abort(request({ uploadId: productId }));
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
+    expect((await abort(request({ uploadId: "invalid" }))).status).toBe(400);
+  });
   it("rechaza origen ajeno antes de resolver sesión", async () => {
     expect((await init(request(body, "https://ajeno.test"))).status).toBe(403);
     expect(mocks.auth).not.toHaveBeenCalled();
@@ -89,7 +98,7 @@ describe("rutas de control de medios", () => {
       expect(response.status).toBe(200);
       expect(response.headers.get("cache-control")).toBe("no-store");
       expect(await response.json()).toMatchObject({
-        uploadId: "token",
+        uploadId: productId,
         putUrl: "https://r2.test/x",
         expiresAt: 100,
       });
@@ -110,7 +119,7 @@ describe("rutas de control de medios", () => {
         objectKey: "foto.webp",
         mediaAssetId: "asset",
       });
-      const response = await complete(request({ purpose: "gallery_image", uploadId: "token" }));
+      const response = await complete(request({ purpose: "gallery_image", uploadId: productId }));
       expect(response.status).toBe(200);
       expect(mocks.path).not.toHaveBeenCalled();
       if (status === "PUBLISHED")

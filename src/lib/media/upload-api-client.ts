@@ -82,3 +82,37 @@ export function completeUpload(
 ): Promise<UploadApiResult<UploadCompletion>> {
   return post("/complete", body, completion);
 }
+
+export async function abortUpload(uploadId: string): Promise<boolean> {
+  try {
+    const response = await fetch("/api/admin/media/uploads/abort", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uploadId }),
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.status === 204;
+  } catch {
+    return false;
+  }
+}
+const pendingUploads = new Set<string>();
+let pagehideRegistered = false;
+export function trackPendingUpload(uploadId: string): void {
+  pendingUploads.add(uploadId);
+  if (typeof window !== "undefined" && !pagehideRegistered) {
+    window.addEventListener("pagehide", () => {
+      for (const id of pendingUploads)
+        navigator.sendBeacon(
+          "/api/admin/media/uploads/abort",
+          new Blob([JSON.stringify({ uploadId: id })], { type: "application/json" })
+        );
+    });
+    pagehideRegistered = true;
+  }
+}
+export function forgetPendingUpload(uploadId: string): void {
+  pendingUploads.delete(uploadId);
+}

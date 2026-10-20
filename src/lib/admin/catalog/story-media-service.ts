@@ -11,6 +11,7 @@ import {
   type DirectUploadOptions,
   type DirectUploadRequest,
 } from "@/lib/admin/media/direct-upload-service";
+import { completeUpload, setUploadAsset } from "@/lib/admin/media/upload-ledger";
 import { CatalogDomainError } from "./types";
 
 /**
@@ -34,7 +35,7 @@ export interface RequestStoryImageUploadInput {
 export type RequestStoryImageUploadResult = DirectUploadRequest;
 
 export interface ConfirmStoryImageUploadInput {
-  uploadToken: string;
+  uploadId: string;
   /** Measured by the browser; display metadata only, so it is bounds-checked, not trusted. */
   width?: number | null;
   height?: number | null;
@@ -110,14 +111,14 @@ export async function confirmStoryImageUpload(
   const actorId = await authorize(options);
   const database = options?.database ?? db;
   const token = await verifyDirectUpload(
-    { uploadToken: input.uploadToken, purpose: "story_image", actorId },
+    { uploadId: input.uploadId, purpose: "story_image", actorId },
     options
   );
   const productId = token.subjectId;
   if (!productId) {
     throw new CatalogDomainError(
       "La autorización de subida no indica el producto.",
-      "DIRECT_UPLOAD_TOKEN_INVALID",
+      "DIRECT_UPLOAD_INVALID_SUBJECT",
       400
     );
   }
@@ -130,7 +131,9 @@ export async function confirmStoryImageUpload(
       .for("update");
     if (!product)
       throw new CatalogDomainError("El producto solicitado no existe.", "PRODUCT_NOT_FOUND", 404);
-    const { asset } = await registerDirectUploadAsset(tx, token, input);
+    await completeUpload(tx, token.id, actorId);
+    const { asset } = await registerDirectUploadAsset(tx, token);
+    await setUploadAsset(tx, token.id, asset);
     const result = (link: { id: string }) => ({
       productStatus: product.status,
       productMediaId: link.id,

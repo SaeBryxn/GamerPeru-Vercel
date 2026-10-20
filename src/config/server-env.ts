@@ -25,7 +25,6 @@ export const serverEnvSchema = z
     R2_PRIVATE_PROOFS_BUCKET: z.string().default("gamerperu-private-proofs"),
     R2_PRIVATE_PAYMENT_MEDIA_BUCKET: z.string().default("gamerperu-private-payment-media"),
     R2_DB_BACKUPS_BUCKET: z.string().default("gamerperu-db-backups-private"),
-    CATALOG_MEDIA_INTENT_HMAC_SECRET: z.string().optional(),
     INNGEST_EVENT_KEY: z.string().optional(),
     INNGEST_SIGNING_KEY: z.string().optional(),
     TAVILY_API_KEY: z.string().optional(),
@@ -85,7 +84,6 @@ function readRawServerEnv(): Record<string, string | undefined> {
     R2_PRIVATE_PROOFS_BUCKET: process.env.R2_PRIVATE_PROOFS_BUCKET,
     R2_PRIVATE_PAYMENT_MEDIA_BUCKET: process.env.R2_PRIVATE_PAYMENT_MEDIA_BUCKET,
     R2_DB_BACKUPS_BUCKET: process.env.R2_DB_BACKUPS_BUCKET,
-    CATALOG_MEDIA_INTENT_HMAC_SECRET: process.env.CATALOG_MEDIA_INTENT_HMAC_SECRET,
     INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
     INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
     TAVILY_API_KEY: process.env.TAVILY_API_KEY,
@@ -127,105 +125,30 @@ export const serverEnv = new Proxy({} as ServerEnv, {
 });
 
 export interface CatalogMediaRuntimeConfig {
-  /** Empty when an explicit S3_ENDPOINT supplies the storage host instead. */
   r2AccountId: string;
   r2AccessKeyId: string;
   r2SecretAccessKey: string;
   r2PublicMediaBucket: string;
-  catalogMediaIntentHmacSecret: string;
 }
-
-export const KNOWN_INSECURE_EXAMPLE_HMAC_SECRET =
-  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-
-/**
- * Validates and returns full real-runtime configuration for Cloudflare R2 catalog media operations.
- * Fails closed if any credential, bucket, or secret is absent or uses placeholder values.
- */
 export function requireCatalogMediaRuntimeConfig(): CatalogMediaRuntimeConfig {
-  const accountId = serverEnv.R2_ACCOUNT_ID;
-  const accessKeyId = serverEnv.R2_ACCESS_KEY_ID;
-  const secretAccessKey = serverEnv.R2_SECRET_ACCESS_KEY;
-  const publicMediaBucket = serverEnv.R2_PUBLIC_MEDIA_BUCKET;
-  const secret = serverEnv.CATALOG_MEDIA_INTENT_HMAC_SECRET;
-
-  // R2 derives its endpoint from the account id; an explicit S3_ENDPOINT (Supabase Storage,
-  // MinIO, any S3-compatible provider) already carries that host, so the account id is only
-  // mandatory when we fall back to the Cloudflare naming convention.
-  const hasExplicitEndpoint = Boolean(serverEnv.S3_ENDPOINT?.trim());
-  if (
-    !hasExplicitEndpoint &&
-    (!accountId || accountId.startsWith("placeholder_") || accountId.trim() === "")
-  ) {
-    throw new Error(
-      "R2_ACCOUNT_ID is required for real catalog media storage operations when S3_ENDPOINT is not set."
-    );
-  }
-  if (!accessKeyId || accessKeyId.startsWith("placeholder_") || accessKeyId.trim() === "") {
+  const accountId = serverEnv.R2_ACCOUNT_ID?.trim() ?? "";
+  const accessKeyId = serverEnv.R2_ACCESS_KEY_ID?.trim() ?? "";
+  const secretAccessKey = serverEnv.R2_SECRET_ACCESS_KEY?.trim() ?? "";
+  const publicMediaBucket = serverEnv.R2_PUBLIC_MEDIA_BUCKET.trim();
+  if (!serverEnv.S3_ENDPOINT && (!accountId || accountId.startsWith("placeholder_")))
+    throw new Error("R2_ACCOUNT_ID is required when S3_ENDPOINT is not set.");
+  if (!accessKeyId || accessKeyId.startsWith("placeholder_"))
     throw new Error("R2_ACCESS_KEY_ID is required for real catalog media storage operations.");
-  }
-  if (
-    !secretAccessKey ||
-    secretAccessKey.startsWith("placeholder_") ||
-    secretAccessKey.trim() === ""
-  ) {
+  if (!secretAccessKey || secretAccessKey.startsWith("placeholder_"))
     throw new Error("R2_SECRET_ACCESS_KEY is required for real catalog media storage operations.");
-  }
-  if (!publicMediaBucket || publicMediaBucket.trim() === "") {
+  if (!publicMediaBucket)
     throw new Error(
       "R2_PUBLIC_MEDIA_BUCKET is required for real catalog media storage operations."
     );
-  }
-  if (!secret || secret.trim() === "") {
-    throw new Error("CATALOG_MEDIA_INTENT_HMAC_SECRET is required for catalog media operations.");
-  }
-
-  const trimmedSecret = secret.trim();
-  const isHex64 = /^[0-9a-fA-F]{64}$/.test(trimmedSecret);
-  if (!isHex64) {
-    throw new Error(
-      "CATALOG_MEDIA_INTENT_HMAC_SECRET must be a 64-character hexadecimal string representing 32 bytes of high entropy."
-    );
-  }
-
-  if (trimmedSecret.toLowerCase() === KNOWN_INSECURE_EXAMPLE_HMAC_SECRET.toLowerCase()) {
-    throw new Error(
-      "CATALOG_MEDIA_INTENT_HMAC_SECRET cannot use the insecure repository example placeholder."
-    );
-  }
-
   return {
-    r2AccountId: accountId?.trim() ?? "",
-    r2AccessKeyId: accessKeyId.trim(),
-    r2SecretAccessKey: secretAccessKey.trim(),
-    r2PublicMediaBucket: publicMediaBucket.trim(),
-    catalogMediaIntentHmacSecret: trimmedSecret,
+    r2AccountId: accountId,
+    r2AccessKeyId: accessKeyId,
+    r2SecretAccessKey: secretAccessKey,
+    r2PublicMediaBucket: publicMediaBucket,
   };
-}
-
-/**
- * Validates and retrieves the catalog media intent signing secret.
- * Allows override in deterministic test environments.
- */
-export function getCatalogMediaIntentSecret(overrideSecret?: string): string {
-  const secret = overrideSecret ?? serverEnv.CATALOG_MEDIA_INTENT_HMAC_SECRET;
-  if (!secret || secret.trim() === "") {
-    throw new Error("CATALOG_MEDIA_INTENT_HMAC_SECRET is required.");
-  }
-  const trimmed = secret.trim();
-  const isHex64 = /^[0-9a-fA-F]{64}$/.test(trimmed);
-  if (!isHex64) {
-    throw new Error(
-      "CATALOG_MEDIA_INTENT_HMAC_SECRET must be a 64-character hexadecimal string representing 32 bytes of high entropy."
-    );
-  }
-  if (
-    !overrideSecret &&
-    trimmed.toLowerCase() === KNOWN_INSECURE_EXAMPLE_HMAC_SECRET.toLowerCase()
-  ) {
-    throw new Error(
-      "CATALOG_MEDIA_INTENT_HMAC_SECRET cannot use the insecure repository example placeholder."
-    );
-  }
-  return trimmed;
 }

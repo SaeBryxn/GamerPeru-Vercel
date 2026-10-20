@@ -20,7 +20,7 @@ export const completeUploadSchema = z
   .object({
     purpose: z.enum(DIRECT_UPLOAD_PURPOSES),
     productId: z.string().uuid().optional(),
-    uploadId: z.string().min(1).max(4096),
+    uploadId: z.string().uuid(),
     width: z.number().int().positive().max(20000).nullable().optional(),
     height: z.number().int().positive().max(20000).nullable().optional(),
     mutationRequestId: z.string().uuid().nullable().optional(),

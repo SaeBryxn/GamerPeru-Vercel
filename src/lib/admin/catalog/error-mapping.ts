@@ -62,6 +62,8 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
       return { error: err.message, code: err.code };
     }
     switch (err.code) {
+      case "MEDIA_BUDGET_EXCEEDED":
+        return { error: "Se alcanzó el presupuesto de almacenamiento de medios.", code: err.code };
       case "SLUG_CONFLICT":
         return {
           error: "Ya existe otro producto con este slug. Por favor ingresa uno diferente.",

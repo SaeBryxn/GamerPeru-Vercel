@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { findUpload } from "@/lib/admin/media/upload-ledger";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import postgres from "postgres";
 import { assertLocalDatabaseTarget } from "@/lib/admin/test-target-guard";
@@ -16,11 +18,10 @@ import { R2_BUCKETS } from "@/lib/storage/r2";
 import { computeMutationRequestDigest } from "@/lib/admin/catalog/crypto";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 
-/** Final object key carried by a direct-upload token (its payload is base64url JSON). */
-function tokenObjectKey(uploadToken: string): string {
-  const [body] = uploadToken.split(".");
-  return (JSON.parse(Buffer.from(body!, "base64url").toString("utf8")) as { objectKey: string })
-    .objectKey;
+async function tokenObjectKey(uploadId: string): Promise<string> {
+  const upload = await findUpload(uploadId);
+  if (!upload) throw new Error("Subida fixture no encontrada.");
+  return upload.objectKey;
 }
 
 describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
@@ -110,6 +111,14 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
   });
 
   afterAll(async () => {
+    const [accounting] = await pgSql`
+      SELECT COALESCE(SUM(declared_size_bytes) FILTER (WHERE status='READY'),0)::bigint AS used,
+             COALESCE(SUM(declared_size_bytes) FILTER (WHERE status='PENDING'),0)::bigint AS reserved
+      FROM media_uploads WHERE actor_auth_user_id=${fixtureIds.adminUser};
+    `;
+    await pgSql`UPDATE media_storage_budget SET used_bytes=used_bytes-${Number(accounting?.used ?? 0)}, reserved_bytes=reserved_bytes-${Number(accounting?.reserved ?? 0)} WHERE id=1`;
+    await pgSql`DELETE FROM media_uploads WHERE actor_auth_user_id=${fixtureIds.adminUser}`;
+
     if (pgSql) {
       await pgSql.begin(async (tx) => {
         await tx`DELETE FROM product_media WHERE product_id IN (${fixtureIds.product}, ${fixtureIds.otherProduct});`;
@@ -130,12 +139,11 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     serviceOpts: {
       authContext: VerifiedAuthContextReady;
       storageAdapter: InMemoryCatalogStorageAdapter;
-      intentSecret: string;
     },
     variantId: string | null,
     mutationRequestId: string
   ) {
-    const body = Buffer.from(`webp-bytes-${mutationRequestId}`);
+    const body = readFileSync("tests/fixtures/media/opaque.webp");
     const request = await requestGalleryImageUpload(
       {
         productId: fixtureIds.product,
@@ -147,15 +155,15 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     );
     storage.setObject(
       R2_BUCKETS.PUBLIC_MEDIA,
-      tokenObjectKey(request.uploadToken),
+      await tokenObjectKey(request.uploadId),
       body,
       "image/webp"
     );
     const result = await confirmGalleryImageUpload(
-      { uploadToken: request.uploadToken, width: 1200, height: 1200, mutationRequestId },
+      { uploadId: request.uploadId, width: 1200, height: 1200, mutationRequestId },
       serviceOpts
     );
-    return { result, uploadToken: request.uploadToken };
+    return { result, uploadId: request.uploadId };
   }
 
   it("enforces service-layer RBAC on all media operations", async () => {
@@ -163,7 +171,6 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     const serviceOpts = {
       authContext: authUnauthorized,
       storageAdapter: storage,
-      intentSecret: TEST_HMAC_SECRET,
     };
 
     await expect(
@@ -178,7 +185,7 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
       )
     ).rejects.toThrow(/permisos suficientes/i);
 
-    await expect(confirmGalleryImageUpload({ uploadToken: "dummy" }, serviceOpts)).rejects.toThrow(
+    await expect(confirmGalleryImageUpload({ uploadId: "dummy" }, serviceOpts)).rejects.toThrow(
       /permisos suficientes/i
     );
 
@@ -231,7 +238,6 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
-      intentSecret: TEST_HMAC_SECRET,
     };
 
     const first = await uploadGalleryPhoto(
@@ -280,7 +286,7 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
 
     // A repeated confirm returns the same attachment.
     const replay = await confirmGalleryImageUpload(
-      { uploadToken: first.uploadToken, mutationRequestId: "018f0024-mr-upload-0000000001" },
+      { uploadId: first.uploadId, mutationRequestId: "018f0024-mr-upload-0000000001" },
       serviceOpts
     );
     expect(replay).toMatchObject({ productMediaId: first.result.productMediaId, replayed: true });
@@ -290,10 +296,10 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
       { productId: fixtureIds.product, variantId: null, mimeType: "image/webp", fileSizeBytes: 64 },
       serviceOpts
     );
-    const objectKey = tokenObjectKey(request.uploadToken);
+    const objectKey = await tokenObjectKey(request.uploadId);
     storage.setObject(R2_BUCKETS.PUBLIC_MEDIA, objectKey, Buffer.alloc(65, 1), "image/webp");
     await expect(
-      confirmGalleryImageUpload({ uploadToken: request.uploadToken }, serviceOpts)
+      confirmGalleryImageUpload({ uploadId: request.uploadId }, serviceOpts)
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_MISMATCH" });
     expect(storage.hasObject(R2_BUCKETS.PUBLIC_MEDIA, objectKey)).toBe(false);
   });
@@ -303,7 +309,6 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
-      intentSecret: TEST_HMAC_SECRET,
     };
 
     // Get an existing media asset on the product
@@ -368,7 +373,6 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
-      intentSecret: TEST_HMAC_SECRET,
     };
 
     const pms =
@@ -421,7 +425,6 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
-      intentSecret: TEST_HMAC_SECRET,
     };
 
     // Find a global product media row
@@ -490,7 +493,6 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
-      intentSecret: TEST_HMAC_SECRET,
     };
 
     // Get current product state and its primaryMediaId
@@ -532,7 +534,6 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: new InMemoryCatalogStorageAdapter(),
-      intentSecret: TEST_HMAC_SECRET,
     };
 
     const [mediaRow] = await pgSql`
@@ -716,7 +717,6 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: storage,
-      intentSecret: TEST_HMAC_SECRET,
     };
 
     // 1. Variant belongs to fixtureIds.product, but request specifies otherProduct
@@ -769,7 +769,6 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
     const serviceOpts = {
       authContext: authCatalogAdmin,
       storageAdapter: new InMemoryCatalogStorageAdapter(),
-      intentSecret: TEST_HMAC_SECRET,
     };
     const primaryMutationId = "018f0024-br2-race-primary-000001";
     const variantMutationId = "018f0024-br2-race-variant-000001";
@@ -906,8 +905,8 @@ describe("GP-024 / GP-055 — Admin Catalog Media Live Integration", () => {
       const metaStr = JSON.stringify(a.metadata);
       expect(metaStr).not.toContain(TEST_HMAC_SECRET);
       expect(metaStr).not.toContain("X-Amz-Signature");
-      expect(metaStr).not.toContain("presignedPutUrl");
-      expect(metaStr).not.toContain("uploadToken");
+      expect(metaStr).not.toContain("putUrl");
+      expect(metaStr).not.toContain("uploadId");
     }
   });
 });

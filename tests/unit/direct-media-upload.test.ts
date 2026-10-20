@@ -1,3 +1,4 @@
+import { fixtureHeader } from "../helpers/media-upload-ledger-mock";
 import { S3Client } from "@aws-sdk/client-s3";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { type CatalogStorageAdapter } from "@/lib/admin/catalog/media-storage";
@@ -14,9 +15,8 @@ import {
 import { confirmHomeMediaUpload, requestHomeMediaUpload } from "@/lib/home/home-media-service";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 
-vi.mock("@/lib/storage/r2", () => ({ R2_BUCKETS: { PUBLIC_MEDIA: "public-media" } }));
+vi.mock("@/lib/storage/r2-buckets", () => ({ R2_BUCKETS: { PUBLIC_MEDIA: "public-media" } }));
 
-const SECRET = "a1b2c3d4e5f67890123456789abcdef0a1b2c3d4e5f67890123456789abcdef0";
 const NOW = 1_800_000_000;
 const MB = 1024 * 1024;
 
@@ -26,6 +26,7 @@ function storage(head: { contentLength: number; contentType?: string } | null = 
       return `https://r2.example/${params.bucket}/${params.key}`;
     }),
     headObject: vi.fn(async () => head),
+    getObjectRange: vi.fn(async () => fixtureHeader(head?.contentType ?? "image/webp")),
     deleteObject: vi.fn(async () => undefined),
   } as unknown as CatalogStorageAdapter & {
     generatePresignedPutUrl: ReturnType<typeof vi.fn>;
@@ -64,7 +65,7 @@ async function sign(
       mimeType,
       fileSizeBytes,
     },
-    { storageAdapter: adapter, intentSecret: SECRET, nowSeconds: NOW }
+    { storageAdapter: adapter, nowSeconds: NOW }
   );
 }
 
@@ -138,7 +139,7 @@ describe("Direct upload signing", () => {
             mimeType: "image/webp",
             fileSizeBytes: 10,
           },
-          { storageAdapter: storage(), intentSecret: SECRET, nowSeconds: NOW }
+          { storageAdapter: storage(), nowSeconds: NOW }
         ),
         keyPrefix
       ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_INVALID_PREFIX" });
@@ -148,12 +149,11 @@ describe("Direct upload signing", () => {
 
 describe("Direct upload verification", () => {
   it("accepts an object that matches what was signed exactly", async () => {
-    const { uploadToken } = await sign("home_video", "video/webm", 3 * MB);
+    const { uploadId } = await sign("home_video", "video/webm", 3 * MB);
     const token = await verifyDirectUpload(
-      { uploadToken, purpose: "home_video", actorId: "admin-1" },
+      { uploadId, purpose: "home_video", actorId: "admin-1" },
       {
         storageAdapter: storage({ contentLength: 3 * MB, contentType: "video/webm" }),
-        intentSecret: SECRET,
         nowSeconds: NOW,
       }
     );
@@ -162,42 +162,25 @@ describe("Direct upload verification", () => {
   });
 
   it("deletes an object of a different length, even a smaller one", async () => {
-    const { uploadToken } = await sign("home_video", "video/mp4", 3 * MB);
+    const { uploadId } = await sign("home_video", "video/mp4", 3 * MB);
     const adapter = storage({ contentLength: 3 * MB - 1, contentType: "video/mp4" });
     await expect(
       verifyDirectUpload(
-        { uploadToken, purpose: "home_video", actorId: "admin-1" },
-        { storageAdapter: adapter, intentSecret: SECRET, nowSeconds: NOW }
+        { uploadId, purpose: "home_video", actorId: "admin-1" },
+        { storageAdapter: adapter, nowSeconds: NOW }
       )
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_MISMATCH" });
     expect(adapter.deleteObject).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a token signed for another purpose", async () => {
-    const { uploadToken } = await sign("home_video_poster", "image/webp", MB);
+    const { uploadId } = await sign("home_video_poster", "image/webp", MB);
     await expect(
       verifyDirectUpload(
-        { uploadToken, purpose: "home_video", actorId: "admin-1" },
-        { storageAdapter: storage(), intentSecret: SECRET, nowSeconds: NOW }
+        { uploadId, purpose: "home_video", actorId: "admin-1" },
+        { storageAdapter: storage(), nowSeconds: NOW }
       )
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_PURPOSE_MISMATCH" });
-  });
-
-  it("refuses a token whose payload was edited", async () => {
-    const { uploadToken } = await sign("home_video", "video/mp4", MB);
-    const [body, signature] = uploadToken.split(".");
-    const payload = JSON.parse(Buffer.from(body!, "base64url").toString("utf8")) as Record<
-      string,
-      unknown
-    >;
-    payload.fileSizeBytes = 500 * MB;
-    const forged = `${Buffer.from(JSON.stringify(payload)).toString("base64url")}.${signature}`;
-    await expect(
-      verifyDirectUpload(
-        { uploadToken: forged, purpose: "home_video", actorId: "admin-1" },
-        { storageAdapter: storage(), intentSecret: SECRET, nowSeconds: NOW }
-      )
-    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_TOKEN_INVALID" });
   });
 });
 
@@ -217,12 +200,11 @@ describe("Direct upload asset registration", () => {
   }
 
   it("records videos as VIDEO with the signed size and bounded dimensions", async () => {
-    const { uploadToken } = await sign("home_video", "video/mp4", 4 * MB);
+    const { uploadId } = await sign("home_video", "video/mp4", 4 * MB);
     const token = await verifyDirectUpload(
-      { uploadToken, purpose: "home_video", actorId: "admin-1" },
+      { uploadId, purpose: "home_video", actorId: "admin-1" },
       {
         storageAdapter: storage({ contentLength: 4 * MB, contentType: "video/mp4" }),
-        intentSecret: SECRET,
         nowSeconds: NOW,
       }
     );
@@ -237,18 +219,17 @@ describe("Direct upload asset registration", () => {
       mimeType: "video/mp4",
       fileSizeBytes: 4 * MB,
       securityClass: "PUBLIC_MEDIA",
-      width: 1920,
+      width: null,
       height: null,
     });
   });
 
   it("returns the existing asset on a repeated confirm", async () => {
-    const { uploadToken } = await sign("home_image", "image/webp", MB);
+    const { uploadId } = await sign("home_image", "image/webp", MB);
     const token = await verifyDirectUpload(
-      { uploadToken, purpose: "home_image", actorId: "admin-1" },
+      { uploadId, purpose: "home_image", actorId: "admin-1" },
       {
         storageAdapter: storage({ contentLength: MB, contentType: "image/webp" }),
-        intentSecret: SECRET,
         nowSeconds: NOW,
       }
     );
@@ -265,7 +246,6 @@ describe("Home media uploads", () => {
     const options = {
       authContext: admin(),
       storageAdapter: adapter,
-      intentSecret: SECRET,
       nowSeconds: NOW,
     };
     await requestHomeMediaUpload(
@@ -289,7 +269,7 @@ describe("Home media uploads", () => {
   });
 
   it("refuse story uploads and operators without catalog permission", async () => {
-    const base = { storageAdapter: storage(), intentSecret: SECRET, nowSeconds: NOW };
+    const base = { storageAdapter: storage(), nowSeconds: NOW };
     await expect(
       requestHomeMediaUpload(
         { purpose: "story_image", mimeType: "image/webp", fileSizeBytes: MB },
@@ -309,10 +289,9 @@ describe("Home media uploads", () => {
     const options = {
       authContext: admin(),
       storageAdapter: adapter,
-      intentSecret: SECRET,
       nowSeconds: NOW,
     };
-    const { uploadToken } = await requestHomeMediaUpload(
+    const { uploadId } = await requestHomeMediaUpload(
       { purpose: "home_video", mimeType: "video/mp4", fileSizeBytes: 5 * MB },
       options
     );
@@ -334,7 +313,7 @@ describe("Home media uploads", () => {
     const database = { transaction: async (fn: (t: unknown) => unknown) => fn(tx) } as never;
 
     const result = await confirmHomeMediaUpload(
-      { purpose: "home_video", uploadToken, width: 1920, height: 1080 },
+      { purpose: "home_video", uploadId, width: 1920, height: 1080 },
       { ...options, database }
     );
     expect(result).toMatchObject({
@@ -353,7 +332,6 @@ describe("R2 presigned PUT", () => {
     vi.stubEnv("R2_ACCESS_KEY_ID", "unit-test-access-key");
     vi.stubEnv("R2_SECRET_ACCESS_KEY", "unit-test-secret-key");
     vi.stubEnv("R2_PUBLIC_MEDIA_BUCKET", "unit-test-public-media");
-    vi.stubEnv("CATALOG_MEDIA_INTENT_HMAC_SECRET", SECRET);
   });
   afterAll(() => vi.unstubAllEnvs());
 
@@ -381,3 +359,9 @@ describe("R2 presigned PUT", () => {
 });
 
 import { R2CatalogStorageAdapter } from "@/lib/admin/catalog/media-storage-sdk";
+
+vi.mock(
+  "@/lib/admin/media/upload-ledger",
+  async () => await import("../helpers/media-upload-ledger-mock")
+);
+vi.mock("@/db", () => ({ db: { transaction: async (fn: (tx: object) => unknown) => fn({}) } }));

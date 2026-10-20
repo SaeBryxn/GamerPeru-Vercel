@@ -64,9 +64,9 @@ dashboard under the Worker → Settings → Variables and Secrets:
   optional `DATABASE_POOL_MAX`.
 - Supabase: `SUPABASE_SECRET_KEY`.
 - Storage: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PUBLIC_MEDIA_BUCKET`,
-  `R2_CATALOG_STAGING_BUCKET`, `R2_PRIVATE_PROOFS_BUCKET`, `R2_PRIVATE_PAYMENT_MEDIA_BUCKET`,
+  `R2_PRIVATE_PROOFS_BUCKET`, `R2_PRIVATE_PAYMENT_MEDIA_BUCKET`,
   `R2_DB_BACKUPS_BUCKET`. Do not set `S3_ENDPOINT` / `S3_REGION`.
-- Signing: `CHECKOUT_HMAC_SECRET`, `INVENTORY_HMAC_SECRET`, `CATALOG_MEDIA_INTENT_HMAC_SECRET`
+- Signing: `CHECKOUT_HMAC_SECRET`, `INVENTORY_HMAC_SECRET`
   (same values as the current production, since the database is shared).
 - Business rules: `CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE`, `CHECKOUT_RESERVATION_TTL_MINUTES`,
   `CHECKOUT_IDEMPOTENCY_TTL_MINUTES`, `PAYMENT_SUBMISSION_IDEMPOTENCY_TTL_MINUTES`,
@@ -105,8 +105,8 @@ pnpm cf:deploy
 1. Worker → Settings → Domains & Routes → add `gamerperu.com` (and `www`) as custom domains.
 2. Remove the domain from the Vercel project so both do not answer.
 3. Supabase → Authentication → URL Configuration: Site URL and redirect URLs on the final domain.
-4. R2 → `gamerperu-private-proofs` and `gamerperu-catalog-staging-private` → CORS: the final
-   domain in `AllowedOrigins`.
+4. R2 → `gamerperu-private-proofs` y `gamerperu-public-media` → CORS con los orígenes finales.
+   El público admite Content-Type y Cache-Control; Content-Length lo fija el navegador.
 5. Inngest: sync the app at `https://gamerperu.com/api/inngest`.
 
 ## 5. After the first deploy
@@ -117,3 +117,32 @@ pnpm cf:deploy
 - Upload a portrait phone photo in the admin; it must come out upright.
 - Place a test order, upload a payment proof, approve it in the admin.
 - Rollback: `npx wrangler rollback` restores the previous Worker version.
+
+## GP-059: control de medios y presupuesto
+
+Galería, historia y home usan Route Handlers con `aws4fetch` y PUT directo al bucket público.
+El SDK permanece para comprobantes privados y diagnósticos; su configuración de checksum
+sigue siendo necesaria en esos dominios. No se usa Supabase Storage para medios.
+
+Aplicar la migración Drizzle `0022_media_uploads` antes de desplegar el código que usa el ledger.
+La fila `media_storage_budget` se siembra con 8 GiB, el tamaño declarado de los assets públicos
+y reserva 0. El UPDATE condicional impide que reservas concurrentes superen ese presupuesto.
+El uso es un libro contable del servidor, no una medición independiente del contenido del bucket.
+
+Complete inspecciona HEAD y hasta 4096 bytes; un JPEG cuyo SOF no cabe se rechaza. Las dimensiones
+persistidas vienen del encabezado. Abortar borra solo objetos PENDING y libera su reserva bajo
+bloqueo; READY nunca se borra por aborto. Pagehide intenta avisar con sendBeacon, sin garantía
+de entrega. Inngest `media-uploads-sweep`, cron `17 * * * *`, reintenta la limpieza de hasta cien
+PENDING vencidas desde hace más de una hora. Un DELETE fallido conserva la reserva para reintentar.
+
+El contador de huérfanos considera assets públicos sin referencias en galería, historia, home ni
+principal de producto, mayores de 30 días. No borra objetos ni assets.
+
+El dueño puede retirar el secreto `CATALOG_MEDIA_INTENT_HMAC_SECRET` y la variable antigua
+`R2_CATALOG_STAGING_BUCKET`: ya no tienen consumidores de runtime ni del script de diagnóstico.
+El bucket de staging retirado lo elimina el dueño tras verificar su contenido; Codex no lo toca.
+Las URLs HMAC emitidas antes del cambio no tienen ledger y no pueden confirmarse con el código nuevo.
+
+El gate compara gzip de Wrangler dry-run en Linux con **5869,50 KiB**, sin optimizar Next/OpenNext.
+Documentar antes/después y justificar un aumento mayor de 20 KiB. Los avisos preexistentes del
+emulador y OpenNext son BASELINE; no se relaja seguridad para silenciarlos.

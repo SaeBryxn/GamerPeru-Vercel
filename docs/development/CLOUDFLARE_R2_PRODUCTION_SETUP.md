@@ -51,7 +51,6 @@ R2_DB_BACKUPS_BUCKET=gamerperu-db-backups-private
 
 NEXT_PUBLIC_SITE_URL=https://gamerperu.com
 NEXT_PUBLIC_CDN_URL=https://media.gamerperu.com
-CATALOG_MEDIA_INTENT_HMAC_SECRET=<64 hex chars, unique to production>
 ```
 
 The bucket names above are the code defaults (`src/config/server-env.ts`); setting them
@@ -67,13 +66,12 @@ just a restart.
 
 Create all buckets in the same account, location hint **South America (SAM)** or automatic.
 
-| #   | Bucket                              | Access                     | Written by                                                                                                     | Read by                                                     | CORS         |
-| --- | ----------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------ |
-| 1   | `gamerperu-public-media`            | **Public** (custom domain) | **Browser** (admin, presigned PUT straight to the final key: gallery, story and home media)                    | Everyone, via `https://media.gamerperu.com/<key>`           | **Required** |
-| 2   | `gamerperu-catalog-staging-private` | Retired (ADR-013)          | Nothing since GP-055; empty it and delete it                                                                   | —                                                           | —            |
-| 3   | `gamerperu-private-proofs`          | **Private**                | **Browser** (customer, presigned PUT to `payment-proofs/staging/…`); server copies to `payment-proofs/final/…` | Server; admins via 5-minute presigned GET                   | **Required** |
-| 4   | `gamerperu-private-payment-media`   | **Private**                | Operator (Yape/Plin QR images registered as media assets)                                                      | Customers via short-lived presigned GET rendered in `<img>` | Not needed   |
-| 5   | `gamerperu-db-backups-private`      | **Private**                | Backup tooling (not referenced by app code today)                                                              | Operators only                                              | Not needed   |
+| #   | Bucket                            | Access                     | Written by                                                                                                     | Read by                                                     | CORS         |
+| --- | --------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------ |
+| 1   | `gamerperu-public-media`          | **Public** (custom domain) | **Browser** (admin, presigned PUT straight to the final key: gallery, story and home media)                    | Everyone, via `https://media.gamerperu.com/<key>`           | **Required** |
+| 3   | `gamerperu-private-proofs`        | **Private**                | **Browser** (customer, presigned PUT to `payment-proofs/staging/…`); server copies to `payment-proofs/final/…` | Server; admins via 5-minute presigned GET                   | **Required** |
+| 4   | `gamerperu-private-payment-media` | **Private**                | Operator (Yape/Plin QR images registered as media assets)                                                      | Customers via short-lived presigned GET rendered in `<img>` | Not needed   |
+| 5   | `gamerperu-db-backups-private`    | **Private**                | Backup tooling (not referenced by app code today)                                                              | Operators only                                              | Not needed   |
 
 ### Making bucket 1 public
 
@@ -90,7 +88,7 @@ production):
 Optional: a Cache Rule on `media.gamerperu.com` with a long edge TTL; the server already writes
 `CacheControl` on finalized objects.
 
-### Private buckets (2–5)
+### Private buckets
 
 Leave public access, custom domains and r2.dev **all disabled**. Every read goes through
 server-issued presigned URLs.
@@ -174,7 +172,7 @@ Notes:
 
 ## 4. Order of operations
 
-1. Create the five buckets (section 2).
+1. Create the four active buckets (section 2).
 2. Connect `media.gamerperu.com` to `gamerperu-public-media`.
 3. Apply CORS on the proofs and public-media buckets.
 4. Add lifecycle rules.
@@ -231,3 +229,32 @@ Storage failures are logged as JSON with an `event`, `errorCode` and `httpStatus
 | `errorCode=NoSuchBucket` / HeadBucket 404                                            | Bucket name typo or created in another account               |
 | `httpStatus=403`, `AccessDenied`                                                     | Token not scoped to that bucket                              |
 | `payment_proof_staging_head_failed` right after upload                               | The browser upload never landed; check the Network tab first |
+
+## GP-059: control de medios y presupuesto
+
+Galería, historia y home usan Route Handlers con `aws4fetch` y PUT directo al bucket público.
+El SDK permanece para comprobantes privados y diagnósticos; su configuración de checksum
+sigue siendo necesaria en esos dominios. No se usa Supabase Storage para medios.
+
+Aplicar la migración Drizzle `0022_media_uploads` antes de desplegar el código que usa el ledger.
+La fila `media_storage_budget` se siembra con 8 GiB, el tamaño declarado de los assets públicos
+y reserva 0. El UPDATE condicional impide que reservas concurrentes superen ese presupuesto.
+El uso es un libro contable del servidor, no una medición independiente del contenido del bucket.
+
+Complete inspecciona HEAD y hasta 4096 bytes; un JPEG cuyo SOF no cabe se rechaza. Las dimensiones
+persistidas vienen del encabezado. Abortar borra solo objetos PENDING y libera su reserva bajo
+bloqueo; READY nunca se borra por aborto. Pagehide intenta avisar con sendBeacon, sin garantía
+de entrega. Inngest `media-uploads-sweep`, cron `17 * * * *`, reintenta la limpieza de hasta cien
+PENDING vencidas desde hace más de una hora. Un DELETE fallido conserva la reserva para reintentar.
+
+El contador de huérfanos considera assets públicos sin referencias en galería, historia, home ni
+principal de producto, mayores de 30 días. No borra objetos ni assets.
+
+El dueño puede retirar el secreto `CATALOG_MEDIA_INTENT_HMAC_SECRET` y la variable antigua
+`R2_CATALOG_STAGING_BUCKET`: ya no tienen consumidores de runtime ni del script de diagnóstico.
+El bucket de staging retirado lo elimina el dueño tras verificar su contenido; Codex no lo toca.
+Las URLs HMAC emitidas antes del cambio no tienen ledger y no pueden confirmarse con el código nuevo.
+
+El gate compara gzip de Wrangler dry-run en Linux con **5869,50 KiB**, sin optimizar Next/OpenNext.
+Documentar antes/después y justificar un aumento mayor de 20 KiB. Los avisos preexistentes del
+emulador y OpenNext son BASELINE; no se relaja seguridad para silenciarlos.

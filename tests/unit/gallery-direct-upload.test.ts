@@ -1,3 +1,4 @@
+import { fixtureHeader } from "../helpers/media-upload-ledger-mock";
 import { describe, expect, it, vi } from "vitest";
 import {
   confirmGalleryImageUpload,
@@ -8,9 +9,8 @@ import type { CatalogStorageAdapter } from "@/lib/admin/catalog/media-storage";
 import { DIRECT_UPLOAD_POLICIES, checkDirectUpload } from "@/lib/media/direct-upload-policy";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 
-vi.mock("@/lib/storage/r2", () => ({ R2_BUCKETS: { PUBLIC_MEDIA: "public-media" } }));
+vi.mock("@/lib/storage/r2-buckets", () => ({ R2_BUCKETS: { PUBLIC_MEDIA: "public-media" } }));
 
-const SECRET = "a1b2c3d4e5f67890123456789abcdef0a1b2c3d4e5f67890123456789abcdef0";
 const NOW = 1_800_000_000;
 const MB = 1024 * 1024;
 const PRODUCT_ID = "0190f4c2-7a1b-7c3d-8e4f-5a6b7c8d9e0f";
@@ -31,6 +31,7 @@ function storage(head: { contentLength: number; contentType?: string } | null = 
       return `https://r2.example/${params.bucket}/${params.key}`;
     }),
     headObject: vi.fn(async () => head),
+    getObjectRange: vi.fn(async () => fixtureHeader(head?.contentType ?? "image/webp")),
     deleteObject: vi.fn(async () => undefined),
   } as unknown as CatalogStorageAdapter & {
     generatePresignedPutUrl: ReturnType<typeof vi.fn>;
@@ -76,7 +77,7 @@ async function sign(variantId: string | null, adapter = storage()) {
   const { database } = fakeDatabase(lookups);
   return requestGalleryImageUpload(
     { productId: PRODUCT_ID, variantId, mimeType: "image/webp", fileSizeBytes: 2 * MB },
-    { authContext: ADMIN, storageAdapter: adapter, intentSecret: SECRET, nowSeconds: NOW, database }
+    { authContext: ADMIN, storageAdapter: adapter, nowSeconds: NOW, database }
   );
 }
 
@@ -112,7 +113,7 @@ describe("Gallery upload signing", () => {
     await expect(
       requestGalleryImageUpload(
         { productId: PRODUCT_ID, variantId: VARIANT_ID, mimeType: "image/webp", fileSizeBytes: MB },
-        { authContext: ADMIN, storageAdapter: storage(), intentSecret: SECRET, database }
+        { authContext: ADMIN, storageAdapter: storage(), database }
       )
     ).rejects.toMatchObject({ code: "MEDIA_VARIANT_PRODUCT_MISMATCH" });
   });
@@ -122,17 +123,30 @@ describe("Gallery upload signing", () => {
     await expect(
       requestGalleryImageUpload(
         { productId: PRODUCT_ID, mimeType: "image/webp", fileSizeBytes: MB },
-        { authContext: ADMIN, storageAdapter: storage(), intentSecret: SECRET, database }
+        { authContext: ADMIN, storageAdapter: storage(), database }
       )
     ).rejects.toMatchObject({ code: "PRODUCT_NOT_FOUND" });
   });
 });
 
 describe("Gallery upload confirmation", () => {
+  it("rechaza firma ajena al MIME y borra el objeto", async () => {
+    const { uploadId } = await sign(null);
+    const adapter = storage({ contentLength: 2 * MB, contentType: "image/webp" });
+    adapter.getObjectRange = async () => new TextEncoder().encode("<html>no-image</html>");
+    await expect(
+      confirmGalleryImageUpload(
+        { uploadId },
+        { authContext: ADMIN, storageAdapter: adapter, nowSeconds: NOW }
+      )
+    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_SIGNATURE_MISMATCH", httpStatus: 422 });
+    expect(adapter.deleteObject).toHaveBeenCalledOnce();
+  });
+
   const verified = () => storage({ contentLength: 2 * MB, contentType: "image/webp" });
 
   it("attaches the photo after the gallery, to its signed variant, and audits it", async () => {
-    const { uploadToken } = await sign(VARIANT_ID);
+    const { uploadId } = await sign(VARIANT_ID);
     const { database, inserts } = fakeDatabase([
       [{ id: PRODUCT_ID, status: "DRAFT" }], // product row lock
       [{ productId: PRODUCT_ID }], // variant still belongs to the product
@@ -141,11 +155,10 @@ describe("Gallery upload confirmation", () => {
       [{ maxOrder: 4 }], // current last gallery position
     ]);
     const result = await confirmGalleryImageUpload(
-      { uploadToken, width: 2000, height: 1500, mutationRequestId: "mr-1" },
+      { uploadId, width: 2000, height: 1500, mutationRequestId: "mr-1" },
       {
         authContext: ADMIN,
         storageAdapter: verified(),
-        intentSecret: SECRET,
         nowSeconds: NOW,
         database,
       }
@@ -156,8 +169,8 @@ describe("Gallery upload confirmation", () => {
       mediaType: "IMAGE",
       mimeType: "image/webp",
       fileSizeBytes: 2 * MB,
-      width: 2000,
-      height: 1500,
+      width: 8,
+      height: 6,
     });
     // No content hash: the Worker never sees the bytes.
     expect(inserts[0]).not.toHaveProperty("checksumSha256");
@@ -174,18 +187,17 @@ describe("Gallery upload confirmation", () => {
   });
 
   it("returns the existing attachment on a repeated confirm", async () => {
-    const { uploadToken } = await sign(null);
+    const { uploadId } = await sign(null);
     const { database, inserts } = fakeDatabase([
       [{ id: PRODUCT_ID, status: "DRAFT" }],
       [{ id: "asset-1", objectKey: "k", mimeType: "image/webp" }], // asset already registered
       [{ id: "pm-1" }], // already attached
     ]);
     const result = await confirmGalleryImageUpload(
-      { uploadToken },
+      { uploadId },
       {
         authContext: ADMIN,
         storageAdapter: verified(),
-        intentSecret: SECRET,
         nowSeconds: NOW,
         database,
       }
@@ -199,7 +211,7 @@ describe("Gallery upload confirmation", () => {
   });
 
   it("rejects a token signed for another kind of upload", async () => {
-    const { uploadToken } = await requestDirectUpload(
+    const { uploadId } = await requestDirectUpload(
       {
         purpose: "story_image",
         actorId: "admin-1",
@@ -208,25 +220,31 @@ describe("Gallery upload confirmation", () => {
         mimeType: "image/webp",
         fileSizeBytes: MB,
       },
-      { storageAdapter: storage(), intentSecret: SECRET, nowSeconds: NOW }
+      { storageAdapter: storage(), nowSeconds: NOW }
     );
     await expect(
       confirmGalleryImageUpload(
-        { uploadToken },
-        { authContext: ADMIN, storageAdapter: verified(), intentSecret: SECRET, nowSeconds: NOW }
+        { uploadId },
+        { authContext: ADMIN, storageAdapter: verified(), nowSeconds: NOW }
       )
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_PURPOSE_MISMATCH" });
   });
 
   it("deletes an object whose size differs from what was signed", async () => {
-    const { uploadToken } = await sign(null);
+    const { uploadId } = await sign(null);
     const adapter = storage({ contentLength: 2 * MB + 10, contentType: "image/webp" });
     await expect(
       confirmGalleryImageUpload(
-        { uploadToken },
-        { authContext: ADMIN, storageAdapter: adapter, intentSecret: SECRET, nowSeconds: NOW }
+        { uploadId },
+        { authContext: ADMIN, storageAdapter: adapter, nowSeconds: NOW }
       )
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_MISMATCH" });
     expect(adapter.deleteObject).toHaveBeenCalledTimes(1);
   });
 });
+
+vi.mock(
+  "@/lib/admin/media/upload-ledger",
+  async () => await import("../helpers/media-upload-ledger-mock")
+);
+vi.mock("@/db", () => ({ db: { transaction: async (fn: (tx: object) => unknown) => fn({}) } }));

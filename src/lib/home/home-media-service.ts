@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "@/db";
 import { auditEvents } from "@/db/schema";
 import { requirePermission, type VerifiedAuthContextReady } from "@/lib/auth/rbac";
+import { completeUpload, setUploadAsset } from "@/lib/admin/media/upload-ledger";
 import { CatalogDomainError } from "@/lib/admin/catalog/types";
 import {
   registerDirectUploadAsset,
@@ -89,7 +90,7 @@ export async function requestHomeMediaUpload(
 export async function confirmHomeMediaUpload(
   input: {
     purpose: DirectUploadPurpose;
-    uploadToken: string;
+    uploadId: string;
     width?: number | null;
     height?: number | null;
   },
@@ -99,12 +100,14 @@ export async function confirmHomeMediaUpload(
   assertHomePurpose(input.purpose);
   const database = options?.database ?? db;
   const token = await verifyDirectUpload(
-    { uploadToken: input.uploadToken, purpose: input.purpose, actorId },
+    { uploadId: input.uploadId, purpose: input.purpose, actorId },
     options
   );
 
   return database.transaction(async (tx) => {
-    const { asset, created } = await registerDirectUploadAsset(tx, token, input);
+    await completeUpload(tx, token.id, actorId);
+    const { asset, created } = await registerDirectUploadAsset(tx, token);
+    await setUploadAsset(tx, token.id, asset);
     if (created) {
       await tx.insert(auditEvents).values({
         actorType: "ADMIN",

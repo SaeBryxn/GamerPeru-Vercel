@@ -224,6 +224,7 @@ export type CatalogHealthResult =
   | {
       status: "READY";
       data: {
+        unreferencedAssetCount?: number;
         evaluatedProducts: number;
         productsWithIssues: number;
         productsWithBlockers: number;

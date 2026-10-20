@@ -61,33 +61,9 @@ function createNodeDatabase(): Database {
     });
   }
 
-  /*
-   * One pool per module instance, cached on globalThis so a single dev compilation
-   * never opens several. A hot reload builds a new module instance: the sockets of
-   * the disposed one stay open but its handlers are gone, and reusing them leaves
-   * every query waiting for a reply that is never processed. So a new instance
-   * retires the previous pool instead of adopting it.
-   */
-  const globalForDb = globalThis as unknown as {
-    conn: postgres.Sql | undefined;
-    connOwner: symbol | undefined;
-  };
-
-  const moduleInstanceId = Symbol("db-module-instance");
-
-  if (!isProduction && globalForDb.conn && globalForDb.connOwner !== moduleInstanceId) {
-    void globalForDb.conn.end({ timeout: 0 }).catch(() => {});
-    globalForDb.conn = undefined;
-  }
-
-  const client = globalForDb.conn ?? postgres(connectionString, clientOptions());
-
-  if (!isProduction) {
-    globalForDb.conn = client;
-    globalForDb.connOwner = moduleInstanceId;
-  }
-
-  return createDatabase(client);
+  // Dev route bundles can coexist. Closing another bundle's pool interrupts its active requests;
+  // each module owns its pool and postgres.js retires idle connections after twenty seconds.
+  return createDatabase(postgres(connectionString, clientOptions()));
 }
 
 /**

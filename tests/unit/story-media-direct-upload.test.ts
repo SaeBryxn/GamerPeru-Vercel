@@ -1,3 +1,4 @@
+import { fixtureHeader } from "../helpers/media-upload-ledger-mock";
 import { describe, expect, it, vi } from "vitest";
 import {
   confirmStoryImageUpload,
@@ -7,9 +8,8 @@ import type { CatalogStorageAdapter } from "@/lib/admin/catalog/media-storage";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/storage/r2", () => ({ R2_BUCKETS: { PUBLIC_MEDIA: "public-media" } }));
+vi.mock("@/lib/storage/r2-buckets", () => ({ R2_BUCKETS: { PUBLIC_MEDIA: "public-media" } }));
 
-const SECRET = "a1b2c3d4e5f67890123456789abcdef0a1b2c3d4e5f67890123456789abcdef0";
 const PRODUCT_ID = "0190f4c2-7a1b-7c3d-8e4f-5a6b7c8d9e0f";
 const NOW = 1_800_000_000;
 
@@ -29,6 +29,7 @@ function storage(head: { contentLength: number; contentType?: string } | null) {
       return `https://r2.example/${params.bucket}/${params.key}`;
     }),
     headObject: vi.fn(async () => head),
+    getObjectRange: vi.fn(async () => fixtureHeader(head?.contentType ?? "image/webp")),
     deleteObject: vi.fn(async () => undefined),
   } as unknown as CatalogStorageAdapter & {
     generatePresignedPutUrl: ReturnType<typeof vi.fn>;
@@ -45,7 +46,10 @@ function productLookup(row: { productSlug: string; brandSlug: string } | undefin
     where: () => chain,
     limit: () => Promise.resolve(row ? [row] : []),
   };
-  return { select: () => chain } as never;
+  return {
+    select: () => chain,
+    transaction: async (fn: (tx: object) => unknown) => fn({}),
+  } as never;
 }
 
 async function issueToken(adapter = storage(null), actor = admin()) {
@@ -54,7 +58,6 @@ async function issueToken(adapter = storage(null), actor = admin()) {
     {
       authContext: actor,
       storageAdapter: adapter,
-      intentSecret: SECRET,
       nowSeconds: NOW,
       database: productLookup({ productSlug: "atk-a9", brandSlug: "atk" }),
     }
@@ -78,7 +81,7 @@ describe("story image direct upload", () => {
 
   it("obtiene el estado bajo bloqueo antes de registrar la imagen", async () => {
     const adapter = storage({ contentLength: 2_000_000, contentType: "image/jpeg" });
-    const { uploadToken } = await issueToken(adapter);
+    const { uploadId } = await issueToken(adapter);
     const rows: unknown[][] = [
       [{ id: PRODUCT_ID, status: "PUBLISHED" }],
       [],
@@ -109,11 +112,10 @@ describe("story image direct upload", () => {
     };
     const database = { transaction: async (fn: (value: typeof tx) => unknown) => fn(tx) } as never;
     const result = await confirmStoryImageUpload(
-      { uploadToken, width: 100, height: 100 },
+      { uploadId, width: 100, height: 100 },
       {
         authContext: admin(),
         storageAdapter: adapter,
-        intentSecret: SECRET,
         nowSeconds: NOW,
         database,
       }
@@ -127,7 +129,6 @@ describe("story image direct upload", () => {
     const options = {
       authContext: admin(),
       storageAdapter: adapter,
-      intentSecret: SECRET,
       database: productLookup({ productSlug: "p", brandSlug: "b" }),
     };
     await expect(
@@ -145,31 +146,14 @@ describe("story image direct upload", () => {
     expect(adapter.generatePresignedPutUrl).not.toHaveBeenCalled();
   });
 
-  it("refuses a tampered token", async () => {
-    const { uploadToken } = await issueToken();
-    const [body] = uploadToken.split(".");
-    await expect(
-      confirmStoryImageUpload(
-        { uploadToken: `${body}.${"0".repeat(64)}` },
-        {
-          authContext: admin(),
-          storageAdapter: storage(null),
-          intentSecret: SECRET,
-          nowSeconds: NOW,
-        }
-      )
-    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_TOKEN_INVALID" });
-  });
-
   it("refuses a token issued to another session", async () => {
-    const { uploadToken } = await issueToken();
+    const { uploadId } = await issueToken();
     await expect(
       confirmStoryImageUpload(
-        { uploadToken },
+        { uploadId },
         {
           authContext: admin("someone-else"),
           storageAdapter: storage(null),
-          intentSecret: SECRET,
           nowSeconds: NOW,
         }
       )
@@ -177,14 +161,13 @@ describe("story image direct upload", () => {
   });
 
   it("reports a missing object without registering anything", async () => {
-    const { uploadToken } = await issueToken();
+    const { uploadId } = await issueToken();
     await expect(
       confirmStoryImageUpload(
-        { uploadToken },
+        { uploadId },
         {
           authContext: admin(),
           storageAdapter: storage(null),
-          intentSecret: SECRET,
           nowSeconds: NOW,
         }
       )
@@ -192,38 +175,44 @@ describe("story image direct upload", () => {
   });
 
   it("deletes an object whose type or size does not match what was signed", async () => {
-    const { uploadToken } = await issueToken();
+    const { uploadId } = await issueToken();
     const wrongType = storage({ contentLength: 2_000_000, contentType: "text/html" });
     await expect(
       confirmStoryImageUpload(
-        { uploadToken },
-        { authContext: admin(), storageAdapter: wrongType, intentSecret: SECRET, nowSeconds: NOW }
+        { uploadId },
+        { authContext: admin(), storageAdapter: wrongType, nowSeconds: NOW }
       )
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_MISMATCH" });
     expect(wrongType.deleteObject).toHaveBeenCalledTimes(1);
 
+    const { uploadId: tooLargeId } = await issueToken();
     const tooLarge = storage({ contentLength: 10485761, contentType: "image/jpeg" });
     await expect(
       confirmStoryImageUpload(
-        { uploadToken },
-        { authContext: admin(), storageAdapter: tooLarge, intentSecret: SECRET, nowSeconds: NOW }
+        { uploadId: tooLargeId },
+        { authContext: admin(), storageAdapter: tooLarge, nowSeconds: NOW }
       )
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_MISMATCH" });
     expect(tooLarge.deleteObject).toHaveBeenCalledTimes(1);
   });
 
   it("expires tokens after the upload window", async () => {
-    const { uploadToken } = await issueToken();
+    const { uploadId } = await issueToken();
     await expect(
       confirmStoryImageUpload(
-        { uploadToken },
+        { uploadId },
         {
           authContext: admin(),
           storageAdapter: storage(null),
-          intentSecret: SECRET,
           nowSeconds: NOW + 16 * 60,
         }
       )
-    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_TOKEN_EXPIRED" });
+    ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_EXPIRED" });
   });
 });
+
+vi.mock(
+  "@/lib/admin/media/upload-ledger",
+  async () => await import("../helpers/media-upload-ledger-mock")
+);
+vi.mock("@/db", () => ({ db: { transaction: async (fn: (tx: object) => unknown) => fn({}) } }));
