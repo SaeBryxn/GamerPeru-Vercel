@@ -1,9 +1,6 @@
 import type { S3Client } from "@aws-sdk/client-s3";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import {
-  R2CatalogStorageAdapter,
-  isAuthoritativeStorageNotFoundError,
-} from "@/lib/admin/catalog/media-storage";
+import { isAuthoritativeStorageNotFoundError } from "@/lib/admin/catalog/media-storage";
 
 const HEAD_PARAMS = { bucket: "public-media-test", key: "products/brand/product/test-object" };
 
@@ -83,3 +80,5 @@ describe("GP-024 R2 catalog HEAD semantics", () => {
     expect(isAuthoritativeStorageNotFoundError(new Error("network failure"))).toBe(false);
   });
 });
+
+import { R2CatalogStorageAdapter } from "@/lib/admin/catalog/media-storage-sdk";

@@ -93,7 +93,8 @@ ADR-015 quedan como mejora opcional posterior para evitar transformaciones respo
 - SEO: conserva URLs inmutables y metadatos de accesibilidad; cambia la invalidación de datos.
 - Rendimiento: sin archivo completo en el Worker; hasta 4 KB de inspección en GP-059; un
   firmante por isolate; sin invalidación de borradores. El límite de bundle comprimido
-  exigido por este encargo es menor de 3 MB y se mide en Linux, sin desplegar.
+  se compara con la base de 5869,50 KiB gzip en Linux, sin desplegar. No debe aumentar; una
+  subida mayor de 20 KiB requiere justificación (criterios corregidos por el dueño).
 
 ## Migration / Reversal
 

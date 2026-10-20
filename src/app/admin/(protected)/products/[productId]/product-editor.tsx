@@ -28,8 +28,6 @@ import {
   updateVariantAction,
   duplicateProductAction,
   transitionProductStatusAction,
-  requestGalleryImageUploadAction,
-  confirmGalleryImageUploadAction,
   updateMediaAltTextAction,
   reorderProductMediaAction,
   detachProductMediaAction,
@@ -62,6 +60,7 @@ import { VariantStockCell } from "@/components/admin/inventory/variant-stock-cel
 import type { VariantStockRow } from "@/lib/admin/inventory/readers";
 import { findWeightSpecField } from "@/lib/admin/catalog/weight-spec";
 import { uploadDirect, type DirectUploadStage } from "@/lib/media/direct-upload-client";
+import { requestUpload, completeUpload } from "@/lib/media/upload-api-client";
 import styles from "./product-editor.module.css";
 
 interface ProductEditorProps {
@@ -101,7 +100,7 @@ interface UploadQueueItem {
   error?: string;
 }
 
-const MAX_MEDIA_BYTES = 10485760;
+const MAX_MEDIA_BYTES = 20 * 1024 * 1024;
 const ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
 
 const EDITOR_SECTION_ORDER: ProductEditorSection[] = [
@@ -122,6 +121,9 @@ export function ProductEditor({
   variantStock,
 }: ProductEditorProps) {
   const router = useRouter();
+  const uploadController = useRef<AbortController | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  useEffect(() => () => uploadController.current?.abort(), []);
 
   const [detail, setDetail] = useState<AdminProductUiDetail>(initialDetail);
 
@@ -868,11 +870,13 @@ export function ProductEditor({
     const rejected: string[] = [];
     const accepted = files.filter((file) => {
       if (!ALLOWED_MEDIA_TYPES.includes(file.type)) {
-        rejected.push(`${file.name}: formato no permitido`);
+        rejected.push(
+          `${file.name}: ${/\.hei[cf]$/i.test(file.name) ? "HEIC no es compatible; conviértelo a JPEG o PNG" : "formato no permitido"}`
+        );
         return false;
       }
       if (file.size > MAX_MEDIA_BYTES) {
-        rejected.push(`${file.name}: supera los 10 MB`);
+        rejected.push(`${file.name}: supera los 20 MB`);
         return false;
       }
       return true;
@@ -900,7 +904,7 @@ export function ProductEditor({
 
   /**
    * Uploads one photo straight to R2 (ADR-013): the browser re-encodes it (no EXIF, upright, at
-   * most 2000 px), the server signs the PUT and then attaches the stored object after a HEAD
+   * most 2400 px), the server signs the PUT and then attaches the stored object after a HEAD
    * check. Confirm is idempotent, so a retry never adds the photo twice.
    */
   const uploadSingleFile = async (file: File): Promise<{ ok: boolean; error?: string }> => {
@@ -910,10 +914,17 @@ export function ProductEditor({
       purpose: "gallery_image",
       file,
       request: (input) =>
-        requestGalleryImageUploadAction({ productId: product.id, variantId, ...input }),
+        requestUpload({ purpose: "gallery_image", productId: product.id, variantId, ...input }),
       confirm: (input) =>
-        confirmGalleryImageUploadAction({ productId: product.id, mutationRequestId, ...input }),
+        completeUpload({
+          purpose: "gallery_image",
+          productId: product.id,
+          mutationRequestId,
+          ...input,
+        }),
       onStage: setUploadStage,
+      signal: uploadController.current?.signal,
+      onProgress: setUploadProgress,
     });
     return result.ok ? { ok: true } : { ok: false, error: result.error };
   };
@@ -921,6 +932,8 @@ export function ProductEditor({
   const handleStartUpload = async () => {
     if (selectedFiles.length === 0) return;
 
+    uploadController.current = new AbortController();
+    setUploadProgress(0);
     setIsUploadingMedia(true);
     setUploadError(null);
     setUploadSuccess(null);
@@ -934,6 +947,8 @@ export function ProductEditor({
     let uploaded = 0;
 
     for (const [index, file] of selectedFiles.entries()) {
+      if (uploadController.current.signal.aborted) break;
+      setUploadProgress(0);
       setUploadQueue((current) =>
         current.map((item, i) => (i === index ? { ...item, status: "uploading" } : item))
       );
@@ -951,6 +966,15 @@ export function ProductEditor({
       if (result.ok) uploaded += 1;
     }
 
+    if (uploadController.current.signal.aborted) {
+      setUploadQueue((current) =>
+        current.map((item) =>
+          item.status === "pending"
+            ? { ...item, status: "error", error: "Subida cancelada." }
+            : item
+        )
+      );
+    }
     const failed = selectedFiles.length - uploaded;
     if (uploaded > 0) {
       setUploadSuccess(
@@ -971,6 +995,7 @@ export function ProductEditor({
       router.refresh();
     }
 
+    uploadController.current = null;
     setIsUploadingMedia(false);
   };
 
@@ -1634,6 +1659,28 @@ export function ProductEditor({
 
           {activeSection === "imagenes" && (
             <section id="imagenes" className={styles.card} data-testid="section-media">
+              {isUploadingMedia && (
+                <div aria-live="polite">
+                  <progress
+                    className={styles.uploadProgress}
+                    role="progressbar"
+                    aria-label="Progreso de subida"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={uploadProgress}
+                    value={uploadProgress}
+                    max={100}
+                  />{" "}
+                  {uploadProgress}%
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => uploadController.current?.abort()}
+                  >
+                    Cancelar subida
+                  </button>
+                </div>
+              )}
               <div className={styles.sectionHead}>
                 <div>
                   <h2 className={styles.cardTitle}>Fotos del producto</h2>
@@ -1656,8 +1703,8 @@ export function ProductEditor({
                   Agregar una foto
                 </span>
                 <div className={styles.mediaUploadLimits} data-testid="media-upload-limits">
-                  JPEG, PNG, WebP o AVIF, hasta 10 MB por foto. Se recomiendan imágenes cuadradas de
-                  al menos 1200 x 1200 px.
+                  JPEG, PNG, WebP o AVIF, hasta 20 MB por foto. Se optimizan antes de subir (hasta
+                  2400 px y 4 MB). Se recomiendan imágenes cuadradas de al menos 1200 x 1200 px.
                 </div>
 
                 <div className={styles.mediaUploadControls}>

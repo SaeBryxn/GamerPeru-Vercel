@@ -41,6 +41,10 @@ export function cacheCatalogQuery<Args extends unknown[], Result>(
  * next request reads the database, and drops every prerendered storefront page built from them.
  */
 export function revalidateStorefrontCatalog(): void {
-  revalidateTag(CATALOG_CACHE_TAG, { expire: 0 });
+  revalidateStorefrontCatalogData();
   revalidatePath("/", "layout");
+}
+
+export function revalidateStorefrontCatalogData(): void {
+  revalidateTag(CATALOG_CACHE_TAG, { expire: 0 });
 }

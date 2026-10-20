@@ -76,6 +76,52 @@ describe("story image direct upload", () => {
     });
   });
 
+  it("obtiene el estado bajo bloqueo antes de registrar la imagen", async () => {
+    const adapter = storage({ contentLength: 2_000_000, contentType: "image/jpeg" });
+    const { uploadToken } = await issueToken(adapter);
+    const rows: unknown[][] = [
+      [{ id: PRODUCT_ID, status: "PUBLISHED" }],
+      [],
+      [],
+      [{ maxOrder: 0 }],
+    ];
+    const locked = vi.fn();
+    const chain = () => {
+      const builder: Record<string, unknown> = {};
+      for (const method of ["from", "where"]) builder[method] = () => builder;
+      builder.for = (mode: string) => {
+        locked(mode);
+        return builder;
+      };
+      builder.then = (resolve: (value: unknown) => unknown) =>
+        Promise.resolve(rows.shift() ?? []).then(resolve);
+      return builder;
+    };
+    let id = 0;
+    const tx = {
+      select: chain,
+      insert: () => ({
+        values: (value: Record<string, unknown>) =>
+          Object.assign(Promise.resolve(), {
+            returning: async () => [{ id: `row-${++id}`, ...value }],
+          }),
+      }),
+    };
+    const database = { transaction: async (fn: (value: typeof tx) => unknown) => fn(tx) } as never;
+    const result = await confirmStoryImageUpload(
+      { uploadToken, width: 100, height: 100 },
+      {
+        authContext: admin(),
+        storageAdapter: adapter,
+        intentSecret: SECRET,
+        nowSeconds: NOW,
+        database,
+      }
+    );
+    expect(result.productStatus).toBe("PUBLISHED");
+    expect(locked).toHaveBeenCalledWith("update");
+  });
+
   it("rejects unsupported types and oversize files before signing anything", async () => {
     const adapter = storage(null);
     const options = {

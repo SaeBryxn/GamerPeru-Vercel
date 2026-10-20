@@ -36,7 +36,7 @@ export const DIRECT_UPLOAD_POLICIES: Readonly<Record<DirectUploadPurpose, Direct
     mimeTypes: { "image/webp": "webp", "image/jpeg": "jpg" },
     maxBytes: 4 * MB,
     mediaType: "IMAGE",
-    maxImageDimension: 2000,
+    maxImageDimension: 2400,
     label: "La foto",
     alwaysReencode: true,
   },

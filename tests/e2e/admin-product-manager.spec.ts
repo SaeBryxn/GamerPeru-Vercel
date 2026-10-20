@@ -51,6 +51,45 @@ async function loginAndNavigateTo(page: Page, email: string, targetPath: string)
 }
 
 test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integration Suite", () => {
+  test("GP-058: cancelar subida es accesible y no confirma el archivo", async ({ page }) => {
+    const product = ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct;
+    await loginAndNavigateTo(
+      page,
+      ADMIN_E2E_USERS.superadmin.email,
+      `/admin/products/${product.id}`
+    );
+    await openSection(page, "imagenes");
+    let completed = 0;
+    const origin = new URL(page.url()).origin;
+    await page.route("**/api/admin/media/uploads", (route) =>
+      route.fulfill({
+        json: {
+          uploadId: "018f0000-0000-7000-8000-000000009999",
+          putUrl: `${origin}/fixture-r2/foto.webp`,
+          requiredHeaders: {},
+          expiresAt: Date.now() / 1000 + 900,
+        },
+      })
+    );
+    await page.route("**/fixture-r2/**", async (route) => {
+      await route.request().response();
+    });
+    await page.route("**/api/admin/media/uploads/complete", (route) => {
+      completed++;
+      return route.fulfill({ status: 500 });
+    });
+    await page.route("**/api/admin/media/uploads/abort", (route) => route.fulfill({ status: 204 }));
+    await page.getByTestId("input-media-file").setInputFiles("tests/fixtures/gp014-media/hero.png");
+    await page.getByTestId("btn-upload-media").click();
+    const cancel = page.getByRole("button", { name: "Cancelar subida" });
+    await expect(page.getByRole("progressbar", { name: "Progreso de subida" })).toBeVisible();
+    await cancel.focus();
+    await cancel.press("Enter");
+    await expect(cancel).toHaveCount(0);
+    expect(completed).toBe(0);
+    await page.waitForLoadState("networkidle");
+  });
+
   // --------------------------------------------------------------------------
   // Requirement A: Access Control
   // --------------------------------------------------------------------------
@@ -774,7 +813,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await openSection(page, "imagenes");
     await expect(page.locator('[data-testid="section-media"]')).toBeVisible();
     await expect(page.locator('[data-testid="media-upload-area"]')).toBeVisible();
-    await expect(page.locator('[data-testid="media-upload-limits"]')).toContainText("10 MB");
+    await expect(page.locator('[data-testid="media-upload-limits"]')).toContainText("20 MB");
     await expect(page.locator('input[data-testid="input-media-file"]')).toBeVisible();
     await expect(page.locator('[data-testid="select-media-upload-variant"]')).toBeVisible();
     await expect(page.locator('[data-testid="btn-upload-media"]')).toBeVisible();
@@ -1111,7 +1150,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await expect(page.locator('[data-testid="media-upload-area"]')).toHaveCount(0);
   });
 
-  test("Requirement S8: Upload advisory, accept attribute, client-side >10 MiB rejection, and zero deletion controls", async ({
+  test("Requirement S8: Upload advisory, accept attribute, client-side >20 MiB rejection, and zero deletion controls", async ({
     page,
   }) => {
     await loginAndNavigateTo(
@@ -1125,8 +1164,8 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     const fileInput = page.locator('input[data-testid="input-media-file"]');
     await expect(fileInput).toHaveAttribute("accept", "image/jpeg,image/png,image/webp,image/avif");
 
-    // 2. Client-side rejection of > 10 MiB file (10,485,761 bytes)
-    const oversizedBuffer = Buffer.alloc(10485761);
+    // El límite corresponde al original antes de optimizar.
+    const oversizedBuffer = Buffer.alloc(25 * 1024 * 1024);
     await fileInput.setInputFiles({
       name: "oversized.png",
       mimeType: "image/png",
@@ -1136,7 +1175,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     // Advisory error is visible and has role="alert" / aria-live="assertive"
     const clientError = page.locator('[data-testid="media-client-error"]');
     await expect(clientError).toBeVisible();
-    await expect(clientError).toContainText("10 MB");
+    await expect(clientError).toContainText("20 MB");
     await expect(clientError).toHaveAttribute("role", "alert");
     await expect(clientError).toHaveAttribute("aria-live", "assertive");
 

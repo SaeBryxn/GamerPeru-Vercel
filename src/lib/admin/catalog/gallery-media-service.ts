@@ -42,6 +42,11 @@ export interface ConfirmGalleryImageUploadInput {
 }
 
 export interface ConfirmGalleryImageUploadResult {
+  objectKey: string;
+  mimeType: string;
+  width: number | null;
+  height: number | null;
+  productStatus: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   productMediaId: string;
   mediaAssetId: string;
   /** True when this upload was already attached by an earlier confirm. */
@@ -145,7 +150,7 @@ export async function confirmGalleryImageUpload(
 
   return database.transaction(async (tx) => {
     const [product] = await tx
-      .select({ id: products.id })
+      .select({ id: products.id, status: products.status })
       .from(products)
       .where(eq(products.id, productId))
       .for("update");
@@ -156,12 +161,20 @@ export async function confirmGalleryImageUpload(
 
     const { asset } = await registerDirectUploadAsset(tx, token, input);
 
+    const metadata = {
+      objectKey: asset.objectKey,
+      mimeType: asset.mimeType,
+      width: asset.width,
+      height: asset.height,
+      productStatus: product.status,
+    };
+
     const [existing] = await tx
       .select({ id: productMedia.id })
       .from(productMedia)
       .where(and(eq(productMedia.mediaAssetId, asset.id), eq(productMedia.productId, productId)));
     if (existing) {
-      return { productMediaId: existing.id, mediaAssetId: asset.id, replayed: true };
+      return { ...metadata, productMediaId: existing.id, mediaAssetId: asset.id, replayed: true };
     }
 
     // Counted within the gallery, so story images never shift gallery positions.
@@ -197,6 +210,6 @@ export async function confirmGalleryImageUpload(
       },
     });
 
-    return { productMediaId: link!.id, mediaAssetId: asset.id, replayed: false };
+    return { ...metadata, productMediaId: link!.id, mediaAssetId: asset.id, replayed: false };
   });
 }

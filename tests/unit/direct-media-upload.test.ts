@@ -1,9 +1,6 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import {
-  R2CatalogStorageAdapter,
-  type CatalogStorageAdapter,
-} from "@/lib/admin/catalog/media-storage";
+import { type CatalogStorageAdapter } from "@/lib/admin/catalog/media-storage";
 import {
   registerDirectUploadAsset,
   requestDirectUpload,
@@ -382,3 +379,5 @@ describe("R2 presigned PUT", () => {
     );
   });
 });
+
+import { R2CatalogStorageAdapter } from "@/lib/admin/catalog/media-storage-sdk";

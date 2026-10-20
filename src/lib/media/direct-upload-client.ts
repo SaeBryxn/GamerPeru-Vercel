@@ -11,6 +11,7 @@ interface ActionResult<T> {
   success: boolean;
   data?: T;
   error?: string;
+  status?: number;
 }
 
 export interface DirectUploadClientOptions<Confirmed> {
@@ -19,17 +20,19 @@ export interface DirectUploadClientOptions<Confirmed> {
   /** Server action that signs the upload for this exact type and size. */
   request: (input: { mimeType: string; fileSizeBytes: number }) => Promise<
     ActionResult<{
-      uploadToken: string;
-      presignedPutUrl: string;
+      uploadId: string;
+      putUrl: string;
       requiredHeaders: Record<string, string>;
     }>
   >;
   /** Server action that verifies the stored object and registers it. */
   confirm: (input: {
-    uploadToken: string;
+    uploadId: string;
     width: number | null;
     height: number | null;
   }) => Promise<ActionResult<Confirmed>>;
+  signal?: AbortSignal;
+  onProgress?: (pct: number) => void;
   onStage?: (stage: DirectUploadStage) => void;
 }
 
@@ -84,7 +87,26 @@ export async function uploadDirect<Confirmed>({
   request,
   confirm,
   onStage,
+  onProgress,
+  signal,
 }: DirectUploadClientOptions<Confirmed>): Promise<DirectUploadClientResult<Confirmed>> {
+  if (signal?.aborted) return { ok: false, error: "Subida cancelada." };
+  if (/\.hei[cf]$/i.test(file.name) || /image\/hei[cf]/i.test(file.type)) {
+    return {
+      ok: false,
+      error: "HEIC no es compatible. Convierte la imagen a JPEG, PNG, WebP o AVIF.",
+    };
+  }
+  if (
+    purpose === "gallery_image" &&
+    (file.size > 20 * 1024 * 1024 ||
+      !["image/jpeg", "image/png", "image/webp", "image/avif"].includes(file.type))
+  ) {
+    return {
+      ok: false,
+      error: "Usa JPEG, PNG, WebP o AVIF de hasta 20 MB. La imagen se optimiza antes de subir.",
+    };
+  }
   const policy = DIRECT_UPLOAD_POLICIES[purpose];
   // Re-encoded purposes accept any decodable still image: what is checked is the prepared output.
   if (!policy.alwaysReencode) {
@@ -108,6 +130,7 @@ export async function uploadDirect<Confirmed>({
   const problem = checkDirectUpload(purpose, { type: prepared.type, size: prepared.size });
   if (problem) return { ok: false, error: problem.message };
 
+  if (signal?.aborted) return { ok: false, error: "Subida cancelada." };
   onStage?.("authorizing");
   const [signed, dimensions] = await Promise.all([
     request({ mimeType: prepared.type, fileSizeBytes: prepared.size }),
@@ -117,24 +140,133 @@ export async function uploadDirect<Confirmed>({
     return { ok: false, error: signed.error ?? "No se pudo autorizar la subida." };
   }
 
-  onStage?.("uploading");
+  let progress = 0;
+  const report = (pct: number) => {
+    progress = Math.max(progress, Math.min(100, pct));
+    onProgress?.(progress);
+  };
   try {
-    const put = await fetch(signed.data.presignedPutUrl, {
-      method: "PUT",
-      headers: signed.data.requiredHeaders,
-      body: prepared,
-    });
-    if (!put.ok) {
-      return { ok: false, error: "No se pudo transferir el archivo al almacenamiento." };
+    signal?.throwIfAborted();
+    onStage?.("uploading");
+    report(0);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await putWithProgress(signed.data.putUrl, signed.data.requiredHeaders, prepared, {
+          signal,
+          onProgress: report,
+        });
+        break;
+      } catch (error) {
+        if (
+          signal?.aborted ||
+          !(error instanceof UploadTransferError) ||
+          !error.retryable ||
+          attempt >= 2
+        )
+          throw error;
+        await retryDelay(attempt, signal);
+      }
     }
-  } catch {
-    return { ok: false, error: "Se cortó la conexión mientras se subía el archivo." };
+    signal?.throwIfAborted();
+    onStage?.("processing");
+    for (let attempt = 0; ; attempt++) {
+      let confirmed: ActionResult<Confirmed>;
+      try {
+        confirmed = await confirm({ uploadId: signed.data.uploadId, ...dimensions });
+      } catch (error) {
+        if (!(error instanceof TypeError) || attempt >= 2) throw error;
+        await retryDelay(attempt, signal);
+        continue;
+      }
+      if (confirmed.success && confirmed.data !== undefined)
+        return { ok: true, data: confirmed.data };
+      if (
+        attempt >= 2 ||
+        (confirmed.status !== 0 && !(confirmed.status && confirmed.status >= 500))
+      ) {
+        return { ok: false, error: confirmed.error ?? "No se pudo registrar el archivo." };
+      }
+      await retryDelay(attempt, signal);
+    }
+  } catch (error) {
+    if (signal?.aborted) return { ok: false, error: "Subida cancelada." };
+    return {
+      ok: false,
+      error:
+        error instanceof UploadTransferError
+          ? error.message
+          : "No se pudo completar la subida. Vuelve a intentarlo.",
+    };
   }
+}
 
-  onStage?.("processing");
-  const confirmed = await confirm({ uploadToken: signed.data.uploadToken, ...dimensions });
-  if (!confirmed.success || confirmed.data === undefined) {
-    return { ok: false, error: confirmed.error ?? "No se pudo registrar el archivo." };
+class UploadTransferError extends Error {
+  readonly retryable: boolean;
+  constructor(status: number) {
+    super(
+      status === 403
+        ? "La autorización de subida caducó o fue rechazada. Vuelve a subir el archivo."
+        : "No se pudo transferir el archivo al almacenamiento."
+    );
+    this.retryable = status === 0 || status === 408 || status === 429 || status >= 500;
   }
-  return { ok: true, data: confirmed.data };
+}
+
+function retryDelay(attempt: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Subida cancelada", "AbortError"));
+      return;
+    }
+    const abort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      reject(new DOMException("Subida cancelada", "AbortError"));
+    };
+    const timer = setTimeout(
+      () => {
+        signal?.removeEventListener("abort", abort);
+        resolve();
+      },
+      attempt === 0 ? 500 : 1500
+    );
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+export function putWithProgress(
+  url: string,
+  headers: Record<string, string>,
+  body: File,
+  options: { onProgress?: (pct: number) => void; signal?: AbortSignal }
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const abort = () => xhr.abort();
+    const done = (error?: Error) => {
+      options.signal?.removeEventListener("abort", abort);
+      if (error) reject(error);
+      else {
+        options.onProgress?.(100);
+        resolve();
+      }
+    };
+    xhr.open("PUT", url);
+    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0)
+        options.onProgress?.(Math.floor((event.loaded / event.total) * 100));
+    };
+    xhr.onload = () =>
+      done(xhr.status >= 200 && xhr.status < 300 ? undefined : new UploadTransferError(xhr.status));
+    xhr.onerror = () => done(new UploadTransferError(0));
+    xhr.ontimeout = () => done(new UploadTransferError(408));
+    xhr.onabort = () => done(new DOMException("Subida cancelada", "AbortError"));
+    if (options.signal?.aborted) {
+      done(new DOMException("Subida cancelada", "AbortError"));
+      return;
+    }
+    options.signal?.addEventListener("abort", abort, { once: true });
+    xhr.send(body);
+  });
 }

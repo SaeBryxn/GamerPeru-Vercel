@@ -153,6 +153,27 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
     await sql.end();
   });
 
+  test("GP-058: historia usa el plano JSON con control de origen", async ({ page }) => {
+    await loginAndNavigateTo(page, ADMIN_E2E_USERS.catalog.email, storyPath);
+    const origin = new URL(page.url()).origin;
+    const rejected = await page.request.post("/api/admin/media/uploads", {
+      headers: { Origin: "https://ajeno.test" },
+      data: {
+        purpose: "story_image",
+        productId: product.id,
+        mimeType: "image/webp",
+        fileSizeBytes: 10,
+      },
+    });
+    expect(rejected.status()).toBe(403);
+    const invalid = await page.request.post("/api/admin/media/uploads/complete", {
+      headers: { Origin: origin },
+      data: { purpose: "story_image", uploadId: "invalid" },
+    });
+    expect(invalid.status()).toBe(400);
+    expect(invalid.headers()["cache-control"]).toContain("no-store");
+  });
+
   test("Product Manager entry navigates to the authorized Story shell and unauthorized actors fail closed", async ({
     page,
   }) => {

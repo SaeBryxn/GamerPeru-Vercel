@@ -995,3 +995,8 @@
     justify-content: center;
   }
 }
+
+.uploadProgress {
+  width: min(100%, 24rem);
+  accent-color: var(--color-brand-primary);
+}

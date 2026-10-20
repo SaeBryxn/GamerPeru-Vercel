@@ -10,7 +10,7 @@ import { getCatalogMediaIntentSecret } from "@/config/server-env";
 import { R2_BUCKETS } from "@/lib/storage/r2";
 import { CatalogDomainError } from "@/lib/admin/catalog/types";
 import {
-  R2CatalogStorageAdapter,
+  getDefaultCatalogStorageAdapter,
   type CatalogStorageAdapter,
 } from "@/lib/admin/catalog/media-storage";
 import {
@@ -61,6 +61,7 @@ export interface DirectUploadOptions {
 }
 
 export interface DirectUploadRequest {
+  expiresAt: number;
   uploadToken: string;
   presignedPutUrl: string;
   /** Headers the browser must send with the PUT; they are part of the signature. */
@@ -152,7 +153,7 @@ export async function requestDirectUpload(
     getCatalogMediaIntentSecret(options?.intentSecret)
   );
 
-  const adapter = options?.storageAdapter ?? new R2CatalogStorageAdapter();
+  const adapter = options?.storageAdapter ?? getDefaultCatalogStorageAdapter();
   const presignedPutUrl = await adapter.generatePresignedPutUrl({
     bucket: R2_BUCKETS.PUBLIC_MEDIA,
     key: objectKey,
@@ -164,6 +165,7 @@ export async function requestDirectUpload(
 
   return {
     uploadToken,
+    expiresAt: nowSeconds + UPLOAD_WINDOW_SECONDS,
     presignedPutUrl,
     requiredHeaders: { "Content-Type": input.mimeType, "Cache-Control": CACHE_CONTROL },
   };
@@ -198,7 +200,7 @@ export async function verifyDirectUpload(
     );
   }
 
-  const adapter = options?.storageAdapter ?? new R2CatalogStorageAdapter();
+  const adapter = options?.storageAdapter ?? getDefaultCatalogStorageAdapter();
   const head = await adapter.headObject({ bucket: R2_BUCKETS.PUBLIC_MEDIA, key: token.objectKey });
   if (!head) {
     throw new CatalogDomainError(

@@ -41,6 +41,7 @@ export interface ConfirmStoryImageUploadInput {
 }
 
 export interface ConfirmStoryImageUploadResult {
+  productStatus: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   productMediaId: string;
   mediaAssetId: string;
   objectKey: string;
@@ -122,8 +123,16 @@ export async function confirmStoryImageUpload(
   }
 
   return database.transaction(async (tx) => {
+    const [product] = await tx
+      .select({ id: products.id, status: products.status })
+      .from(products)
+      .where(eq(products.id, productId))
+      .for("update");
+    if (!product)
+      throw new CatalogDomainError("El producto solicitado no existe.", "PRODUCT_NOT_FOUND", 404);
     const { asset } = await registerDirectUploadAsset(tx, token, input);
     const result = (link: { id: string }) => ({
+      productStatus: product.status,
       productMediaId: link.id,
       mediaAssetId: asset.id,
       objectKey: asset.objectKey,

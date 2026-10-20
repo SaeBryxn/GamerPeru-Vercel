@@ -1,10 +1,7 @@
 "use client";
 
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
-import {
-  confirmStoryImageUploadAction,
-  requestStoryImageUploadAction,
-} from "@/lib/admin/catalog/story-media-actions";
+import { requestUpload, completeUpload } from "@/lib/media/upload-api-client";
 import { uploadDirect } from "@/lib/media/direct-upload-client";
 import { directUploadAccept } from "@/lib/media/direct-upload-policy";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
@@ -28,13 +25,15 @@ export async function uploadStoryImage(
   const result = await uploadDirect({
     purpose: "story_image",
     file,
-    request: (input) => requestStoryImageUploadAction({ productId, ...input }),
-    confirm: (input) => confirmStoryImageUploadAction({ productId, ...input }),
+    request: (input) => requestUpload({ purpose: "story_image", productId, ...input }),
+    confirm: (input) => completeUpload({ purpose: "story_image", productId, ...input }),
     // Compression is part of authorizing from the operator's point of view.
     onStage: (stage) => onStage(stage === "preparing" ? "authorizing" : stage),
   });
   if (!result.ok) return result;
 
+  if (!result.data.productMediaId)
+    return { ok: false, error: "No se pudo vincular la imagen a la historia." };
   const publicUrl = resolvePublicMediaUrl(result.data.objectKey);
   if (!publicUrl) {
     return { ok: false, error: "La imagen se subió, pero no tiene una URL pública." };

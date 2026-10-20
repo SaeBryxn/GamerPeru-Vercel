@@ -21,9 +21,9 @@ const actions = vi.hoisted(() => ({
 const refresh = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/home/home-sections-actions", () => actions);
-vi.mock("@/lib/home/home-media-actions", () => ({
-  requestHomeMediaUploadAction: vi.fn(),
-  confirmHomeMediaUploadAction: vi.fn(),
+vi.mock("@/lib/media/upload-api-client", () => ({
+  requestUpload: vi.fn(),
+  completeUpload: vi.fn(),
 }));
 vi.mock("@/lib/media/resolve-public-media-url", () => ({
   resolvePublicMediaUrl: (key: string) => `https://cdn.test/${key}`,

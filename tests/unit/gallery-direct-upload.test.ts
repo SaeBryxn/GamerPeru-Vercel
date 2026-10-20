@@ -84,7 +84,7 @@ describe("Gallery upload policy", () => {
   it("accepts only the browser-prepared WebP or JPEG up to 4 MB, always re-encoded", () => {
     const policy = DIRECT_UPLOAD_POLICIES.gallery_image;
     expect(Object.keys(policy.mimeTypes)).toEqual(["image/webp", "image/jpeg"]);
-    expect(policy.maxImageDimension).toBe(2000);
+    expect(policy.maxImageDimension).toBe(2400);
     expect(policy.alwaysReencode).toBe(true);
     expect(checkDirectUpload("gallery_image", { type: "image/png", size: MB })?.code).toBe(
       "DIRECT_UPLOAD_UNSUPPORTED_TYPE"
@@ -134,7 +134,7 @@ describe("Gallery upload confirmation", () => {
   it("attaches the photo after the gallery, to its signed variant, and audits it", async () => {
     const { uploadToken } = await sign(VARIANT_ID);
     const { database, inserts } = fakeDatabase([
-      [{ id: PRODUCT_ID }], // product row lock
+      [{ id: PRODUCT_ID, status: "DRAFT" }], // product row lock
       [{ productId: PRODUCT_ID }], // variant still belongs to the product
       [], // no asset for this key yet
       [], // not attached yet
@@ -176,7 +176,7 @@ describe("Gallery upload confirmation", () => {
   it("returns the existing attachment on a repeated confirm", async () => {
     const { uploadToken } = await sign(null);
     const { database, inserts } = fakeDatabase([
-      [{ id: PRODUCT_ID }],
+      [{ id: PRODUCT_ID, status: "DRAFT" }],
       [{ id: "asset-1", objectKey: "k", mimeType: "image/webp" }], // asset already registered
       [{ id: "pm-1" }], // already attached
     ]);
@@ -190,7 +190,11 @@ describe("Gallery upload confirmation", () => {
         database,
       }
     );
-    expect(result).toEqual({ productMediaId: "pm-1", mediaAssetId: "asset-1", replayed: true });
+    expect(result).toMatchObject({
+      productMediaId: "pm-1",
+      mediaAssetId: "asset-1",
+      replayed: true,
+    });
     expect(inserts).toHaveLength(0);
   });
 

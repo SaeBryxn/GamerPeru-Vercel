@@ -18,12 +18,6 @@ import {
   setProductPrimaryMedia,
   reassignProductMediaVariant,
 } from "./media-service";
-import type { DirectUploadRequest } from "@/lib/admin/media/direct-upload-service";
-import {
-  confirmGalleryImageUpload,
-  requestGalleryImageUpload,
-  type ConfirmGalleryImageUploadResult,
-} from "./gallery-media-service";
 import { parsePenInputToCents } from "./money";
 import { mapDomainErrorToUi } from "./error-mapping";
 import { type CatalogStatus, type VariantStatus } from "./types";
@@ -535,85 +529,6 @@ export async function transitionProductStatusAction(
     const uiError = mapDomainErrorToUi(err);
     return { success: false, ...uiError };
   }
-}
-
-export interface RequestGalleryImageUploadActionInput {
-  productId: string;
-  variantId?: string | null;
-  mimeType: string;
-  fileSizeBytes: number;
-}
-
-/** Step 1: signs a direct browser-to-R2 upload for one gallery photo. No file data reaches the server. */
-export async function requestGalleryImageUploadAction(
-  input: RequestGalleryImageUploadActionInput
-): Promise<ActionResult<DirectUploadRequest>> {
-  const denied = await requireCatalogMediaManager();
-  if (denied.error) return denied.error;
-
-  try {
-    const data = await requestGalleryImageUpload(input, { authContext: denied.authContext });
-    return { success: true, data };
-  } catch (err) {
-    return { success: false, ...mapDomainErrorToUi(err) };
-  }
-}
-
-export interface ConfirmGalleryImageUploadActionInput {
-  productId: string;
-  uploadToken: string;
-  width?: number | null;
-  height?: number | null;
-  mutationRequestId?: string | null;
-}
-
-/** Step 3: after the browser's PUT, checks the object with a HEAD and attaches it to the gallery. */
-export async function confirmGalleryImageUploadAction(
-  input: ConfirmGalleryImageUploadActionInput
-): Promise<ActionResult<ConfirmGalleryImageUploadResult>> {
-  const denied = await requireCatalogMediaManager();
-  if (denied.error) return denied.error;
-
-  try {
-    const data = await confirmGalleryImageUpload(
-      {
-        uploadToken: input.uploadToken,
-        width: input.width,
-        height: input.height,
-        mutationRequestId: input.mutationRequestId,
-      },
-      { authContext: denied.authContext }
-    );
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${input.productId}`);
-    revalidateStorefront();
-    return { success: true, data };
-  } catch (err) {
-    return { success: false, ...mapDomainErrorToUi(err) };
-  }
-}
-
-async function requireCatalogMediaManager() {
-  const authContext = await getVerifiedAuthContext();
-  if (authContext.status !== "READY") {
-    return {
-      error: {
-        success: false as const,
-        error: "Debes iniciar sesión con una cuenta de personal autorizada.",
-        code: "AUTHENTICATION_REQUIRED",
-      },
-    };
-  }
-  if (!authContext.permissions.has("catalog:manage")) {
-    return {
-      error: {
-        success: false as const,
-        error: "No tienes los permisos necesarios para gestionar medios del catálogo.",
-        code: "FORBIDDEN",
-      },
-    };
-  }
-  return { error: null, authContext };
 }
 
 export interface UpdateMediaAltTextActionInput {

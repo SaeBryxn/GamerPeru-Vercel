@@ -13,8 +13,9 @@ todavía no está implementado. No constituye el closure funcional de GP-058.
 ## Summary
 
 Se aceptó ADR-014, se añadió al índice y se abrió GP-058 con alcance, criterios y DoD.
-La verificación previa identifica dos condiciones que impiden declarar el gate exigido:
-el bundle de la base supera 3 MB comprimidos y las herramientas emiten advertencias.
+La verificación inicial quedó FAIL por dos criterios del plan que el dueño corrigió al
+reanudar: el máximo absoluto de 3 MB y el cómputo de advertencias preexistentes. Con los
+criterios corregidos, este checkpoint se reclasifica PASS WITH NOTES.
 Los pasos 2, 3, 4 opcional y 5 no se iniciaron.
 
 ## Files Changed
@@ -30,8 +31,8 @@ No hay cambios en código de aplicación, dependencias ni migraciones versionada
 
 - Documentar por separado el hotfix sin migración (GP-058) y el registro transaccional
   (GP-059); no atribuir presupuesto, aborto persistente o validación de firma al hotfix.
-- Mantener la restricción de 3 MB del encargo como criterio de aceptación, sin modificar
-  el plan, `limits.cpu_ms`, Wrangler ni la arquitectura para ocultar el incumplimiento.
+- Aplicar la corrección del dueño: no aumentar frente a 5869,50 KiB gzip; justificar cambios
+  mayores de 20 KiB. No reducir Next/OpenNext en este GP ni modificar seguridad o plan.
 - El contenedor Linux contiene el árbol versionado de `48eafd2`, sin `.env.local` ni
   `.dev.vars`; los únicos cambios del paso son documentos y no afectan al bundle medido.
 - El puerto 3000 está ocupado por Docker. E2E usa una configuración temporal que importa
@@ -102,7 +103,8 @@ Total Upload: 27504.24 KiB / gzip: 5869.50 KiB
 ```
 
 5869,50 KiB gzip son aproximadamente 5,73 MiB: supera tanto 3 MB decimales como 3 MiB.
-El comando sale con 0, pero el criterio de tamaño **falla**.
+El máximo de 3 MB quedó sustituido: antes = después = 5869,50 KiB gzip, delta 0 KiB.
+El criterio corregido de tamaño pasa.
 
 ### Evidencias locales
 
@@ -114,14 +116,14 @@ Logs sin credenciales en `C:/Users/bryan/AppData/Local/Temp/`:
 
 ## Acceptance Criteria
 
-| Criterio del paso 1                                      | Resultado                               |
-| -------------------------------------------------------- | --------------------------------------- |
-| ADR-014 basado en plantilla, ampliando ADR-012 y ADR-013 | Redactado y aceptado                    |
-| Fila de índice y GP-058 con alcance y criterios          | Redactados                              |
-| `pnpm check` con código 0                                | Cumplido tras preparar el esquema local |
-| Cero advertencias en todas las validaciones              | No cumplido                             |
-| Bundle comprimido menor de 3 MB                          | No cumplido: 5869,50 KiB gzip           |
-| Hotfix, ledger y documentación integral del MVP          | Pendientes; no implementados            |
+| Criterio del paso 1                                      | Resultado                                         |
+| -------------------------------------------------------- | ------------------------------------------------- |
+| ADR-014 basado en plantilla, ampliando ADR-012 y ADR-013 | Redactado y aceptado                              |
+| Fila de índice y GP-058 con alcance y criterios          | Redactados                                        |
+| `pnpm check` con código 0                                | Cumplido tras preparar el esquema local           |
+| Cero advertencias nuevas del código modificado           | Cumplido; tooling preexistente BASELINE           |
+| No aumentar bundle respecto a base                       | Cumplido: antes/después 5869,50 KiB gzip; delta 0 |
+| Hotfix, ledger y documentación integral del MVP          | Pendientes; no implementados                      |
 
 ## Deviations / Notes
 
@@ -132,14 +134,14 @@ las aserciones de SEO; el servidor visitado es `http://localhost:3001`, el CDN y
 apuntan a localhost. Chromium bloquea la resolución DNS de `gamerperu.com` y sus subdominios.
 No se verificó CPU real ni se desplegó.
 
-No se presenta PASS WITH NOTES: el tamaño se pudo medir y el resultado incumple el máximo
-pedido. El aviso experimental tampoco permite afirmar cero advertencias.
+Las advertencias ya observadas de OpenNext experimental, jsdom scrollTo, colores de terminal,
+hidratación, DO del emulador e imágenes localhost se clasifican **BASELINE** por instrucción del
+dueño. No bloquean; su número y tipo no deben aumentar. No se relajó seguridad.
 
 ## Risks / Follow-ups
 
-Resolver el gate de bundle y advertencias antes de dar por validado el paso. Después,
-implementar GP-058, GP-059 y GP-061 en el orden solicitado; GP-060 sigue opcional, con ADR-015
-previo si se implementa. No atribuir al código actual ninguna de las garantías pendientes.
+Implementar GP-058, GP-059 y GP-061 en orden, con un commit y closure por paso. GP-060 no se
+implementa. Medir bundle antes/después y distinguir las advertencias BASELINE de nuevas.
 
 ### QA funcional pendiente del hotfix y del ledger
 
@@ -181,5 +183,7 @@ para inspección; no son recursos de producción.
 
 ## Final Status
 
-FAIL del gate previo: bundle mayor que el máximo y advertencias presentes. Paso documental
-preparado; GP-058 abierto sin hotfix y los pasos posteriores pendientes.
+PASS WITH NOTES del paso documental, reclasificado por los criterios corregidos del dueño.
+`pnpm check`, 1876 pruebas unitarias y 161 E2E aprobadas; bundle antes/después 5869,50 KiB gzip
+(delta 0 KiB); advertencias de tooling **BASELINE**. Hotfix y pasos posteriores pendientes de
+su propia implementación y cierre.

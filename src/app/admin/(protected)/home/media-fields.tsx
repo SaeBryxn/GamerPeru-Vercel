@@ -2,10 +2,7 @@
 
 import React, { useId, useState } from "react";
 import { ImageOff, Upload, Video } from "lucide-react";
-import {
-  confirmHomeMediaUploadAction,
-  requestHomeMediaUploadAction,
-} from "@/lib/home/home-media-actions";
+import { requestUpload, completeUpload } from "@/lib/media/upload-api-client";
 import type { HomeImageSlot, HomeVideoSourceContent } from "@/lib/home/section-schemas";
 import { uploadDirect, type DirectUploadStage } from "@/lib/media/direct-upload-client";
 import { directUploadAccept, type DirectUploadPurpose } from "@/lib/media/direct-upload-policy";
@@ -43,7 +40,7 @@ export function extractYouTubeId(input: string): string {
 }
 
 interface UploadButtonProps {
-  purpose: DirectUploadPurpose;
+  purpose: Extract<DirectUploadPurpose, `home_${string}`>;
   label: string;
   onUploaded: (assetId: string, media: EditorMedia) => void;
   onError: (message: string) => void;
@@ -60,8 +57,12 @@ function UploadButton({ purpose, label, onUploaded, onError, disabled }: UploadB
     const result = await uploadDirect({
       purpose,
       file,
-      request: (input) => requestHomeMediaUploadAction({ purpose, ...input }),
-      confirm: (input) => confirmHomeMediaUploadAction({ purpose, ...input }),
+      request: (input) =>
+        requestUpload({
+          purpose: purpose,
+          ...input,
+        }),
+      confirm: (input) => completeUpload({ purpose, ...input }),
       onStage: setStage,
     });
     setStage(null);
@@ -71,7 +72,7 @@ function UploadButton({ purpose, label, onUploaded, onError, disabled }: UploadB
     }
     onUploaded(result.data.mediaAssetId, {
       url: resolvePublicMediaUrl(result.data.objectKey),
-      mediaType: result.data.mediaType,
+      mediaType: result.data.mediaType ?? "IMAGE",
     });
   };
 
