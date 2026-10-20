@@ -9,5 +9,5 @@ export const mediaUploadsSweep = inngest.createFunction(
     triggers: [{ cron: "17 * * * *" }],
   },
   async ({ step }) =>
-    step.run("expire-pending-media-uploads", () => expireStaleUploads(new Date(), 100))
+    step.run("expire-pending-media-uploads", () => expireStaleUploads(new Date(), 25))
 );

@@ -155,7 +155,7 @@ Si la firma no coincide, el servicio borra el objeto y marca REJECTED con 422. L
 ```mermaid
 flowchart LR
   Cron[Inngest, minuto 17 de cada hora] --> Select[PENDING expiradas hace más de una hora]
-  Select --> Lock[Hasta 100 con skipLocked]
+  Select --> Lock[Hasta 25 con skipLocked]
   Lock --> Delete[DELETE objeto]
   Delete --> Success{¿Éxito?}
   Success -->|Sí| Expire[EXPIRED y liberar reserva]

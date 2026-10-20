@@ -83,19 +83,22 @@ describe("ledger de subidas", () => {
     await expect(abortUpload(failed.tx, "id", "actor", "USER_ABORTED", adapter)).rejects.toThrow();
     expect(failed.updates).toHaveLength(0);
   });
-  it("sweep limita a cien filas, usa skipLocked y marca EXPIRED", async () => {
-    const fake = transaction();
-    const database = {
-      transaction: async (fn: (tx: UploadTransaction) => unknown) => fn(fake.tx),
-    } as never;
-    expect(
-      await expireStaleUploads(new Date(), 500, {
-        database,
-        storageAdapter: new InMemoryCatalogStorageAdapter(),
-      })
-    ).toEqual({ expired: 1 });
-    expect(fake.builder.limit).toHaveBeenCalledWith(100);
-    expect(fake.builder.for).toHaveBeenCalledWith("update", { skipLocked: true });
-    expect(fake.updates.at(-1)).toMatchObject({ status: "EXPIRED" });
-  });
+  it.each([undefined, 500])(
+    "sweep limita a 25 filas con límite %s, usa skipLocked y marca EXPIRED",
+    async (limit) => {
+      const fake = transaction();
+      const database = {
+        transaction: async (fn: (tx: UploadTransaction) => unknown) => fn(fake.tx),
+      } as never;
+      expect(
+        await expireStaleUploads(new Date(), limit, {
+          database,
+          storageAdapter: new InMemoryCatalogStorageAdapter(),
+        })
+      ).toEqual({ expired: 1 });
+      expect(fake.builder.limit).toHaveBeenCalledWith(25);
+      expect(fake.builder.for).toHaveBeenCalledWith("update", { skipLocked: true });
+      expect(fake.updates.at(-1)).toMatchObject({ status: "EXPIRED" });
+    }
+  );
 });

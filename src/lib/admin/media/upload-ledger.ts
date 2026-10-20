@@ -170,7 +170,7 @@ export async function abortUpload(
 
 export async function expireStaleUploads(
   now: Date,
-  limit = 100,
+  limit = 25,
   options?: { database?: typeof db; storageAdapter?: CatalogStorageAdapter }
 ): Promise<{ expired: number }> {
   const database = options?.database ?? db;
@@ -185,7 +185,7 @@ export async function expireStaleUploads(
         )
       )
       .orderBy(mediaUploads.expiresAt)
-      .limit(Math.max(0, Math.min(100, limit)))
+      .limit(Math.max(0, Math.min(25, limit)))
       .for("update", { skipLocked: true });
     for (const upload of pending)
       await abortUpload(tx, upload.id, upload.actorAuthUserId, "EXPIRED", options?.storageAdapter);

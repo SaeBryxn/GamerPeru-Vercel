@@ -41,7 +41,7 @@ No reintroducir proxy de archivos ni invalidación global para ocultar síntomas
 
 `media_storage_budget.id=1` inicia con 8 GiB (8589934592 bytes), uso SUM de assets PUBLIC_MEDIA y reserva cero. Init reserva; complete mueve reserva a uso una vez. Es contabilidad del dominio, no inventario independiente de R2. No editar contadores sin reconciliación revisada.
 
-Inngest `media-uploads-sweep`, cron `17 * * * *`, procesa máximo cien PENDING cuya expiración pasó hace una hora. Usa skipLocked, elimina antes de liberar y revierte si DELETE falla. El dueño debe comprobar sincronización de función/cron alojados. Beacon es de mejor esfuerzo.
+Inngest `media-uploads-sweep`, cron `17 * * * *`, procesa máximo 25 PENDING cuya expiración pasó hace una hora. Usa skipLocked, elimina antes de liberar y revierte si DELETE falla. El dueño debe comprobar sincronización de función/cron alojados. Beacon es de mejor esfuerzo.
 
 El contador de huérfanos busca PUBLIC_MEDIA mayores de treinta días sin referencias de galería/historia/home ni principal de producto. Solo informa; no borra assets listos.
 

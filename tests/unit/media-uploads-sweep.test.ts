@@ -22,6 +22,6 @@ describe("cron de subidas", () => {
       triggers: [{ cron: "17 * * * *" }],
     });
     expect(await call[1]({ step: { run: async (_name, fn) => fn() } })).toEqual({ expired: 3 });
-    expect(mocks.expire).toHaveBeenCalledWith(expect.any(Date), 100);
+    expect(mocks.expire).toHaveBeenCalledWith(expect.any(Date), 25);
   });
 });

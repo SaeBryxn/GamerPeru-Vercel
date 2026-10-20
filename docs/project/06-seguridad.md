@@ -19,7 +19,7 @@ OAuth y correo/contraseña establecen sesión. Los clientes solo acceden a sus r
 | Contenido        | HEAD, tamaño, MIME, firma y dimensiones del header; rango máximo 4096 bytes |
 | Idempotencia     | Bloqueo del ledger; READY no contabiliza dos veces                          |
 | Cancelación      | PENDING; abort no borra READY                                               |
-| Expiración       | Sweep con una hora de margen, máximo cien filas y skipLocked                |
+| Expiración       | Sweep con una hora de margen, máximo 25 filas y skipLocked                  |
 
 El control devuelve JSON saneado y `Cache-Control: no-store`. La firma limita cabeceras y caducidad. CORS del bucket debe permitir solo orígenes autorizados. El progreso no prueba aceptación: complete registra el asset. Las tablas nuevas tienen RLS y REVOKE de roles API, incluido service_role; el dominio usa conexión servidor. No se debilita CSP, RLS ni validación para silenciar warnings.
 

@@ -39,7 +39,7 @@ y mediante sendBeacon al cerrar la página. El dashboard informa huérfanos sin 
 - UPDATE de reserva, INSERT y firma se ejecutan dentro de la misma transacción: una firma fallida
   revierte la reserva. Completar bloquea el upload y mueve reservado a usado una sola vez.
 - DELETE se espera bajo row lock. Si falla, el rollback conserva reserva y estado para reintentar.
-  Abort sobre READY no borra nada. Sweep usa skipLocked y como máximo cien filas.
+  Abort sobre READY no borra nada. Sweep usa skipLocked y como máximo 25 filas.
 - Las dimensiones del navegador son solo entrada compatible; las persistidas vienen del header.
   Un JPEG cuyo marcador SOF no cabe en 4 KB se rechaza de forma segura.
 - Se añade al reporte de huérfanos la protección del principal de producto además de las referencias
@@ -80,10 +80,26 @@ y mediante sendBeacon al cerrar la página. El dashboard informa huérfanos sin 
 - Magic bytes WebP VP8/VP8L/VP8X, JPEG SOF0/SOF2, PNG y tipos de video: fixtures/unit.
 - Firma incompatible produce 422 y elimina/rechaza; dimensiones del browser no sobrescriben header.
 - Cancelar durante PUT no adjunta imagen y devuelve el presupuesto a su valor previo: E2E local.
-- Cron, límite 100 y skipLocked: unit. Tablas con RLS y roles de API sin permisos: verificación SQL local.
+- Cron, límite 25 y skipLocked: unit. Tablas con RLS y roles de API sin permisos: verificación SQL local.
 - Source/scripts sin consumidores del antiguo HMAC ni staging. El dueño puede retirar ambos valores.
 
 ## Deviations / Notes
+
+### Ajuste posterior: limpieza limitada a 25 por ejecución
+
+El 20/10/2026, después de GP-061, el dueño reduce de 100 a **25** el lote del cron,
+el valor por defecto y el tope interno de `expireStaleUploads`. Cada subida caducada
+requiere DELETE a R2 y consultas de base de datos; el cambio reduce el trabajo por
+invocación ante el límite de 50 subrequests de Workers Free indicado por el dueño.
+Se mantienen cron, concurrencia, skipLocked, margen de expiración y semántica transaccional.
+
+Validación de este ajuste: `pnpm typecheck` y `pnpm lint`, ambos código 0 y sin warnings;
+`pnpm exec vitest run tests/unit/media-uploads-sweep.test.ts tests/unit/upload-ledger.test.ts`,
+**7/7 pruebas en 2 archivos**. Se comprueban el lote del cron, el límite por defecto y
+el recorte de una solicitud de 500 a 25. Solo se ejecutaron los gates solicitados,
+sin build, E2E ni peticiones a producción. El bundle anterior medido sigue siendo
+**5864,57 KiB gzip**; no se volvió a medir el tamaño después de este ajuste.
+Commit: `fix(media): limitar la limpieza de subidas a 25 por ejecución para el plan Free`.
 
 Se detectó un problema previo del pool Node al ejecutar rutas distintas en desarrollo:
 la inicialización de un nuevo bundle cerraba el pool de otra petición, causando CONNECTION_ENDED.
