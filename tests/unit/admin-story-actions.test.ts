@@ -152,13 +152,10 @@ describe("GP-026 CHK1 thin Story Server Actions", () => {
     await expect(entry.action()).resolves.toEqual({ success: true, data: result });
     expect(entry.service).toHaveBeenCalledTimes(1);
     expect(entry.service).toHaveBeenCalledWith(expect.any(Object), { authContext });
-    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/admin/products/${productId}`);
-    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/admin/products/${productId}/story`);
-    expect(mocks.revalidatePath).toHaveBeenCalledTimes(entry.publicPath ? 3 : 2);
+    // An immediate expiry would re-render the editor inside the action (Error 1102 on Workers).
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
     if (entry.publicPath) {
-      // Publishing changes the public product page, so the whole storefront catalog is refreshed.
-      expect(mocks.revalidateTag).toHaveBeenCalledWith("storefront-catalog", { expire: 0 });
-      expect(mocks.revalidatePath).toHaveBeenCalledWith("/", "layout");
+      expect(mocks.revalidateTag).toHaveBeenCalledWith("storefront-catalog", { expire: 1 });
     } else {
       expect(mocks.revalidateTag).not.toHaveBeenCalled();
     }

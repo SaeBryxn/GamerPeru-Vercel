@@ -45,11 +45,8 @@ export function VideoEditor({
         <div className={styles.alertWarning} role="alert">
           <AlertCircle size={18} aria-hidden="true" />
           <div>
-            <strong>No hay videos MP4 disponibles en este producto</strong>
-            <p>
-              Debes adjuntar un archivo de video público MP4 al producto desde el Product Manager
-              antes de poder completar este bloque.
-            </p>
+            <strong>Este producto todavía no tiene videos MP4</strong>
+            <p>Pulsa «Seleccionar video MP4» y sube un video MP4 para completar este bloque.</p>
           </div>
         </div>
       )}
@@ -61,7 +58,7 @@ export function VideoEditor({
         mediaType="VIDEO"
         selectedMediaId={payload.videoMediaId}
         selectableMedia={selectableMedia}
-        helpText="Selecciona un video público en formato MP4 previamente adjunto."
+        helpText="Sube un video MP4 o elige uno que ya hayas subido."
         error={getIssue("videoMediaId")}
         onOpenPicker={(triggerRef) =>
           onOpenMediaPicker({

@@ -48,3 +48,15 @@ export function revalidateStorefrontCatalog(): void {
 export function revalidateStorefrontCatalogData(): void {
   revalidateTag(CATALOG_CACHE_TAG, { expire: 0 });
 }
+
+/**
+ * Catalog invalidation for Server Actions. Any immediate expiry (`revalidatePath`, or a tag with
+ * `expire: 0`) makes Next.js render the current admin page again inside the action's response,
+ * on top of the write, and on the Workers CPU limit that request ends in Error 1102. Marking the
+ * tag stale with a one-second expiry skips that render; ISR pages carry the tags of the cached
+ * queries they read, so they are invalidated too. Admin pages are dynamic and the editors call
+ * `router.refresh()` themselves.
+ */
+export function markStorefrontCatalogStale(): void {
+  revalidateTag(CATALOG_CACHE_TAG, { expire: 1 });
+}

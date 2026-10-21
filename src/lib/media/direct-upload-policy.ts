@@ -7,6 +7,7 @@
 export const DIRECT_UPLOAD_PURPOSES = [
   "gallery_image",
   "story_image",
+  "story_video",
   "home_image",
   "home_video",
   "home_video_poster",
@@ -46,6 +47,13 @@ export const DIRECT_UPLOAD_POLICIES: Readonly<Record<DirectUploadPurpose, Direct
     mediaType: "IMAGE",
     maxImageDimension: 2560,
     label: "La imagen",
+  },
+  story_video: {
+    mimeTypes: { "video/mp4": "mp4" },
+    maxBytes: 50 * MB,
+    mediaType: "VIDEO",
+    maxImageDimension: null,
+    label: "El video",
   },
   home_image: {
     mimeTypes: STILL_IMAGE_TYPES,

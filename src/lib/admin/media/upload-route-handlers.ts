@@ -8,8 +8,8 @@ import {
   confirmGalleryImageUpload,
 } from "@/lib/admin/catalog/gallery-media-service";
 import {
-  requestStoryImageUpload,
-  confirmStoryImageUpload,
+  requestStoryMediaUpload,
+  confirmStoryMediaUpload,
 } from "@/lib/admin/catalog/story-media-service";
 import { requestHomeMediaUpload, confirmHomeMediaUpload } from "@/lib/home/home-media-service";
 import { revalidateStorefrontCatalogData } from "@/lib/catalog/catalog-cache";
@@ -28,8 +28,8 @@ export async function initAdminMediaUpload(request: Request): Promise<Response> 
     const data =
       input.purpose === "gallery_image"
         ? await requestGalleryImageUpload(input, options)
-        : input.purpose === "story_image"
-          ? await requestStoryImageUpload(input, options)
+        : input.purpose === "story_image" || input.purpose === "story_video"
+          ? await requestStoryMediaUpload(input, options)
           : await requestHomeMediaUpload(input, options);
     return mediaJson(data);
   } catch (error) {
@@ -46,11 +46,15 @@ export async function completeAdminMediaUpload(request: Request): Promise<Respon
       return mediaJson({ error: "Datos de confirmación no válidos.", code: "INVALID_BODY" }, 400);
     const input = parsed.data;
     const options = { authContext: guard.authContext };
-    if (input.purpose === "gallery_image" || input.purpose === "story_image") {
+    if (
+      input.purpose === "gallery_image" ||
+      input.purpose === "story_image" ||
+      input.purpose === "story_video"
+    ) {
       const data =
         input.purpose === "gallery_image"
           ? await confirmGalleryImageUpload(input, options)
-          : await confirmStoryImageUpload(input, options);
+          : await confirmStoryMediaUpload({ ...input, purpose: input.purpose }, options);
       if (data.productStatus === "PUBLISHED") revalidateStorefrontCatalogData();
       return mediaJson({ ...data, src: resolvePublicMediaUrl(data.objectKey) });
     }

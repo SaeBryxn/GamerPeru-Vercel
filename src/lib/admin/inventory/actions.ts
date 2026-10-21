@@ -1,8 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { revalidatePath } from "next/cache";
-import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
+import { markStorefrontCatalogStale } from "@/lib/catalog/catalog-cache";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { adjustInventory, getVariantAvailability } from "@/lib/inventory/service";
 import type { ActionResult } from "@/lib/admin/catalog/actions";
@@ -74,10 +73,8 @@ export async function setVariantStockAction(
   }
 
   const availability = await getVariantAvailability({ variantId: input.variantId });
-  revalidatePath(`/admin/products/${input.productId}`);
-  revalidatePath("/admin");
   // Availability decides which variants and products the storefront can offer.
-  revalidateStorefrontCatalog();
+  markStorefrontCatalogStale();
 
   return {
     success: true,

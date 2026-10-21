@@ -4,7 +4,7 @@ import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { getAdminProductStory } from "@/lib/admin/catalog/story-reader";
 import { CatalogDomainError } from "@/lib/admin/catalog/types";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
-import { StoryBuilder } from "./story-builder";
+import { StoryBuilder } from "./story-builder-client";
 
 export const dynamic = "force-dynamic";
 

@@ -6,15 +6,23 @@ import { Check, ImageUp, LoaderCircle, Search, Video, X } from "lucide-react";
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
 import {
   STORY_IMAGE_ACCEPT,
-  uploadStoryImage,
+  STORY_VIDEO_ACCEPT,
+  uploadStoryMedia,
   type StoryImageUploadStage,
 } from "./story-image-upload";
 import styles from "./story-builder.module.css";
 
-const STAGE_LABEL: Record<StoryImageUploadStage, string> = {
-  authorizing: "Preparando la subida…",
-  uploading: "Subiendo imagen…",
-  processing: "Registrando imagen…",
+const STAGE_LABEL: Record<"IMAGE" | "VIDEO", Record<StoryImageUploadStage, string>> = {
+  IMAGE: {
+    authorizing: "Preparando la subida…",
+    uploading: "Subiendo imagen…",
+    processing: "Registrando imagen…",
+  },
+  VIDEO: {
+    authorizing: "Preparando la subida…",
+    uploading: "Subiendo video…",
+    processing: "Registrando video…",
+  },
 };
 
 const FOCUSABLE_SELECTOR =
@@ -23,7 +31,7 @@ const FOCUSABLE_SELECTOR =
 interface MediaPickerDialogProps {
   isOpen: boolean;
   productId: string;
-  /** Called with an image uploaded from the picker, before it is selected. */
+  /** Called with an image or video uploaded from the picker, before it is selected. */
   onUploaded: (media: AdminStorySelectableMedia) => void;
   title: string;
   mediaType: "IMAGE" | "VIDEO";
@@ -57,7 +65,7 @@ export function MediaPickerDialog({
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
     setUploadError(null);
-    const result = await uploadStoryImage(productId, file, setUploadStage);
+    const result = await uploadStoryMedia(productId, file, mediaType, setUploadStage);
     setUploadStage(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (!result.ok) {
@@ -158,7 +166,7 @@ export function MediaPickerDialog({
             <p>
               {mediaType === "IMAGE"
                 ? "Sube una imagen solo para la historia o elige una existente. Las imágenes que subas aquí no aparecen en la galería del producto."
-                : "Selecciona un video público MP4 adjunto al producto."}
+                : "Sube un video MP4 solo para la historia o elige uno existente."}
             </p>
           </div>
           <button
@@ -174,40 +182,46 @@ export function MediaPickerDialog({
           </button>
         </div>
 
-        {mediaType === "IMAGE" && (
-          <div className={styles.storyUpload}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={STORY_IMAGE_ACCEPT}
-              className={styles.visuallyHiddenInput}
-              onChange={(event) => void handleFile(event.target.files?.[0])}
-              data-testid="story-image-upload-input"
-              tabIndex={-1}
-              aria-hidden="true"
-            />
-            <button
-              type="button"
-              className={styles.storyUploadButton}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadStage !== null}
-              data-testid="story-image-upload-button"
-            >
-              {uploadStage ? (
-                <LoaderCircle size={18} className={styles.spinner} aria-hidden="true" />
-              ) : (
-                <ImageUp size={18} aria-hidden="true" />
-              )}
-              <span>
-                {uploadStage ? STAGE_LABEL[uploadStage] : "Subir imagen para la historia"}
-              </span>
-            </button>
-            <p className={styles.storyUploadHint} aria-live="polite">
-              {uploadError ??
-                "JPEG, PNG o WebP hasta 10 MB. Para banners a todo lo ancho, usa al menos 2400 px de ancho."}
-            </p>
-          </div>
-        )}
+        <div className={styles.storyUpload}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={mediaType === "VIDEO" ? STORY_VIDEO_ACCEPT : STORY_IMAGE_ACCEPT}
+            className={styles.visuallyHiddenInput}
+            onChange={(event) => void handleFile(event.target.files?.[0])}
+            data-testid="story-image-upload-input"
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+          <button
+            type="button"
+            className={styles.storyUploadButton}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadStage !== null}
+            data-testid="story-image-upload-button"
+          >
+            {uploadStage ? (
+              <LoaderCircle size={18} className={styles.spinner} aria-hidden="true" />
+            ) : mediaType === "VIDEO" ? (
+              <Video size={18} aria-hidden="true" />
+            ) : (
+              <ImageUp size={18} aria-hidden="true" />
+            )}
+            <span>
+              {uploadStage
+                ? STAGE_LABEL[mediaType][uploadStage]
+                : mediaType === "VIDEO"
+                  ? "Subir video para la historia"
+                  : "Subir imagen para la historia"}
+            </span>
+          </button>
+          <p className={styles.storyUploadHint} aria-live="polite">
+            {uploadError ??
+              (mediaType === "VIDEO"
+                ? "MP4 (H.264) hasta 50 MB. Los videos .MOV del iPhone deben exportarse como MP4."
+                : "JPEG, PNG o WebP hasta 10 MB. Para banners a todo lo ancho, usa al menos 2400 px de ancho.")}
+          </p>
+        </div>
 
         <div className={styles.pickerSearch}>
           <Search size={16} aria-hidden="true" className={styles.searchIcon} />

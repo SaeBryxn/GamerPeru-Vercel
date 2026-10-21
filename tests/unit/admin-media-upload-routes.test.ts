@@ -27,8 +27,8 @@ vi.mock("@/lib/admin/catalog/gallery-media-service", () => ({
   confirmGalleryImageUpload: mocks.galleryComplete,
 }));
 vi.mock("@/lib/admin/catalog/story-media-service", () => ({
-  requestStoryImageUpload: mocks.story,
-  confirmStoryImageUpload: mocks.storyComplete,
+  requestStoryMediaUpload: mocks.story,
+  confirmStoryMediaUpload: mocks.storyComplete,
 }));
 vi.mock("@/lib/home/home-media-service", () => ({
   requestHomeMediaUpload: mocks.home,
@@ -84,33 +84,37 @@ describe("rutas de control de medios", () => {
     expect((await init(request({ ...body, productId: "invalid" }))).status).toBe(400);
     expect((await init(request({ ...body, unexpected: true }))).status).toBe(400);
   });
-  it.each(["gallery_image", "story_image", "home_image", "home_video", "home_video_poster"])(
-    "despacha %s al servicio correcto",
-    async (purpose) => {
-      const response = await init(
-        request({
-          purpose,
-          ...(purpose.startsWith("home") ? {} : { productId }),
-          mimeType: body.mimeType,
-          fileSizeBytes: 10,
-        })
-      );
-      expect(response.status).toBe(200);
-      expect(response.headers.get("cache-control")).toBe("no-store");
-      expect(await response.json()).toMatchObject({
-        uploadId: productId,
-        putUrl: "https://r2.test/x",
-        expiresAt: 100,
-      });
-      expect(
-        purpose === "gallery_image"
-          ? mocks.gallery
-          : purpose === "story_image"
-            ? mocks.story
-            : mocks.home
-      ).toHaveBeenCalledOnce();
-    }
-  );
+  it.each([
+    "gallery_image",
+    "story_image",
+    "story_video",
+    "home_image",
+    "home_video",
+    "home_video_poster",
+  ])("despacha %s al servicio correcto", async (purpose) => {
+    const response = await init(
+      request({
+        purpose,
+        ...(purpose.startsWith("home") ? {} : { productId }),
+        mimeType: body.mimeType,
+        fileSizeBytes: 10,
+      })
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({
+      uploadId: productId,
+      putUrl: "https://r2.test/x",
+      expiresAt: 100,
+    });
+    expect(
+      purpose === "gallery_image"
+        ? mocks.gallery
+        : purpose.startsWith("story")
+          ? mocks.story
+          : mocks.home
+    ).toHaveBeenCalledOnce();
+  });
   it.each(["DRAFT", "ARCHIVED", "PUBLISHED"])(
     "confirmar %s solo invalida datos publicados",
     async (status) => {

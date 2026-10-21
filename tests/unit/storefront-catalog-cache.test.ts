@@ -76,6 +76,16 @@ describe("storefront catalog cache", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/", "layout");
   });
 
+  it("marks the catalog stale from Server Actions without an immediate expiry", async () => {
+    const { markStorefrontCatalogStale, CATALOG_CACHE_TAG } =
+      await import("@/lib/catalog/catalog-cache");
+
+    markStorefrontCatalogStale();
+
+    expect(mocks.revalidateTag).toHaveBeenCalledWith(CATALOG_CACHE_TAG, { expire: 1 });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
   it("returns the original reader outside production", async () => {
     vi.stubEnv("NODE_ENV", "development");
     const { withCatalogCache } = await import("@/lib/catalog/cached-readers");

@@ -12,6 +12,7 @@ export const requestUploadSchema = z.discriminatedUnion("purpose", [
     })
     .strict(),
   z.object({ purpose: z.literal("story_image"), productId: z.string().uuid(), ...file }).strict(),
+  z.object({ purpose: z.literal("story_video"), productId: z.string().uuid(), ...file }).strict(),
   z.object({ purpose: z.literal("home_image"), ...file }).strict(),
   z.object({ purpose: z.literal("home_video"), ...file }).strict(),
   z.object({ purpose: z.literal("home_video_poster"), ...file }).strict(),

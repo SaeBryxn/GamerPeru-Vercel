@@ -1,8 +1,8 @@
 import { fixtureHeader } from "../helpers/media-upload-ledger-mock";
 import { describe, expect, it, vi } from "vitest";
 import {
-  confirmStoryImageUpload,
-  requestStoryImageUpload,
+  confirmStoryMediaUpload,
+  requestStoryMediaUpload,
 } from "@/lib/admin/catalog/story-media-service";
 import type { CatalogStorageAdapter } from "@/lib/admin/catalog/media-storage";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
@@ -53,8 +53,13 @@ function productLookup(row: { productSlug: string; brandSlug: string } | undefin
 }
 
 async function issueToken(adapter = storage(null), actor = admin()) {
-  return requestStoryImageUpload(
-    { productId: PRODUCT_ID, mimeType: "image/jpeg", fileSizeBytes: 2_000_000 },
+  return requestStoryMediaUpload(
+    {
+      purpose: "story_image",
+      productId: PRODUCT_ID,
+      mimeType: "image/jpeg",
+      fileSizeBytes: 2_000_000,
+    },
     {
       authContext: actor,
       storageAdapter: adapter,
@@ -111,8 +116,8 @@ describe("story image direct upload", () => {
       }),
     };
     const database = { transaction: async (fn: (value: typeof tx) => unknown) => fn(tx) } as never;
-    const result = await confirmStoryImageUpload(
-      { uploadId, width: 100, height: 100 },
+    const result = await confirmStoryMediaUpload(
+      { purpose: "story_image", uploadId, width: 100, height: 100 },
       {
         authContext: admin(),
         storageAdapter: adapter,
@@ -132,14 +137,19 @@ describe("story image direct upload", () => {
       database: productLookup({ productSlug: "p", brandSlug: "b" }),
     };
     await expect(
-      requestStoryImageUpload(
-        { productId: PRODUCT_ID, mimeType: "image/gif", fileSizeBytes: 10 },
+      requestStoryMediaUpload(
+        { purpose: "story_image", productId: PRODUCT_ID, mimeType: "image/gif", fileSizeBytes: 10 },
         options
       )
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_UNSUPPORTED_TYPE" });
     await expect(
-      requestStoryImageUpload(
-        { productId: PRODUCT_ID, mimeType: "image/png", fileSizeBytes: 10485761 },
+      requestStoryMediaUpload(
+        {
+          purpose: "story_image",
+          productId: PRODUCT_ID,
+          mimeType: "image/png",
+          fileSizeBytes: 10485761,
+        },
         options
       )
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_SIZE_LIMIT_EXCEEDED" });
@@ -149,8 +159,8 @@ describe("story image direct upload", () => {
   it("refuses a token issued to another session", async () => {
     const { uploadId } = await issueToken();
     await expect(
-      confirmStoryImageUpload(
-        { uploadId },
+      confirmStoryMediaUpload(
+        { purpose: "story_image", uploadId },
         {
           authContext: admin("someone-else"),
           storageAdapter: storage(null),
@@ -163,8 +173,8 @@ describe("story image direct upload", () => {
   it("reports a missing object without registering anything", async () => {
     const { uploadId } = await issueToken();
     await expect(
-      confirmStoryImageUpload(
-        { uploadId },
+      confirmStoryMediaUpload(
+        { purpose: "story_image", uploadId },
         {
           authContext: admin(),
           storageAdapter: storage(null),
@@ -178,8 +188,8 @@ describe("story image direct upload", () => {
     const { uploadId } = await issueToken();
     const wrongType = storage({ contentLength: 2_000_000, contentType: "text/html" });
     await expect(
-      confirmStoryImageUpload(
-        { uploadId },
+      confirmStoryMediaUpload(
+        { purpose: "story_image", uploadId },
         { authContext: admin(), storageAdapter: wrongType, nowSeconds: NOW }
       )
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_MISMATCH" });
@@ -188,8 +198,8 @@ describe("story image direct upload", () => {
     const { uploadId: tooLargeId } = await issueToken();
     const tooLarge = storage({ contentLength: 10485761, contentType: "image/jpeg" });
     await expect(
-      confirmStoryImageUpload(
-        { uploadId: tooLargeId },
+      confirmStoryMediaUpload(
+        { purpose: "story_image", uploadId: tooLargeId },
         { authContext: admin(), storageAdapter: tooLarge, nowSeconds: NOW }
       )
     ).rejects.toMatchObject({ code: "DIRECT_UPLOAD_MISMATCH" });
@@ -199,8 +209,8 @@ describe("story image direct upload", () => {
   it("expires tokens after the upload window", async () => {
     const { uploadId } = await issueToken();
     await expect(
-      confirmStoryImageUpload(
-        { uploadId },
+      confirmStoryMediaUpload(
+        { purpose: "story_image", uploadId },
         {
           authContext: admin(),
           storageAdapter: storage(null),

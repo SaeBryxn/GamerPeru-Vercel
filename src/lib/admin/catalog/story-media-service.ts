@@ -15,33 +15,37 @@ import { completeUpload, setUploadAsset } from "@/lib/admin/media/upload-ledger"
 import { CatalogDomainError } from "./types";
 
 /**
- * Story images use the shared direct upload (`direct-upload-service`): the browser PUTs them
- * straight to their final key and they are only registered here, with a product-scoped key and
- * a STORY attachment. Images are resized for display by the image optimizer, so the original
- * can be a heavy banner.
+ * Story images and MP4 videos use the shared direct upload (`direct-upload-service`): the
+ * browser PUTs them straight to their final key and they are only registered here, with a
+ * product-scoped key and a STORY attachment. Images are resized for display by the image
+ * optimizer, so the original can be a heavy banner.
  */
+
+export type StoryMediaPurpose = "story_image" | "story_video";
 
 export interface StoryMediaServiceOptions extends DirectUploadOptions {
   authContext?: VerifiedAuthContextReady;
   database?: typeof db;
 }
 
-export interface RequestStoryImageUploadInput {
+export interface RequestStoryMediaUploadInput {
+  purpose: StoryMediaPurpose;
   productId: string;
   mimeType: string;
   fileSizeBytes: number;
 }
 
-export type RequestStoryImageUploadResult = DirectUploadRequest;
+export type RequestStoryMediaUploadResult = DirectUploadRequest;
 
-export interface ConfirmStoryImageUploadInput {
+export interface ConfirmStoryMediaUploadInput {
+  purpose: StoryMediaPurpose;
   uploadId: string;
   /** Measured by the browser; display metadata only, so it is bounds-checked, not trusted. */
   width?: number | null;
   height?: number | null;
 }
 
-export interface ConfirmStoryImageUploadResult {
+export interface ConfirmStoryMediaUploadResult {
   productStatus: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   productMediaId: string;
   mediaAssetId: string;
@@ -65,11 +69,11 @@ async function authorize(options?: StoryMediaServiceOptions): Promise<string> {
   return (await requirePermission("catalog:manage")).authUserId;
 }
 
-/** Signs a direct-to-bucket upload for one story image at a fresh, product-scoped key. */
-export async function requestStoryImageUpload(
-  input: RequestStoryImageUploadInput,
+/** Signs a direct-to-bucket upload for one story image or video at a fresh, product-scoped key. */
+export async function requestStoryMediaUpload(
+  input: RequestStoryMediaUploadInput,
   options?: StoryMediaServiceOptions
-): Promise<RequestStoryImageUploadResult> {
+): Promise<RequestStoryMediaUploadResult> {
   const actorId = await authorize(options);
   const database = options?.database ?? db;
 
@@ -89,7 +93,7 @@ export async function requestStoryImageUpload(
 
   return requestDirectUpload(
     {
-      purpose: "story_image",
+      purpose: input.purpose,
       actorId,
       subjectId: input.productId,
       keyPrefix: `products/${row.brandSlug}/${row.productSlug}/story`,
@@ -101,17 +105,17 @@ export async function requestStoryImageUpload(
 }
 
 /**
- * Registers an uploaded story image once the shared check passes (token and HEAD). Idempotent:
- * a repeated confirm for the same key returns the existing attachment.
+ * Registers an uploaded story image or video once the shared check passes (token and HEAD).
+ * Idempotent: a repeated confirm for the same key returns the existing attachment.
  */
-export async function confirmStoryImageUpload(
-  input: ConfirmStoryImageUploadInput,
+export async function confirmStoryMediaUpload(
+  input: ConfirmStoryMediaUploadInput,
   options?: StoryMediaServiceOptions
-): Promise<ConfirmStoryImageUploadResult> {
+): Promise<ConfirmStoryMediaUploadResult> {
   const actorId = await authorize(options);
   const database = options?.database ?? db;
   const token = await verifyDirectUpload(
-    { uploadId: input.uploadId, purpose: "story_image", actorId },
+    { uploadId: input.uploadId, purpose: input.purpose, actorId },
     options
   );
   const productId = token.subjectId;

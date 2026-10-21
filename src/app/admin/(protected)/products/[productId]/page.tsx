@@ -10,7 +10,7 @@ import {
 } from "@/lib/admin/catalog/readers";
 import { getAdminProductStory } from "@/lib/admin/catalog/story-reader";
 import { sanitizeProductDetailForUi } from "@/lib/admin/catalog/ui-dto";
-import { ProductEditor } from "./product-editor";
+import { ProductEditor } from "./product-editor-client";
 
 export const dynamic = "force-dynamic";
 

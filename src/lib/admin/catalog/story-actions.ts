@@ -1,7 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
+import { markStorefrontCatalogStale } from "@/lib/catalog/catalog-cache";
 import { getVerifiedAuthContext, type PermissionName } from "@/lib/auth/rbac";
 import { mapDomainErrorToUi } from "./error-mapping";
 import {
@@ -131,11 +130,6 @@ function mapStoryError(error: unknown): StoryActionResult<StoryMutationResult> {
   };
 }
 
-function revalidateAdminPaths(productId: string): void {
-  revalidatePath(`/admin/products/${productId}`);
-  revalidatePath(`/admin/products/${productId}/story`);
-}
-
 async function runStoryAction<TInput>(
   permission: PermissionName,
   input: TInput,
@@ -157,9 +151,8 @@ async function runStoryAction<TInput>(
 
   try {
     const result = await operation(input, { authContext });
-    revalidateAdminPaths(result.productId);
     if (revalidatePublicPath) {
-      revalidateStorefrontCatalog();
+      markStorefrontCatalogStale();
     }
     return { success: true, data: result };
   } catch (error) {

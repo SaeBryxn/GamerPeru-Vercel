@@ -1,7 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
+import { markStorefrontCatalogStale } from "@/lib/catalog/catalog-cache";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import {
   createProduct,
@@ -24,11 +23,12 @@ import { type CatalogStatus, type VariantStatus } from "./types";
 import type { Product, ProductVariant } from "@/db/schema";
 
 /**
- * Drops the cached storefront after a catalog write, so the edit is visible on the next request
- * instead of after the catalog cache window: the product page, its listings and the navigation.
+ * Expires the cached storefront after a catalog write, so the edit is visible on the next request
+ * instead of after the catalog cache window. Admin pages are not revalidated here: they are
+ * dynamic, and revalidating them would re-render the editor inside the action (Error 1102).
  */
 function revalidateStorefront() {
-  revalidateStorefrontCatalog();
+  markStorefrontCatalogStale();
 }
 
 export interface ActionResult<T = unknown> {
@@ -215,8 +215,6 @@ export async function createProductAction(
       { authContext }
     );
 
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${product.id}`);
     revalidateStorefront();
 
     return { success: true, data: { product } };
@@ -267,8 +265,6 @@ export async function updateProductAction(
       { authContext }
     );
 
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${input.productId}`);
     revalidateStorefront();
 
     return { success: true, data: { product } };
@@ -346,8 +342,6 @@ export async function createVariantAction(
       { authContext }
     );
 
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${input.productId}`);
     revalidateStorefront();
 
     return { success: true, data: { variant } };
@@ -434,8 +428,6 @@ export async function updateVariantAction(
       { authContext }
     );
 
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${input.productId}`);
     revalidateStorefront();
 
     return { success: true, data: { variant } };
@@ -478,8 +470,6 @@ export async function duplicateProductAction(
       { authContext }
     );
 
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${product.id}`);
     revalidateStorefront();
 
     return { success: true, data: { product } };
@@ -520,8 +510,6 @@ export async function transitionProductStatusAction(
       { authContext }
     );
 
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${input.productId}`);
     revalidateStorefront();
 
     return { success: true, data: { product } };
@@ -572,8 +560,6 @@ export async function updateMediaAltTextAction(
       { authContext }
     );
 
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${input.productId}`);
     revalidateStorefront();
 
     return {
@@ -629,8 +615,6 @@ export async function reorderProductMediaAction(
       { authContext }
     );
 
-    revalidatePath(`/admin/products/${input.productId}`);
-
     revalidateStorefront();
 
     return { success: true, data: result };
@@ -675,8 +659,6 @@ export async function detachProductMediaAction(
       },
       { authContext }
     );
-
-    revalidatePath(`/admin/products/${input.productId}`);
 
     revalidateStorefront();
 
@@ -728,8 +710,6 @@ export async function setPrimaryMediaAction(
       { authContext }
     );
 
-    revalidatePath("/admin/products");
-    revalidatePath(`/admin/products/${input.productId}`);
     revalidateStorefront();
 
     return {
@@ -785,8 +765,6 @@ export async function reassignProductMediaVariantAction(
       },
       { authContext }
     );
-
-    revalidatePath(`/admin/products/${input.productId}`);
 
     revalidateStorefront();
 
