@@ -73,7 +73,7 @@ El dashboard (`/admin`) sí lee pedidos y pagos reales (cola de pagos sin verifi
 | **Favoritos**                                                   | `src/app/(storefront)/cuenta/favoritos/page.tsx`                   | Placeholder "Próximamente". No existe tabla de wishlist. Además está enlazado desde el footer.                                                                                                                                                   |
 | **Referidos**                                                   | `src/app/(storefront)/cuenta/referidos/page.tsx`                   | Placeholder "Próximamente". No hay esquema (GP-031).                                                                                                                                                                                             |
 | **Imágenes editoriales del home**                               | `src/app/(storefront)/page.tsx:97-159`                             | Referencia 7 archivos en `public/images/home/` que **no existen** (solo hay un README). `HomeImage` colapsa el hueco en silencio: el home se ve vacío en esas secciones.                                                                         |
-| **Videos del home**                                             | `video-hero.tsx:17`, `page.tsx:67`                                 | Embeds de YouTube con IDs fijos en código. Confirmar derechos de uso (regla de AGENTS.md sobre activos de terceros).                                                                                                                             |
+| **Videos del home**                                             | `video-hero.tsx:17`, `page.tsx:67`                                 | Embeds de YouTube con IDs fijos en código. Confirmar derechos de uso (activos de terceros).                                                                                                                                                      |
 | **Seguimiento de envío en "Mis pedidos"**                       | `src/components/account/order-card.tsx:117`                        | Lee `trackingUrl` real, pero nadie puede escribirlo (no hay UI de despacho). Siempre vacío.                                                                                                                                                      |
 | **Estado "En verificación" en confirmación**                    | `checkout-confirmation-view.tsx:78`, `manual-payment-card.tsx:308` | La UI contempla `VERIFYING`, pero ningún backend produce ese estado.                                                                                                                                                                             |
 | **Mega-menú: `/guia-de-compra/*`, `/software/*`, `/soporte/*`** | `navigation-data.ts`                                               | Rutas inexistentes; están correctamente ocultas por `missingDestinations` en `menu-entries.ts`. No es bug, pero son secciones que no existen.                                                                                                    |
@@ -193,7 +193,7 @@ Qué falta construir, por pieza:
 
 ## 4. Roadmap final hacia producción
 
-El orden respeta dependencias técnicas. Cada bloque indica el GP canónico al que corresponde; según `AGENTS.md`, cada uno debe asignarse explícitamente y cerrarse con su Closure Report.
+El orden respeta dependencias técnicas. Cada bloque indica el GP canónico al que corresponde.
 
 ### Bloqueantes para el lanzamiento (para poder vender)
 

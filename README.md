@@ -129,14 +129,13 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to view th
 
 Canonical architecture specifications and decision records live in [`docs/`](./docs/):
 
-- [`AGENTS.md`](./AGENTS.md) — Operating contract, quality gates, and anti-clone rules.
 - [`docs/engineering/ENGINEERING_STANDARDS.md`](./docs/engineering/ENGINEERING_STANDARDS.md) — Canonical engineering & quality standards.
 - [`docs/specs/`](./docs/specs/) — Core functional and domain specifications.
 - [`docs/architecture/TECHNOLOGY_ARCHITECTURE.md`](./docs/architecture/TECHNOLOGY_ARCHITECTURE.md) — Canonical technology baseline.
 - [`docs/architecture/APPLICATION_FOUNDATION.md`](./docs/architecture/APPLICATION_FOUNDATION.md) — Canonical application shell, layout, error, and observability foundation.
 - [`docs/architecture/COMMERCE_DOMAIN_MODEL.md`](./docs/architecture/COMMERCE_DOMAIN_MODEL.md) — Complete 67-section commerce domain model.
 - [`docs/decisions/`](./docs/decisions/) — Accepted Architecture Decision Records (ADR-001 through ADR-008).
-- [`docs/roadmap/ROADMAP.md`](./docs/roadmap/ROADMAP.md) — 53-step development roadmap.
+- [`docs/roadmap/ROADMAP.md`](./docs/roadmap/ROADMAP.md) — Lo que falta: GPs por cerrar y no implementados (en español).
 
 ---
 

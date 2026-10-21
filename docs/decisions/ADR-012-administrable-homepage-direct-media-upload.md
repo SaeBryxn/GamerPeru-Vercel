@@ -6,7 +6,7 @@ ACCEPTED — 2026-10-15 (approved by the owner, including the `home_sections` an
 `home_section_media` table design). Extends [ADR-004](ADR-004-storage-media-pipeline.md) (media pipeline) and
 operates within [ADR-010](ADR-010-storefront-catalog-caching.md) (caching) and
 [ADR-011](ADR-011-cloudflare-workers-hosting.md) (Workers hosting). Implemented by
-[GP-053](../roadmap/GP-053.md).
+GP-053.
 
 ## Context
 
@@ -20,7 +20,7 @@ The storefront home (`src/app/(storefront)/page.tsx`) is hardcoded:
   return 400 and the blocks render empty backgrounds.
 - Changing the order of the blocks or hiding one requires a code change and a deploy.
 
-Admin is a first-class product surface (`AGENTS.md`): the operator must be able to run the home
+Admin is a first-class product surface: the operator must be able to run the home
 the same way they already run products, stories and the menu (`storefront_menu_entries`).
 
 The media constraints come from the hosting decision:

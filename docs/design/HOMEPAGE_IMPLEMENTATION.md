@@ -8,7 +8,6 @@ This document defines the canonical architecture, visual design system translati
 
 **Canonical Authorities**:
 
-- [AGENTS.md](file:///d:/Documentos/GamerPeru/AGENTS.md) — Core operating contract (multi-brand, Peru-first, zero warning policy).
 - [GAMER_PERU_DESIGN_LANGUAGE.md](file:///d:/Documentos/GamerPeru/docs/design/GAMER_PERU_DESIGN_LANGUAGE.md) — Visual authority ("Machinery Obsidian & Signal Crimson").
 - [DESIGN_SYSTEM_IMPLEMENTATION.md](file:///d:/Documentos/GamerPeru/docs/design/DESIGN_SYSTEM_IMPLEMENTATION.md) — GP-008 Design System tokens and primitives.
 - [GLOBAL_NAVIGATION_IMPLEMENTATION.md](file:///d:/Documentos/GamerPeru/docs/design/GLOBAL_NAVIGATION_IMPLEMENTATION.md) — GP-009 Storefront shell integration.

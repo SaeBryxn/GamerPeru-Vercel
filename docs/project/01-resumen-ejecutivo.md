@@ -27,4 +27,4 @@ La información enviada por el cliente no prueba la recepción de fondos. Solo l
 
 No hay cifras inventadas de ventas, conversión o rendimiento real. Las métricas comerciales (búsqueda→PDP→carrito→compra y abandono por etapa) requieren una línea base operativa y datos reales tratados conforme a privacidad. El resultado técnico no demuestra por sí solo éxito comercial.
 
-Referencias: [GP-000](../roadmap/GP-000.md), [principios](../architecture/ARCHITECTURE_PRINCIPLES.md), [modelo comercial](../architecture/COMMERCE_DOMAIN_MODEL.md).
+Referencias: [roadmap](../roadmap/ROADMAP.md), [principios](../architecture/ARCHITECTURE_PRINCIPLES.md), [modelo comercial](../architecture/COMMERCE_DOMAIN_MODEL.md).

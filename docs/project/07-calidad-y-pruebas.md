@@ -38,7 +38,7 @@ Las suites live/semillas exigen guardas locales fail-closed. No cargar `.env.loc
 | Bundle original → final                     | 5869,50 → 5864,57; −4,93 KiB                                        |
 | Entrada GP-059 → salida                     | 5860,17 → 5864,57; +4,40 KiB                                        |
 
-El [closure GP-059](../roadmap/GP-059-CLOSURE.md) precisa alcance y secuencia. El dueño aceptó también la medición intermedia +4,68 KiB. No se continúa optimizando Next/OpenNext. En GP-061 el gate autorizado se limita a formato, lint del script nuevo y una ejecución de capturas; no se repiten cf:build ni E2E y se hereda este estado de aplicación.
+El closure de GP-059 (en el historial de git) precisa alcance y secuencia. El dueño aceptó también la medición intermedia +4,68 KiB. No se continúa optimizando Next/OpenNext. En GP-061 el gate autorizado se limita a formato, lint del script nuevo y una ejecución de capturas; no se repiten cf:build ni E2E y se hereda este estado de aplicación.
 
 ## Definition of Done y cobertura
 
@@ -54,4 +54,4 @@ El [closure GP-059](../roadmap/GP-059-CLOSURE.md) precisa alcance y secuencia. E
 
 Cero warnings aplica al código nuevo/modificado. BASELINE: jsdom `scrollTo` 7→7, OpenNext experimental 1→1; categorías previas de NO_COLOR/FORCE_COLOR, hidratación/DO del emulador e imágenes localhost. No se admite aumentar número/tipo ni se relaja seguridad. Los cierres de stream del dev server se documentan como incidencia de desarrollo, sin atribuirlos a CPU de producción.
 
-Referencias: [estándares](../engineering/ENGINEERING_STANDARDS.md), [plantilla](../templates/CLOSURE_REPORT_TEMPLATE.md), [GP-058](../roadmap/GP-058-CLOSURE.md).
+Referencias: [estándares](../engineering/ENGINEERING_STANDARDS.md), [plantilla](../templates/CLOSURE_REPORT_TEMPLATE.md), [pendientes](../roadmap/ROADMAP.md).

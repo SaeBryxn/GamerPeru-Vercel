@@ -6,7 +6,7 @@ ACCEPTED — 2026-10-20, por encargo del dueño. Amplía
 [ADR-012](ADR-012-administrable-homepage-direct-media-upload.md) y
 [ADR-013](ADR-013-gallery-direct-upload.md), dentro del despliegue de
 [ADR-011](ADR-011-cloudflare-workers-hosting.md). Se implementa por etapas en
-[GP-058](../roadmap/GP-058.md) y GP-059.
+GP-058 y GP-059.
 
 ## Context
 

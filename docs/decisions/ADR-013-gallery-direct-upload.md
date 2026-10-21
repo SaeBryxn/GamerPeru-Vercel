@@ -6,7 +6,7 @@ ACCEPTED — 2026-10-15 (approved by the owner). Details the gallery migration a
 [ADR-012 §8](ADR-012-administrable-homepage-direct-media-upload.md). Supersedes only the
 server-side normalization step of [ADR-004](ADR-004-storage-media-pipeline.md) for catalog
 gallery photos; buckets, public domain and immutable keys from ADR-004 stay as they are.
-Implemented by [GP-055](../roadmap/GP-055.md).
+Implemented by GP-055.
 
 ## Context
 

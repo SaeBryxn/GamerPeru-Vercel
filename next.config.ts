@@ -69,6 +69,8 @@ const nextConfig: NextConfig = {
     : ["tsx", "ts", "jsx", "js", "node.ts"],
   reactStrictMode: true,
   poweredByHeader: false,
+  // The repository intentionally has no AGENTS.md; without this `next dev` recreates it.
+  agentRules: false,
   images: {
     remotePatterns: [
       {
