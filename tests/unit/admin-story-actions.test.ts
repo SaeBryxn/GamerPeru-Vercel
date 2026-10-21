@@ -155,7 +155,7 @@ describe("GP-026 CHK1 thin Story Server Actions", () => {
     // An immediate expiry would re-render the editor inside the action (Error 1102 on Workers).
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
     if (entry.publicPath) {
-      expect(mocks.revalidateTag).toHaveBeenCalledWith("storefront-catalog", { expire: 1 });
+      expect(mocks.revalidateTag).toHaveBeenCalledWith("storefront-catalog", "max");
     } else {
       expect(mocks.revalidateTag).not.toHaveBeenCalled();
     }

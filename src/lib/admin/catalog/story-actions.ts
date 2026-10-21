@@ -1,6 +1,6 @@
 "use server";
 
-import { markStorefrontCatalogStale } from "@/lib/catalog/catalog-cache";
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { getVerifiedAuthContext, type PermissionName } from "@/lib/auth/rbac";
 import { mapDomainErrorToUi } from "./error-mapping";
 import {
@@ -152,7 +152,7 @@ async function runStoryAction<TInput>(
   try {
     const result = await operation(input, { authContext });
     if (revalidatePublicPath) {
-      markStorefrontCatalogStale();
+      revalidateStorefrontCatalog();
     }
     return { success: true, data: result };
   } catch (error) {

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   cartItems,
@@ -19,6 +19,8 @@ import {
   outboxEvents,
   paymentInstructionVersions,
   paymentMethodConfigurations,
+  paymentSubmissions,
+  paymentVerifications,
   payments,
   productVariants,
   products,
@@ -1139,6 +1141,28 @@ export async function loadCheckoutConfirmation(
     }
   }
 
+  const [latestSubmission] = payment
+    ? await db
+        .select({ submittedAt: paymentSubmissions.submittedAt })
+        .from(paymentSubmissions)
+        .where(eq(paymentSubmissions.paymentId, payment.id))
+        .orderBy(desc(paymentSubmissions.submittedAt))
+        .limit(1)
+    : [];
+  const [approval] = payment
+    ? await db
+        .select({ verifiedAt: paymentVerifications.verifiedAt })
+        .from(paymentVerifications)
+        .where(
+          and(
+            eq(paymentVerifications.paymentId, payment.id),
+            eq(paymentVerifications.decision, "APPROVED")
+          )
+        )
+        .orderBy(desc(paymentVerifications.verifiedAt))
+        .limit(1)
+    : [];
+
   let paymentMethodName = "";
   if (payment && payment.paymentMethodCode) {
     const [paymentMethod] = await db
@@ -1200,6 +1224,18 @@ export async function loadCheckoutConfirmation(
         lineTotalCents: item.lineTotalCents,
       })),
       createdAt: order.createdAt.toISOString(),
+      progress: {
+        createdAt: order.createdAt.toISOString(),
+        proofSubmittedAt: latestSubmission?.submittedAt.toISOString() ?? null,
+        paymentConfirmedAt: approval?.verifiedAt.toISOString() ?? null,
+        shipmentStatus: shipment?.status ?? null,
+        shippedAt: shipment?.shippedAt?.toISOString() ?? null,
+        deliveredAt: shipment?.deliveredAt?.toISOString() ?? null,
+        cancelledAt: order.cancelledAt?.toISOString() ?? null,
+        courierName: shipment?.courierName ?? null,
+        trackingNumber: shipment?.trackingNumber ?? null,
+        trackingUrl: shipment?.trackingUrl ?? null,
+      },
     },
   };
 }

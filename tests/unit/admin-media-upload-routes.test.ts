@@ -127,7 +127,7 @@ describe("rutas de control de medios", () => {
       expect(response.status).toBe(200);
       expect(mocks.path).not.toHaveBeenCalled();
       if (status === "PUBLISHED")
-        expect(mocks.tag).toHaveBeenCalledWith("storefront-catalog", { expire: 0 });
+        expect(mocks.tag).toHaveBeenCalledWith("storefront-catalog", "max");
       else expect(mocks.tag).not.toHaveBeenCalled();
     }
   );

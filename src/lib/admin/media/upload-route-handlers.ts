@@ -12,7 +12,7 @@ import {
   confirmStoryMediaUpload,
 } from "@/lib/admin/catalog/story-media-service";
 import { requestHomeMediaUpload, confirmHomeMediaUpload } from "@/lib/home/home-media-service";
-import { revalidateStorefrontCatalogData } from "@/lib/catalog/catalog-cache";
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import { abortUpload } from "./upload-ledger";
 
@@ -55,7 +55,7 @@ export async function completeAdminMediaUpload(request: Request): Promise<Respon
         input.purpose === "gallery_image"
           ? await confirmGalleryImageUpload(input, options)
           : await confirmStoryMediaUpload({ ...input, purpose: input.purpose }, options);
-      if (data.productStatus === "PUBLISHED") revalidateStorefrontCatalogData();
+      if (data.productStatus === "PUBLISHED") revalidateStorefrontCatalog();
       return mediaJson({ ...data, src: resolvePublicMediaUrl(data.objectKey) });
     }
     const data = await confirmHomeMediaUpload(input, options);

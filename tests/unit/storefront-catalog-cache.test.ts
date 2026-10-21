@@ -66,23 +66,13 @@ describe("storefront catalog cache", () => {
     );
   });
 
-  it("expires the catalog data at once and drops the prerendered storefront", async () => {
+  it("marks the catalog stale instead of expiring the storefront at once", async () => {
     const { revalidateStorefrontCatalog, CATALOG_CACHE_TAG } =
       await import("@/lib/catalog/catalog-cache");
 
     revalidateStorefrontCatalog();
 
-    expect(mocks.revalidateTag).toHaveBeenCalledWith(CATALOG_CACHE_TAG, { expire: 0 });
-    expect(mocks.revalidatePath).toHaveBeenCalledWith("/", "layout");
-  });
-
-  it("marks the catalog stale from Server Actions without an immediate expiry", async () => {
-    const { markStorefrontCatalogStale, CATALOG_CACHE_TAG } =
-      await import("@/lib/catalog/catalog-cache");
-
-    markStorefrontCatalogStale();
-
-    expect(mocks.revalidateTag).toHaveBeenCalledWith(CATALOG_CACHE_TAG, { expire: 1 });
+    expect(mocks.revalidateTag).toHaveBeenCalledWith(CATALOG_CACHE_TAG, "max");
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 

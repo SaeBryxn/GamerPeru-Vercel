@@ -2,8 +2,10 @@
 
 import React, { useState, useId } from "react";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
-import { AlertTriangle, Clock, MapPin, Package, XCircle } from "lucide-react";
+import { AlertTriangle, Clock, ListChecks, MapPin, Package, XCircle } from "lucide-react";
 import { DomeLink, Icon } from "@/components/ui";
+import { OrderTimeline } from "@/components/account/order-timeline";
+import { buildOrderTimeline, type CustomerOrderProgressDTO } from "@/lib/account/order-timeline";
 import type { CheckoutConfirmationDTO } from "@/lib/checkout/types";
 import type { PaymentInstructionDTO } from "@/lib/payments/reader";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -26,7 +28,16 @@ const RISE_VARIANTS: Variants = {
   }),
 };
 
-const STEP = { mark: 0, title: 1, lead: 2, payment: 3, actions: 4, summary: 5, delivery: 6 };
+const STEP = {
+  mark: 0,
+  title: 1,
+  lead: 2,
+  payment: 3,
+  timeline: 4,
+  actions: 5,
+  summary: 6,
+  delivery: 7,
+};
 
 export interface CheckoutConfirmationViewProps {
   confirmation: CheckoutConfirmationDTO;
@@ -68,10 +79,22 @@ function SuccessMark() {
 }
 
 /**
- * Heading for the order's payment state. A submitted receipt is not a confirmed payment: until
- * the team verifies it, the page says it was received, never that it was paid.
+ * Heading for the order's state. A submitted receipt is not a confirmed payment: until the team
+ * verifies it, the page says it was received, never that it was paid.
  */
-function heroCopy(paymentStatus: string): { title: string; lead: string } {
+function heroCopy(
+  paymentStatus: string,
+  progress: CustomerOrderProgressDTO
+): { title: string; lead: string } {
+  if (progress.deliveredAt || progress.shipmentStatus === "DELIVERED") {
+    return { title: "¡Pedido entregado!", lead: "Gracias por comprar en Gamer Perú." };
+  }
+  if (progress.shippedAt || progress.shipmentStatus === "SHIPPED") {
+    return {
+      title: "Tu pedido va en camino",
+      lead: "Ya lo entregamos al courier. Abajo puedes ver el seguimiento.",
+    };
+  }
   switch (paymentStatus) {
     case "PAID":
       return {
@@ -128,7 +151,8 @@ export function CheckoutConfirmationView({
   const isCancelled = orderStatus === "CANCELLED" || orderStatus === "REFUNDED";
   const isEligibleForCancellation =
     !isCancelled && orderStatus === "PENDING" && paymentStatus === "UNPAID";
-  const hero = heroCopy(paymentStatus);
+  const hero = heroCopy(paymentStatus, confirmation.progress);
+  const timeline = buildOrderTimeline(confirmation.progress, orderStatus, paymentStatus);
   const totalLabel = isCancelled
     ? "Total"
     : paymentStatus === "PAID"
@@ -294,6 +318,19 @@ export function CheckoutConfirmationView({
               </div>
             )}
           </motion.div>
+
+          <motion.section
+            className={styles.card}
+            aria-labelledby="order-timeline-title"
+            variants={RISE_VARIANTS}
+            custom={STEP.timeline}
+          >
+            <h2 id="order-timeline-title" className={styles.summaryTitle}>
+              <Icon icon={ListChecks} size="sm" aria-hidden="true" />
+              Seguimiento del pedido
+            </h2>
+            <OrderTimeline steps={timeline} trackingUrl={confirmation.progress.trackingUrl} />
+          </motion.section>
 
           <motion.div className={styles.actions} variants={RISE_VARIANTS} custom={STEP.actions}>
             <DomeLink

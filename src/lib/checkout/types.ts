@@ -1,5 +1,6 @@
 import type { ValidatedBaseAddressData } from "@/lib/account/address-validation";
 import type { CustomerAddressDTO } from "@/lib/account/types";
+import type { CustomerOrderProgressDTO } from "@/lib/account/order-timeline";
 
 export type CheckoutDeliveryAddressInput =
   | { mode: "INLINE"; address: ValidatedBaseAddressData }
@@ -152,6 +153,7 @@ export interface CheckoutConfirmationDTO {
   deliveryAddress: CheckoutConfirmationAddressDTO;
   items: CheckoutConfirmationItemDTO[];
   createdAt: string;
+  progress: CustomerOrderProgressDTO;
 }
 
 export type CheckoutConfirmationResult =

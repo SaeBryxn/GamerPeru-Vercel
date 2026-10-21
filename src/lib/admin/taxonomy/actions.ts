@@ -25,11 +25,10 @@ async function requireCatalogManager<T>(): Promise<ActionResult<T> | null> {
   return null;
 }
 
-/** Storefront routes that list taxonomy, refreshed after every change. */
-function revalidateTaxonomy(kind: TaxonomyKind) {
+/** Admin screens that list taxonomy and the storefront catalog, refreshed after every change. */
+function revalidateTaxonomy() {
   revalidatePath("/admin/taxonomia");
   revalidatePath("/admin/products/new");
-  revalidatePath(kind === "category" ? "/categorias" : "/marcas");
   revalidateStorefrontCatalog();
 }
 
@@ -43,7 +42,7 @@ export async function createTaxonomyAction(
   const result = await createTaxonomy(kind, input);
   if (!result.success) return { success: false, error: result.error, code: "INVALID_INPUT" };
 
-  revalidateTaxonomy(kind);
+  revalidateTaxonomy();
   return { success: true, data: { id: result.id } };
 }
 
@@ -58,6 +57,6 @@ export async function updateTaxonomyAction(
   const result = await updateTaxonomy(kind, id, input);
   if (!result.success) return { success: false, error: result.error, code: "INVALID_INPUT" };
 
-  revalidateTaxonomy(kind);
+  revalidateTaxonomy();
   return { success: true };
 }

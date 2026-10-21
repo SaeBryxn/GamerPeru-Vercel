@@ -1,5 +1,5 @@
 import "server-only";
-import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 
 /** Every cross-request storefront catalog entry carries this tag, so one call invalidates all. */
 export const CATALOG_CACHE_TAG = "storefront-catalog";
@@ -37,26 +37,13 @@ export function cacheCatalogQuery<Args extends unknown[], Result>(
 }
 
 /**
- * Makes a catalog write visible on the storefront: expires the cached queries at once, so the
- * next request reads the database, and drops every prerendered storefront page built from them.
+ * Makes a catalog write visible on the storefront. The tag is marked stale rather than expired:
+ * visitors keep receiving the cached page while it regenerates once in the background. An
+ * immediate expiry made every concurrent visitor render the page inside their own request, which
+ * on the Workers CPU limit ends in Error 1102, and inside a Server Action it also re-rendered the
+ * current admin page. ISR pages carry the tags of the cached queries they read (the navigation
+ * included), so they are refreshed too.
  */
 export function revalidateStorefrontCatalog(): void {
-  revalidateStorefrontCatalogData();
-  revalidatePath("/", "layout");
-}
-
-export function revalidateStorefrontCatalogData(): void {
-  revalidateTag(CATALOG_CACHE_TAG, { expire: 0 });
-}
-
-/**
- * Catalog invalidation for Server Actions. Any immediate expiry (`revalidatePath`, or a tag with
- * `expire: 0`) makes Next.js render the current admin page again inside the action's response,
- * on top of the write, and on the Workers CPU limit that request ends in Error 1102. Marking the
- * tag stale with a one-second expiry skips that render; ISR pages carry the tags of the cached
- * queries they read, so they are invalidated too. Admin pages are dynamic and the editors call
- * `router.refresh()` themselves.
- */
-export function markStorefrontCatalogStale(): void {
-  revalidateTag(CATALOG_CACHE_TAG, { expire: 1 });
+  revalidateTag(CATALOG_CACHE_TAG, "max");
 }

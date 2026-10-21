@@ -1,0 +1,130 @@
+.timeline {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+}
+
+.step:last-child {
+  padding-bottom: 0;
+}
+
+/* Connector between markers; it takes the colour of the step it leaves. */
+.step:not(:last-child)::after {
+  position: absolute;
+  top: 26px;
+  bottom: 2px;
+  left: 11px;
+  width: 2px;
+  border-radius: 1px;
+  background-color: var(--color-border-subtle);
+  content: "";
+}
+
+.done:not(:last-child)::after {
+  background-color: var(--color-status-success-text);
+}
+
+.marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--color-border-subtle);
+  border-radius: 50%;
+  background-color: var(--color-surface-card);
+  color: var(--color-surface-card);
+}
+
+.done .marker {
+  border-color: var(--color-status-success-text);
+  background-color: var(--color-status-success-text);
+}
+
+.current .marker {
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 0 0 4px var(--color-brand-red-glow);
+}
+
+.current .marker::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-brand-primary);
+  content: "";
+}
+
+.closed .marker {
+  border-color: var(--color-text-secondary);
+  background-color: var(--color-text-secondary);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.label {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-text-primary);
+}
+
+.upcoming .label {
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.time {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.detail {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.trackingLink {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--space-1);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.trackingLink:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -123,6 +123,18 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       },
     ],
     createdAt: "2026-08-30T21:00:00.000Z",
+    progress: {
+      createdAt: "2026-08-30T21:00:00.000Z",
+      proofSubmittedAt: null,
+      paymentConfirmedAt: null,
+      shipmentStatus: "UNFULFILLED",
+      shippedAt: null,
+      deliveredAt: null,
+      cancelledAt: null,
+      courierName: null,
+      trackingNumber: null,
+      trackingUrl: null,
+    },
   };
 
   beforeEach(() => {

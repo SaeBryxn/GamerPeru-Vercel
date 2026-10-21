@@ -1,6 +1,6 @@
 "use server";
 
-import { markStorefrontCatalogStale } from "@/lib/catalog/catalog-cache";
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import {
   createProduct,
@@ -28,7 +28,7 @@ import type { Product, ProductVariant } from "@/db/schema";
  * dynamic, and revalidating them would re-render the editor inside the action (Error 1102).
  */
 function revalidateStorefront() {
-  markStorefrontCatalogStale();
+  revalidateStorefrontCatalog();
 }
 
 export interface ActionResult<T = unknown> {

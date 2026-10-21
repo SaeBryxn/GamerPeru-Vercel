@@ -1,6 +1,6 @@
 import "server-only";
 import { asc, eq, inArray } from "drizzle-orm";
-import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { db } from "@/db";
 import { homeSectionMedia, homeSections, mediaAssets, type HomeSectionType } from "@/db/schema";
 import { CATALOG_REVALIDATE_SECONDS, isCatalogCacheEnabled } from "@/lib/catalog/catalog-cache";
@@ -17,10 +17,13 @@ import {
 
 export const HOME_CACHE_TAG = "storefront-home";
 
-/** Makes an operator change visible at once: expires the cached sections and the home page. */
+/**
+ * Makes an operator change visible: the sections, and the home page built from them, are marked
+ * stale and regenerate in the background (see `revalidateStorefrontCatalog` for why they are not
+ * expired at once).
+ */
 export function revalidateStorefrontHome(): void {
-  revalidateTag(HOME_CACHE_TAG, { expire: 0 });
-  revalidatePath("/");
+  revalidateTag(HOME_CACHE_TAG, "max");
 }
 
 export interface StorefrontHome {

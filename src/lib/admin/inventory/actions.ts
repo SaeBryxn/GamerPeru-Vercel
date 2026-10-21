@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { markStorefrontCatalogStale } from "@/lib/catalog/catalog-cache";
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { adjustInventory, getVariantAvailability } from "@/lib/inventory/service";
 import type { ActionResult } from "@/lib/admin/catalog/actions";
@@ -74,7 +74,7 @@ export async function setVariantStockAction(
 
   const availability = await getVariantAvailability({ variantId: input.variantId });
   // Availability decides which variants and products the storefront can offer.
-  markStorefrontCatalogStale();
+  revalidateStorefrontCatalog();
 
   return {
     success: true,
