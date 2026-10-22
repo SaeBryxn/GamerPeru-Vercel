@@ -587,6 +587,42 @@ export async function adjustInventory(input: AdjustInventoryInput): Promise<Adju
         )
         .for("update")
         .limit(1);
+
+      // A new variant has no inventory row yet; its first physical count creates it at zero.
+      if (!item && input.commandKind === "PHYSICAL_COUNT") {
+        const [variant] = await tx
+          .select({ id: productVariants.id })
+          .from(productVariants)
+          .where(eq(productVariants.id, varVal.normalized))
+          .limit(1);
+        if (variant) {
+          await tx
+            .insert(inventoryItems)
+            .values({
+              id: generateUuidV7(),
+              variantId: varVal.normalized,
+              locationId: location.id,
+              quantityOnHand: 0,
+              quantityReserved: 0,
+              quantityAllocated: 0,
+              reorderPoint: 0,
+            })
+            .onConflictDoNothing({
+              target: [inventoryItems.variantId, inventoryItems.locationId],
+            });
+          [item] = await tx
+            .select()
+            .from(inventoryItems)
+            .where(
+              and(
+                eq(inventoryItems.variantId, varVal.normalized),
+                eq(inventoryItems.locationId, location.id)
+              )
+            )
+            .for("update")
+            .limit(1);
+        }
+      }
     }
 
     if (!item) {
