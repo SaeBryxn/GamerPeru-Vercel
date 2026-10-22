@@ -2,8 +2,9 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Check, ImageUp, LoaderCircle, Search, Video, X } from "lucide-react";
+import { Check, ImageUp, LoaderCircle, Search, Trash2, Video, X } from "lucide-react";
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
+import { useVideoHoverPreview, VideoThumb } from "./block-editors/editor-field";
 import {
   STORY_IMAGE_ACCEPT,
   STORY_VIDEO_ACCEPT,
@@ -28,6 +29,93 @@ const STAGE_LABEL: Record<"IMAGE" | "VIDEO", Record<StoryImageUploadStage, strin
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+export type DeleteStoryMediaResult = { ok: true } | { ok: false; error: string };
+
+/** Nombre visible de un medio: su texto alternativo o «Video N» según su orden en el producto. */
+function getMediaDisplayName(
+  media: AdminStorySelectableMedia,
+  allMedia: readonly AdminStorySelectableMedia[]
+): string {
+  if (media.altText) return media.altText;
+  const sameType = allMedia.filter((m) => m.mediaType === media.mediaType);
+  const position = sameType.findIndex((m) => m.productMediaId === media.productMediaId) + 1;
+  return `${media.mediaType === "VIDEO" ? "Video" : "Imagen"} ${position}`;
+}
+
+interface MediaOptionProps {
+  media: AdminStorySelectableMedia;
+  displayName: string;
+  isSelected: boolean;
+  onChoose: () => void;
+}
+
+function MediaOption({ media, displayName, isSelected, onChoose }: MediaOptionProps) {
+  const { videoRef, previewHandlers } = useVideoHoverPreview();
+  const isVideo = media.mediaType === "VIDEO";
+
+  return (
+    <div
+      role="option"
+      aria-selected={isSelected}
+      tabIndex={0}
+      className={`${styles.mediaOption} ${isSelected ? styles.mediaOptionSelected : ""}`}
+      onClick={onChoose}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onChoose();
+        }
+      }}
+      {...(isVideo ? previewHandlers : {})}
+      data-testid={`media-option-${media.productMediaId}`}
+    >
+      {isVideo ? (
+        <VideoThumb
+          src={media.publicUrl}
+          label={`Vista previa: ${displayName}`}
+          videoRef={videoRef}
+          fill
+        />
+      ) : (
+        <div className={styles.mediaThumbnailWrapper}>
+          <Image
+            src={media.publicUrl}
+            alt={media.altText ?? "Miniatura multimedia"}
+            width={120}
+            height={90}
+            className={styles.mediaThumbnail}
+            unoptimized
+          />
+        </div>
+      )}
+      <div className={styles.mediaDetails}>
+        {media.placement === "STORY" && <span className={styles.storyBadge}>Solo historia</span>}
+        {media.variantTitle && (
+          <span className={styles.variantBadge}>Variante: {media.variantTitle}</span>
+        )}
+        {(isVideo || Boolean(media.altText)) && (
+          <span className={styles.mediaAltText}>{displayName}</span>
+        )}
+        <span className={styles.mediaMeta}>
+          {media.width && media.height ? `${media.width}×${media.height} · ` : ""}
+          {media.mimeType}
+        </span>
+        <span
+          className={`${styles.selectionStateText} ${isSelected ? styles.selectionStateActive : ""}`}
+        >
+          {isSelected ? (
+            <>
+              <Check size={14} aria-hidden="true" /> Seleccionado
+            </>
+          ) : (
+            "Click para seleccionar"
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 interface MediaPickerDialogProps {
   isOpen: boolean;
   productId: string;
@@ -41,6 +129,11 @@ interface MediaPickerDialogProps {
   triggerRef: React.RefObject<HTMLElement | null>;
   onSelect: (mediaId: string | undefined) => void;
   onClose: () => void;
+  /**
+   * Desvincula del producto un video subido solo para la historia. Si se omite, el selector no
+   * ofrece la acción «Eliminar del producto».
+   */
+  onDeleteFromProduct?: (media: AdminStorySelectableMedia) => Promise<DeleteStoryMediaResult>;
 }
 
 export function MediaPickerDialog({
@@ -55,8 +148,42 @@ export function MediaPickerDialog({
   triggerRef,
   onSelect,
   onClose,
+  onDeleteFromProduct,
 }: MediaPickerDialogProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+  const confirmingDeleteIdRef = useRef<string | null>(null);
+  const deleteTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
+  const cancelDeleteRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    confirmingDeleteIdRef.current = confirmingDeleteId;
+    if (confirmingDeleteId) cancelDeleteRef.current?.focus();
+  }, [confirmingDeleteId]);
+
+  const cancelDelete = () => {
+    const id = confirmingDeleteIdRef.current;
+    setConfirmingDeleteId(null);
+    if (id) window.setTimeout(() => deleteTriggerRefs.current.get(id)?.focus(), 0);
+  };
+
+  const confirmDelete = async (media: AdminStorySelectableMedia) => {
+    if (!onDeleteFromProduct) return;
+    setDeletingId(media.productMediaId);
+    setDeleteMessage(null);
+    const result = await onDeleteFromProduct(media);
+    setDeletingId(null);
+    setConfirmingDeleteId(null);
+    if (!result.ok) {
+      setDeleteMessage(result.error);
+      window.setTimeout(() => deleteTriggerRefs.current.get(media.productMediaId)?.focus(), 0);
+      return;
+    }
+    setDeleteMessage("Video eliminado del producto.");
+    dialogRef.current?.focus();
+  };
   const [filterQuery, setFilterQuery] = useState("");
   const [uploadStage, setUploadStage] = useState<StoryImageUploadStage | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -87,6 +214,11 @@ export function MediaPickerDialog({
     return alt.includes(query) || variant.includes(query);
   });
 
+  const storyVideos =
+    mediaType === "VIDEO"
+      ? selectableMedia.filter((m) => m.mediaType === "VIDEO" && m.placement === "STORY")
+      : [];
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -106,6 +238,13 @@ export function MediaPickerDialog({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
+        // Con una confirmación abierta, Escape solo la cancela.
+        const confirmingId = confirmingDeleteIdRef.current;
+        if (confirmingId) {
+          setConfirmingDeleteId(null);
+          window.setTimeout(() => deleteTriggerRefs.current.get(confirmingId)?.focus(), 0);
+          return;
+        }
         onClose();
         window.setTimeout(() => triggerRef.current?.focus(), 10);
         return;
@@ -267,78 +406,105 @@ export function MediaPickerDialog({
                 : "No se encontraron archivos multimedia que coincidan con la búsqueda."}
             </p>
           ) : (
-            filteredMedia.map((media) => {
-              const isSelected = media.productMediaId === selectedMediaId;
-              return (
-                <div
-                  key={media.productMediaId}
-                  role="option"
-                  aria-selected={isSelected}
-                  tabIndex={0}
-                  className={`${styles.mediaOption} ${isSelected ? styles.mediaOptionSelected : ""}`}
-                  onClick={() => {
-                    onSelect(media.productMediaId);
-                    onClose();
-                    window.setTimeout(() => triggerRef.current?.focus(), 10);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelect(media.productMediaId);
-                      onClose();
-                      window.setTimeout(() => triggerRef.current?.focus(), 10);
-                    }
-                  }}
-                  data-testid={`media-option-${media.productMediaId}`}
-                >
-                  <div className={styles.mediaThumbnailWrapper}>
-                    {media.mediaType === "IMAGE" ? (
-                      <Image
-                        src={media.publicUrl}
-                        alt={media.altText ?? "Miniatura multimedia"}
-                        width={120}
-                        height={90}
-                        className={styles.mediaThumbnail}
-                        unoptimized
-                      />
-                    ) : (
-                      <div className={styles.videoPlaceholder}>
-                        <Video size={32} aria-hidden="true" />
-                        <span>MP4</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className={styles.mediaDetails}>
-                    {media.placement === "STORY" && (
-                      <span className={styles.storyBadge}>Solo historia</span>
-                    )}
-                    {media.variantTitle && (
-                      <span className={styles.variantBadge}>Variante: {media.variantTitle}</span>
-                    )}
-                    {media.altText && <span className={styles.mediaAltText}>{media.altText}</span>}
-                    <span className={styles.mediaMeta}>
-                      {media.width && media.height ? `${media.width}×${media.height} · ` : ""}
-                      {media.mimeType}
-                    </span>
-                    <span
-                      className={`${styles.selectionStateText} ${
-                        isSelected ? styles.selectionStateActive : ""
-                      }`}
-                    >
-                      {isSelected ? (
-                        <>
-                          <Check size={14} aria-hidden="true" /> Seleccionado
-                        </>
-                      ) : (
-                        "Click para seleccionar"
-                      )}
-                    </span>
-                  </div>
-                </div>
-              );
-            })
+            filteredMedia.map((media) => (
+              <MediaOption
+                key={media.productMediaId}
+                media={media}
+                displayName={getMediaDisplayName(media, selectableMedia)}
+                isSelected={media.productMediaId === selectedMediaId}
+                onChoose={() => {
+                  onSelect(media.productMediaId);
+                  onClose();
+                  window.setTimeout(() => triggerRef.current?.focus(), 10);
+                }}
+              />
+            ))
           )}
         </div>
+
+        {onDeleteFromProduct && storyVideos.length > 0 && (
+          <section
+            className={styles.storyMediaManager}
+            aria-labelledby="story-media-manager-title"
+            data-testid="story-media-manager"
+          >
+            <h3 id="story-media-manager-title">Videos subidos para la historia</h3>
+            <p className={styles.storyUploadHint}>
+              «Eliminar del producto» lo quita del producto y de los bloques que lo usan, que
+              quedarán pendientes hasta que elijas otro video.
+            </p>
+            <ul className={styles.storyMediaManagerList}>
+              {storyVideos.map((media) => {
+                const name = getMediaDisplayName(media, selectableMedia);
+                const isConfirming = confirmingDeleteId === media.productMediaId;
+                const isDeleting = deletingId === media.productMediaId;
+                const questionId = `delete-story-media-${media.productMediaId}`;
+                return (
+                  <li key={media.productMediaId} className={styles.storyMediaManagerRow}>
+                    <span className={styles.storyMediaManagerName}>
+                      <Video size={16} aria-hidden="true" />
+                      {name}
+                    </span>
+                    {isConfirming ? (
+                      <div
+                        role="group"
+                        aria-labelledby={questionId}
+                        className={styles.storyMediaConfirm}
+                      >
+                        <p id={questionId}>¿Eliminar «{name}» del producto?</p>
+                        <button
+                          ref={cancelDeleteRef}
+                          type="button"
+                          className={styles.secondaryButton}
+                          onClick={cancelDelete}
+                          disabled={isDeleting}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.dangerSolidButton}
+                          onClick={() => void confirmDelete(media)}
+                          disabled={isDeleting}
+                          data-testid={`confirm-delete-media-${media.productMediaId}`}
+                        >
+                          {isDeleting ? (
+                            <LoaderCircle size={16} className={styles.spinner} aria-hidden="true" />
+                          ) : (
+                            <Trash2 size={16} aria-hidden="true" />
+                          )}
+                          {isDeleting ? "Eliminando…" : "Sí, eliminar"}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        ref={(node) => {
+                          if (node) deleteTriggerRefs.current.set(media.productMediaId, node);
+                          else deleteTriggerRefs.current.delete(media.productMediaId);
+                        }}
+                        type="button"
+                        className={styles.dangerButton}
+                        onClick={() => {
+                          setDeleteMessage(null);
+                          setConfirmingDeleteId(media.productMediaId);
+                        }}
+                        disabled={deletingId !== null}
+                        aria-label={`Eliminar del producto: ${name}`}
+                        data-testid={`delete-media-${media.productMediaId}`}
+                      >
+                        <Trash2 size={16} aria-hidden="true" />
+                        Eliminar del producto
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+        <p className={styles.storyMediaManagerStatus} role="status">
+          {deleteMessage}
+        </p>
       </div>
     </div>
   );

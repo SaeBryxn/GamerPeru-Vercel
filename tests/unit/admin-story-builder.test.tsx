@@ -27,10 +27,15 @@ const mocks = vi.hoisted(() => ({
   discardDraft: vi.fn(),
   publishStory: vi.fn(),
   unpublishStory: vi.fn(),
+  detachMedia: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
+}));
+
+vi.mock("@/lib/admin/catalog/actions", () => ({
+  detachProductMediaAction: (...args: unknown[]) => mocks.detachMedia(...args),
 }));
 
 vi.mock("@/lib/admin/catalog/story-actions", () => ({
@@ -245,6 +250,7 @@ beforeEach(() => {
   mocks.discardDraft.mockReset();
   mocks.publishStory.mockReset();
   mocks.unpublishStory.mockReset();
+  mocks.detachMedia.mockReset();
   mocks.saveDraft.mockResolvedValue(successfulSave());
   mocks.discardDraft.mockResolvedValue({
     success: true,
@@ -803,6 +809,128 @@ describe("GP-026 CHK2 Story Builder component", () => {
     expect(screen.getAllByTestId(/^story-block-(?!list$)/)[0]!.getAttribute("data-block-id")).toBe(
       FIRST_BLOCK_ID
     );
+  });
+});
+
+describe("Historia — densidad y videos del producto", () => {
+  const VIDEO_BLOCK_ID = "018f0026-0000-7000-8000-000000000103";
+  const STORY_VIDEO_ID = "018f0026-1000-7000-8000-000000000003";
+  const storyVideo = {
+    productMediaId: STORY_VIDEO_ID,
+    mediaAssetId: "018f0026-9000-7000-8000-000000000003",
+    variantId: null,
+    variantTitle: null,
+    displayOrder: 0,
+    placement: "STORY" as const,
+    mediaType: "VIDEO" as const,
+    mimeType: "video/mp4",
+    publicUrl: "https://example.com/story-clip.mp4",
+    width: 1920,
+    height: 1080,
+    altText: "Clip de la historia",
+  };
+
+  function storyWithVideo(): AdminProductStoryDto {
+    return {
+      ...makeStory("DRAFT_ONLY", [
+        ...validDocument,
+        { blockId: VIDEO_BLOCK_ID, type: "video", payload: { videoMediaId: STORY_VIDEO_ID } },
+      ]),
+      selectableMedia: [storyVideo],
+    };
+  }
+
+  it("despliega solo el primer bloque y los incompletos al abrir", () => {
+    render(
+      <StoryBuilder
+        initialStory={makeStory("DRAFT_ONLY", [
+          ...validDocument,
+          { blockId: VIDEO_BLOCK_ID, type: "video", payload: {} } as AuthoringStoryDocument[number],
+        ])}
+      />
+    );
+    const expanded = (position: number) =>
+      screen
+        .getByRole("button", { name: new RegExp(`(Colapsar|Expandir) bloque ${position}$`) })
+        .getAttribute("aria-expanded");
+    expect(expanded(1)).toBe("true");
+    expect(expanded(2)).toBe("false");
+    expect(expanded(3)).toBe("true");
+  });
+
+  it("elimina un video de historia del producto y deja pendiente el bloque que lo usaba", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    mocks.detachMedia.mockResolvedValue({
+      success: true,
+      data: { success: true, replayed: false },
+    });
+    render(<StoryBuilder initialStory={storyWithVideo()} />);
+
+    await user.click(screen.getByRole("button", { name: "Expandir bloque 3" }));
+    const videoCard = screen.getByTestId(`story-block-${VIDEO_BLOCK_ID}`);
+    expect(within(videoCard).getByText("Bloque completo")).toBeTruthy();
+    expect(within(videoCard).getByTestId("video-thumb")).toBeTruthy();
+
+    await user.click(
+      within(videoCard).getByRole("button", { name: /Cambiar video mp4 del producto/i })
+    );
+    const dialog = screen.getByRole("dialog", { name: "Seleccionar video del producto" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Eliminar del producto: Clip de la historia" })
+    );
+    await user.click(within(dialog).getByRole("button", { name: /Sí, eliminar/ }));
+
+    await waitFor(() => expect(mocks.detachMedia).toHaveBeenCalledTimes(1));
+    expect(mocks.detachMedia.mock.calls[0]?.[0]).toEqual({
+      productId: PRODUCT_ID,
+      productMediaId: STORY_VIDEO_ID,
+      mutationRequestId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+    });
+    await waitFor(() => expect(within(dialog).queryAllByRole("option")).toHaveLength(0));
+    expect(within(videoCard).getByText("Configuración pendiente")).toBeTruthy();
+    expect(within(videoCard).queryByTestId("video-thumb")).toBeNull();
+    expect(screen.getByTestId("story-dirty-state").textContent).toBe("Cambios sin guardar");
+    vi.restoreAllMocks();
+  });
+
+  it("conserva el video y reutiliza el mutationRequestId si la eliminación pierde la conexión", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    mocks.detachMedia.mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce({
+      success: false,
+      error: "No puedes quitar la imagen principal.",
+      code: "PRIMARY_MEDIA_CANNOT_BE_DETACHED",
+    });
+    render(<StoryBuilder initialStory={storyWithVideo()} />);
+
+    await user.click(screen.getByRole("button", { name: "Expandir bloque 3" }));
+    await user.click(screen.getByRole("button", { name: /Cambiar video mp4 del producto/i }));
+    const dialog = screen.getByRole("dialog", { name: "Seleccionar video del producto" });
+
+    const deleteOnce = async () => {
+      await user.click(
+        within(dialog).getByRole("button", { name: "Eliminar del producto: Clip de la historia" })
+      );
+      await user.click(within(dialog).getByRole("button", { name: /Sí, eliminar/ }));
+    };
+
+    await deleteOnce();
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status").textContent).toMatch(/Se perdió la conexión/)
+    );
+    await deleteOnce();
+    await waitFor(() =>
+      expect(within(dialog).getByRole("status").textContent).toBe(
+        "No puedes quitar la imagen principal."
+      )
+    );
+
+    const [first, second] = mocks.detachMedia.mock.calls.map((call) => call[0]);
+    expect(second.mutationRequestId).toBe(first.mutationRequestId);
+    expect(within(dialog).getAllByRole("option")).toHaveLength(1);
+    expect(screen.getByTestId("story-dirty-state").textContent).not.toBe("Cambios sin guardar");
+    vi.restoreAllMocks();
   });
 });
 

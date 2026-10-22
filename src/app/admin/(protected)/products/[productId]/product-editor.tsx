@@ -2119,28 +2119,21 @@ export function ProductEditor({
               </div>
 
               {currentSpecSchema && currentSpecSchema.fieldDefinitions ? (
-                <form
-                  onSubmit={handleSaveSpecs}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1.25rem",
-                    marginTop: "1rem",
-                  }}
-                >
-                  <div className={styles.grid2}>
+                <form onSubmit={handleSaveSpecs} className={styles.specForm}>
+                  <div className={styles.specGrid}>
                     {currentSpecSchema.fieldDefinitions.map((field) => {
                       const val = specValues[field.key];
 
                       return (
                         <div key={field.key} className={styles.field}>
-                          <label htmlFor={`spec-${field.key}`} className={styles.label}>
-                            {field.label}
-                            {field.unit && (
-                              <span style={{ color: "#a1a1aa", fontWeight: 400, marginLeft: 4 }}>
-                                ({field.unit})
-                              </span>
-                            )}
+                          <label
+                            htmlFor={`spec-${field.key}`}
+                            className={`${styles.label} ${styles.specLabel}`}
+                          >
+                            <span className={styles.specLabelText} title={field.label}>
+                              {field.label}
+                            </span>
+                            {field.unit && <span className={styles.specUnit}>({field.unit})</span>}
                           </label>
 
                           {/* STRING / TEXT Field */}
@@ -2220,7 +2213,7 @@ export function ProductEditor({
                     })}
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <div className={styles.specFooter}>
                     <button
                       type="submit"
                       disabled={isSavingSpecs}

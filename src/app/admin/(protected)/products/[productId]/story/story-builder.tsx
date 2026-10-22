@@ -49,10 +49,12 @@ import {
   type StoryLifecycle,
   type StoryLifecycleSummary,
 } from "@/lib/admin/catalog/story-builder-model";
+import { detachProductMediaAction } from "@/lib/admin/catalog/actions";
 import { MutationRequestTracker } from "@/lib/admin/catalog/mutation-request";
 import type {
   AdminProductStoryDto,
   AdminStoryRelatedProductOption,
+  AdminStorySelectableMedia,
 } from "@/lib/admin/catalog/story-reader";
 import type {
   AuthoringStoryDocument,
@@ -65,9 +67,14 @@ import {
   STORY_FLOW_STEPS,
 } from "./block-library-guide";
 import { BlockWireframe } from "./block-wireframe";
-import { MediaPickerDialog } from "./media-picker-dialog";
+import { MediaPickerDialog, type DeleteStoryMediaResult } from "./media-picker-dialog";
 import { RelatedProductPickerDialog } from "./related-product-picker-dialog";
 import { ValidationSummary } from "./validation-summary";
+import {
+  clearStoryMediaReferences,
+  collectIncompleteBlockIds,
+  getDefaultExpandedBlockIds,
+} from "./story-builder-state";
 import { HeroMediaEditor } from "./block-editors/hero-media-editor";
 import { FullBleedImageEditor } from "./block-editors/full-bleed-image-editor";
 import { ImageTextEditor } from "./block-editors/image-text-editor";
@@ -239,9 +246,9 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
     Map<string, AdminStoryRelatedProductOption>
   >(() => new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p])));
 
-  // Block expansion state (all blocks expanded initially)
-  const [expandedBlockIds, setExpandedBlockIds] = useState<Set<string>>(
-    () => new Set(initialStory.initialDocument.map((b) => b.blockId))
+  // Solo el primer bloque y los incompletos empiezan desplegados.
+  const [expandedBlockIds, setExpandedBlockIds] = useState<Set<string>>(() =>
+    getDefaultExpandedBlockIds(document)
   );
 
   // Validation issues state
@@ -282,6 +289,8 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
   const confirmationDialogRef = useRef<HTMLDivElement | null>(null);
   const confirmationTriggerRef = useRef<HTMLElement | null>(null);
   const preservedUnpublishDocumentRef = useRef<EditorStoryBlock[] | null>(null);
+  // Reutiliza el mutationRequestId si la eliminación falló sin respuesta (reintento idempotente).
+  const detachRequestIds = useRef(new Map<string, string>());
   const allowAuthoritativeReloadRef = useRef(false);
   const lastProductIdRef = useRef(initialStory.product.id);
 
@@ -290,19 +299,13 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
     [document, savedBaseline]
   );
   const normResult = useMemo(() => normalizeEditorStoryDocument(document), [document]);
-  const incompleteBlockIds = useMemo(() => {
-    if (normResult.success) return new Set<string>();
-    const ids = new Set<string>();
-    for (const issue of normResult.issues) {
-      const match = issue.path.match(/^blocks\[(\d+)\]/);
-      if (match) {
-        const idx = parseInt(match[1]!, 10);
-        const b = document[idx];
-        if (b) ids.add(b.blockId);
-      }
-    }
-    return ids;
-  }, [document, normResult]);
+  const incompleteBlockIds = useMemo(
+    () =>
+      normResult.success
+        ? new Set<string>()
+        : collectIncompleteBlockIds(document, normResult.issues),
+    [document, normResult]
+  );
   const incompleteCount = incompleteBlockIds.size;
 
   const isAnyMutationPending = isSaving || isDiscarding || isPublishing || isUnpublishing;
@@ -377,7 +380,9 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
       setKnownProductOptions(
         new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p]))
       );
-      setExpandedBlockIds(new Set(initialStory.initialDocument.map((b) => b.blockId)));
+      setExpandedBlockIds(
+        getDefaultExpandedBlockIds(createEditorDocument(initialStory.initialDocument))
+      );
       setStaleConflict(false);
       saveTracker.current.complete();
       discardTracker.current.complete();
@@ -404,7 +409,9 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
       setKnownProductOptions(
         new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p]))
       );
-      setExpandedBlockIds(new Set(initialStory.initialDocument.map((b) => b.blockId)));
+      setExpandedBlockIds(
+        getDefaultExpandedBlockIds(createEditorDocument(initialStory.initialDocument))
+      );
       setStaleConflict(false);
       saveTracker.current.complete();
       discardTracker.current.complete();
@@ -444,12 +451,51 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
       setKnownProductOptions(
         new Map((initialStory.initialRelatedProducts ?? []).map((p) => [p.productId, p]))
       );
-      setExpandedBlockIds(new Set(initialStory.initialDocument.map((b) => b.blockId)));
+      setExpandedBlockIds(
+        getDefaultExpandedBlockIds(createEditorDocument(initialStory.initialDocument))
+      );
     } else {
       // Local document has dirty unsaved edits; update only background durableStory metadata
       setDurableStory(durableViewFromStory(initialStory));
     }
   }, [initialStory]);
+
+  const deleteStoryMediaFromProduct = useCallback(
+    async (media: AdminStorySelectableMedia): Promise<DeleteStoryMediaResult> => {
+      const productMediaId = media.productMediaId;
+      const mutationRequestId = detachRequestIds.current.get(productMediaId) ?? crypto.randomUUID();
+      detachRequestIds.current.set(productMediaId, mutationRequestId);
+
+      let result: Awaited<ReturnType<typeof detachProductMediaAction>>;
+      try {
+        result = await detachProductMediaAction({
+          productId: initialStory.product.id,
+          productMediaId,
+          mutationRequestId,
+        });
+      } catch {
+        return {
+          ok: false,
+          error: "Se perdió la conexión al eliminar el video. Inténtalo de nuevo.",
+        };
+      }
+
+      detachRequestIds.current.delete(productMediaId);
+      if (!result.success) {
+        return { ok: false, error: result.error ?? "No se pudo eliminar el video del producto." };
+      }
+
+      setSelectableMedia((current) => current.filter((m) => m.productMediaId !== productMediaId));
+      setDocument((current) => clearStoryMediaReferences(current, productMediaId));
+      setMediaPickerState((current) =>
+        current?.selectedMediaId === productMediaId
+          ? { ...current, selectedMediaId: undefined }
+          : current
+      );
+      return { ok: true };
+    },
+    [initialStory.product.id]
+  );
 
   useEffect(() => {
     if (!dirty) return;
@@ -1686,7 +1732,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
                           aria-label={`Mover ${definition.label} hacia arriba`}
                         >
                           <ArrowUp size={16} aria-hidden="true" />
-                          Subir
+                          <span className={styles.blockActionLabel}>Subir</span>
                         </button>
                         <button
                           type="button"
@@ -1696,7 +1742,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
                           aria-label={`Mover ${definition.label} hacia abajo`}
                         >
                           <ArrowDown size={16} aria-hidden="true" />
-                          Bajar
+                          <span className={styles.blockActionLabel}>Bajar</span>
                         </button>
                         <button
                           type="button"
@@ -1706,7 +1752,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
                           aria-label={`Duplicar ${definition.label}`}
                         >
                           <Copy size={16} aria-hidden="true" />
-                          Duplicar
+                          <span className={styles.blockActionLabel}>Duplicar</span>
                         </button>
                         <button
                           type="button"
@@ -1726,7 +1772,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
                           aria-label={`Eliminar ${definition.label}`}
                         >
                           <Trash2 size={16} aria-hidden="true" />
-                          Eliminar
+                          <span className={styles.blockActionLabel}>Eliminar</span>
                         </button>
                       </div>
 
@@ -1819,6 +1865,7 @@ export function StoryBuilder({ initialStory, canPublish = false }: StoryBuilderP
           triggerRef={mediaPickerState.triggerRef}
           onSelect={mediaPickerState.onSelect}
           onClose={() => setMediaPickerState(null)}
+          onDeleteFromProduct={deleteStoryMediaFromProduct}
         />
       )}
 

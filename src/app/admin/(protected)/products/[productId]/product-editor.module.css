@@ -375,6 +375,52 @@
   }
 }
 
+/* Ficha técnica: columnas que se ajustan al ancho y Guardar fijo al pie de la tarjeta. */
+.specForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.specGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.875rem 1rem;
+}
+
+.specLabel {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.specLabelText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.specUnit {
+  flex: 0 0 auto;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.specFooter {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 calc(-1 * var(--admin-card-padding, 28px)) calc(-1 * var(--admin-card-padding, 28px));
+  padding: 0.75rem var(--admin-card-padding, 28px);
+  border-top: 1px solid var(--admin-panel-border);
+  border-radius: 0 0 var(--admin-card-radius, 18px) var(--admin-card-radius, 18px);
+  background-color: var(--admin-panel);
+}
+
 .field {
   display: flex;
   flex-direction: column;

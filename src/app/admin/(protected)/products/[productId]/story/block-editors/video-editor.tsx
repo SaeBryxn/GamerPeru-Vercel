@@ -58,7 +58,7 @@ export function VideoEditor({
         mediaType="VIDEO"
         selectedMediaId={payload.videoMediaId}
         selectableMedia={selectableMedia}
-        helpText="Sube un video MP4 o elige uno que ya hayas subido."
+        helpText="Sube un video MP4 o elige uno que ya hayas subido. Si quitas el video, el bloque queda pendiente; para publicar sin video, elimina el bloque."
         error={getIssue("videoMediaId")}
         onOpenPicker={(triggerRef) =>
           onOpenMediaPicker({

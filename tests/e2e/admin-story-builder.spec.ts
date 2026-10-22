@@ -135,6 +135,14 @@ function getStoryCards(page: Page) {
   return page.locator('[data-testid^="story-block-"][data-block-id]');
 }
 
+// Al cargar, solo el primer bloque y los incompletos se despliegan; expande el resto.
+async function expandAllStoryBlocks(page: Page) {
+  const collapsed = page.getByRole("button", { name: /^Expandir bloque \d+/ });
+  while ((await collapsed.count()) > 0) {
+    await collapsed.first().click();
+  }
+}
+
 test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
   test.describe.configure({ mode: "serial" });
 
@@ -425,6 +433,7 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
 
     const reloadedCards = page.locator('[data-testid^="story-block-"][data-block-id]');
     await expect(reloadedCards).toHaveCount(4);
+    await expandAllStoryBlocks(page);
     await expect(reloadedCards.nth(0).getByLabel(/Encabezado/i)).toHaveValue(
       "Mouse Gamer Flagship"
     );
@@ -556,6 +565,7 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
 
     const reloadedCards = page.locator('[data-testid^="story-block-"][data-block-id]');
     await expect(reloadedCards).toHaveCount(4);
+    await expandAllStoryBlocks(page);
     await expect(reloadedCards.nth(0).getByLabel("Valor *").first()).toHaveValue("8000Hz");
     await expect(
       reloadedCards
@@ -717,6 +727,7 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
 
     const reloadedCards = page.locator('[data-testid^="story-block-"][data-block-id]');
     await expect(reloadedCards).toHaveCount(5);
+    await expandAllStoryBlocks(page);
     await expect(reloadedCards.nth(0).getByPlaceholder("Encabezado 3")).toHaveValue("Ultra");
     await expect(reloadedCards.nth(1).getByLabel(/Largo \(mm\)/i)).toHaveValue("121.5");
     await expect(

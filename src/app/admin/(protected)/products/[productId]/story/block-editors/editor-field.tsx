@@ -2,7 +2,7 @@
 
 import React, { useRef } from "react";
 import Image from "next/image";
-import { Image as ImageIcon, Video as VideoIcon, X } from "lucide-react";
+import { Image as ImageIcon, Play, Trash2, Video as VideoIcon } from "lucide-react";
 import type { AdminStorySelectableMedia } from "@/lib/admin/catalog/story-reader";
 import styles from "../story-builder.module.css";
 
@@ -56,6 +56,79 @@ export function EditorField({
   );
 }
 
+/**
+ * Reproduce en silencio la vista previa de un video mientras el puntero o el foco están sobre su
+ * contenedor, y la pausa al salir. Los manejadores se aplican al contenedor (la tarjeta o la
+ * opción del selector) para que enfocar sus botones también muestre el video.
+ */
+export function useVideoHoverPreview() {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const play = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      // El navegador puede rechazar play() (ahorro de datos, pestaña en segundo plano): se ignora.
+      void Promise.resolve(video.play()).catch(() => undefined);
+    } catch {
+      // Entornos sin soporte de medios.
+    }
+  };
+
+  const pause = () => {
+    const video = videoRef.current;
+    if (video && !video.paused) video.pause();
+  };
+
+  const previewHandlers = {
+    onMouseEnter: play,
+    onMouseLeave: pause,
+    onFocus: play,
+    onBlur: (event: React.FocusEvent<HTMLElement>) => {
+      if (
+        event.relatedTarget instanceof Node &&
+        event.currentTarget.contains(event.relatedTarget)
+      ) {
+        return;
+      }
+      pause();
+    },
+  };
+
+  return { videoRef, previewHandlers };
+}
+
+interface VideoThumbProps {
+  src: string;
+  label: string;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  /** Ocupa todo el ancho disponible (selector) en vez del tamaño fijo de 128×72. */
+  fill?: boolean;
+}
+
+export function VideoThumb({ src, label, videoRef, fill = false }: VideoThumbProps) {
+  return (
+    <div className={`${styles.videoThumb} ${fill ? styles.videoThumbFill : ""}`}>
+      {/* #t=0.1 obliga a pintar el primer cuadro con preload="metadata" en Safari y Chrome. */}
+      <video
+        ref={videoRef}
+        src={`${src}#t=0.1`}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-label={label}
+        className={styles.videoThumbMedia}
+        data-testid="video-thumb"
+      />
+      <span className={styles.videoThumbBadge} aria-hidden="true">
+        <Play size={10} />
+        MP4
+      </span>
+    </div>
+  );
+}
+
 interface MediaFieldProps {
   fieldId: string;
   label: string;
@@ -82,6 +155,7 @@ export function MediaField({
   onClear,
 }: MediaFieldProps) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const { videoRef, previewHandlers } = useVideoHoverPreview();
   const helpId = helpText ? `${fieldId}-help` : undefined;
   const errorId = error ? `${fieldId}-error` : undefined;
   const describedBy = [helpId, errorId].filter(Boolean).join(" ") || undefined;
@@ -89,6 +163,7 @@ export function MediaField({
   const selectedMedia = selectedMediaId
     ? selectableMedia.find((m) => m.productMediaId === selectedMediaId)
     : null;
+  const isVideo = selectedMedia?.mediaType === "VIDEO";
 
   return (
     <div className={styles.formGroup}>
@@ -110,22 +185,43 @@ export function MediaField({
         tabIndex={-1}
       >
         {selectedMedia ? (
-          <div className={styles.selectedMediaCard} data-testid={`selected-media-${fieldId}`}>
-            <div className={styles.selectedMediaThumbnail}>
-              {selectedMedia.mediaType === "IMAGE" ? (
-                <Image
+          <div
+            className={styles.selectedMediaCard}
+            data-testid={`selected-media-${fieldId}`}
+            {...(isVideo ? previewHandlers : {})}
+          >
+            <div className={styles.selectedMediaPreview}>
+              {isVideo ? (
+                <VideoThumb
                   src={selectedMedia.publicUrl}
-                  alt={selectedMedia.altText ?? "Imagen seleccionada"}
-                  width={80}
-                  height={60}
-                  className={styles.mediaThumbnail}
-                  unoptimized
+                  label={`Vista previa: ${selectedMedia.altText ?? label}`}
+                  videoRef={videoRef}
                 />
               ) : (
-                <div className={styles.videoPlaceholderSmall}>
-                  <VideoIcon size={20} aria-hidden="true" />
-                  <span>MP4</span>
+                <div className={styles.selectedMediaThumbnail}>
+                  <Image
+                    src={selectedMedia.publicUrl}
+                    alt={selectedMedia.altText ?? "Imagen seleccionada"}
+                    width={80}
+                    height={60}
+                    className={styles.mediaThumbnail}
+                    unoptimized
+                  />
                 </div>
+              )}
+              {onClear && (
+                <button
+                  type="button"
+                  className={styles.mediaClearButton}
+                  onClick={onClear}
+                  aria-label={isVideo ? "Quitar video" : `Quitar ${label.toLowerCase()}`}
+                  title={isVideo ? "Quitar video" : "Quitar imagen"}
+                  data-testid={`clear-media-${fieldId}`}
+                >
+                  <span className={styles.mediaClearIcon}>
+                    <Trash2 size={14} aria-hidden="true" />
+                  </span>
+                </button>
               )}
             </div>
             <div className={styles.selectedMediaInfo}>
@@ -153,17 +249,6 @@ export function MediaField({
               >
                 Cambiar
               </button>
-              {onClear && (
-                <button
-                  type="button"
-                  className={styles.iconButton}
-                  onClick={onClear}
-                  aria-label={`Quitar ${label.toLowerCase()}`}
-                  data-testid={`clear-media-${fieldId}`}
-                >
-                  <X size={16} aria-hidden="true" />
-                </button>
-              )}
             </div>
           </div>
         ) : (
