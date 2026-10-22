@@ -29,9 +29,13 @@
   box-shadow: var(--admin-card-shadow);
 }
 
+/* One-line toolbar: search on the left, compact selects and dates beside it. */
 .filterPanel {
-  padding-bottom: var(--space-6);
-  border-bottom: 1px solid var(--color-border-subtle);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-card-radius);
+  background: var(--color-surface-card);
+  box-shadow: var(--admin-card-shadow);
 }
 
 .sectionHeading {
@@ -55,31 +59,42 @@
 }
 
 .filterForm {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .field {
   display: flex;
+  flex: 0 1 168px;
   flex-direction: column;
   min-width: 0;
-  gap: 0.375rem;
+}
+
+.searchField {
+  flex: 1 1 260px;
+}
+
+.dateField {
+  flex: 0 1 148px;
 }
 
 .field label {
-  color: var(--color-text-muted);
-  font-size: 12px;
-  font-weight: 600;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .field input,
 .field select {
   width: 100%;
   min-width: 0;
-  min-height: 40px;
-  padding: 0.5rem 0.75rem;
+  min-height: 36px;
+  padding: 0.375rem 0.625rem;
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md);
   background: var(--color-surface-card);
@@ -139,8 +154,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 40px;
-  padding: 0.55rem 1rem;
+  min-height: 36px;
+  padding: 0.4rem 0.875rem;
   border-radius: var(--radius-md);
   font-family: var(--font-body);
   font-size: 0.8125rem;
@@ -238,7 +253,7 @@
 }
 
 .table th {
-  padding: 0.85rem 0.75rem;
+  padding: 0.625rem 0.75rem;
   border-bottom: 1px solid var(--color-border-subtle);
   color: var(--color-text-muted);
   font-size: 12px;
@@ -247,9 +262,9 @@
 }
 
 .table td {
-  padding: 0.85rem 0.75rem;
+  padding: 0.625rem 0.75rem;
   border-bottom: 1px solid var(--color-border-subtle);
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .table tr:last-child td {
@@ -314,43 +329,6 @@
   margin-top: 0.25rem;
   color: var(--color-text-secondary);
   font-size: 0.6875rem;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  min-height: 1.65rem;
-  padding: 0.2rem 0;
-  border: none;
-  background: none;
-  color: var(--color-text-secondary);
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.25;
-  text-wrap: balance;
-}
-
-.badge::before {
-  content: "";
-  flex-shrink: 0;
-  width: var(--admin-dot-size);
-  height: var(--admin-dot-size);
-  border-radius: 9999px;
-  background-color: var(--color-text-disabled);
-}
-.badge[data-tone="success"]::before {
-  background-color: var(--color-status-success-text);
-}
-.badge[data-tone="warning"]::before {
-  background-color: var(--color-status-warning-text);
-}
-.badge[data-tone="danger"]::before {
-  background-color: var(--admin-danger);
-}
-.badge[data-tone="info"]::before {
-  background-color: var(--admin-accent);
 }
 
 .money,
@@ -467,6 +445,282 @@
   font-size: 0.8125rem;
 }
 
+.clickableRow {
+  cursor: pointer;
+}
+
+.orderCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.orderCellText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Overlapping product photos; a ring in the card color separates each from the one behind. */
+.thumbStack {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.thumb {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: var(--color-surface-secondary);
+  box-shadow: 0 0 0 2px var(--color-surface-card);
+  color: var(--color-text-muted);
+}
+
+.thumbStack .thumb + .thumb {
+  margin-left: -12px;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbMore {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.quickViewButton,
+.proofButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: var(--color-surface-card);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quickViewButton {
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+}
+
+.proofButton {
+  min-height: 28px;
+  padding: 0 8px;
+  border-color: var(--color-status-info-border);
+  background: var(--color-status-info-background);
+  color: var(--color-status-info-text);
+}
+
+.quickViewButton:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text-primary);
+}
+
+.quickViewButton:focus-visible,
+.proofButton:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.customerName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.emailSent {
+  display: inline-flex;
+  color: var(--color-status-success-text);
+}
+
+.emailPending {
+  display: inline-flex;
+  color: var(--color-text-disabled);
+}
+
+.methodCell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.proofBody {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: var(--space-5);
+  background: var(--color-surface-secondary);
+}
+
+.proofImage {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: var(--admin-card-shadow);
+}
+
+.quickBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-5);
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+
+.quickLoading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+.quickBadges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.quickDate {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.quickSection h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.quickSection p {
+  margin: 0 0 2px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.quickItems {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-inset-radius);
+  list-style: none;
+}
+
+.quickItems li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.quickItems li + li {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.quickItemText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.quickItemText span {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.quickTotal {
+  margin-top: var(--space-2);
+  text-align: right;
+}
+
+.quickGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-5);
+}
+
+.quickTimeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.quickTimeline li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.quickTimeline time {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+
 @media (max-width: 1199px) {
   .tableScroll {
     display: none;
@@ -480,13 +734,9 @@
 }
 
 @media (max-width: 767px) {
-  .filterForm {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .searchField,
-  .filterActions {
-    grid-column: 1 / -1;
+  .field,
+  .dateField {
+    flex: 1 1 140px;
   }
 
   .cardList {
@@ -503,14 +753,9 @@
     font-size: 24px;
   }
 
-  .filterForm {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .searchField,
-  .shipmentField,
   .filterActions {
-    grid-column: 1 / -1;
+    flex: 1 1 100%;
   }
 
   .filterActions > * {

@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { motion, useReducedMotion, type Variants } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
+import { Eye, MailCheck, MailX } from "lucide-react";
+import { StatusBadge } from "@/components/admin/ui";
 import type { AdminOrderListRow } from "@/lib/admin/orders/types";
 import {
   formatMoney,
@@ -11,6 +14,9 @@ import {
   shipmentLabels,
   statusTone,
 } from "./order-list-format";
+import { OrderQuickView } from "./order-quick-view";
+import { OrderThumbs } from "./order-thumbs";
+import { ProofPreview } from "./proof-preview";
 import styles from "./orders.module.css";
 
 const EASE = [0.25, 0.1, 0.25, 1] as const;
@@ -26,20 +32,32 @@ function useCascade(): { group: Variants; item: Variants } {
   };
 }
 
-function StatusBadge({ label, status }: { label: string; status: string }) {
-  return (
-    <span className={styles.badge} data-tone={statusTone(status)}>
-      {label}
-    </span>
-  );
-}
-
 function OrderLink({ orderNumber }: { orderNumber: string }) {
   return <Link href={`/admin/orders/${encodeURIComponent(orderNumber)}`}>{orderNumber}</Link>;
 }
 
-export function OrderTable({ rows }: { rows: AdminOrderListRow[] }) {
+function EmailState({ sent }: { sent: boolean }) {
+  return sent ? (
+    <span className={styles.emailSent} title="Correo de confirmación enviado">
+      <MailCheck size={14} aria-hidden="true" />
+      <span className={styles.visuallyHidden}>Correo de confirmación enviado</span>
+    </span>
+  ) : (
+    <span className={styles.emailPending} title="Correo de confirmación no registrado">
+      <MailX size={14} aria-hidden="true" />
+      <span className={styles.visuallyHidden}>Correo de confirmación no registrado</span>
+    </span>
+  );
+}
+
+/** Clicks on the row open the quick view, except clicks on its own links and buttons. */
+function isRowClick(event: React.MouseEvent<HTMLElement>): boolean {
+  return !(event.target as HTMLElement).closest("a, button");
+}
+
+export function OrderTable({ rows, canVerify }: { rows: AdminOrderListRow[]; canVerify: boolean }) {
   const { group, item } = useCascade();
+  const [quickView, setQuickView] = useState<string | null>(null);
 
   return (
     <div className={styles.tableScroll} data-testid="orders-desktop-list">
@@ -53,7 +71,6 @@ export function OrderTable({ rows }: { rows: AdminOrderListRow[] }) {
             <th scope="col">Pago</th>
             <th scope="col">Envío</th>
             <th scope="col">Total</th>
-            <th scope="col">Artículos</th>
             <th scope="col">Método</th>
             <th scope="col">Creado</th>
             <th scope="col">Actividad</th>
@@ -64,28 +81,58 @@ export function OrderTable({ rows }: { rows: AdminOrderListRow[] }) {
             <motion.tr
               key={row.orderNumber}
               variants={item}
+              className={styles.clickableRow}
+              onClick={(event) => {
+                if (isRowClick(event)) setQuickView(row.orderNumber);
+              }}
               data-testid={`order-row-${row.orderNumber}`}
             >
-              <td className={styles.orderNumber}>
-                <OrderLink orderNumber={row.orderNumber} />
+              <td>
+                <div className={styles.orderCell}>
+                  <OrderThumbs items={row.itemPreviews} lineCount={row.itemLineCount} />
+                  <div className={styles.orderCellText}>
+                    <span className={styles.orderNumber}>
+                      <OrderLink orderNumber={row.orderNumber} />
+                    </span>
+                    <span className={styles.secondaryText}>
+                      {row.unitCount} artículo{row.unitCount === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.quickViewButton}
+                    onClick={() => setQuickView(row.orderNumber)}
+                    aria-label={`Vista rápida del pedido ${row.orderNumber}`}
+                    title="Vista rápida"
+                  >
+                    <Eye size={15} aria-hidden="true" />
+                  </button>
+                </div>
               </td>
               <td>
+                <span className={styles.customerName}>
+                  {row.recipientName ?? "Sin nombre"}
+                  <EmailState sent={row.confirmationEmailSent} />
+                </span>
                 <span className={styles.customerEmail}>{row.customerEmailMasked}</span>
                 <span className={styles.secondaryText}>
                   {row.accountLinkState === "LINKED" ? "Cuenta vinculada" : "Sin cuenta vinculada"}
                 </span>
               </td>
               <td>
-                <StatusBadge label={orderLabels[row.orderStatus]} status={row.orderStatus} />
+                <StatusBadge tone={statusTone(row.orderStatus)}>
+                  {orderLabels[row.orderStatus]}
+                </StatusBadge>
               </td>
               <td>
-                <StatusBadge label={paymentLabels[row.paymentStatus]} status={row.paymentStatus} />
+                <StatusBadge tone={statusTone(row.paymentStatus)}>
+                  {paymentLabels[row.paymentStatus]}
+                </StatusBadge>
               </td>
               <td>
-                <StatusBadge
-                  label={shipmentLabels[row.shipmentStatus]}
-                  status={row.shipmentStatus}
-                />
+                <StatusBadge tone={statusTone(row.shipmentStatus)}>
+                  {shipmentLabels[row.shipmentStatus]}
+                </StatusBadge>
               </td>
               <td>
                 <span className={styles.money}>{formatMoney(row)}</span>
@@ -93,8 +140,17 @@ export function OrderTable({ rows }: { rows: AdminOrderListRow[] }) {
                   <span className={styles.integrityWarning}>Revisar datos</span>
                 )}
               </td>
-              <td className={styles.numeric}>{row.unitCount}</td>
-              <td>{row.paymentMethod?.label ?? "Sin método registrado"}</td>
+              <td>
+                <span className={styles.methodCell}>
+                  {row.paymentMethod?.label ?? "Sin método registrado"}
+                  {canVerify && row.latestSubmission?.hasProof && (
+                    <ProofPreview
+                      submissionId={row.latestSubmission.id}
+                      orderNumber={row.orderNumber}
+                    />
+                  )}
+                </span>
+              </td>
               <td className={styles.dateTime}>{limaDateTime.format(new Date(row.createdAt))}</td>
               <td className={styles.dateTime}>
                 {limaDateTime.format(new Date(row.latestOperationalAt))}
@@ -103,12 +159,22 @@ export function OrderTable({ rows }: { rows: AdminOrderListRow[] }) {
           ))}
         </motion.tbody>
       </table>
+      <AnimatePresence>
+        {quickView && (
+          <OrderQuickView
+            key={quickView}
+            orderNumber={quickView}
+            onClose={() => setQuickView(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-export function OrderCards({ rows }: { rows: AdminOrderListRow[] }) {
+export function OrderCards({ rows, canVerify }: { rows: AdminOrderListRow[]; canVerify: boolean }) {
   const { group, item } = useCascade();
+  const [quickView, setQuickView] = useState<string | null>(null);
 
   return (
     <motion.div
@@ -126,28 +192,37 @@ export function OrderCards({ rows }: { rows: AdminOrderListRow[] }) {
           data-testid={`order-card-${row.orderNumber}`}
         >
           <div className={styles.cardHeader}>
-            <div>
-              <p className={styles.orderNumber}>
-                <OrderLink orderNumber={row.orderNumber} />
-              </p>
-              <p className={styles.customerEmail}>{row.customerEmailMasked}</p>
+            <div className={styles.orderCell}>
+              <OrderThumbs items={row.itemPreviews} lineCount={row.itemLineCount} />
+              <div className={styles.orderCellText}>
+                <p className={styles.orderNumber}>
+                  <OrderLink orderNumber={row.orderNumber} />
+                </p>
+                <p className={styles.customerEmail}>
+                  {row.recipientName ? `${row.recipientName} · ` : ""}
+                  {row.customerEmailMasked}
+                </p>
+              </div>
             </div>
-            <StatusBadge label={orderLabels[row.orderStatus]} status={row.orderStatus} />
+            <StatusBadge tone={statusTone(row.orderStatus)}>
+              {orderLabels[row.orderStatus]}
+            </StatusBadge>
           </div>
           <dl className={styles.cardFacts}>
             <div>
               <dt>Pago</dt>
               <dd>
-                <StatusBadge label={paymentLabels[row.paymentStatus]} status={row.paymentStatus} />
+                <StatusBadge tone={statusTone(row.paymentStatus)}>
+                  {paymentLabels[row.paymentStatus]}
+                </StatusBadge>
               </dd>
             </div>
             <div>
               <dt>Envío</dt>
               <dd>
-                <StatusBadge
-                  label={shipmentLabels[row.shipmentStatus]}
-                  status={row.shipmentStatus}
-                />
+                <StatusBadge tone={statusTone(row.shipmentStatus)}>
+                  {shipmentLabels[row.shipmentStatus]}
+                </StatusBadge>
               </dd>
             </div>
             <div>
@@ -160,7 +235,15 @@ export function OrderCards({ rows }: { rows: AdminOrderListRow[] }) {
             </div>
             <div>
               <dt>Método</dt>
-              <dd>{row.paymentMethod?.label ?? "Sin método registrado"}</dd>
+              <dd className={styles.methodCell}>
+                {row.paymentMethod?.label ?? "Sin método registrado"}
+                {canVerify && row.latestSubmission?.hasProof && (
+                  <ProofPreview
+                    submissionId={row.latestSubmission.id}
+                    orderNumber={row.orderNumber}
+                  />
+                )}
+              </dd>
             </div>
             <div>
               <dt>Creado</dt>
@@ -174,8 +257,25 @@ export function OrderCards({ rows }: { rows: AdminOrderListRow[] }) {
           {row.integrityIssues.length > 0 && (
             <p className={styles.integrityWarning}>Revisar datos del pedido</p>
           )}
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => setQuickView(row.orderNumber)}
+          >
+            <Eye size={15} aria-hidden="true" />
+            Vista rápida
+          </button>
         </motion.article>
       ))}
+      <AnimatePresence>
+        {quickView && (
+          <OrderQuickView
+            key={quickView}
+            orderNumber={quickView}
+            onClose={() => setQuickView(null)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

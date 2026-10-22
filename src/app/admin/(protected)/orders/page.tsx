@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertCircle, Inbox, RotateCcw } from "lucide-react";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
+import { SegmentedNav } from "@/components/admin/ui";
 import { getAdminOrderList } from "@/lib/admin/orders/reader";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { OrderFilters } from "./order-filters";
@@ -23,13 +24,45 @@ function value(params: SearchParams, name: string): string {
 
 function buildListHref(params: SearchParams, cursor?: string): string {
   const next = new URLSearchParams();
-  for (const key of ["q", "orderStatus", "paymentStatus", "shipmentStatus", "from", "to"]) {
+  for (const key of FILTER_KEYS) {
     const current = value(params, key);
     if (current) next.set(key, current);
   }
   next.set("pageSize", value(params, "pageSize") || "25");
   if (cursor) next.set("cursor", cursor);
   return `/admin/orders?${next.toString()}`;
+}
+
+const FILTER_KEYS = ["q", "orderStatus", "paymentStatus", "shipmentStatus", "from", "to"] as const;
+
+// Shortcuts built only from filters the list already accepts.
+const QUICK_FILTERS: {
+  label: string;
+  filters: Partial<Record<(typeof FILTER_KEYS)[number], string>>;
+}[] = [
+  { label: "Todos", filters: {} },
+  { label: "Por validar pago", filters: { paymentStatus: "SUBMITTED" } },
+  {
+    label: "Listos para preparar",
+    filters: { orderStatus: "CONFIRMED", shipmentStatus: "UNFULFILLED" },
+  },
+  { label: "Completados", filters: { orderStatus: "FULFILLED" } },
+];
+
+function QuickFilters({ params }: { params: SearchParams }) {
+  return (
+    <SegmentedNav
+      label="Filtros rápidos de pedidos"
+      options={QUICK_FILTERS.map(({ label, filters }) => {
+        const query = new URLSearchParams(filters);
+        return {
+          label,
+          href: query.size > 0 ? `/admin/orders?${query.toString()}` : "/admin/orders",
+          active: FILTER_KEYS.every((key) => (filters[key] ?? "") === value(params, key)),
+        };
+      })}
+    />
+  );
 }
 
 function AppliedFilters({ params }: { params: SearchParams }) {
@@ -108,6 +141,8 @@ export default async function AdminOrdersPage({ searchParams }: OrdersPageProps)
   };
   const hasFilters = Object.values(filterValues).some(Boolean);
   const hasCursor = Boolean(value(params, "cursor"));
+  // Receipt images are only signed for staff who verify payments.
+  const canVerify = authContext.permissions.has("orders:verify");
   const header = (
     <header className={styles.pageHeader}>
       <div>
@@ -150,6 +185,7 @@ export default async function AdminOrdersPage({ searchParams }: OrdersPageProps)
     <div className={styles.page}>
       {header}
       <OrderFilters values={filterValues} hasFilters={hasFilters} />
+      <QuickFilters params={params} />
       <AppliedFilters params={params} />
       {result.rows.length === 0 ? (
         <StatePanel
@@ -168,8 +204,8 @@ export default async function AdminOrdersPage({ searchParams }: OrdersPageProps)
             <h2>Pedidos registrados</h2>
             <p>Mostrando {result.rows.length} pedidos en esta página</p>
           </div>
-          <OrderTable rows={result.rows} />
-          <OrderCards rows={result.rows} />
+          <OrderTable rows={result.rows} canVerify={canVerify} />
+          <OrderCards rows={result.rows} canVerify={canVerify} />
         </section>
       )}
       {(result.nextCursor !== null || hasCursor) && (

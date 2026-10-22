@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { desc, eq, sql } from "drizzle-orm";
+import { orderItemPreviewsSql, type OrderItemPreview } from "@/lib/orders/item-previews-sql";
 import { db } from "@/db";
 import { customerProfiles, orders } from "@/db/schema";
 import { getVerifiedIdentity } from "@/lib/auth/claims";
@@ -15,12 +16,7 @@ const ORDER_HISTORY_LIMIT = 50;
 /** Thumbnails shown per order row; the rest are summarized as "+N". */
 const ORDER_THUMBNAIL_LIMIT = 3;
 
-export interface CustomerOrderItemPreview {
-  productName: string;
-  variantTitle: string;
-  quantity: number;
-  imageObjectKey: string | null;
-}
+export type CustomerOrderItemPreview = OrderItemPreview;
 
 /** Client-safe order summary: the order number is the public handle, no internal ids. */
 export interface CustomerOrderSummaryDTO {
@@ -41,47 +37,7 @@ export type AccountOrdersState =
   | { status: "NEEDS_PROFILE_COMPLETION" }
   | { status: "ERROR"; error: string };
 
-// Same card image rule as the catalog: the designated primary, else the first public global photo.
-const itemPreviewsSql = sql<CustomerOrderItemPreview[] | null>`(
-  SELECT jsonb_agg(
-    jsonb_build_object(
-      'productName', x.product_name_snapshot,
-      'variantTitle', x.variant_title_snapshot,
-      'quantity', x.quantity,
-      'imageObjectKey', x.object_key
-    ) ORDER BY x.created_at, x.id
-  )
-  FROM (
-    SELECT oi.id, oi.created_at, oi.product_name_snapshot, oi.variant_title_snapshot, oi.quantity,
-      (
-        SELECT a.object_key
-        FROM product_variants pv
-        JOIN products p ON p.id = pv.product_id
-        JOIN media_assets a ON a.id = COALESCE(
-          p.primary_media_id,
-          (
-            SELECT pm.media_asset_id
-            FROM product_media pm
-            JOIN media_assets ma ON ma.id = pm.media_asset_id
-            WHERE pm.product_id = p.id
-              AND pm.placement = 'GALLERY'
-              AND ma.security_class = 'PUBLIC_MEDIA'
-              AND ma.media_type = 'IMAGE'
-            ORDER BY (pm.variant_id IS NULL) DESC, pm.display_order ASC, pm.created_at ASC
-            LIMIT 1
-          )
-        )
-        WHERE pv.id = oi.variant_id
-          AND a.security_class = 'PUBLIC_MEDIA'
-          AND a.media_type = 'IMAGE'
-        LIMIT 1
-      ) AS object_key
-    FROM order_items oi
-    WHERE oi.order_id = ${orders.id}
-    ORDER BY oi.created_at, oi.id
-    LIMIT ${ORDER_THUMBNAIL_LIMIT}
-  ) x
-)`;
+const itemPreviewsSql = orderItemPreviewsSql(sql`${orders.id}`, ORDER_THUMBNAIL_LIMIT);
 
 const itemCountSql = sql<number>`(
   SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi WHERE oi.order_id = ${orders.id}

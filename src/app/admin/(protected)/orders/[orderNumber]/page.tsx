@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { Stagger, StaggerItem } from "@/components/admin/ui";
-import { getAdminOrderDetail } from "@/lib/admin/orders/reader";
+import { getAdminOrderDetail, getAdminOrderItemPreviews } from "@/lib/admin/orders/reader";
+import type { AdminOrderItemPreview } from "@/lib/admin/orders/types";
+import { OrderThumbs } from "../order-thumbs";
 import type { AdminOrderDetail, OrderIntegrityIssue } from "@/lib/admin/orders/types";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { ORDER_STATUSES, PAYMENT_STATUSES, SHIPMENT_STATUSES } from "../order-status-options";
@@ -87,7 +89,13 @@ function Unavailable() {
   return <p className={styles.unavailable}>Datos de pedido no disponibles</p>;
 }
 
-function DetailBody({ detail }: { detail: AdminOrderDetail }) {
+function DetailBody({
+  detail,
+  itemPreviews,
+}: {
+  detail: AdminOrderDetail;
+  itemPreviews: AdminOrderItemPreview[];
+}) {
   const { order, contact, items, address, pricing, payment, refunds, shipments } = detail;
   const moneyConflict = detail.integrityIssues.some(
     (issue) => issue === "CURRENCY_MISMATCH" || issue === "UNSUPPORTED_CURRENCY"
@@ -175,11 +183,19 @@ function DetailBody({ detail }: { detail: AdminOrderDetail }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item) => (
+                      {items.map((item, index) => (
                         <tr key={item.id}>
                           <td>
-                            <strong>{item.productName}</strong>
-                            <span className={styles.muted}>{item.variantTitle}</span>
+                            <span className={styles.itemProduct}>
+                              <OrderThumbs
+                                items={itemPreviews[index] ? [itemPreviews[index]] : []}
+                                lineCount={1}
+                              />
+                              <span>
+                                <strong>{item.productName}</strong>
+                                <span className={styles.muted}>{item.variantTitle}</span>
+                              </span>
+                            </span>
                           </td>
                           <td>{item.sku}</td>
                           <td>
@@ -393,5 +409,6 @@ export default async function AdminOrderDetailPage({ params }: OrderDetailPagePr
     );
   }
 
-  return <DetailBody detail={result.detail} />;
+  const itemPreviews = (await getAdminOrderItemPreviews(orderNumber)) ?? [];
+  return <DetailBody detail={result.detail} itemPreviews={itemPreviews} />;
 }

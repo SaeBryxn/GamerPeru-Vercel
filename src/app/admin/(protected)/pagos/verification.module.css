@@ -202,8 +202,6 @@
 
 .rowStatusText {
   overflow: hidden;
-  font-size: 13px;
-  color: var(--color-text-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

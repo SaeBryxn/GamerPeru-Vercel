@@ -13,10 +13,26 @@ export type OrderIntegrityIssue =
   | "CURRENCY_MISMATCH"
   | "UNSUPPORTED_CURRENCY";
 
+export interface AdminOrderItemPreview {
+  productName: string;
+  variantTitle: string;
+  quantity: number;
+  imageObjectKey: string | null;
+}
+
 export interface AdminOrderListRow {
   orderNumber: string;
   createdAt: string;
   customerEmailMasked: string;
+  /** Name on the delivery address; orders keep no other customer name. */
+  recipientName: string | null;
+  /** First lines with their catalog image, for the thumbnail stack. */
+  itemPreviews: AdminOrderItemPreview[];
+  itemLineCount: number;
+  /** Latest receipt submission, when the customer sent one; the image is signed on demand. */
+  latestSubmission: { id: string; hasProof: boolean } | null;
+  /** The order confirmation email was accepted by the provider. */
+  confirmationEmailSent: boolean;
   accountLinkState: AccountLinkState;
   orderStatus: OrderStatus;
   paymentStatus: PaymentDisplayStatus;

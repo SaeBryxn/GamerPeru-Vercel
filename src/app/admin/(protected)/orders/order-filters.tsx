@@ -36,10 +36,9 @@ export function OrderFilters({ values, hasFilters }: OrderFiltersProps) {
 
   return (
     <section className={styles.filterPanel} aria-labelledby="order-filters-title">
-      <div className={styles.sectionHeading}>
-        <h2 id="order-filters-title">Buscar y filtrar</h2>
-        <p>Busca por número de pedido o por el email exacto registrado al comprar.</p>
-      </div>
+      <h2 id="order-filters-title" className={styles.visuallyHidden}>
+        Buscar y filtrar
+      </h2>
       <form
         ref={formRef}
         method="GET"
@@ -51,7 +50,7 @@ export function OrderFilters({ values, hasFilters }: OrderFiltersProps) {
         <div className={`${styles.field} ${styles.searchField}`}>
           <label htmlFor="orders-q">Buscar pedido</label>
           <div className={styles.searchControl}>
-            <Search size={18} aria-hidden="true" />
+            <Search size={16} aria-hidden="true" />
             <input
               id="orders-q"
               name="q"
@@ -65,7 +64,7 @@ export function OrderFilters({ values, hasFilters }: OrderFiltersProps) {
         <div className={styles.field}>
           <label htmlFor="orders-status">Estado del pedido</label>
           <select id="orders-status" name="orderStatus" defaultValue={values.orderStatus}>
-            <option value="">Todos</option>
+            <option value="">Estado: todos</option>
             {ORDER_STATUSES.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -76,7 +75,7 @@ export function OrderFilters({ values, hasFilters }: OrderFiltersProps) {
         <div className={styles.field}>
           <label htmlFor="orders-payment">Estado del pago</label>
           <select id="orders-payment" name="paymentStatus" defaultValue={values.paymentStatus}>
-            <option value="">Todos</option>
+            <option value="">Pago: todos</option>
             {PAYMENT_STATUSES.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -84,10 +83,10 @@ export function OrderFilters({ values, hasFilters }: OrderFiltersProps) {
             ))}
           </select>
         </div>
-        <div className={`${styles.field} ${styles.shipmentField}`}>
+        <div className={styles.field}>
           <label htmlFor="orders-shipment">Estado del envío</label>
           <select id="orders-shipment" name="shipmentStatus" defaultValue={values.shipmentStatus}>
-            <option value="">Todos</option>
+            <option value="">Envío: todos</option>
             {SHIPMENT_STATUSES.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -95,13 +94,19 @@ export function OrderFilters({ values, hasFilters }: OrderFiltersProps) {
             ))}
           </select>
         </div>
-        <div className={styles.field}>
+        <div className={`${styles.field} ${styles.dateField}`}>
           <label htmlFor="orders-from">Desde</label>
-          <input id="orders-from" name="from" type="date" defaultValue={values.from} />
+          <input
+            id="orders-from"
+            name="from"
+            type="date"
+            defaultValue={values.from}
+            title="Desde"
+          />
         </div>
-        <div className={styles.field}>
+        <div className={`${styles.field} ${styles.dateField}`}>
           <label htmlFor="orders-to">Hasta</label>
-          <input id="orders-to" name="to" type="date" defaultValue={values.to} />
+          <input id="orders-to" name="to" type="date" defaultValue={values.to} title="Hasta" />
         </div>
         <div className={styles.filterActions}>
           <button type="submit" className={styles.primaryButton}>

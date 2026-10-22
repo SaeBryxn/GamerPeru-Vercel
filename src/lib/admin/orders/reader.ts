@@ -16,6 +16,7 @@ import {
   type OrderStatus,
   type PaymentStatus,
 } from "@/db/schema";
+import { orderItemPreviewsSql, type OrderItemPreview } from "@/lib/orders/item-previews-sql";
 import { requireOrdersAdmin } from "./guard";
 import { loadAdminTimelinePage } from "./timeline";
 import type {
@@ -35,6 +36,9 @@ import {
   parseAdminOrderListQuery,
   safeTrackingUrl,
 } from "./validation";
+
+/** Thumbnails per row in the admin list; the rest of the lines show as "+N". */
+const LIST_THUMBNAIL_LIMIT = 3;
 
 function iso(value: Date | string): string {
   return new Date(value).toISOString();
@@ -139,12 +143,18 @@ export async function getAdminOrderList(
       method_code: string | null;
       method_label: string | null;
       unit_count: string | number;
+      line_count: string | number;
+      item_previews: OrderItemPreview[] | null;
+      recipient_name: string | null;
+      submission_id: string | null;
+      submission_has_proof: boolean | null;
+      confirmation_email_sent: boolean;
       shipment_count: string | number;
       single_shipment_status: ShipmentDisplayStatus | null;
       latest_operational_at: Date | string;
     }>(sql`
       WITH item_totals AS (
-        SELECT i.order_id, SUM(i.quantity)::bigint AS unit_count
+        SELECT i.order_id, SUM(i.quantity)::bigint AS unit_count, COUNT(*)::bigint AS line_count
         FROM order_items i WHERE i.order_id IN (${ids}) GROUP BY i.order_id
       ), shipment_summary AS (
         SELECT s.order_id, COUNT(*)::bigint AS shipment_count,
@@ -162,6 +172,14 @@ export async function getAdminOrderList(
              ps.currency AS pricing_currency, p.status AS payment_status,
              p.currency AS payment_currency, p.payment_method_code AS method_code,
              pm.name AS method_label, COALESCE(it.unit_count, 0)::bigint AS unit_count,
+             COALESCE(it.line_count, 0)::bigint AS line_count,
+             ${orderItemPreviewsSql(sql`o.id`, LIST_THUMBNAIL_LIMIT)} AS item_previews,
+             oas.recipient_name, sub.id AS submission_id, sub.has_proof AS submission_has_proof,
+             EXISTS (
+               SELECT 1 FROM notification_deliveries nd
+               JOIN outbox_events oe ON oe.id = nd.outbox_event_id
+               WHERE oe.aggregate_id = o.id::text AND oe.event_name = 'OrderPlaced'
+             ) AS confirmation_email_sent,
              COALESCE(ss.shipment_count, 0)::bigint AS shipment_count,
              ss.single_shipment_status,
              GREATEST(o.updated_at, p.updated_at, ss.latest_at, rs.latest_at, ns.latest_at) AS latest_operational_at
@@ -169,6 +187,12 @@ export async function getAdminOrderList(
       LEFT JOIN order_pricing_snapshots ps ON ps.order_id = o.id
       LEFT JOIN payments p ON p.order_id = o.id
       LEFT JOIN payment_method_configurations pm ON pm.code = p.payment_method_code
+      LEFT JOIN order_address_snapshots oas ON oas.order_id = o.id
+      LEFT JOIN LATERAL (
+        SELECT s.id, s.proof_media_id IS NOT NULL AS has_proof
+        FROM payment_submissions s WHERE s.payment_id = p.id
+        ORDER BY s.attempt_number DESC LIMIT 1
+      ) sub ON true
       LEFT JOIN item_totals it ON it.order_id = o.id
       LEFT JOIN shipment_summary ss ON ss.order_id = o.id
       LEFT JOIN refund_summary rs ON rs.order_id = o.id
@@ -188,6 +212,13 @@ export async function getAdminOrderList(
         orderNumber: row.order_number,
         createdAt: iso(row.created_at),
         customerEmailMasked: maskOrderEmail(row.customer_email),
+        recipientName: row.recipient_name ?? null,
+        itemPreviews: row.item_previews ?? [],
+        itemLineCount: safeCount(row.line_count),
+        latestSubmission: row.submission_id
+          ? { id: row.submission_id, hasProof: row.submission_has_proof === true }
+          : null,
+        confirmationEmailSent: row.confirmation_email_sent === true,
         accountLinkState: row.customer_id ? "LINKED" : "NOT_LINKED",
         orderStatus: row.order_status,
         paymentStatus: row.payment_status ?? "NOT_RECORDED",
@@ -527,4 +558,19 @@ export async function getAdminOrderTimelinePage(
   } catch {
     return { status: "SYSTEM_ERROR" };
   }
+}
+
+/** Every line of one order with its catalog image, in order; used by the quick view. */
+export async function getAdminOrderItemPreviews(
+  orderNumberInput: unknown
+): Promise<OrderItemPreview[] | null> {
+  const authority = await requireOrdersAdmin();
+  if (!authority.authorized) return null;
+  const orderNumber = normalizeOrderNumber(orderNumberInput);
+  if (!orderNumber) return null;
+  const [row] = await db.execute<{ previews: OrderItemPreview[] | null }>(sql`
+    SELECT ${orderItemPreviewsSql(sql`o.id`, 100)} AS previews
+    FROM orders o WHERE o.order_number = ${orderNumber}
+  `);
+  return row?.previews ?? [];
 }

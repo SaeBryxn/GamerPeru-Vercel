@@ -7,7 +7,7 @@ import {
   AdminCard,
   MetricRow,
   MetricWidget,
-  StatusDot,
+  StatusBadge,
   ToastViewport,
   useToasts,
 } from "@/components/admin/ui";
@@ -15,6 +15,7 @@ import { claimPaymentAction } from "@/lib/payments/verification-actions";
 import type { VerificationQueueItem } from "@/lib/payments/verification-queue";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatAttempt, formatRelative } from "./format";
+import { ProofPreview } from "../orders/proof-preview";
 import { ReviewDrawer } from "./review-drawer";
 import styles from "./verification.module.css";
 
@@ -264,23 +265,22 @@ function QueueRow({
 
       <div className={styles.rowFlags}>
         {hasDuplicates && (
-          <span className={styles.flag} title={item.duplicateOrderNumbers.join(", ")}>
-            <StatusDot tone="critical" />
-            Código repetido
+          <span title={item.duplicateOrderNumbers.join(", ")}>
+            <StatusBadge tone="danger">Código repetido</StatusBadge>
           </span>
         )}
-        {item.submission.isLate && (
-          <span className={styles.flag}>
-            <StatusDot tone="attention" />
-            Tardío
-          </span>
+        {item.submission.isLate && <StatusBadge tone="warning">Tardío</StatusBadge>}
+        {item.submission.hasProof ? (
+          <ProofPreview submissionId={item.submission.id} orderNumber={item.orderNumber} />
+        ) : (
+          <StatusBadge tone="neutral">Sin captura</StatusBadge>
         )}
-        {!item.submission.hasProof && <span className={styles.flag}>Sin captura</span>}
       </div>
 
       <div className={styles.rowStatus}>
-        <StatusDot tone={isTaken || isMine ? "ok" : "attention"} />
-        <span className={styles.rowStatusText}>{statusLabel}</span>
+        <StatusBadge tone={isMine ? "info" : isTaken ? "neutral" : "warning"}>
+          <span className={styles.rowStatusText}>{statusLabel}</span>
+        </StatusBadge>
       </div>
 
       <div className={styles.rowAction}>

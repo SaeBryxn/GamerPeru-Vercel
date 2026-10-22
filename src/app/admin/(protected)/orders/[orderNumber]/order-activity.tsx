@@ -15,7 +15,7 @@ interface OrderActivityProps {
   initialTimeline: AdminTimelinePage;
 }
 
-const timelineLabels: Record<AdminTimelineType, string> = {
+export const timelineLabels: Record<AdminTimelineType, string> = {
   ORDER_PLACED: "Pedido registrado",
   PAYMENT_SUBMITTED: "Comprobante enviado",
   ORDER_CONFIRMED: "Pedido confirmado",
