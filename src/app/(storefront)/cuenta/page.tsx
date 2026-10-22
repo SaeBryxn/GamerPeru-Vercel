@@ -11,12 +11,6 @@ import styles from "@/components/account/account.module.css";
 
 export const dynamic = "force-dynamic";
 
-const MEMBER_SINCE_FORMAT = new Intl.DateTimeFormat("es-PE", {
-  month: "long",
-  year: "numeric",
-  timeZone: "America/Lima",
-});
-
 export default async function CuentaPage() {
   const profileState = await getCurrentCustomerProfile();
 
@@ -38,10 +32,8 @@ export default async function CuentaPage() {
     getCurrentCustomerAddresses(),
   ]);
 
-  const profile = profileState.profile;
   const orders = ordersState.status === "READY" ? ordersState.orders : [];
   const latestOrder = orders[0] ?? null;
-  const inTransit = orders.filter((order) => order.status.isInTransit).length;
   const defaultAddress =
     addressesState.status === "READY"
       ? addressesState.addresses.find((address) => address.isDefault)
@@ -78,22 +70,7 @@ export default async function CuentaPage() {
 
   return (
     <div className={styles.sectionStack}>
-      <div className={`${styles.card} ${styles.greeting}`}>
-        <div>
-          <h1 className={styles.greetingTitle}>Hola, {profile.firstName || "de nuevo"}</h1>
-          <p className={styles.greetingMeta}>
-            Cliente desde {MEMBER_SINCE_FORMAT.format(profile.createdAt)}
-          </p>
-        </div>
-        {inTransit > 0 && (
-          <span className={styles.transitNotice} role="status">
-            <span className={styles.pulseDot} aria-hidden="true" />
-            {inTransit === 1
-              ? "Tienes 1 pedido en camino"
-              : `Tienes ${inTransit} pedidos en camino`}
-          </span>
-        )}
-      </div>
+      <h1 className={styles.visuallyHidden}>Resumen de tu cuenta</h1>
 
       <section aria-labelledby="latest-order-title" className={styles.sectionStack}>
         <div className={styles.sectionHeader}>
@@ -115,6 +92,9 @@ export default async function CuentaPage() {
       <AccountQuickLinks links={quickLinks} />
 
       <div className={`${styles.card} ${styles.supportCard}`}>
+        <span className={`${styles.quickIcon} ${styles.toneGreen}`} aria-hidden="true">
+          <MessageCircle size={20} />
+        </span>
         <div>
           <h2 className={styles.cardTitle}>¿Necesitas ayuda?</h2>
           <p className={styles.cardText}>

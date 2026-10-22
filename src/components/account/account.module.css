@@ -1,52 +1,145 @@
-/* Open canvas: a wide shell, a quiet text menu and hairline-bordered white blocks. */
+/*
+ * Full-width hub: an obsidian band with the customer identity and counters, then a fluid
+ * two-column body. Crimson marks where the customer is and what needs attention; each kind of
+ * destination keeps one hue (orders crimson, addresses blue, profile green, cart amber).
+ */
 .page {
+  --account-gutter: var(--gutter-desktop-lg);
   min-height: 70vh;
   background-color: var(--color-surface-canvas);
 }
 
-.shell {
-  width: 100%;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: var(--space-16) var(--gutter-desktop-lg) var(--space-24);
+.hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgb(225 29 72 / 34%) 0%, rgb(225 29 72 / 0%) 55%),
+    radial-gradient(80% 120% at 0% 100%, rgb(225 29 72 / 12%) 0%, rgb(225 29 72 / 0%) 60%),
+    linear-gradient(
+      180deg,
+      var(--color-surface-dark-canvas) 0%,
+      var(--color-surface-dark-card) 100%
+    );
+  color: var(--color-text-dark-primary);
 }
 
-.shellHeader {
+.heroInner {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-12);
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-12) var(--account-gutter) var(--space-10);
+}
+
+.heroIdentity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.heroAvatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, var(--color-brand-primary), var(--color-brand-active));
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 8%);
+  font-family: var(--font-heading);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--color-brand-text-on-accent);
 }
 
 .eyebrow {
   margin: 0 0 var(--space-1);
   font-family: var(--font-body);
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--color-text-muted);
+  color: var(--color-text-dark-link);
 }
 
 .shellTitle {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(26px, 3vw, 34px);
+  font-size: clamp(26px, 3.2vw, 40px);
   font-weight: 800;
+  line-height: 1.1;
   letter-spacing: -0.03em;
-  color: var(--color-text-primary);
+  color: var(--color-text-dark-primary);
 }
 
 .shellEmail {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-2) 0 0;
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--color-text-dark-secondary);
+  overflow-wrap: anywhere;
+}
+
+.heroAside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.heroStats {
+  display: flex;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.heroStat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 112px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: var(--radius-lg);
+  background-color: rgb(255 255 255 / 5%);
+}
+
+.heroStat dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-dark-secondary);
+}
+
+.heroStat dd {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--color-text-dark-primary);
+}
+
+.heroStatLive {
+  border-color: rgb(251 113 133 / 45%);
+  background-color: rgb(225 29 72 / 18%);
+}
+
+.heroStatLive dt {
+  color: var(--color-text-dark-link);
 }
 
 .mobileLogout {
   display: none;
+}
+
+.mobileLogout button {
+  color: var(--color-text-dark-secondary);
 }
 
 .shellActions {
@@ -60,14 +153,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
-  padding: 0 16px;
-  border: 1px solid var(--color-border-default);
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid rgb(255 255 255 / 22%);
   border-radius: 9999px;
-  background-color: var(--color-surface-card);
+  background-color: rgb(255 255 255 / 6%);
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--color-text-dark-primary);
   text-decoration: none;
   transition:
     border-color 0.2s ease,
@@ -75,12 +168,12 @@
 }
 
 .adminLink:hover {
-  border-color: var(--color-text-primary);
-  background-color: var(--color-surface-canvas);
+  border-color: var(--color-text-dark-primary);
+  background-color: rgb(255 255 255 / 12%);
 }
 
 .adminLink:focus-visible {
-  outline: 2px solid var(--color-text-primary);
+  outline: 2px solid var(--color-border-dark-focus);
   outline-offset: 2px;
 }
 
@@ -89,16 +182,22 @@
   height: 16px;
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  align-items: start;
-  column-gap: 96px;
+.shell {
+  width: 100%;
+  padding: var(--space-10) var(--account-gutter) var(--space-24);
 }
 
-@media (min-width: 1280px) {
+.layout {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--space-10);
+}
+
+@media (min-width: 1440px) {
   .layout {
-    column-gap: 128px;
+    grid-template-columns: 272px minmax(0, 1fr);
+    column-gap: var(--space-12);
   }
 }
 
@@ -109,7 +208,12 @@
   top: var(--space-8);
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-card);
+  box-shadow: 0 1px 2px rgb(9 9 11 / 4%);
 }
 
 .navList {
@@ -129,19 +233,23 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 40px;
-  padding: 0 0 0 var(--space-4);
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
   font-family: var(--font-body);
   font-size: 15px;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--color-text-secondary);
   text-decoration: none;
   white-space: nowrap;
-  transition: color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .navLink:hover {
+  background-color: var(--color-surface-secondary);
   color: var(--color-text-primary);
 }
 
@@ -150,20 +258,35 @@
   outline-offset: 2px;
 }
 
-.navLinkActive {
-  color: var(--color-text-primary);
+.navLinkActive,
+.navLinkActive:hover {
+  background-color: transparent;
+  color: var(--color-brand-hover);
   font-weight: 700;
 }
 
-/* A thin red marker shared through layoutId, so it glides to the item that becomes active. */
+.navIcon {
+  position: relative;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.navLink:hover .navIcon {
+  color: var(--color-text-primary);
+}
+
+.navLinkActive .navIcon,
+.navLinkActive:hover .navIcon {
+  color: var(--color-brand-primary);
+}
+
+/* Tinted crimson block shared through layoutId, so it glides to the item that becomes active. */
 .navPill {
   position: absolute;
-  top: 11px;
-  bottom: 11px;
-  left: 0;
-  width: 2px;
-  border-radius: 9999px;
-  background-color: var(--color-brand-red);
+  inset: 0;
+  border-left: 3px solid var(--color-brand-primary);
+  border-radius: var(--radius-md);
+  background-color: var(--color-brand-subtle-light);
 }
 
 .navLabel,
@@ -183,21 +306,51 @@
   height: 20px;
   padding: 0 6px;
   border-radius: 9999px;
-  background-color: var(--color-brand-red);
-  color: var(--color-surface-card);
+  background-color: var(--color-brand-primary);
+  color: var(--color-brand-text-on-accent);
   font-size: 11px;
   font-weight: 700;
 }
 
 .navFooter {
-  padding-left: var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 /* ---------- Content ---------- */
 
 .content {
   min-width: 0;
-  max-width: 880px;
+}
+
+/* Hue chips for icons: one per kind of destination; each text color keeps AA on its tint. */
+.toneCrimson {
+  background-color: var(--color-brand-subtle-light);
+  color: var(--color-brand-hover);
+}
+
+.toneBlue {
+  background-color: var(--color-status-info-background);
+  color: var(--color-status-info-text);
+}
+
+.toneGreen {
+  background-color: var(--color-status-success-background);
+  color: var(--color-status-success-text);
+}
+
+.toneAmber {
+  background-color: var(--color-status-warning-background);
+  color: var(--color-status-warning-text);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .sectionStack {
@@ -235,6 +388,7 @@
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
   background-color: var(--color-surface-card);
+  box-shadow: 0 1px 2px rgb(9 9 11 / 4%);
 }
 
 .cardHead {
@@ -370,51 +524,9 @@
 
 /* ---------- Overview ---------- */
 
-.greeting {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.greetingTitle {
-  margin: 0;
-  font-family: var(--font-heading);
-  font-size: clamp(22px, 2.6vw, 28px);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--color-text-primary);
-}
-
-.greetingMeta {
-  margin: var(--space-1) 0 0;
-  font-size: 14px;
-  color: var(--color-text-muted);
-}
-
-.transitNotice {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-radius: 9999px;
-  background-color: var(--color-status-danger-background);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-brand-red);
-}
-
-.pulseDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 9999px;
-  background-color: var(--color-brand-red);
-}
-
 .quickGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--space-4);
 }
 
@@ -426,9 +538,13 @@
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
   background-color: var(--color-surface-card);
+  box-shadow: 0 1px 2px rgb(9 9 11 / 4%);
   color: inherit;
   text-decoration: none;
-  transition: border-color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .quickCardButton {
@@ -440,6 +556,8 @@
 
 .quickCard:hover {
   border-color: var(--color-border-default);
+  box-shadow: 0 12px 28px -18px rgb(9 9 11 / 35%);
+  transform: translateY(-2px);
 }
 
 .quickCard:focus-visible {
@@ -452,11 +570,9 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-md);
-  background-color: var(--color-surface-secondary);
-  color: var(--color-text-primary);
 }
 
 .quickBody {
@@ -482,11 +598,11 @@
 }
 
 .supportCard {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-4);
+  border-left: 3px solid var(--color-status-success-text);
 }
 
 /* ---------- Orders ---------- */
@@ -626,8 +742,8 @@
 }
 
 .statusProgress {
-  background-color: var(--color-surface-secondary);
-  color: var(--color-text-primary);
+  background-color: var(--color-status-info-background);
+  color: var(--color-status-info-text);
 }
 
 .statusTransit {
@@ -694,12 +810,18 @@
 /* ---------- Responsive ---------- */
 
 @media (max-width: 1023px) {
-  .shell {
-    padding: var(--space-8) var(--gutter-tablet) var(--space-16);
+  .page {
+    --account-gutter: var(--gutter-tablet);
   }
 
-  .shellHeader {
-    margin-bottom: var(--space-5);
+  .heroInner {
+    padding-top: var(--space-8);
+    padding-bottom: var(--space-8);
+  }
+
+  .shell {
+    padding-top: 0;
+    padding-bottom: var(--space-16);
   }
 
   .mobileLogout {
@@ -714,9 +836,12 @@
   /* The sidebar becomes a row of scrollable tabs that bleeds to the screen edge. */
   .nav {
     position: static;
-    margin: 0 calc(var(--gutter-tablet) * -1);
-    padding: 0 var(--gutter-tablet);
+    margin: 0 calc(var(--account-gutter) * -1);
+    padding: var(--space-2) var(--account-gutter);
+    border: 0;
     border-bottom: 1px solid var(--color-border-subtle);
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .navList {
@@ -736,17 +861,12 @@
   }
 
   .navLink {
-    min-height: 44px;
     padding: 0 var(--space-3);
   }
 
   .navPill {
-    top: auto;
-    right: var(--space-3);
-    bottom: -1px;
-    left: var(--space-3);
-    width: auto;
-    height: 2px;
+    border-left: 0;
+    border-bottom: 3px solid var(--color-brand-primary);
   }
 
   .navFooter {
@@ -755,13 +875,34 @@
 }
 
 @media (max-width: 767px) {
-  .shell {
-    padding: var(--space-5) var(--gutter-mobile) var(--space-10);
+  .page {
+    --account-gutter: var(--gutter-mobile);
   }
 
-  .nav {
-    margin: 0 calc(var(--gutter-mobile) * -1);
-    padding: var(--space-2) var(--gutter-mobile);
+  .heroInner {
+    gap: var(--space-5);
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-6);
+  }
+
+  .heroIdentity {
+    gap: var(--space-4);
+  }
+
+  .heroAvatar {
+    width: 52px;
+    height: 52px;
+    font-size: 22px;
+  }
+
+  .heroAside,
+  .heroStats {
+    width: 100%;
+  }
+
+  .heroStat {
+    flex: 1;
+    min-width: 0;
   }
 
   .card {
@@ -773,8 +914,12 @@
     gap: 0;
   }
 
-  .quickGrid {
-    grid-template-columns: minmax(0, 1fr);
+  .supportCard {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .supportCard > :last-child {
+    grid-column: 1 / -1;
   }
 
   .orderCard {
@@ -807,5 +952,9 @@
   .navLink,
   .quickCard {
     transition: none;
+  }
+
+  .quickCard:hover {
+    transform: none;
   }
 }

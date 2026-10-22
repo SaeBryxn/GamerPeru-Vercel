@@ -69,7 +69,14 @@ const DOT_TONE: Record<StatusDotTone, string | undefined> = {
   critical: styles.dotCritical,
 };
 
-/** A 6px status mark: the only place a signal color appears next to a number. */
+const METRIC_TONE: Record<StatusDotTone, string | undefined> = {
+  neutral: undefined,
+  ok: styles.metricOk,
+  attention: styles.metricAttention,
+  critical: styles.metricCritical,
+};
+
+/** A small status mark beside a metric label; the metric's number takes the same hue. */
 export function StatusDot({ tone = "neutral" }: { tone?: StatusDotTone }) {
   return (
     <span className={[styles.dot, DOT_TONE[tone]].filter(Boolean).join(" ")} aria-hidden="true" />
@@ -104,6 +111,7 @@ export function MetricWidget({
 }: MetricWidgetProps) {
   const sizeClass =
     size === "large" ? styles.metricValueLarge : size === "small" ? styles.metricValueSmall : "";
+  const toneClass = dot ? METRIC_TONE[dot] : undefined;
 
   const body = (
     <>
@@ -125,11 +133,15 @@ export function MetricWidget({
   );
 
   return href ? (
-    <Link href={href} className={`${styles.metric} ${styles.metricLink}`} data-testid={testId}>
+    <Link
+      href={href}
+      className={[styles.metric, styles.metricLink, toneClass].filter(Boolean).join(" ")}
+      data-testid={testId}
+    >
       {body}
     </Link>
   ) : (
-    <div className={styles.metric} data-testid={testId}>
+    <div className={[styles.metric, toneClass].filter(Boolean).join(" ")} data-testid={testId}>
       {body}
     </div>
   );

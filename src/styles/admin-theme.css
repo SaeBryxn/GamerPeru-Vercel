@@ -5,10 +5,12 @@
  * redefines the canonical tokens inside that scope, so every admin screen that
  * already consumes --color-* follows the theme without touching its CSS.
  *
- * The admin is monochrome. --admin-accent is near-black (near-white on dark):
- * it marks active states, primary actions and focus. The brand red lives only
- * in --admin-danger, for critical errors, destructive actions and tiny status
- * dots. Status colors keep their text hue but lose their pastel fills.
+ * Neutral surfaces with color where it carries meaning. --admin-accent stays
+ * near-black (near-white on dark) for primary actions and focus. Signal
+ * crimson (--admin-brand) marks where the operator is: the active navigation
+ * entry on an obsidian sidebar. Statuses use tinted fills (green success,
+ * amber warning, rose danger, blue info) so a queue can be read at a glance;
+ * every status text keeps AA contrast on its fill.
  */
 
 [data-admin-theme] {
@@ -40,18 +42,21 @@
   --color-border-focus: #111827;
 
   --color-status-success-text: #15803d;
-  --color-status-success-background: #f3f4f6;
-  --color-status-success-border: #e5e7eb;
+  --color-status-success-background: #ecfdf3;
+  --color-status-success-border: #bbf7d0;
   --color-status-warning-text: #92400e;
-  --color-status-warning-background: #f3f4f6;
-  --color-status-warning-border: #e5e7eb;
-  --color-status-danger-text: #e11d48;
-  --color-status-danger-background: #f9fafb;
-  --color-status-danger-border: #e5e7eb;
-  --color-status-info-text: #374151;
-  --color-status-info-background: #f3f4f6;
-  --color-status-info-border: #e5e7eb;
+  --color-status-warning-background: #fffbeb;
+  --color-status-warning-border: #fde68a;
+  --color-status-danger-text: #be123c;
+  --color-status-danger-background: #fff1f2;
+  --color-status-danger-border: #fecdd3;
+  --color-status-info-text: #1d4ed8;
+  --color-status-info-background: #eff6ff;
+  --color-status-info-border: #bfdbfe;
 
+  --admin-brand: #e11d48;
+  --admin-brand-text: #fb7185;
+  --admin-brand-soft: rgba(225, 29, 72, 0.16);
   --admin-accent: #111827;
   --admin-accent-strong: #000000;
   --admin-accent-soft: rgba(17, 24, 39, 0.06);
@@ -64,7 +69,7 @@
   --admin-card-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
   --admin-inset: #f9fafb;
   --admin-inset-border: #e5e7eb;
-  --admin-sidebar-surface: #ffffff;
+  --admin-sidebar-surface: #09090b;
   --admin-header-surface: rgba(249, 250, 251, 0.85);
   --admin-scrim: rgba(17, 24, 39, 0.4);
 }
@@ -86,20 +91,23 @@
   --color-border-strong: #4a4e5a;
   --color-border-focus: #f3f4f6;
 
-  /* Hue survives on text for readability; fills stay neutral like in light. */
+  /* Translucent tints keep each hue readable on the dark cards. */
   --color-status-success-text: #4ade80;
-  --color-status-success-background: #1a1b21;
-  --color-status-success-border: #23252d;
+  --color-status-success-background: rgba(74, 222, 128, 0.12);
+  --color-status-success-border: rgba(74, 222, 128, 0.28);
   --color-status-warning-text: #fbbf24;
-  --color-status-warning-background: #1a1b21;
-  --color-status-warning-border: #23252d;
+  --color-status-warning-background: rgba(251, 191, 36, 0.12);
+  --color-status-warning-border: rgba(251, 191, 36, 0.28);
   --color-status-danger-text: #fb7185;
-  --color-status-danger-background: #1a1b21;
-  --color-status-danger-border: #23252d;
-  --color-status-info-text: #cbd5e1;
-  --color-status-info-background: #1a1b21;
-  --color-status-info-border: #23252d;
+  --color-status-danger-background: rgba(251, 113, 133, 0.12);
+  --color-status-danger-border: rgba(251, 113, 133, 0.28);
+  --color-status-info-text: #93c5fd;
+  --color-status-info-background: rgba(147, 197, 253, 0.12);
+  --color-status-info-border: rgba(147, 197, 253, 0.28);
 
+  --admin-brand: #f43f5e;
+  --admin-brand-text: #fb7185;
+  --admin-brand-soft: rgba(244, 63, 94, 0.16);
   --admin-accent: #f3f4f6;
   --admin-accent-strong: #ffffff;
   --admin-accent-soft: rgba(243, 244, 246, 0.08);

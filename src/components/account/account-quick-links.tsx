@@ -32,18 +32,28 @@ export interface QuickLink {
   icon: keyof typeof QUICK_ICONS;
 }
 
+// One hue per kind of destination, repeated wherever that destination appears.
+const QUICK_TONES = {
+  cart: styles.toneAmber,
+  orders: styles.toneCrimson,
+  addresses: styles.toneBlue,
+  profile: styles.toneGreen,
+} satisfies Record<string, string | undefined>;
+
 function QuickTileBody({
   icon: Icon,
+  tone,
   title,
   text,
 }: {
   icon: LucideIcon;
+  tone: keyof typeof QUICK_TONES;
   title: string;
   text: string;
 }): React.JSX.Element {
   return (
     <>
-      <span className={styles.quickIcon}>
+      <span className={`${styles.quickIcon} ${QUICK_TONES[tone] ?? ""}`}>
         <Icon size={20} aria-hidden="true" />
       </span>
       <span className={styles.quickBody}>
@@ -74,6 +84,7 @@ export function AccountQuickLinks({ links }: { links: QuickLink[] }) {
         >
           <QuickTileBody
             icon={ShoppingBag}
+            tone="cart"
             title="Tu carrito"
             text={
               itemCount > 0
@@ -95,7 +106,12 @@ export function AccountQuickLinks({ links }: { links: QuickLink[] }) {
               navigate(link.href);
             }}
           >
-            <QuickTileBody icon={QUICK_ICONS[link.icon]} title={link.title} text={link.text} />
+            <QuickTileBody
+              icon={QUICK_ICONS[link.icon]}
+              tone={link.icon}
+              title={link.title}
+              text={link.text}
+            />
           </Link>
         </motion.div>
       ))}

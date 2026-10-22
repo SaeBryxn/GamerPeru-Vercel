@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
+import { Heart, LayoutGrid, MapPin, Package, UserRound, type LucideIcon } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { useAccountNavigate } from "./account-transition";
 import styles from "./account.module.css";
@@ -11,14 +12,15 @@ import styles from "./account.module.css";
 interface NavDestination {
   label: string;
   href: string;
+  icon: LucideIcon;
 }
 
 const NAV_DESTINATIONS: NavDestination[] = [
-  { label: "Resumen", href: "/cuenta" },
-  { label: "Mis pedidos", href: "/cuenta/pedidos" },
-  { label: "Favoritos", href: "/cuenta/favoritos" },
-  { label: "Direcciones", href: "/cuenta/direcciones" },
-  { label: "Datos personales", href: "/cuenta/perfil" },
+  { label: "Resumen", href: "/cuenta", icon: LayoutGrid },
+  { label: "Mis pedidos", href: "/cuenta/pedidos", icon: Package },
+  { label: "Favoritos", href: "/cuenta/favoritos", icon: Heart },
+  { label: "Direcciones", href: "/cuenta/direcciones", icon: MapPin },
+  { label: "Datos personales", href: "/cuenta/perfil", icon: UserRound },
 ];
 
 const PILL_TRANSITION = { type: "spring", stiffness: 420, damping: 36, mass: 0.8 } as const;
@@ -74,6 +76,7 @@ export function AccountNavigation({ ordersInTransit }: AccountNavigationProps) {
                     aria-hidden="true"
                   />
                 )}
+                <item.icon className={styles.navIcon} size={18} aria-hidden="true" />
                 <span className={styles.navLabel}>{item.label}</span>
                 {showBadge && (
                   <span

@@ -44,15 +44,16 @@ export default async function CuentaLayout({ children }: { children: React.React
     );
   }
 
-  // The badge is a courtesy: if orders fail to load, the account still opens without it.
-  const ordersInTransit =
-    ordersState.status === "READY"
-      ? ordersState.orders.filter((order) => order.status.isInTransit).length
-      : 0;
+  // The counters are a courtesy: if orders fail to load, the account still opens without them.
+  const orders = ordersState.status === "READY" ? ordersState.orders : [];
+  const ordersInTransit = orders.filter((order) => order.status.isInTransit).length;
 
   return (
     <AccountShell
+      firstName={profileState.profile.firstName || null}
       displayEmail={profileState.profile.email}
+      memberSince={profileState.profile.createdAt}
+      orderCount={orders.length}
       ordersInTransit={ordersInTransit}
       showAdminLink={hasAdminShellAccess(authContext)}
     >

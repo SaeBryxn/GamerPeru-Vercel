@@ -114,6 +114,18 @@
   color: var(--color-text-primary);
 }
 
+.metricOk .metricValue {
+  color: var(--color-status-success-text);
+}
+
+.metricAttention .metricValue {
+  color: var(--color-status-warning-text);
+}
+
+.metricCritical .metricValue {
+  color: var(--color-status-danger-text);
+}
+
 .metricValueLarge {
   font-size: 36px;
 }

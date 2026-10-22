@@ -43,6 +43,20 @@
 /* --------------------------------------------------------------------------
  * Sidebar
  * -------------------------------------------------------------------------- */
+/* Obsidian in both themes: the sidebar redefines the text and line tokens it consumes. */
+.sidebar,
+.drawer {
+  --color-text-primary: #f4f4f5;
+  --color-text-secondary: #b4b4bd;
+  --color-text-muted: #8b8b96;
+  --color-border-subtle: #23232a;
+  --color-border-default: #33333c;
+  --color-border-focus: #f4f4f5;
+  --color-surface-secondary: rgba(255, 255, 255, 0.06);
+  --color-surface-tertiary: #27272a;
+  --color-surface-card: #18181b;
+}
+
 .sidebar {
   position: sticky;
   top: 0;
@@ -96,9 +110,9 @@
 
 .brandBadge {
   padding: 1px 6px;
-  border: 1px solid var(--color-border-default);
+  border: 1px solid var(--admin-brand);
   border-radius: 6px;
-  color: var(--color-text-muted);
+  color: var(--admin-brand-text);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
@@ -154,24 +168,25 @@
   outline-offset: 2px;
 }
 
-.navLinkActive {
+.navLinkActive,
+.navLinkActive:hover {
+  background-color: transparent;
   color: var(--color-text-primary);
   font-weight: 600;
 }
 
-.navLinkActive:hover {
-  background-color: transparent;
-}
-
-/* Shared element: Framer Motion glides this 2px marker between entries. */
+/* Shared element: Framer Motion glides this crimson block between entries. */
 .navActiveMarker {
   position: absolute;
-  top: 9px;
-  bottom: 9px;
-  left: 0;
-  width: 2px;
-  border-radius: 9999px;
-  background-color: var(--color-text-primary);
+  inset: 0;
+  border-left: 3px solid var(--admin-brand);
+  border-radius: 8px;
+  background-color: var(--admin-brand-soft);
+}
+
+.navIcon,
+.navLabel {
+  position: relative;
 }
 
 .navIcon {
@@ -182,9 +197,12 @@
   color: var(--color-text-muted);
 }
 
-.navLink:hover .navIcon,
-.navLinkActive .navIcon {
+.navLink:hover .navIcon {
   color: var(--color-text-primary);
+}
+
+.navLinkActive .navIcon {
+  color: var(--admin-brand-text);
 }
 
 .navLabel {
@@ -211,8 +229,8 @@
   height: 36px;
   flex-shrink: 0;
   border-radius: var(--radius-full);
-  background-color: var(--color-surface-tertiary);
-  color: var(--color-text-primary);
+  background: linear-gradient(135deg, var(--admin-brand), #9f1239);
+  color: #ffffff;
   font-family: var(--font-heading);
   font-size: 14px;
   font-weight: 700;
