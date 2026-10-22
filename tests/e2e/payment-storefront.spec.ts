@@ -54,7 +54,7 @@ test.describe("GP-019 / CHK2 — Storefront Manual Payment Submission E2E Suite"
     await page.getByTestId("checkout-input-recipient-name").fill("Mario Rossi");
     await page.getByTestId("checkout-input-phone").fill("987654321");
     await page.getByTestId("checkout-input-street-address").fill("Av. Larco 100");
-    await page.getByTestId("checkout-input-department").fill("Lima");
+    await page.getByTestId("checkout-input-department").selectOption("Lima");
     await page.getByTestId("checkout-input-province").fill("Lima");
     await page.getByTestId("checkout-input-district").fill("Miraflores");
 
@@ -168,7 +168,7 @@ test.describe("GP-019 / CHK2 — Storefront Manual Payment Submission E2E Suite"
       .getByTestId("checkout-input-streetAddress")
       .or(page.getByTestId("checkout-input-street-address"))
       .fill("Av. Larco 100");
-    await page.getByTestId("checkout-input-department").fill("Lima");
+    await page.getByTestId("checkout-input-department").selectOption("Lima");
     await page.getByTestId("checkout-input-province").fill("Lima");
     await page.getByTestId("checkout-input-district").fill("Miraflores");
 

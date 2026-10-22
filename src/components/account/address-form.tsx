@@ -2,6 +2,12 @@
 
 import React, { useState, useRef, type RefObject } from "react";
 import type { CustomerAddressDTO, AddressActionValidationErrors } from "@/lib/account/types";
+import {
+  PERU_DEPARTMENTS,
+  districtSuggestions,
+  findPeruDepartment,
+  provinceSuggestions,
+} from "@/lib/account/peru-locations";
 import { useModalFocus } from "./use-modal-focus";
 import styles from "./address.module.css";
 
@@ -27,6 +33,9 @@ export function AddressForm({
   const isEditing = Boolean(initialAddress);
   const firstInputRef = useRef<HTMLInputElement>(null);
   const [errors, setErrors] = useState<AddressActionValidationErrors>({});
+  // Only drive the province and district suggestions; the inputs stay uncontrolled.
+  const [department, setDepartment] = useState(initialAddress?.department ?? "");
+  const [province, setProvince] = useState(initialAddress?.province ?? "");
 
   const { modalRef } = useModalFocus<HTMLDivElement>({
     isOpen: true,
@@ -188,17 +197,23 @@ export function AddressForm({
                 <label htmlFor="address-department" className={styles.label}>
                   Departamento *
                 </label>
-                <input
+                <select
                   id="address-department"
                   name="department"
-                  type="text"
-                  defaultValue={initialAddress?.department ?? ""}
+                  defaultValue={findPeruDepartment(initialAddress?.department ?? "") ?? ""}
+                  onChange={(event) => setDepartment(event.target.value)}
                   className={`${styles.input} ${errors.department ? styles.inputError : ""}`}
                   aria-invalid={Boolean(errors.department)}
                   aria-describedby={errors.department ? "error-department" : undefined}
-                  maxLength={100}
                   required
-                />
+                >
+                  <option value="">Elige un departamento</option>
+                  {PERU_DEPARTMENTS.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
                 {errors.department && (
                   <span id="error-department" className={styles.fieldError} role="alert">
                     {errors.department}
@@ -216,12 +231,20 @@ export function AddressForm({
                   name="province"
                   type="text"
                   defaultValue={initialAddress?.province ?? ""}
+                  onChange={(event) => setProvince(event.target.value)}
                   className={`${styles.input} ${errors.province ? styles.inputError : ""}`}
                   aria-invalid={Boolean(errors.province)}
                   aria-describedby={errors.province ? "error-province" : undefined}
                   maxLength={100}
+                  list="address-province-options"
+                  autoComplete="address-level2"
                   required
                 />
+                <datalist id="address-province-options">
+                  {provinceSuggestions(department).map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
                 {errors.province && (
                   <span id="error-province" className={styles.fieldError} role="alert">
                     {errors.province}
@@ -243,8 +266,15 @@ export function AddressForm({
                   aria-invalid={Boolean(errors.district)}
                   aria-describedby={errors.district ? "error-district" : undefined}
                   maxLength={100}
+                  list="address-district-options"
+                  autoComplete="address-level3"
                   required
                 />
+                <datalist id="address-district-options">
+                  {districtSuggestions(department, province).map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
                 {errors.district && (
                   <span id="error-district" className={styles.fieldError} role="alert">
                     {errors.district}

@@ -80,7 +80,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     await page.getByTestId("checkout-input-phone").fill("987654321");
     await page.getByTestId("checkout-input-street-address").fill("Av. Larco 742");
     await page.getByTestId("checkout-input-apartment").fill("Oficina 502");
-    await page.getByTestId("checkout-input-department").fill("Lima");
+    await page.getByTestId("checkout-input-department").selectOption("Lima");
     await page.getByTestId("checkout-input-province").fill("Lima");
     await page.getByTestId("checkout-input-district").fill("Miraflores");
     await page
@@ -216,7 +216,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     await page.getByTestId("checkout-input-recipient-name").fill("Luis Ramos");
     await page.getByTestId("checkout-input-phone").fill("911222333");
     await page.getByTestId("checkout-input-street-address").fill("Calle Libertad 200");
-    await page.getByTestId("checkout-input-department").fill("Lima");
+    await page.getByTestId("checkout-input-department").selectOption("Lima");
     await page.getByTestId("checkout-input-province").fill("Lima");
     await page.getByTestId("checkout-input-district").fill("Barranco");
 
@@ -275,7 +275,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     await page.getByTestId("checkout-input-recipient-name").fill("Mario Gomez");
     await page.getByTestId("checkout-input-phone").fill("955667788");
     await page.getByTestId("checkout-input-street-address").fill("Av. Pardo 555");
-    await page.getByTestId("checkout-input-department").fill("Lima");
+    await page.getByTestId("checkout-input-department").selectOption("Lima");
     await page.getByTestId("checkout-input-province").fill("Lima");
     await page.getByTestId("checkout-input-district").fill("Miraflores");
 
@@ -332,7 +332,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     await page.getByTestId("checkout-input-recipient-name").fill("Elena Torres");
     await page.getByTestId("checkout-input-phone").fill("944332211");
     await page.getByTestId("checkout-input-street-address").fill("Av. Arequipa 1234");
-    await page.getByTestId("checkout-input-department").fill("Arequipa");
+    await page.getByTestId("checkout-input-department").selectOption("Arequipa");
     await page.getByTestId("checkout-input-province").fill("Arequipa");
     await page.getByTestId("checkout-input-district").fill("Yanahuara");
 
@@ -368,7 +368,7 @@ test.describe("GP-018 / CHK6 — Customer Checkout UI & End-to-End Acceptance Su
     await page.getByTestId("checkout-input-recipient-name").fill("Valeria Rios");
     await page.getByTestId("checkout-input-phone").fill("977665544");
     await page.getByTestId("checkout-input-street-address").fill("Calle Las Flores 456");
-    await page.getByTestId("checkout-input-department").fill("Lima");
+    await page.getByTestId("checkout-input-department").selectOption("Lima");
     await page.getByTestId("checkout-input-province").fill("Lima");
     await page.getByTestId("checkout-input-district").fill("San Isidro");
 

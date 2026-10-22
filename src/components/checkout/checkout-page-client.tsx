@@ -24,6 +24,12 @@ import type {
   CheckoutSubmitResult,
 } from "@/lib/checkout/types";
 import styles from "./checkout-page-client.module.css";
+import {
+  PERU_DEPARTMENTS,
+  districtSuggestions,
+  findPeruDepartment,
+  provinceSuggestions,
+} from "@/lib/account/peru-locations";
 
 export interface CheckoutPageClientProps {
   context: CheckoutContextDTO;
@@ -248,8 +254,8 @@ export function CheckoutPageClient({
       if (!inlineAddress.streetAddress.trim()) {
         errors.streetAddress = "La dirección de entrega es obligatoria.";
       }
-      if (!inlineAddress.department.trim()) {
-        errors.department = "El departamento es obligatorio.";
+      if (!findPeruDepartment(inlineAddress.department)) {
+        errors.department = "Elige un departamento de la lista.";
       }
       if (!inlineAddress.province.trim()) {
         errors.province = "La provincia es obligatoria.";
@@ -774,21 +780,34 @@ export function CheckoutPageClient({
                     <label htmlFor="inline-department" className={styles.label}>
                       Departamento <span className={styles.requiredMark}>*</span>
                     </label>
-                    <input
+                    <select
                       id="inline-department"
-                      type="text"
                       value={inlineAddress.department}
                       onChange={(e) => {
-                        setInlineAddress((prev) => ({ ...prev, department: e.target.value }));
+                        const department = e.target.value;
+                        // A new department invalidates the province and district typed for the old one.
+                        const provinces = provinceSuggestions(department);
+                        setInlineAddress((prev) => ({
+                          ...prev,
+                          department,
+                          province: provinces.length === 1 ? (provinces[0] ?? "") : "",
+                          district: "",
+                        }));
                         setReviewChangedWarning(null);
                         resetAttemptId();
                       }}
                       className={[styles.input, formErrors.department ? styles.inputError : ""]
                         .filter(Boolean)
                         .join(" ")}
-                      placeholder="Lima"
                       data-testid="checkout-input-department"
-                    />
+                    >
+                      <option value="">Elige un departamento</option>
+                      {PERU_DEPARTMENTS.map((department) => (
+                        <option key={department} value={department}>
+                          {department}
+                        </option>
+                      ))}
+                    </select>
                     {formErrors.department && (
                       <span className={styles.fieldError}>{formErrors.department}</span>
                     )}
@@ -811,8 +830,15 @@ export function CheckoutPageClient({
                         .filter(Boolean)
                         .join(" ")}
                       placeholder="Lima"
+                      list="inline-province-options"
+                      autoComplete="address-level2"
                       data-testid="checkout-input-province"
                     />
+                    <datalist id="inline-province-options">
+                      {provinceSuggestions(inlineAddress.department).map((province) => (
+                        <option key={province} value={province} />
+                      ))}
+                    </datalist>
                     {formErrors.province && (
                       <span className={styles.fieldError}>{formErrors.province}</span>
                     )}
@@ -835,8 +861,17 @@ export function CheckoutPageClient({
                         .filter(Boolean)
                         .join(" ")}
                       placeholder="Miraflores"
+                      list="inline-district-options"
+                      autoComplete="address-level3"
                       data-testid="checkout-input-district"
                     />
+                    <datalist id="inline-district-options">
+                      {districtSuggestions(inlineAddress.department, inlineAddress.province).map(
+                        (district) => (
+                          <option key={district} value={district} />
+                        )
+                      )}
+                    </datalist>
                     {formErrors.district && (
                       <span className={styles.fieldError}>{formErrors.district}</span>
                     )}

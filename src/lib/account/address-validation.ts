@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { findPeruDepartment } from "./peru-locations";
 import type { AddressActionValidationErrors } from "./types";
 
 export const baseAddressSchema = z.object({
@@ -31,7 +32,17 @@ export const baseAddressSchema = z.object({
     .string({ required_error: "El departamento es obligatorio." })
     .trim()
     .min(1, "El departamento es obligatorio.")
-    .max(100, "El departamento no puede exceder 100 caracteres."),
+    .max(100, "El departamento no puede exceder 100 caracteres.")
+    // Stored with INEI spelling so a typo or a missing accent never produces a second "Lima".
+    .transform((value, context): string => {
+      const department = findPeruDepartment(value);
+      if (department) return department;
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Elige un departamento de la lista.",
+      });
+      return z.NEVER;
+    }),
   province: z
     .string({ required_error: "La provincia es obligatoria." })
     .trim()
