@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import React, { useId, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown, ImageIcon, Plus } from "lucide-react";
 import { StatusBadge } from "@/components/admin/ui";
 import {
@@ -24,6 +24,7 @@ export interface VariantBoardProps {
   media: AdminProductUiDetailMedia[];
   variantStock: Record<string, VariantStockRow>;
   canManageInventory: boolean;
+  primaryMediaAssetId?: string | null;
   /** Set when the category sheet has a weight field: weight is edited there, once for the product. */
   weightSpecLabel?: string | null;
   onChanged: () => void;
@@ -59,6 +60,7 @@ export function VariantBoard({
   media,
   variantStock,
   canManageInventory,
+  primaryMediaAssetId = null,
   weightSpecLabel = null,
   onChanged,
 }: VariantBoardProps) {
@@ -66,10 +68,17 @@ export function VariantBoard({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorStage, setErrorStage] = useState<"variant" | "stock" | "photo">("variant");
   const [notice, setNotice] = useState<string | null>(null);
   const saving = useRef(false);
   const variantTracker = useRef(new MutationRequestTracker());
   const photoTracker = useRef(new MutationRequestTracker());
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const moreRef = useRef<HTMLDetailsElement>(null);
+  const skuRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
   const photos = media
     .filter((item) => item.publicUrl && item.mimeType.startsWith("image/"))
     .toSorted((a, b) => a.displayOrder - b.displayOrder);
@@ -101,8 +110,14 @@ export function VariantBoard({
     event.preventDefault();
     if (!draft || saving.current) return;
     setError(null);
+    setErrorStage("variant");
     setNotice(null);
     // Validate all stages before saving the first one, using the existing money parser.
+    const parsedMoney = {
+      price_cents: null,
+      compare_at_price_cents: null,
+      cost_cents: null,
+    } as Record<"price_cents" | "compare_at_price_cents" | "cost_cents", number | null>;
     for (const [input, field] of [
       [draft.price, "price_cents"],
       [draft.compareAt, "compare_at_price_cents"],
@@ -113,6 +128,7 @@ export function VariantBoard({
         setError(result.error);
         return;
       }
+      parsedMoney[field] = result.cents;
     }
     const quantity = Number(draft.stock);
     if (
@@ -120,9 +136,12 @@ export function VariantBoard({
       (!draft.stock.trim() || !Number.isInteger(quantity) || quantity < 0)
     ) {
       setError("Usa un número entero de 0 o más.");
+      setErrorStage("stock");
       return;
     }
     if (!draft.sku.trim()) {
+      if (moreRef.current) moreRef.current.open = true;
+      skuRef.current?.focus();
       setError("Completa el código SKU en Más opciones.");
       return;
     }
@@ -141,35 +160,51 @@ export function VariantBoard({
         weightGrams: draft.weight ? Number(draft.weight) : null,
         status: draft.status,
       };
-      const payload = draft.variant
-        ? {
-            ...fields,
-            variantId: draft.variant.id,
-            expectedUpdatedAt: new Date(draft.variant.updatedAt).toISOString(),
-          }
-        : fields;
-      const mutationRequestId = variantTracker.current.getRequestId(payload);
-      const result =
-        "variantId" in payload
-          ? await updateVariantAction({ ...payload, mutationRequestId })
-          : await createVariantAction({ ...payload, mutationRequestId });
-      variantTracker.current.complete();
-      if (!result.success || !result.data) {
-        setError(
-          result.error ??
-            (draft.variant ? "No se pudo actualizar la variante." : "No se pudo crear la variante.")
-        );
-        return;
+      const metadataChanged =
+        !draft.variant ||
+        fields.sku !== draft.variant.sku ||
+        fields.title !== draft.variant.title ||
+        parsedMoney.price_cents !== draft.variant.priceCents ||
+        parsedMoney.compare_at_price_cents !== draft.variant.compareAtPriceCents ||
+        parsedMoney.cost_cents !== draft.variant.costCents ||
+        fields.weightGrams !== draft.variant.weightGrams ||
+        fields.status !== draft.variant.status;
+      let saved = draft.variant ? { ...draft.variant } : null;
+      if (metadataChanged) {
+        const payload = draft.variant
+          ? {
+              ...fields,
+              variantId: draft.variant.id,
+              expectedUpdatedAt: new Date(draft.variant.updatedAt).toISOString(),
+            }
+          : fields;
+        const mutationRequestId = variantTracker.current.getRequestId(payload);
+        const result =
+          "variantId" in payload
+            ? await updateVariantAction({ ...payload, mutationRequestId })
+            : await createVariantAction({ ...payload, mutationRequestId });
+        variantTracker.current.complete();
+        if (!result.success || !result.data) {
+          setError(
+            result.error ??
+              (draft.variant
+                ? "No se pudo actualizar la variante."
+                : "No se pudo crear la variante.")
+          );
+          return;
+        }
+        changed = true;
+        saved = {
+          ...result.data.variant,
+          isSkuImmutable: draft.variant?.isSkuImmutable ?? false,
+        };
+        // Retain the saved identity/timestamp even if a later independent action fails.
+        patch({ variant: saved });
       }
-      changed = true;
-      const saved = {
-        ...result.data.variant,
-        isSkuImmutable: draft.variant?.isSkuImmutable ?? false,
-      };
-      // Retain the saved identity/timestamp even if a later independent action fails.
-      patch({ variant: saved });
-      if (canManageInventory && draft.stock !== draft.initialStock) {
+      if (!saved) return;
+      if (canManageInventory && quantity !== Number(draft.initialStock)) {
         stage = "stock";
+        setErrorStage("stock");
         const stockResult = await setVariantStockAction({
           productId,
           variantId: saved.id,
@@ -177,16 +212,19 @@ export function VariantBoard({
         });
         if (!stockResult.success || !stockResult.data) {
           setError(stockResult.error ?? "No se pudo guardar.");
-          setNotice(
-            "El color o talla ya se guardó. Falta guardar el stock y, si la cambiaste, la foto."
-          );
+          if (changed)
+            setNotice(
+              "El precio y los datos ya se guardaron. Falta guardar las unidades y, si la cambiaste, la foto."
+            );
           return;
         }
         saved.isSkuImmutable = true;
+        changed = true;
         patch({ variant: { ...saved }, initialStock: String(stockResult.data.onHand) });
       }
       if (draft.photoId && draft.photoId !== draft.initialPhotoId) {
         stage = "photo";
+        setErrorStage("photo");
         const photoPayload = {
           productId,
           productMediaId: draft.photoId,
@@ -199,14 +237,16 @@ export function VariantBoard({
         photoTracker.current.complete();
         if (!photoResult.success) {
           setError(photoResult.error ?? "No se pudo actualizar la variante de la foto.");
-          setNotice("Los datos ya se guardaron. Falta asignar la foto.");
+          if (changed) setNotice("Los datos ya se guardaron. Falta asignar la foto.");
           return;
         }
         patch({ initialPhotoId: draft.photoId });
+        changed = true;
       }
       setDraft(null);
       setNotice(draft.variant ? "Color o talla actualizado." : "Color o talla agregado.");
     } catch {
+      setErrorStage(stage);
       setError(
         stage === "variant"
           ? draft.variant
@@ -224,6 +264,17 @@ export function VariantBoard({
       if (changed) onChanged();
     }
   };
+
+  const errorMessage = error ? (
+    <p ref={errorRef} id={`${id}-error`} role="alert" tabIndex={-1} className={styles.error}>
+      {error}
+    </p>
+  ) : null;
+  const selectedPhoto = draft ? photos.find((photo) => photo.id === draft.photoId) : undefined;
+  const totalAvailable = variants.reduce(
+    (sum, variant) => sum + (variantStock[variant.id]?.available ?? 0),
+    0
+  );
 
   const editor = draft ? (
     <form
@@ -247,91 +298,128 @@ export function VariantBoard({
             placeholder="Ej. Negro · Mediano"
           />
         </label>
-        <div className={styles.grid}>
-          <label className={styles.field}>
-            <span>Precio</span>
-            <div className={styles.money}>
-              <span aria-hidden="true">S/</span>
-              <input
-                aria-label="Precio"
-                required
-                inputMode="decimal"
-                value={draft.price}
-                onChange={(event) => patch({ price: event.target.value })}
-                placeholder="329.00"
-              />
+        <div className={styles.editorGrid}>
+          <section className={styles.group} aria-label="Precios de esta versión">
+            <h4>Precio de venta</h4>
+            <div className={styles.grid}>
+              <label className={styles.field}>
+                <span>Precio</span>
+                <div className={styles.money}>
+                  <span aria-hidden="true">S/</span>
+                  <input
+                    aria-label="Precio"
+                    required
+                    inputMode="decimal"
+                    value={draft.price}
+                    onChange={(event) => patch({ price: event.target.value })}
+                    placeholder="329.00"
+                  />
+                </div>
+              </label>
+              <label className={styles.field}>
+                <span>Precio antes (tachado)</span>
+                <div className={styles.money}>
+                  <span aria-hidden="true">S/</span>
+                  <input
+                    aria-label="Precio antes (tachado)"
+                    inputMode="decimal"
+                    value={draft.compareAt}
+                    onChange={(event) => patch({ compareAt: event.target.value })}
+                    placeholder="Opcional"
+                  />
+                </div>
+              </label>
             </div>
-          </label>
-          <label className={styles.field}>
-            <span>Precio antes (tachado)</span>
-            <div className={styles.money}>
-              <span aria-hidden="true">S/</span>
-              <input
-                aria-label="Precio antes (tachado)"
-                inputMode="decimal"
-                value={draft.compareAt}
-                onChange={(event) => patch({ compareAt: event.target.value })}
-                placeholder="Opcional"
-              />
+          </section>
+          <section className={styles.group} aria-label="Inventario de esta versión">
+            <h4>Inventario</h4>
+            <div className={styles.grid}>
+              <label className={styles.field}>
+                <span>Unidades en stock</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  required
+                  disabled={!canManageInventory}
+                  value={draft.stock}
+                  aria-invalid={Boolean(error && errorStage === "stock")}
+                  aria-describedby={`${id}-stock-help${error && errorStage === "stock" ? ` ${id}-error` : ""}`}
+                  onChange={(event) => patch({ stock: event.target.value })}
+                />
+              </label>
             </div>
-          </label>
-          <label className={styles.field}>
-            <span>Unidades en stock</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              required
-              disabled={!canManageInventory}
-              value={draft.stock}
-              onChange={(event) => patch({ stock: event.target.value })}
-            />
-          </label>
+            <p id={`${id}-stock-help`} className={styles.hint}>
+              {canManageInventory
+                ? "Cuenta las unidades físicas. Las reservadas siguen separadas."
+                : "Puedes consultar el stock. Para cambiarlo necesitas permisos de inventario."}
+            </p>
+            {errorStage === "stock" && errorMessage}
+          </section>
         </div>
-        <p className={styles.hint}>
-          {canManageInventory
-            ? "Cuenta las unidades físicas. Las reservadas siguen separadas."
-            : "Puedes consultar el stock. Para cambiarlo necesitas permisos de inventario."}
-        </p>
-        <div className={styles.grid}>
-          <label className={styles.field}>
-            <span>Estado</span>
-            <select
-              value={draft.status}
-              onChange={(event) => patch({ status: event.target.value as VariantStatus })}
-            >
-              <option value="ACTIVE">Activa</option>
-              <option value="INACTIVE">Inactiva</option>
-              <option value="ARCHIVED">Archivada</option>
-            </select>
-          </label>
-          <label className={styles.field}>
-            <span>Asignar una foto</span>
-            <select
-              value={draft.photoId}
-              onChange={(event) => patch({ photoId: event.target.value })}
-            >
-              <option value="">Sin asignar una foto nueva</option>
-              {photos
-                .filter((photo) => !photo.variantId || photo.variantId === draft.variant?.id)
-                .map((photo, index) => (
-                  <option key={photo.id} value={photo.id}>
-                    {photo.altText?.trim() ? photo.altText : `Foto ${index + 1}`}
-                  </option>
-                ))}
-            </select>
-          </label>
-        </div>
-        <p className={styles.hint}>
-          Usa una foto de la galería. La foto principal debe conservarse como foto general del
-          producto.
-        </p>
-        <details className={styles.more}>
+        <section className={styles.group} aria-label="Estado y fotografía">
+          <h4>Cómo se muestra</h4>
+          <div className={styles.grid}>
+            <label className={styles.field}>
+              <span>Estado</span>
+              <select
+                value={draft.status}
+                onChange={(event) => patch({ status: event.target.value as VariantStatus })}
+              >
+                <option value="ACTIVE">Activa</option>
+                <option value="INACTIVE">Inactiva</option>
+                <option value="ARCHIVED">Archivada</option>
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span>Asignar una foto</span>
+              <select
+                value={draft.photoId}
+                onChange={(event) => patch({ photoId: event.target.value })}
+              >
+                <option value="">Conservar las fotos actuales</option>
+                {photos
+                  .filter((photo) => !photo.variantId || photo.variantId === draft.variant?.id)
+                  .map((photo, index) => (
+                    <option
+                      key={photo.id}
+                      value={photo.id}
+                      disabled={photo.mediaAssetId === primaryMediaAssetId}
+                    >
+                      {photo.altText?.trim() ? photo.altText : `Foto ${index + 1}`}
+                      {photo.mediaAssetId === primaryMediaAssetId
+                        ? " · Foto principal (general)"
+                        : ""}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
+          {selectedPhoto?.publicUrl && (
+            <div className={styles.photoPreview}>
+              <Image
+                src={selectedPhoto.publicUrl}
+                alt={`Foto elegida para ${draft.title}`}
+                width={64}
+                height={64}
+                unoptimized
+              />
+              <span>Foto de esta versión</span>
+            </div>
+          )}
+          <p className={styles.hint}>
+            Usa una foto de la galería. La foto principal debe conservarse como foto general del
+            producto.
+          </p>
+          {errorStage === "photo" && errorMessage}
+        </section>
+        <details ref={moreRef} className={styles.more}>
           <summary>Más opciones{!draft.sku.trim() ? " · Falta el código SKU" : ""}</summary>
           <div className={styles.grid}>
             <label className={styles.field}>
               <span>Código SKU</span>
               <input
+                ref={skuRef}
                 maxLength={50}
                 disabled={draft.variant?.isSkuImmutable}
                 value={draft.sku}
@@ -368,9 +456,10 @@ export function VariantBoard({
           </div>
         </details>
       </fieldset>
-      {error && (
-        <p role="alert" className={styles.error}>
-          {error}
+      {errorStage === "variant" && errorMessage}
+      {notice && (
+        <p role="status" className={styles.notice}>
+          {notice}
         </p>
       )}
       <div className={styles.actions}>
@@ -393,12 +482,23 @@ export function VariantBoard({
 
   return (
     <section className={styles.root} aria-label="Colores, tallas y precios" aria-busy={pending}>
-      <p className={styles.hint}>Abre una ficha para cambiar su precio, foto o unidades.</p>
+      <header className={styles.boardHeader}>
+        <div>
+          <h3>Versiones del producto</h3>
+          <p className={styles.hint}>
+            {variants.length} {variants.length === 1 ? "versión" : "versiones"} · {totalAvailable}{" "}
+            unidades disponibles en inventario
+          </p>
+        </div>
+        <button type="button" className={styles.add} disabled={pending} onClick={() => open(null)}>
+          <Plus size={16} aria-hidden="true" />
+          Agregar color o talla
+        </button>
+      </header>
       <div className={styles.board}>
         {variants.map((variant) => {
-          const photo =
-            photos.find((item) => item.variantId === variant.id) ??
-            photos.find((item) => item.variantId === null);
+          const variantPhoto = photos.find((item) => item.variantId === variant.id);
+          const photo = variantPhoto ?? photos.find((item) => item.variantId === null);
           const stock = variantStock[variant.id];
           const expanded = draft?.variant?.id === variant.id;
           return (
@@ -417,11 +517,16 @@ export function VariantBoard({
                 aria-label={`Editar ${nameOf(variant)}`}
                 onClick={() => (expanded ? setDraft(null) : open(variant))}
               >
-                <span className={styles.thumbnail}>
-                  {photo?.publicUrl ? (
-                    <Image src={photo.publicUrl} alt="" width={64} height={64} unoptimized />
-                  ) : (
-                    <ImageIcon size={24} aria-hidden="true" />
+                <span className={styles.photoGroup}>
+                  <span className={styles.thumbnail}>
+                    {photo?.publicUrl ? (
+                      <Image src={photo.publicUrl} alt="" width={64} height={64} unoptimized />
+                    ) : (
+                      <ImageIcon size={24} aria-hidden="true" />
+                    )}
+                  </span>
+                  {photo && !variantPhoto && (
+                    <span className={styles.photoCaption}>Foto general</span>
                   )}
                 </span>
                 <span className={styles.cardInfo}>
@@ -439,6 +544,9 @@ export function VariantBoard({
                         ? "Archivada"
                         : "Inactiva"}
                   </StatusBadge>
+                  {variant.status === "ACTIVE" && stock?.available === 0 && (
+                    <StatusBadge tone="warning">Sin stock</StatusBadge>
+                  )}
                   <ChevronDown size={16} aria-hidden="true" />
                 </span>
               </button>
@@ -453,11 +561,7 @@ export function VariantBoard({
       {draft &&
         (!draft.variant || !variants.some((variant) => variant.id === draft.variant?.id)) &&
         editor}
-      <button type="button" className={styles.add} disabled={pending} onClick={() => open(null)}>
-        <Plus size={16} aria-hidden="true" />
-        Agregar color o talla
-      </button>
-      {notice && (
+      {!draft && notice && (
         <p role="status" className={styles.hint}>
           {notice}
         </p>

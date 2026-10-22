@@ -1783,6 +1783,7 @@ export function ProductEditor({
                   variants={variants}
                   media={media}
                   variantStock={variantStock}
+                  primaryMediaAssetId={detail.primaryMedia?.mediaAssetId ?? null}
                   canManageInventory={actorPermissions.includes("inventory:manage")}
                   weightSpecLabel={weightSpecField?.label ?? null}
                   onChanged={() => router.refresh()}
