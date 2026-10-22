@@ -9,6 +9,8 @@ interface DashboardHeaderProps {
   actorRoles: string[];
   /** Leave the selector out when the page places it next to the metrics it drives. */
   showPeriodSelector?: boolean;
+  /** Controls shown at the right of the title, such as the view switcher. */
+  aside?: React.ReactNode;
 }
 
 const PERIOD_OPTIONS: Array<{ id: DashboardPeriodSelector; label: string }> = [
@@ -26,7 +28,7 @@ export function PeriodSelector({ selectedPeriod }: { selectedPeriod: DashboardPe
         return (
           <Link
             key={option.id}
-            href={`/admin?period=${option.id}`}
+            href={`/admin?vista=metricas&period=${option.id}`}
             className={`${styles.periodBtn} ${isActive ? styles.periodBtnActive : ""}`}
             aria-current={isActive ? "page" : undefined}
           >
@@ -43,6 +45,7 @@ export function DashboardHeader({
   actorEmail,
   actorRoles,
   showPeriodSelector = true,
+  aside,
 }: DashboardHeaderProps) {
   return (
     <header className={styles.header}>
@@ -58,6 +61,7 @@ export function DashboardHeader({
         </p>
       </div>
 
+      {aside}
       {showPeriodSelector && <PeriodSelector selectedPeriod={selectedPeriod} />}
     </header>
   );

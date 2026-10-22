@@ -55,7 +55,7 @@
 }
 
 .cellRow > * {
-  padding: var(--admin-card-padding);
+  padding: var(--space-4) var(--space-5);
   box-shadow:
     -1px 0 0 0 var(--color-border-subtle),
     0 -1px 0 0 var(--color-border-subtle);
@@ -106,7 +106,7 @@
 
 .metricValue {
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.1;
@@ -159,6 +159,103 @@
 
 .dotAttention {
   background-color: var(--color-status-warning-text);
+}
+
+.badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 2px 9px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 9999px;
+  background-color: var(--color-surface-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+.badge::before {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background-color: currentColor;
+  content: "";
+}
+
+.badgeSuccess {
+  border-color: var(--color-status-success-border);
+  background-color: var(--color-status-success-background);
+  color: var(--color-status-success-text);
+}
+
+.badgeWarning {
+  border-color: var(--color-status-warning-border);
+  background-color: var(--color-status-warning-background);
+  color: var(--color-status-warning-text);
+}
+
+.badgeDanger {
+  border-color: var(--color-status-danger-border);
+  background-color: var(--color-status-danger-background);
+  color: var(--color-status-danger-text);
+}
+
+.badgeInfo {
+  border-color: var(--color-status-info-border);
+  background-color: var(--color-status-info-background);
+  color: var(--color-status-info-text);
+}
+
+.badgeNeutral {
+  border-color: var(--color-border-default);
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-secondary);
+}
+
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background-color: var(--color-surface-secondary);
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.segment:hover {
+  color: var(--color-text-primary);
+}
+
+.segment:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.segmentActive {
+  background-color: var(--color-surface-card);
+  box-shadow: var(--admin-card-shadow);
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 @media (max-width: 639px) {

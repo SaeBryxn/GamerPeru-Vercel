@@ -90,20 +90,31 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
 });
 
 describe("Admin navigation sections", () => {
-  it("groups every destination into a titled section in display order", () => {
-    const groups = groupAdminNavigation(CANONICAL_ADMIN_NAV_ITEMS);
-    expect(groups.map((group) => [group.label, group.items.map((item) => item.id)])).toEqual([
-      ["Resumen", ["overview"]],
-      ["Ventas", ["orders", "payment-verification"]],
+  const shape = (permissions?: Set<PermissionName>) =>
+    groupAdminNavigation(
+      permissions ? getAdminNavigation(permissions) : CANONICAL_ADMIN_NAV_ITEMS
+    ).map((group) => [
+      group.label,
+      group.entries.map((entry) =>
+        entry.kind === "item"
+          ? entry.item.id
+          : [entry.folder.label, entry.items.map((item) => item.id)]
+      ),
+    ]);
+
+  it("groups destinations into sections with collapsible folders in display order", () => {
+    expect(shape()).toEqual([
+      ["Operaciones", ["overview", "orders", "payment-verification"]],
       ["Catálogo", ["products", "taxonomy"]],
-      ["Tienda online", ["storefront-home", "storefront-menu"]],
-      ["Inteligencia artificial", ["ai-product-assistant", "ai-settings"]],
-      ["Accesos", ["team"]],
+      ["Tienda y contenido", [["Diseño de tienda", ["storefront-home", "storefront-menu"]]]],
+      ["IA y sistema", [["Motor IA", ["ai-product-assistant", "ai-settings"]], "team"]],
     ]);
   });
 
-  it("drops sections the staff member cannot open", () => {
-    const groups = groupAdminNavigation(getAdminNavigation(new Set(["orders:verify"])));
-    expect(groups.map((group) => group.id)).toEqual(["overview", "sales"]);
+  it("drops sections and folders the staff member cannot open", () => {
+    expect(shape(new Set<PermissionName>(["ai:manage_credentials"]))).toEqual([
+      ["Operaciones", ["overview"]],
+      ["IA y sistema", [["Motor IA", ["ai-settings"]]]],
+    ]);
   });
 });

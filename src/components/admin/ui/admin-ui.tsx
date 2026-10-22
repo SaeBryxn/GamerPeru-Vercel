@@ -146,3 +146,60 @@ export function MetricWidget({
     </div>
   );
 }
+
+export type StatusBadgeTone = "success" | "warning" | "danger" | "info" | "neutral";
+
+const BADGE_TONE: Record<StatusBadgeTone, string | undefined> = {
+  success: styles.badgeSuccess,
+  warning: styles.badgeWarning,
+  danger: styles.badgeDanger,
+  info: styles.badgeInfo,
+  neutral: styles.badgeNeutral,
+};
+
+/** Status pill: tinted fill, hairline border and a dot, so a row reads at a glance. */
+export function StatusBadge({
+  tone,
+  children,
+  testId,
+}: {
+  tone: StatusBadgeTone;
+  children: React.ReactNode;
+  testId?: string;
+}) {
+  return (
+    <span
+      className={[styles.badge, BADGE_TONE[tone]].filter(Boolean).join(" ")}
+      data-tone={tone}
+      data-testid={testId}
+    >
+      {children}
+    </span>
+  );
+}
+
+export interface SegmentedNavOption {
+  href: string;
+  label: React.ReactNode;
+  active: boolean;
+}
+
+/** Compact segmented control made of links, for views that live in the URL. */
+export function SegmentedNav({ label, options }: { label: string; options: SegmentedNavOption[] }) {
+  return (
+    <nav className={styles.segmented} aria-label={label}>
+      {options.map((option) => (
+        <Link
+          key={option.href}
+          href={option.href}
+          className={[styles.segment, option.active ? styles.segmentActive : ""]
+            .filter(Boolean)
+            .join(" ")}
+          aria-current={option.active ? "page" : undefined}
+        >
+          {option.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}

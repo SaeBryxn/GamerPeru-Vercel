@@ -1,15 +1,18 @@
 import type { PermissionName } from "@/lib/auth/rbac";
-import type { AdminNavGroup, AdminNavItem } from "./types";
+import type { AdminNavFolder, AdminNavFolderId, AdminNavGroup, AdminNavItem } from "./types";
 
 /** Sidebar sections, in display order; each one gets its own color in the shell. */
 export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
-  { id: "overview", label: "Resumen", hint: "Lo que pide tu atención hoy" },
-  { id: "sales", label: "Ventas", hint: "Pedidos y comprobantes de pago" },
+  { id: "operations", label: "Operaciones", hint: "Pedidos y pagos del día" },
   { id: "catalog", label: "Catálogo", hint: "Productos, fotos, categorías y marcas" },
-  { id: "storefront", label: "Tienda online", hint: "Portada, imágenes, videos y menú" },
-  { id: "ai", label: "Inteligencia artificial", hint: "Investigación y proveedores de IA" },
-  { id: "access", label: "Accesos", hint: "Quién entra al panel" },
+  { id: "storefront", label: "Tienda y contenido", hint: "Portada, imágenes, videos y menú" },
+  { id: "system", label: "IA y sistema", hint: "Motor de IA y accesos al panel" },
 ];
+
+export const ADMIN_NAV_FOLDERS: Record<AdminNavFolderId, AdminNavFolder> = {
+  "storefront-design": { id: "storefront-design", label: "Diseño de tienda", iconName: "Palette" },
+  "ai-engine": { id: "ai-engine", label: "Motor IA", iconName: "Cpu" },
+};
 
 /**
  * Canonical Gamer Perú Admin Navigation Items
@@ -23,7 +26,7 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     id: "overview",
     label: "Inicio",
     href: "/admin",
-    group: "overview",
+    group: "operations",
     iconName: "Gauge",
     description: "Panel principal de administración",
   },
@@ -31,7 +34,7 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     id: "orders",
     label: "Pedidos",
     href: "/admin/orders",
-    group: "sales",
+    group: "operations",
     iconName: "ShoppingBag",
     requiredPermission: "orders:manage",
     description: "Gestión y seguimiento de pedidos",
@@ -40,7 +43,7 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     id: "payment-verification",
     label: "Pagos",
     href: "/admin/pagos",
-    group: "sales",
+    group: "operations",
     iconName: "ReceiptText",
     requiredPermission: "orders:verify",
     description: "Cola de comprobantes Yape/Plin por verificar",
@@ -68,6 +71,7 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: "Home de la tienda",
     href: "/admin/home",
     group: "storefront",
+    folder: "storefront-design",
     iconName: "LayoutTemplate",
     requiredPermission: "catalog:manage",
     description: "Secciones, textos, imágenes y videos de la portada",
@@ -77,6 +81,7 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: "Menú de la tienda",
     href: "/admin/menu",
     group: "storefront",
+    folder: "storefront-design",
     iconName: "PanelTop",
     requiredPermission: "catalog:manage",
     description: "Qué secciones ve el cliente en la barra superior",
@@ -85,7 +90,8 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     id: "ai-product-assistant",
     label: "Asistente IA",
     href: "/admin/products/ai-import",
-    group: "ai",
+    group: "system",
+    folder: "ai-engine",
     iconName: "Sparkles",
     requiredPermission: "catalog:ai_research",
     description: "Investigación y revisión asistida de productos",
@@ -94,7 +100,8 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     id: "ai-settings",
     label: "Configuración IA",
     href: "/admin/settings/ai",
-    group: "ai",
+    group: "system",
+    folder: "ai-engine",
     iconName: "KeyRound",
     requiredPermission: "ai:manage_credentials",
     description: "Proveedores, credenciales y perfiles de IA",
@@ -103,21 +110,39 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     id: "team",
     label: "Equipo",
     href: "/admin/equipo",
-    group: "access",
+    group: "system",
     iconName: "UserCog",
     requiredPermission: "staff:manage",
     description: "Quién accede al panel y con qué nivel",
   },
 ];
 
-/** The visible items split into their sections; sections left empty by permissions are dropped. */
+export type AdminNavEntry =
+  | { kind: "item"; item: AdminNavItem }
+  | { kind: "folder"; folder: AdminNavFolder; items: AdminNavItem[] };
+
+/**
+ * The visible items split into their sections; inside a section, items that share a folder
+ * collapse into one entry placed where the first of them sits. Empty sections are dropped.
+ */
 export function groupAdminNavigation(
   items: AdminNavItem[]
-): Array<AdminNavGroup & { items: AdminNavItem[] }> {
-  return ADMIN_NAV_GROUPS.map((group) => ({
-    ...group,
-    items: items.filter((item) => item.group === group.id),
-  })).filter((group) => group.items.length > 0);
+): Array<AdminNavGroup & { entries: AdminNavEntry[] }> {
+  return ADMIN_NAV_GROUPS.map((group) => {
+    const entries: AdminNavEntry[] = [];
+    for (const item of items.filter((candidate) => candidate.group === group.id)) {
+      if (!item.folder) {
+        entries.push({ kind: "item", item });
+        continue;
+      }
+      const existing = entries.find(
+        (entry) => entry.kind === "folder" && entry.folder.id === item.folder
+      );
+      if (existing?.kind === "folder") existing.items.push(item);
+      else entries.push({ kind: "folder", folder: ADMIN_NAV_FOLDERS[item.folder], items: [item] });
+    }
+    return { ...group, entries };
+  }).filter((group) => group.entries.length > 0);
 }
 
 /**

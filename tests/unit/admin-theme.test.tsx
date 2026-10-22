@@ -66,7 +66,7 @@ describe("Admin theme", () => {
 
 describe("Admin sidebar", () => {
   const items = [
-    { id: "overview", label: "Inicio", href: "/admin", group: "overview", iconName: "Gauge" },
+    { id: "overview", label: "Inicio", href: "/admin", group: "operations", iconName: "Gauge" },
     {
       id: "products",
       label: "Productos",
@@ -78,7 +78,7 @@ describe("Admin sidebar", () => {
       id: "ai",
       label: "Asistente IA",
       href: "/admin/products/ai-import",
-      group: "ai",
+      group: "system",
       iconName: "Sparkles",
     },
   ] as AdminNavItem[];

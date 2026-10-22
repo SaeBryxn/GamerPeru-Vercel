@@ -81,22 +81,28 @@ test.describe("GP-023 / CHK2 — Admin Dashboard Visual Integration & E2E Suite"
     await expect(page.locator("aside")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1, name: "Resumen" })).toBeVisible();
 
-    // Period selector loaded with default 30 días active
-    const treintaDiasLink = page.getByRole("link", { name: "30 días" });
-    await expect(treintaDiasLink).toBeVisible();
-    await expect(treintaDiasLink).toHaveAttribute("aria-current", "page");
-
-    // All 5 metric sections authorized for SUPER_ADMIN
-    await expect(page.getByRole("heading", { level: 2, name: "Resumen Financiero" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "Flujo de Pedidos" })).toBeVisible();
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Verificación de Pagos Manuales" })
-    ).toBeVisible();
+    // The operational view holds the catalog and inventory snapshots.
+    await expect(page.getByRole("link", { name: "Resumen operativo" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
     await expect(
       page.getByRole("heading", { level: 2, name: "Resumen de Catálogo" })
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { level: 2, name: "Resumen de Inventario" })
+    ).toBeVisible();
+
+    // The period metrics live in their own view, with 30 días selected by default.
+    await page.getByRole("link", { name: "Métricas del período" }).click();
+    await expect(page).toHaveURL(/vista=metricas/);
+    const treintaDiasLink = page.getByRole("link", { name: "30 días" });
+    await expect(treintaDiasLink).toBeVisible();
+    await expect(treintaDiasLink).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("heading", { level: 2, name: "Resumen Financiero" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Flujo de Pedidos" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Verificación de Pagos Manuales" })
     ).toBeVisible();
 
     // Staff identity banner

@@ -140,11 +140,6 @@
   --group-soft: rgba(251, 113, 133, 0.14);
 }
 
-.toneCrimson {
-  --group-color: #fb7185;
-  --group-soft: rgba(251, 113, 133, 0.14);
-}
-
 .toneGreen {
   --group-color: #4ade80;
   --group-soft: rgba(74, 222, 128, 0.13);
@@ -163,11 +158,6 @@
 .toneViolet {
   --group-color: #c084fc;
   --group-soft: rgba(192, 132, 252, 0.14);
-}
-
-.toneTeal {
-  --group-color: #2dd4bf;
-  --group-soft: rgba(45, 212, 191, 0.13);
 }
 
 .navGroupHead {
@@ -255,6 +245,53 @@
   border-left: 3px solid var(--group-color, var(--admin-brand));
   border-radius: 8px;
   background-color: var(--group-soft, var(--admin-brand-soft));
+}
+
+/* Folder toggle: same row as a link, with a chevron that turns when open. */
+.navFolderButton {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.navFolderButton[aria-disabled="true"] {
+  cursor: default;
+}
+
+.navChevron {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform 0.2s ease;
+}
+
+.navChevronOpen {
+  transform: rotate(180deg);
+}
+
+.navSubList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 0 22px;
+  padding: 0 0 0 10px;
+  border-left: 1px solid var(--color-border-subtle);
+  list-style: none;
+}
+
+.navLinkNested {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.navLinkNested .navIconChip {
+  width: 24px;
+  height: 24px;
 }
 
 .navIconChip,
@@ -495,7 +532,7 @@
 
 @media (min-width: 768px) {
   .mainContent {
-    padding: var(--space-10) var(--space-10) var(--space-16);
+    padding: var(--space-6) var(--space-8) var(--space-10);
   }
 }
 
@@ -551,7 +588,8 @@
 @media (prefers-reduced-motion: reduce) {
   .drawer,
   .drawerBackdrop,
-  .navLink {
+  .navLink,
+  .navChevron {
     transition: none;
   }
 }

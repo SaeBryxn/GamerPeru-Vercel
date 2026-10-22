@@ -1,6 +1,15 @@
 import type { PermissionName, RoleName } from "@/lib/auth/rbac";
 
-export type AdminNavGroupId = "overview" | "sales" | "catalog" | "storefront" | "ai" | "access";
+export type AdminNavGroupId = "operations" | "catalog" | "storefront" | "system";
+
+/** Collapsible entry inside a section that holds related destinations. */
+export type AdminNavFolderId = "storefront-design" | "ai-engine";
+
+export interface AdminNavFolder {
+  id: AdminNavFolderId;
+  label: string;
+  iconName: "Palette" | "Cpu";
+}
 
 export interface AdminNavGroup {
   id: AdminNavGroupId;
@@ -14,6 +23,7 @@ export interface AdminNavItem {
   label: string;
   href: string;
   group: AdminNavGroupId;
+  folder?: AdminNavFolderId;
   iconName:
     | "Gauge"
     | "ShoppingBag"

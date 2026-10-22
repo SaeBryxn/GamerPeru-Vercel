@@ -16,13 +16,13 @@ import { QuickActions } from "@/components/admin/dashboard/quick-actions";
 import { HomeStatusSection } from "@/components/admin/dashboard/home-status-section";
 import { CatalogHealthSection } from "@/components/admin/dashboard/catalog-health-section";
 import { buildDashboardLinks } from "@/components/admin/dashboard/dashboard-links";
-import { Stagger } from "@/components/admin/ui";
+import { SegmentedNav, Stagger } from "@/components/admin/ui";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
 interface AdminDashboardPageProps {
-  searchParams?: Promise<{ period?: string }>;
+  searchParams?: Promise<{ period?: string; vista?: string }>;
 }
 
 export default async function AdminDashboardPage({ searchParams }: AdminDashboardPageProps) {
@@ -47,6 +47,21 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     payload.catalogOverview.status !== "UNAUTHORIZED" ||
     payload.inventoryOverview.status !== "UNAUTHORIZED";
   const links = buildDashboardLinks(payload.actor.permissions, payload.period);
+  // Two views instead of one long page: today's work, or the numbers of the chosen period.
+  const view = resolvedParams.vista === "metricas" ? "metrics" : "operations";
+  const viewNav = hasAnyMetricAccess ? (
+    <SegmentedNav
+      label="Vista del resumen"
+      options={[
+        { href: "/admin", label: "Resumen operativo", active: view === "operations" },
+        {
+          href: `/admin?vista=metricas&period=${selectedPeriod}`,
+          label: "Métricas del período",
+          active: view === "metrics",
+        },
+      ]}
+    />
+  ) : null;
 
   return (
     <div className={styles.container}>
@@ -55,9 +70,10 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
         actorEmail={payload.actor.email}
         actorRoles={payload.actor.roles}
         showPeriodSelector={!hasAnyMetricAccess}
+        aside={viewNav}
       />
 
-      {hasAnyMetricAccess ? (
+      {hasAnyMetricAccess && view === "operations" ? (
         <Stagger className={styles.dashboardBody}>
           <AttentionSection payload={payload} links={links} />
           <QuickActions links={links} />
@@ -68,6 +84,19 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
               productsHref={links.products?.({ pending: "issues" }) ?? null}
             />
           </div>
+          <div className={styles.lowerGrid}>
+            <CatalogOverviewSection
+              catalogOverview={payload.catalogOverview}
+              productsHref={links.products}
+            />
+            <InventoryOverviewSection
+              inventoryOverview={payload.inventoryOverview}
+              outOfStockHref={links.products?.({ pending: "stock" })}
+            />
+          </div>
+        </Stagger>
+      ) : hasAnyMetricAccess ? (
+        <Stagger className={styles.dashboardBody}>
           <div className={styles.metricsDivider}>
             <h2 className={styles.metricsTitle}>Métricas del período</h2>
             <PeriodSelector selectedPeriod={selectedPeriod} />
@@ -84,16 +113,6 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
             paymentVerification={payload.paymentVerification}
             queueHref={links.payments ?? undefined}
           />
-          <div className={styles.lowerGrid}>
-            <CatalogOverviewSection
-              catalogOverview={payload.catalogOverview}
-              productsHref={links.products}
-            />
-            <InventoryOverviewSection
-              inventoryOverview={payload.inventoryOverview}
-              outOfStockHref={links.products?.({ pending: "stock" })}
-            />
-          </div>
         </Stagger>
       ) : (
         <div className={styles.dashboardBody}>
