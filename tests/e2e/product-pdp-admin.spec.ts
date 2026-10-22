@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import postgres from "postgres";
 import {
   assertLocalDatabaseTarget,
@@ -27,11 +27,19 @@ async function login(page: Page, target: string) {
   await page.goto(target);
 }
 
-/** "Lo básico" may already be the open step; clicking an open step would close it. */
-async function openBasics(page: Page) {
-  const header = page.getByTestId("section-nav-informacion");
+/** Opens step 5 "Página del producto"; clicking an open step would close it. */
+async function openPageStep(page: Page) {
+  const header = page.getByTestId("section-nav-historia");
   if ((await header.getAttribute("aria-expanded")) !== "true") await header.click();
   await expect(header).toHaveAttribute("aria-expanded", "true");
+  return page.getByRole("form", { name: "Página del producto" });
+}
+
+/** Opens one block of step 5 (only one is open at a time). */
+async function openBlock(step: Locator, title: string) {
+  const button = step.getByRole("button", { name: new RegExp(`^${title}`) });
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+  await expect(button).toHaveAttribute("aria-expanded", "true");
 }
 
 async function assertNoOverflow(page: Page) {
@@ -108,16 +116,17 @@ test("el admin guarda los bloques, miniaturas y accesorios con filas editables",
   page,
 }) => {
   await login(page, `/admin/products/${productId}`);
-  await openBasics(page);
-  const root = page.getByRole("region", { name: "Configuración de la ficha de tienda" });
+  const root = await openPageStep(page);
+  await openBlock(root, "Especificaciones de la tienda");
+  await root.getByText("Calificación y reseñas", { exact: true }).click();
   await root.getByRole("switch", { name: "Mostrar calificación y reseñas" }).check();
   await root.getByLabel("Promedio (0 a 5)").fill("4.8");
   await root.getByLabel("Cantidad de reseñas").fill("24");
-  await root.getByText("Regalo con tu compra", { exact: true }).click();
-  await root.getByRole("switch", { name: "Activar banner de regalo por compra" }).check();
+  await openBlock(root, "Regalo");
+  await root.getByRole("switch", { name: "Mostrar en la tienda: Regalo" }).check();
   await root.getByLabel("Título del regalo").fill("Grip tape de cortesía");
   await root.getByLabel("Descripción corta").fill("Un regalo con tu pedido, hasta agotar stock.");
-  await root.getByText("Colores, tallas y miniaturas", { exact: true }).click();
+  await openBlock(root, "Colores y miniaturas");
   await root
     .getByRole("group", { name: "Negro · PDP-E2E-BLACK", exact: true })
     .getByLabel("Color", { exact: true })
@@ -130,13 +139,13 @@ test("el admin guarda los bloques, miniaturas y accesorios con filas editables",
     .getByRole("group", { name: "Blanco · PDP-E2E-WHITE", exact: true })
     .getByLabel("Miniatura")
     .selectOption(id(42));
-  await root.getByText("Más accesorios", { exact: true }).click();
-  await root.getByRole("switch", { name: "Mostrar sección Más Accesorios" }).check();
+  await openBlock(root, "Accesorios");
+  await root.getByRole("switch", { name: "Mostrar en la tienda: Accesorios" }).check();
   await root.getByLabel("Buscar por producto o SKU").fill("Grip PDP E2E");
   await root.getByRole("button", { name: "Buscar", exact: true }).click();
   await root.getByRole("checkbox", { name: /Grip PDP E2E/ }).check();
-  await root.getByText("Guía de tallas y dimensiones", { exact: true }).click();
-  await root.getByRole("switch", { name: "Mostrar calculador de talla" }).check();
+  await openBlock(root, "Guía de tallas");
+  await root.getByRole("switch", { name: "Mostrar en la tienda: Guía de tallas" }).check();
   for (const [index, name, min, max] of [
     [0, "Mini", "", "17.5"],
     [1, "Med", "17.5", "19"],
@@ -145,23 +154,27 @@ test("el admin guarda los bloques, miniaturas y accesorios con filas editables",
     await root.getByRole("button", { name: "Añadir talla", exact: true }).click();
     const row = root.getByRole("group", { name: `Talla ${index + 1}`, exact: true });
     await row.getByLabel("Nombre", { exact: true }).fill(name);
+    await row.getByLabel("Mano mínima (cm)", { exact: true }).fill(min);
+    await row.getByLabel("Mano máxima (cm)", { exact: true }).fill(max);
+  }
+  await openBlock(root, "Dimensiones");
+  for (const index of [0, 1, 2]) {
+    const row = root.getByRole("group", { name: `Talla ${index + 1}`, exact: true });
     await row.getByLabel("Peso (ej. 45 ± 2 g)").fill("45 ± 2 g");
     for (const [label, number] of [
       ["Largo (mm)", "110"],
       ["Ancho (mm)", "60"],
       ["Alto (mm)", "36"],
-      ["Mano mínima (cm)", min],
-      ["Mano máxima (cm)", max],
     ] as const)
       await row.getByLabel(label, { exact: true }).fill(number);
   }
-  await root.getByText("Especificaciones y destacados", { exact: true }).click();
+  await openBlock(root, "Especificaciones de la tienda");
   await root.getByRole("button", { name: "Añadir especificación", exact: true }).click();
   await root.getByLabel("Atributo", { exact: true }).fill("Conexión");
   await root.getByLabel("Valor", { exact: true }).fill("USB-C / 2.4 GHz");
   await root.getByLabel("Nota opcional", { exact: true }).fill("Cableado e inalámbrico");
-  await root.getByText("Contenido de la caja", { exact: true }).click();
-  await root.getByRole("switch", { name: "Mostrar acordeón Contenido de la caja" }).check();
+  await openBlock(root, "Contenido de caja");
+  await root.getByRole("switch", { name: "Mostrar en la tienda: Contenido de caja" }).check();
   for (const [index, name] of [
     [0, "Edición especial"],
     [1, "Edición estándar"],
@@ -174,12 +187,12 @@ test("el admin guarda los bloques, miniaturas y accesorios con filas editables",
     await edition.getByLabel("Nombre del ítem").fill("Mouse y receptor");
     await edition.getByLabel("Cantidad (ej. 1 o 20)").fill("1");
   }
-  await root.getByText("Garantía, soporte y envío", { exact: true }).click();
+  await openBlock(root, "Soporte");
   await root.getByLabel("Texto de garantía").fill("1 año de garantía oficial");
   await root.getByLabel("URL del manual").fill("https://example.com/manual.pdf");
   await root.getByLabel("URL del web-hub / driver").fill("https://example.com/driver");
   await root.getByLabel("Nota de envío").fill("Despacho al siguiente día hábil.");
-  await page.getByTestId("btn-save-details").click();
+  await root.getByRole("button", { name: "Guardar página del producto" }).click();
   await expect
     .poll(
       async () =>
@@ -195,8 +208,10 @@ test("el admin guarda los bloques, miniaturas y accesorios con filas editables",
     )
     .toBe("Grafito");
   await page.reload();
-  await openBasics(page);
-  await expect(page.getByLabel("Promedio (0 a 5)")).toHaveValue("4.8");
+  const reloaded = await openPageStep(page);
+  await openBlock(reloaded, "Especificaciones de la tienda");
+  await reloaded.getByText("Calificación y reseñas", { exact: true }).click();
+  await expect(reloaded.getByLabel("Promedio (0 a 5)")).toHaveValue("4.8");
 });
 
 test("crear producto conserva la configuración y los importes exactos", async ({ page }) => {
@@ -279,10 +294,10 @@ for (const width of [360, 768, 1440])
       animations: "disabled",
     });
     await login(page, `/admin/products/${productId}`);
-    await openBasics(page);
-    await expect(page.getByTestId("section-general-details")).toBeVisible();
-    await expect(page.locator("#panel-informacion")).toBeVisible();
-    await expect(page.getByLabel("Promedio (0 a 5)")).toBeVisible();
+    const step = await openPageStep(page);
+    await openBlock(step, "Regalo");
+    await expect(step.getByLabel("Título del regalo")).toBeVisible();
+    await expect(step.getByRole("button", { name: "Guardar página del producto" })).toBeVisible();
     await assertNoOverflow(page);
     await page.screenshot({
       path: testInfo.outputPath(`admin-pdp-${width}.png`),

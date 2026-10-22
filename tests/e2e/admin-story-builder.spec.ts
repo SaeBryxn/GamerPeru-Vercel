@@ -189,9 +189,15 @@ test.describe("GP-026 CHK3 — Admin Product Story Builder", () => {
     const productPath = `/admin/products/${product.id}`;
     await loginAndNavigateTo(page, ADMIN_E2E_USERS.catalog.email, productPath);
 
-    await expect(page.getByTestId("product-story-entry")).toBeVisible();
-    await expect(page.getByTestId("product-story-status")).toHaveText("Estado: Sin historia");
-    await page.getByTestId("product-story-link").click();
+    await page.getByTestId("section-nav-historia").click();
+    const entry = page.getByTestId("product-story-entry");
+    await expect(entry).toBeVisible();
+    await expect(entry.getByRole("button", { name: /^Historia/ })).toContainText("Sin historia");
+    await expect(entry.getByRole("link", { name: "Editar historia" })).toHaveAttribute(
+      "href",
+      storyPath
+    );
+    await page.goto(storyPath);
     await expect(page).toHaveURL(storyPath);
     await expect(
       page.getByRole("heading", { level: 1, name: "Historia del producto" })

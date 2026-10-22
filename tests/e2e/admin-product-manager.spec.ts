@@ -33,6 +33,10 @@ async function openSection(page: Page, section: EditorSection) {
   await expect(header).toHaveAttribute("aria-expanded", "true");
 }
 
+/** Step 3 lists each color or size as a card that opens its own form. */
+const variantBoard = (page: Page) =>
+  page.getByRole("region", { name: "Colores, tallas y precios" });
+
 async function loginAndNavigateTo(page: Page, email: string, targetPath: string) {
   await page.context().clearCookies();
   await page.goto(`/auth/login?redirect=${encodeURIComponent(targetPath)}`);
@@ -291,9 +295,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
 
     // Verify mixed-case SKU was NOT silently converted to uppercase
     await openSection(page, "variantes");
-    await expect(
-      page.locator('[data-testid="table-variants"]').locator(`text=${mixedCaseSku}`)
-    ).toBeVisible();
+    await expect(variantBoard(page).getByRole("article")).toHaveCount(1);
 
     // Direct PostgreSQL Readback Evidence for minor-unit integer cents (Requirement E)
     const variantRows = await sql`
@@ -379,22 +381,21 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     const specialCasingSku = `sku.with.valid-app-text_${Date.now().toString().slice(-4)}`;
 
     await openSection(page, "variantes");
-    await page.locator('[data-testid="btn-add-variant"]').click();
-    await expect(page.locator('[data-testid="modal-create-variant"]')).toBeVisible();
+    const board = variantBoard(page);
+    await board.getByRole("button", { name: "Agregar color o talla" }).click();
+    const form = board.getByRole("form", { name: "Agregar color o talla" });
+    await form.getByLabel("Color o talla").fill(`Blanco Nieve ${specialCasingSku.slice(-4)}`);
+    await form.getByLabel("Precio", { exact: true }).fill("179.90");
+    await form.getByLabel("Precio antes (tachado)").fill("209.90");
+    await form.getByText("Más opciones").click();
+    await form.getByLabel("Código SKU").fill(specialCasingSku);
+    await form.getByLabel("Costo (S/)").fill("95.00");
+    await form.getByRole("button", { name: "Guardar color o talla" }).click();
 
-    await page.locator('[data-testid="input-new-sku"]').fill(specialCasingSku);
-    await page.locator('[data-testid="input-new-title"]').fill("Blanco Nieve");
-    await page.locator('[data-testid="input-new-price"]').fill("179.90");
-    await page.locator('[data-testid="input-new-compare-at"]').fill("209.90");
-    await page.locator('[data-testid="input-new-cost"]').fill("95.00");
-    await page.locator('[data-testid="input-new-weight"]').fill("47");
-
-    await page.locator('[data-testid="btn-confirm-new-variant"]').click();
-
-    // Modal closes and new variant is visible with exact casing
-    await expect(page.locator('[data-testid="modal-create-variant"]')).toHaveCount(0);
+    // The form closes and the new card appears
+    await expect(form).toHaveCount(0);
     await expect(
-      page.locator('[data-testid="table-variants"]').locator(`text=${specialCasingSku}`)
+      board.getByRole("button", { name: `Editar Blanco Nieve ${specialCasingSku.slice(-4)}` })
     ).toBeVisible();
 
     // DB confirmation
@@ -419,23 +420,32 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
 
     // Edit the primary variant (E2E-PUB-SKU-001)
     await openSection(page, "variantes");
-    await page.locator('button[data-testid="btn-edit-variant"]').first().click();
-    await expect(page.locator('[data-testid="modal-edit-variant"]')).toBeVisible();
+    const board = variantBoard(page);
+    await board
+      .getByTestId(`variant-card-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.variantId}`)
+      .getByRole("button", { name: /^Editar / })
+      .click();
+    const form = board.getByRole("form", { name: "Editar color o talla" });
 
     // SKU must remain as originally authored
-    await expect(page.locator('[data-testid="input-edit-sku"]')).toHaveValue(
+    await form.getByText("Más opciones").click();
+    await expect(form.getByLabel("Código SKU")).toHaveValue(
       ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.sku
     );
 
-    await page.locator('[data-testid="input-edit-title"]').fill("Variante Publicable Actualizada");
-    await page.locator('[data-testid="input-edit-price"]').fill("169.90");
-    await page.locator('[data-testid="btn-confirm-edit-variant"]').click();
+    await form.getByLabel("Color o talla").fill("Variante Publicable Actualizada");
+    await form.getByLabel("Precio", { exact: true }).fill("169.90");
+    await form.getByRole("button", { name: "Guardar color o talla" }).click();
 
-    await expect(page.locator('[data-testid="modal-edit-variant"]')).toHaveCount(0);
-    await expect(
-      page.locator('[data-testid="table-variants"]').locator("text=Variante Publicable Actualizada")
-    ).toBeVisible();
-    await expect(page.locator("text=S/ 169.90")).toBeVisible();
+    await expect(form).toHaveCount(0);
+    await expect
+      .poll(
+        async () =>
+          (
+            await sql`SELECT title, price_cents FROM product_variants WHERE sku = ${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.sku}`
+          )[0]
+      )
+      .toEqual({ title: "Variante Publicable Actualizada", price_cents: 16990 });
   });
 
   // --------------------------------------------------------------------------
@@ -452,17 +462,18 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
 
     // Click edit variant on immutable variant
     await openSection(page, "variantes");
-    await page.locator('button[data-testid="btn-edit-variant"]').first().click();
-    await expect(page.locator('[data-testid="modal-edit-variant"]')).toBeVisible();
+    const board = variantBoard(page);
+    await board
+      .getByRole("button", { name: /^Editar / })
+      .first()
+      .click();
+    const form = board.getByRole("form", { name: "Editar color o talla" });
+    await form.getByText("Más opciones").click();
 
-    const skuInput = page.locator('[data-testid="input-edit-sku"]');
-    await expect(skuInput).toBeDisabled();
-    await expect(skuInput).toHaveAttribute("readonly", "");
-
-    // Must display canonical immutability explanation
-    await expect(page.locator('[data-testid="sku-immutable-notice"]')).toContainText(
-      "El SKU es permanentemente inmutable"
-    );
+    await expect(form.getByLabel("Código SKU")).toBeDisabled();
+    await expect(
+      form.getByText("Este código no puede cambiar porque ya tiene inventario o pedidos.")
+    ).toBeVisible();
   });
 
   // --------------------------------------------------------------------------
@@ -894,6 +905,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       ADMIN_E2E_USERS.superadmin.email,
       `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
     );
+    await openSection(page, "imagenes");
 
     const card1 = page.locator(
       `[data-testid="media-card-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
@@ -961,6 +973,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       ADMIN_E2E_USERS.superadmin.email,
       `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
     );
+    await openSection(page, "imagenes");
 
     // 1. Variant-specific media button is disabled
     const varSetPrimaryBtn = page.locator(
@@ -969,7 +982,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await expect(varSetPrimaryBtn).toBeDisabled();
     await expect(varSetPrimaryBtn).toHaveAttribute(
       "title",
-      "Las imágenes de variante no pueden ser asignadas como principal global"
+      "Las fotos de una variante no pueden ser la principal"
     );
 
     // 2. Global secondary media button is enabled
@@ -982,7 +995,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     // 3. Click Set Primary and verify authoritative persistence
     await globalSetPrimaryBtn.click();
     await expect(page.locator('[data-testid="media-op-success"]')).toContainText(
-      "Imagen principal actualizada exitosamente"
+      "Foto principal actualizada"
     );
 
     // Database verification: primary_media_id is now mediaAsset2Id
@@ -1013,6 +1026,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       ADMIN_E2E_USERS.superadmin.email,
       `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
     );
+    await openSection(page, "imagenes");
 
     // 1. Open Alt-Text modal
     const altBtn = page.locator(
@@ -1038,7 +1052,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     // Modal closes and success notification appears
     await expect(modal).not.toBeVisible();
     await expect(page.locator('[data-testid="media-op-success"]')).toContainText(
-      "Texto alternativo actualizado exitosamente"
+      "Texto alternativo actualizado"
     );
 
     // Database verification: MediaAsset authoritative alt_text updated
@@ -1060,6 +1074,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       ADMIN_E2E_USERS.superadmin.email,
       `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
     );
+    await openSection(page, "imagenes");
 
     // 1. Verify accessible names on reorder buttons
     const moveDownBtn1 = page.locator(
@@ -1068,15 +1083,13 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     const moveUpBtn1 = page.locator(
       `[data-testid="btn-move-up-${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.productMediaId1}"]`
     );
-    await expect(moveDownBtn1).toHaveAttribute("aria-label", "Mover hacia abajo");
-    await expect(moveUpBtn1).toHaveAttribute("aria-label", "Mover hacia arriba");
+    await expect(moveDownBtn1).toHaveAttribute("aria-label", "Mover después");
+    await expect(moveUpBtn1).toHaveAttribute("aria-label", "Mover antes");
     await expect(moveUpBtn1).toBeDisabled(); // First item cannot move up
 
     // 2. Move item 1 down
     await moveDownBtn1.click();
-    await expect(page.locator('[data-testid="media-op-success"]')).toContainText(
-      "Orden de medios actualizado exitosamente"
-    );
+    await expect(page.locator('[data-testid="media-op-success"]')).toContainText("Orden guardado");
 
     // 3. Database verification: display_order updated atomically
     const orderRows = await sql`
@@ -1101,6 +1114,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       ADMIN_E2E_USERS.superadmin.email,
       `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
     );
+    await openSection(page, "imagenes");
 
     // --- Sub-case A: Global -> Variant succeeds ---
     const reassignBtn2 = page.locator(
@@ -1117,7 +1131,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
 
     await expect(varModal).not.toBeVisible();
     await expect(page.locator('[data-testid="media-op-success"]')).toContainText(
-      "Asociación de variante actualizada exitosamente"
+      "Variante de la foto actualizada"
     );
 
     const pm2Row = await sql`
@@ -1139,7 +1153,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
 
     await expect(varModal).not.toBeVisible();
     await expect(page.locator('[data-testid="media-op-success"]')).toContainText(
-      "Asociación de variante actualizada exitosamente"
+      "Variante de la foto actualizada"
     );
 
     const pm3Row = await sql`
@@ -1196,7 +1210,6 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/Acceso no autorizado/i);
 
     // Media section is completely absent
-    await openSection(page, "imagenes");
     await expect(page.locator('[data-testid="section-media"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="media-upload-area"]')).toHaveCount(0);
   });
@@ -1248,6 +1261,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       ADMIN_E2E_USERS.superadmin.email,
       `/admin/products/${ADMIN_E2E_PRODUCT_FIXTURES.publishableProduct.id}`
     );
+    await openSection(page, "imagenes");
 
     // --- Alt-Text Modal Accessibility ---
     const altBtn = page.locator(
