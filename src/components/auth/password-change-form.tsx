@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { passwordChangeSchema } from "@/lib/auth/validation";
 import { mapAuthError } from "@/lib/auth/errors";
-import { AuthField } from "./auth-field";
+import { PasswordField } from "./auth-field";
 import { AuthSubmitButton } from "./auth-submit-button";
 import styles from "./auth.module.css";
 
@@ -67,10 +67,9 @@ export function PasswordChangeForm() {
       ) : null}
 
       <form onSubmit={handleSubmit} noValidate className={styles.form}>
-        <AuthField
+        <PasswordField
           id="change-password"
           name="password"
-          type="password"
           label="Nueva contraseña"
           description="Mínimo 8 caracteres"
           autoComplete="new-password"
@@ -81,10 +80,9 @@ export function PasswordChangeForm() {
           disabled={isSubmitting}
         />
 
-        <AuthField
+        <PasswordField
           id="change-confirmPassword"
           name="confirmPassword"
-          type="password"
           label="Confirmar nueva contraseña"
           autoComplete="new-password"
           required

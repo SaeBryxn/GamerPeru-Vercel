@@ -4,11 +4,12 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { Check, Circle } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { signupSchema } from "@/lib/auth/validation";
 import { mapAuthError } from "@/lib/auth/errors";
 import { initiateGoogleOAuth } from "@/lib/auth/google-oauth";
-import { AuthField } from "./auth-field";
+import { AuthField, PasswordField } from "./auth-field";
 import { AuthSubmitButton } from "./auth-submit-button";
 import { AUTH_ITEM_VARIANTS, AUTH_LIST_VARIANTS } from "./auth-motion";
 import { GoogleIcon } from "./google-icon";
@@ -174,12 +175,37 @@ export function RegisterForm() {
         </motion.div>
 
         <motion.div variants={AUTH_ITEM_VARIANTS}>
-          <AuthField
+          <PasswordField
             id="register-password"
             name="password"
-            type="password"
             label="Contraseña"
-            description="Mínimo 8 caracteres"
+            description={
+              <ul className={styles.requirements} aria-live="polite">
+                <li
+                  className={`${styles.requirement} ${password.length >= 8 ? styles.requirementMet : ""}`}
+                >
+                  {password.length >= 8 ? (
+                    <Check size={14} aria-hidden="true" />
+                  ) : (
+                    <Circle size={14} aria-hidden="true" />
+                  )}
+                  Mínimo 8 caracteres
+                  {password.length >= 8 ? <span className={styles.srOnly}> (cumplido)</span> : null}
+                </li>
+                <li
+                  className={`${styles.requirement} ${
+                    password.length > 0 && password === confirmPassword ? styles.requirementMet : ""
+                  }`}
+                >
+                  {password.length > 0 && password === confirmPassword ? (
+                    <Check size={14} aria-hidden="true" />
+                  ) : (
+                    <Circle size={14} aria-hidden="true" />
+                  )}
+                  Las dos contraseñas coinciden
+                </li>
+              </ul>
+            }
             autoComplete="new-password"
             required
             value={password}
@@ -190,10 +216,9 @@ export function RegisterForm() {
         </motion.div>
 
         <motion.div variants={AUTH_ITEM_VARIANTS}>
-          <AuthField
+          <PasswordField
             id="register-confirmPassword"
             name="confirmPassword"
-            type="password"
             label="Confirmar contraseña"
             autoComplete="new-password"
             required
@@ -203,6 +228,18 @@ export function RegisterForm() {
             disabled={isSubmitting || isGoogleSubmitting}
           />
         </motion.div>
+
+        <motion.p variants={AUTH_ITEM_VARIANTS} className={styles.legalNote}>
+          Al crear tu cuenta aceptas los{" "}
+          <Link href="/legal/terminos" className={styles.link} target="_blank">
+            Términos de servicio
+          </Link>{" "}
+          y la{" "}
+          <Link href="/legal/privacidad" className={styles.link} target="_blank">
+            Política de privacidad
+          </Link>
+          .
+        </motion.p>
 
         <AuthSubmitButton disabled={isBusy} variants={AUTH_ITEM_VARIANTS}>
           {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}

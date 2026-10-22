@@ -11,7 +11,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { loginSchema } from "@/lib/auth/validation";
 import { mapAuthError } from "@/lib/auth/errors";
 import { initiateGoogleOAuth } from "@/lib/auth/google-oauth";
-import { AuthField } from "./auth-field";
+import { AuthField, PasswordField } from "./auth-field";
 import { AuthSubmitButton } from "./auth-submit-button";
 import { AUTH_ITEM_VARIANTS, AUTH_LIST_VARIANTS } from "./auth-motion";
 import { GoogleIcon } from "./google-icon";
@@ -216,10 +216,9 @@ export function LoginForm() {
           </motion.div>
 
           <motion.div variants={AUTH_ITEM_VARIANTS}>
-            <AuthField
+            <PasswordField
               id="login-password"
               name="password"
-              type="password"
               label="Contraseña"
               autoComplete="current-password"
               required

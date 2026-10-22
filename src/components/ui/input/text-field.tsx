@@ -9,6 +9,8 @@ export interface TextFieldProps extends Omit<InputProps, "hasError"> {
   containerClassName?: string;
   /** Keeps the label for assistive technology while the placeholder carries it visually. */
   hideLabel?: boolean;
+  /** Control placed inside the field at its end, such as a show-password toggle. */
+  endAdornment?: React.ReactNode;
 }
 
 export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
@@ -21,6 +23,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(func
     disabled,
     containerClassName,
     hideLabel = false,
+    endAdornment,
     className,
     "aria-describedby": customDescribedBy,
     ...rest
@@ -38,13 +41,16 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(func
 
   return (
     <div className={[styles.container, containerClassName].filter(Boolean).join(" ")}>
-      <label htmlFor={inputId} className={hideLabel ? styles.visuallyHidden : styles.label}>
+      {/* The required mark is drawn by CSS so the label's text, and the field's name, stay exact. */}
+      <label
+        htmlFor={inputId}
+        className={
+          hideLabel
+            ? styles.visuallyHidden
+            : [styles.label, required ? styles.labelRequired : ""].filter(Boolean).join(" ")
+        }
+      >
         {label}
-        {required && !hideLabel ? (
-          <span className={styles.requiredIndicator} aria-hidden="true">
-            *
-          </span>
-        ) : null}
       </label>
 
       <div className={styles.inputWrapper}>
@@ -56,9 +62,12 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(func
           hasError={hasError}
           aria-invalid={hasError ? "true" : undefined}
           aria-describedby={describedBy || undefined}
-          className={className}
+          className={[className, endAdornment ? styles.inputWithAdornment : ""]
+            .filter(Boolean)
+            .join(" ")}
           {...rest}
         />
+        {endAdornment ? <span className={styles.endAdornment}>{endAdornment}</span> : null}
       </div>
 
       {description ? (
