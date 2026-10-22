@@ -48,18 +48,23 @@ export function resolveActiveNavId(navItems: AdminNavItem[], currentPath: string
   return matches.reduce((best, item) => (item.href.length > best.href.length ? item : best)).id;
 }
 
-function readOpenFolders(): AdminNavFolderId[] {
+/** Folders the operator opened or closed by hand; the rest follow the current screen. */
+type FolderChoices = Partial<Record<AdminNavFolderId, boolean>>;
+
+function readFolderChoices(): FolderChoices {
   try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(OPEN_FOLDERS_KEY) ?? "[]");
-    return Array.isArray(value) ? (value as AdminNavFolderId[]) : [];
+    const value: unknown = JSON.parse(window.localStorage.getItem(OPEN_FOLDERS_KEY) ?? "{}");
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as FolderChoices)
+      : {};
   } catch {
-    return [];
+    return {};
   }
 }
 
-function writeOpenFolders(ids: AdminNavFolderId[]) {
+function writeFolderChoices(choices: FolderChoices) {
   try {
-    window.localStorage.setItem(OPEN_FOLDERS_KEY, JSON.stringify(ids));
+    window.localStorage.setItem(OPEN_FOLDERS_KEY, JSON.stringify(choices));
   } catch {
     // The menu still works; it only forgets which folders were open.
   }
@@ -77,8 +82,8 @@ interface AdminNavSectionsProps {
 
 /**
  * The admin destinations split into sections. Related destinations sit in a folder that expands
- * in place; the folder holding the current screen is always open. Collapsed, the sections become
- * a flat column of icons separated by hairlines.
+ * in place; the folder holding the current screen starts open, and any folder can be opened or
+ * closed by hand. Collapsed, the sections become a flat column of icons separated by hairlines.
  */
 export function AdminNavSections({
   navItems,
@@ -89,17 +94,19 @@ export function AdminNavSections({
 }: AdminNavSectionsProps) {
   const activeId = resolveActiveNavId(navItems, currentPath);
   const activeFolder = navItems.find((item) => item.id === activeId)?.folder;
-  const [openFolders, setOpenFolders] = useState<AdminNavFolderId[]>([]);
+  const [folderChoices, setFolderChoices] = useState<FolderChoices>({});
 
   // Read after hydration so the server and first client render agree.
   useEffect(() => {
-    setOpenFolders(readOpenFolders());
+    setFolderChoices(readFolderChoices());
   }, []);
 
+  const isFolderOpen = (id: AdminNavFolderId) => folderChoices[id] ?? id === activeFolder;
+
   const toggleFolder = (id: AdminNavFolderId) => {
-    setOpenFolders((current) => {
-      const next = current.includes(id) ? current.filter((open) => open !== id) : [...current, id];
-      writeOpenFolders(next);
+    setFolderChoices((current) => {
+      const next = { ...current, [id]: !(current[id] ?? id === activeFolder) };
+      writeFolderChoices(next);
       return next;
     });
   };
@@ -173,7 +180,7 @@ export function AdminNavSections({
             {group.entries.map((entry) => {
               if (entry.kind === "item") return renderLink(entry.item);
               const { folder, items } = entry;
-              const isOpen = folder.id === activeFolder || openFolders.includes(folder.id);
+              const isOpen = isFolderOpen(folder.id);
               const panelId = `${markerId}-${folder.id}`;
               const FolderIcon = ICONS[folder.iconName];
               return (
@@ -183,11 +190,7 @@ export function AdminNavSections({
                     className={`${styles.navLink} ${styles.navFolderButton}`}
                     aria-expanded={isOpen}
                     aria-controls={panelId}
-                    // The folder with the current screen stays open; closing it would hide it.
-                    aria-disabled={folder.id === activeFolder || undefined}
-                    onClick={() => {
-                      if (folder.id !== activeFolder) toggleFolder(folder.id);
-                    }}
+                    onClick={() => toggleFolder(folder.id)}
                   >
                     <span className={styles.navIconChip} aria-hidden="true">
                       <FolderIcon className={styles.navIcon} />

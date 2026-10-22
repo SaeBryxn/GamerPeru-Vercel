@@ -292,10 +292,6 @@
   cursor: pointer;
 }
 
-.navFolderButton[aria-disabled="true"] {
-  cursor: default;
-}
-
 .navChevron {
   width: 16px;
   height: 16px;
@@ -317,6 +313,11 @@
   padding: 0 0 0 10px;
   border-left: 1px solid var(--color-border-subtle);
   list-style: none;
+}
+
+/* Author display rules beat the hidden attribute, so a closed folder has to say it again. */
+.navSubList[hidden] {
+  display: none;
 }
 
 .navLinkNested {

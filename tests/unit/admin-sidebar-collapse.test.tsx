@@ -55,4 +55,32 @@ describe("Admin sidebar collapse", () => {
       screen.getByRole("link", { name: "Home de la tienda" }).getAttribute("aria-current")
     ).toBe("page");
   });
+
+  it("opens and closes folders, including the one that holds the current screen", () => {
+    render(
+      <AdminSidebar
+        navItems={CANONICAL_ADMIN_NAV_ITEMS}
+        staff={staff}
+        currentPath="/admin/home"
+        collapsed={false}
+        onToggleCollapsed={() => undefined}
+      />
+    );
+
+    const design = screen.getByRole("button", { name: /Diseño de tienda/ });
+    const designList = document.getElementById(design.getAttribute("aria-controls")!)!;
+    expect(design.getAttribute("aria-expanded")).toBe("true");
+    expect(designList.hidden).toBe(false);
+    fireEvent.click(design);
+    expect(design.getAttribute("aria-expanded")).toBe("false");
+    expect(designList.hidden).toBe(true);
+
+    const engine = screen.getByRole("button", { name: /Motor IA/ });
+    const engineList = document.getElementById(engine.getAttribute("aria-controls")!)!;
+    expect(engineList.hidden).toBe(true);
+    fireEvent.click(engine);
+    expect(engineList.hidden).toBe(false);
+    fireEvent.click(engine);
+    expect(engineList.hidden).toBe(true);
+  });
 });
