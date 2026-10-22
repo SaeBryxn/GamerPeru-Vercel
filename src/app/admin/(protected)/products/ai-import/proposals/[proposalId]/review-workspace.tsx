@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { formatDimensions, formatHandRange, pdpSizeSchema } from "@/lib/catalog/product-pdp-config";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -75,6 +76,12 @@ function humanFieldName(path: string): string {
     "research.unmappedSpecifications": "Especificaciones sin mapear",
     "research.variants": "Variantes propuestas",
     "research.mediaCandidates": "Referencias de medios",
+    "pdp.sizes": "Tallas, dimensiones y peso",
+    "pdp.packageContents": "Contenido de la caja",
+    "pdp.support.warranty": "Garantía",
+    "pdp.support.manualUrl": "Manual del producto",
+    "pdp.support.driverUrl": "Software del producto",
+    "pdp.highlights": "Especificaciones de la tienda",
   };
   return labels[path] ?? path;
 }
@@ -108,6 +115,196 @@ function safeArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function pdpRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function PdpReviewValue({ path, value }: { path: string; value: unknown }) {
+  if (path === "pdp.sizes")
+    return (
+      <ul>
+        {safeArray(value).map((entry, index) => {
+          const parsed = pdpSizeSchema.safeParse(entry);
+          if (!parsed.success) return <li key={index}>Talla incompleta</li>;
+          const size = parsed.data;
+          return (
+            <li key={index}>
+              {[
+                size.name,
+                formatDimensions(size),
+                size.weight,
+                size.handMin !== null || size.handMax !== null
+                  ? `Mano: ${formatHandRange(size)}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  if (path === "pdp.packageContents")
+    return (
+      <ul>
+        {safeArray(value).map((entry, index) => {
+          const edition = pdpRecord(entry);
+          return (
+            <li key={index}>
+              <strong>{String(edition.edition ?? "")}</strong>
+              <ul>
+                {safeArray(edition.items).map((entry, itemIndex) => {
+                  const item = pdpRecord(entry);
+                  return (
+                    <li key={itemIndex}>
+                      {[
+                        item.name,
+                        item.quantity ? `Cantidad: ${String(item.quantity)}` : null,
+                        item.note,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  if (path === "pdp.highlights")
+    return (
+      <ul>
+        {safeArray(value).map((entry, index) => {
+          const row = pdpRecord(entry);
+          return (
+            <li key={index}>{[row.label, row.value, row.note].filter(Boolean).join(" · ")}</li>
+          );
+        })}
+      </ul>
+    );
+  return <p>{valueForEditor(value) || "Sin valor propuesto"}</p>;
+}
+
+/** Structured controls keep the review usable without asking staff to edit JSON. */
+function PdpArrayEditor({
+  path,
+  raw,
+  onChange,
+  disabled,
+}: {
+  path: string;
+  raw: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  const rows = safeArray(JSON.parse(raw)).map(pdpRecord);
+  const changeRow = (index: number, key: string, value: unknown) =>
+    onChange(
+      JSON.stringify(
+        rows.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row))
+      )
+    );
+  const columns =
+    path === "pdp.sizes"
+      ? [
+          ["name", "Talla"],
+          ["lengthMm", "Largo (mm)"],
+          ["widthMm", "Ancho (mm)"],
+          ["heightMm", "Alto (mm)"],
+          ["weight", "Peso (con unidad)"],
+          ["handMin", "Mano mínima (cm)"],
+          ["handMax", "Mano máxima (cm)"],
+        ]
+      : path === "pdp.highlights"
+        ? [
+            ["label", "Dato"],
+            ["value", "Valor"],
+            ["note", "Nota"],
+          ]
+        : [["edition", "Edición"]];
+  const numeric = new Set(["lengthMm", "widthMm", "heightMm", "handMin", "handMax"]);
+  return (
+    <div>
+      {rows.map((row, index) => (
+        <fieldset key={index} disabled={disabled}>
+          <legend>
+            {path === "pdp.sizes" ? "Talla" : path === "pdp.highlights" ? "Especificación" : "Caja"}{" "}
+            {index + 1}
+          </legend>
+          {columns.map(([key, label]) => (
+            <label className={styles.field} key={key}>
+              <span>{label}</span>
+              <input
+                aria-label={`${label} ${index + 1}`}
+                type={numeric.has(key!) ? "number" : "text"}
+                step={numeric.has(key!) ? "any" : undefined}
+                value={String(row[key!] ?? "")}
+                onChange={(event) =>
+                  changeRow(
+                    index,
+                    key!,
+                    numeric.has(key!)
+                      ? event.target.value === ""
+                        ? null
+                        : Number(event.target.value)
+                      : event.target.value
+                  )
+                }
+              />
+            </label>
+          ))}
+          {path === "pdp.packageContents" &&
+            safeArray(row.items).map((entry, itemIndex) => {
+              const item = pdpRecord(entry);
+              return (
+                <fieldset key={itemIndex}>
+                  <legend>Elemento {itemIndex + 1}</legend>
+                  {[
+                    ["name", "Elemento"],
+                    ["quantity", "Cantidad"],
+                    ["note", "Nota"],
+                  ].map(([key, label]) => (
+                    <label className={styles.field} key={key}>
+                      <span>{label}</span>
+                      <input
+                        aria-label={`${label} ${itemIndex + 1} de caja ${index + 1}`}
+                        value={String(item[key!] ?? "")}
+                        onChange={(event) =>
+                          changeRow(
+                            index,
+                            "items",
+                            safeArray(row.items).map((current, currentIndex) =>
+                              currentIndex === itemIndex
+                                ? { ...pdpRecord(current), [key!]: event.target.value }
+                                : current
+                            )
+                          )
+                        }
+                      />
+                    </label>
+                  ))}
+                </fieldset>
+              );
+            })}
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() =>
+              onChange(JSON.stringify(rows.filter((_, rowIndex) => rowIndex !== index)))
+            }
+          >
+            Quitar fila {index + 1}
+          </button>
+        </fieldset>
+      ))}
+    </div>
+  );
+}
+
 function FieldReviewCard({
   field,
   proposalId,
@@ -130,6 +327,7 @@ function FieldReviewCard({
   const isBrand = field.fieldPath === "catalog.brandId";
   const isCategory = field.fieldPath === "catalog.categoryId";
   const isCatalogSelector = isBrand || isCategory;
+  const isPdp = field.fieldPath.startsWith("pdp.");
   const options = isBrand ? brandOptions : categoryOptions;
   const initialDecision = field.decision;
   const [decision, setDecision] = useState(field.decision);
@@ -197,7 +395,11 @@ function FieldReviewCard({
           <span className={styles.valueLabel}>
             <Bot size={14} aria-hidden="true" /> Propuesta IA · no aprobada
           </span>
-          <pre>{valueForEditor(field.proposedValue) || "Sin valor propuesto"}</pre>
+          {isPdp ? (
+            <PdpReviewValue path={field.fieldPath} value={field.proposedValue} />
+          ) : (
+            <pre>{valueForEditor(field.proposedValue) || "Sin valor propuesto"}</pre>
+          )}
         </div>
         <div className={styles.humanValue}>
           <span className={styles.valueLabel}>
@@ -218,6 +420,13 @@ function FieldReviewCard({
                   </option>
                 ))}
               </select>
+            ) : isPdp && Array.isArray(field.proposedValue) ? (
+              <PdpArrayEditor
+                path={field.fieldPath}
+                raw={manualValue}
+                onChange={setManualValue}
+                disabled={disabled || pending}
+              />
             ) : typeof field.proposedValue === "boolean" ? (
               <select
                 aria-label={`Valor manual para ${humanFieldName(field.fieldPath)}`}
@@ -237,6 +446,8 @@ function FieldReviewCard({
                 disabled={disabled || pending}
               />
             )
+          ) : isPdp && decision === "ACCEPTED" ? (
+            <PdpReviewValue path={field.fieldPath} value={field.proposedValue} />
           ) : (
             <pre>
               {decision === "ACCEPTED"
@@ -261,7 +472,11 @@ function FieldReviewCard({
                   {source.relationship}
                 </span>
                 <code>{source.sourceId.slice(0, 8)}</code>
-                <span>{valueForEditor(source.sourceValue)}</span>
+                {isPdp ? (
+                  <PdpReviewValue path={field.fieldPath} value={source.sourceValue} />
+                ) : (
+                  <span>{valueForEditor(source.sourceValue)}</span>
+                )}
               </li>
             ))}
           </ul>

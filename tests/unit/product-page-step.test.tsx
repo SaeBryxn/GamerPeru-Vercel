@@ -10,6 +10,37 @@ vi.mock("@/lib/admin/catalog/actions", () => ({ updateProductAction: actions.upd
 vi.mock("@/lib/admin/catalog/pdp-actions", () => ({ searchPdpAccessoriesAction: actions.search }));
 afterEach(cleanup);
 
+it("avisa si un bloque activado está vacío y actualiza el resumen al apagarlo", () => {
+  render(
+    <ProductPageStep
+      product={{ id: "product-empty", name: "Mouse", updatedAt: new Date("2026-10-22T08:00:00Z") }}
+      pdpConfig={productPdpConfigSchema.parse({
+        gift: { enabled: true },
+        accessories: { enabled: true },
+        sizeGuide: { enabled: true },
+        packageContents: { enabled: true },
+      })}
+      variants={[]}
+      media={[]}
+      storySummary={{
+        lifecycle: "NO_STORY",
+        draftRevisionNumber: null,
+        publishedRevisionNumber: null,
+        publishedAt: null,
+      }}
+      onChanged={vi.fn()}
+    />
+  );
+  expect(screen.getAllByText("Activado, pero vacío: no se verá en la tienda")).toHaveLength(6);
+  fireEvent.click(screen.getByRole("switch", { name: "Mostrar en la tienda: Contenido de caja" }));
+  expect(screen.getAllByText("Activado, pero vacío: no se verá en la tienda")).toHaveLength(5);
+  expect(
+    screen
+      .getByRole("switch", { name: "Mostrar en la tienda: Contenido de caja" })
+      .getAttribute("aria-checked")
+  ).not.toBe("true");
+});
+
 it("permite activar un regalo, verlo en la vista previa y guardar pdpConfig", async () => {
   const config = productPdpConfigSchema.parse({
     gift: { title: "Grip de regalo", description: "Incluido con tu mouse" },

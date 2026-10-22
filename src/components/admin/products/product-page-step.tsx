@@ -100,6 +100,23 @@ function visible(block: Block, config: ProductPdpConfig, story: StoryLifecycleSu
 }
 
 function blockSummary(block: Block, config: ProductPdpConfig, story: StoryLifecycleSummary) {
+  const hasContent: Partial<Record<Block, boolean>> = {
+    gift: Boolean(config.gift.title.trim()),
+    accessories: config.accessories.variantIds.length > 0,
+    sizeGuide: config.sizeGuide.sizes.some((size) => Boolean(size.name.trim())),
+    dimensions: config.sizeGuide.sizes.some((size) =>
+      Boolean(size.name.trim() && (formatDimensions(size) ?? size.weight.trim()))
+    ),
+    specifications: config.specifications.some((row) =>
+      Boolean(row.label.trim() && row.value.trim())
+    ),
+    packageContents: config.packageContents.editions.some((edition) =>
+      edition.items.some((item) => Boolean(item.name.trim()))
+    ),
+  };
+  if (visible(block, config, story) && hasContent[block] === false) {
+    return "Activado, pero vacío: no se verá en la tienda";
+  }
   switch (block) {
     case "story":
       return getStoryLifecycleText(story);
