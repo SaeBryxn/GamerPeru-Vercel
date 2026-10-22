@@ -110,6 +110,136 @@ export const identityResolutionSchema = z
   })
   .strict();
 
+const sourceIndexesSchema = z.array(z.number().int().nonnegative()).min(1).max(10);
+const optionalMeasurement = z.number().finite().positive().max(3000).nullable().optional();
+const handMeasurement = z.number().finite().min(15).max(22).nullable().optional();
+const sourcedText = (maximum: number) =>
+  z.object({ value: boundedText(maximum), sourceIndexes: sourceIndexesSchema }).strict();
+
+export const storePageSchema = z
+  .object({
+    sizes: z
+      .array(
+        z
+          .object({
+            name: boundedText(40),
+            lengthMm: optionalMeasurement,
+            widthMm: optionalMeasurement,
+            heightMm: optionalMeasurement,
+            weight: boundedText(50).optional(),
+            handMin: handMeasurement,
+            handMax: handMeasurement,
+            sourceIndexes: sourceIndexesSchema,
+          })
+          .strict()
+          .refine(
+            (size) => size.handMin == null || size.handMax == null || size.handMin < size.handMax,
+            "La longitud mínima debe ser menor que la máxima."
+          )
+      )
+      .max(6)
+      .optional(),
+    packageContents: z
+      .array(
+        z
+          .object({
+            edition: boundedText(80),
+            sourceIndexes: sourceIndexesSchema,
+            items: z
+              .array(
+                z
+                  .object({
+                    name: boundedText(100),
+                    quantity: boundedText(20).optional(),
+                    note: boundedText(160).optional(),
+                    sourceIndexes: sourceIndexesSchema,
+                  })
+                  .strict()
+              )
+              .min(1)
+              .max(30),
+          })
+          .strict()
+      )
+      .max(2)
+      .optional(),
+    support: z
+      .object({
+        warranty: sourcedText(120).optional(),
+        manualUrl: z
+          .object({ value: z.string().url().max(500), sourceIndexes: sourceIndexesSchema })
+          .strict()
+          .optional(),
+        driverUrl: z
+          .object({ value: z.string().url().max(500), sourceIndexes: sourceIndexesSchema })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    highlights: z
+      .array(
+        z
+          .object({
+            label: boundedText(80),
+            value: boundedText(300),
+            note: boundedText(180).optional(),
+            sourceIndexes: sourceIndexesSchema,
+          })
+          .strict()
+      )
+      .max(60)
+      .optional(),
+  })
+  .strict();
+
+/** One review per block or support field, linked only to its actual evidence. */
+export function storePageReviewFields(page: z.infer<typeof storePageSchema> | undefined): Array<{
+  fieldPath: string;
+  proposedValue: unknown;
+  sourceIndexes: number[];
+}> {
+  if (!page) return [];
+  const fields = [];
+  if (page.sizes?.length)
+    fields.push({
+      fieldPath: "pdp.sizes",
+      proposedValue: page.sizes.map(({ sourceIndexes: _sources, ...size }) => size),
+      sourceIndexes: [...new Set(page.sizes.flatMap((size) => size.sourceIndexes))],
+    });
+  if (page.packageContents?.length)
+    fields.push({
+      fieldPath: "pdp.packageContents",
+      proposedValue: page.packageContents.map(({ sourceIndexes: _sources, items, ...edition }) => ({
+        ...edition,
+        items: items.map(({ sourceIndexes: _itemSources, ...item }) => item),
+      })),
+      sourceIndexes: [
+        ...new Set(
+          page.packageContents.flatMap((edition) => [
+            ...edition.sourceIndexes,
+            ...edition.items.flatMap((item) => item.sourceIndexes),
+          ])
+        ),
+      ],
+    });
+  for (const [key, field] of Object.entries(page.support ?? {})) {
+    if (field)
+      fields.push({
+        fieldPath: `pdp.support.${key}`,
+        proposedValue: field.value,
+        sourceIndexes: field.sourceIndexes,
+      });
+  }
+  if (page.highlights?.length)
+    fields.push({
+      fieldPath: "pdp.highlights",
+      proposedValue: page.highlights.map(({ sourceIndexes: _sources, ...row }) => row),
+      sourceIndexes: [...new Set(page.highlights.flatMap((row) => row.sourceIndexes))],
+    });
+  return fields;
+}
+
 export const specificationExtractionSchema = z
   .object({
     specifications: z
@@ -150,6 +280,7 @@ export const specificationExtractionSchema = z
     unmappedSpecifications: evidenceRecordSchema.default({}),
     variants: z.array(proposedVariantSchema).max(50).default([]),
     mediaCandidates: z.array(z.string().url().max(2_000)).max(20).default([]),
+    storePage: storePageSchema.optional(),
   })
   .strict();
 

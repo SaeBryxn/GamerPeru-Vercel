@@ -30,6 +30,7 @@ import {
   identityResolutionSchema,
   profileSnapshotSchema,
   specificationExtractionSchema,
+  storePageReviewFields,
 } from "./schemas";
 import type { CopyGeneration, IdentityResolution, SpecificationExtraction } from "./schemas";
 import { acquireSearchEvidence } from "./search-evidence";
@@ -47,6 +48,7 @@ export const AI_RESEARCH_SYSTEM_INSTRUCTION = [
   "Do not select tools, providers, models, credentials, URLs, permissions, prices, inventory, publication, or database actions.",
   "Never return sell price, cost price, stock, inventory, or publication-state fields or claims.",
   "Return only JSON matching the supplied schema and only facts supported by source indexes.",
+  "For storePage, extract sizes (dimensions in mm, weight with units), package contents, support and specification highlights only when evidenced; omit missing facts. Each row and support value needs sourceIndexes. Hand ranges in cm require explicit official guidance; never infer them from mouse dimensions. Manual and software URLs must exactly match an evidence URL. Never invent warranty or box quantities.",
 ].join(" ");
 
 export interface ResearchOrchestratorDependencies {
@@ -244,6 +246,53 @@ export function assertProviderIdentityResolution(value: IdentityResolution): voi
   }
 }
 
+export function assertSpecificationEvidence(
+  value: SpecificationExtraction,
+  evidence: ExternalProductEvidence[]
+): void {
+  const sourceIndexes = [
+    ...value.specifications.flatMap((specification) => [
+      ...specification.sourceIndexes,
+      ...specification.conflictingValues.flatMap((conflict) => conflict.sourceIndexes),
+    ]),
+    ...storePageReviewFields(value.storePage).flatMap((field) => field.sourceIndexes),
+  ];
+  if (sourceIndexes.some((index) => !evidence[index])) {
+    throw new AiGatewayError(
+      "AI_PROVIDER_RESPONSE_INVALID",
+      "Provider returned invalid source provenance."
+    );
+  }
+  const allowedUrls = new Set(
+    evidence.flatMap((source) => [source.originalUrl, source.resolvedUrl])
+  );
+  const supportUrls = [
+    value.storePage?.support?.manualUrl?.value,
+    value.storePage?.support?.driverUrl?.value,
+  ].filter((url): url is string => url !== undefined);
+  if ([...value.mediaCandidates, ...supportUrls].some((url) => !allowedUrls.has(url))) {
+    throw new AiGatewayError(
+      "AI_PROVIDER_RESPONSE_INVALID",
+      "Provider returned an unexpected URL."
+    );
+  }
+  for (const size of value.storePage?.sizes ?? []) {
+    if (
+      (size.handMin != null || size.handMax != null) &&
+      !size.sourceIndexes.some((index) =>
+        ["TIER_1_OFFICIAL_MANUFACTURER", "TIER_2_OFFICIAL_MANUAL"].includes(
+          evidence[index]!.trustTier
+        )
+      )
+    ) {
+      throw new AiGatewayError(
+        "AI_PROVIDER_RESPONSE_INVALID",
+        "Hand ranges require official source provenance."
+      );
+    }
+  }
+}
+
 export async function processClaimedResearchItem(
   item: ClaimedResearchItem,
   dependencies: ResearchOrchestratorDependencies = {}
@@ -374,27 +423,7 @@ export async function processClaimedResearchItem(
         input,
         signal: controller.signal,
         schema: specificationExtractionSchema,
-        validate(value) {
-          const sourceIndexes = value.specifications.flatMap((specification) => [
-            ...specification.sourceIndexes,
-            ...specification.conflictingValues.flatMap((conflict) => conflict.sourceIndexes),
-          ]);
-          if (sourceIndexes.some((index) => !evidence[index])) {
-            throw new AiGatewayError(
-              "AI_PROVIDER_RESPONSE_INVALID",
-              "Provider returned invalid source provenance."
-            );
-          }
-          const allowedUrls = new Set(
-            evidence.flatMap((source) => [source.originalUrl, source.resolvedUrl])
-          );
-          if (value.mediaCandidates.some((url) => !allowedUrls.has(url))) {
-            throw new AiGatewayError(
-              "AI_PROVIDER_RESPONSE_INVALID",
-              "Provider returned an unexpected URL."
-            );
-          }
-        },
+        validate: (value) => assertSpecificationEvidence(value, evidence),
       });
       const copy: CopyGeneration = await executeWithFallback({
         item,
