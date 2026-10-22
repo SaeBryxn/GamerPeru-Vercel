@@ -250,7 +250,7 @@
 }
 
 .dangerButton {
-  color: var(--admin-danger);
+  color: var(--color-status-danger-text);
   background-color: transparent;
   border: 1px solid var(--color-border-default);
 }
@@ -432,7 +432,7 @@
 
 .deleteAction {
   margin-left: auto;
-  color: var(--admin-danger);
+  color: var(--color-status-danger-text);
 }
 
 .actionPanel {
@@ -933,7 +933,7 @@
 }
 
 .requiredIndicator {
-  color: var(--admin-danger);
+  color: var(--color-status-danger-text);
 }
 
 .fieldHelp {
@@ -947,7 +947,7 @@
   margin: 0;
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--admin-danger);
+  color: var(--color-status-danger-text);
 }
 
 .textInput,
@@ -1601,7 +1601,7 @@
 }
 
 .searchErrorMessage {
-  color: var(--admin-danger);
+  color: var(--color-status-danger-text);
   font-size: 0.8125rem;
   margin: 0.5rem 0;
 }
@@ -1718,7 +1718,7 @@
 }
 
 .validationIssueLink:hover {
-  color: var(--admin-danger);
+  color: var(--color-status-danger-text);
 }
 
 .validationIssueLink:focus-visible {
