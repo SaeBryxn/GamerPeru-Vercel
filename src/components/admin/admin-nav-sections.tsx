@@ -54,9 +54,7 @@ type FolderChoices = Partial<Record<AdminNavFolderId, boolean>>;
 function readFolderChoices(): FolderChoices {
   try {
     const value: unknown = JSON.parse(window.localStorage.getItem(OPEN_FOLDERS_KEY) ?? "{}");
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? (value as FolderChoices)
-      : {};
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
   } catch {
     return {};
   }
