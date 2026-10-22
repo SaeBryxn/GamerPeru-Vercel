@@ -5,6 +5,18 @@
   padding-top: 20px;
   min-width: 0;
 }
+.embedded,
+.inlineSection {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.embedded p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
 .root h3 {
   margin: 0;
   font-size: 16px;
@@ -92,7 +104,7 @@
 .search > label {
   flex: 1;
 }
-.root button {
+:is(.root, .embedded) button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -107,15 +119,15 @@
   font-size: 12px;
   cursor: pointer;
 }
-.root button:disabled {
+:is(.root, .embedded) button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
-.root .remove {
+:is(.root, .embedded) .remove {
   padding: 8px;
   flex-shrink: 0;
 }
-.root :is(button, input, select, summary):focus-visible {
+:is(.root, .embedded) :is(button, input, select, summary):focus-visible {
   outline: 2px solid var(--color-text-primary, #18181b);
   outline-offset: 3px;
 }
@@ -152,6 +164,12 @@
   align-items: end;
   gap: 8px;
   padding: 12px 0;
+}
+.embedded .grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+.embedded .itemRow {
+  grid-template-columns: minmax(0, 1fr);
 }
 @media (max-width: 600px) {
   .grid,
