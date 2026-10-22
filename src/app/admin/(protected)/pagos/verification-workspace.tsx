@@ -11,7 +11,7 @@ import {
   ToastViewport,
   useToasts,
 } from "@/components/admin/ui";
-import { claimPaymentAction } from "@/lib/payments/verification-actions";
+import { claimPaymentAction, releasePaymentAction } from "@/lib/payments/verification-actions";
 import type { VerificationQueueItem } from "@/lib/payments/verification-queue";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatAttempt, formatRelative } from "./format";
@@ -24,20 +24,27 @@ type Filter = "all" | "pending" | "mine";
 interface VerificationWorkspaceProps {
   queue: VerificationQueueItem[];
   currentUserId: string;
+  /** Supervisors (staff:manage) can return a case another operator left claimed. */
+  canReleaseOthers: boolean;
   renderedAt: string;
 }
+
+/** A claim older than this is shown as stuck so a supervisor notices it. */
+const STALE_CLAIM_MS = 24 * 60 * 60 * 1000;
 
 const EASE = [0.25, 0.1, 0.25, 1] as const;
 
 export function VerificationWorkspace({
   queue,
   currentUserId,
+  canReleaseOthers,
   renderedAt,
 }: VerificationWorkspaceProps) {
   const reduceMotion = useReducedMotion();
   const [filter, setFilter] = useState<Filter>("all");
   const [activePaymentId, setActivePaymentId] = useState<string | null>(null);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [releasingId, setReleasingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const { toasts, notify } = useToasts();
@@ -71,6 +78,16 @@ export function VerificationWorkspace({
       } else {
         notify("error", result.error);
       }
+    });
+  };
+
+  const release = (item: VerificationQueueItem) => {
+    setReleasingId(item.paymentId);
+    startTransition(async () => {
+      const result = await releasePaymentAction(item.paymentId);
+      setReleasingId(null);
+      if (result.success) notify("success", `Caso ${item.orderNumber} devuelto a la cola`);
+      else notify("error", result.error);
     });
   };
 
@@ -182,8 +199,11 @@ export function VerificationWorkspace({
                     currentUserId={currentUserId}
                     renderedAt={renderedAt}
                     busy={claimingId === item.paymentId}
+                    releasing={releasingId === item.paymentId}
+                    canReleaseOthers={canReleaseOthers}
                     reduceMotion={Boolean(reduceMotion)}
                     onReview={() => review(item)}
+                    onRelease={() => release(item)}
                   />
                 ))}
               </AnimatePresence>
@@ -214,16 +234,23 @@ function QueueRow({
   currentUserId,
   renderedAt,
   busy,
+  releasing,
+  canReleaseOthers,
   reduceMotion,
   onReview,
+  onRelease,
 }: {
   item: VerificationQueueItem;
   currentUserId: string;
   renderedAt: string;
   busy: boolean;
+  releasing: boolean;
+  canReleaseOthers: boolean;
   reduceMotion: boolean;
   onReview: () => void;
+  onRelease: () => void;
 }) {
+  const [confirmingRelease, setConfirmingRelease] = useState(false);
   const isMine = item.claimedByAuthUserId === currentUserId;
   const isTaken = item.paymentStatus === "VERIFYING" && !isMine;
   const hasDuplicates = item.duplicateOrderNumbers.length > 0;
@@ -233,6 +260,11 @@ function QueueRow({
     : isTaken
       ? `Revisando: ${item.claimedByEmail ?? "otro operador"}`
       : "Por revisar";
+  const claimAge = isTaken && item.claimedAt ? formatRelative(item.claimedAt, renderedAt) : null;
+  const isStale =
+    isTaken &&
+    item.claimedAt !== null &&
+    new Date(renderedAt).getTime() - new Date(item.claimedAt).getTime() > STALE_CLAIM_MS;
 
   return (
     <motion.li
@@ -278,22 +310,65 @@ function QueueRow({
       </div>
 
       <div className={styles.rowStatus}>
-        <StatusBadge tone={isMine ? "info" : isTaken ? "neutral" : "warning"}>
+        <StatusBadge tone={isMine ? "info" : isStale ? "danger" : isTaken ? "neutral" : "warning"}>
           <span className={styles.rowStatusText}>{statusLabel}</span>
         </StatusBadge>
+        {claimAge && (
+          <span className={styles.rowMeta}>
+            {isStale ? "Tomado " : ""}
+            {claimAge}
+          </span>
+        )}
       </div>
 
       <div className={styles.rowAction}>
-        <button
-          type="button"
-          className={isMine ? styles.primaryButton : styles.secondaryButton}
-          onClick={onReview}
-          disabled={isTaken || busy}
-          aria-label={`${isMine ? "Continuar" : "Revisar"} el pago del pedido ${item.orderNumber}`}
-        >
-          {busy ? "Tomando…" : isMine ? "Continuar" : isTaken ? "En revisión" : "Revisar"}
-          {!isTaken && !busy && <ArrowRight size={15} aria-hidden="true" />}
-        </button>
+        {isTaken && canReleaseOthers ? (
+          confirmingRelease ? (
+            <span className={styles.releaseConfirm} role="group" aria-label="Confirmar liberación">
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => {
+                  setConfirmingRelease(false);
+                  onRelease();
+                }}
+                disabled={releasing}
+              >
+                Sí, liberar
+              </button>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setConfirmingRelease(false)}
+                disabled={releasing}
+              >
+                Cancelar
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => setConfirmingRelease(true)}
+              disabled={releasing}
+              aria-label={`Liberar el pago del pedido ${item.orderNumber} para devolverlo a la cola`}
+              title="Devuelve el caso a la cola para que otro operador lo tome"
+            >
+              {releasing ? "Liberando…" : "Liberar"}
+            </button>
+          )
+        ) : (
+          <button
+            type="button"
+            className={isMine ? styles.primaryButton : styles.secondaryButton}
+            onClick={onReview}
+            disabled={isTaken || busy}
+            aria-label={`${isMine ? "Continuar" : "Revisar"} el pago del pedido ${item.orderNumber}`}
+          >
+            {busy ? "Tomando…" : isMine ? "Continuar" : isTaken ? "En revisión" : "Revisar"}
+            {!isTaken && !busy && <ArrowRight size={15} aria-hidden="true" />}
+          </button>
+        )}
       </div>
     </motion.li>
   );

@@ -1465,10 +1465,9 @@ export function ProductEditor({
                       <>
                         <XCircle size={14} aria-hidden="true" />
                         <span>
-                          Falta
                           {publishReadiness.blockers.length === 1
-                            ? " 1 cosa"
-                            : ` ${publishReadiness.blockers.length} cosas`}
+                            ? "Falta 1 cosa"
+                            : `Faltan ${publishReadiness.blockers.length} cosas`}
                         </span>
                       </>
                     )}
@@ -1489,7 +1488,12 @@ export function ProductEditor({
 
               {publishReadiness.blockers.length > 0 && (
                 <QualityChecklist
-                  title="Falta esto para que el producto entre a la tienda"
+                  title={
+                    // A published product is already on sale; the gaps are what the customer misses.
+                    product.status === "PUBLISHED"
+                      ? "Ya está en la tienda, pero le falta esto"
+                      : "Falta esto para que el producto entre a la tienda"
+                  }
                   tone="blocker"
                   issues={publishReadiness.blockers}
                   onJump={setActiveSection}

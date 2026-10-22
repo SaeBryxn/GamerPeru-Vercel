@@ -9,6 +9,7 @@ import type { AdminOrderListRow } from "@/lib/admin/orders/types";
 import {
   formatMoney,
   limaDateTime,
+  limaShortDateTime,
   orderLabels,
   paymentLabels,
   shipmentLabels,
@@ -71,9 +72,7 @@ export function OrderTable({ rows, canVerify }: { rows: AdminOrderListRow[]; can
             <th scope="col">Pago</th>
             <th scope="col">Envío</th>
             <th scope="col">Total</th>
-            <th scope="col">Método</th>
             <th scope="col">Creado</th>
-            <th scope="col">Actividad</th>
           </tr>
         </thead>
         <motion.tbody variants={group} initial="hidden" animate="visible">
@@ -109,12 +108,16 @@ export function OrderTable({ rows, canVerify }: { rows: AdminOrderListRow[]; can
                   </button>
                 </div>
               </td>
-              <td>
+              <td className={styles.customerCell}>
                 <span className={styles.customerName}>
-                  {row.recipientName ?? "Sin nombre"}
+                  <span className={styles.customerNameText}>
+                    {row.recipientName ?? "Sin nombre"}
+                  </span>
                   <EmailState sent={row.confirmationEmailSent} />
                 </span>
-                <span className={styles.customerEmail}>{row.customerEmailMasked}</span>
+                <span className={styles.customerEmail} title={row.customerEmailMasked}>
+                  {row.customerEmailMasked}
+                </span>
                 <span className={styles.secondaryText}>
                   {row.accountLinkState === "LINKED" ? "Cuenta vinculada" : "Sin cuenta vinculada"}
                 </span>
@@ -128,6 +131,17 @@ export function OrderTable({ rows, canVerify }: { rows: AdminOrderListRow[]; can
                 <StatusBadge tone={statusTone(row.paymentStatus)}>
                   {paymentLabels[row.paymentStatus]}
                 </StatusBadge>
+                <span className={styles.methodCell}>
+                  <span className={styles.secondaryText}>
+                    {row.paymentMethod?.label ?? "Sin método registrado"}
+                  </span>
+                  {canVerify && row.latestSubmission?.hasProof && (
+                    <ProofPreview
+                      submissionId={row.latestSubmission.id}
+                      orderNumber={row.orderNumber}
+                    />
+                  )}
+                </span>
               </td>
               <td>
                 <StatusBadge tone={statusTone(row.shipmentStatus)}>
@@ -140,20 +154,11 @@ export function OrderTable({ rows, canVerify }: { rows: AdminOrderListRow[]; can
                   <span className={styles.integrityWarning}>Revisar datos</span>
                 )}
               </td>
-              <td>
-                <span className={styles.methodCell}>
-                  {row.paymentMethod?.label ?? "Sin método registrado"}
-                  {canVerify && row.latestSubmission?.hasProof && (
-                    <ProofPreview
-                      submissionId={row.latestSubmission.id}
-                      orderNumber={row.orderNumber}
-                    />
-                  )}
+              <td className={styles.dateTime} title={limaDateTime.format(new Date(row.createdAt))}>
+                {limaShortDateTime.format(new Date(row.createdAt))}
+                <span className={styles.secondaryText}>
+                  Act. {limaShortDateTime.format(new Date(row.latestOperationalAt))}
                 </span>
-              </td>
-              <td className={styles.dateTime}>{limaDateTime.format(new Date(row.createdAt))}</td>
-              <td className={styles.dateTime}>
-                {limaDateTime.format(new Date(row.latestOperationalAt))}
               </td>
             </motion.tr>
           ))}

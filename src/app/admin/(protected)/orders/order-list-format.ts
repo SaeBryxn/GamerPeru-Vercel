@@ -25,6 +25,16 @@ export const limaDateTime = new Intl.DateTimeFormat("es-PE", {
   hour12: false,
 });
 
+/** Shorter stamp for the table, where the year adds width but rarely information. */
+export const limaShortDateTime = new Intl.DateTimeFormat("es-PE", {
+  timeZone: "America/Lima",
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
 export function formatMoney(row: AdminOrderListRow): string {
   if (!Number.isSafeInteger(row.totalCents) || row.totalCents < 0) return "Importe no disponible";
   if (row.currency === "PEN") return formatCentsToPen(BigInt(row.totalCents));

@@ -26,6 +26,7 @@ export default async function PaymentVerificationPage() {
     <VerificationWorkspace
       queue={queue}
       currentUserId={authContext.authUserId}
+      canReleaseOthers={authContext.permissions.has("staff:manage")}
       renderedAt={new Date().toISOString()}
     />
   );

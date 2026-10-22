@@ -72,9 +72,14 @@ function detail(overrides: Partial<VerificationDetail> = {}): VerificationDetail
   };
 }
 
-function renderWorkspace(queue: VerificationQueueItem[]) {
+function renderWorkspace(queue: VerificationQueueItem[], canReleaseOthers = false) {
   return render(
-    <VerificationWorkspace queue={queue} currentUserId={ME} renderedAt={RENDERED_AT} />
+    <VerificationWorkspace
+      queue={queue}
+      currentUserId={ME}
+      canReleaseOthers={canReleaseOthers}
+      renderedAt={RENDERED_AT}
+    />
   );
 }
 
@@ -85,6 +90,30 @@ describe("GP-028 — payment verification queue UI", () => {
   });
 
   afterEach(cleanup);
+
+  it("lets a supervisor release a case another operator left claimed", async () => {
+    actions.releasePaymentAction.mockResolvedValue({ success: true, paymentId: "p" });
+    const stuck = queueItem({
+      paymentStatus: "VERIFYING",
+      claimedByAuthUserId: OTHER,
+      claimedByEmail: "otra@gamerperu.pe",
+      claimedAt: "2026-09-01T15:00:00.000Z",
+    });
+
+    renderWorkspace([stuck], false);
+    expect(screen.queryByRole("button", { name: /Liberar el pago/ })).toBeNull();
+    cleanup();
+
+    renderWorkspace([stuck], true);
+    const row = screen.getByTestId("verification-row");
+    expect(within(row).getByText(/Tomado hace 26 días/)).toBeTruthy();
+    fireEvent.click(
+      within(row).getByRole("button", { name: /Liberar el pago del pedido GP-TEST0001/ })
+    );
+    expect(actions.releasePaymentAction).not.toHaveBeenCalled();
+    fireEvent.click(within(row).getByRole("button", { name: "Sí, liberar" }));
+    await waitFor(() => expect(actions.releasePaymentAction).toHaveBeenCalledWith(stuck.paymentId));
+  });
 
   it("shows the queue with fraud and lateness flags and who holds each case", () => {
     renderWorkspace([
