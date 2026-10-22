@@ -1,8 +1,6 @@
-import React from "react";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import { renderToString } from "react-dom/server";
 import {
   getProductReadinessGaps,
   getBlockingGaps,
@@ -11,10 +9,7 @@ import {
 import {
   getReadinessGuidance,
   PRODUCT_EDITOR_SECTIONS,
-  SECTION_LABEL,
-  type ProductEditorSection,
 } from "@/lib/admin/catalog/readiness-guidance";
-import { ProductSectionNav } from "@/components/admin/products/product-section-nav";
 import type { AdminProductListItem } from "@/lib/admin/catalog/types";
 
 function buildItem(overrides: Partial<AdminProductListItem> = {}): AdminProductListItem {
@@ -102,56 +97,5 @@ describe("Plain-language guidance for publish readiness", () => {
     const guidance = getReadinessGuidance("SOMETHING_NEW");
     expect(guidance.section).toBe("resumen");
     expect(guidance.action.length).toBeGreaterThan(0);
-  });
-});
-
-describe("ProductSectionNav", () => {
-  const sections: ProductEditorSection[] = [
-    "resumen",
-    "informacion",
-    "imagenes",
-    "variantes",
-    "especificaciones",
-    "historia",
-  ];
-
-  const noop = () => {};
-
-  it("renders one tab per section with its Spanish label", () => {
-    const html = renderToString(
-      <ProductSectionNav sections={sections} active="resumen" onSelect={noop} />
-    );
-    for (const section of sections) {
-      expect(html).toContain(`id="tab-${section}"`);
-      expect(html).toContain(SECTION_LABEL[section]);
-    }
-    expect(html).toContain('role="tablist"');
-  });
-
-  it("marks exactly one tab as selected", () => {
-    const html = renderToString(
-      <ProductSectionNav sections={sections} active="imagenes" onSelect={noop} />
-    );
-    expect(html.match(/aria-selected="true"/g)).toHaveLength(1);
-    expect(html).toContain('aria-controls="panel-imagenes"');
-  });
-
-  it("marks sections that still have blockers", () => {
-    const html = renderToString(
-      <ProductSectionNav
-        sections={sections}
-        active="resumen"
-        onSelect={noop}
-        sectionsWithIssues={["imagenes"]}
-      />
-    );
-    expect(html).toContain('aria-label="Tiene pendientes"');
-  });
-
-  it("renders no issue markers when nothing is pending", () => {
-    const html = renderToString(
-      <ProductSectionNav sections={sections} active="resumen" onSelect={noop} />
-    );
-    expect(html).not.toContain('aria-label="Tiene pendientes"');
   });
 });

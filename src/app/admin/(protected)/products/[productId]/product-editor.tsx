@@ -18,6 +18,8 @@ import {
   Lock,
   Upload,
   BookOpen,
+  Check,
+  ChevronDown,
   ChevronRight,
   ExternalLink,
   X,
@@ -44,7 +46,6 @@ import {
   getReadinessGuidance,
   type ProductEditorSection,
 } from "@/lib/admin/catalog/readiness-guidance";
-import { ProductSectionNav } from "@/components/admin/products/product-section-nav";
 import { QualityChecklist } from "@/components/admin/products/quality-checklist";
 import { FeaturedToggle } from "@/components/admin/products/featured-toggle";
 import { MediaTile } from "@/components/admin/products/media-tile";
@@ -105,14 +106,23 @@ interface UploadQueueItem {
 const MAX_MEDIA_BYTES = 20 * 1024 * 1024;
 const ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
 
-const EDITOR_SECTION_ORDER: ProductEditorSection[] = [
-  "resumen",
-  "informacion",
-  "imagenes",
-  "variantes",
-  "especificaciones",
-  "historia",
+/** The editor as five steps in the order a product is filled in; "resumen" is the side panel. */
+const EDITOR_STEPS: Array<{ section: ProductEditorSection; title: string; hint: string }> = [
+  { section: "informacion", title: "Lo básico", hint: "Nombre, marca, categoría y descripción" },
+  { section: "imagenes", title: "Fotos", hint: "La foto principal y la galería" },
+  {
+    section: "variantes",
+    title: "Colores, tallas y precios",
+    hint: "Precio y stock de cada versión",
+  },
+  {
+    section: "especificaciones",
+    title: "Especificaciones",
+    hint: "Datos técnicos de la categoría",
+  },
+  { section: "historia", title: "Página del producto", hint: "Historia y bloques de la ficha" },
 ];
+const EDITOR_SECTION_ORDER: ProductEditorSection[] = EDITOR_STEPS.map((step) => step.section);
 
 export function ProductEditor({
   initialDetail,
@@ -141,11 +151,17 @@ export function ProductEditor({
 
   const hasPublishPermission = actorPermissions.includes("catalog:publish");
 
-  const [activeSection, setActiveSection] = useState<ProductEditorSection>("resumen");
+  // One step open at a time: the first one with something missing, or the basics.
+  const [activeSection, setActiveSection] = useState<ProductEditorSection>(() => {
+    const firstMissing = initialDetail.publishReadiness.blockers
+      .map((blocker) => getReadinessGuidance(blocker.code).section)
+      .find((section) => EDITOR_SECTION_ORDER.includes(section));
+    return firstMissing ?? "informacion";
+  });
   // When the category's technical sheet has a weight field, weight is edited only there.
   const weightSpecField = findWeightSpecField(currentSpecSchema?.fieldDefinitions);
 
-  // A deep link from the product list ("#imagenes") should open that tab, not scroll a long page.
+  // A deep link from the product list ("#imagenes") opens that step.
   useEffect(() => {
     const hash = window.location.hash.replace("#", "");
     if (EDITOR_SECTION_ORDER.includes(hash as ProductEditorSection)) {
@@ -178,9 +194,61 @@ export function ProductEditor({
     };
   }, []);
 
-  const sectionsWithIssues = Array.from(
-    new Set(publishReadiness.blockers.map((blocker) => getReadinessGuidance(blocker.code).section))
-  );
+  const missingBySection = publishReadiness.blockers.reduce<
+    Partial<Record<ProductEditorSection, number>>
+  >((counts, blocker) => {
+    const section = getReadinessGuidance(blocker.code).section;
+    counts[section] = (counts[section] ?? 0) + 1;
+    return counts;
+  }, {});
+
+  /** Opens a step and brings it into view; the summary panel uses it to jump to what is missing. */
+  const openStep = useCallback((section: ProductEditorSection) => {
+    setActiveSection(section);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(`panel-${section}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const renderStepHeader = (section: ProductEditorSection) => {
+    const index = EDITOR_STEPS.findIndex((step) => step.section === section);
+    const step = EDITOR_STEPS[index];
+    if (!step) return null;
+    const missing = missingBySection[section] ?? 0;
+    const isOpen = activeSection === section;
+    return (
+      <button
+        type="button"
+        className={styles.stepHeader}
+        onClick={() => (isOpen ? setActiveSection("resumen") : openStep(section))}
+        aria-expanded={isOpen}
+        data-testid={`section-nav-${section}`}
+      >
+        <span
+          className={`${styles.stepNumber} ${missing === 0 ? styles.stepNumberDone : ""}`}
+          aria-hidden="true"
+        >
+          {missing === 0 ? <Check size={14} /> : index + 1}
+        </span>
+        <span className={styles.stepText}>
+          <span className={styles.stepTitle}>{step.title}</span>
+          <span className={styles.stepHint}>{step.hint}</span>
+        </span>
+        {missing > 0 && (
+          <span className={styles.stepMissing}>
+            {missing === 1 ? "Falta 1 cosa" : `Faltan ${missing} cosas`}
+          </span>
+        )}
+        <ChevronDown
+          size={18}
+          className={`${styles.stepChevron} ${isOpen ? styles.stepChevronOpen : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+    );
+  };
 
   // General Details State
   const [name, setName] = useState(product.name);
@@ -1426,874 +1494,895 @@ export function ProductEditor({
         </div>
       )}
 
-      <ProductSectionNav
-        sections={EDITOR_SECTION_ORDER}
-        active={activeSection}
-        onSelect={setActiveSection}
-        sectionsWithIssues={sectionsWithIssues}
-      />
-
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={activeSection}
-          role="tabpanel"
-          id={`panel-${activeSection}`}
-          aria-labelledby={`tab-${activeSection}`}
-          className={styles.sectionPanel}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-        >
-          {activeSection === "resumen" && (
-            <section
-              id="resumen"
-              className={styles.card}
-              aria-label="Estado de publicación"
-              data-testid="section-publish-readiness"
-            >
-              <div className={styles.readinessStatusHeader}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                  <h2 className={styles.cardTitle}>Resumen</h2>
-                  <span
-                    className={`${styles.readinessBadge} ${
-                      publishReadiness.isPublishable
-                        ? styles.readinessBadgeReady
-                        : styles.readinessBadgeBlocked
-                    }`}
-                    data-testid="readiness-badge"
-                  >
-                    {publishReadiness.isPublishable ? (
-                      <>
-                        <CheckCircle2 size={14} aria-hidden="true" />
-                        <span>Listo para publicar</span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle size={14} aria-hidden="true" />
-                        <span>
-                          {publishReadiness.blockers.length === 1
-                            ? "Falta 1 cosa"
-                            : `Faltan ${publishReadiness.blockers.length} cosas`}
-                        </span>
-                      </>
-                    )}
-                  </span>
-                </div>
-
-                {!hasPublishPermission && (
-                  <span className={styles.permissionNotice} data-testid="publish-permission-notice">
-                    <Lock
-                      size={12}
-                      style={{ display: "inline", marginRight: 4 }}
-                      aria-hidden="true"
-                    />
-                    Solo lectura de publicación (requiere permiso <code>catalog:publish</code>).
-                  </span>
-                )}
-              </div>
-
-              {publishReadiness.blockers.length > 0 && (
-                <QualityChecklist
-                  title={
-                    // A published product is already on sale; the gaps are what the customer misses.
-                    product.status === "PUBLISHED"
-                      ? "Ya está en la tienda, pero le falta esto"
-                      : "Falta esto para que el producto entre a la tienda"
-                  }
-                  tone="blocker"
-                  issues={publishReadiness.blockers}
-                  onJump={setActiveSection}
-                  testId="readiness-blockers-list"
-                  itemTestIdPrefix="blocker"
-                />
-              )}
-
-              {publishReadiness.warnings.length > 0 && (
-                <QualityChecklist
-                  title="Recomendado, pero no obligatorio"
-                  tone="warning"
-                  issues={publishReadiness.warnings}
-                  onJump={setActiveSection}
-                  testId="publish-warnings"
-                  itemTestIdPrefix="warning"
-                />
-              )}
-            </section>
-          )}
-
-          {activeSection === "informacion" && (
-            <section id="informacion" className={styles.card} data-testid="section-general-details">
-              <h2 className={styles.cardTitle}>Información</h2>
-              <p className={styles.cardDescription}>
-                Esto es lo que el cliente lee en la ficha del producto. El subtítulo aparece bajo el
-                nombre y la descripción debajo del precio.
-              </p>
-              <form
-                onSubmit={handleSaveDetails}
-                style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
+      <div className={styles.editorLayout}>
+        <div className={styles.stepList}>
+          <section
+            id="panel-informacion"
+            className={`${styles.step} ${activeSection === "informacion" ? styles.stepOpen : ""}`}
+          >
+            {renderStepHeader("informacion")}
+            {activeSection === "informacion" && (
+              <section
+                id="informacion"
+                className={styles.card}
+                data-testid="section-general-details"
               >
-                <div className={styles.grid2}>
-                  <div className={styles.field}>
-                    <label htmlFor="edit-name" className={styles.label}>
-                      Nombre del producto <span className={styles.required}>*</span>
-                    </label>
-                    <input
-                      id="edit-name"
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className={styles.input}
-                      data-testid="input-name"
-                    />
-                  </div>
-
-                  <div className={styles.field}>
-                    <label htmlFor="edit-slug" className={styles.label}>
-                      Dirección en la tienda <span className={styles.required}>*</span>
-                    </label>
-                    <input
-                      id="edit-slug"
-                      type="text"
-                      required
-                      value={slug}
-                      onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                      className={styles.input}
-                      data-testid="input-slug"
-                    />
-                  </div>
-                </div>
-
-                <div className={styles.grid2}>
-                  <div className={styles.field}>
-                    <label htmlFor="edit-brand" className={styles.label}>
-                      Marca <span className={styles.required}>*</span>
-                    </label>
-                    <select
-                      id="edit-brand"
-                      required
-                      value={brandId}
-                      onChange={(e) => setBrandId(e.target.value)}
-                      className={styles.select}
-                      data-testid="select-brand"
-                    >
-                      {brands.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className={styles.field}>
-                    <label htmlFor="edit-category" className={styles.label}>
-                      Categoría <span className={styles.required}>*</span>
-                    </label>
-                    <select
-                      id="edit-category"
-                      required
-                      value={categoryId}
-                      onChange={(e) => {
-                        setCategoryId(e.target.value);
-                      }}
-                      className={styles.select}
-                      data-testid="select-category"
-                    >
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                    {categoryId !== product.categoryId && (
-                      <p className={styles.helpText} style={{ color: "#b45309" }}>
-                        Advertencia: Al cambiar la categoría, las especificaciones técnicas se
-                        reconciliarán según el esquema de la nueva categoría.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className={styles.field}>
-                  <label htmlFor="edit-subtitle" className={styles.label}>
-                    Subtítulo
-                  </label>
-                  <input
-                    id="edit-subtitle"
-                    type="text"
-                    value={subtitle}
-                    onChange={(e) => setSubtitle(e.target.value)}
-                    placeholder="Ej. Edición de rendimiento"
-                    className={styles.input}
-                    data-testid="input-subtitle"
-                  />
-                </div>
-
-                <div className={styles.field}>
-                  <label htmlFor="edit-description" className={styles.label}>
-                    Descripción
-                  </label>
-                  <textarea
-                    id="edit-description"
-                    rows={4}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Qué lo hace distinto: construcción, sensor, para qué tipo de juego sirve..."
-                    className={styles.textarea}
-                    data-testid="input-description"
-                  />
-                </div>
-
-                <FeaturedToggle checked={isFeatured} onChange={setIsFeatured} />
-
-                <ProductPdpFields
-                  value={pdpConfig}
-                  onChange={setPdpConfig}
-                  variants={variants}
-                  media={media}
-                  productId={product.id}
-                />
-
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    type="submit"
-                    disabled={isSavingDetails}
-                    className={styles.primaryButton}
-                    data-testid="btn-save-details"
-                  >
-                    {isSavingDetails ? (
-                      <>
-                        <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-                        <span>Guardando...</span>
-                      </>
-                    ) : (
-                      <span>Guardar Cambios</span>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </section>
-          )}
-
-          {activeSection === "imagenes" && (
-            <section id="imagenes" className={styles.card} data-testid="section-media">
-              {isUploadingMedia && (
-                <div aria-live="polite">
-                  <progress
-                    className={styles.uploadProgress}
-                    role="progressbar"
-                    aria-label="Progreso de subida"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={uploadProgress}
-                    value={uploadProgress}
-                    max={100}
-                  />{" "}
-                  {uploadProgress}%
-                  <button
-                    type="button"
-                    className={styles.secondaryButton}
-                    onClick={() => uploadController.current?.abort()}
-                  >
-                    Cancelar subida
-                  </button>
-                </div>
-              )}
-              <div className={styles.sectionHead}>
-                <div>
-                  <h2 className={styles.cardTitle}>Fotos del producto</h2>
-                  <p className={styles.cardDescription}>
-                    La foto principal es la que ve el cliente en la tienda y en los listados. Las
-                    demás aparecen en la galería. Cada foto se optimiza sola al subirla.
-                  </p>
-                </div>
-              </div>
-
-              {/* Upload Control Box */}
-              <div className={styles.mediaUploadBox} data-testid="media-upload-area">
-                <span
-                  style={{
-                    fontSize: "0.875rem",
-                    fontWeight: 600,
-                    color: "var(--color-text-primary, #18181b)",
-                  }}
-                >
-                  Agregar una foto
-                </span>
-                <div className={styles.mediaUploadLimits} data-testid="media-upload-limits">
-                  JPEG, PNG, WebP o AVIF, hasta 20 MB por foto. Se optimizan antes de subir (hasta
-                  2400 px y 4 MB). Se recomiendan imágenes cuadradas de al menos 1200 x 1200 px.
-                </div>
-
-                <div className={styles.mediaUploadControls}>
-                  <input
-                    id="media-file-input"
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp,image/avif"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    className={styles.mediaFileInput}
-                    data-testid="input-media-file"
-                    disabled={isUploadingMedia}
-                  />
-
-                  <select
-                    id="media-upload-variant"
-                    value={uploadTargetVariantId}
-                    onChange={(e) => {
-                      setUploadTargetVariantId(e.target.value);
-                    }}
-                    className={styles.mediaVariantSelect}
-                    data-testid="select-media-upload-variant"
-                    disabled={isUploadingMedia}
-                  >
-                    <option value="">Para todo el producto</option>
-                    {variants.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        Variante: {v.title} ({v.sku})
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={handleStartUpload}
-                    disabled={selectedFiles.length === 0 || isUploadingMedia}
-                    className={styles.primaryButton}
-                    data-testid="btn-upload-media"
-                  >
-                    {isUploadingMedia ? (
-                      <>
-                        <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-                        <span>
-                          {uploadStage === "preparing"
-                            ? "Preparando foto..."
-                            : uploadStage === "authorizing"
-                              ? "Autorizando..."
-                              : uploadStage === "uploading"
-                                ? "Subiendo..."
-                                : "Registrando..."}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={14} aria-hidden="true" />
-                        <span>
-                          {selectedFiles.length > 1
-                            ? `Subir ${selectedFiles.length} fotos`
-                            : "Subir foto"}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {selectedFiles.length > 0 && uploadQueue.length === 0 && (
-                  <ul className={styles.mediaSelectedList} data-testid="media-selected-list">
-                    {selectedFiles.map((file, index) => (
-                      <li key={`${file.name}-${index}`} className={styles.mediaSelectedItem}>
-                        <ImageIcon size={14} aria-hidden="true" />
-                        <span className={styles.mediaSelectedName}>{file.name}</span>
-                        <span className={styles.mediaSelectedSize}>
-                          {(file.size / 1048576).toFixed(1)} MB
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeSelectedFile(index)}
-                          className={styles.mediaSelectedRemove}
-                          aria-label={`Quitar ${file.name} de la lista`}
-                          disabled={isUploadingMedia}
-                        >
-                          <X size={13} aria-hidden="true" />
-                        </button>
-                      </li>
-                    ))}
-                    <li>
-                      <button
-                        type="button"
-                        onClick={clearSelectedFiles}
-                        className={styles.mediaSelectedClear}
-                        disabled={isUploadingMedia}
-                      >
-                        Quitar todas
-                      </button>
-                    </li>
-                  </ul>
-                )}
-
-                {uploadQueue.length > 0 && (
-                  <ul className={styles.mediaSelectedList} data-testid="media-upload-queue">
-                    {uploadQueue.map((item, index) => (
-                      <li
-                        key={`${item.name}-${index}`}
-                        className={styles.mediaSelectedItem}
-                        data-testid={`media-queue-item-${index}`}
-                      >
-                        {item.status === "uploading" ? (
-                          <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-                        ) : item.status === "done" ? (
-                          <CheckCircle2 size={14} className={styles.queueDone} aria-hidden="true" />
-                        ) : item.status === "error" ? (
-                          <XCircle size={14} className={styles.queueError} aria-hidden="true" />
-                        ) : (
-                          <ImageIcon size={14} aria-hidden="true" />
-                        )}
-                        <span className={styles.mediaSelectedName}>{item.name}</span>
-                        <span className={styles.mediaSelectedSize}>
-                          {item.status === "done"
-                            ? "Lista"
-                            : item.status === "uploading"
-                              ? "Subiendo..."
-                              : item.status === "error"
-                                ? (item.error ?? "Error")
-                                : "En espera"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {clientFileError && (
-                  <div
-                    className={styles.mediaUploadError}
-                    data-testid="media-client-error"
-                    role="alert"
-                    aria-live="assertive"
-                  >
-                    {clientFileError}
-                  </div>
-                )}
-
-                {uploadError && (
-                  <div
-                    className={styles.mediaUploadError}
-                    data-testid="media-upload-error"
-                    role="alert"
-                    aria-live="assertive"
-                  >
-                    {uploadError}
-                  </div>
-                )}
-
-                {uploadSuccess && (
-                  <div
-                    className={styles.mediaUploadSuccess}
-                    data-testid="media-upload-success"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    {uploadSuccess}
-                  </div>
-                )}
-              </div>
-
-              {/* Operational Notifications */}
-              {mediaOpError && (
-                <div
-                  className={styles.mediaUploadError}
-                  data-testid="media-op-error"
-                  role="alert"
-                  aria-live="assertive"
-                  style={{ marginTop: "1rem" }}
-                >
-                  {mediaOpError}
-                </div>
-              )}
-
-              {mediaOrder.length > 0 ? (
-                <div
-                  className={styles.mediaGrid}
-                  onDragLeave={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                      setDropTargetIndex(null);
-                    }
-                  }}
-                >
-                  {mediaOrder.map((m, idx) => {
-                    const assignedVariant = m.variantId
-                      ? variants.find((v) => v.id === m.variantId)
-                      : null;
-
-                    return (
-                      <MediaTile
-                        key={m.id}
-                        media={m}
-                        index={idx}
-                        count={mediaOrder.length}
-                        productName={product.name}
-                        isPrimary={m.mediaAssetId === product.primaryMediaId}
-                        variantLabel={assignedVariant?.title ?? null}
-                        isSettingPrimary={isSettingPrimary === m.id}
-                        isDetaching={detachingMediaId === m.id}
-                        isConfirmingDetach={confirmDetachId === m.id}
-                        isReordering={isReorderingMedia}
-                        isDragSource={dragSourceIndex === idx}
-                        isDropTarget={dragSourceIndex !== null && dropTargetIndex === idx}
-                        onSetPrimary={() => handleSetPrimary(m)}
-                        onEditAlt={(trigger) => handleOpenAltTextModal(m, trigger)}
-                        onEditVariant={(trigger) => handleOpenVariantModal(m, trigger)}
-                        onRequestDetach={() => setConfirmDetachId(m.id)}
-                        onCancelDetach={() => setConfirmDetachId(null)}
-                        onConfirmDetach={() => void handleDetachMedia(m)}
-                        onMove={(direction) =>
-                          reorderMedia(idx, direction === "up" ? idx - 1 : idx + 1)
-                        }
-                        onDragStart={() => setDragSourceIndex(idx)}
-                        onDragEnter={() => setDropTargetIndex(idx)}
-                        onDragEnd={() => {
-                          setDragSourceIndex(null);
-                          setDropTargetIndex(null);
-                        }}
-                        onDrop={() => {
-                          if (dragSourceIndex !== null && !isReorderingMedia) {
-                            reorderMedia(dragSourceIndex, idx);
-                          }
-                          setDragSourceIndex(null);
-                          setDropTargetIndex(null);
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className={styles.cardDescription} data-testid="media-empty-state">
-                  Todavía no hay fotos. Sube la primera desde el área de arriba.
+                <h2 className={styles.cardTitle}>Información</h2>
+                <p className={styles.cardDescription}>
+                  Esto es lo que el cliente lee en la ficha del producto. El subtítulo aparece bajo
+                  el nombre y la descripción debajo del precio.
                 </p>
-              )}
-            </section>
-          )}
-
-          {activeSection === "variantes" && (
-            <section id="variantes" className={styles.card} data-testid="section-variants">
-              <div className={styles.sectionHead}>
-                <div>
-                  <h2 className={styles.cardTitle}>Variantes y stock</h2>
-                  <p className={styles.cardDescription}>
-                    Cada color o medida es una variante, con su propio código, precio y stock.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleOpenCreateVariant}
-                  className={styles.primaryButton}
-                  data-testid="btn-add-variant"
+                <form
+                  onSubmit={handleSaveDetails}
+                  style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
                 >
-                  <Plus size={14} aria-hidden="true" />
-                  <span>Agregar Variante</span>
-                </button>
-              </div>
+                  <div className={styles.grid2}>
+                    <div className={styles.field}>
+                      <label htmlFor="edit-name" className={styles.label}>
+                        Nombre del producto <span className={styles.required}>*</span>
+                      </label>
+                      <input
+                        id="edit-name"
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className={styles.input}
+                        data-testid="input-name"
+                      />
+                    </div>
 
-              <div className={styles.tableWrapper}>
-                <table className={styles.table} data-testid="table-variants">
-                  <thead>
-                    <tr>
-                      <th scope="col">SKU</th>
-                      <th scope="col">Nombre</th>
-                      <th scope="col" className={styles.numeric}>
-                        Precio venta
-                      </th>
-                      <th scope="col" className={styles.numeric}>
-                        Precio tachado
-                      </th>
-                      <th scope="col" className={styles.numeric}>
-                        Costo
-                      </th>
-                      {!weightSpecField && (
-                        <th scope="col" className={styles.numeric}>
-                          Peso
-                        </th>
-                      )}
-                      <th scope="col">Stock</th>
-                      <th scope="col">Estado</th>
-                      <th scope="col" className={styles.actionsCol}>
-                        <span className={styles.srOnly}>Acciones</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {variants.map((v) => (
-                      <tr key={v.id} data-testid={`variant-row-${v.id}`}>
-                        <td>
-                          <div className={styles.skuCell}>
-                            <span className={styles.skuBadge} data-testid={`variant-sku-${v.id}`}>
-                              {v.sku}
-                            </span>
-                            {v.isSkuImmutable && (
-                              <span
-                                className={styles.immutableIcon}
-                                title="SKU fijo: ya tiene inventario o pedidos"
-                                aria-label="SKU fijo"
-                                role="img"
-                                data-testid={`variant-immutable-badge-${v.id}`}
-                              >
-                                <Lock size={11} aria-hidden="true" />
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className={styles.nameCell}>{v.title}</td>
-                        <td className={styles.numeric}>
-                          <span className={styles.price}>
-                            {formatCentsToPenDisplay(v.priceCents)}
-                          </span>
-                        </td>
-                        <td className={styles.numeric}>
-                          {v.compareAtPriceCents ? (
-                            <span className={styles.priceCompare}>
-                              {formatCentsToPenDisplay(v.compareAtPriceCents)}
-                            </span>
-                          ) : (
-                            <span className={styles.empty}>—</span>
-                          )}
-                        </td>
-                        <td className={styles.numeric}>
-                          {v.costCents ? (
-                            <span className={styles.muted}>
-                              {formatCentsToPenDisplay(v.costCents)}
-                            </span>
-                          ) : (
-                            <span className={styles.empty}>—</span>
-                          )}
-                        </td>
-                        {!weightSpecField && (
-                          <td className={styles.numeric}>
-                            {v.weightGrams ? (
-                              <span className={styles.muted}>{v.weightGrams} g</span>
-                            ) : (
-                              <span className={styles.empty}>—</span>
-                            )}
-                          </td>
-                        )}
-                        <td>
-                          <VariantStockCell
-                            productId={product.id}
-                            variantId={v.id}
-                            stock={
-                              variantStock[v.id] ?? {
-                                variantId: v.id,
-                                onHand: 0,
-                                reserved: 0,
-                                allocated: 0,
-                                available: 0,
-                              }
-                            }
-                            canManage={actorPermissions.includes("inventory:manage")}
-                          />
-                        </td>
-                        <td>
-                          <span
-                            className={`${styles.statusPill} ${
-                              v.status === "ACTIVE"
-                                ? styles.statusActive
-                                : v.status === "INACTIVE"
-                                  ? styles.statusInactive
-                                  : styles.statusArchived
-                            }`}
-                          >
-                            {v.status === "ACTIVE"
-                              ? "Activa"
-                              : v.status === "INACTIVE"
-                                ? "Inactiva"
-                                : "Archivada"}
-                          </span>
-                        </td>
-                        <td className={styles.actionsCol}>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditVariant(v)}
-                            className={styles.iconButton}
-                            data-testid="btn-edit-variant"
-                            id={`btn-edit-variant-${v.id}`}
-                            title="Editar variante"
-                            aria-label={`Editar variante ${v.title}`}
-                          >
-                            <Pencil size={14} aria-hidden="true" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-          {activeSection === "especificaciones" && (
-            <section
-              id="especificaciones"
-              className={styles.card}
-              data-testid="section-specifications"
-            >
-              <div className={styles.sectionHead}>
-                <div>
-                  <h2 className={styles.cardTitle}>Especificaciones Técnicas ({category.name})</h2>
-                  <p className={styles.cardDescription}>
-                    {currentSpecSchema
-                      ? `Esquema activo v${currentSpecSchema.schemaVersion}. Puedes guardar especificaciones parciales.`
-                      : "Esta categoría no tiene un esquema de especificaciones técnicas configurado."}
-                  </p>
-                </div>
-              </div>
-
-              {currentSpecSchema && currentSpecSchema.fieldDefinitions ? (
-                <form onSubmit={handleSaveSpecs} className={styles.specForm}>
-                  <div className={styles.specGrid}>
-                    {currentSpecSchema.fieldDefinitions.map((field) => {
-                      const val = specValues[field.key];
-
-                      return (
-                        <div key={field.key} className={styles.field}>
-                          <label
-                            htmlFor={`spec-${field.key}`}
-                            className={`${styles.label} ${styles.specLabel}`}
-                          >
-                            <span className={styles.specLabelText} title={field.label}>
-                              {field.label}
-                            </span>
-                            {field.unit && <span className={styles.specUnit}>({field.unit})</span>}
-                          </label>
-
-                          {/* STRING / TEXT Field */}
-                          {field.dataType === "string" && (
-                            <input
-                              id={`spec-${field.key}`}
-                              type="text"
-                              value={typeof val === "string" ? val : ""}
-                              onChange={(e) => handleSpecFieldChange(field.key, e.target.value)}
-                              className={styles.input}
-                              data-testid={`spec-input-${field.key}`}
-                            />
-                          )}
-
-                          {/* NUMBER Field */}
-                          {field.dataType === "number" && (
-                            <input
-                              id={`spec-${field.key}`}
-                              type="number"
-                              min={field.min ?? undefined}
-                              max={field.max ?? undefined}
-                              step={field.step ?? "any"}
-                              value={val !== undefined && val !== null ? String(val) : ""}
-                              onChange={(e) => {
-                                const num = e.target.value === "" ? "" : Number(e.target.value);
-                                handleSpecFieldChange(field.key, num);
-                              }}
-                              className={styles.input}
-                              data-testid={`spec-input-${field.key}`}
-                            />
-                          )}
-
-                          {/* BOOLEAN Field */}
-                          {field.dataType === "boolean" && (
-                            <select
-                              id={`spec-${field.key}`}
-                              value={val === true ? "true" : val === false ? "false" : ""}
-                              onChange={(e) => {
-                                const boolVal =
-                                  e.target.value === "true"
-                                    ? true
-                                    : e.target.value === "false"
-                                      ? false
-                                      : "";
-                                handleSpecFieldChange(field.key, boolVal);
-                              }}
-                              className={styles.select}
-                              data-testid={`spec-input-${field.key}`}
-                            >
-                              <option value="">(No especificado)</option>
-                              <option value="true">Sí</option>
-                              <option value="false">No</option>
-                            </select>
-                          )}
-
-                          {/* ENUM Field (Always single-choice string selection for all enum specifications) */}
-                          {field.dataType === "enum" && (
-                            <select
-                              id={`spec-${field.key}`}
-                              value={typeof val === "string" ? val : ""}
-                              onChange={(e) =>
-                                handleSpecFieldChange(field.key, e.target.value || "")
-                              }
-                              className={styles.select}
-                              data-testid={`spec-input-${field.key}`}
-                            >
-                              <option value="">(Seleccionar opción)</option>
-                              {field.options?.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
-                      );
-                    })}
+                    <div className={styles.field}>
+                      <label htmlFor="edit-slug" className={styles.label}>
+                        Dirección en la tienda <span className={styles.required}>*</span>
+                      </label>
+                      <input
+                        id="edit-slug"
+                        type="text"
+                        required
+                        value={slug}
+                        onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                        className={styles.input}
+                        data-testid="input-slug"
+                      />
+                    </div>
                   </div>
 
-                  <div className={styles.specFooter}>
+                  <div className={styles.grid2}>
+                    <div className={styles.field}>
+                      <label htmlFor="edit-brand" className={styles.label}>
+                        Marca <span className={styles.required}>*</span>
+                      </label>
+                      <select
+                        id="edit-brand"
+                        required
+                        value={brandId}
+                        onChange={(e) => setBrandId(e.target.value)}
+                        className={styles.select}
+                        data-testid="select-brand"
+                      >
+                        {brands.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className={styles.field}>
+                      <label htmlFor="edit-category" className={styles.label}>
+                        Categoría <span className={styles.required}>*</span>
+                      </label>
+                      <select
+                        id="edit-category"
+                        required
+                        value={categoryId}
+                        onChange={(e) => {
+                          setCategoryId(e.target.value);
+                        }}
+                        className={styles.select}
+                        data-testid="select-category"
+                      >
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      {categoryId !== product.categoryId && (
+                        <p className={styles.helpText} style={{ color: "#b45309" }}>
+                          Advertencia: Al cambiar la categoría, las especificaciones técnicas se
+                          reconciliarán según el esquema de la nueva categoría.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={styles.field}>
+                    <label htmlFor="edit-subtitle" className={styles.label}>
+                      Subtítulo
+                    </label>
+                    <input
+                      id="edit-subtitle"
+                      type="text"
+                      value={subtitle}
+                      onChange={(e) => setSubtitle(e.target.value)}
+                      placeholder="Ej. Edición de rendimiento"
+                      className={styles.input}
+                      data-testid="input-subtitle"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <label htmlFor="edit-description" className={styles.label}>
+                      Descripción
+                    </label>
+                    <textarea
+                      id="edit-description"
+                      rows={4}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Qué lo hace distinto: construcción, sensor, para qué tipo de juego sirve..."
+                      className={styles.textarea}
+                      data-testid="input-description"
+                    />
+                  </div>
+
+                  <FeaturedToggle checked={isFeatured} onChange={setIsFeatured} />
+
+                  <ProductPdpFields
+                    value={pdpConfig}
+                    onChange={setPdpConfig}
+                    variants={variants}
+                    media={media}
+                    productId={product.id}
+                  />
+
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button
                       type="submit"
-                      disabled={isSavingSpecs}
+                      disabled={isSavingDetails}
                       className={styles.primaryButton}
-                      data-testid="btn-save-specs"
+                      data-testid="btn-save-details"
                     >
-                      {isSavingSpecs ? (
+                      {isSavingDetails ? (
                         <>
                           <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
                           <span>Guardando...</span>
                         </>
                       ) : (
-                        <span>Guardar Especificaciones</span>
+                        <span>Guardar Cambios</span>
                       )}
                     </button>
                   </div>
                 </form>
-              ) : (
-                <p className={styles.cardDescription}>
-                  Selecciona una categoría con especificaciones técnicas para configurar sus
-                  valores.
-                </p>
-              )}
-            </section>
-          )}
+              </section>
+            )}
+          </section>
+          <section
+            id="panel-imagenes"
+            className={`${styles.step} ${activeSection === "imagenes" ? styles.stepOpen : ""}`}
+          >
+            {renderStepHeader("imagenes")}
+            {activeSection === "imagenes" && (
+              <section id="imagenes" className={styles.card} data-testid="section-media">
+                {isUploadingMedia && (
+                  <div aria-live="polite">
+                    <progress
+                      className={styles.uploadProgress}
+                      role="progressbar"
+                      aria-label="Progreso de subida"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={uploadProgress}
+                      value={uploadProgress}
+                      max={100}
+                    />{" "}
+                    {uploadProgress}%
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={() => uploadController.current?.abort()}
+                    >
+                      Cancelar subida
+                    </button>
+                  </div>
+                )}
+                <div className={styles.sectionHead}>
+                  <div>
+                    <h2 className={styles.cardTitle}>Fotos del producto</h2>
+                    <p className={styles.cardDescription}>
+                      La foto principal es la que ve el cliente en la tienda y en los listados. Las
+                      demás aparecen en la galería. Cada foto se optimiza sola al subirla.
+                    </p>
+                  </div>
+                </div>
 
-          {activeSection === "historia" && (
-            <section
-              id="historia"
-              className={`${styles.card} ${styles.storyEntryCard}`}
-              aria-labelledby="product-story-entry-title"
-              data-testid="product-story-entry"
-            >
-              <div className={styles.storyEntryContent}>
-                <div className={styles.storyEntryIcon} aria-hidden="true">
-                  <BookOpen size={22} />
-                </div>
-                <div className={styles.storyEntryCopy}>
-                  <h2 id="product-story-entry-title" className={styles.cardTitle}>
-                    Historia del producto
-                  </h2>
-                  <p className={styles.cardDescription}>
-                    Organiza el relato editorial del producto en un espacio de trabajo dedicado.
-                  </p>
-                  <span className={styles.storyLifecycleText} data-testid="product-story-status">
-                    Estado: {getStoryLifecycleText(storySummary)}
+                {/* Upload Control Box */}
+                <div className={styles.mediaUploadBox} data-testid="media-upload-area">
+                  <span
+                    style={{
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                      color: "var(--color-text-primary, #18181b)",
+                    }}
+                  >
+                    Agregar una foto
                   </span>
+                  <div className={styles.mediaUploadLimits} data-testid="media-upload-limits">
+                    JPEG, PNG, WebP o AVIF, hasta 20 MB por foto. Se optimizan antes de subir (hasta
+                    2400 px y 4 MB). Se recomiendan imágenes cuadradas de al menos 1200 x 1200 px.
+                  </div>
+
+                  <div className={styles.mediaUploadControls}>
+                    <input
+                      id="media-file-input"
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp,image/avif"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className={styles.mediaFileInput}
+                      data-testid="input-media-file"
+                      disabled={isUploadingMedia}
+                    />
+
+                    <select
+                      id="media-upload-variant"
+                      value={uploadTargetVariantId}
+                      onChange={(e) => {
+                        setUploadTargetVariantId(e.target.value);
+                      }}
+                      className={styles.mediaVariantSelect}
+                      data-testid="select-media-upload-variant"
+                      disabled={isUploadingMedia}
+                    >
+                      <option value="">Para todo el producto</option>
+                      {variants.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          Variante: {v.title} ({v.sku})
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={handleStartUpload}
+                      disabled={selectedFiles.length === 0 || isUploadingMedia}
+                      className={styles.primaryButton}
+                      data-testid="btn-upload-media"
+                    >
+                      {isUploadingMedia ? (
+                        <>
+                          <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                          <span>
+                            {uploadStage === "preparing"
+                              ? "Preparando foto..."
+                              : uploadStage === "authorizing"
+                                ? "Autorizando..."
+                                : uploadStage === "uploading"
+                                  ? "Subiendo..."
+                                  : "Registrando..."}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={14} aria-hidden="true" />
+                          <span>
+                            {selectedFiles.length > 1
+                              ? `Subir ${selectedFiles.length} fotos`
+                              : "Subir foto"}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {selectedFiles.length > 0 && uploadQueue.length === 0 && (
+                    <ul className={styles.mediaSelectedList} data-testid="media-selected-list">
+                      {selectedFiles.map((file, index) => (
+                        <li key={`${file.name}-${index}`} className={styles.mediaSelectedItem}>
+                          <ImageIcon size={14} aria-hidden="true" />
+                          <span className={styles.mediaSelectedName}>{file.name}</span>
+                          <span className={styles.mediaSelectedSize}>
+                            {(file.size / 1048576).toFixed(1)} MB
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeSelectedFile(index)}
+                            className={styles.mediaSelectedRemove}
+                            aria-label={`Quitar ${file.name} de la lista`}
+                            disabled={isUploadingMedia}
+                          >
+                            <X size={13} aria-hidden="true" />
+                          </button>
+                        </li>
+                      ))}
+                      <li>
+                        <button
+                          type="button"
+                          onClick={clearSelectedFiles}
+                          className={styles.mediaSelectedClear}
+                          disabled={isUploadingMedia}
+                        >
+                          Quitar todas
+                        </button>
+                      </li>
+                    </ul>
+                  )}
+
+                  {uploadQueue.length > 0 && (
+                    <ul className={styles.mediaSelectedList} data-testid="media-upload-queue">
+                      {uploadQueue.map((item, index) => (
+                        <li
+                          key={`${item.name}-${index}`}
+                          className={styles.mediaSelectedItem}
+                          data-testid={`media-queue-item-${index}`}
+                        >
+                          {item.status === "uploading" ? (
+                            <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                          ) : item.status === "done" ? (
+                            <CheckCircle2
+                              size={14}
+                              className={styles.queueDone}
+                              aria-hidden="true"
+                            />
+                          ) : item.status === "error" ? (
+                            <XCircle size={14} className={styles.queueError} aria-hidden="true" />
+                          ) : (
+                            <ImageIcon size={14} aria-hidden="true" />
+                          )}
+                          <span className={styles.mediaSelectedName}>{item.name}</span>
+                          <span className={styles.mediaSelectedSize}>
+                            {item.status === "done"
+                              ? "Lista"
+                              : item.status === "uploading"
+                                ? "Subiendo..."
+                                : item.status === "error"
+                                  ? (item.error ?? "Error")
+                                  : "En espera"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {clientFileError && (
+                    <div
+                      className={styles.mediaUploadError}
+                      data-testid="media-client-error"
+                      role="alert"
+                      aria-live="assertive"
+                    >
+                      {clientFileError}
+                    </div>
+                  )}
+
+                  {uploadError && (
+                    <div
+                      className={styles.mediaUploadError}
+                      data-testid="media-upload-error"
+                      role="alert"
+                      aria-live="assertive"
+                    >
+                      {uploadError}
+                    </div>
+                  )}
+
+                  {uploadSuccess && (
+                    <div
+                      className={styles.mediaUploadSuccess}
+                      data-testid="media-upload-success"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {uploadSuccess}
+                    </div>
+                  )}
                 </div>
-              </div>
-              <Link
-                href={`/admin/products/${product.id}/story`}
-                className={styles.storyEntryLink}
-                data-testid="product-story-link"
+
+                {/* Operational Notifications */}
+                {mediaOpError && (
+                  <div
+                    className={styles.mediaUploadError}
+                    data-testid="media-op-error"
+                    role="alert"
+                    aria-live="assertive"
+                    style={{ marginTop: "1rem" }}
+                  >
+                    {mediaOpError}
+                  </div>
+                )}
+
+                {mediaOrder.length > 0 ? (
+                  <div
+                    className={styles.mediaGrid}
+                    onDragLeave={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                        setDropTargetIndex(null);
+                      }
+                    }}
+                  >
+                    {mediaOrder.map((m, idx) => {
+                      const assignedVariant = m.variantId
+                        ? variants.find((v) => v.id === m.variantId)
+                        : null;
+
+                      return (
+                        <MediaTile
+                          key={m.id}
+                          media={m}
+                          index={idx}
+                          count={mediaOrder.length}
+                          productName={product.name}
+                          isPrimary={m.mediaAssetId === product.primaryMediaId}
+                          variantLabel={assignedVariant?.title ?? null}
+                          isSettingPrimary={isSettingPrimary === m.id}
+                          isDetaching={detachingMediaId === m.id}
+                          isConfirmingDetach={confirmDetachId === m.id}
+                          isReordering={isReorderingMedia}
+                          isDragSource={dragSourceIndex === idx}
+                          isDropTarget={dragSourceIndex !== null && dropTargetIndex === idx}
+                          onSetPrimary={() => handleSetPrimary(m)}
+                          onEditAlt={(trigger) => handleOpenAltTextModal(m, trigger)}
+                          onEditVariant={(trigger) => handleOpenVariantModal(m, trigger)}
+                          onRequestDetach={() => setConfirmDetachId(m.id)}
+                          onCancelDetach={() => setConfirmDetachId(null)}
+                          onConfirmDetach={() => void handleDetachMedia(m)}
+                          onMove={(direction) =>
+                            reorderMedia(idx, direction === "up" ? idx - 1 : idx + 1)
+                          }
+                          onDragStart={() => setDragSourceIndex(idx)}
+                          onDragEnter={() => setDropTargetIndex(idx)}
+                          onDragEnd={() => {
+                            setDragSourceIndex(null);
+                            setDropTargetIndex(null);
+                          }}
+                          onDrop={() => {
+                            if (dragSourceIndex !== null && !isReorderingMedia) {
+                              reorderMedia(dragSourceIndex, idx);
+                            }
+                            setDragSourceIndex(null);
+                            setDropTargetIndex(null);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className={styles.cardDescription} data-testid="media-empty-state">
+                    Todavía no hay fotos. Sube la primera desde el área de arriba.
+                  </p>
+                )}
+              </section>
+            )}
+          </section>
+          <section
+            id="panel-variantes"
+            className={`${styles.step} ${activeSection === "variantes" ? styles.stepOpen : ""}`}
+          >
+            {renderStepHeader("variantes")}
+            {activeSection === "variantes" && (
+              <section id="variantes" className={styles.card} data-testid="section-variants">
+                <div className={styles.sectionHead}>
+                  <div>
+                    <h2 className={styles.cardTitle}>Variantes y stock</h2>
+                    <p className={styles.cardDescription}>
+                      Cada color o medida es una variante, con su propio código, precio y stock.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateVariant}
+                    className={styles.primaryButton}
+                    data-testid="btn-add-variant"
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                    <span>Agregar Variante</span>
+                  </button>
+                </div>
+
+                <div className={styles.tableWrapper}>
+                  <table className={styles.table} data-testid="table-variants">
+                    <thead>
+                      <tr>
+                        <th scope="col">SKU</th>
+                        <th scope="col">Nombre</th>
+                        <th scope="col" className={styles.numeric}>
+                          Precio venta
+                        </th>
+                        <th scope="col" className={styles.numeric}>
+                          Precio tachado
+                        </th>
+                        <th scope="col" className={styles.numeric}>
+                          Costo
+                        </th>
+                        {!weightSpecField && (
+                          <th scope="col" className={styles.numeric}>
+                            Peso
+                          </th>
+                        )}
+                        <th scope="col">Stock</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col" className={styles.actionsCol}>
+                          <span className={styles.srOnly}>Acciones</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {variants.map((v) => (
+                        <tr key={v.id} data-testid={`variant-row-${v.id}`}>
+                          <td>
+                            <div className={styles.skuCell}>
+                              <span className={styles.skuBadge} data-testid={`variant-sku-${v.id}`}>
+                                {v.sku}
+                              </span>
+                              {v.isSkuImmutable && (
+                                <span
+                                  className={styles.immutableIcon}
+                                  title="SKU fijo: ya tiene inventario o pedidos"
+                                  aria-label="SKU fijo"
+                                  role="img"
+                                  data-testid={`variant-immutable-badge-${v.id}`}
+                                >
+                                  <Lock size={11} aria-hidden="true" />
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className={styles.nameCell}>{v.title}</td>
+                          <td className={styles.numeric}>
+                            <span className={styles.price}>
+                              {formatCentsToPenDisplay(v.priceCents)}
+                            </span>
+                          </td>
+                          <td className={styles.numeric}>
+                            {v.compareAtPriceCents ? (
+                              <span className={styles.priceCompare}>
+                                {formatCentsToPenDisplay(v.compareAtPriceCents)}
+                              </span>
+                            ) : (
+                              <span className={styles.empty}>—</span>
+                            )}
+                          </td>
+                          <td className={styles.numeric}>
+                            {v.costCents ? (
+                              <span className={styles.muted}>
+                                {formatCentsToPenDisplay(v.costCents)}
+                              </span>
+                            ) : (
+                              <span className={styles.empty}>—</span>
+                            )}
+                          </td>
+                          {!weightSpecField && (
+                            <td className={styles.numeric}>
+                              {v.weightGrams ? (
+                                <span className={styles.muted}>{v.weightGrams} g</span>
+                              ) : (
+                                <span className={styles.empty}>—</span>
+                              )}
+                            </td>
+                          )}
+                          <td>
+                            <VariantStockCell
+                              productId={product.id}
+                              variantId={v.id}
+                              stock={
+                                variantStock[v.id] ?? {
+                                  variantId: v.id,
+                                  onHand: 0,
+                                  reserved: 0,
+                                  allocated: 0,
+                                  available: 0,
+                                }
+                              }
+                              canManage={actorPermissions.includes("inventory:manage")}
+                            />
+                          </td>
+                          <td>
+                            <span
+                              className={`${styles.statusPill} ${
+                                v.status === "ACTIVE"
+                                  ? styles.statusActive
+                                  : v.status === "INACTIVE"
+                                    ? styles.statusInactive
+                                    : styles.statusArchived
+                              }`}
+                            >
+                              {v.status === "ACTIVE"
+                                ? "Activa"
+                                : v.status === "INACTIVE"
+                                  ? "Inactiva"
+                                  : "Archivada"}
+                            </span>
+                          </td>
+                          <td className={styles.actionsCol}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditVariant(v)}
+                              className={styles.iconButton}
+                              data-testid="btn-edit-variant"
+                              id={`btn-edit-variant-${v.id}`}
+                              title="Editar variante"
+                              aria-label={`Editar variante ${v.title}`}
+                            >
+                              <Pencil size={14} aria-hidden="true" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+          </section>
+          <section
+            id="panel-especificaciones"
+            className={`${styles.step} ${activeSection === "especificaciones" ? styles.stepOpen : ""}`}
+          >
+            {renderStepHeader("especificaciones")}
+            {activeSection === "especificaciones" && (
+              <section
+                id="especificaciones"
+                className={styles.card}
+                data-testid="section-specifications"
               >
-                Editar historia
-                <ChevronRight size={16} aria-hidden="true" />
-              </Link>
-            </section>
-          )}
-        </motion.div>
-      </AnimatePresence>
+                <div className={styles.sectionHead}>
+                  <div>
+                    <h2 className={styles.cardTitle}>
+                      Especificaciones Técnicas ({category.name})
+                    </h2>
+                    <p className={styles.cardDescription}>
+                      {currentSpecSchema
+                        ? `Esquema activo v${currentSpecSchema.schemaVersion}. Puedes guardar especificaciones parciales.`
+                        : "Esta categoría no tiene un esquema de especificaciones técnicas configurado."}
+                    </p>
+                  </div>
+                </div>
+
+                {currentSpecSchema && currentSpecSchema.fieldDefinitions ? (
+                  <form onSubmit={handleSaveSpecs} className={styles.specForm}>
+                    <div className={styles.specGrid}>
+                      {currentSpecSchema.fieldDefinitions.map((field) => {
+                        const val = specValues[field.key];
+
+                        return (
+                          <div key={field.key} className={styles.field}>
+                            <label
+                              htmlFor={`spec-${field.key}`}
+                              className={`${styles.label} ${styles.specLabel}`}
+                            >
+                              <span className={styles.specLabelText} title={field.label}>
+                                {field.label}
+                              </span>
+                              {field.unit && (
+                                <span className={styles.specUnit}>({field.unit})</span>
+                              )}
+                            </label>
+
+                            {/* STRING / TEXT Field */}
+                            {field.dataType === "string" && (
+                              <input
+                                id={`spec-${field.key}`}
+                                type="text"
+                                value={typeof val === "string" ? val : ""}
+                                onChange={(e) => handleSpecFieldChange(field.key, e.target.value)}
+                                className={styles.input}
+                                data-testid={`spec-input-${field.key}`}
+                              />
+                            )}
+
+                            {/* NUMBER Field */}
+                            {field.dataType === "number" && (
+                              <input
+                                id={`spec-${field.key}`}
+                                type="number"
+                                min={field.min ?? undefined}
+                                max={field.max ?? undefined}
+                                step={field.step ?? "any"}
+                                value={val !== undefined && val !== null ? String(val) : ""}
+                                onChange={(e) => {
+                                  const num = e.target.value === "" ? "" : Number(e.target.value);
+                                  handleSpecFieldChange(field.key, num);
+                                }}
+                                className={styles.input}
+                                data-testid={`spec-input-${field.key}`}
+                              />
+                            )}
+
+                            {/* BOOLEAN Field */}
+                            {field.dataType === "boolean" && (
+                              <select
+                                id={`spec-${field.key}`}
+                                value={val === true ? "true" : val === false ? "false" : ""}
+                                onChange={(e) => {
+                                  const boolVal =
+                                    e.target.value === "true"
+                                      ? true
+                                      : e.target.value === "false"
+                                        ? false
+                                        : "";
+                                  handleSpecFieldChange(field.key, boolVal);
+                                }}
+                                className={styles.select}
+                                data-testid={`spec-input-${field.key}`}
+                              >
+                                <option value="">(No especificado)</option>
+                                <option value="true">Sí</option>
+                                <option value="false">No</option>
+                              </select>
+                            )}
+
+                            {/* ENUM Field (Always single-choice string selection for all enum specifications) */}
+                            {field.dataType === "enum" && (
+                              <select
+                                id={`spec-${field.key}`}
+                                value={typeof val === "string" ? val : ""}
+                                onChange={(e) =>
+                                  handleSpecFieldChange(field.key, e.target.value || "")
+                                }
+                                className={styles.select}
+                                data-testid={`spec-input-${field.key}`}
+                              >
+                                <option value="">(Seleccionar opción)</option>
+                                {field.options?.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className={styles.specFooter}>
+                      <button
+                        type="submit"
+                        disabled={isSavingSpecs}
+                        className={styles.primaryButton}
+                        data-testid="btn-save-specs"
+                      >
+                        {isSavingSpecs ? (
+                          <>
+                            <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+                            <span>Guardando...</span>
+                          </>
+                        ) : (
+                          <span>Guardar Especificaciones</span>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <p className={styles.cardDescription}>
+                    Selecciona una categoría con especificaciones técnicas para configurar sus
+                    valores.
+                  </p>
+                )}
+              </section>
+            )}
+          </section>
+          <section
+            id="panel-historia"
+            className={`${styles.step} ${activeSection === "historia" ? styles.stepOpen : ""}`}
+          >
+            {renderStepHeader("historia")}
+            {activeSection === "historia" && (
+              <section
+                id="historia"
+                className={`${styles.card} ${styles.storyEntryCard}`}
+                aria-labelledby="product-story-entry-title"
+                data-testid="product-story-entry"
+              >
+                <div className={styles.storyEntryContent}>
+                  <div className={styles.storyEntryIcon} aria-hidden="true">
+                    <BookOpen size={22} />
+                  </div>
+                  <div className={styles.storyEntryCopy}>
+                    <h2 id="product-story-entry-title" className={styles.cardTitle}>
+                      Historia del producto
+                    </h2>
+                    <p className={styles.cardDescription}>
+                      Organiza el relato editorial del producto en un espacio de trabajo dedicado.
+                    </p>
+                    <span className={styles.storyLifecycleText} data-testid="product-story-status">
+                      Estado: {getStoryLifecycleText(storySummary)}
+                    </span>
+                  </div>
+                </div>
+                <Link
+                  href={`/admin/products/${product.id}/story`}
+                  className={styles.storyEntryLink}
+                  data-testid="product-story-link"
+                >
+                  Editar historia
+                  <ChevronRight size={16} aria-hidden="true" />
+                </Link>
+              </section>
+            )}
+          </section>
+        </div>
+
+        <aside className={styles.publishPanel} aria-label="Para publicar">
+          <section
+            id="panel-resumen"
+            className={styles.card}
+            aria-label="Estado de publicación"
+            data-testid="section-publish-readiness"
+          >
+            <div className={styles.readinessStatusHeader}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <h2 className={styles.cardTitle}>Para publicar</h2>
+                <span
+                  className={`${styles.readinessBadge} ${
+                    publishReadiness.isPublishable
+                      ? styles.readinessBadgeReady
+                      : styles.readinessBadgeBlocked
+                  }`}
+                  data-testid="readiness-badge"
+                >
+                  {publishReadiness.isPublishable ? (
+                    <>
+                      <CheckCircle2 size={14} aria-hidden="true" />
+                      <span>Listo para publicar</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle size={14} aria-hidden="true" />
+                      <span>
+                        {publishReadiness.blockers.length === 1
+                          ? "Falta 1 cosa"
+                          : `Faltan ${publishReadiness.blockers.length} cosas`}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </div>
+
+              {!hasPublishPermission && (
+                <span className={styles.permissionNotice} data-testid="publish-permission-notice">
+                  <Lock
+                    size={12}
+                    style={{ display: "inline", marginRight: 4 }}
+                    aria-hidden="true"
+                  />
+                  Solo lectura de publicación (requiere permiso <code>catalog:publish</code>).
+                </span>
+              )}
+            </div>
+
+            {publishReadiness.blockers.length > 0 && (
+              <QualityChecklist
+                title={
+                  // A published product is already on sale; the gaps are what the customer misses.
+                  product.status === "PUBLISHED"
+                    ? "Ya está en la tienda, pero le falta esto"
+                    : "Falta esto para que el producto entre a la tienda"
+                }
+                tone="blocker"
+                issues={publishReadiness.blockers}
+                onJump={openStep}
+                testId="readiness-blockers-list"
+                itemTestIdPrefix="blocker"
+              />
+            )}
+
+            {publishReadiness.warnings.length > 0 && (
+              <QualityChecklist
+                title="Recomendado, pero no obligatorio"
+                tone="warning"
+                issues={publishReadiness.warnings}
+                onJump={openStep}
+                testId="publish-warnings"
+                itemTestIdPrefix="warning"
+              />
+            )}
+          </section>
+        </aside>
+      </div>
 
       <div className={styles.toastStack} aria-live="polite" data-testid="media-op-success">
         <AnimatePresence initial={false}>

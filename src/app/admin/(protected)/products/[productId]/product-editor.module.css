@@ -1,10 +1,8 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
 }
 
 .header {
@@ -507,6 +505,8 @@
  * Variants Table
  * -------------------------------------------------------------------------- */
 .tableWrapper {
+  /* Keeps visually hidden labels inside the scroll area instead of widening the page. */
+  position: relative;
   margin-top: 0.25rem;
   overflow-x: auto;
   border: 1px solid var(--color-border-subtle);
@@ -1045,4 +1045,146 @@
 .uploadProgress {
   width: min(100%, 24rem);
   accent-color: var(--color-brand-primary);
+}
+
+/* Steps on the left, the "Para publicar" panel pinned on the right. */
+.editorLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.stepList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.step {
+  scroll-margin-top: calc(var(--admin-header-height) + 16px);
+}
+
+.stepHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--admin-panel);
+  box-shadow: var(--admin-card-shadow);
+  color: var(--color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.stepHeader:hover {
+  border-color: var(--color-border-strong);
+}
+
+.stepHeader:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.stepOpen .stepHeader {
+  border-color: var(--admin-accent);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* The open step's own card continues the header instead of floating below it. */
+.stepOpen > .card {
+  margin-top: -1px;
+  border-color: var(--admin-accent);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.stepNumber {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.stepNumberDone {
+  border-color: var(--color-status-success-border);
+  background-color: var(--color-status-success-background);
+  color: var(--color-status-success-text);
+}
+
+.stepText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stepTitle {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.stepHint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.stepMissing {
+  flex-shrink: 0;
+  padding: 2px 9px;
+  border: 1px solid var(--color-status-warning-border);
+  border-radius: 9999px;
+  background-color: var(--color-status-warning-background);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-status-warning-text);
+}
+
+.stepChevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform 0.2s ease;
+}
+
+.stepChevronOpen {
+  transform: rotate(180deg);
+}
+
+.publishPanel {
+  position: sticky;
+  top: calc(var(--admin-header-height) + 16px);
+  min-width: 0;
+}
+
+@media (max-width: 1099px) {
+  .editorLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* On narrow screens what is missing comes first. */
+  .publishPanel {
+    position: static;
+    order: -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stepHeader,
+  .stepChevron {
+    transition: none;
+  }
 }

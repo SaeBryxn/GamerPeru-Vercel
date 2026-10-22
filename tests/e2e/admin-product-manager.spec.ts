@@ -23,14 +23,14 @@ test.afterAll(async () => {
   await sql.end();
 });
 
-type EditorSection = "resumen" | "informacion" | "imagenes" | "variantes" | "especificaciones";
+type EditorSection = "informacion" | "imagenes" | "variantes" | "especificaciones";
 
-/** The product editor renders one section at a time; open the tab before driving its controls. */
+/** The product editor opens one step at a time; clicking an open step closes it, so only click a closed one. */
 async function openSection(page: Page, section: EditorSection) {
-  const tab = page.locator(`[data-testid="section-nav-${section}"]`);
-  await tab.waitFor({ state: "visible", timeout: 15000 });
-  await tab.click();
-  await page.locator(`#panel-${section}`).waitFor({ state: "visible", timeout: 15000 });
+  const header = page.locator(`[data-testid="section-nav-${section}"]`);
+  await header.waitFor({ state: "visible", timeout: 15000 });
+  if ((await header.getAttribute("aria-expanded")) !== "true") await header.click();
+  await expect(header).toHaveAttribute("aria-expanded", "true");
 }
 
 async function loginAndNavigateTo(page: Page, email: string, targetPath: string) {

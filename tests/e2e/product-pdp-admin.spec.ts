@@ -27,6 +27,13 @@ async function login(page: Page, target: string) {
   await page.goto(target);
 }
 
+/** "Lo básico" may already be the open step; clicking an open step would close it. */
+async function openBasics(page: Page) {
+  const header = page.getByTestId("section-nav-informacion");
+  if ((await header.getAttribute("aria-expanded")) !== "true") await header.click();
+  await expect(header).toHaveAttribute("aria-expanded", "true");
+}
+
 async function assertNoOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
@@ -101,7 +108,7 @@ test("el admin guarda los bloques, miniaturas y accesorios con filas editables",
   page,
 }) => {
   await login(page, `/admin/products/${productId}`);
-  await page.getByTestId("section-nav-informacion").click();
+  await openBasics(page);
   const root = page.getByRole("region", { name: "Configuración de la ficha de tienda" });
   await root.getByRole("switch", { name: "Mostrar calificación y reseñas" }).check();
   await root.getByLabel("Promedio (0 a 5)").fill("4.8");
@@ -188,7 +195,7 @@ test("el admin guarda los bloques, miniaturas y accesorios con filas editables",
     )
     .toBe("Grafito");
   await page.reload();
-  await page.getByTestId("section-nav-informacion").click();
+  await openBasics(page);
   await expect(page.getByLabel("Promedio (0 a 5)")).toHaveValue("4.8");
 });
 
@@ -272,9 +279,9 @@ for (const width of [360, 768, 1440])
       animations: "disabled",
     });
     await login(page, `/admin/products/${productId}`);
-    await page.getByTestId("section-nav-informacion").click();
+    await openBasics(page);
     await expect(page.getByTestId("section-general-details")).toBeVisible();
-    await expect(page.getByRole("tabpanel")).toHaveCSS("opacity", "1");
+    await expect(page.locator("#panel-informacion")).toBeVisible();
     await expect(page.getByLabel("Promedio (0 a 5)")).toBeVisible();
     await assertNoOverflow(page);
     await page.screenshot({
