@@ -36,6 +36,7 @@ export interface ProductPageStepProps {
 
 const BLOCKS = [
   ["story", "Historia"],
+  ["variants", "Colores y miniaturas"],
   ["gift", "Regalo"],
   ["accessories", "Accesorios"],
   ["sizeGuide", "Guía de tallas"],
@@ -45,6 +46,7 @@ const BLOCKS = [
   ["support", "Soporte"],
 ] as const;
 type Block = (typeof BLOCKS)[number][0];
+const ALWAYS_SHOWN: Block[] = ["story", "variants", "support"];
 const hasSupport = (config: ProductPdpConfig) =>
   Object.values(config.support).some((value) => value.trim());
 
@@ -53,8 +55,11 @@ function editorConfig(
   variants: AdminProductDetailVariant[],
   media: ProductPageStepProps["media"]
 ) {
-  const config = buildPdpEditorConfig(pdpConfig, variants);
-  // Photos can have been reassigned in step 3 since the presentation was last saved.
+  return withAvailablePhotos(buildPdpEditorConfig(pdpConfig, variants), media);
+}
+
+/** Photos can have been reassigned in step 3 since the presentation was last saved. */
+function withAvailablePhotos(config: ProductPdpConfig, media: ProductPageStepProps["media"]) {
   for (const [variantId, presentation] of Object.entries(config.variants)) {
     if (
       presentation.mediaAssetId &&
@@ -75,6 +80,8 @@ function visible(block: Block, config: ProductPdpConfig, story: StoryLifecycleSu
   switch (block) {
     case "story":
       return story.lifecycle === "PUBLISHED_ONLY" || story.lifecycle === "DRAFT_OVER_PUBLISHED";
+    case "variants":
+      return true;
     case "gift":
       return config.gift.enabled;
     case "accessories":
@@ -96,6 +103,12 @@ function blockSummary(block: Block, config: ProductPdpConfig, story: StoryLifecy
   switch (block) {
     case "story":
       return getStoryLifecycleText(story);
+    case "variants": {
+      const count = Object.keys(config.variants).length;
+      return count
+        ? `${count} ${count === 1 ? "versión" : "versiones"} · nombre del color, talla y miniatura`
+        : "Crea los colores o tallas en el paso 3.";
+    }
     case "gift":
       return config.gift.title || "Aún no agregaste un regalo.";
     case "accessories":
@@ -155,6 +168,20 @@ function BlockPreview({
           <p>El contenido completo se revisa en el editor de historia.</p>
         </div>
       );
+    case "variants": {
+      const rows = Object.values(config.variants).filter(
+        (variant) => variant.color || variant.size
+      );
+      return rows.length ? (
+        <ul className={styles.swatches}>
+          {rows.map((variant, index) => (
+            <li key={index}>{[variant.color, variant.size].filter(Boolean).join(" · ")}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>Escribe el color o la talla de cada versión para ver los selectores.</p>
+      );
+    }
     case "gift":
       return config.gift.title.trim() ? (
         <div className={styles.gift}>
@@ -383,6 +410,7 @@ export function ProductPageStep({
   const toggle = (block: Block, checked: boolean) => {
     switch (block) {
       case "story":
+      case "variants":
         return;
       case "gift":
         change({ ...config, gift: { ...config.gift, enabled: checked } });
@@ -427,7 +455,7 @@ export function ProductPageStep({
     const payload = {
       productId: product.id,
       expectedUpdatedAt,
-      pdpConfig: editorConfig(validated.data, variants, media),
+      pdpConfig: withAvailablePhotos(validated.data, media),
     };
     try {
       const result = await updateProductAction({
@@ -499,7 +527,7 @@ export function ProductPageStep({
                       role="switch"
                       aria-label={`Mostrar en la tienda: ${title}`}
                       checked={isVisible}
-                      disabled={pending || block === "story" || block === "support"}
+                      disabled={pending || ALWAYS_SHOWN.includes(block)}
                       onChange={(event) => toggle(block, event.target.checked)}
                     />
                     <span>Mostrar en la tienda</span>
@@ -578,9 +606,7 @@ export function ProductPageStep({
           {active && <h3>{activeTitle}</h3>}
           {!active ? (
             <p>Abre un bloque para ver su contenido.</p>
-          ) : visible(active, config, storySummary) ||
-            active === "story" ||
-            active === "support" ? (
+          ) : visible(active, config, storySummary) || ALWAYS_SHOWN.includes(active) ? (
             <BlockPreview
               key={active}
               block={active}

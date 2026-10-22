@@ -402,7 +402,12 @@ export function VariantBoard({
           const stock = variantStock[variant.id];
           const expanded = draft?.variant?.id === variant.id;
           return (
-            <article key={variant.id} className={styles.card} data-expanded={expanded}>
+            <article
+              key={variant.id}
+              className={styles.card}
+              data-expanded={expanded}
+              data-testid={`variant-card-${variant.id}`}
+            >
               <button
                 type="button"
                 className={styles.cardButton}
