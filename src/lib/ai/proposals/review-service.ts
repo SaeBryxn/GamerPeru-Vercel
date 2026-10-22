@@ -23,6 +23,7 @@ import {
   proposalFieldDecisionInputSchema,
   proposalReadInputSchema,
   proposalVersionInputSchema,
+  parsePdpProposalField,
   validateSourceResolutionSemantics,
   humanVariantPlanInputSchema,
   type HumanVariantPlanInput,
@@ -603,6 +604,9 @@ function normalizeSelectedValue(row: ReviewRow, input: ProposalFieldDecisionInpu
     if (row.field_path === "research.variants") {
       throw new ProposalReviewError("AI_PROPOSAL_HUMAN_PRICE_REQUIRED");
     }
+    if (classifyProposalFieldPath(row.field_path) === "PDP") {
+      parsePdpProposalField(row.field_path, row.proposed_value);
+    }
     return row.proposed_value;
   }
   if (input.selectedValue === undefined) {
@@ -628,6 +632,9 @@ function normalizeSelectedValue(row: ReviewRow, input: ProposalFieldDecisionInpu
     return normalizeOptionalCopy(input.selectedValue, 8_000);
   if (row.field_path === "seo.title") return normalizeOptionalCopy(input.selectedValue, 70);
   if (row.field_path === "seo.description") return normalizeOptionalCopy(input.selectedValue, 170);
+  if (classifyProposalFieldPath(row.field_path) === "PDP") {
+    return parsePdpProposalField(row.field_path, input.selectedValue);
+  }
   return normalizeJson(input.selectedValue);
 }
 
@@ -942,7 +949,9 @@ async function validateEffectiveSpecifications(
     throw new ProposalReviewError("AI_PROPOSAL_INTEGRITY_ERROR");
   }
   const proposedKeys = Object.keys(proposal.proposed_specifications);
-  if (proposedKeys.some((key) => classifyProposalFieldPath(key) !== "SPECIFICATION")) {
+  if (
+    proposedKeys.some((key) => !["SPECIFICATION", "PDP"].includes(classifyProposalFieldPath(key)))
+  ) {
     throw new ProposalReviewError("AI_PROPOSAL_INTEGRITY_ERROR");
   }
   const mapped = reviewMap(reviews);
@@ -960,6 +969,13 @@ async function validateEffectiveSpecifications(
   const effectiveSpecs: Record<string, unknown> = {};
   for (const key of proposedKeys) {
     const review = mapped.get(key)!;
+    if (classifyProposalFieldPath(key) === "PDP") {
+      parsePdpProposalField(key, review.proposed_value);
+      if (review.decision === "ACCEPTED" || review.decision === "MANUALLY_EDITED") {
+        parsePdpProposalField(key, review.selected_value);
+      }
+      continue;
+    }
     if (review.decision === "ACCEPTED" || review.decision === "MANUALLY_EDITED") {
       effectiveSpecs[key] = review.selected_value;
     }
@@ -1169,6 +1185,18 @@ export async function deriveApprovedProposalApplyProjection(
     targetProductVersionSnapshot: toIso(proposal.target_product_version_snapshot),
     product,
     specifications,
+    pdpFields: Object.fromEntries(
+      reviews
+        .filter(
+          (review) =>
+            classifyProposalFieldPath(review.field_path) === "PDP" &&
+            (review.decision === "ACCEPTED" || review.decision === "MANUALLY_EDITED")
+        )
+        .map((review) => [
+          review.field_path,
+          parsePdpProposalField(review.field_path, review.selected_value),
+        ])
+    ),
     variants,
   };
 }

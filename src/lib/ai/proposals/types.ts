@@ -222,6 +222,7 @@ export interface ApprovedProposalApplyProjection {
     description?: string | null;
   };
   specifications: Record<string, unknown>;
+  pdpFields?: Record<string, unknown>;
   variants: NormalizedVariantPlanEntry[];
 }
 

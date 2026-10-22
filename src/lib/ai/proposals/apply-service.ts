@@ -13,6 +13,12 @@ import {
 import { createProduct, createVariant, updateProduct } from "@/lib/admin/catalog/service";
 import { isPlainRecord } from "@/lib/admin/catalog/record";
 import type { Product, ProductVariant } from "@/db/schema";
+import {
+  formatDimensions,
+  parseProductPdpConfig,
+  productPdpConfigSchema,
+} from "@/lib/catalog/product-pdp-config";
+import { pdpProposalFieldsSchema } from "./schemas";
 import { AI_AUDIT_ACTIONS } from "../audit-actions";
 import {
   assertApplyStepFingerprint,
@@ -47,6 +53,74 @@ import {
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = { execute: (query: ReturnType<typeof sql>) => Promise<unknown> };
+
+/** Only accepted review fields enter this merge; other content and switches are preserved. */
+export function mergeAcceptedStorePage(existing: unknown, acceptedFields: Record<string, unknown>) {
+  const fields = pdpProposalFieldsSchema.parse(acceptedFields);
+  const config = parseProductPdpConfig(existing);
+  // New products have no explicit switches yet. Do not enable their empty blocks by default.
+  if (!isPlainRecord(existing) || !Object.hasOwn(existing, "dimensionsEnabled"))
+    config.dimensionsEnabled = false;
+  if (!isPlainRecord(existing) || !Object.hasOwn(existing, "specificationsEnabled"))
+    config.specificationsEnabled = false;
+  if (fields["pdp.sizes"] !== undefined) {
+    const sizes = fields["pdp.sizes"];
+    config.sizeGuide.sizes = sizes;
+    config.sizeGuide.enabled = sizes.some(
+      (size) =>
+        size.name.trim() &&
+        (size.weight.trim() ||
+          size.lengthMm !== null ||
+          size.widthMm !== null ||
+          size.heightMm !== null ||
+          size.handMin !== null ||
+          size.handMax !== null)
+    );
+    config.dimensionsEnabled = sizes.some(
+      (size) => size.name.trim() && Boolean(formatDimensions(size) ?? size.weight.trim())
+    );
+  }
+  if (fields["pdp.packageContents"] !== undefined) {
+    config.packageContents.editions = fields["pdp.packageContents"].map((edition) => ({
+      name: edition.edition,
+      badge: "neutral",
+      items: edition.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity ?? "",
+        note: item.note ?? "",
+      })),
+    }));
+    config.packageContents.enabled = config.packageContents.editions.some((edition) =>
+      edition.items.some((item) => item.name.trim())
+    );
+  }
+  if (fields["pdp.highlights"] !== undefined) {
+    config.specifications = fields["pdp.highlights"];
+    config.specificationsEnabled = config.specifications.some(
+      (row) => row.label.trim() && row.value.trim()
+    );
+  }
+  for (const key of ["warranty", "manualUrl", "driverUrl"] as const) {
+    const value = fields[`pdp.support.${key}`];
+    if (value !== undefined) config.support[key] = value;
+  }
+  return productPdpConfigSchema.parse(config);
+}
+
+async function mergedPdpForProjection(
+  executor: Executor,
+  projection: ApprovedProposalApplyProjection
+) {
+  if (!projection.pdpFields || Object.keys(projection.pdpFields).length === 0) return undefined;
+  if (projection.mode === "CREATE") return mergeAcceptedStorePage({}, projection.pdpFields);
+  const [product] = rows<{ pdp_config: unknown }>(
+    await executor.execute(sql`
+    SELECT pdp_config FROM products WHERE id = ${projection.targetProductId}::uuid LIMIT 1
+  `)
+  );
+  if (!product) throw new ProposalApplyError("AI_PROPOSAL_APPLY_INTEGRITY_ERROR");
+  return mergeAcceptedStorePage(product.pdp_config, projection.pdpFields);
+}
 
 interface ApplyProposalRow {
   id: string;
@@ -231,7 +305,9 @@ function assertExactStepSet(
   const expected = buildRequiredApplySteps({
     mode: projection.mode,
     includeProductUpdate:
-      projection.mode === "ENRICH" || Object.keys(projection.specifications).length > 0,
+      projection.mode === "ENRICH" ||
+      Object.keys(projection.specifications).length > 0 ||
+      Object.keys(projection.pdpFields ?? {}).length > 0,
     variantCount: projection.variants.length,
   });
   const startupCreate =
@@ -329,7 +405,11 @@ async function initializeOrLoadApply(
       }
       const projection = await deriveApprovedProposalApplyProjection(tx, proposal.id, "APPROVED");
       const applyOperationId = generateUuidV7();
-      const definitions = buildInitialApplyStepDefinitions(applyOperationId, projection);
+      const definitions = buildInitialApplyStepDefinitions(
+        applyOperationId,
+        projection,
+        await mergedPdpForProjection(tx, projection)
+      );
       for (const definition of definitions) {
         await insertStep(tx, proposal.id, applyOperationId, actor.authUserId, definition);
       }
@@ -558,7 +638,8 @@ async function commitProductCreate(
       operationId,
       projection,
       result.id,
-      result.createdAt.toISOString()
+      result.createdAt.toISOString(),
+      await mergedPdpForProjection(tx, projection)
     );
     for (const definition of downstream) {
       await insertStep(tx, proposal.id, operationId, actorId, definition);

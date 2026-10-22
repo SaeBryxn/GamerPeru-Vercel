@@ -2,6 +2,7 @@ import { z } from "zod";
 import { parsePenInputToCents } from "@/lib/admin/catalog/money";
 import { isPlainRecord } from "@/lib/admin/catalog/record";
 import { PRODUCT_SLUG_REGEX } from "@/lib/admin/catalog/publish-readiness";
+import { pdpSizeSchema, productPdpConfigSchema } from "@/lib/catalog/product-pdp-config";
 import {
   PROPOSAL_REVIEW_DECISIONS,
   ProposalReviewError,
@@ -46,7 +47,51 @@ export type ProposalFieldDecisionInput = z.infer<typeof proposalFieldDecisionInp
 export type HumanVariantPlanInput = z.infer<typeof humanVariantPlanInputSchema>;
 
 export type ProposalFieldPathKind =
-  "CATALOG" | "COPY" | "SEO" | "RESEARCH" | "RESERVED" | "SPECIFICATION";
+  "CATALOG" | "COPY" | "SEO" | "RESEARCH" | "PDP" | "RESERVED" | "SPECIFICATION";
+
+const reviewText = (max: number) => z.string().trim().min(1).max(max);
+export const pdpProposalFieldsSchema = z
+  .object({
+    "pdp.sizes": z.array(pdpSizeSchema).max(6).optional(),
+    "pdp.packageContents": z
+      .array(
+        z
+          .object({
+            edition: reviewText(80),
+            items: z
+              .array(
+                z
+                  .object({
+                    name: reviewText(100),
+                    quantity: z.string().trim().max(20).optional(),
+                    note: z.string().trim().max(160).optional(),
+                  })
+                  .strict()
+              )
+              .max(30),
+          })
+          .strict()
+      )
+      .max(2)
+      .optional(),
+    "pdp.support.warranty": productPdpConfigSchema.shape.support
+      .removeDefault()
+      .shape.warranty.optional(),
+    "pdp.support.manualUrl": productPdpConfigSchema.shape.support
+      .removeDefault()
+      .shape.manualUrl.optional(),
+    "pdp.support.driverUrl": productPdpConfigSchema.shape.support
+      .removeDefault()
+      .shape.driverUrl.optional(),
+    "pdp.highlights": productPdpConfigSchema.shape.specifications.removeDefault().optional(),
+  })
+  .strict();
+
+export function parsePdpProposalField(fieldPath: string, value: unknown): unknown {
+  const parsed = pdpProposalFieldsSchema.safeParse({ [fieldPath]: value });
+  if (!parsed.success) throw new ProposalReviewError("AI_PROPOSAL_INVALID_DECISION");
+  return parsed.data[fieldPath as keyof typeof parsed.data];
+}
 
 const KNOWN_CATALOG_PATHS = new Set(["catalog.brandId", "catalog.categoryId", "catalog.slug"]);
 const KNOWN_COPY_PATHS = new Set(["copy.name", "copy.subtitle", "copy.description"]);
@@ -62,7 +107,10 @@ export function classifyProposalFieldPath(fieldPath: string): ProposalFieldPathK
   if (KNOWN_COPY_PATHS.has(fieldPath)) return "COPY";
   if (KNOWN_SEO_PATHS.has(fieldPath)) return "SEO";
   if (KNOWN_RESEARCH_PATHS.has(fieldPath)) return "RESEARCH";
-  if (["catalog.", "copy.", "seo.", "research."].some((root) => fieldPath.startsWith(root))) {
+  if (Object.hasOwn(pdpProposalFieldsSchema.shape, fieldPath)) return "PDP";
+  if (
+    ["catalog.", "copy.", "seo.", "research.", "pdp."].some((root) => fieldPath.startsWith(root))
+  ) {
     return "RESERVED";
   }
   return "SPECIFICATION";

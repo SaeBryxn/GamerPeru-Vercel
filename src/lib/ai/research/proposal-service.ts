@@ -11,6 +11,7 @@ import {
   aiSources,
 } from "@/db/schema";
 import type { CopyGeneration, IdentityResolution, SpecificationExtraction } from "./schemas";
+import { storePageReviewFields } from "./schemas";
 import { researchJobCounterUpdate } from "./lease-service";
 import { LeaseLostError } from "./types";
 
@@ -84,7 +85,15 @@ export async function publishDraftProposal(options: {
     if (ownedSources.length !== sourceRows.length) {
       throw new Error("AI_PROVIDER_RESPONSE_INVALID");
     }
-    const invalidSourceIndex = options.extraction.specifications.some((specification) =>
+    const specifications = [
+      ...options.extraction.specifications,
+      ...storePageReviewFields(options.extraction.storePage).map((field) => ({
+        ...field,
+        value: field.proposedValue,
+        conflictingValues: [] as Array<{ value: unknown; sourceIndexes: number[] }>,
+      })),
+    ];
+    const invalidSourceIndex = specifications.some((specification) =>
       [
         ...specification.sourceIndexes,
         ...specification.conflictingValues.flatMap((item) => item.sourceIndexes),
@@ -107,10 +116,7 @@ export async function publishDraftProposal(options: {
       proposedSubtitle: options.copy.subtitle,
       proposedDescription: options.copy.description,
       proposedSpecifications: Object.fromEntries(
-        options.extraction.specifications.map((specification) => [
-          specification.fieldPath,
-          specification.value,
-        ])
+        specifications.map((specification) => [specification.fieldPath, specification.value])
       ),
       unmappedSpecifications: options.extraction.unmappedSpecifications,
       proposedVariants: options.extraction.variants,
@@ -146,7 +152,7 @@ export async function publishDraftProposal(options: {
     }
 
     let hasConflicts = false;
-    for (const specification of options.extraction.specifications) {
+    for (const specification of specifications) {
       const reviewId = generateUuidV7();
       const conflictDetails = specification.conflictingValues.length
         ? { competingValues: specification.conflictingValues }

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { computeRequestFingerprint } from "@/lib/admin/catalog/crypto";
 import { CatalogDomainError } from "@/lib/admin/catalog/types";
+import { productPdpConfigSchema } from "@/lib/catalog/product-pdp-config";
+import type { ProductPdpConfig } from "@/lib/catalog/product-pdp-config";
 import {
   PROPOSAL_APPLY_STEP_STATUSES,
   ProposalApplyError,
@@ -36,6 +38,7 @@ export const createProductUpdateApplyPayloadSchema = z
     productId: UUID_SCHEMA,
     expectedUpdatedAt: ISO_TIMESTAMP_SCHEMA,
     specValues: z.record(z.unknown()),
+    pdpConfig: productPdpConfigSchema.optional(),
   })
   .strict();
 
@@ -50,6 +53,7 @@ export const enrichProductUpdateApplyPayloadSchema = z
     subtitle: z.string().trim().min(1).max(255).optional(),
     description: z.string().trim().min(1).max(8_000).optional(),
     specValues: z.record(z.unknown()),
+    pdpConfig: productPdpConfigSchema.optional(),
   })
   .strict();
 
@@ -217,7 +221,8 @@ function buildVariantDefinitions(
 
 export function buildInitialApplyStepDefinitions(
   applyOperationId: string,
-  projection: ApprovedProposalApplyProjection
+  projection: ApprovedProposalApplyProjection,
+  pdpConfig?: ProductPdpConfig
 ): ApplyStepDefinition[] {
   if (projection.mode === "CREATE") {
     const requestPayload = productCreateApplyPayloadSchema.parse({
@@ -246,6 +251,7 @@ export function buildInitialApplyStepDefinitions(
       ? {}
       : { description: projection.product.description }),
     specValues: projection.specifications,
+    ...(pdpConfig === undefined ? {} : { pdpConfig }),
   });
   return [
     buildStepDefinition(applyOperationId, "PRODUCT_UPDATE", 0, productPayload),
@@ -257,17 +263,19 @@ export function buildCreateDownstreamStepDefinitions(
   applyOperationId: string,
   projection: ApprovedProposalApplyProjection,
   productId: string,
-  originalCreatedAt: string
+  originalCreatedAt: string,
+  pdpConfig?: ProductPdpConfig
 ): ApplyStepDefinition[] {
   if (projection.mode !== "CREATE") {
     throw new ProposalApplyError("AI_PROPOSAL_APPLY_INTEGRITY_ERROR");
   }
   const definitions: ApplyStepDefinition[] = [];
-  if (Object.keys(projection.specifications).length > 0) {
+  if (Object.keys(projection.specifications).length > 0 || pdpConfig !== undefined) {
     const productPayload = createProductUpdateApplyPayloadSchema.parse({
       productId,
       expectedUpdatedAt: originalCreatedAt,
       specValues: projection.specifications,
+      ...(pdpConfig === undefined ? {} : { pdpConfig }),
     });
     definitions.push(buildStepDefinition(applyOperationId, "PRODUCT_UPDATE", 1, productPayload));
   }
