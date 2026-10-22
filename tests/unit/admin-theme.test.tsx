@@ -12,7 +12,7 @@ import {
   ADMIN_THEME_BOOTSTRAP_SCRIPT,
   ADMIN_THEME_STORAGE_KEY,
 } from "@/components/admin/use-admin-theme";
-import { resolveActiveNavId } from "@/components/admin/admin-sidebar";
+import { resolveActiveNavId } from "@/components/admin/admin-nav-sections";
 import type { AdminNavItem } from "@/lib/admin/types";
 
 describe("Admin theme", () => {
@@ -66,13 +66,20 @@ describe("Admin theme", () => {
 
 describe("Admin sidebar", () => {
   const items = [
-    { id: "overview", label: "Inicio", href: "/admin", iconName: "LayoutDashboard" },
-    { id: "products", label: "Productos", href: "/admin/products", iconName: "Package" },
+    { id: "overview", label: "Inicio", href: "/admin", group: "overview", iconName: "Gauge" },
+    {
+      id: "products",
+      label: "Productos",
+      href: "/admin/products",
+      group: "catalog",
+      iconName: "Mouse",
+    },
     {
       id: "ai",
       label: "Asistente IA",
       href: "/admin/products/ai-import",
-      iconName: "Bot",
+      group: "ai",
+      iconName: "Sparkles",
     },
   ] as AdminNavItem[];
 

@@ -1,21 +1,9 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import Link from "next/link";
-import {
-  Bot,
-  CheckCircle,
-  House,
-  Users,
-  LayoutDashboard,
-  Menu,
-  Package,
-  Settings2,
-  ShoppingCart,
-  Tags,
-  X,
-} from "lucide-react";
+import { X } from "lucide-react";
 import type { AdminNavItem, AdminStaffProfile } from "@/lib/admin/types";
+import { AdminNavSections } from "./admin-nav-sections";
 import styles from "./admin-shell.module.css";
 
 interface AdminMobileNavProps {
@@ -35,18 +23,6 @@ export function AdminMobileNav({
   currentPath = "/admin",
   triggerRef,
 }: AdminMobileNavProps) {
-  const iconMap = {
-    LayoutDashboard,
-    ShoppingCart,
-    CheckCircle,
-    Package,
-    Bot,
-    Settings2,
-    Tags,
-    Menu,
-    House,
-    Users,
-  };
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -133,40 +109,16 @@ export function AdminMobileNav({
             </button>
           </div>
 
-          <div className={styles.navSectionTitle}>Principal</div>
-          <nav aria-label="Secciones del panel móvil">
-            <ul className={styles.navList}>
-              {navItems.map((item) => {
-                const isActive =
-                  currentPath === item.href ||
-                  (item.href !== "/admin" &&
-                    currentPath.startsWith(`${item.href}/`) &&
-                    !navItems.some(
-                      (candidate) =>
-                        candidate.href.length > item.href.length &&
-                        (currentPath === candidate.href ||
-                          currentPath.startsWith(`${candidate.href}/`))
-                    ));
-                const IconComponent =
-                  iconMap[item.iconName as keyof typeof iconMap] ?? LayoutDashboard;
-                return (
-                  <li key={item.id} className={styles.navItem}>
-                    <Link
-                      href={item.href}
-                      onClick={() => {
-                        onClose();
-                        triggerRef?.current?.focus();
-                      }}
-                      className={`${styles.navLink} ${isActive ? styles.navLinkActive : ""}`}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      <IconComponent className={styles.navIcon} aria-hidden="true" />
-                      <span>{item.label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+          <nav aria-label="Secciones del panel móvil" className={styles.sidebarNav}>
+            <AdminNavSections
+              navItems={navItems}
+              currentPath={currentPath}
+              markerId="admin-mobile-nav-active"
+              onNavigate={() => {
+                onClose();
+                triggerRef?.current?.focus();
+              }}
+            />
           </nav>
         </div>
 

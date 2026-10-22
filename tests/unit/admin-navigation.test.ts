@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { getAdminNavigation, CANONICAL_ADMIN_NAV_ITEMS } from "@/lib/admin/navigation";
+import {
+  getAdminNavigation,
+  groupAdminNavigation,
+  CANONICAL_ADMIN_NAV_ITEMS,
+} from "@/lib/admin/navigation";
 import type { PermissionName } from "@/lib/auth/rbac";
 
 describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Scope Contract Tests", () => {
@@ -82,5 +86,24 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
     expect(
       getAdminNavigation(new Set<PermissionName>(["staff:manage"])).map((item) => item.href)
     ).toEqual(["/admin", "/admin/equipo"]);
+  });
+});
+
+describe("Admin navigation sections", () => {
+  it("groups every destination into a titled section in display order", () => {
+    const groups = groupAdminNavigation(CANONICAL_ADMIN_NAV_ITEMS);
+    expect(groups.map((group) => [group.label, group.items.map((item) => item.id)])).toEqual([
+      ["Resumen", ["overview"]],
+      ["Ventas", ["orders", "payment-verification"]],
+      ["Catálogo", ["products", "taxonomy"]],
+      ["Tienda online", ["storefront-home", "storefront-menu"]],
+      ["Inteligencia artificial", ["ai-product-assistant", "ai-settings"]],
+      ["Accesos", ["team"]],
+    ]);
+  });
+
+  it("drops sections the staff member cannot open", () => {
+    const groups = groupAdminNavigation(getAdminNavigation(new Set(["orders:verify"])));
+    expect(groups.map((group) => group.id)).toEqual(["overview", "sales"]);
   });
 });

@@ -1,23 +1,30 @@
 import type { PermissionName, RoleName } from "@/lib/auth/rbac";
 
+export type AdminNavGroupId = "overview" | "sales" | "catalog" | "storefront" | "ai" | "access";
+
+export interface AdminNavGroup {
+  id: AdminNavGroupId;
+  label: string;
+  /** One line under the group title saying what the operator does there. */
+  hint: string;
+}
+
 export interface AdminNavItem {
   id: string;
   label: string;
   href: string;
+  group: AdminNavGroupId;
   iconName:
-    | "LayoutDashboard"
-    | "Package"
-    | "ShoppingCart"
-    | "CheckCircle"
-    | "Boxes"
-    | "Users"
-    | "LifeBuoy"
-    | "Settings"
-    | "Bot"
-    | "Settings2"
-    | "Tags"
-    | "Menu"
-    | "House";
+    | "Gauge"
+    | "ShoppingBag"
+    | "ReceiptText"
+    | "Mouse"
+    | "FolderTree"
+    | "LayoutTemplate"
+    | "PanelTop"
+    | "Sparkles"
+    | "KeyRound"
+    | "UserCog";
   requiredPermission?: PermissionName;
   description?: string;
 }
