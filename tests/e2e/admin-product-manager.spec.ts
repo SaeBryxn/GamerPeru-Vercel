@@ -263,11 +263,6 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await page.locator('[data-testid="input-name"]').fill(testProductName);
     await expect(page.locator('[data-testid="input-slug"]')).toHaveValue(testProductSlug);
 
-    await page.locator('[data-testid="input-subtitle"]').fill("Subtítulo de prueba E2E");
-    await page
-      .locator('[data-testid="input-description"]')
-      .fill("Descripción técnica detallada para E2E.");
-
     // Select Brand and Category
     await page
       .locator('[data-testid="select-brand"]')
@@ -275,14 +270,6 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     await page
       .locator('[data-testid="select-category"]')
       .selectOption(ADMIN_E2E_PRODUCT_FIXTURES.categoryA.id);
-
-    // Initial Variant with raw PEN strings and mixed-case SKU
-    await page.locator('[data-testid="input-variant-sku"]').fill(mixedCaseSku);
-    await page.locator('[data-testid="input-variant-title"]').fill("Negro Ónix");
-    await page.locator('[data-testid="input-variant-price"]').fill("249.90");
-    await page.locator('[data-testid="input-variant-compare-at"]').fill("299.90");
-    await page.locator('[data-testid="input-variant-cost"]').fill("120.50");
-    await page.locator('[data-testid="input-variant-weight"]').fill("49");
 
     // Submit
     await page.locator('[data-testid="btn-submit-product"]').click();
@@ -293,9 +280,24 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
       testProductName
     );
 
-    // Verify mixed-case SKU was NOT silently converted to uppercase
+    // First color in step 3, with raw PEN strings and a mixed-case SKU
     await openSection(page, "variantes");
-    await expect(variantBoard(page).getByRole("article")).toHaveCount(1);
+    const board = variantBoard(page);
+    await board.getByRole("button", { name: "Agregar color o talla" }).click();
+    const form = board.getByRole("form", { name: "Agregar color o talla" });
+    await form.getByLabel("Color o talla").fill("Negro Ónix");
+    await form.getByLabel("Precio", { exact: true }).fill("249.90");
+    await form.getByLabel("Precio antes (tachado)").fill("299.90");
+    await form.getByText("Más opciones").click();
+    await form.getByLabel("Código SKU").fill(mixedCaseSku);
+    // Weight is asked here only when the category sheet has no weight field.
+    const weightInput = form.getByLabel("Peso (gramos)");
+    const weightHere = (await weightInput.count()) > 0;
+    if (weightHere) await weightInput.fill("49");
+    await form.getByLabel("Costo (S/)").fill("120.50");
+    await form.getByRole("button", { name: "Guardar color o talla" }).click();
+    await expect(form).toHaveCount(0);
+    await expect(board.getByRole("article")).toHaveCount(1);
 
     // Direct PostgreSQL Readback Evidence for minor-unit integer cents (Requirement E)
     const variantRows = await sql`
@@ -310,7 +312,7 @@ test.describe("GP-024 / CHK2 — Admin Product Manager UI & Authoring Integratio
     expect(varData.price_cents).toBe(24990);
     expect(varData.compare_at_price_cents).toBe(29990);
     expect(varData.cost_cents).toBe(12050);
-    expect(varData.weight_grams).toBe(49);
+    if (weightHere) expect(varData.weight_grams).toBe(49);
   });
 
   // --------------------------------------------------------------------------

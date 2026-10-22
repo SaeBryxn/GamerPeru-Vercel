@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 900px;
+  max-width: 640px;
   margin: 0 auto;
   width: 100%;
 }
@@ -377,4 +377,19 @@
   border-radius: var(--admin-inset-radius);
   background-color: var(--color-status-danger-background);
   color: var(--color-status-danger-text);
+}
+
+/* The address is generated from the name; it opens only to change it. */
+.slugDetails {
+  margin-top: 0.25rem;
+}
+
+.slugDetails > summary {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.slugDetails[open] > summary {
+  margin-bottom: 0.75rem;
 }

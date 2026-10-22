@@ -220,30 +220,42 @@ test("crear producto conserva la configuración y los importes exactos", async (
   await page.getByTestId("input-slug").fill("pdp-created-e2e");
   await page.getByTestId("select-brand").selectOption(id(1));
   await page.getByTestId("select-category").selectOption(id(2));
-  await page.getByTestId("input-variant-sku").fill("PDP-created-e2e");
-  await page.getByTestId("input-variant-price").fill("249.90");
-  await page.getByTestId("input-variant-compare-at").fill("299.90");
-  await page.getByLabel("Color inicial", { exact: true }).fill("Negro");
-  await page.getByLabel("Talla inicial (opcional)").fill("Mini");
-  const config = page.getByRole("region", { name: "Configuración de la ficha de tienda" });
-  await config.getByText("Regalo con tu compra", { exact: true }).click();
-  await config.getByRole("switch", { name: "Activar banner de regalo por compra" }).check();
-  await config.getByLabel("Título del regalo").fill("Regalo al crear");
   expect(
     await page
       .getByTestId("form-create-product")
       .evaluate((form: HTMLFormElement) => form.checkValidity())
   ).toBe(true);
   await page.getByTestId("btn-submit-product").click();
-  await expect
-    .poll(async () => {
-      const error = page.getByTestId("form-error");
-      if (await error.count()) throw new Error(await error.innerText());
-      return (await sql`SELECT pdp_config FROM products WHERE slug='pdp-created-e2e'`)[0]
-        ?.pdp_config?.gift?.title;
-    })
-    .toBe("Regalo al crear");
   await expect(page).toHaveURL(/\/admin\/products\/[a-f0-9-]+/);
+
+  await page.getByTestId("section-nav-variantes").click();
+  const board = page.getByRole("region", { name: "Colores, tallas y precios" });
+  await board.getByRole("button", { name: "Agregar color o talla" }).click();
+  const variantForm = board.getByRole("form", { name: "Agregar color o talla" });
+  await variantForm.getByLabel("Color o talla").fill("Negro Mini");
+  await variantForm.getByLabel("Precio", { exact: true }).fill("249.90");
+  await variantForm.getByLabel("Precio antes (tachado)").fill("299.90");
+  await variantForm.getByText("Más opciones").click();
+  await variantForm.getByLabel("Código SKU").fill("PDP-created-e2e");
+  await variantForm.getByRole("button", { name: "Guardar color o talla" }).click();
+  await expect(variantForm).toHaveCount(0);
+
+  const step = await openPageStep(page);
+  await openBlock(step, "Colores y miniaturas");
+  const swatch = step.getByRole("group", { name: "Negro Mini · PDP-created-e2e", exact: true });
+  await swatch.getByLabel("Color", { exact: true }).fill("Negro");
+  await swatch.getByLabel("Talla (Mini, Med, Max o personalizada)").fill("Mini");
+  await openBlock(step, "Regalo");
+  await step.getByRole("switch", { name: "Mostrar en la tienda: Regalo" }).check();
+  await step.getByLabel("Título del regalo").fill("Regalo al crear");
+  await step.getByRole("button", { name: "Guardar página del producto" }).click();
+  await expect
+    .poll(
+      async () =>
+        (await sql`SELECT pdp_config FROM products WHERE slug='pdp-created-e2e'`)[0]?.pdp_config
+          ?.gift?.title
+    )
+    .toBe("Regalo al crear");
   const [variant] =
     await sql`SELECT price_cents,compare_at_price_cents,attributes FROM product_variants WHERE sku='PDP-created-e2e'`;
   expect(variant?.price_cents).toBe(24990);

@@ -28,12 +28,12 @@ export default async function NewProductPage() {
       <header className={styles.header}>
         <Link href="/admin/products" className={styles.backLink}>
           <ArrowLeft size={14} aria-hidden="true" />
-          <span>Volver a Productos</span>
+          <span>Volver a productos</span>
         </Link>
         <div className={styles.titleArea}>
-          <h1 className={styles.title}>Nuevo Producto</h1>
+          <h1 className={styles.title}>Nuevo producto</h1>
           <p className={styles.subtitle}>
-            Registra un producto maestro en el catálogo junto a su variante inicial.
+            Empieza con lo básico. Fotos, colores, precios y lo demás los completas en el editor.
           </p>
         </div>
       </header>
