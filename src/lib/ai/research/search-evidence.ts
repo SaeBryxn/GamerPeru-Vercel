@@ -5,18 +5,18 @@ import { AI_RESEARCH_LIMITS } from "./config";
 import { researchDomainRateLimiter } from "./domain-rate-limiter";
 import type { DomainRateLimiter } from "./domain-rate-limiter";
 import { fetchDestination } from "./destination-fetcher";
-import { searchTavily } from "./search-acquisition";
+import { searchWeb } from "./search-acquisition";
 import { assignSourceTrust } from "./source-service";
 import { ResearchExecutionError } from "./types";
 import type { ExternalProductEvidence } from "./types";
 
 export interface SearchEvidenceDependencies {
-  search?: typeof searchTavily;
+  search?: typeof searchWeb;
   fetcher?: typeof fetchDestination;
 }
 
 async function fetchCandidates(options: {
-  candidates: Awaited<ReturnType<typeof searchTavily>>;
+  candidates: Awaited<ReturnType<typeof searchWeb>>;
   userAgent: string;
   canonicalBrandHostname?: string;
   fetcher: typeof fetchDestination;
@@ -57,7 +57,7 @@ export async function acquireSearchEvidence(options: {
   signal?: AbortSignal;
   dependencies?: SearchEvidenceDependencies;
 }): Promise<ExternalProductEvidence[]> {
-  const search = options.dependencies?.search ?? searchTavily;
+  const search = options.dependencies?.search ?? searchWeb;
   const fetcher = options.dependencies?.fetcher ?? fetchDestination;
   const rateLimiter = researchDomainRateLimiter;
 

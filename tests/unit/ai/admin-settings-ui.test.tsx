@@ -44,6 +44,11 @@ const settings: AdminAiSettingsDto = {
       healthCheckSupported: true,
     },
     {
+      providerKey: "groq",
+      researchExecutionSupported: true,
+      healthCheckSupported: true,
+    },
+    {
       providerKey: "openai",
       researchExecutionSupported: false,
       healthCheckSupported: false,

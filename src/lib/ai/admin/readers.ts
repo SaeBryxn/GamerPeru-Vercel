@@ -1,3 +1,4 @@
+import { RESEARCH_PROVIDER_KEYS } from "@/lib/ai/gateway/registry";
 import "server-only";
 
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
@@ -66,7 +67,7 @@ function toIso(value: Date): string {
 function getProviderRuntimeCapability(
   providerKey: string
 ): Omit<AdminAiProviderCapabilityDto, "providerKey"> {
-  const supported = providerKey === "google";
+  const supported = (RESEARCH_PROVIDER_KEYS as readonly string[]).includes(providerKey);
   return {
     researchExecutionSupported: supported,
     healthCheckSupported: supported,

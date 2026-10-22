@@ -74,8 +74,11 @@ dashboard under the Worker → Settings → Variables and Secrets:
   `INVENTORY_IDEMPOTENCY_TTL_MINUTES`, `INVENTORY_QUARANTINE_LOCATION_CODE`.
 - Email and jobs: `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`, `CONTACT_INBOX_EMAIL` (inbox
   for the contact and distributor forms), `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`.
-- Optional: `LOG_LEVEL`, AI settings (`TAVILY_API_KEY`, `AI_ENCRYPTION_ACTIVE_KEY_VERSION`,
-  `AI_ENCRYPTION_KEY_V1`, `AI_RESEARCH_FETCH_USER_AGENT`).
+- Optional: `LOG_LEVEL`, AI settings (`TAVILY_API_KEY`, `SERPER_API_KEY`,
+  `AI_ENCRYPTION_ACTIVE_KEY_VERSION`, `AI_ENCRYPTION_KEY_V1`, `AI_RESEARCH_FETCH_USER_AGENT`).
+  Search tries Tavily and falls back to Serper (either one alone is enough). The AI model runs on
+  the research profile's provider; to fall back from Gemini to Groq, add the Groq key in
+  Configuración IA and enable the `PRODUCT_RESEARCH_FALLBACK` profile with a Groq model.
 
 Not needed on the Worker: `DATABASE_MIGRATION_URL` (migrations run from a workstation),
 `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` (source-map upload at build only).

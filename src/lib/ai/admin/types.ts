@@ -1,9 +1,11 @@
 import type { ProposalReviewDecision, ProposalApplyStepStatus } from "@/lib/ai/proposals/types";
 
-export const ADMIN_AI_PROVIDER_KEYS = ["google", "openai", "anthropic"] as const;
+export const ADMIN_AI_PROVIDER_KEYS = ["google", "groq", "openai", "anthropic"] as const;
 export const ADMIN_AI_PROFILE_KEYS = [
   "PRODUCT_RESEARCH_FAST",
   "PRODUCT_RESEARCH_DEEP",
+  // Used automatically when the primary profile is out of free quota or down.
+  "PRODUCT_RESEARCH_FALLBACK",
   "SEO_COPY",
   "BATCH_IMPORT",
 ] as const;

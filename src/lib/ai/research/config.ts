@@ -24,7 +24,10 @@ export const AI_RESEARCH_LIMITS = Object.freeze({
 });
 
 export interface ResearchRuntimeConfig {
-  tavilyApiKey: string;
+  /** Primary search provider; null when only the Serper fallback is configured. */
+  tavilyApiKey: string | null;
+  /** Fallback search provider used when Tavily is missing, out of quota or down. */
+  serperApiKey: string | null;
   fetchUserAgent: string;
 }
 
@@ -51,12 +54,16 @@ export function requireResearchRuntimeConfig(
   override?: Partial<ResearchRuntimeConfig>
 ): ResearchRuntimeConfig {
   const tavilyApiKey = override?.tavilyApiKey ?? serverEnv.TAVILY_API_KEY ?? "";
+  const serperApiKey =
+    override?.serperApiKey !== undefined ? override.serperApiKey : (serverEnv.SERPER_API_KEY ?? "");
   const fetchUserAgent = override?.fetchUserAgent ?? serverEnv.AI_RESEARCH_FETCH_USER_AGENT ?? "";
 
-  if (isPlaceholder(tavilyApiKey)) {
+  const tavily = tavilyApiKey && !isPlaceholder(tavilyApiKey) ? tavilyApiKey.trim() : null;
+  const serper = serperApiKey && !isPlaceholder(serperApiKey) ? serperApiKey.trim() : null;
+  if (!tavily && !serper) {
     throw new ResearchExecutionError(
       "AI_SEARCH_CONFIG_MISSING",
-      "Tavily search is not configured."
+      "Tavily search is not configured and there is no Serper fallback."
     );
   }
   if (isPlaceholder(fetchUserAgent) || !isIdentifiableUserAgent(fetchUserAgent)) {
@@ -66,7 +73,7 @@ export function requireResearchRuntimeConfig(
     );
   }
 
-  return { tavilyApiKey: tavilyApiKey.trim(), fetchUserAgent: fetchUserAgent.trim() };
+  return { tavilyApiKey: tavily, serperApiKey: serper, fetchUserAgent: fetchUserAgent.trim() };
 }
 
 export function requireResearchFetchUserAgent(override?: string): string {

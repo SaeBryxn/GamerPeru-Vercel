@@ -45,6 +45,7 @@ type Notice = { tone: "success" | "error" | "info"; text: string };
 
 const DEFAULT_PROVIDER_NAMES: Record<AdminAiProviderKey, string> = {
   google: "Google Gemini",
+  groq: "Groq",
   openai: "OpenAI",
   anthropic: "Anthropic",
 };

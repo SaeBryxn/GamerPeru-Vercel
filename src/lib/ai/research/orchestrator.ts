@@ -8,7 +8,7 @@ import {
   NoActiveProviderCredentialError,
   withActiveProviderCredential,
 } from "../credential-service";
-import { getAiAdapter } from "../gateway/registry";
+import { getAiAdapter, RESEARCH_PROVIDER_KEYS } from "../gateway/registry";
 import { AiGatewayError } from "../gateway/types";
 import type { AiProviderAdapter, AiStructuredGenerationResult } from "../gateway/types";
 import type { fetchDestination } from "./destination-fetcher";
@@ -34,6 +34,7 @@ import type { CopyGeneration, IdentityResolution, SpecificationExtraction } from
 import { acquireSearchEvidence } from "./search-evidence";
 import { persistEvidenceSourceSet, readPersistedSourceLedger } from "./source-service";
 import { runProviderAttempt } from "./attempt-service";
+import { isOverDailyFreeTier, loadFallbackExecution, shouldFallBack } from "./provider-fallback";
 import type { AiOperationType } from "./attempt-service";
 import { AI_RESEARCH_LIMITS, requireResearchFetchUserAgent } from "./config";
 import { LeaseLostError, ResearchExecutionError } from "./types";
@@ -116,7 +117,7 @@ async function loadExecutionContext(item: ClaimedResearchItem): Promise<{
   if (
     !row.providerEnabled ||
     row.providerId !== parsed.data.providerId ||
-    row.providerKey !== "google"
+    !(RESEARCH_PROVIDER_KEYS as readonly string[]).includes(row.providerKey)
   ) {
     throw new ResearchExecutionError(
       "AI_PROVIDER_DISABLED",
@@ -126,7 +127,7 @@ async function loadExecutionContext(item: ClaimedResearchItem): Promise<{
   return { profileId: row.profileId, snapshot: parsed.data, providerKey: row.providerKey };
 }
 
-async function executeStructured<T>(options: {
+interface StructuredCall<T> {
   adapter: AiProviderAdapter;
   apiKey: string;
   item: ClaimedResearchItem;
@@ -137,7 +138,9 @@ async function executeStructured<T>(options: {
   signal: AbortSignal;
   schema: Parameters<typeof zodToJsonSchema>[0] & { parse(value: unknown): T };
   validate?: (value: T) => void;
-}): Promise<T> {
+}
+
+async function executeStructured<T>(options: StructuredCall<T>): Promise<T> {
   const jsonSchema = providerJsonSchema(options.schema);
   const requestDigest = createProviderRequestDigest({
     operationType: options.operationType,
@@ -291,111 +294,128 @@ export async function processClaimedResearchItem(
     }
     await heartbeatResearchItem(item.id, item.leaseToken);
 
-    const adapter = (dependencies.resolveAdapter ?? getAiAdapter)(execution.providerKey);
-    await (dependencies.withCredential ?? withActiveProviderCredential)(
-      execution.snapshot.providerId,
-      async (apiKey) => {
-        const input = buildProviderEvidenceInput(item, evidence);
-        let identity: IdentityResolution;
-        if (localIdentity.deterministicStatus === "EXACT_MATCH") {
-          identity = {
-            status: "EXACT_MATCH",
-            brandName: null,
-            modelName: item.query,
-            rationale:
-              "Existing ENRICH target is authoritative and cannot be changed by the provider.",
-          };
-        } else {
-          identity = await executeStructured({
-            adapter,
-            apiKey,
-            item,
-            profileId: execution.profileId,
-            snapshot: execution.snapshot,
-            operationType: "IDENTITY_RESOLUTION",
-            input,
-            signal: controller.signal,
-            schema: identityResolutionSchema,
-            validate: assertProviderIdentityResolution,
-          });
+    const resolveAdapter = dependencies.resolveAdapter ?? getAiAdapter;
+    const withCredential = dependencies.withCredential ?? withActiveProviderCredential;
+    const adapter = resolveAdapter(execution.providerKey);
+    const fallback = await loadFallbackExecution(execution.snapshot.providerId);
+    // Once the primary provider is out of free quota, the rest of the job uses the fallback.
+    let primaryExhausted = fallback ? await isOverDailyFreeTier(execution) : false;
+    await withCredential(execution.snapshot.providerId, async (apiKey) => {
+      const executeWithFallback = async <T>(
+        call: Omit<StructuredCall<T>, "adapter" | "apiKey" | "profileId" | "snapshot">
+      ): Promise<T> => {
+        if (!primaryExhausted || !fallback) {
+          try {
+            return await executeStructured({
+              ...call,
+              adapter,
+              apiKey,
+              profileId: execution.profileId,
+              snapshot: execution.snapshot,
+            });
+          } catch (error) {
+            if (!fallback || !shouldFallBack(error)) throw error;
+            primaryExhausted = true;
+          }
         }
-        const stop = mapIdentityStop(identity);
-        if (stop) {
-          await finishResearchItemWithoutProposal(
-            item.id,
-            item.leaseToken,
-            stop.status,
-            stop.identityStatus
-          );
-          return;
-        }
-
-        const extraction: SpecificationExtraction = await executeStructured({
-          adapter,
-          apiKey,
+        return await withCredential(fallback.snapshot.providerId, async (fallbackApiKey) =>
+          executeStructured({
+            ...call,
+            adapter: resolveAdapter(fallback.providerKey),
+            apiKey: fallbackApiKey,
+            profileId: fallback.profileId,
+            snapshot: fallback.snapshot,
+          })
+        );
+      };
+      const input = buildProviderEvidenceInput(item, evidence);
+      let identity: IdentityResolution;
+      if (localIdentity.deterministicStatus === "EXACT_MATCH") {
+        identity = {
+          status: "EXACT_MATCH",
+          brandName: null,
+          modelName: item.query,
+          rationale:
+            "Existing ENRICH target is authoritative and cannot be changed by the provider.",
+        };
+      } else {
+        identity = await executeWithFallback({
           item,
-          profileId: execution.profileId,
-          snapshot: execution.snapshot,
-          operationType: "SPEC_EXTRACTION",
+          operationType: "IDENTITY_RESOLUTION",
           input,
           signal: controller.signal,
-          schema: specificationExtractionSchema,
-          validate(value) {
-            const sourceIndexes = value.specifications.flatMap((specification) => [
-              ...specification.sourceIndexes,
-              ...specification.conflictingValues.flatMap((conflict) => conflict.sourceIndexes),
-            ]);
-            if (sourceIndexes.some((index) => !evidence[index])) {
-              throw new AiGatewayError(
-                "AI_PROVIDER_RESPONSE_INVALID",
-                "Provider returned invalid source provenance."
-              );
-            }
-            const allowedUrls = new Set(
-              evidence.flatMap((source) => [source.originalUrl, source.resolvedUrl])
-            );
-            if (value.mediaCandidates.some((url) => !allowedUrls.has(url))) {
-              throw new AiGatewayError(
-                "AI_PROVIDER_RESPONSE_INVALID",
-                "Provider returned an unexpected URL."
-              );
-            }
-          },
-        });
-        const copy: CopyGeneration = await executeStructured({
-          adapter,
-          apiKey,
-          item,
-          profileId: execution.profileId,
-          snapshot: execution.snapshot,
-          operationType: "COPY_GENERATION",
-          input: JSON.stringify({
-            requestedProduct: item.query,
-            identity,
-            verifiedFacts: extraction.specifications.map((specification) => ({
-              fieldPath: specification.fieldPath,
-              value: specification.value,
-            })),
-          }),
-          signal: controller.signal,
-          schema: copyGenerationSchema,
-          validate(value) {
-            assertOriginalCopy(
-              value,
-              evidence.map((source) => source.text)
-            );
-          },
-        });
-        await publishDraftProposal({
-          itemId: item.id,
-          leaseToken: item.leaseToken,
-          identity,
-          extraction,
-          copy,
-          sourceIds: evidence.map((source) => source.sourceId!),
+          schema: identityResolutionSchema,
+          validate: assertProviderIdentityResolution,
         });
       }
-    );
+      const stop = mapIdentityStop(identity);
+      if (stop) {
+        await finishResearchItemWithoutProposal(
+          item.id,
+          item.leaseToken,
+          stop.status,
+          stop.identityStatus
+        );
+        return;
+      }
+
+      const extraction: SpecificationExtraction = await executeWithFallback({
+        item,
+        operationType: "SPEC_EXTRACTION",
+        input,
+        signal: controller.signal,
+        schema: specificationExtractionSchema,
+        validate(value) {
+          const sourceIndexes = value.specifications.flatMap((specification) => [
+            ...specification.sourceIndexes,
+            ...specification.conflictingValues.flatMap((conflict) => conflict.sourceIndexes),
+          ]);
+          if (sourceIndexes.some((index) => !evidence[index])) {
+            throw new AiGatewayError(
+              "AI_PROVIDER_RESPONSE_INVALID",
+              "Provider returned invalid source provenance."
+            );
+          }
+          const allowedUrls = new Set(
+            evidence.flatMap((source) => [source.originalUrl, source.resolvedUrl])
+          );
+          if (value.mediaCandidates.some((url) => !allowedUrls.has(url))) {
+            throw new AiGatewayError(
+              "AI_PROVIDER_RESPONSE_INVALID",
+              "Provider returned an unexpected URL."
+            );
+          }
+        },
+      });
+      const copy: CopyGeneration = await executeWithFallback({
+        item,
+        operationType: "COPY_GENERATION",
+        input: JSON.stringify({
+          requestedProduct: item.query,
+          identity,
+          verifiedFacts: extraction.specifications.map((specification) => ({
+            fieldPath: specification.fieldPath,
+            value: specification.value,
+          })),
+        }),
+        signal: controller.signal,
+        schema: copyGenerationSchema,
+        validate(value) {
+          assertOriginalCopy(
+            value,
+            evidence.map((source) => source.text)
+          );
+        },
+      });
+      await publishDraftProposal({
+        itemId: item.id,
+        leaseToken: item.leaseToken,
+        identity,
+        extraction,
+        copy,
+        sourceIds: evidence.map((source) => source.sourceId!),
+      });
+    });
   } catch (error) {
     if (error instanceof LeaseLostError || leaseLost) return;
     const code =

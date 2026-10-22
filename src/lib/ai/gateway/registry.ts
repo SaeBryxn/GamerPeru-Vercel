@@ -1,4 +1,5 @@
 import { googleGeminiAdapter } from "./google-gemini-adapter";
+import { groqAdapter } from "./groq-adapter";
 import { mockAiAdapter } from "./mock-adapter";
 import type { AiProviderAdapter } from "./types";
 
@@ -20,8 +21,12 @@ export class UnsupportedAiProviderError extends Error {
  */
 const registry = new Map<string, AiProviderAdapter>();
 
+/** Providers that can run product research (structured JSON output). */
+export const RESEARCH_PROVIDER_KEYS = ["google", "groq"] as const;
+
 registry.set("mock", mockAiAdapter);
 registry.set("google", googleGeminiAdapter);
+registry.set("groq", groqAdapter);
 
 /**
  * Resolves an AI provider adapter by providerKey.
