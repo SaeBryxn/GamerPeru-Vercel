@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { MotionConfig } from "framer-motion";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
@@ -12,6 +12,31 @@ import { AdminMobileNav } from "./admin-mobile-nav";
 import { useAdminTheme } from "./use-admin-theme";
 import styles from "./admin-shell.module.css";
 
+const SIDEBAR_COLLAPSED_KEY = "gp-admin-sidebar-collapsed";
+
+/** Remembers whether the operator keeps the sidebar as an icon rail. Read after hydration. */
+function useSidebarCollapsed(): [boolean, () => void] {
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
+    } catch {
+      // Without storage the sidebar simply starts expanded.
+    }
+  }, []);
+  const toggle = () => {
+    setCollapsed((current) => {
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, current ? "0" : "1");
+      } catch {
+        // The choice still applies to this visit.
+      }
+      return !current;
+    });
+  };
+  return [collapsed, toggle];
+}
+
 interface AdminShellProps {
   authContext: VerifiedAuthContextReady;
   children: React.ReactNode;
@@ -22,6 +47,7 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const { theme, toggle } = useAdminTheme();
+  const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed();
 
   const staff = {
     authUserId: authContext.authUserId,
@@ -43,7 +69,13 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
         </a>
 
         <div className={styles.layoutContainer}>
-          <AdminSidebar navItems={navItems} staff={staff} currentPath={currentPath} />
+          <AdminSidebar
+            navItems={navItems}
+            staff={staff}
+            currentPath={currentPath}
+            collapsed={sidebarCollapsed}
+            onToggleCollapsed={toggleSidebar}
+          />
 
           <div className={styles.mainWrapper}>
             <AdminHeader

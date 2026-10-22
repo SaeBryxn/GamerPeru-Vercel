@@ -71,6 +71,85 @@
   padding: var(--space-6) var(--space-4);
   border-right: 1px solid var(--color-border-subtle);
   background-color: var(--admin-sidebar-surface);
+  transition: width 0.2s ease;
+}
+
+/* Icon rail: names stay in tooltips and for screen readers. */
+.sidebarCollapsed {
+  width: 68px;
+  padding-inline: var(--space-3);
+}
+
+.sidebarBrandRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-8);
+}
+
+.sidebarBrandRow .sidebarBrand {
+  margin-bottom: 0;
+}
+
+.sidebarCollapsed .sidebarBrandRow {
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.collapseButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.collapseButton:hover {
+  border-color: var(--color-border-default);
+  color: var(--color-text-primary);
+}
+
+.collapseButton:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.navRail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.navRail > ul + ul {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.sidebarCollapsed .navLink {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebarCollapsed .staffProfileCard {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 @media (min-width: 1024px) {
@@ -110,9 +189,9 @@
 
 .brandBadge {
   padding: 1px 6px;
-  border: 1px solid var(--admin-brand);
+  border: 1px solid var(--color-border-default);
   border-radius: 6px;
-  color: var(--admin-brand-text);
+  color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
@@ -134,60 +213,16 @@
   gap: var(--space-5);
 }
 
-/* Each section carries one hue: its title marker, icon chips and active block. */
-.navGroup {
-  --group-color: var(--admin-brand-text);
-  --group-soft: rgba(251, 113, 133, 0.14);
-}
-
-.toneGreen {
-  --group-color: #4ade80;
-  --group-soft: rgba(74, 222, 128, 0.13);
-}
-
-.toneBlue {
-  --group-color: #60a5fa;
-  --group-soft: rgba(96, 165, 250, 0.14);
-}
-
-.toneAmber {
-  --group-color: #fbbf24;
-  --group-soft: rgba(251, 191, 36, 0.13);
-}
-
-.toneViolet {
-  --group-color: #c084fc;
-  --group-soft: rgba(192, 132, 252, 0.14);
-}
-
 .navGroupHead {
   margin: 0 var(--space-2) var(--space-2);
 }
 
 .navSectionTitle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
   margin: 0;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-text-primary);
-}
-
-.navSectionTitle::before {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background-color: var(--group-color);
-  content: "";
-}
-
-.navGroupHint {
-  margin: 2px 0 0 16px;
-  font-size: 11px;
-  line-height: 1.35;
   color: var(--color-text-muted);
 }
 
@@ -242,9 +277,9 @@
 .navActiveMarker {
   position: absolute;
   inset: 0;
-  border-left: 3px solid var(--group-color, var(--admin-brand));
+  border-left: 2px solid var(--admin-brand);
   border-radius: 8px;
-  background-color: var(--group-soft, var(--admin-brand-soft));
+  background-color: rgba(255, 255, 255, 0.07);
 }
 
 /* Folder toggle: same row as a link, with a chevron that turns when open. */
@@ -290,8 +325,8 @@
 }
 
 .navLinkNested .navIconChip {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
 }
 
 .navIconChip,
@@ -304,26 +339,24 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  background-color: var(--group-soft, rgba(255, 255, 255, 0.06));
+  width: 20px;
+  height: 20px;
 }
 
 .navIcon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  stroke-width: 2;
-  color: var(--group-color, var(--color-text-muted));
+  stroke-width: 1.75;
+  color: var(--color-text-muted);
 }
 
 .navLink:hover .navIcon {
-  color: var(--group-color, var(--color-text-primary));
+  color: var(--color-text-primary);
 }
 
 .navLinkActive .navIcon {
-  color: var(--group-color, var(--admin-brand-text));
+  color: var(--color-text-primary);
 }
 
 .navLabel {
@@ -350,8 +383,8 @@
   height: 36px;
   flex-shrink: 0;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--admin-brand), #9f1239);
-  color: #ffffff;
+  background-color: var(--color-surface-tertiary);
+  color: var(--color-text-primary);
   font-family: var(--font-heading);
   font-size: 14px;
   font-weight: 700;
@@ -589,7 +622,8 @@
   .drawer,
   .drawerBackdrop,
   .navLink,
-  .navChevron {
+  .navChevron,
+  .sidebar {
     transition: none;
   }
 }

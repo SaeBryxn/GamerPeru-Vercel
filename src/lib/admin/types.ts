@@ -14,8 +14,6 @@ export interface AdminNavFolder {
 export interface AdminNavGroup {
   id: AdminNavGroupId;
   label: string;
-  /** One line under the group title saying what the operator does there. */
-  hint: string;
 }
 
 export interface AdminNavItem {

@@ -19,12 +19,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { groupAdminNavigation } from "@/lib/admin/navigation";
-import type {
-  AdminNavFolder,
-  AdminNavFolderId,
-  AdminNavGroupId,
-  AdminNavItem,
-} from "@/lib/admin/types";
+import type { AdminNavFolder, AdminNavFolderId, AdminNavItem } from "@/lib/admin/types";
 import styles from "./admin-shell.module.css";
 
 const ICONS: Record<AdminNavItem["iconName"] | AdminNavFolder["iconName"], typeof Gauge> = {
@@ -40,13 +35,6 @@ const ICONS: Record<AdminNavItem["iconName"] | AdminNavFolder["iconName"], typeo
   UserCog,
   Palette,
   Cpu,
-};
-
-const GROUP_TONE: Record<AdminNavGroupId, string | undefined> = {
-  operations: styles.toneGreen,
-  catalog: styles.toneBlue,
-  storefront: styles.toneAmber,
-  system: styles.toneViolet,
 };
 
 const OPEN_FOLDERS_KEY = "gp-admin-nav-open";
@@ -83,17 +71,21 @@ interface AdminNavSectionsProps {
   /** Shared-layout id for the active marker; each nav keeps its own so they never swap. */
   markerId: string;
   onNavigate?: () => void;
+  /** Icon rail: every destination as an icon, names in tooltips and for screen readers. */
+  collapsed?: boolean;
 }
 
 /**
- * The admin destinations split into colored sections. Related destinations sit in a folder
- * that expands in place; the folder holding the current screen is always open.
+ * The admin destinations split into sections. Related destinations sit in a folder that expands
+ * in place; the folder holding the current screen is always open. Collapsed, the sections become
+ * a flat column of icons separated by hairlines.
  */
 export function AdminNavSections({
   navItems,
   currentPath,
   markerId,
   onNavigate,
+  collapsed = false,
 }: AdminNavSectionsProps) {
   const activeId = resolveActiveNavId(navItems, currentPath);
   const activeFolder = navItems.find((item) => item.id === activeId)?.folder;
@@ -120,7 +112,7 @@ export function AdminNavSections({
         <Link
           href={item.href}
           onClick={onNavigate}
-          title={item.description}
+          title={collapsed ? item.label : item.description}
           className={[
             styles.navLink,
             nested ? styles.navLinkNested : "",
@@ -142,25 +134,40 @@ export function AdminNavSections({
           <span className={styles.navIconChip} aria-hidden="true">
             <Icon className={styles.navIcon} />
           </span>
-          <span className={styles.navLabel}>{item.label}</span>
+          <span className={collapsed ? styles.visuallyHidden : styles.navLabel}>{item.label}</span>
         </Link>
       </li>
     );
   };
 
+  const groups = groupAdminNavigation(navItems);
+
+  if (collapsed) {
+    return (
+      <div className={styles.navRail}>
+        {groups.map((group) => (
+          <ul key={group.id} className={styles.navList} aria-label={group.label}>
+            {group.entries
+              .flatMap((entry) => (entry.kind === "item" ? [entry.item] : entry.items))
+              .map((item) => renderLink(item))}
+          </ul>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className={styles.navGroups}>
-      {groupAdminNavigation(navItems).map((group) => (
+      {groups.map((group) => (
         <section
           key={group.id}
-          className={`${styles.navGroup} ${GROUP_TONE[group.id] ?? ""}`}
+          className={styles.navGroup}
           aria-labelledby={`${markerId}-${group.id}`}
         >
           <div className={styles.navGroupHead}>
             <h2 id={`${markerId}-${group.id}`} className={styles.navSectionTitle}>
               {group.label}
             </h2>
-            <p className={styles.navGroupHint}>{group.hint}</p>
           </div>
           <ul className={styles.navList}>
             {group.entries.map((entry) => {

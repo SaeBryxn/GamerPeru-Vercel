@@ -1,12 +1,12 @@
 import type { PermissionName } from "@/lib/auth/rbac";
 import type { AdminNavFolder, AdminNavFolderId, AdminNavGroup, AdminNavItem } from "./types";
 
-/** Sidebar sections, in display order; each one gets its own color in the shell. */
+/** Sidebar sections, in display order. */
 export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
-  { id: "operations", label: "Operaciones", hint: "Pedidos y pagos del día" },
-  { id: "catalog", label: "Catálogo", hint: "Productos, fotos, categorías y marcas" },
-  { id: "storefront", label: "Tienda y contenido", hint: "Portada, imágenes, videos y menú" },
-  { id: "system", label: "IA y sistema", hint: "Motor de IA y accesos al panel" },
+  { id: "operations", label: "Operaciones" },
+  { id: "catalog", label: "Catálogo" },
+  { id: "storefront", label: "Tienda y contenido" },
+  { id: "system", label: "IA y sistema" },
 ];
 
 export const ADMIN_NAV_FOLDERS: Record<AdminNavFolderId, AdminNavFolder> = {
