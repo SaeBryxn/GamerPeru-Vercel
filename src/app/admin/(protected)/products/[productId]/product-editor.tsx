@@ -1329,10 +1329,8 @@ export function ProductEditor({
                 className={styles.card}
                 data-testid="section-general-details"
               >
-                <h2 className={styles.cardTitle}>Información</h2>
                 <p className={styles.cardDescription}>
-                  Esto es lo que el cliente lee en la ficha del producto. El subtítulo aparece bajo
-                  el nombre y la descripción debajo del precio.
+                  Esto es lo que el cliente lee en la tienda.
                 </p>
                 <form
                   onSubmit={handleSaveDetails}
@@ -1367,6 +1365,7 @@ export function ProductEditor({
                         className={styles.input}
                         data-testid="input-slug"
                       />
+                      <p className={styles.helpText}>gamerperu.com/productos/{slug || "…"}</p>
                     </div>
                   </div>
 
@@ -1413,8 +1412,8 @@ export function ProductEditor({
                       </select>
                       {categoryId !== product.categoryId && (
                         <p className={styles.helpText} style={{ color: "#b45309" }}>
-                          Advertencia: Al cambiar la categoría, las especificaciones técnicas se
-                          reconciliarán según el esquema de la nueva categoría.
+                          Al cambiar la categoría, las especificaciones pasan a los campos de la
+                          nueva categoría.
                         </p>
                       )}
                     </div>
@@ -1465,7 +1464,7 @@ export function ProductEditor({
                           <span>Guardando...</span>
                         </>
                       ) : (
-                        <span>Guardar Cambios</span>
+                        <span>Guardar</span>
                       )}
                     </button>
                   </div>
@@ -1502,15 +1501,10 @@ export function ProductEditor({
                     </button>
                   </div>
                 )}
-                <div className={styles.sectionHead}>
-                  <div>
-                    <h2 className={styles.cardTitle}>Fotos del producto</h2>
-                    <p className={styles.cardDescription}>
-                      La foto principal es la que ve el cliente en la tienda y en los listados. Las
-                      demás aparecen en la galería. Cada foto se optimiza sola al subirla.
-                    </p>
-                  </div>
-                </div>
+                <p className={styles.cardDescription}>
+                  La foto principal se ve en la tienda y en los listados. Arrastra las demás para
+                  ordenar la galería.
+                </p>
 
                 {/* Upload Control Box */}
                 <div className={styles.mediaUploadBox} data-testid="media-upload-area">
@@ -1524,8 +1518,7 @@ export function ProductEditor({
                     Agregar una foto
                   </span>
                   <div className={styles.mediaUploadLimits} data-testid="media-upload-limits">
-                    JPEG, PNG, WebP o AVIF, hasta 20 MB por foto. Se optimizan antes de subir (hasta
-                    2400 px y 4 MB). Se recomiendan imágenes cuadradas de al menos 1200 x 1200 px.
+                    JPG, PNG, WebP o AVIF de hasta 20 MB. Mejor cuadradas, de 1200 × 1200 px o más.
                   </div>
 
                   <div className={styles.mediaUploadControls}>
@@ -1554,7 +1547,7 @@ export function ProductEditor({
                       <option value="">Para todo el producto</option>
                       {variants.map((v) => (
                         <option key={v.id} value={v.id}>
-                          Variante: {v.title} ({v.sku})
+                          Solo para {v.title}
                         </option>
                       ))}
                     </select>
@@ -1765,7 +1758,7 @@ export function ProductEditor({
                   </div>
                 ) : (
                   <p className={styles.cardDescription} data-testid="media-empty-state">
-                    Todavía no hay fotos. Sube la primera desde el área de arriba.
+                    Todavía no hay fotos. Sube la primera arriba.
                   </p>
                 )}
               </section>
@@ -1802,18 +1795,11 @@ export function ProductEditor({
                 className={styles.card}
                 data-testid="section-specifications"
               >
-                <div className={styles.sectionHead}>
-                  <div>
-                    <h2 className={styles.cardTitle}>
-                      Especificaciones Técnicas ({category.name})
-                    </h2>
-                    <p className={styles.cardDescription}>
-                      {currentSpecSchema
-                        ? `Esquema activo v${currentSpecSchema.schemaVersion}. Puedes guardar especificaciones parciales.`
-                        : "Esta categoría no tiene un esquema de especificaciones técnicas configurado."}
-                    </p>
-                  </div>
-                </div>
+                <p className={styles.cardDescription}>
+                  {currentSpecSchema
+                    ? `Datos técnicos de ${category.name}. Puedes guardar aunque falten algunos.`
+                    : `${category.name} todavía no tiene campos técnicos. Se agregan en Categorías y marcas.`}
+                </p>
 
                 {currentSpecSchema && currentSpecSchema.fieldDefinitions ? (
                   <form onSubmit={handleSaveSpecs} className={styles.specForm}>
@@ -1925,17 +1911,12 @@ export function ProductEditor({
                             <span>Guardando...</span>
                           </>
                         ) : (
-                          <span>Guardar Especificaciones</span>
+                          <span>Guardar</span>
                         )}
                       </button>
                     </div>
                   </form>
-                ) : (
-                  <p className={styles.cardDescription}>
-                    Selecciona una categoría con especificaciones técnicas para configurar sus
-                    valores.
-                  </p>
-                )}
+                ) : null}
               </section>
             )}
           </section>
