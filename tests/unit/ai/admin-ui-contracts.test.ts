@@ -110,7 +110,7 @@ describe("GP-025 / CHK4 — Admin AI UI contracts", () => {
   });
 
   it("restricts providers and profiles to the canonical physical keys", () => {
-    expect(ADMIN_AI_PROVIDER_KEYS).toEqual(["google", "groq", "openai", "anthropic"]);
+    expect(ADMIN_AI_PROVIDER_KEYS).toEqual(["google", "groq", "cloudflare", "openai", "anthropic"]);
     expect(ADMIN_AI_PROFILE_KEYS).toEqual([
       "PRODUCT_RESEARCH_FAST",
       "PRODUCT_RESEARCH_DEEP",

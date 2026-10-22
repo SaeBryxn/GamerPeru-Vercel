@@ -8,6 +8,7 @@ import {
   NoActiveProviderCredentialError,
   withActiveProviderCredential,
 } from "../credential-service";
+import { KEYLESS_AI_PROVIDER_KEYS } from "../admin/types";
 import { getAiAdapter, RESEARCH_PROVIDER_KEYS } from "../gateway/registry";
 import { AiGatewayError } from "../gateway/types";
 import type { AiProviderAdapter, AiStructuredGenerationResult } from "../gateway/types";
@@ -296,11 +297,19 @@ export async function processClaimedResearchItem(
 
     const resolveAdapter = dependencies.resolveAdapter ?? getAiAdapter;
     const withCredential = dependencies.withCredential ?? withActiveProviderCredential;
+    // Binding-based providers (Workers AI) have no stored key to decrypt.
+    const withProviderAccess = <T>(
+      target: { providerKey: string; snapshot: { providerId: string } },
+      operation: (apiKey: string) => Promise<T>
+    ): Promise<T> =>
+      KEYLESS_AI_PROVIDER_KEYS.includes(target.providerKey)
+        ? operation("")
+        : withCredential(target.snapshot.providerId, operation);
     const adapter = resolveAdapter(execution.providerKey);
     const fallback = await loadFallbackExecution(execution.snapshot.providerId);
     // Once the primary provider is out of free quota, the rest of the job uses the fallback.
     let primaryExhausted = fallback ? await isOverDailyFreeTier(execution) : false;
-    await withCredential(execution.snapshot.providerId, async (apiKey) => {
+    await withProviderAccess(execution, async (apiKey) => {
       const executeWithFallback = async <T>(
         call: Omit<StructuredCall<T>, "adapter" | "apiKey" | "profileId" | "snapshot">
       ): Promise<T> => {
@@ -318,7 +327,7 @@ export async function processClaimedResearchItem(
             primaryExhausted = true;
           }
         }
-        return await withCredential(fallback.snapshot.providerId, async (fallbackApiKey) =>
+        return await withProviderAccess(fallback, async (fallbackApiKey) =>
           executeStructured({
             ...call,
             adapter: resolveAdapter(fallback.providerKey),

@@ -49,6 +49,11 @@ const settings: AdminAiSettingsDto = {
       healthCheckSupported: true,
     },
     {
+      providerKey: "cloudflare",
+      researchExecutionSupported: true,
+      healthCheckSupported: true,
+    },
+    {
       providerKey: "openai",
       researchExecutionSupported: false,
       healthCheckSupported: false,

@@ -1,3 +1,4 @@
+import { cloudflareWorkersAiAdapter } from "./cloudflare-workers-ai-adapter";
 import { googleGeminiAdapter } from "./google-gemini-adapter";
 import { groqAdapter } from "./groq-adapter";
 import { mockAiAdapter } from "./mock-adapter";
@@ -22,11 +23,12 @@ export class UnsupportedAiProviderError extends Error {
 const registry = new Map<string, AiProviderAdapter>();
 
 /** Providers that can run product research (structured JSON output). */
-export const RESEARCH_PROVIDER_KEYS = ["google", "groq"] as const;
+export const RESEARCH_PROVIDER_KEYS = ["google", "groq", "cloudflare"] as const;
 
 registry.set("mock", mockAiAdapter);
 registry.set("google", googleGeminiAdapter);
 registry.set("groq", groqAdapter);
+registry.set("cloudflare", cloudflareWorkersAiAdapter);
 
 /**
  * Resolves an AI provider adapter by providerKey.

@@ -77,8 +77,11 @@ dashboard under the Worker → Settings → Variables and Secrets:
 - Optional: `LOG_LEVEL`, AI settings (`TAVILY_API_KEY`, `SERPER_API_KEY`,
   `AI_ENCRYPTION_ACTIVE_KEY_VERSION`, `AI_ENCRYPTION_KEY_V1`, `AI_RESEARCH_FETCH_USER_AGENT`).
   Search tries Tavily and falls back to Serper (either one alone is enough). The AI model runs on
-  the research profile's provider; to fall back from Gemini to Groq, add the Groq key in
-  Configuración IA and enable the `PRODUCT_RESEARCH_FALLBACK` profile with a Groq model.
+  the research profile's provider. Cloudflare Workers AI needs no key: it uses the `AI` binding in
+  `wrangler.jsonc` and the account's free daily allowance; enable "Cloudflare Workers AI" in
+  Configuración IA and give the profile a Workers AI model such as
+  `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. Gemini and Groq need their key in Configuración
+  IA; any of them can be the `PRODUCT_RESEARCH_FALLBACK` profile.
 
 Not needed on the Worker: `DATABASE_MIGRATION_URL` (migrations run from a workstation),
 `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` (source-map upload at build only).

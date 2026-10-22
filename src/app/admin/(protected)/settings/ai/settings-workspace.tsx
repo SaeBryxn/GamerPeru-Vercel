@@ -34,6 +34,7 @@ import {
   type AdminAiProviderDto,
   type AdminAiProviderKey,
   type AdminAiSettingsDto,
+  KEYLESS_AI_PROVIDER_KEYS,
 } from "@/lib/ai/admin/types";
 import styles from "@/components/admin/ai-admin.module.css";
 
@@ -46,6 +47,7 @@ type Notice = { tone: "success" | "error" | "info"; text: string };
 const DEFAULT_PROVIDER_NAMES: Record<AdminAiProviderKey, string> = {
   google: "Google Gemini",
   groq: "Groq",
+  cloudflare: "Cloudflare Workers AI",
   openai: "OpenAI",
   anthropic: "Anthropic",
 };
@@ -217,107 +219,115 @@ function ProviderCard({
         </button>
       </fieldset>
 
-      <section className={styles.credentialSection} aria-label={`Credencial de ${providerKey}`}>
-        <div className={styles.credentialHeading}>
-          <div>
-            <KeyRound size={17} aria-hidden="true" />
-            <strong>Credencial cifrada</strong>
-          </div>
-          {provider?.credential && (
-            <span
-              className={`${styles.statusBadge} ${provider.credential.lastHealthStatus === "HEALTHY" ? styles.statusPositive : provider.credential.lastHealthStatus === "UNHEALTHY" ? styles.statusDanger : styles.statusNeutral}`}
-            >
-              {provider.credential.lastHealthStatus ?? "UNTESTED"}
-            </span>
-          )}
+      {KEYLESS_AI_PROVIDER_KEYS.includes(providerKey) ? (
+        <div className={styles.inlineEmpty} role="note">
+          No necesita clave: usa el binding AI del Worker y la cuota diaria gratis de la cuenta de
+          Cloudflare. Habilítalo y elige un modelo de Workers AI en el perfil, por ejemplo
+          <code> @cf/meta/llama-3.3-70b-instruct-fp8-fast</code>.
         </div>
-        {provider?.credential ? (
-          <dl className={styles.credentialMeta}>
+      ) : (
+        <section className={styles.credentialSection} aria-label={`Credencial de ${providerKey}`}>
+          <div className={styles.credentialHeading}>
             <div>
-              <dt>Clave</dt>
-              <dd>
-                <code>{provider.credential.maskedKey}</code>
-              </dd>
+              <KeyRound size={17} aria-hidden="true" />
+              <strong>Credencial cifrada</strong>
             </div>
-            <div>
-              <dt>Versión de cifrado</dt>
-              <dd>v{provider.credential.keyVersion}</dd>
-            </div>
-            <div>
-              <dt>Última prueba</dt>
-              <dd>{formatDate(provider.credential.lastTestedAt)}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p className={styles.muted}>
-            No hay una credencial activa. La clave nunca podrá leerse de vuelta.
-          </p>
-        )}
-        {provider ? (
-          <div className={styles.credentialForm}>
-            <label className={styles.field}>
-              <span>{provider.credential ? "Nueva clave para reemplazo" : "Clave de API"}</span>
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-                placeholder="Se cifra al guardar"
-              />
-            </label>
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={saveKey}
-              disabled={pending || apiKey.trim().length < 8}
-            >
-              <KeyRound size={15} aria-hidden="true" />{" "}
-              {provider.credential ? "Reemplazar credencial" : "Guardar credencial"}
-            </button>
-          </div>
-        ) : (
-          <div className={styles.inlineEmpty}>
-            Guarda primero la configuración del proveedor para habilitar credenciales.
-          </div>
-        )}
-        {provider?.credential && (
-          <>
-            {!capability.healthCheckSupported && (
-              <div className={styles.inlineEmpty} role="note">
-                Prueba de conexión no disponible hasta incorporar el adaptador de ejecución.
-              </div>
+            {provider?.credential && (
+              <span
+                className={`${styles.statusBadge} ${provider.credential.lastHealthStatus === "HEALTHY" ? styles.statusPositive : provider.credential.lastHealthStatus === "UNHEALTHY" ? styles.statusDanger : styles.statusNeutral}`}
+              >
+                {provider.credential.lastHealthStatus ?? "UNTESTED"}
+              </span>
             )}
-            <div className={styles.compactActions}>
-              {capability.healthCheckSupported && (
+          </div>
+          {provider?.credential ? (
+            <dl className={styles.credentialMeta}>
+              <div>
+                <dt>Clave</dt>
+                <dd>
+                  <code>{provider.credential.maskedKey}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Versión de cifrado</dt>
+                <dd>v{provider.credential.keyVersion}</dd>
+              </div>
+              <div>
+                <dt>Última prueba</dt>
+                <dd>{formatDate(provider.credential.lastTestedAt)}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className={styles.muted}>
+              No hay una credencial activa. La clave nunca podrá leerse de vuelta.
+            </p>
+          )}
+          {provider ? (
+            <div className={styles.credentialForm}>
+              <label className={styles.field}>
+                <span>{provider.credential ? "Nueva clave para reemplazo" : "Clave de API"}</span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  placeholder="Se cifra al guardar"
+                />
+              </label>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={saveKey}
+                disabled={pending || apiKey.trim().length < 8}
+              >
+                <KeyRound size={15} aria-hidden="true" />{" "}
+                {provider.credential ? "Reemplazar credencial" : "Guardar credencial"}
+              </button>
+            </div>
+          ) : (
+            <div className={styles.inlineEmpty}>
+              Guarda primero la configuración del proveedor para habilitar credenciales.
+            </div>
+          )}
+          {provider?.credential && (
+            <>
+              {!capability.healthCheckSupported && (
+                <div className={styles.inlineEmpty} role="note">
+                  Prueba de conexión no disponible hasta incorporar el adaptador de ejecución.
+                </div>
+              )}
+              <div className={styles.compactActions}>
+                {capability.healthCheckSupported && (
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={testConnection}
+                    disabled={pending}
+                  >
+                    <RefreshCw size={15} aria-hidden="true" /> Probar conexión
+                  </button>
+                )}
                 <button
                   type="button"
                   className={styles.secondaryButton}
-                  onClick={testConnection}
+                  onClick={rotate}
                   disabled={pending}
                 >
-                  <RefreshCw size={15} aria-hidden="true" /> Probar conexión
+                  <RotateCw size={15} aria-hidden="true" /> Rotar cifrado
                 </button>
-              )}
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={rotate}
-                disabled={pending}
-              >
-                <RotateCw size={15} aria-hidden="true" /> Rotar cifrado
-              </button>
-              <button
-                type="button"
-                className={styles.dangerSecondaryButton}
-                onClick={() => setConfirmation("revoke")}
-                disabled={pending}
-              >
-                <Trash2 size={15} aria-hidden="true" /> Revocar
-              </button>
-            </div>
-          </>
-        )}
-      </section>
+                <button
+                  type="button"
+                  className={styles.dangerSecondaryButton}
+                  onClick={() => setConfirmation("revoke")}
+                  disabled={pending}
+                >
+                  <Trash2 size={15} aria-hidden="true" /> Revocar
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       <ConfirmationDialog
         open={confirmation === "replace"}

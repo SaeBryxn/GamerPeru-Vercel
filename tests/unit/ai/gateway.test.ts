@@ -15,9 +15,9 @@ describe("Strict AI Gateway & Deterministic Mock Adapter", () => {
       expect(adapter.providerKey).toBe("mock");
     });
 
-    it("registers the Google and Groq adapters and the deterministic mock explicitly", () => {
+    it("registers the Google, Groq and Workers AI adapters and the deterministic mock explicitly", () => {
       const keys = getRegisteredProviderKeys();
-      expect(keys).toEqual(["mock", "google", "groq"]);
+      expect(keys).toEqual(["mock", "google", "groq", "cloudflare"]);
     });
 
     it("fails closed for unknown or arbitrary provider keys", () => {

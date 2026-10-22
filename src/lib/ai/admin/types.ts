@@ -1,6 +1,14 @@
 import type { ProposalReviewDecision, ProposalApplyStepStatus } from "@/lib/ai/proposals/types";
 
-export const ADMIN_AI_PROVIDER_KEYS = ["google", "groq", "openai", "anthropic"] as const;
+export const ADMIN_AI_PROVIDER_KEYS = [
+  "google",
+  "groq",
+  "cloudflare",
+  "openai",
+  "anthropic",
+] as const;
+/** Providers reached through a Worker binding instead of an API key. */
+export const KEYLESS_AI_PROVIDER_KEYS: readonly string[] = ["cloudflare"];
 export const ADMIN_AI_PROFILE_KEYS = [
   "PRODUCT_RESEARCH_FAST",
   "PRODUCT_RESEARCH_DEEP",
