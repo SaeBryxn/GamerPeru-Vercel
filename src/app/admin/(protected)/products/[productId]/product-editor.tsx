@@ -10,24 +10,18 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  Plus,
-  Pencil,
   RefreshCw,
   Loader2,
   Image as ImageIcon,
   Lock,
   Upload,
-  BookOpen,
   Check,
   ChevronDown,
-  ChevronRight,
   ExternalLink,
   X,
 } from "lucide-react";
 import {
   updateProductAction,
-  createVariantAction,
-  updateVariantAction,
   duplicateProductAction,
   transitionProductStatusAction,
   updateMediaAltTextAction,
@@ -36,12 +30,8 @@ import {
   setPrimaryMediaAction,
   reassignProductMediaVariantAction,
 } from "@/lib/admin/catalog/actions";
-import { formatCentsToPenDisplay } from "@/lib/admin/catalog/money";
 import { MutationRequestTracker } from "@/lib/admin/catalog/mutation-request";
-import {
-  getStoryLifecycleText,
-  type StoryLifecycleSummary,
-} from "@/lib/admin/catalog/story-builder-model";
+import { type StoryLifecycleSummary } from "@/lib/admin/catalog/story-builder-model";
 import {
   getReadinessGuidance,
   type ProductEditorSection,
@@ -50,18 +40,11 @@ import { QualityChecklist } from "@/components/admin/products/quality-checklist"
 import { FeaturedToggle } from "@/components/admin/products/featured-toggle";
 import { MediaTile } from "@/components/admin/products/media-tile";
 import type { AdminProductUiDetail } from "@/lib/admin/catalog/ui-dto";
-import type {
-  AdminProductDetailVariant,
-  BrandReference,
-  CategoryReference,
-  CatalogStatus,
-  VariantStatus,
-} from "@/lib/admin/catalog/types";
-import { VariantStockCell } from "@/components/admin/inventory/variant-stock-cell";
+import type { BrandReference, CategoryReference, CatalogStatus } from "@/lib/admin/catalog/types";
 import type { VariantStockRow } from "@/lib/admin/inventory/readers";
 import { findWeightSpecField } from "@/lib/admin/catalog/weight-spec";
-import { ProductPdpFields } from "@/components/admin/products/product-pdp-fields";
-import { buildPdpEditorConfig } from "@/lib/catalog/product-pdp-config";
+import { VariantBoard } from "@/components/admin/products/variant-board";
+import { ProductPageStep } from "@/components/admin/products/product-page-step";
 import { uploadDirect, type DirectUploadStage } from "@/lib/media/direct-upload-client";
 import { requestUpload, completeUpload } from "@/lib/media/upload-api-client";
 import styles from "./product-editor.module.css";
@@ -74,15 +57,6 @@ interface ProductEditorProps {
   storySummary: StoryLifecycleSummary;
   /** Stock per variant at the primary location. */
   variantStock: Record<string, VariantStockRow>;
-}
-
-function centsToInputString(cents: number | null | undefined): string {
-  if (cents === null || cents === undefined) return "";
-  const sign = cents < 0 ? "-" : "";
-  const abs = Math.abs(cents);
-  const whole = Math.floor(abs / 100);
-  const fraction = String(abs % 100).padStart(2, "0");
-  return `${sign}${whole}.${fraction}`;
 }
 
 interface ToastMessage {
@@ -120,7 +94,11 @@ const EDITOR_STEPS: Array<{ section: ProductEditorSection; title: string; hint: 
     title: "Especificaciones",
     hint: "Datos técnicos de la categoría",
   },
-  { section: "historia", title: "Página del producto", hint: "Historia y bloques de la ficha" },
+  {
+    section: "historia",
+    title: "Página del producto",
+    hint: "Historia, regalo, accesorios y soporte",
+  },
 ];
 const EDITOR_SECTION_ORDER: ProductEditorSection[] = EDITOR_STEPS.map((step) => step.section);
 
@@ -258,9 +236,6 @@ export function ProductEditor({
   const [subtitle, setSubtitle] = useState(product.subtitle ?? "");
   const [description, setDescription] = useState(product.description ?? "");
   const [isFeatured, setIsFeatured] = useState(product.isFeatured);
-  const [pdpConfig, setPdpConfig] = useState(() =>
-    buildPdpEditorConfig(product.pdpConfig, variants)
-  );
 
   // Specifications State
   const [specValues, setSpecValues] = useState<Record<string, unknown>>(() => {
@@ -280,28 +255,6 @@ export function ProductEditor({
   const [duplicateName, setDuplicateName] = useState(`${product.name} (Copia)`);
   const [duplicateSlug, setDuplicateSlug] = useState(`${product.slug}-copia`);
   const [isDuplicating, setIsDuplicating] = useState(false);
-
-  const [showCreateVariantModal, setShowCreateVariantModal] = useState(false);
-  const [newVarSku, setNewVarSku] = useState("");
-  const [newVarTitle, setNewVarTitle] = useState("");
-  const [newVarPrice, setNewVarPrice] = useState("");
-  const [newVarCompareAt, setNewVarCompareAt] = useState("");
-  const [newVarCost, setNewVarCost] = useState("");
-  const [newVarWeight, setNewVarWeight] = useState("");
-  const [newVarStatus, setNewVarStatus] = useState<VariantStatus>("ACTIVE");
-  const [isCreatingVariant, setIsCreatingVariant] = useState(false);
-  const [variantFormError, setVariantFormError] = useState<string | null>(null);
-
-  const [editingVariant, setEditingVariant] = useState<AdminProductDetailVariant | null>(null);
-  const [editVarSku, setEditVarSku] = useState("");
-  const [editVarTitle, setEditVarTitle] = useState("");
-  const [editVarPrice, setEditVarPrice] = useState("");
-  const [editVarCompareAt, setEditVarCompareAt] = useState("");
-  const [editVarCost, setEditVarCost] = useState("");
-  const [editVarWeight, setEditVarWeight] = useState("");
-  const [editVarStatus, setEditVarStatus] = useState<VariantStatus>("ACTIVE");
-  const [isUpdatingVariant, setIsUpdatingVariant] = useState(false);
-  const [editVariantError, setEditVariantError] = useState<string | null>(null);
 
   // Media Authoring & Management State (CHK3)
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -464,8 +417,6 @@ export function ProductEditor({
   // Stable Mutation Request Trackers
   const detailsTracker = useRef(new MutationRequestTracker());
   const specsTracker = useRef(new MutationRequestTracker());
-  const createVarTracker = useRef(new MutationRequestTracker());
-  const editVarTracker = useRef(new MutationRequestTracker());
   const duplicateTracker = useRef(new MutationRequestTracker());
   const transitionTracker = useRef(new MutationRequestTracker());
   const mediaAltTracker = useRef(new MutationRequestTracker());
@@ -485,7 +436,6 @@ export function ProductEditor({
     setSubtitle(initialDetail.product.subtitle ?? "");
     setDescription(initialDetail.product.description ?? "");
     setIsFeatured(initialDetail.product.isFeatured);
-    setPdpConfig(buildPdpEditorConfig(initialDetail.product.pdpConfig, initialDetail.variants));
     setSpecValues((initialDetail.specifications?.specValues as Record<string, unknown>) ?? {});
     setDuplicateName(`${initialDetail.product.name} (Copia)`);
     setDuplicateSlug(`${initialDetail.product.slug}-copia`);
@@ -510,7 +460,6 @@ export function ProductEditor({
       subtitle: subtitle.trim() ? subtitle.trim() : null,
       description: description.trim() ? description.trim() : null,
       isFeatured,
-      pdpConfig,
     };
 
     const mutationRequestId = detailsTracker.current.getRequestId(payload);
@@ -678,133 +627,6 @@ export function ProductEditor({
     } catch {
       setGeneralError("Error de conexión al duplicar el producto.");
       setIsDuplicating(false);
-    }
-  };
-
-  const handleOpenCreateVariant = () => {
-    setNewVarSku("");
-    setNewVarTitle("");
-    setNewVarPrice("");
-    setNewVarCompareAt("");
-    setNewVarCost("");
-    setNewVarWeight("");
-    setNewVarStatus("ACTIVE");
-    setVariantFormError(null);
-    setShowCreateVariantModal(true);
-  };
-
-  const handleCreateVariant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsCreatingVariant(true);
-    setVariantFormError(null);
-
-    const payload = {
-      productId: product.id,
-      sku: newVarSku.trim(),
-      title: newVarTitle.trim(),
-      pricePen: newVarPrice.trim(),
-      compareAtPricePen: newVarCompareAt.trim() ? newVarCompareAt.trim() : null,
-      costPen: newVarCost.trim() ? newVarCost.trim() : null,
-      weightGrams: newVarWeight ? parseInt(newVarWeight, 10) : null,
-      status: newVarStatus,
-    };
-
-    const mutationRequestId = createVarTracker.current.getRequestId(payload);
-
-    try {
-      const res = await createVariantAction({
-        ...payload,
-        mutationRequestId,
-      });
-
-      createVarTracker.current.complete();
-
-      if (res.success && res.data?.variant) {
-        const createdVariant: AdminProductDetailVariant = {
-          ...res.data.variant,
-          isSkuImmutable: false,
-        };
-        setDetail((prev) => ({
-          ...prev,
-          variants: [...prev.variants, createdVariant],
-        }));
-        setShowCreateVariantModal(false);
-        setGeneralSuccess("Variante creada exitosamente.");
-        router.refresh();
-      } else {
-        setVariantFormError(res.error ?? "No se pudo crear la variante.");
-      }
-    } catch {
-      setVariantFormError("Error de conexión al crear la variante.");
-    } finally {
-      setIsCreatingVariant(false);
-    }
-  };
-
-  const handleOpenEditVariant = (v: AdminProductDetailVariant) => {
-    setEditingVariant(v);
-    setEditVarSku(v.sku);
-    setEditVarTitle(v.title);
-    setEditVarPrice(centsToInputString(v.priceCents));
-    setEditVarCompareAt(centsToInputString(v.compareAtPriceCents));
-    setEditVarCost(centsToInputString(v.costCents));
-    setEditVarWeight(v.weightGrams ? String(v.weightGrams) : "");
-    setEditVarStatus(v.status);
-    setEditVariantError(null);
-  };
-
-  const handleUpdateVariant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingVariant) return;
-
-    setIsUpdatingVariant(true);
-    setEditVariantError(null);
-
-    const payload = {
-      productId: product.id,
-      variantId: editingVariant.id,
-      expectedUpdatedAt: new Date(editingVariant.updatedAt).toISOString(),
-      sku: editVarSku.trim(),
-      title: editVarTitle.trim(),
-      pricePen: editVarPrice.trim(),
-      compareAtPricePen: editVarCompareAt.trim() ? editVarCompareAt.trim() : null,
-      costPen: editVarCost.trim() ? editVarCost.trim() : null,
-      weightGrams: editVarWeight ? parseInt(editVarWeight, 10) : null,
-      status: editVarStatus,
-    };
-
-    const mutationRequestId = editVarTracker.current.getRequestId(payload);
-
-    try {
-      const res = await updateVariantAction({
-        ...payload,
-        mutationRequestId,
-      });
-
-      editVarTracker.current.complete();
-
-      if (res.success && res.data?.variant) {
-        setDetail((prev) => ({
-          ...prev,
-          variants: prev.variants.map((v) =>
-            v.id === res.data!.variant.id
-              ? { ...res.data!.variant, isSkuImmutable: v.isSkuImmutable }
-              : v
-          ),
-        }));
-        setEditingVariant(null);
-        setGeneralSuccess("Variante actualizada exitosamente.");
-        router.refresh();
-      } else {
-        if (res.code === "STALE_WRITE_CONFLICT") {
-          setStaleConflict(true);
-        }
-        setEditVariantError(res.error ?? "No se pudo actualizar la variante.");
-      }
-    } catch {
-      setEditVariantError("Error de conexión al actualizar la variante.");
-    } finally {
-      setIsUpdatingVariant(false);
     }
   };
 
@@ -1630,14 +1452,6 @@ export function ProductEditor({
 
                   <FeaturedToggle checked={isFeatured} onChange={setIsFeatured} />
 
-                  <ProductPdpFields
-                    value={pdpConfig}
-                    onChange={setPdpConfig}
-                    variants={variants}
-                    media={media}
-                    productId={product.id}
-                  />
-
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button
                       type="submit"
@@ -1964,156 +1778,15 @@ export function ProductEditor({
             {renderStepHeader("variantes")}
             {activeSection === "variantes" && (
               <section id="variantes" className={styles.card} data-testid="section-variants">
-                <div className={styles.sectionHead}>
-                  <div>
-                    <h2 className={styles.cardTitle}>Variantes y stock</h2>
-                    <p className={styles.cardDescription}>
-                      Cada color o medida es una variante, con su propio código, precio y stock.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleOpenCreateVariant}
-                    className={styles.primaryButton}
-                    data-testid="btn-add-variant"
-                  >
-                    <Plus size={14} aria-hidden="true" />
-                    <span>Agregar Variante</span>
-                  </button>
-                </div>
-
-                <div className={styles.tableWrapper}>
-                  <table className={styles.table} data-testid="table-variants">
-                    <thead>
-                      <tr>
-                        <th scope="col">SKU</th>
-                        <th scope="col">Nombre</th>
-                        <th scope="col" className={styles.numeric}>
-                          Precio venta
-                        </th>
-                        <th scope="col" className={styles.numeric}>
-                          Precio tachado
-                        </th>
-                        <th scope="col" className={styles.numeric}>
-                          Costo
-                        </th>
-                        {!weightSpecField && (
-                          <th scope="col" className={styles.numeric}>
-                            Peso
-                          </th>
-                        )}
-                        <th scope="col">Stock</th>
-                        <th scope="col">Estado</th>
-                        <th scope="col" className={styles.actionsCol}>
-                          <span className={styles.srOnly}>Acciones</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {variants.map((v) => (
-                        <tr key={v.id} data-testid={`variant-row-${v.id}`}>
-                          <td>
-                            <div className={styles.skuCell}>
-                              <span className={styles.skuBadge} data-testid={`variant-sku-${v.id}`}>
-                                {v.sku}
-                              </span>
-                              {v.isSkuImmutable && (
-                                <span
-                                  className={styles.immutableIcon}
-                                  title="SKU fijo: ya tiene inventario o pedidos"
-                                  aria-label="SKU fijo"
-                                  role="img"
-                                  data-testid={`variant-immutable-badge-${v.id}`}
-                                >
-                                  <Lock size={11} aria-hidden="true" />
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className={styles.nameCell}>{v.title}</td>
-                          <td className={styles.numeric}>
-                            <span className={styles.price}>
-                              {formatCentsToPenDisplay(v.priceCents)}
-                            </span>
-                          </td>
-                          <td className={styles.numeric}>
-                            {v.compareAtPriceCents ? (
-                              <span className={styles.priceCompare}>
-                                {formatCentsToPenDisplay(v.compareAtPriceCents)}
-                              </span>
-                            ) : (
-                              <span className={styles.empty}>—</span>
-                            )}
-                          </td>
-                          <td className={styles.numeric}>
-                            {v.costCents ? (
-                              <span className={styles.muted}>
-                                {formatCentsToPenDisplay(v.costCents)}
-                              </span>
-                            ) : (
-                              <span className={styles.empty}>—</span>
-                            )}
-                          </td>
-                          {!weightSpecField && (
-                            <td className={styles.numeric}>
-                              {v.weightGrams ? (
-                                <span className={styles.muted}>{v.weightGrams} g</span>
-                              ) : (
-                                <span className={styles.empty}>—</span>
-                              )}
-                            </td>
-                          )}
-                          <td>
-                            <VariantStockCell
-                              productId={product.id}
-                              variantId={v.id}
-                              stock={
-                                variantStock[v.id] ?? {
-                                  variantId: v.id,
-                                  onHand: 0,
-                                  reserved: 0,
-                                  allocated: 0,
-                                  available: 0,
-                                }
-                              }
-                              canManage={actorPermissions.includes("inventory:manage")}
-                            />
-                          </td>
-                          <td>
-                            <span
-                              className={`${styles.statusPill} ${
-                                v.status === "ACTIVE"
-                                  ? styles.statusActive
-                                  : v.status === "INACTIVE"
-                                    ? styles.statusInactive
-                                    : styles.statusArchived
-                              }`}
-                            >
-                              {v.status === "ACTIVE"
-                                ? "Activa"
-                                : v.status === "INACTIVE"
-                                  ? "Inactiva"
-                                  : "Archivada"}
-                            </span>
-                          </td>
-                          <td className={styles.actionsCol}>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditVariant(v)}
-                              className={styles.iconButton}
-                              data-testid="btn-edit-variant"
-                              id={`btn-edit-variant-${v.id}`}
-                              title="Editar variante"
-                              aria-label={`Editar variante ${v.title}`}
-                            >
-                              <Pencil size={14} aria-hidden="true" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <VariantBoard
+                  productId={product.id}
+                  variants={variants}
+                  media={media}
+                  variantStock={variantStock}
+                  canManageInventory={actorPermissions.includes("inventory:manage")}
+                  weightSpecLabel={weightSpecField?.label ?? null}
+                  onChanged={() => router.refresh()}
+                />
               </section>
             )}
           </section>
@@ -2271,36 +1944,15 @@ export function ProductEditor({
           >
             {renderStepHeader("historia")}
             {activeSection === "historia" && (
-              <section
-                id="historia"
-                className={`${styles.card} ${styles.storyEntryCard}`}
-                aria-labelledby="product-story-entry-title"
-                data-testid="product-story-entry"
-              >
-                <div className={styles.storyEntryContent}>
-                  <div className={styles.storyEntryIcon} aria-hidden="true">
-                    <BookOpen size={22} />
-                  </div>
-                  <div className={styles.storyEntryCopy}>
-                    <h2 id="product-story-entry-title" className={styles.cardTitle}>
-                      Historia del producto
-                    </h2>
-                    <p className={styles.cardDescription}>
-                      Organiza el relato editorial del producto en un espacio de trabajo dedicado.
-                    </p>
-                    <span className={styles.storyLifecycleText} data-testid="product-story-status">
-                      Estado: {getStoryLifecycleText(storySummary)}
-                    </span>
-                  </div>
-                </div>
-                <Link
-                  href={`/admin/products/${product.id}/story`}
-                  className={styles.storyEntryLink}
-                  data-testid="product-story-link"
-                >
-                  Editar historia
-                  <ChevronRight size={16} aria-hidden="true" />
-                </Link>
+              <section id="historia" className={styles.card} data-testid="product-story-entry">
+                <ProductPageStep
+                  product={product}
+                  pdpConfig={product.pdpConfig}
+                  variants={variants}
+                  media={media}
+                  storySummary={storySummary}
+                  onChanged={() => router.refresh()}
+                />
               </section>
             )}
           </section>
@@ -2480,402 +2132,6 @@ export function ProductEditor({
                     </>
                   ) : (
                     <span>Crear Copia</span>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Create Variant Modal */}
-      {showCreateVariantModal && (
-        <div
-          className={styles.modalOverlay}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-create-variant-title"
-        >
-          <div className={styles.modalContent} data-testid="modal-create-variant">
-            <div className={styles.modalHeader}>
-              <h3 id="modal-create-variant-title" className={styles.modalTitle}>
-                Agregar Variante
-              </h3>
-            </div>
-            <form
-              onSubmit={handleCreateVariant}
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              {variantFormError && (
-                <div className={styles.alertError} data-testid="variant-form-error" role="alert">
-                  {variantFormError}
-                </div>
-              )}
-
-              <div className={styles.grid2}>
-                <div className={styles.field}>
-                  <label htmlFor="modal-sku" className={styles.label}>
-                    SKU <span className={styles.required}>*</span>
-                  </label>
-                  <input
-                    id="modal-sku"
-                    type="text"
-                    required
-                    value={newVarSku}
-                    onChange={(e) => setNewVarSku(e.target.value)}
-                    placeholder="Ej: WLM-BX-RED"
-                    className={styles.input}
-                    data-testid="input-new-sku"
-                  />
-                  <p className={styles.helpText}>Código único para la variante.</p>
-                </div>
-
-                <div className={styles.field}>
-                  <label htmlFor="modal-title" className={styles.label}>
-                    Nombre de la Variante <span className={styles.required}>*</span>
-                  </label>
-                  <input
-                    id="modal-title"
-                    type="text"
-                    required
-                    value={newVarTitle}
-                    onChange={(e) => setNewVarTitle(e.target.value)}
-                    placeholder="Ej: Rojo / Edición Limitada"
-                    className={styles.input}
-                    data-testid="input-new-title"
-                  />
-                </div>
-              </div>
-
-              <div className={styles.grid3}>
-                <div className={styles.field}>
-                  <label htmlFor="modal-price" className={styles.label}>
-                    Precio de Venta (PEN) <span className={styles.required}>*</span>
-                  </label>
-                  <input
-                    id="modal-price"
-                    type="text"
-                    inputMode="decimal"
-                    required
-                    value={newVarPrice}
-                    onChange={(e) => setNewVarPrice(e.target.value)}
-                    placeholder="129.90"
-                    className={styles.input}
-                    data-testid="input-new-price"
-                  />
-                </div>
-
-                <div className={styles.field}>
-                  <label htmlFor="modal-compare-at" className={styles.label}>
-                    Precio Tachado (PEN)
-                  </label>
-                  <input
-                    id="modal-compare-at"
-                    type="text"
-                    inputMode="decimal"
-                    value={newVarCompareAt}
-                    onChange={(e) => setNewVarCompareAt(e.target.value)}
-                    placeholder="149.90"
-                    className={styles.input}
-                    data-testid="input-new-compare-at"
-                  />
-                </div>
-
-                <div className={styles.field}>
-                  <label htmlFor="modal-cost" className={styles.label}>
-                    Costo Unitario (PEN)
-                  </label>
-                  <input
-                    id="modal-cost"
-                    type="text"
-                    inputMode="decimal"
-                    value={newVarCost}
-                    onChange={(e) => setNewVarCost(e.target.value)}
-                    placeholder="75.00"
-                    className={styles.input}
-                    data-testid="input-new-cost"
-                  />
-                </div>
-              </div>
-
-              <div className={styles.grid2}>
-                {weightSpecField ? (
-                  <div className={styles.field}>
-                    <span className={styles.label}>Peso</span>
-                    <p className={styles.helpText}>
-                      Se edita una sola vez en la Ficha técnica, campo «{weightSpecField.label}».
-                    </p>
-                    <button
-                      type="button"
-                      className={styles.inlineLink}
-                      onClick={() => {
-                        setShowCreateVariantModal(false);
-                        setActiveSection("especificaciones");
-                      }}
-                    >
-                      Ir a Ficha técnica
-                    </button>
-                  </div>
-                ) : (
-                  <div className={styles.field}>
-                    <label htmlFor="modal-weight" className={styles.label}>
-                      Peso (gramos)
-                    </label>
-                    <input
-                      id="modal-weight"
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={newVarWeight}
-                      onChange={(e) => setNewVarWeight(e.target.value)}
-                      placeholder="Ej: 39"
-                      className={styles.input}
-                      data-testid="input-new-weight"
-                    />
-                  </div>
-                )}
-
-                <div className={styles.field}>
-                  <label htmlFor="modal-status" className={styles.label}>
-                    Estado
-                  </label>
-                  <select
-                    id="modal-status"
-                    value={newVarStatus}
-                    onChange={(e) => setNewVarStatus(e.target.value as VariantStatus)}
-                    className={styles.select}
-                    data-testid="select-new-status"
-                  >
-                    <option value="ACTIVE">Activa</option>
-                    <option value="INACTIVE">Inactiva</option>
-                    <option value="ARCHIVED">Archivada</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className={styles.modalActions}>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateVariantModal(false)}
-                  className={styles.secondaryButton}
-                  data-testid="btn-cancel-new-variant"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isCreatingVariant}
-                  className={styles.primaryButton}
-                  data-testid="btn-confirm-new-variant"
-                >
-                  {isCreatingVariant ? (
-                    <>
-                      <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-                      <span>Creando...</span>
-                    </>
-                  ) : (
-                    <span>Crear Variante</span>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Variant Modal */}
-      {editingVariant && (
-        <div
-          className={styles.modalOverlay}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-edit-variant-title"
-        >
-          <div className={styles.modalContent} data-testid="modal-edit-variant">
-            <div className={styles.modalHeader}>
-              <h3 id="modal-edit-variant-title" className={styles.modalTitle}>
-                Editar Variante
-              </h3>
-            </div>
-            <form
-              onSubmit={handleUpdateVariant}
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              {editVariantError && (
-                <div className={styles.alertError} data-testid="edit-variant-error" role="alert">
-                  {editVariantError}
-                </div>
-              )}
-
-              <div className={styles.grid2}>
-                <div className={styles.field}>
-                  <label htmlFor="edit-var-sku" className={styles.label}>
-                    SKU <span className={styles.required}>*</span>
-                  </label>
-                  <input
-                    id="edit-var-sku"
-                    type="text"
-                    required
-                    value={editVarSku}
-                    disabled={editingVariant.isSkuImmutable}
-                    readOnly={editingVariant.isSkuImmutable}
-                    onChange={(e) => setEditVarSku(e.target.value)}
-                    className={styles.input}
-                    data-testid="input-edit-sku"
-                  />
-                  {editingVariant.isSkuImmutable && (
-                    <p
-                      className={styles.helpText}
-                      style={{ color: "#b45309" }}
-                      data-testid="sku-immutable-notice"
-                    >
-                      El SKU es permanentemente inmutable porque existen registros de inventario o
-                      historial de pedidos. Para utilizar un SKU comercial diferente, crea una nueva
-                      variante.
-                    </p>
-                  )}
-                </div>
-
-                <div className={styles.field}>
-                  <label htmlFor="edit-var-title" className={styles.label}>
-                    Nombre de la Variante <span className={styles.required}>*</span>
-                  </label>
-                  <input
-                    id="edit-var-title"
-                    type="text"
-                    required
-                    value={editVarTitle}
-                    onChange={(e) => setEditVarTitle(e.target.value)}
-                    className={styles.input}
-                    data-testid="input-edit-title"
-                  />
-                </div>
-              </div>
-
-              <div className={styles.grid3}>
-                <div className={styles.field}>
-                  <label htmlFor="edit-var-price" className={styles.label}>
-                    Precio (PEN) <span className={styles.required}>*</span>
-                  </label>
-                  <input
-                    id="edit-var-price"
-                    type="text"
-                    inputMode="decimal"
-                    required
-                    value={editVarPrice}
-                    onChange={(e) => setEditVarPrice(e.target.value)}
-                    className={styles.input}
-                    data-testid="input-edit-price"
-                  />
-                </div>
-
-                <div className={styles.field}>
-                  <label htmlFor="edit-var-compare-at" className={styles.label}>
-                    Precio Tachado (PEN)
-                  </label>
-                  <input
-                    id="edit-var-compare-at"
-                    type="text"
-                    inputMode="decimal"
-                    value={editVarCompareAt}
-                    onChange={(e) => setEditVarCompareAt(e.target.value)}
-                    className={styles.input}
-                    data-testid="input-edit-compare-at"
-                  />
-                </div>
-
-                <div className={styles.field}>
-                  <label htmlFor="edit-var-cost" className={styles.label}>
-                    Costo (PEN)
-                  </label>
-                  <input
-                    id="edit-var-cost"
-                    type="text"
-                    inputMode="decimal"
-                    value={editVarCost}
-                    onChange={(e) => setEditVarCost(e.target.value)}
-                    className={styles.input}
-                    data-testid="input-edit-cost"
-                  />
-                </div>
-              </div>
-
-              <div className={styles.grid2}>
-                {weightSpecField ? (
-                  <div className={styles.field}>
-                    <span className={styles.label}>Peso</span>
-                    <p className={styles.helpText}>
-                      Se edita una sola vez en la Ficha técnica, campo «{weightSpecField.label}».
-                    </p>
-                    <button
-                      type="button"
-                      className={styles.inlineLink}
-                      onClick={() => {
-                        setEditingVariant(null);
-                        setActiveSection("especificaciones");
-                      }}
-                    >
-                      Ir a Ficha técnica
-                    </button>
-                  </div>
-                ) : (
-                  <div className={styles.field}>
-                    <label htmlFor="edit-var-weight" className={styles.label}>
-                      Peso (gramos)
-                    </label>
-                    <input
-                      id="edit-var-weight"
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={editVarWeight}
-                      onChange={(e) => setEditVarWeight(e.target.value)}
-                      className={styles.input}
-                      data-testid="input-edit-weight"
-                    />
-                  </div>
-                )}
-
-                <div className={styles.field}>
-                  <label htmlFor="edit-var-status" className={styles.label}>
-                    Estado
-                  </label>
-                  <select
-                    id="edit-var-status"
-                    value={editVarStatus}
-                    onChange={(e) => setEditVarStatus(e.target.value as VariantStatus)}
-                    className={styles.select}
-                    data-testid="select-edit-status"
-                  >
-                    <option value="ACTIVE">Activa</option>
-                    <option value="INACTIVE">Inactiva</option>
-                    <option value="ARCHIVED">Archivada</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className={styles.modalActions}>
-                <button
-                  type="button"
-                  onClick={() => setEditingVariant(null)}
-                  className={styles.secondaryButton}
-                  data-testid="btn-cancel-edit-variant"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUpdatingVariant}
-                  className={styles.primaryButton}
-                  data-testid="btn-confirm-edit-variant"
-                >
-                  {isUpdatingVariant ? (
-                    <>
-                      <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
-                      <span>Guardando...</span>
-                    </>
-                  ) : (
-                    <span>Guardar Cambios</span>
                   )}
                 </button>
               </div>
