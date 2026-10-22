@@ -1,8 +1,8 @@
-import { RESEARCH_PROVIDER_KEYS } from "@/lib/ai/gateway/registry";
 import "server-only";
 
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { RESEARCH_PROVIDER_KEYS } from "@/lib/ai/gateway/registry";
 import {
   aiProductProposals,
   aiProfiles,
@@ -539,4 +539,48 @@ export async function getAdminAiSettings(
     })
   );
   return { providers, profiles, providerCapabilities };
+}
+
+export interface ProductAutofillContextDto {
+  /** Research profile to run "Autocompletar" with; null when none is configured and enabled. */
+  profileId: string | null;
+  /** Latest research run on this product, so a reload picks up where it left off. */
+  latestJobId: string | null;
+}
+
+/** What the product editor needs to offer filling the product from the web. */
+export async function getProductAutofillContext(
+  productId: string,
+  options?: AdminAiReaderOptions
+): Promise<ProductAutofillContextDto> {
+  await requireReaderPermission("catalog:ai_research", options);
+  const [profiles, [latest]] = await Promise.all([
+    db
+      .select({
+        id: aiProfiles.id,
+        profileKey: aiProfiles.profileKey,
+        providerKey: aiProviders.providerKey,
+      })
+      .from(aiProfiles)
+      .innerJoin(aiProviders, eq(aiProfiles.providerId, aiProviders.id))
+      .where(
+        and(
+          eq(aiProfiles.isEnabled, true),
+          eq(aiProviders.isEnabled, true),
+          inArray(aiProfiles.profileKey, ["PRODUCT_RESEARCH_FAST", "PRODUCT_RESEARCH_DEEP"])
+        )
+      ),
+    db
+      .select({ jobId: aiResearchJobItems.jobId })
+      .from(aiResearchJobItems)
+      .where(eq(aiResearchJobItems.targetProductId, productId))
+      .orderBy(desc(aiResearchJobItems.createdAt))
+      .limit(1),
+  ]);
+  const usable = profiles.filter((profile) =>
+    (RESEARCH_PROVIDER_KEYS as readonly string[]).includes(profile.providerKey)
+  );
+  const profile =
+    usable.find((candidate) => candidate.profileKey === "PRODUCT_RESEARCH_FAST") ?? usable[0];
+  return { profileId: profile?.id ?? null, latestJobId: latest?.jobId ?? null };
 }

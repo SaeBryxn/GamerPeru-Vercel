@@ -44,6 +44,8 @@ import type { BrandReference, CategoryReference, CatalogStatus } from "@/lib/adm
 import type { VariantStockRow } from "@/lib/admin/inventory/readers";
 import { findWeightSpecField } from "@/lib/admin/catalog/weight-spec";
 import { VariantBoard } from "@/components/admin/products/variant-board";
+import { AutofillBar } from "@/components/admin/products/autofill-bar";
+import type { ProductAutofillContextDto } from "@/lib/ai/admin/readers";
 import { ProductPageStep } from "@/components/admin/products/product-page-step";
 import { uploadDirect, type DirectUploadStage } from "@/lib/media/direct-upload-client";
 import { requestUpload, completeUpload } from "@/lib/media/upload-api-client";
@@ -57,6 +59,8 @@ interface ProductEditorProps {
   storySummary: StoryLifecycleSummary;
   /** Stock per variant at the primary location. */
   variantStock: Record<string, VariantStockRow>;
+  /** Null when the actor cannot run AI research. */
+  autofill: ProductAutofillContextDto | null;
 }
 
 interface ToastMessage {
@@ -109,6 +113,7 @@ export function ProductEditor({
   actorPermissions,
   storySummary,
   variantStock,
+  autofill,
 }: ProductEditorProps) {
   const router = useRouter();
   const uploadController = useRef<AbortController | null>(null);
@@ -1314,6 +1319,15 @@ export function ProductEditor({
         <div className={styles.alertSuccess} data-testid="alert-general-success" role="status">
           <p style={{ margin: 0 }}>{generalSuccess}</p>
         </div>
+      )}
+
+      {autofill && (
+        <AutofillBar
+          productId={product.id}
+          productName={product.name}
+          isDraft={product.status === "DRAFT"}
+          context={autofill}
+        />
       )}
 
       <div className={styles.editorLayout}>

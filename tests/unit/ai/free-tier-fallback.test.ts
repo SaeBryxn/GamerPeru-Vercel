@@ -73,7 +73,7 @@ describe("free search chain", () => {
   };
 
   it("moves to Serper when Tavily's monthly credits are exhausted (432)", async () => {
-    const fetchImpl = vi.fn(async (url: string | URL | Request) =>
+    const fetchImpl = vi.fn(async (url: string | URL | Request, _init?: RequestInit) =>
       String(url) === TAVILY_SEARCH_ENDPOINT
         ? new Response("{}", { status: 432 })
         : new Response(JSON.stringify(serperBody), { status: 200 })
@@ -102,7 +102,10 @@ describe("free search chain", () => {
   });
 
   it("uses Serper alone when only Serper is configured", async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(serperBody), { status: 200 }));
+    const fetchImpl = vi.fn(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        new Response(JSON.stringify(serperBody), { status: 200 })
+    );
     await searchWeb({
       query: "Razer Viper",
       runtimeConfig: { tavilyApiKey: "", serperApiKey: "serper-test", fetchUserAgent: userAgent },
@@ -113,7 +116,10 @@ describe("free search chain", () => {
   });
 
   it("does not hide a Tavily rejection that another provider would not fix", async () => {
-    const fetchImpl = vi.fn(async () => new Response("{}", { status: 400 }));
+    const fetchImpl = vi.fn(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        new Response("{}", { status: 400 })
+    );
     await expect(
       searchWeb({
         query: "Razer Viper",

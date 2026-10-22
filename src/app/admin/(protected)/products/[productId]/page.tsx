@@ -9,6 +9,7 @@ import {
   getPublishedCategories,
 } from "@/lib/admin/catalog/readers";
 import { getAdminProductStory } from "@/lib/admin/catalog/story-reader";
+import { getProductAutofillContext } from "@/lib/ai/admin/readers";
 import { sanitizeProductDetailForUi } from "@/lib/admin/catalog/ui-dto";
 import { ProductEditor } from "./product-editor-client";
 
@@ -45,6 +46,9 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   const story = await getAdminProductStory(productId, { authContext });
   const variantStock = await getVariantStockMap(detail.variants.map((v) => v.id));
   const sanitizedDetail = sanitizeProductDetailForUi(detail);
+  const autofill = authContext.permissions.has("catalog:ai_research")
+    ? await getProductAutofillContext(productId, { authContext })
+    : null;
 
   return (
     <ProductEditor
@@ -54,6 +58,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
       categories={categories}
       actorPermissions={Array.from(authContext.permissions)}
       variantStock={variantStock}
+      autofill={autofill}
       storySummary={{
         lifecycle: story.lifecycle,
         draftRevisionNumber: story.draft?.revisionNumber ?? null,
