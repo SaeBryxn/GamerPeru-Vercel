@@ -1,0 +1,215 @@
+.root {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  color: var(--color-text-primary);
+}
+.board {
+  display: grid;
+  gap: var(--space-3);
+}
+.card {
+  min-width: 0;
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background: var(--admin-panel);
+}
+.card[data-expanded="true"] {
+  border-color: var(--color-text-muted);
+}
+.cardButton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.thumbnail {
+  display: grid;
+  place-items: center;
+  flex: 0 0 64px;
+  height: 64px;
+  border-radius: var(--admin-inset-radius);
+  overflow: hidden;
+  background: var(--admin-inset);
+  color: var(--color-text-muted);
+}
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.cardInfo {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1;
+}
+.cardInfo strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.price {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.cardState {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.hint,
+.empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.empty {
+  padding: var(--space-4);
+  background: var(--admin-inset);
+  border-radius: var(--admin-inset-radius);
+}
+.form {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-top: 1px solid var(--admin-panel-border);
+}
+.fields {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.legend {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 0 var(--space-3);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+  gap: var(--space-3);
+}
+.field {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+.field input,
+.field select {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-radius);
+  font: inherit;
+  color: var(--color-text-primary);
+  background: var(--admin-panel);
+}
+.field small {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  line-height: 1.5;
+}
+.money {
+  position: relative;
+}
+.money > span {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  color: var(--color-text-muted);
+}
+.money input {
+  padding-left: 35px;
+}
+.more {
+  border-top: 1px solid var(--admin-panel-border);
+  padding-top: var(--space-3);
+}
+.more summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+.more[open] summary {
+  margin-bottom: var(--space-3);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.actions button,
+.add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-radius);
+  color: var(--color-text-primary);
+  background: var(--admin-panel);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.actions .primary {
+  color: var(--admin-accent-contrast);
+  background: var(--admin-accent);
+  border-color: var(--admin-accent);
+}
+.add {
+  justify-self: start;
+}
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--admin-danger);
+}
+.root button:focus-visible,
+.root input:focus-visible,
+.root select:focus-visible,
+.root summary:focus-visible {
+  outline: 2px solid var(--admin-focus-ring, var(--admin-accent));
+  outline-offset: 3px;
+}
+.root button:disabled,
+.root input:disabled,
+.root select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+@media (max-width: 480px) {
+  .cardButton {
+    flex-wrap: wrap;
+  }
+  .cardState {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .actions button {
+    flex: 1;
+  }
+}
