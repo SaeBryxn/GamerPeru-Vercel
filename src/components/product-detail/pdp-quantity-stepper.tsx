@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { Icon, VisuallyHidden } from "@/components/ui";
 import styles from "./pdp-quantity-stepper.module.css";
 
@@ -34,7 +34,7 @@ export interface PdpQuantityStepperProps {
   disabled?: boolean;
 }
 
-/** `< 1 >` quantity control sized to sit beside the add-to-cart button. */
+/** `− 1 +` quantity control sized to sit beside the add-to-cart button. */
 export function PdpQuantityStepper({
   value,
   min = 1,
@@ -68,7 +68,7 @@ export function PdpQuantityStepper({
         transition={SNAPPY_SPRING}
         data-testid={delta < 0 ? "pdp-quantity-decrease" : "pdp-quantity-increase"}
       >
-        <Icon icon={delta < 0 ? ChevronLeft : ChevronRight} size="sm" aria-hidden="true" />
+        <Icon icon={delta < 0 ? Minus : Plus} size="sm" aria-hidden="true" />
       </motion.button>
     );
   };

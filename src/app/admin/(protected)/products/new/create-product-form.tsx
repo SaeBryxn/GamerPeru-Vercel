@@ -7,6 +7,8 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { createProductAction } from "@/lib/admin/catalog/actions";
 import { MutationRequestTracker } from "@/lib/admin/catalog/mutation-request";
 import type { BrandReference, CategoryReference } from "@/lib/admin/catalog/types";
+import { ProductPdpFields } from "@/components/admin/products/product-pdp-fields";
+import { parseProductPdpConfig } from "@/lib/catalog/product-pdp-config";
 import { FeaturedToggle } from "@/components/admin/products/featured-toggle";
 import styles from "./new-product.module.css";
 
@@ -39,6 +41,9 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
   const [subtitle, setSubtitle] = useState("");
   const [description, setDescription] = useState("");
   const [isFeatured, setIsFeatured] = useState(false);
+  const [pdpConfig, setPdpConfig] = useState(() => parseProductPdpConfig({}));
+  const [color, setColor] = useState("");
+  const [size, setSize] = useState("");
 
   // Initial Variant fields (raw strings for currency)
   const [sku, setSku] = useState("");
@@ -79,8 +84,13 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
       subtitle: subtitle.trim() ? subtitle.trim() : null,
       description: description.trim() ? description.trim() : null,
       isFeatured,
+      pdpConfig,
       initialVariant: sku.trim()
         ? {
+            attributes: {
+              ...(color.trim() ? { color: color.trim() } : {}),
+              ...(size.trim() ? { size: size.trim() } : {}),
+            },
             sku: sku.trim(),
             title: variantTitle.trim() ? variantTitle.trim() : "Estándar",
             pricePen: pricePen.trim(),
@@ -360,6 +370,26 @@ export function CreateProductForm({ brands, categories }: CreateProductFormProps
           />
         </div>
       </div>
+
+      <div className={styles.grid2}>
+        <label className={styles.field}>
+          Color inicial
+          <input
+            className={styles.input}
+            value={color}
+            onChange={(event) => setColor(event.target.value)}
+          />
+        </label>
+        <label className={styles.field}>
+          Talla inicial (opcional)
+          <input
+            className={styles.input}
+            value={size}
+            onChange={(event) => setSize(event.target.value)}
+          />
+        </label>
+      </div>
+      <ProductPdpFields value={pdpConfig} onChange={setPdpConfig} />
 
       {/* Actions */}
       <div className={styles.actions}>

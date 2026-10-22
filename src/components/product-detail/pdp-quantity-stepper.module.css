@@ -2,10 +2,10 @@
 .stepper {
   display: inline-flex;
   align-items: center;
-  height: 58px;
+  height: 48px;
   padding: 0 var(--space-1);
   border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   background-color: var(--color-surface-card);
 }
 
@@ -13,8 +13,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: none;
   border-radius: var(--radius-sm);
@@ -38,7 +38,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
+  width: 24px;
   height: 26px;
   overflow: hidden;
   font-family: var(--font-body);

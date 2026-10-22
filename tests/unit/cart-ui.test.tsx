@@ -617,6 +617,43 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
   });
 
   describe("5. ProductCommercePanel Add-to-Cart Integration & PROFILE_REQUIRED UX", () => {
+    it("envía únicamente los accesorios seleccionados en la misma compra", async () => {
+      mockLoadCurrentCartAction.mockResolvedValueOnce({ success: true, cart: emptyCart });
+      mockAddCartItemAction.mockResolvedValueOnce({ success: true, cart: sampleCart });
+      const selectedId = "018f0000-0000-7000-8000-00000000c510";
+      render(
+        <CartProvider>
+          <ProductCommercePanel
+            product={{ id: sampleVariant.productId, name: "Mouse con accesorios", subtitle: null }}
+            brand={{ name: "Gamer Perú", slug: "gamer-peru" }}
+            variants={[sampleVariant]}
+            selectedVariant={sampleVariant}
+            onSelectVariant={vi.fn()}
+            accessories={[
+              { id: selectedId, name: "Grip tape", priceCents: 1990 },
+              { id: "018f0000-0000-7000-8000-00000000c511", name: "Skates", priceCents: 2990 },
+            ]}
+          />
+        </CartProvider>
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("product-commerce-panel").getAttribute("data-cart-status")).toBe(
+          "READY"
+        )
+      );
+      fireEvent.click(screen.getByRole("checkbox", { name: /Grip tape/ }));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("pdp-add-to-cart-button"));
+      });
+      await waitFor(() =>
+        expect(mockAddCartItemAction).toHaveBeenCalledWith(null, {
+          variantId: sampleVariant.id,
+          quantity: 1,
+          accessoryVariantIds: [selectedId],
+        })
+      );
+    });
+
     it("submits variant ID and opens drawer on success", async () => {
       mockLoadCurrentCartAction.mockResolvedValueOnce({
         success: true,

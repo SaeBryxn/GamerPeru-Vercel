@@ -87,3 +87,48 @@
   color: var(--color-text-primary);
   white-space: nowrap;
 }
+
+.box {
+  background: var(--color-surface-secondary);
+  border-radius: 12px;
+}
+.list > li {
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.row {
+  gap: 10px;
+  padding: 12px;
+}
+.image {
+  object-fit: contain;
+  border-radius: 4px;
+}
+.name {
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.price {
+  font-size: 12px;
+  font-weight: 600;
+}
+.checkbox:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 3px;
+}
+@media (max-width: 400px) {
+  .row {
+    grid-template-columns: auto 32px minmax(0, 1fr);
+  }
+  .price {
+    grid-column: 3;
+  }
+  .thumb,
+  .image {
+    width: 32px;
+    height: 32px;
+  }
+}

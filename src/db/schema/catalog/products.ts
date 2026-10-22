@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -38,6 +39,7 @@ export const products = pgTable(
     slug: varchar("slug", { length: 200 }).notNull(),
     subtitle: varchar("subtitle", { length: 255 }),
     description: text("description"),
+    pdpConfig: jsonb("pdp_config").$type<Record<string, unknown>>().notNull().default({}),
     status: catalogStatusEnum("status").notNull().default("DRAFT"),
     isFeatured: boolean("is_featured").notNull().default(false),
     primaryMediaId: uuid("primary_media_id").references(() => mediaAssets.id, {

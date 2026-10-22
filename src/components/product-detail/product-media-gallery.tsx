@@ -115,11 +115,18 @@ export function buildEligibleGallery(
 export function resolveDefaultFocusedIndex(
   gallery: ProductMediaItem[],
   primaryMedia: ProductMediaItem | null,
-  selectedVariantId: string
+  selectedVariantId: string,
+  preferredMediaAssetId?: string | null
 ): number {
   if (gallery.length === 0) {
     return -1;
   }
+
+  const preferredIndex = gallery.findIndex(
+    (item) =>
+      item.mediaAssetId === preferredMediaAssetId && item.asset.mimeType.startsWith("image/")
+  );
+  if (preferredIndex >= 0) return preferredIndex;
 
   // 1. First selected-variant-specific media
   const variantIndex = gallery.findIndex((m) => m.variantId === selectedVariantId);
@@ -158,9 +165,15 @@ export function resolveDefaultFocusedIndex(
 export function resolveInitialLcpMediaAssetId(
   gallery: ProductMediaItem[],
   primaryMedia: ProductMediaItem | null,
-  initialVariantId: string
+  initialVariantId: string,
+  preferredMediaAssetId?: string | null
 ): string | null {
-  const initialIndex = resolveDefaultFocusedIndex(gallery, primaryMedia, initialVariantId);
+  const initialIndex = resolveDefaultFocusedIndex(
+    gallery,
+    primaryMedia,
+    initialVariantId,
+    preferredMediaAssetId
+  );
   if (initialIndex < 0 || initialIndex >= gallery.length) {
     return null;
   }
@@ -240,8 +253,14 @@ export function ProductMediaGallery({
   }
 
   const defaultIndex = useMemo(
-    () => resolveDefaultFocusedIndex(eligibleGallery, primaryMedia, selectedVariant.id),
-    [eligibleGallery, primaryMedia, selectedVariant.id]
+    () =>
+      resolveDefaultFocusedIndex(
+        eligibleGallery,
+        primaryMedia,
+        selectedVariant.id,
+        selectedVariant.thumbnailMediaAssetId
+      ),
+    [eligibleGallery, primaryMedia, selectedVariant.id, selectedVariant.thumbnailMediaAssetId]
   );
 
   const activeIndex =
@@ -253,7 +272,12 @@ export function ProductMediaGallery({
 
   // Initial LCP asset ID computed once on initial render
   const [initialLcpAssetId] = useState<string | null>(() =>
-    resolveInitialLcpMediaAssetId(eligibleGallery, primaryMedia, selectedVariant.id)
+    resolveInitialLcpMediaAssetId(
+      eligibleGallery,
+      primaryMedia,
+      selectedVariant.id,
+      selectedVariant.thumbnailMediaAssetId
+    )
   );
 
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);

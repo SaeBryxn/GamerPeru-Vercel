@@ -20,6 +20,25 @@ export function validateVariantId(input: unknown): ValidationResult<string> {
   return { success: true, data: trimmed };
 }
 
+export function validateAccessoryVariantIds(
+  input: unknown,
+  mainVariantId: string
+): ValidationResult<string[]> {
+  if (input === undefined) return { success: true, data: [] };
+  if (!Array.isArray(input) || input.length > 12)
+    return { success: false, error: "Elige como máximo 12 accesorios." };
+  const ids: string[] = [];
+  for (const candidate of input) {
+    const parsed = validateVariantId(candidate);
+    if (!parsed.success) return parsed;
+    const id = parsed.data.toLowerCase();
+    if (id === mainVariantId.toLowerCase())
+      return { success: false, error: "El accesorio debe ser distinto del producto principal." };
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return { success: true, data: ids };
+}
+
 /**
  * Validates add-to-cart line quantity.
  * Allows optional quantity (defaults to 1).

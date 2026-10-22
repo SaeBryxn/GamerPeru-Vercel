@@ -1,5 +1,6 @@
 import type { ValidatedSpecificationSchema } from "@/lib/discovery-filters/types";
 import type { ValidatedStoryBlock } from "./story-validation";
+import type { ProductPdpConfig } from "./product-pdp-config";
 
 export type { CanonicalStoryBlockType, ValidatedStoryBlock } from "./story-validation";
 
@@ -22,6 +23,7 @@ export interface ProductDetailCategory {
 }
 
 export interface ProductVariantDetail {
+  thumbnailMediaAssetId?: string | null;
   id: string;
   productId: string;
   sku: string;
@@ -68,6 +70,8 @@ export interface ProductStoryDetail {
 }
 
 export interface ProductDetailEntity {
+  pdpConfig?: ProductPdpConfig;
+  accessories?: ProductPdpAccessory[];
   id: string;
   name: string;
   slug: string;
@@ -82,4 +86,11 @@ export interface ProductDetailEntity {
   media: ProductMediaItem[];
   specifications: ProductSpecificationDetail | null;
   story: ProductStoryDetail | null;
+}
+
+export interface ProductPdpAccessory {
+  id: string;
+  name: string;
+  priceCents: number;
+  imageUrl: string | null;
 }

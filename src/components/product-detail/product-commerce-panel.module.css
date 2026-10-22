@@ -36,8 +36,8 @@
 .title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(31px, 2.9vw, 44px);
-  font-weight: 800;
+  font-size: clamp(30px, 2.5vw, 36px);
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.1;
   color: var(--color-text-primary);
@@ -61,8 +61,8 @@
 /* After the add-to-cart button, the price is what the eye should land on. */
 .sellingPrice {
   font-family: var(--font-heading);
-  font-size: clamp(32px, 2.6vw, 40px);
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
@@ -79,11 +79,11 @@
 .discountBadge {
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
-  background-color: var(--color-brand-primary);
+  background-color: var(--color-surface-secondary);
   font-family: var(--font-body);
   font-size: 12px;
   font-weight: 700;
-  color: var(--color-brand-text-on-accent);
+  color: var(--color-text-primary);
 }
 
 .metaRow {
@@ -112,14 +112,16 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--space-3);
-  --wishlist-size: 58px;
+  --wishlist-size: 48px;
 }
 
 .primaryAction,
 .secondaryAction {
-  --dome-height: 58px;
-  --dome-radius: var(--radius-sm);
-  --dome-font-size: 16px;
+  --dome-height: 48px;
+  --dome-radius: 8px;
+  --dome-font-size: 14px;
+  --dome-padding: 0 12px;
+  --dome-fill: #27272a;
   width: 100%;
 }
 
@@ -187,10 +189,10 @@
 .assuranceBox {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 6px;
   margin: 0;
-  padding: var(--space-6);
-  border-radius: var(--radius-lg);
+  padding: 12px;
+  border-radius: 16px;
   background-color: var(--color-surface-secondary);
   list-style: none;
 }
@@ -200,12 +202,72 @@
   align-items: flex-start;
   gap: var(--space-3);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.5;
+  padding: 12px 16px;
+  background: var(--color-surface-card);
+  border-radius: 12px;
   color: var(--color-text-secondary);
 }
 
 .assuranceItem > svg {
   flex-shrink: 0;
   color: var(--color-text-muted);
+}
+
+.rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.rating > span:first-child {
+  color: #a17a24;
+  letter-spacing: 0;
+}
+.rating strong {
+  color: var(--color-text-primary);
+}
+.giftBox {
+  padding: 16px;
+  border: 1px solid #e6dec8;
+  border-radius: 12px;
+  background: #fcfbf7;
+}
+.giftLabel {
+  color: #8a7238;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.giftContent {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 10px;
+  color: #8a7238;
+}
+.giftContent strong {
+  color: var(--color-text-primary);
+  font-size: 14px;
+}
+.giftContent p {
+  margin: 3px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.assuranceItem a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.purchaseRow {
+  gap: 8px;
+}
+@media (max-width: 400px) {
+  .primaryAction {
+    --dome-font-size: 12px;
+    --dome-padding: 0 6px;
+  }
 }

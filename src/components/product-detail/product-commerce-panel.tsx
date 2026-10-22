@@ -1,8 +1,20 @@
 "use client";
 
+import type { ProductCommerceConfig } from "@/lib/catalog/product-pdp-config";
+
 import React, { useRef, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, MessageCircle, ShieldCheck, Tag } from "lucide-react";
+import {
+  AlertCircle,
+  Award,
+  BookOpen,
+  Gift,
+  MessageCircle,
+  ShieldCheck,
+  Tag,
+  Truck,
+  Zap,
+} from "lucide-react";
 import { useCart } from "@/components/cart";
 import { DomeButton, DomeLink, Icon } from "@/components/ui";
 import { WishlistButton } from "@/components/wishlist";
@@ -15,6 +27,7 @@ import { PdpAccessories, type PdpAccessory } from "./pdp-accessories";
 import { PdpQuantityStepper } from "./pdp-quantity-stepper";
 import { PdpSpecGrid } from "./pdp-spec-grid";
 import { VariantSelector } from "./variant-selector";
+import type { ProductMediaItem } from "@/lib/catalog/product-detail-types";
 import { StickyBuyBar } from "./sticky-buy-bar";
 import { WhatsAppIcon } from "./whatsapp-icon";
 import styles from "./product-commerce-panel.module.css";
@@ -24,12 +37,14 @@ export interface ProductCommercePanelProps {
     id: string;
     name: string;
     subtitle: string | null;
+    pdpConfig?: ProductCommerceConfig;
   };
   brand: {
     name: string;
     slug: string;
   };
   variants: ProductVariantDetail[];
+  media?: ProductMediaItem[];
   selectedVariant: ProductVariantDetail;
   onSelectVariant: (variant: ProductVariantDetail) => void;
   /** Object key of the photo shown for the selected variant, for the sticky buy bar. */
@@ -59,6 +74,7 @@ export function ProductCommercePanel({
   product,
   brand,
   variants,
+  media = [],
   selectedVariant,
   onSelectVariant,
   thumbnailKey = null,
@@ -70,6 +86,10 @@ export function ProductCommercePanel({
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const [hasAttemptedAdd, setHasAttemptedAdd] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const [selectedAccessoryIds, setSelectedAccessoryIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
+  const pdpConfig = product.pdpConfig;
 
   const isPending = isMutating || pendingVariantIds.has(selectedVariant.id);
   const isAvailable = selectedVariant.status === "ACTIVE";
@@ -82,7 +102,11 @@ export function ProductCommercePanel({
 
   const handleAddToCart = async (returnFocusTo: HTMLElement | null = addButtonRef.current) => {
     setHasAttemptedAdd(true);
-    const success = await addItem(selectedVariant.id, quantity);
+    const success = await addItem(
+      selectedVariant.id,
+      quantity,
+      accessories?.filter((item) => selectedAccessoryIds.has(item.id)).map((item) => item.id)
+    );
     if (success) {
       openDrawer({ returnFocusTo });
     }
@@ -122,6 +146,23 @@ export function ProductCommercePanel({
         <h1 className={styles.title}>{product.name}</h1>
         {product.subtitle && <p className={styles.subtitle}>{product.subtitle}</p>}
 
+        {pdpConfig?.rating.enabled &&
+          pdpConfig.rating.average !== null &&
+          pdpConfig.rating.count !== null &&
+          pdpConfig.rating.count > 0 && (
+            <div
+              className={styles.rating}
+              aria-label={`Calificación ${pdpConfig.rating.average} de 5, ${pdpConfig.rating.count} reseñas`}
+            >
+              <span aria-hidden="true">
+                {"★".repeat(Math.round(pdpConfig.rating.average))}
+                {"☆".repeat(5 - Math.round(pdpConfig.rating.average))}
+              </span>
+              <strong>{pdpConfig.rating.average.toFixed(1)}</strong>
+              <span>({pdpConfig.rating.count} reseñas)</span>
+            </div>
+          )}
+
         <div className={styles.priceCluster} data-testid="price-cluster">
           <span className={styles.sellingPrice} data-testid="selling-price">
             {formatCurrency(selectedVariant.priceCents)}
@@ -152,15 +193,43 @@ export function ProductCommercePanel({
         </div>
       </div>
 
-      <PdpSpecGrid rows={specHighlights} />
+      {pdpConfig?.highlightsEnabled !== false && <PdpSpecGrid rows={specHighlights} />}
+
+      {pdpConfig?.gift.enabled && pdpConfig.gift.title && (
+        <section className={styles.giftBox}>
+          <span className={styles.giftLabel}>{pdpConfig.gift.label}</span>
+          <div className={styles.giftContent}>
+            <Gift size={18} aria-hidden="true" />
+            <div>
+              <strong>{pdpConfig.gift.title}</strong>
+              <p>{pdpConfig.gift.description}</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       <VariantSelector
         variants={variants}
+        media={media}
         selectedVariant={selectedVariant}
         onSelectVariant={handleSelectVariant}
       />
 
-      {accessories && accessories.length > 0 && <PdpAccessories accessories={accessories} />}
+      {accessories && accessories.length > 0 && (
+        <PdpAccessories
+          accessories={accessories}
+          selected={selectedAccessoryIds}
+          onToggle={(id) =>
+            setSelectedAccessoryIds((previous) => {
+              const next = new Set(previous);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            })
+          }
+          disabled={isPending || isProfileRequired}
+        />
+      )}
 
       <div className={styles.actions}>
         {isProfileRequired ? (
@@ -225,6 +294,28 @@ export function ProductCommercePanel({
 
       {/* Only claims the store can stand behind: no stock or warranty promises. */}
       <ul className={styles.assuranceBox} data-testid="payment-trust-box">
+        {pdpConfig?.support.warranty && (
+          <li className={styles.assuranceItem}>
+            <Award size={18} aria-hidden="true" />
+            <span>{pdpConfig.support.warranty}</span>
+          </li>
+        )}
+        {pdpConfig?.support.manualUrl && (
+          <li className={styles.assuranceItem}>
+            <BookOpen size={18} aria-hidden="true" />
+            <a href={pdpConfig.support.manualUrl} target="_blank" rel="noopener noreferrer">
+              Manual de usuario
+            </a>
+          </li>
+        )}
+        {pdpConfig?.support.driverUrl && (
+          <li className={styles.assuranceItem}>
+            <Zap size={18} aria-hidden="true" />
+            <a href={pdpConfig.support.driverUrl} target="_blank" rel="noopener noreferrer">
+              Web-hub / Software Driver
+            </a>
+          </li>
+        )}
         <li className={styles.assuranceItem}>
           <Icon icon={ShieldCheck} size="md" aria-hidden="true" />
           <span>
@@ -232,6 +323,12 @@ export function ProductCommercePanel({
             manualmente al coordinar tu pedido.
           </span>
         </li>
+        {pdpConfig?.support.shippingNote && (
+          <li className={styles.assuranceItem}>
+            <Truck size={18} aria-hidden="true" />
+            <span>{pdpConfig.support.shippingNote}</span>
+          </li>
+        )}
         <li className={styles.assuranceItem}>
           <Icon icon={Tag} size="md" aria-hidden="true" />
           <span>Precios finales en soles (PEN).</span>

@@ -71,6 +71,7 @@ export type CartActionResult =
 export interface AddCartItemInput {
   variantId: string;
   quantity?: number;
+  accessoryVariantIds?: string[];
 }
 
 export interface UpdateCartItemQuantityInput {

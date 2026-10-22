@@ -1,3 +1,4 @@
+import type { ProductCommerceConfig } from "@/lib/catalog/product-pdp-config";
 import type { ProductMediaItem, ProductVariantDetail } from "@/lib/catalog/product-detail-types";
 
 /**
@@ -13,6 +14,7 @@ export interface CommerceHeroProjection {
     id: string;
     name: string;
     subtitle: string | null;
+    pdpConfig?: ProductCommerceConfig;
   };
   brand: {
     name: string;

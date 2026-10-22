@@ -36,6 +36,15 @@ if (!supabasePublishableKey) {
   );
 }
 
+const testBaseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL ?? "http://localhost:3000";
+const parsedBaseUrl = new URL(testBaseUrl);
+if (
+  parsedBaseUrl.protocol !== "http:" ||
+  !["localhost", "127.0.0.1"].includes(parsedBaseUrl.hostname)
+) {
+  throw new Error("Las E2E del admin solo pueden ejecutarse contra un servidor HTTP local.");
+}
+
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: [
@@ -47,6 +56,7 @@ export default defineConfig({
     "**/admin-team.spec.ts",
     "**/admin-ai-product-assistant.spec.ts",
     "**/admin-story-builder.spec.ts",
+    "**/product-pdp-admin.spec.ts",
   ],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -57,7 +67,7 @@ export default defineConfig({
     timeout: 15000,
   },
   use: {
-    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL ?? "http://localhost:3000",
+    baseURL: testBaseUrl,
     trace: "on-first-retry",
     actionTimeout: 15000,
     navigationTimeout: 30000,
@@ -69,12 +79,15 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:3000",
+    command: `pnpm dev --port ${parsedBaseUrl.port || "80"}`,
+    url: testBaseUrl,
     reuseExistingServer: false,
     timeout: 120000,
     env: {
       ...process.env,
+      NEXT_PUBLIC_SITE_URL: testBaseUrl,
+      NEXT_PUBLIC_CDN_URL: `${testBaseUrl}/media`,
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: databaseUrl,
       E2E_CATALOG_FIXTURES: "0",
       PLAYWRIGHT_TEST: "1",
       DEV_CATALOG_PREVIEW: "0",

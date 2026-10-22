@@ -240,6 +240,7 @@ export async function loadInternalProductDetail(
     slug: String(rawProd.slug),
     subtitle: rawProd.subtitle ? String(rawProd.subtitle) : null,
     description: rawProd.description ? String(rawProd.description) : null,
+    pdpConfig: (rawProd.pdp_config ?? {}) as Record<string, unknown>,
     status: rawProd.status as "DRAFT" | "PUBLISHED" | "ARCHIVED",
     isFeatured: Boolean(rawProd.is_featured),
     primaryMediaId: rawProd.primary_media_id ? String(rawProd.primary_media_id) : null,

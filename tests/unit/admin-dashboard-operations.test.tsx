@@ -42,6 +42,7 @@ const product = (id: string, overrides: Partial<Product> = {}): Product => ({
     "Este es un mouse gamer de alto rendimiento con chasis de aleación de magnesio y tasa de sondeo 8K.",
   status: "PUBLISHED",
   isFeatured: false,
+  pdpConfig: {},
   primaryMediaId: `asset-${id}`,
   createdAt: now,
   updatedAt: now,

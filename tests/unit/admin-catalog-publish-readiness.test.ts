@@ -23,6 +23,7 @@ describe("Admin Catalog Publish Readiness Pure Evaluator", () => {
       "Este es un mouse gamer de alto rendimiento con chasis de aleación de magnesio y tasa de sondeo 8K.",
     status: "DRAFT",
     isFeatured: false,
+    pdpConfig: {},
     primaryMediaId: "018f0000-0000-7000-8000-000000000010",
     createdAt: new Date(),
     updatedAt: new Date(),

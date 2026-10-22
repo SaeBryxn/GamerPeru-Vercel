@@ -5,13 +5,12 @@ import { getCachedProduct, getCachedStoryRelatedProducts } from "@/lib/catalog/c
 import { buildProductMetadata } from "@/lib/catalog/pdp-seo";
 import {
   CommerceHeroContainer,
-  HardwareSpecifications,
-  PdpAccordion,
   ProductJsonLd,
   buildSpecRows,
   type CommerceHeroProjection,
-  type PdpAccordionItem,
 } from "@/components/product-detail";
+import { PdpTechnicalDetails } from "@/components/product-detail/pdp-technical-details";
+import { EMPTY_PRODUCT_PDP_CONFIG, projectPdpVariants } from "@/lib/catalog/product-pdp-config";
 import { getPreviewExtras } from "@/components/product-detail/pdp-preview-extras";
 import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
 import { ProductStoryRenderer } from "@/components/product-story";
@@ -52,18 +51,26 @@ export default async function ProductDetailPage({
     notFound();
   }
 
+  const pdpConfig = product.pdpConfig ?? EMPTY_PRODUCT_PDP_CONFIG;
+
   // Narrow Client Component projection: strictly excludes specifications and story
   const heroProjection: CommerceHeroProjection = {
     product: {
       id: product.id,
       name: product.name,
       subtitle: product.subtitle,
+      pdpConfig: {
+        rating: pdpConfig.rating,
+        gift: pdpConfig.gift,
+        support: pdpConfig.support,
+        highlightsEnabled: pdpConfig.highlightsEnabled,
+      },
     },
     brand: {
       name: product.brand.name,
       slug: product.brand.slug,
     },
-    variants: product.variants,
+    variants: projectPdpVariants(product.variants, pdpConfig),
     primaryMedia: product.primaryMedia,
     media: product.media,
   };
@@ -73,49 +80,6 @@ export default async function ProductDetailPage({
   // only the showcase extras vary with the product type.
   const previewExtras =
     resolveCatalogReaderMode() === "dev-preview" ? getPreviewExtras(product.category.slug) : null;
-
-  // Accordion sections only render when they have real content to show.
-  const dimensionRows = specRows.filter((row) =>
-    /largo|ancho|alto|length|width|height|dimens|peso|weight/i.test(`${row.key} ${row.label}`)
-  );
-  const accordionItems: PdpAccordionItem[] = [];
-  if (dimensionRows.length > 0) {
-    accordionItems.push({
-      id: "dimensiones",
-      title: "Dimensiones",
-      content: (
-        <ul key="dimensiones">
-          {dimensionRows.map((row) => (
-            <li key={row.key}>
-              {row.label}: {row.formattedValue}
-            </li>
-          ))}
-        </ul>
-      ),
-    });
-  }
-  if (product.specifications && specRows.length > 0) {
-    accordionItems.push({
-      id: "especificaciones",
-      title: "Especificaciones",
-      content: (
-        <HardwareSpecifications key="especificaciones" specifications={product.specifications} />
-      ),
-    });
-  }
-  if (previewExtras && previewExtras.packageContents.length > 0) {
-    accordionItems.push({
-      id: "contenido",
-      title: "Contenido del paquete",
-      content: (
-        <ul key="contenido">
-          {previewExtras.packageContents.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      ),
-    });
-  }
 
   // Single-query page-level RelatedProducts hydration for Story cross-sell
   let relatedProductsMap: Map<string, ProductDiscoveryItem> | undefined;
@@ -146,15 +110,13 @@ export default async function ProductDetailPage({
         <CommerceHeroContainer
           projection={heroProjection}
           specHighlights={specRows}
-          accessories={
-            previewExtras && previewExtras.accessories.length > 0
-              ? previewExtras.accessories
-              : undefined
-          }
+          accessories={pdpConfig.accessories.enabled ? product.accessories : undefined}
           details={
-            accordionItems.length > 0 ? (
-              <PdpAccordion key="pdp-details" items={accordionItems} />
-            ) : undefined
+            <PdpTechnicalDetails
+              config={pdpConfig}
+              specRows={specRows}
+              previewContents={previewExtras?.packageContents}
+            />
           }
         />
       </div>

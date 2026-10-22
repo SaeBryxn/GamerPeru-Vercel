@@ -62,6 +62,18 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
       return { error: err.message, code: err.code };
     }
     switch (err.code) {
+      case "INVALID_PDP_CONFIG":
+        return {
+          error:
+            "Revisa la ficha de tienda: calificación de 0 a 5, cantidades enteras, medidas positivas, rangos de mano y enlaces HTTP(S) válidos.",
+          code: err.code,
+        };
+      case "INVALID_PDP_REFERENCE":
+        return {
+          error:
+            "Revisa las variantes y miniaturas: usa imágenes de la galería de este producto y accesorios publicados con variantes activas.",
+          code: err.code,
+        };
       case "MEDIA_BUDGET_EXCEEDED":
         return { error: "Se alcanzó el presupuesto de almacenamiento de medios.", code: err.code };
       case "SLUG_CONFLICT":

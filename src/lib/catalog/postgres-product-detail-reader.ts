@@ -18,6 +18,8 @@ import {
   buildPublishedProductStoryByProductIdQuery,
 } from "./postgres-product-detail-queries";
 import { validateStoryBlocks } from "./story-validation";
+import { parseProductPdpConfig } from "./product-pdp-config";
+import { queryPdpAccessories } from "./pdp-accessory-query";
 
 export class PostgresProductDetailReader implements ProductDetailReader {
   async getPublishedProductBySlug(slug: string): Promise<ProductDetailEntity | null> {
@@ -247,12 +249,19 @@ export class PostgresProductDetailReader implements ProductDetailReader {
       }
     }
 
+    const pdpConfig = parseProductPdpConfig(productBase.pdpConfig);
+    const accessories = pdpConfig.accessories.enabled
+      ? await queryPdpAccessories(productBase.id, pdpConfig.accessories.variantIds)
+      : [];
+
     return {
       id: productBase.id,
       name: productBase.name,
       slug: productBase.slug,
       subtitle: productBase.subtitle,
       description: productBase.description,
+      pdpConfig,
+      accessories,
       createdAt: productBase.createdAt.toISOString(),
       updatedAt: productBase.updatedAt.toISOString(),
       brand: {

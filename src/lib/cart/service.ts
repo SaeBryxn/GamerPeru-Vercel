@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { cartItems, carts, productVariants, products } from "@/db/schema";
 import { logger } from "@/lib/logger";
@@ -39,6 +39,7 @@ import {
   validateAddQuantity,
   validateUpdateQuantity,
   validateVariantId,
+  validateAccessoryVariantIds,
 } from "./validation";
 
 /**
@@ -207,6 +208,12 @@ export async function addCartItemAction(
 
   const variantId = variantValidation.data;
   const quantityToAdd = quantityValidation.data;
+  const accessories = validateAccessoryVariantIds(
+    formData instanceof FormData ? undefined : formData.accessoryVariantIds,
+    variantId
+  );
+  if (!accessories.success)
+    return { success: false, code: "INVALID_INPUT", error: accessories.error };
 
   const authority = await resolveCartAuthority();
   if (authority.status === "AUTHENTICATED_PROFILE_REQUIRED") {
@@ -278,6 +285,7 @@ export async function addCartItemAction(
         );
 
         await atomicAddCartLine(authCart.id, variantId, quantityToAdd, tx);
+        await addAccessoryCartLines(authCart.id, accessories.data, tx);
         await refreshCartTtl(authCart.id, AUTHENTICATED_CART_TTL_MS, tx);
 
         const lines = await queryCartHydrationLines(authCart.id, tx);
@@ -330,6 +338,7 @@ export async function addCartItemAction(
       authoritativeToken = resolution.authoritativeToken;
 
       await atomicAddCartLine(resolution.cart.id, variantId, quantityToAdd, tx);
+      await addAccessoryCartLines(resolution.cart.id, accessories.data, tx);
       await refreshCartTtl(resolution.cart.id, ANONYMOUS_CART_TTL_MS, tx);
 
       const lines = await queryCartHydrationLines(resolution.cart.id, tx);
@@ -344,7 +353,14 @@ export async function addCartItemAction(
       cart: snapshot,
       message: "Producto agregado al carrito.",
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof UnavailableAccessoryError)
+      return {
+        success: false,
+        code: "PRODUCT_UNAVAILABLE",
+        error:
+          "Un accesorio ya no está disponible. Revisa tu selección; no se añadió ningún producto.",
+      };
     logger.error({ event: "cart_add_item_failed" });
     return {
       success: false,
@@ -733,4 +749,28 @@ export async function removeCartItemAction(
       error: "Ocurrió un error al eliminar el producto del carrito. Intenta nuevamente.",
     };
   }
+}
+
+class UnavailableAccessoryError extends Error {}
+
+/** Shares the main line's transaction: a failed accessory rolls back the entire selection. */
+async function addAccessoryCartLines(
+  cartId: string,
+  ids: string[],
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0]
+): Promise<void> {
+  if (!ids.length) return;
+  const available = await tx
+    .select({ id: productVariants.id })
+    .from(productVariants)
+    .innerJoin(products, eq(productVariants.productId, products.id))
+    .where(
+      and(
+        inArray(productVariants.id, ids),
+        eq(productVariants.status, "ACTIVE"),
+        eq(products.status, "PUBLISHED")
+      )
+    );
+  if (available.length !== ids.length) throw new UnavailableAccessoryError();
+  for (const id of ids) await atomicAddCartLine(cartId, id, 1, tx);
 }

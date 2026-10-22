@@ -13,6 +13,7 @@ describe("GP-024 / CHK2-BR1 — Media Security Boundary & Sanitizer Contract Tes
     description: null,
     status: "DRAFT" as const,
     isFeatured: false,
+    pdpConfig: {},
     primaryMediaId: null,
     createdAt: new Date(),
     updatedAt: new Date(),

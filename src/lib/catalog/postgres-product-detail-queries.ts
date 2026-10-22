@@ -26,6 +26,7 @@ export function buildPublishedProductBaseBySlugQuery(slug: string) {
       slug: products.slug,
       subtitle: products.subtitle,
       description: products.description,
+      pdpConfig: products.pdpConfig,
       primaryMediaId: products.primaryMediaId,
       createdAt: products.createdAt,
       updatedAt: products.updatedAt,

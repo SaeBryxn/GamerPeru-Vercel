@@ -1,11 +1,15 @@
 "use client";
 
+import Image from "next/image";
 import React, { useMemo } from "react";
 import type { ProductVariantDetail } from "@/lib/catalog/product-detail-types";
+import type { ProductMediaItem } from "@/lib/catalog/product-detail-types";
+import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import styles from "./variant-selector.module.css";
 
 export interface VariantSelectorProps {
   variants: ProductVariantDetail[];
+  media?: ProductMediaItem[];
   selectedVariant: ProductVariantDetail;
   onSelectVariant: (variant: ProductVariantDetail) => void;
 }
@@ -85,8 +89,10 @@ export function resolveDimensions(variants: ProductVariantDetail[]): {
     return { dimensions: [], useFallback: true };
   }
 
-  // 4. Sort dimensions: Color first, then alphabetical
+  // Size precedes color so the selected shape is chosen before its finish.
   validKeys.sort((a, b) => {
+    const isSize = (key: string) => /^(size|talla|tamano)$/.test(key);
+    if (isSize(a) !== isSize(b)) return isSize(a) ? -1 : 1;
     if (a === activeColorKey) return -1;
     if (b === activeColorKey) return 1;
     return a.localeCompare(b);
@@ -173,6 +179,7 @@ export function resolveVariantForOption(
 
 export function VariantSelector({
   variants,
+  media = [],
   selectedVariant,
   onSelectVariant,
 }: VariantSelectorProps): React.JSX.Element {
@@ -226,7 +233,10 @@ export function VariantSelector({
         return (
           <div key={dim.key} className={styles.dimensionBlock}>
             <div className={styles.dimensionHeader}>
-              <span className={styles.dimensionLabel}>{dim.key}:</span>
+              <span className={styles.dimensionLabel}>
+                {dim.isColor ? "Color" : /^(size|talla|tamano)$/.test(dim.key) ? "Tamaño" : dim.key}
+                :
+              </span>
               <span className={styles.dimensionCurrentValue}>{currentValue}</span>
             </div>
 
@@ -266,7 +276,27 @@ export function VariantSelector({
                 const normalizedColor = option.toLowerCase().trim();
                 const swatchClass = dim.isColor ? SWATCH_ALLOWLIST[normalizedColor] : null;
 
-                if (dim.isColor && swatchClass) {
+                const optionVariant =
+                  resolveVariantForOption(variants, dimensions, selectedVariant, dim.key, option) ??
+                  variants.find((variant) => String(variant.attributes[dim.key]) === option);
+                const variantImage = optionVariant
+                  ? (media.find(
+                      (item) =>
+                        item.mediaAssetId === optionVariant.thumbnailMediaAssetId &&
+                        (!item.variantId || item.variantId === optionVariant.id) &&
+                        item.asset.mimeType.startsWith("image/")
+                    ) ??
+                    media.find(
+                      (item) =>
+                        item.variantId === optionVariant.id &&
+                        item.asset.mimeType.startsWith("image/")
+                    ))
+                  : undefined;
+                const variantImageUrl = variantImage
+                  ? resolvePublicMediaUrl(variantImage.asset.objectKey)
+                  : null;
+
+                if (dim.isColor && (swatchClass || variantImageUrl)) {
                   return (
                     <button
                       key={option}
@@ -279,7 +309,17 @@ export function VariantSelector({
                       className={`${styles.swatchButton} ${isSelected ? styles.swatchButtonSelected : ""} ${!isCompatible ? styles.swatchButtonDisabled : ""}`}
                       data-testid={`swatch-option-${option}`}
                     >
-                      <span className={`${styles.swatchInnerCircle} ${swatchClass}`} />
+                      {variantImageUrl ? (
+                        <Image
+                          className={styles.swatchImage}
+                          src={variantImageUrl}
+                          alt=""
+                          width={44}
+                          height={44}
+                        />
+                      ) : (
+                        <span className={`${styles.swatchInnerCircle} ${swatchClass}`} />
+                      )}
                     </button>
                   );
                 }

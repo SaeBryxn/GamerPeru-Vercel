@@ -1035,3 +1035,44 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
     });
   });
 });
+
+describe("Miniatura administrada de variante", () => {
+  it("usa la imagen configurada si pertenece a la galería elegible", () => {
+    const alternate = {
+      ...MOCK_GLOBAL_MEDIA,
+      id: "alternate",
+      mediaAssetId: "alternate",
+      displayOrder: 1,
+    };
+    expect(
+      resolveDefaultFocusedIndex(
+        [MOCK_GLOBAL_MEDIA, alternate],
+        MOCK_GLOBAL_MEDIA,
+        "var-1",
+        "alternate"
+      )
+    ).toBe(1);
+    expect(
+      resolveInitialLcpMediaAssetId(
+        [MOCK_GLOBAL_MEDIA, alternate],
+        MOCK_GLOBAL_MEDIA,
+        "var-1",
+        "alternate"
+      )
+    ).toBe("alternate");
+  });
+  it("descarta preferencias ajenas o que no son imágenes", () => {
+    expect(
+      resolveDefaultFocusedIndex([MOCK_GLOBAL_MEDIA], MOCK_GLOBAL_MEDIA, "var-1", "foreign")
+    ).toBe(0);
+    const video = {
+      ...MOCK_GLOBAL_MEDIA,
+      id: "video",
+      mediaAssetId: "video",
+      asset: { ...MOCK_GLOBAL_MEDIA.asset, mimeType: "video/mp4" },
+    };
+    expect(
+      resolveDefaultFocusedIndex([MOCK_GLOBAL_MEDIA, video], MOCK_GLOBAL_MEDIA, "var-1", "video")
+    ).toBe(0);
+  });
+});

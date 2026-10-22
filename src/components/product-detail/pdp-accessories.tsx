@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useId } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Briefcase,
@@ -11,9 +11,11 @@ import {
   Grid3x3,
   Keyboard,
   Plus,
+  Tag,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import { Icon } from "@/components/ui";
 import { formatCurrency } from "@/lib/utils/currency";
 import styles from "./pdp-accessories.module.css";
@@ -25,7 +27,8 @@ export interface PdpAccessory {
   id: string;
   name: string;
   priceCents: number;
-  glyph: AccessoryGlyph;
+  glyph?: AccessoryGlyph;
+  imageUrl?: string | null;
 }
 
 const GLYPHS: Record<AccessoryGlyph, LucideIcon> = {
@@ -41,36 +44,42 @@ const GLYPHS: Record<AccessoryGlyph, LucideIcon> = {
 
 export interface PdpAccessoriesProps {
   accessories: PdpAccessory[];
+  selected?: ReadonlySet<string>;
+  onToggle?: (id: string) => void;
+  disabled?: boolean;
 }
 
-/**
- * "Añadir accesorios" box: collapsible list of add-on checkboxes. Selection is
- * local UI state for now; it is not sent to the cart.
- */
-export function PdpAccessories({ accessories }: PdpAccessoriesProps) {
+/** Selection is owned by the purchase panel and submitted with the main variant. */
+export function PdpAccessories({ accessories, selected, onToggle, disabled }: PdpAccessoriesProps) {
   const [isOpen, setIsOpen] = useState(true);
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-
-  const toggle = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+  const [localSelected, setLocalSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const id = useId();
+  const activeSelected = selected ?? localSelected;
+  const toggle = (itemId: string) => {
+    if (onToggle) {
+      onToggle(itemId);
+      return;
+    }
+    setLocalSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
       return next;
     });
+  };
 
   return (
-    <section className={styles.box} aria-labelledby="pdp-accessories-title">
+    <section className={styles.box} aria-labelledby={`${id}-title`}>
       <button
         type="button"
         className={styles.header}
         aria-expanded={isOpen}
-        aria-controls="pdp-accessories-list"
+        aria-controls={`${id}-list`}
         onClick={() => setIsOpen((open) => !open)}
       >
         <span className={styles.headerLabel}>
-          <Icon icon={Plus} size="sm" aria-hidden="true" />
-          <span id="pdp-accessories-title">Añadir accesorios</span>
+          <Icon icon={Tag} size="sm" aria-hidden="true" />
+          <span id={`${id}-title`}>Más Accesorios</span>
         </span>
         <motion.span
           className={styles.headerToggle}
@@ -85,7 +94,7 @@ export function PdpAccessories({ accessories }: PdpAccessoriesProps) {
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.ul
-            id="pdp-accessories-list"
+            id={`${id}-list`}
             className={styles.list}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -98,11 +107,22 @@ export function PdpAccessories({ accessories }: PdpAccessoriesProps) {
                   <input
                     type="checkbox"
                     className={styles.checkbox}
-                    checked={selected.has(accessory.id)}
+                    checked={activeSelected.has(accessory.id)}
+                    disabled={disabled}
                     onChange={() => toggle(accessory.id)}
                   />
                   <span className={styles.thumb} aria-hidden="true">
-                    <Icon icon={GLYPHS[accessory.glyph]} size="md" />
+                    {accessory.imageUrl ? (
+                      <Image
+                        src={accessory.imageUrl}
+                        alt=""
+                        width={40}
+                        height={40}
+                        className={styles.image}
+                      />
+                    ) : (
+                      <Icon icon={GLYPHS[accessory.glyph ?? "case"]} size="md" />
+                    )}
                   </span>
                   <span className={styles.name}>{accessory.name}</span>
                   <span className={styles.price}>{formatCurrency(accessory.priceCents)}</span>

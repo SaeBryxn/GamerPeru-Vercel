@@ -134,6 +134,7 @@ export interface CreateProductInput {
   subtitle?: string | null;
   description?: string | null;
   isFeatured?: boolean;
+  pdpConfig?: Record<string, unknown>;
   initialVariant?: {
     sku: string;
     title: string;
@@ -157,6 +158,7 @@ export interface UpdateProductInput {
   description?: string | null;
   isFeatured?: boolean;
   specValues?: Record<string, unknown> | null;
+  pdpConfig?: Record<string, unknown>;
   mutationRequestId?: string;
 }
 

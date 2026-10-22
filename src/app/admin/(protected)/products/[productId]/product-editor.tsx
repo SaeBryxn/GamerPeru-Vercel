@@ -59,6 +59,8 @@ import type {
 import { VariantStockCell } from "@/components/admin/inventory/variant-stock-cell";
 import type { VariantStockRow } from "@/lib/admin/inventory/readers";
 import { findWeightSpecField } from "@/lib/admin/catalog/weight-spec";
+import { ProductPdpFields } from "@/components/admin/products/product-pdp-fields";
+import { buildPdpEditorConfig } from "@/lib/catalog/product-pdp-config";
 import { uploadDirect, type DirectUploadStage } from "@/lib/media/direct-upload-client";
 import { requestUpload, completeUpload } from "@/lib/media/upload-api-client";
 import styles from "./product-editor.module.css";
@@ -188,6 +190,9 @@ export function ProductEditor({
   const [subtitle, setSubtitle] = useState(product.subtitle ?? "");
   const [description, setDescription] = useState(product.description ?? "");
   const [isFeatured, setIsFeatured] = useState(product.isFeatured);
+  const [pdpConfig, setPdpConfig] = useState(() =>
+    buildPdpEditorConfig(product.pdpConfig, variants)
+  );
 
   // Specifications State
   const [specValues, setSpecValues] = useState<Record<string, unknown>>(() => {
@@ -412,6 +417,7 @@ export function ProductEditor({
     setSubtitle(initialDetail.product.subtitle ?? "");
     setDescription(initialDetail.product.description ?? "");
     setIsFeatured(initialDetail.product.isFeatured);
+    setPdpConfig(buildPdpEditorConfig(initialDetail.product.pdpConfig, initialDetail.variants));
     setSpecValues((initialDetail.specifications?.specValues as Record<string, unknown>) ?? {});
     setDuplicateName(`${initialDetail.product.name} (Copia)`);
     setDuplicateSlug(`${initialDetail.product.slug}-copia`);
@@ -436,6 +442,7 @@ export function ProductEditor({
       subtitle: subtitle.trim() ? subtitle.trim() : null,
       description: description.trim() ? description.trim() : null,
       isFeatured,
+      pdpConfig,
     };
 
     const mutationRequestId = detailsTracker.current.getRequestId(payload);
@@ -1639,6 +1646,14 @@ export function ProductEditor({
                 </div>
 
                 <FeaturedToggle checked={isFeatured} onChange={setIsFeatured} />
+
+                <ProductPdpFields
+                  value={pdpConfig}
+                  onChange={setPdpConfig}
+                  variants={variants}
+                  media={media}
+                  productId={product.id}
+                />
 
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <button

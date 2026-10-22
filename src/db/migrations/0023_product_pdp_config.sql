@@ -1,0 +1,1 @@
+ALTER TABLE "products" ADD COLUMN "pdp_config" jsonb DEFAULT '{}'::jsonb NOT NULL;

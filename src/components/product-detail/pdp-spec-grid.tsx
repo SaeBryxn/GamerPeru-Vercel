@@ -1,7 +1,8 @@
 import React from "react";
 import {
-  Activity,
-  BatteryMedium,
+  Wifi,
+  Mouse,
+  BatteryCharging,
   CircleDot,
   Cpu,
   Crosshair,
@@ -13,9 +14,8 @@ import {
   Square,
   MousePointerClick,
   Ruler,
-  Scan,
-  Shapes,
-  Weight,
+  Radar,
+  Scale,
   type LucideIcon,
 } from "lucide-react";
 import { Icon } from "@/components/ui";
@@ -31,13 +31,14 @@ const SPEC_ICON_RULES: ReadonlyArray<[RegExp, LucideIcon]> = [
   [/tama|size/i, Maximize2],
   [/material/i, Layers],
   [/mcu|chip|procesador/i, Cpu],
-  [/polling|hz|frecuencia/i, Activity],
+  [/polling|hz|frecuencia/i, Crosshair],
   [/switch/i, MousePointerClick],
-  [/bater|battery/i, BatteryMedium],
-  [/peso|weight/i, Weight],
-  [/sensor/i, Scan],
+  [/bater|battery/i, BatteryCharging],
+  [/peso|weight/i, Scale],
+  [/sensor/i, Radar],
   [/dpi|cpi/i, Crosshair],
-  [/forma|shape/i, Shapes],
+  [/forma|shape/i, Mouse],
+  [/conex|connection|connectivity|inal.mbr/i, Wifi],
   [/largo|ancho|alto|length|width|height|dimens/i, Ruler],
 ];
 

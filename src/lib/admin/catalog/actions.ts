@@ -46,6 +46,7 @@ export interface CreateProductActionInput {
   subtitle?: string | null;
   description?: string | null;
   isFeatured?: boolean;
+  pdpConfig?: Record<string, unknown>;
   initialVariant?: {
     sku: string;
     title: string;
@@ -69,6 +70,7 @@ export interface UpdateProductActionInput {
   description?: string | null;
   isFeatured?: boolean;
   specValues?: Record<string, unknown> | null;
+  pdpConfig?: Record<string, unknown>;
   mutationRequestId?: string;
 }
 
@@ -209,6 +211,7 @@ export async function createProductAction(
         subtitle: input.subtitle,
         description: input.description,
         isFeatured: input.isFeatured,
+        pdpConfig: input.pdpConfig,
         initialVariant: initialVariantParsed,
         mutationRequestId: input.mutationRequestId,
       },
@@ -260,6 +263,7 @@ export async function updateProductAction(
         description: input.description,
         isFeatured: input.isFeatured,
         specValues: input.specValues,
+        pdpConfig: input.pdpConfig,
         mutationRequestId: input.mutationRequestId,
       },
       { authContext }

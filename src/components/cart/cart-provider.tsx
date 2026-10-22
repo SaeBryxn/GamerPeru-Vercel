@@ -26,7 +26,11 @@ export interface CartContextValue {
   announcement: string | null;
   openDrawer: (options?: OpenDrawerOptions) => void;
   closeDrawer: () => void;
-  addItem: (variantId: string, quantity?: number) => Promise<boolean>;
+  addItem: (
+    variantId: string,
+    quantity?: number,
+    accessoryVariantIds?: string[]
+  ) => Promise<boolean>;
   updateQuantity: (variantId: string, quantity: number) => Promise<boolean>;
   removeItem: (variantId: string) => Promise<boolean>;
   retryBootstrap: () => Promise<void>;
@@ -114,7 +118,7 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
 
   // 3. Add Item Mutation
   const addItem = useCallback(
-    async (variantId: string, quantity = 1): Promise<boolean> => {
+    async (variantId: string, quantity = 1, accessoryVariantIds?: string[]): Promise<boolean> => {
       if (mutationLockRef.current) return false;
       mutationLockRef.current = true;
 
@@ -124,7 +128,11 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
       setLastError(null);
 
       try {
-        const result = await addCartItemAction(null, { variantId, quantity });
+        const result = await addCartItemAction(null, {
+          variantId,
+          quantity,
+          ...(accessoryVariantIds?.length ? { accessoryVariantIds } : {}),
+        });
 
         if (generation !== requestGenerationRef.current) {
           return false;
@@ -140,7 +148,11 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
           setLastError("Debes completar tu perfil para utilizar el carrito.");
           return false;
         } else if (result.code === "PRODUCT_UNAVAILABLE") {
-          setLastError("Este producto ya no está disponible.");
+          setLastError(
+            accessoryVariantIds?.length
+              ? "Un producto o accesorio ya no está disponible. Revisa tu selección; no se añadió ningún producto."
+              : "Este producto ya no está disponible."
+          );
           return false;
         } else if (result.code === "ITEM_NOT_FOUND") {
           setLastError("El producto seleccionado no fue encontrado.");

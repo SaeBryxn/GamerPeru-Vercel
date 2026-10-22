@@ -38,6 +38,8 @@ import {
 import { PRODUCT_SLUG_REGEX } from "./publish-readiness";
 import { loadInternalProductDetail } from "./readers";
 import { isPlainRecord } from "./record";
+import { validatePdpConfig, validatePdpReferences, syncPdpVariantAttributes } from "./pdp-config";
+import { parseProductPdpConfig, type ProductPdpConfig } from "@/lib/catalog/product-pdp-config";
 
 export interface ServiceOptions {
   authContext?: VerifiedAuthContextReady;
@@ -53,6 +55,7 @@ function mapProductRow(raw: Record<string, unknown>): Product {
     slug: String(raw.slug),
     subtitle: raw.subtitle ? String(raw.subtitle) : null,
     description: raw.description ? String(raw.description) : null,
+    pdpConfig: (raw.pdp_config ?? {}) as Record<string, unknown>,
     status: raw.status as "DRAFT" | "PUBLISHED" | "ARCHIVED",
     isFeatured: Boolean(raw.is_featured),
     primaryMediaId: raw.primary_media_id ? String(raw.primary_media_id) : null,
@@ -407,6 +410,7 @@ export async function createProduct(
     categoryId: input.categoryId,
     description: normalizedDescription,
     initialVariant: validatedInitialVariant,
+    ...(input.pdpConfig !== undefined ? { pdpConfig: validatePdpConfig(input.pdpConfig) } : {}),
     isFeatured: Boolean(input.isFeatured),
     name: trimmedName,
     slug: trimmedSlug,
@@ -512,10 +516,14 @@ export async function createProduct(
 
       const productId = generateUuidV7();
 
+      if (normalizedProductPayload.pdpConfig) {
+        await validatePdpReferences(normalizedProductPayload.pdpConfig, productId, tx);
+      }
+
       // Insert Product (Canonically DRAFT)
       const [rawCreated] = (await tx.execute(sql`
         INSERT INTO products (
-          id, brand_id, category_id, name, slug, subtitle, description, status, is_featured, created_at, updated_at
+          id, brand_id, category_id, name, slug, subtitle, description, status, is_featured, pdp_config, created_at, updated_at
         ) VALUES (
           ${productId}::uuid,
           ${normalizedProductPayload.brandId}::uuid,
@@ -526,6 +534,7 @@ export async function createProduct(
           ${normalizedProductPayload.description},
           'DRAFT',
           ${normalizedProductPayload.isFeatured},
+          ${JSON.stringify(normalizedProductPayload.pdpConfig ?? {})}::jsonb,
           NOW(),
           NOW()
         )
@@ -629,6 +638,7 @@ interface NormalizedUpdateProductInput {
   description?: string | null;
   isFeatured?: boolean;
   specValues?: Record<string, unknown>;
+  pdpConfig?: ProductPdpConfig;
 }
 
 function normalizeUpdateProductInput(input: UpdateProductInput): NormalizedUpdateProductInput {
@@ -659,6 +669,15 @@ function normalizeUpdateProductInput(input: UpdateProductInput): NormalizedUpdat
     normalized.description = input.description === null ? null : input.description.trim();
   }
   if (input.isFeatured !== undefined) normalized.isFeatured = Boolean(input.isFeatured);
+  if (input.pdpConfig !== undefined) {
+    if (!isPlainRecord(input.pdpConfig)) {
+      throw new CatalogDomainError(
+        "La configuración de la ficha no es válida.",
+        "INVALID_PDP_CONFIG"
+      );
+    }
+    normalized.pdpConfig = validatePdpConfig(input.pdpConfig);
+  }
 
   if (input.specValues !== undefined && input.specValues !== null) {
     if (!isPlainRecord(input.specValues)) {
@@ -681,7 +700,7 @@ export async function updateProduct(
 ): Promise<Product> {
   const { authUserId } = await resolveActorAndAssertPermission("catalog:manage", options);
   const normalizedMutationRequestId = input.mutationRequestId?.trim() ?? "";
-  const normalizedInput = normalizedMutationRequestId ? normalizeUpdateProductInput(input) : input;
+  const normalizedInput = normalizeUpdateProductInput(input);
   const mutationRequestDigest = normalizedMutationRequestId
     ? computeMutationRequestDigest(
         authUserId,
@@ -955,6 +974,12 @@ export async function updateProduct(
           ? Boolean(normalizedInput.isFeatured)
           : current.isFeatured;
 
+      if (normalizedInput.pdpConfig !== undefined) {
+        const config = normalizedInput.pdpConfig;
+        await validatePdpReferences(config, current.id, tx);
+        await syncPdpVariantAttributes(config, current.id, tx);
+      }
+
       // Update Product
       const [rawUpdated] = (await tx.execute(sql`
         UPDATE products SET
@@ -965,6 +990,7 @@ export async function updateProduct(
           subtitle = ${targetSubtitle},
           description = ${targetDescription},
           is_featured = ${targetIsFeatured},
+          pdp_config = ${JSON.stringify(normalizedInput.pdpConfig ?? current.pdpConfig)}::jsonb,
           updated_at = NOW()
         WHERE id = ${current.id}::uuid
         RETURNING *;
@@ -1807,6 +1833,20 @@ export async function duplicateProduct(
       }
 
       // 7. Insert AuditEvent: request_id is NULL (raw mutationRequestId is NOT persisted)
+      if (Object.keys(source.pdpConfig).length) {
+        const config = parseProductPdpConfig(source.pdpConfig);
+        config.variants = Object.fromEntries(
+          Object.entries(config.variants).flatMap(([oldId, presentation]) => {
+            const newId = variantIdMap.get(oldId);
+            return newId ? [[newId, presentation]] : [];
+          })
+        );
+        await tx.execute(
+          sql`UPDATE products SET pdp_config = ${JSON.stringify(config)}::jsonb WHERE id = ${newProductId}::uuid`
+        );
+        duplicatedProduct.pdpConfig = config;
+      }
+
       const auditMetadata: Record<string, unknown> = {
         source_product_id: source.id,
         duplicate_product_id: newProductId,

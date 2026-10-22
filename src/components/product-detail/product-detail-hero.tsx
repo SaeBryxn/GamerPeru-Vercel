@@ -65,9 +65,14 @@ export function ProductDetailHero({
   // The photo the gallery opens on for this variant, reused as the sticky bar's thumbnail.
   const thumbnailKey = useMemo(() => {
     const gallery = buildEligibleGallery(media, primaryMedia, selectedVariant.id);
-    const index = resolveDefaultFocusedIndex(gallery, primaryMedia, selectedVariant.id);
+    const index = resolveDefaultFocusedIndex(
+      gallery,
+      primaryMedia,
+      selectedVariant.id,
+      selectedVariant.thumbnailMediaAssetId
+    );
     return index >= 0 ? (gallery[index]?.asset.objectKey ?? null) : null;
-  }, [media, primaryMedia, selectedVariant.id]);
+  }, [media, primaryMedia, selectedVariant.id, selectedVariant.thumbnailMediaAssetId]);
 
   return (
     <MotionConfig reducedMotion="user">
@@ -91,6 +96,7 @@ export function ProductDetailHero({
             product={product}
             brand={brand}
             variants={variants}
+            media={media}
             selectedVariant={selectedVariant}
             onSelectVariant={setSelectedVariant}
             thumbnailKey={thumbnailKey}
