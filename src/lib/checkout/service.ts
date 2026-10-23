@@ -1187,6 +1187,7 @@ export async function loadCheckoutConfirmation(
   return {
     success: true,
     confirmation: {
+      isGuestOrder: order.customerId === null,
       reservationExpiresAt: activeReservation?.expiresAt
         ? new Date(activeReservation.expiresAt).toISOString()
         : null,

@@ -304,7 +304,7 @@ export function CheckoutConfirmationView({
                   variants={RISE_VARIANTS}
                   custom={STEP.lead}
                 >
-                  {hero.lead} Enviamos la confirmación a <strong>{customerEmail}</strong>.
+                  {hero.lead} Correo de contacto: <strong>{customerEmail}</strong>.
                 </motion.p>
               </>
             )}
@@ -385,6 +385,11 @@ export function CheckoutConfirmationView({
           </motion.section>
 
           <motion.div className={styles.actions} variants={RISE_VARIANTS} custom={STEP.actions}>
+            {confirmation.isGuestOrder && (
+              <DomeLink href="/checkout/recuperar" tone="light" className={styles.ghostButton}>
+                Recuperar acceso por correo
+              </DomeLink>
+            )}
             <DomeLink
               href="/categorias/mouses"
               tone="light"

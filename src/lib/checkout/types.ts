@@ -138,6 +138,7 @@ export interface CheckoutConfirmationAddressDTO {
 }
 
 export interface CheckoutConfirmationDTO {
+  isGuestOrder?: boolean;
   orderNumber: string;
   status: "PENDING" | "CONFIRMED" | "CANCELLED";
   paymentStatus: "UNPAID" | "PENDING_VERIFICATION" | "PAID" | "REJECTED";
