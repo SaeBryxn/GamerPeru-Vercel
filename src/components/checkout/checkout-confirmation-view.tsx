@@ -310,7 +310,12 @@ export function CheckoutConfirmationView({
             )}
           </section>
 
-          <PurchaseProgress current={paymentStatus === "UNPAID" ? 3 : 4} />
+          {!isCancelled && (
+            <PurchaseProgress
+              current={paymentStatus === "UNPAID" ? 3 : 4}
+              completed={paymentStatus === "PAID"}
+            />
+          )}
           {statusReadError && (
             <p role="status" className={styles.bodyText}>
               No se pudo actualizar el estado. Lo reintentaremos; también puedes recargar la página.

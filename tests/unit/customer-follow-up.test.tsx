@@ -11,6 +11,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { CopyPaymentValue } from "@/components/checkout/copy-payment-value";
+import { PurchaseProgress } from "@/components/checkout/purchase-progress";
 import { ReservationNotice } from "@/components/checkout/reservation-notice";
 import { PdpSizeGuide } from "@/components/product-detail/pdp-size-guide";
 import { pdpSizeSchema } from "@/lib/catalog/product-pdp-config";
@@ -19,6 +20,14 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+it("marca la verificación terminada únicamente después de confirmar el pago", () => {
+  const { rerender, container } = render(<PurchaseProgress current={4} />);
+  expect(screen.getByText("Verificación").closest("li")?.getAttribute("aria-current")).toBe("step");
+  rerender(<PurchaseProgress current={4} completed />);
+  expect(container.querySelector("[aria-current]")).toBeNull();
+  expect(container.querySelectorAll('[data-done="true"]')).toHaveLength(4);
 });
 it("copia el valor y confirma el resultado sin confundirlo con un pago", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
