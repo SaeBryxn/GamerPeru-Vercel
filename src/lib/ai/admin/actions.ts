@@ -4,6 +4,7 @@ import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { ZodError } from "zod";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { createResearchJobAction } from "@/lib/ai/research/actions";
+import { dispatchResearchJob } from "@/lib/ai/research/dispatch-service";
 import {
   applyProposalAction,
   approveProposalAction,
@@ -165,6 +166,30 @@ export async function getResearchJobAdminAction(
   return await runAction(async () => {
     const input = adminResearchJobReadSchema.parse(rawInput);
     return await getResearchJobDetail(input.jobId);
+  });
+}
+
+export async function retryResearchDispatchAdminAction(
+  rawInput: unknown
+): Promise<AdminAiActionResult<{ message: string }>> {
+  return await runAction(async () => {
+    const { jobId } = adminResearchJobReadSchema.parse(rawInput);
+    // The reader enforces catalog:ai_research before revealing or retrying any work.
+    const job = await getResearchJobDetail(jobId);
+    if (!job) throw new Error("AI_JOB_NOT_FOUND: Trabajo no disponible.");
+    if (job.jobStatus !== "QUEUED" || job.dispatchStatus === "DISPATCHED") {
+      return {
+        message:
+          "El trabajo ya fue enviado o comenzó a procesarse. Revisa su estado; no se creó ni envió otro.",
+      };
+    }
+    const result = await dispatchResearchJob(jobId);
+    return {
+      message:
+        result === "DISPATCHED"
+          ? "Reenviamos el mismo trabajo. Espera a que el procesador lo reciba."
+          : "El estado cambió; actualiza para ver el resultado.",
+    };
   });
 }
 

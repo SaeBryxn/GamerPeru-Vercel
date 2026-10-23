@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveResearchMutationIntent,
   shouldPollResearchJob,
+  researchQueueDescription,
 } from "@/lib/ai/admin/client-contracts";
 import {
   adminCredentialSaveSchema,
@@ -171,4 +172,16 @@ describe("GP-025 / CHK4 — Admin AI UI contracts", () => {
       );
     }
   });
+});
+
+it("distingue un envío fallido de un evento enviado sin actividad", () => {
+  expect(
+    researchQueueDescription({
+      dispatchStatus: "DISPATCH_FAILED",
+      updatedAt: new Date(0).toISOString(),
+    })
+  ).toContain("No se pudo enviar");
+  expect(
+    researchQueueDescription({ dispatchStatus: "DISPATCHED", updatedAt: new Date(0).toISOString() })
+  ).toContain("no hay actividad reciente");
 });

@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   executeCredentialHealthCheck: vi.fn(),
   configureProfile: vi.fn(),
   applyProposal: vi.fn(),
+  getResearchJob: vi.fn(),
+  dispatch: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
@@ -27,6 +29,7 @@ vi.mock("@/lib/auth/rbac", async (importOriginal) => {
 vi.mock("@/lib/ai/research/actions", () => ({
   createResearchJobAction: mocks.createResearchJobAction,
 }));
+vi.mock("@/lib/ai/research/dispatch-service", () => ({ dispatchResearchJob: mocks.dispatch }));
 
 vi.mock("@/lib/ai/proposals/actions", () => ({
   applyProposalAction: mocks.applyProposal,
@@ -51,13 +54,14 @@ vi.mock("@/lib/ai/admin/readers", () => ({
   assertAdminProfileRuntimeCompatibility: mocks.assertProfileCompatibility,
   assertAdminProviderHealthCheckSupported: mocks.assertHealthCheckSupported,
   assertAdminResearchSubmissionEligibility: mocks.assertResearchEligibility,
-  getResearchJobDetail: vi.fn(),
+  getResearchJobDetail: mocks.getResearchJob,
 }));
 
 import {
   applyProposalAdminAction,
   configureProfileAdminAction,
   submitResearchJobAdminAction,
+  retryResearchDispatchAdminAction,
   testCredentialAdminAction,
 } from "@/lib/ai/admin/actions";
 
@@ -75,6 +79,30 @@ describe("GP-025 / CHK4-BR1 — Admin action runtime admission", () => {
       roles: ["SUPER_ADMIN"],
       permissions: new Set(["catalog:ai_research", "ai:manage_credentials"]),
     });
+  });
+
+  it("reenvía el mismo trabajo fallido y no crea investigaciones nuevas", async () => {
+    mocks.getResearchJob.mockResolvedValueOnce({
+      jobId: productId,
+      jobStatus: "QUEUED",
+      dispatchStatus: "DISPATCH_FAILED",
+    });
+    mocks.dispatch.mockResolvedValueOnce("DISPATCHED");
+    expect(await retryResearchDispatchAdminAction({ jobId: productId })).toMatchObject({
+      success: true,
+    });
+    expect(mocks.dispatch).toHaveBeenCalledWith(productId);
+    expect(mocks.createResearchJobAction).not.toHaveBeenCalled();
+    mocks.dispatch.mockClear();
+    mocks.getResearchJob.mockResolvedValueOnce({
+      jobId: productId,
+      jobStatus: "QUEUED",
+      dispatchStatus: "DISPATCHED",
+    });
+    expect(await retryResearchDispatchAdminAction({ jobId: productId })).toMatchObject({
+      success: true,
+    });
+    expect(mocks.dispatch).not.toHaveBeenCalled();
   });
 
   it.each(["APPLYING", "APPLIED"])(

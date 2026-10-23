@@ -16,6 +16,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { AiAutofillSetup } from "@/components/admin/ai-autofill-setup";
 import { ConfirmationDialog } from "@/components/admin/confirmation-dialog";
 import {
   configureProfileAdminAction,
@@ -405,7 +406,7 @@ function ProfileCard({
     <article
       className={styles.profileCard}
       data-testid={`profile-${profileKey}`}
-      id={profileKey === "PRODUCT_RESEARCH_FAST" ? "autofill-profile" : undefined}
+      id={`advanced-profile-${profileKey}`}
     >
       <header>
         <div>
@@ -581,6 +582,13 @@ export function AiSettingsWorkspace({ initialSettings }: AiSettingsWorkspaceProp
         </div>
       </section>
 
+      <AiAutofillSetup
+        key={JSON.stringify([
+          initialSettings.providers.map((provider) => provider.updatedAt),
+          initialSettings.profiles.map((profile) => profile.updatedAt),
+        ])}
+        settings={initialSettings}
+      />
       <section aria-labelledby="profiles-heading">
         <div className={styles.sectionHeading}>
           <div>

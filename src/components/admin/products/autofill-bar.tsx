@@ -3,15 +3,21 @@
 import Link from "next/link";
 import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ArrowRight, Loader2, RotateCcw, Search } from "lucide-react";
-import { getResearchJobAdminAction, submitResearchJobAdminAction } from "@/lib/ai/admin/actions";
+import {
+  getResearchJobAdminAction,
+  submitResearchJobAdminAction,
+  retryResearchDispatchAdminAction,
+} from "@/lib/ai/admin/actions";
 import {
   resolveResearchMutationIntent,
   shouldPollResearchJob,
+  researchQueueDescription,
   type ResearchMutationIntent,
 } from "@/lib/ai/admin/client-contracts";
 import type { ProductAutofillContextDto } from "@/lib/ai/admin/readers";
 import type { ResearchJobDetailDto, ResearchJobItemDto } from "@/lib/ai/admin/types";
 import styles from "./autofill-bar.module.css";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 
 export interface AutofillBarProps {
   productId: string;
@@ -58,29 +64,41 @@ export function AutofillBar({ productId, productName, isDraft, context }: Autofi
   const [isSubmitting, startSubmitting] = useTransition();
   const intent = useRef<ResearchMutationIntent | null>(null);
   const polling = useRef(false);
+  const lastRead = useRef("");
+  const [retrying, startRetry] = useTransition();
+  const [notice, setNotice] = useState("");
 
   const refresh = useCallback(async (id: string) => {
-    if (polling.current) return;
+    if (polling.current) return false;
     polling.current = true;
     try {
       const result = await getResearchJobAdminAction({ jobId: id });
-      if (result.success) setJob(result.data ?? null);
+      if (result.success) {
+        setJob(result.data ?? null);
+        const fingerprint = JSON.stringify(result.data);
+        const changed = fingerprint !== lastRead.current;
+        lastRead.current = fingerprint;
+        return changed;
+      }
     } catch {
       // A missed poll is retried on the next tick.
     } finally {
       polling.current = false;
     }
+    return false;
   }, []);
 
   useEffect(() => {
     if (jobId) void refresh(jobId);
   }, [jobId, refresh]);
 
-  useEffect(() => {
-    if (!jobId || (job && !shouldPollResearchJob(job.jobStatus))) return;
-    const timer = window.setInterval(() => void refresh(jobId), 4_000);
-    return () => window.clearInterval(timer);
-  }, [job, jobId, refresh]);
+  useVisiblePolling(
+    jobId ?? "",
+    Boolean(jobId && (!job || shouldPollResearchJob(job.jobStatus))),
+    () => (jobId ? refresh(jobId) : Promise.resolve(false)),
+    5000,
+    60000
+  );
 
   const item = job?.items.find((candidate) => candidate.targetProductId === productId) ?? null;
   const running = Boolean(job && shouldPollResearchJob(job.jobStatus)) || isSubmitting;
@@ -143,6 +161,7 @@ export function AutofillBar({ productId, productName, isDraft, context }: Autofi
 
   return (
     <section className={styles.bar} aria-label="Autocompletar desde la web">
+      {notice && <p role="status">{notice}</p>}
       {ready ? (
         <div className={styles.result} role="status">
           <span>
@@ -162,7 +181,41 @@ export function AutofillBar({ productId, productName, isDraft, context }: Autofi
       ) : running ? (
         <div className={styles.result} role="status" aria-live="polite">
           <Loader2 size={16} className={styles.spinner} aria-hidden="true" />
-          <span>{(item && RUNNING_TEXT[item.status]) ?? "Iniciando la búsqueda…"}</span>
+          <div>
+            <span>
+              {item?.status === "PENDING" && job
+                ? researchQueueDescription(job)
+                : ((item && RUNNING_TEXT[item.status]) ?? "Iniciando la búsqueda…")}
+            </span>
+            {job && (
+              <p>
+                Última actividad:{" "}
+                {new Date(job.updatedAt).toLocaleString("es-PE", { timeZone: "America/Lima" })}.
+                Trabajo: {job.jobId}
+              </p>
+            )}
+            {job?.jobStatus === "QUEUED" && job.dispatchStatus !== "DISPATCHED" && (
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={retrying}
+                onClick={() =>
+                  startRetry(async () => {
+                    const result = await retryResearchDispatchAdminAction({ jobId: job.jobId });
+                    setNotice(
+                      result.success
+                        ? (result.data?.message ?? "Estado actualizado.")
+                        : (result.error ?? "No se pudo reenviar el trabajo.")
+                    );
+                    await refresh(job.jobId);
+                  })
+                }
+              >
+                {retrying ? "Reenviando…" : "Reintentar envío"}
+              </button>
+            )}
+            <Link href="/admin/products/ai-import">Abrir Asistente IA</Link>
+          </div>
         </div>
       ) : failed ? (
         <div className={styles.result} role="alert">

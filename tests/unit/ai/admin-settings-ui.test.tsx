@@ -138,6 +138,24 @@ describe("GP-025 / CHK4 — safe credential UI", () => {
     );
   });
 
+  it("guarda el perfil desde la configuración guiada", async () => {
+    const user = userEvent.setup();
+    render(<AiSettingsWorkspace initialSettings={settings} />);
+    await user.type(screen.getByLabelText("Modelo para autocompletar"), "configured-model");
+    await user.click(
+      screen.getByRole("button", { name: "Guardar configuración de autocompletado" })
+    );
+    await waitFor(() =>
+      expect(configureProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          profileKey: "PRODUCT_RESEARCH_FAST",
+          modelId: "configured-model",
+          isEnabled: true,
+        })
+      )
+    );
+  });
+
   it("al cambiar un perfil de Google a Cloudflare propone un modelo compatible", async () => {
     const user = userEvent.setup();
     const cloudflare = {
