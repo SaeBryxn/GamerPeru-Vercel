@@ -154,3 +154,7 @@ Surgieron del cierre del MVP (`docs/project/10-limitaciones-y-futuro.md`):
 - Cobertura de estados de error en storefront y admin.
 - Auditoría visual y de accesibilidad completa.
 - Nueva entrega de imágenes (lo que era GP-060), si la medición de CPU lo justifica.
+
+### Idea guardada el 23 de octubre de 2026
+
+- [Armador público de PC y setup con comunidad](../plans/idea-armador-pc-setup-comunidad.md): configuración visual animada, presupuesto, orientación de compatibilidad y experiencias reales. Idea confirmada por el dueño para una incorporación futura; alcance técnico y prioridad pendientes. Por ahora solo se documenta.
