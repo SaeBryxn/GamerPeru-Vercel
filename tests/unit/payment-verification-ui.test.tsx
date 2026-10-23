@@ -15,6 +15,7 @@ const actions = vi.hoisted(() => ({
   getProofViewUrlAction: vi.fn(),
 }));
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/lib/payments/verification-actions", () => actions);
 
 import { VerificationWorkspace } from "@/app/admin/(protected)/pagos/verification-workspace";

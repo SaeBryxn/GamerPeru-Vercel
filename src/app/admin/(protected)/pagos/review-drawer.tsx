@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 
 import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -86,6 +87,7 @@ interface ReviewDrawerProps {
 }
 
 export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawerProps) {
+  const router = useRouter();
   const reduceMotion = useReducedMotion();
   const titleId = `review-title-${item.paymentId}`;
 
@@ -196,6 +198,7 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
                 notes: trimmedNotes,
               });
 
+      router.refresh();
       if (result.success) {
         const message =
           result.paymentStatus === "REFUNDED"
@@ -225,6 +228,7 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
   const releaseCase = () => {
     startTransition(async () => {
       const result = await releasePaymentAction(item.paymentId);
+      router.refresh();
       if (result.success) {
         notify("success", `Caso ${item.orderNumber} devuelto a la cola`);
         onClose();

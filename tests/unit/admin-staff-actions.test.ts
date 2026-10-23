@@ -74,7 +74,7 @@ describe("Staff actions", () => {
       nextLevel: "ADMIN",
     });
     expect(result).toEqual({ success: true, data: { email: "nuevo@example.pe", action: "grant" } });
-    expect(mocks.revalidatePath).toHaveBeenCalledWith("/admin/equipo");
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
   it("explains unregistered emails and guardrail refusals", async () => {

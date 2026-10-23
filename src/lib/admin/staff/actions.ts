@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/lib/admin/catalog/actions";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
@@ -53,7 +52,6 @@ async function requireStaffManager(): Promise<
 
 function toActionResult(outcome: StaffChangeOutcome): ActionResult<StaffActionData> {
   if (outcome.ok) {
-    revalidatePath("/admin/equipo");
     return { success: true, data: { email: outcome.email, action: outcome.action } };
   }
   if (outcome.error === "USER_NOT_FOUND") {

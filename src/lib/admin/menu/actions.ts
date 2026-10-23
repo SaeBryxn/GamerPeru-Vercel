@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -30,7 +29,6 @@ async function requireCatalogManager<T>(): Promise<ActionResult<T> | null> {
 
 /** The menu is part of the root layout, so every storefront route has to be refreshed. */
 function revalidateStorefrontMenu() {
-  revalidatePath("/admin/menu");
   revalidateStorefrontCatalog();
 }
 

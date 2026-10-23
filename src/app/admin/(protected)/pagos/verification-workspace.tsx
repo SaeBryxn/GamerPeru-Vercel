@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 
 import React, { useCallback, useMemo, useState, useTransition } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -40,6 +41,7 @@ export function VerificationWorkspace({
   canReleaseOthers,
   renderedAt,
 }: VerificationWorkspaceProps) {
+  const router = useRouter();
   const reduceMotion = useReducedMotion();
   const [filter, setFilter] = useState<Filter>("all");
   const [activePaymentId, setActivePaymentId] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export function VerificationWorkspace({
     setClaimingId(item.paymentId);
     startTransition(async () => {
       const result = await claimPaymentAction(item.paymentId);
+      router.refresh();
       setClaimingId(null);
       if (result.success) {
         setActivePaymentId(item.paymentId);
@@ -85,6 +88,7 @@ export function VerificationWorkspace({
     setReleasingId(item.paymentId);
     startTransition(async () => {
       const result = await releasePaymentAction(item.paymentId);
+      router.refresh();
       setReleasingId(null);
       if (result.success) notify("success", `Caso ${item.orderNumber} devuelto a la cola`);
       else notify("error", result.error);

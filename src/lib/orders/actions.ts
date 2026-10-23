@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { cancelUnpaidOrder } from "./service";
 import type { CancelUnpaidOrderInput, CancelUnpaidOrderResult } from "./types";
 
@@ -12,8 +12,7 @@ export async function cancelUnpaidOrderAction(
 ): Promise<CancelUnpaidOrderResult> {
   const result = await cancelUnpaidOrder(input);
   if (result.success) {
-    revalidatePath(`/checkout/confirmacion/${input.orderNumber}`);
-    revalidatePath("/cuenta/pedidos");
+    revalidateStorefrontCatalog();
   }
   return result;
 }

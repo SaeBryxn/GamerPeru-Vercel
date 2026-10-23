@@ -1,6 +1,5 @@
 "use server";
 
-import { refresh } from "next/cache";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { validateUuid } from "@/lib/inventory/validation";
 import { getPaymentProofViewUrl, type PaymentProofViewResult } from "./proof-viewer";
@@ -18,21 +17,6 @@ import {
   type RecordLatePaymentRefundInput,
   type ReleasePaymentVerificationClaimResult,
 } from "./verification-service";
-
-// Failures that mean the row changed under the operator: the queue is refreshed so it shows why.
-const STALE_STATE_CODES = new Set([
-  "CLAIMED_BY_OTHER",
-  "CLAIM_REQUIRED",
-  "INVALID_PAYMENT_STATE",
-  "STALE_SUBMISSION",
-]);
-
-function refreshAfter<T extends { success: boolean; code?: string }>(result: T): T {
-  if (result.success || (result.code && STALE_STATE_CODES.has(result.code))) {
-    refresh();
-  }
-  return result;
-}
 
 export type VerificationDetailActionResult =
   { success: true; detail: VerificationDetail } | { success: false; error: string };
@@ -60,29 +44,29 @@ export async function getProofViewUrlAction(submissionId: string): Promise<Payme
 export async function claimPaymentAction(
   paymentId: string
 ): Promise<ClaimPaymentVerificationResult> {
-  return refreshAfter(await claimPaymentVerification({ paymentId }));
+  return await claimPaymentVerification({ paymentId });
 }
 
 export async function releasePaymentAction(
   paymentId: string
 ): Promise<ReleasePaymentVerificationClaimResult> {
-  return refreshAfter(await releasePaymentVerificationClaim({ paymentId }));
+  return await releasePaymentVerificationClaim({ paymentId });
 }
 
 export async function approvePaymentAction(
   input: ApprovePaymentInput
 ): Promise<PaymentVerificationDecisionResult> {
-  return refreshAfter(await approvePayment(input));
+  return await approvePayment(input);
 }
 
 export async function rejectPaymentAction(
   input: RejectPaymentInput
 ): Promise<PaymentVerificationDecisionResult> {
-  return refreshAfter(await rejectPayment(input));
+  return await rejectPayment(input);
 }
 
 export async function recordLatePaymentRefundAction(
   input: RecordLatePaymentRefundInput
 ): Promise<PaymentVerificationDecisionResult> {
-  return refreshAfter(await recordLatePaymentRefund(input));
+  return await recordLatePaymentRefund(input);
 }

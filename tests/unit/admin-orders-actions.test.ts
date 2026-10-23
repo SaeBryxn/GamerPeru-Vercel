@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/catalog/catalog-cache", () => ({ revalidateStorefrontCatalog: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/admin/orders/guard", () => ({ requireOrdersAdmin: vi.fn() }));
 vi.mock("@/lib/orders/service", () => ({
@@ -11,6 +12,7 @@ vi.mock("@/lib/admin/orders/note-service", () => ({
   createAdminOrderNote: vi.fn(),
 }));
 
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { revalidatePath } from "next/cache";
 import { requireOrdersAdmin } from "@/lib/admin/orders/guard";
 import {
@@ -105,7 +107,7 @@ describe("GP-027 CHK1 cancellation wrappers", () => {
     });
   });
 
-  it("delegates createAdminOrderNoteAction and revalidates paths on success", async () => {
+  it("guarda notas sin invalidar rutas ni catálogo", async () => {
     vi.mocked(createAdminOrderNote).mockResolvedValue({
       success: true,
       note: { id: randomUUID(), body: "Nota de prueba", createdAt: new Date().toISOString() },
@@ -117,8 +119,8 @@ describe("GP-027 CHK1 cancellation wrappers", () => {
       mutationRequestId: randomUUID(),
     });
     expect(result.success).toBe(true);
-    expect(revalidatePath).toHaveBeenCalledWith("/admin/orders");
-    expect(revalidatePath).toHaveBeenCalledWith("/admin/orders/GP-027-A");
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(revalidateStorefrontCatalog).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     vi.mocked(createAdminOrderNote).mockResolvedValue({

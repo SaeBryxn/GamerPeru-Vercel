@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import type { ActionResult } from "@/lib/admin/catalog/actions";
@@ -27,8 +26,6 @@ async function requireCatalogManager<T>(): Promise<ActionResult<T> | null> {
 
 /** Admin screens that list taxonomy and the storefront catalog, refreshed after every change. */
 function revalidateTaxonomy() {
-  revalidatePath("/admin/taxonomia");
-  revalidatePath("/admin/products/new");
   revalidateStorefrontCatalog();
 }
 

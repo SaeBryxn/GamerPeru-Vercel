@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 
 import React, { useOptimistic, useState, useTransition } from "react";
 import { motion } from "framer-motion";
@@ -52,6 +53,7 @@ function VisibilityToggle({
 }
 
 export function MenuWorkspace({ entries }: MenuWorkspaceProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [optimisticEntries, applyOptimistic] = useOptimistic(
@@ -68,6 +70,7 @@ export function MenuWorkspace({ entries }: MenuWorkspaceProps) {
     startTransition(async () => {
       applyOptimistic(next);
       const result = await setMenuEntryVisibilityAction(entry.id, !entry.isVisible);
+      router.refresh();
       if (!result.success) setError(result.error ?? "No se pudo guardar el cambio.");
     });
   };
@@ -87,6 +90,7 @@ export function MenuWorkspace({ entries }: MenuWorkspaceProps) {
     startTransition(async () => {
       applyOptimistic(next);
       const result = await reorderMenuEntriesAction(next.map((item) => item.id));
+      router.refresh();
       if (!result.success) setError(result.error ?? "No se pudo cambiar el orden.");
     });
   };

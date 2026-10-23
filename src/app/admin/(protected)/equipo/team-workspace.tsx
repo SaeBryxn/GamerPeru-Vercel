@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 
 import React, { useId, useState, useTransition } from "react";
 import { ShieldCheck, UserPlus } from "lucide-react";
@@ -64,6 +65,7 @@ function describeChange(change: PendingChange): {
 
 export function TeamWorkspace({ members }: { members: TeamMemberView[] }) {
   const { toasts, notify } = useToasts();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [email, setEmail] = useState("");
   const [level, setLevel] = useState<StaffLevel>("ADMIN");
@@ -102,6 +104,7 @@ export function TeamWorkspace({ members }: { members: TeamMemberView[] }) {
         else notify("error", result.error ?? "No se pudo cambiar el acceso.");
         return;
       }
+      router.refresh();
       if (change.kind === "grant") setEmail("");
       notify(
         "success",

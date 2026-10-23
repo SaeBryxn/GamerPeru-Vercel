@@ -8,6 +8,7 @@ const actions = vi.hoisted(() => ({
   grantStaffAccessAction: vi.fn(),
   changeStaffAccessAction: vi.fn(),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/lib/admin/staff/actions", () => actions);
 
 import { TeamWorkspace, type TeamMemberView } from "@/app/admin/(protected)/equipo/team-workspace";

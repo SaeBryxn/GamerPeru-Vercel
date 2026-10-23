@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { cancelPaidPreShipmentAndRefund, cancelUnpaidOrder } from "@/lib/orders/service";
 import { requireOrdersAdmin } from "./guard";
 import {
@@ -11,11 +11,8 @@ import {
 
 type AdminActionError = { success: false; code: string };
 
-function refreshOrderPaths(orderNumber: string): void {
-  revalidatePath("/admin/orders");
-  revalidatePath(`/admin/orders/${orderNumber}`);
-  revalidatePath(`/checkout/confirmacion/${orderNumber}`);
-  revalidatePath("/cuenta/pedidos");
+function refreshOrderPaths(_orderNumber: string): void {
+  revalidateStorefrontCatalog();
 }
 
 export async function cancelAdminUnpaidOrderAction(
@@ -96,15 +93,5 @@ export async function cancelAdminPaidOrderAction(input: unknown): Promise<
 export async function createAdminOrderNoteAction(input: unknown) {
   const { createAdminOrderNote } = await import("./note-service");
   const result = await createAdminOrderNote(input);
-  if (result.success) {
-    const orderNumber =
-      typeof input === "object" && input !== null && !Array.isArray(input)
-        ? normalizeOrderNumber((input as Record<string, unknown>).orderNumber)
-        : null;
-    if (orderNumber) {
-      revalidatePath("/admin/orders");
-      revalidatePath(`/admin/orders/${orderNumber}`);
-    }
-  }
   return result;
 }

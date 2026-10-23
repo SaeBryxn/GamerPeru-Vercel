@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { mapDomainErrorToUi } from "@/lib/admin/catalog/error-mapping";
 import { revalidateStorefrontHome } from "./read-home-sections";
@@ -42,7 +41,6 @@ async function readyContext() {
 
 function refresh(): void {
   revalidateStorefrontHome();
-  revalidatePath("/admin/home");
 }
 
 export async function updateHomeSectionContentAction(input: {

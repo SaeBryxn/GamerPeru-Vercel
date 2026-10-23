@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 
 import React, { useState, useTransition } from "react";
 import Link from "next/link";
@@ -48,6 +49,7 @@ function TaxonomyPanel({
   description: string;
   rows: TaxonomyRow[];
 }) {
+  const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
@@ -97,6 +99,7 @@ function TaxonomyPanel({
         setError(result.error ?? "No se pudo guardar.");
         return;
       }
+      router.refresh();
       close();
     });
   };
