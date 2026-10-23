@@ -13,6 +13,7 @@ export async function loadOrderEmailContext(
 ): Promise<OrderEmailContext | null> {
   const [order] = await db.execute<{
     id: string;
+    customer_id: string | null;
     order_number: string;
     customer_email: string;
     subtotal_cents: number;
@@ -26,7 +27,7 @@ export async function loadOrderEmailContext(
     instruction_text: string | null;
     pay_by: Date | null;
   }>(sql`
-    SELECT o.id, o.order_number, o.customer_email, o.subtotal_cents, o.discount_cents,
+    SELECT o.id, o.customer_id, o.order_number, o.customer_email, o.subtotal_cents, o.discount_cents,
            o.shipping_cents, o.total_cents,
            a.recipient_name,
            pm.name AS method_name,
@@ -57,6 +58,7 @@ export async function loadOrderEmailContext(
 
   return {
     orderId: order.id,
+    guestOrder: order.customer_id === null,
     orderNumber: order.order_number,
     customerEmail: order.customer_email,
     recipientName: order.recipient_name,

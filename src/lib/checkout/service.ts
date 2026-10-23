@@ -1,4 +1,5 @@
 import "server-only";
+import { hasGuestRecoveryAccess } from "@/lib/orders/guest-recovery";
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -1099,6 +1100,8 @@ export async function loadCheckoutConfirmation(
       }
     }
   }
+
+  if (!isAuthorized) isAuthorized = await hasGuestRecoveryAccess(order);
 
   if (!isAuthorized) {
     return {

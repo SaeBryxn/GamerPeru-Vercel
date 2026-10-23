@@ -88,6 +88,7 @@ export default async function CheckoutConfirmationPage({
           >
             Ir al catálogo
           </Link>
+          <Link href="/checkout/recuperar">Recuperar acceso a mi pedido</Link>
         </div>
       </Container>
     );

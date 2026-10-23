@@ -1,4 +1,5 @@
 import "server-only";
+import { hasGuestRecoveryAccess } from "@/lib/orders/guest-recovery";
 import { and, eq, gt } from "drizzle-orm";
 import { db } from "@/db";
 import { guestPaymentAccessGrants, orders, payments, type Order, type Payment } from "@/db/schema";
@@ -111,6 +112,20 @@ export async function resolveAuthorizedPayment(
         isGuest: true,
       };
     }
+  }
+
+  if (await hasGuestRecoveryAccess(order)) {
+    const sessionId = `recovery:${order.id}`;
+    return {
+      authorized: true,
+      order,
+      payment,
+      isGuest: true,
+      authorityBindingDigest: computePaymentAuthorityBindingDigest(
+        { type: "GUEST", sessionId },
+        hmacSecret
+      ),
+    };
   }
 
   // Unified generic denial

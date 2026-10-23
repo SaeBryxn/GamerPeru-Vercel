@@ -1,4 +1,5 @@
 import "server-only";
+import { hasGuestRecoveryAccess } from "@/lib/orders/guest-recovery";
 import { and, eq, gt } from "drizzle-orm";
 import { db } from "@/db";
 import { guestPaymentAccessGrants, orders, payments, type Order, type Payment } from "@/db/schema";
@@ -160,6 +161,21 @@ export async function resolveAuthorizedOrder(orderNumber: string): Promise<Resol
   }
 
   // 6. Anti-Oracle Fail-Closed Response
+  if (await hasGuestRecoveryAccess(order)) {
+    const sessionId = `recovery:${order.id}`;
+    return {
+      authorized: true,
+      order,
+      payment,
+      role: "GUEST",
+      sessionId,
+      authorityBindingDigest: computeOrderAuthorityBindingDigest(
+        { type: "GUEST", sessionId },
+        hmacSecret
+      ),
+    };
+  }
+
   return {
     authorized: false,
     code: "NOT_AVAILABLE",

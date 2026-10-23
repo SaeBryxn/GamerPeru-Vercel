@@ -1,5 +1,6 @@
 export interface OrderEmailContext {
   orderId: string;
+  guestOrder?: boolean;
   orderNumber: string;
   customerEmail: string;
   recipientName: string | null;

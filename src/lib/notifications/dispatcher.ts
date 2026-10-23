@@ -1,4 +1,6 @@
 import "server-only";
+import { createGuestAccessToken, GUEST_ACCESS_TTL_MS } from "@/lib/orders/guest-access-token";
+import { renderGuestOrderAccess } from "./templates/guest-order-access";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationDeliveries, outboxEvents } from "@/db/schema";
@@ -18,6 +20,7 @@ type Template = { template: string; render: (context: OrderEmailContext) => Rend
  * later picks up the backlog (bounded by MAX_EVENT_AGE_HOURS) instead of silently skipping it.
  */
 const TEMPLATES: Record<string, Template[]> = {
+  GuestOrderAccessRequested: [{ template: "guest_order_access", render: renderGuestOrderAccess }],
   OrderPlaced: [{ template: "order_placed", render: renderOrderPlaced }],
   PaymentApproved: [{ template: "payment_approved", render: renderPaymentApproved }],
 };
@@ -140,6 +143,24 @@ export async function deliverOutboxEvent(
   if (!context) {
     await markFailed(eventId, "order_not_found");
     return "FAILED";
+  }
+
+  if (context.guestOrder) {
+    const secret = process.env.CHECKOUT_HMAC_SECRET?.trim() ?? "";
+    if (secret.length < 32)
+      return scheduleRetry(eventId, event.retryCount, "guest_access_configuration_unavailable");
+    const fresh = Date.now() < event.createdAt.getTime() + GUEST_ACCESS_TTL_MS;
+    const token = fresh
+      ? createGuestAccessToken(
+          context.orderId,
+          context.customerEmail,
+          secret,
+          event.createdAt.getTime()
+        )
+      : null;
+    context.confirmationUrl = token
+      ? `${deps.config.siteUrl}/checkout/recuperar#pedido=${encodeURIComponent(context.orderNumber)}&token=${encodeURIComponent(token)}`
+      : `${deps.config.siteUrl}/checkout/recuperar`;
   }
 
   const sent = await db
