@@ -2,6 +2,12 @@
 
 Canonical application repository and specifications for `gamerperu.com`.
 
+## Créditos de interfaz
+
+El panel de administración adapta Animated Counter de [Rare UI](https://rareui.com)
+y Spotlight Card de [React Bits](https://reactbits.dev), con CSS Modules y los tokens de Gamer Perú.
+Se conservan sus avisos de autor y condiciones en [docs/licenses](docs/licenses).
+
 ## Mission
 
 Build a premium multi-brand gaming-peripherals e-commerce platform for Peru with elite product presentation, original Gamer Perú identity, comprehensive commerce/Admin capabilities, strong SEO, configurable AI infrastructure, AI-assisted product import, and a privacy-controlled AI customer assistant.

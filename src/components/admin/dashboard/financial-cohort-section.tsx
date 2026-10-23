@@ -1,10 +1,11 @@
 import React from "react";
 import { AlertTriangle } from "lucide-react";
 import type { CohortFinancialsResult } from "@/lib/admin/dashboard-types";
-import { formatCentsToPen, formatInteger } from "@/lib/admin/dashboard-format";
+import { formatCentsToPen } from "@/lib/admin/dashboard-format";
 import { AdminCard, AdminSection, MetricRow, MetricWidget, StaggerItem } from "../ui";
 import { MonetaryTrendBadge, CountTrendBadge } from "./trend-badge";
 import styles from "./financial-cohort-section.module.css";
+import { AnimatedCounter } from "./animated-counter";
 
 interface FinancialCohortSectionProps {
   financialCohort: CohortFinancialsResult;
@@ -49,9 +50,9 @@ export function FinancialCohortSection({
       title="Resumen Financiero"
       caption="Pedidos creados en el período seleccionado, según su estado de pago actual."
     >
-      <AdminCard>
+      <AdminCard className={styles.summaryCard}>
         <MetricRow>
-          <StaggerItem>
+          <StaggerItem className={styles.netCell}>
             <MetricWidget
               label="Valor neto de pedidos"
               value={formatCentsToPen(current.cohortNetCents)}
@@ -74,8 +75,9 @@ export function FinancialCohortSection({
           <StaggerItem>
             <MetricWidget
               label="Pedidos pagados"
-              value={formatInteger(current.cohortPaidOrders)}
-              valueTestId="kpi-paid-orders"
+              value={
+                <AnimatedCounter value={current.cohortPaidOrders} valueTestId="kpi-paid-orders" />
+              }
               href={paidOrdersHref}
               trend={<CountTrendBadge trend={trends.paidOrders} comparisonLabel={COMPARISON} />}
               footnote={`${current.cohortActivePaidOrders} pedidos pagados activos`}

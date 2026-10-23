@@ -1,0 +1,36 @@
+/* React Bits Spotlight Card, adaptado a una tarjeta de navegación del admin. */
+.card {
+  position: relative;
+  isolation: isolate;
+}
+.lightClip {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.light {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--action-accent, var(--color-status-info-text)) 13%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity var(--motion-duration-fast) ease;
+}
+.card:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--color-border-focus);
+}
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+  .lightClip {
+    display: none;
+  }
+}

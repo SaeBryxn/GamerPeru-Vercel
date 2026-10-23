@@ -1,5 +1,4 @@
 import React from "react";
-import Link from "next/link";
 import {
   ArrowUpRight,
   LayoutTemplate,
@@ -11,6 +10,7 @@ import {
 import { AdminSection } from "../ui";
 import type { DashboardLinks } from "./dashboard-links";
 import styles from "./operations.module.css";
+import { SpotlightLink } from "./spotlight-link";
 
 interface QuickAction {
   id: string;
@@ -70,7 +70,7 @@ export function QuickActions({ links }: { links: DashboardLinks }) {
       <ul className={styles.actionGrid}>
         {actions.map(({ icon: Icon, ...action }) => (
           <li key={action.id}>
-            <Link
+            <SpotlightLink
               href={action.href}
               className={styles.actionCard}
               data-section={action.id}
@@ -84,7 +84,7 @@ export function QuickActions({ links }: { links: DashboardLinks }) {
                 <span className={styles.actionDescription}>{action.description}</span>
               </span>
               <ArrowUpRight size={15} className={styles.actionArrow} aria-hidden="true" />
-            </Link>
+            </SpotlightLink>
           </li>
         ))}
       </ul>

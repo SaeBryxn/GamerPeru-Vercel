@@ -13,6 +13,7 @@ import type { AdminDashboardPayload } from "@/lib/admin/dashboard-types";
 import { formatCentsToPen, formatInteger } from "@/lib/admin/dashboard-format";
 import type { DashboardLinks } from "./dashboard-links";
 import styles from "./operations-snapshot.module.css";
+import { AnimatedCounter } from "./animated-counter";
 
 interface OperationsSnapshotProps {
   payload: Pick<
@@ -109,8 +110,8 @@ export function OperationsSnapshot({ payload, links }: OperationsSnapshotProps) 
               </span>
               {card.href && <ArrowUpRight size={17} aria-hidden="true" />}
             </span>
-            <span className={styles.value} data-testid={`snapshot-${card.id}`}>
-              {formatInteger(card.value)}
+            <span className={styles.value}>
+              <AnimatedCounter value={card.value} valueTestId={`snapshot-${card.id}`} />
             </span>
             <span className={styles.label}>{card.label}</span>
             <span className={styles.note}>{card.note}</span>
