@@ -1,9 +1,9 @@
 .header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-5) var(--space-8);
+  gap: var(--space-4) var(--space-6);
 }
 
 .titleBlock {
@@ -16,7 +16,7 @@
 .title {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: var(--color-text-primary);
@@ -24,15 +24,8 @@
 
 .subtitle {
   margin: 0;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-}
-
-.session {
-  margin: var(--space-1) 0 0;
   font-size: 12px;
-  color: var(--color-text-muted);
-  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
 }
 
 /* Segmented control: a quiet track, the active period lifted onto a white chip. */
@@ -48,12 +41,12 @@
 .periodBtn {
   display: inline-flex;
   align-items: center;
-  height: 30px;
+  min-height: 36px;
   padding: 0 var(--space-3);
   border-radius: 7px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   text-decoration: none;
   white-space: nowrap;
   transition:
@@ -75,6 +68,22 @@
   box-shadow: var(--admin-card-shadow);
   font-weight: 600;
   color: var(--color-text-primary);
+}
+
+@media (max-width: 639px) {
+  .title {
+    font-size: 24px;
+  }
+  .periodNav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+  .periodBtn {
+    min-height: 44px;
+    justify-content: center;
+    padding-inline: var(--space-2);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

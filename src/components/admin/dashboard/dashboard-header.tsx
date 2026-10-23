@@ -5,8 +5,6 @@ import styles from "./dashboard-header.module.css";
 
 interface DashboardHeaderProps {
   selectedPeriod: DashboardPeriodSelector;
-  actorEmail: string | null;
-  actorRoles: string[];
   /** Leave the selector out when the page places it next to the metrics it drives. */
   showPeriodSelector?: boolean;
   /** Controls shown at the right of the title, such as the view switcher. */
@@ -42,23 +40,14 @@ export function PeriodSelector({ selectedPeriod }: { selectedPeriod: DashboardPe
 
 export function DashboardHeader({
   selectedPeriod,
-  actorEmail,
-  actorRoles,
   showPeriodSelector = true,
   aside,
 }: DashboardHeaderProps) {
   return (
     <header className={styles.header}>
       <div className={styles.titleBlock}>
-        <h1 className={styles.title}>Resumen</h1>
-        <p className={styles.subtitle}>
-          Lo que requiere tu atención, accesos rápidos y las métricas de Gamer Perú.
-        </p>
-        <p className={styles.session}>
-          {actorEmail ?? "Personal Autorizado"}
-          {actorRoles.length > 0 ? ` · ${actorRoles.join(", ")}` : ""}
-          {" · "}Datos actualizados al cargar esta página
-        </p>
+        <h1 className={styles.title}>Inicio</h1>
+        <p className={styles.subtitle}>Datos actualizados al abrir esta página</p>
       </div>
 
       {aside}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type {
   Brand,
@@ -27,8 +27,11 @@ import { AttentionSection } from "@/components/admin/dashboard/attention-section
 import { QuickActions, buildQuickActions } from "@/components/admin/dashboard/quick-actions";
 import { CatalogHealthSection } from "@/components/admin/dashboard/catalog-health-section";
 import { HomeStatusSection } from "@/components/admin/dashboard/home-status-section";
+import AdminDashboardPage from "@/app/admin/(protected)/page";
+import { getAdminDashboardData } from "@/lib/admin/dashboard-reader";
 
 vi.mock("@/db", () => ({ db: {} }));
+vi.mock("@/lib/admin/dashboard-reader", () => ({ getAdminDashboardData: vi.fn() }));
 
 const now = new Date();
 const product = (id: string, overrides: Partial<Product> = {}): Product => ({
@@ -380,7 +383,12 @@ describe("Attention section", () => {
     if (payload.paymentVerification.status === "READY")
       payload.paymentVerification.data.snapshotQueue.oldestPendingAt = "2026-10-01T12:00:00Z";
     const { container } = render(<AttentionSection payload={payload} links={links} />);
-    expect(container.querySelector("a")?.textContent).toBe("Pedidos por preparar");
+    const next = container.querySelector('[data-priority="next"]');
+    expect(next?.textContent).toContain("Pedidos por preparar");
+    expect(next?.getAttribute("href")).toBe(
+      "/admin/orders?orderStatus=CONFIRMED&paymentStatus=PAID&shipmentStatus=UNFULFILLED"
+    );
+    expect(container.querySelectorAll('[data-priority="next"]')).toHaveLength(1);
   });
   it("shows only pending work, each linked to its filtered view", () => {
     const links = buildDashboardLinks(
@@ -418,7 +426,7 @@ describe("Attention section", () => {
 });
 
 describe("Operational sections", () => {
-  it("render quick actions as links with wireframes", () => {
+  it("render quick actions as compact links with icons", () => {
     const links = buildDashboardLinks(["catalog:manage", "orders:manage"], period);
     render(<QuickActions links={links} />);
     expect(screen.getByTestId("quick-action-home").getAttribute("href")).toBe("/admin/home");
@@ -467,5 +475,64 @@ describe("Operational sections", () => {
   it("explain when the home sections cannot be read", () => {
     render(<HomeStatusSection homeStatus={{ status: "UNAVAILABLE" }} href="/admin/home" />);
     expect(screen.getByTestId("home-status-unavailable")).toBeTruthy();
+  });
+});
+
+describe("Jerarquía de Inicio", () => {
+  function dashboardPayload(withCatalog: boolean): AdminDashboardPayload {
+    return {
+      period,
+      actor: {
+        authUserId: "test",
+        email: "operador@example.test",
+        roles: ["ADMIN_ORDERS"],
+        permissions: withCatalog ? ["catalog:manage", "orders:manage"] : ["orders:manage"],
+      },
+      financialCohort: { status: "UNAUTHORIZED" },
+      orderPipeline: { status: "UNAUTHORIZED" },
+      ...attentionPayload(),
+      inventoryOverview: { status: "UNAUTHORIZED" },
+      catalogOverview: withCatalog
+        ? {
+            status: "READY",
+            data: {
+              publishedProducts: 7,
+              draftProducts: 2,
+              archivedProducts: 0,
+              activeSellableSkus: 8,
+              totalActiveVariants: 9,
+              totalVariants: 9,
+              publishedProductsWithoutSkus: 0,
+            },
+          }
+        : { status: "UNAUTHORIZED" },
+      homeStatus: { status: "UNAUTHORIZED" },
+      catalogHealth: { status: "UNAUTHORIZED" },
+    };
+  }
+
+  it("mantiene las cifras secundarias disponibles al desplegar y conserva el filtro de métricas", async () => {
+    vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(true));
+    render(await AdminDashboardPage({}));
+    const summary = screen.getByText("Resumen del catálogo y existencias");
+    const details = summary.closest("details")!;
+    expect(details.open).toBe(false);
+    fireEvent.click(summary);
+    expect(details.open).toBe(true);
+    expect(within(details).getByTestId("catalog-published-products").textContent).toContain("7");
+    expect(screen.getByRole("link", { name: "Métricas del período" }).getAttribute("href")).toBe(
+      "/admin?vista=metricas&period=LAST_30_DAYS"
+    );
+    expect(screen.queryByText("operador@example.test")).toBeNull();
+    expect(screen.queryByText("ADMIN_ORDERS")).toBeNull();
+  });
+
+  it("una cuenta de pedidos conserva los accesos autorizados sin una columna vacía de catálogo", async () => {
+    vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(false));
+    const { container } = render(await AdminDashboardPage({}));
+    expect(screen.getByTestId("quick-action-orders").getAttribute("href")).toBe("/admin/orders");
+    expect(screen.queryByTestId("quick-action-catalog")).toBeNull();
+    expect(container.querySelector("details")).toBeNull();
+    expect(container.querySelector('[data-has-catalog="false"]')?.children).toHaveLength(1);
   });
 });

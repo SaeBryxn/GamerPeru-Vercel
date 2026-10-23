@@ -126,6 +126,10 @@ Validación: formato, TypeScript, lint y 20 pruebas afectadas correctos. Captura
 
 Archivos candidatos: página de `/admin` y `src/components/admin/dashboard/`.
 
+**Implementación local del 23 de octubre:** Inicio muestra los pendientes en una sola lista, con una siguiente tarea identificada y accesos a los filtros originales. La identidad queda en Mi cuenta. Los accesos rápidos usan filas compactas con iconos y acentos suaves; el resumen de catálogo y existencias queda disponible en un bloque plegable. Se conservan la vista de métricas, sus períodos, los permisos y las consultas existentes. Las cuentas de pedidos no reciben una columna vacía de catálogo.
+
+Validación: formato, TypeScript, lint y 38 pruebas dirigidas correctos. Por indicación del dueño no se hicieron capturas ni pruebas visuales; la revisión de la composición y el funcionamiento con sus datos queda a su cargo en el servidor local. El dueño autorizó ejecutar la web local contra el Supabase de producción y pidió dejar de hacer pushes automáticos. No se cambiaron datos ni se probó el sitio de producción durante este rediseño.
+
 ### O2. Pagos
 
 **Tarea:** decidir con evidencia. Compactar filtros y resumen; el panel mantiene importe, pedido, comprobante, asignación y decisiones en orden de lectura.
@@ -247,7 +251,7 @@ Mantener la prohibición de peticiones a `gamerperu.com`, acceso a la base de pr
 
 ## 13. Siguiente cambio propuesto
 
-La cabecera y el menú de cuenta están implementados. El siguiente cambio es **Inicio**: priorizar pendientes y siguiente acción, manteniendo operación y métricas separadas. Después seguir Pagos, Pedidos y la consolidación de Inventario, en ese orden.
+La cabecera y el menú de cuenta están implementados. **Inicio** tiene una primera versión implementada en local, pendiente de revisión visual del dueño. Después de esa revisión, el siguiente cambio propuesto es Pagos; luego Pedidos y la consolidación de Inventario.
 
 La cantidad de pasos y el tiempo actual se medirán antes de prometer una reducción. Como guía, el dueño debería poder ubicar una sección y completar su tarea con menos dudas, manteniendo los controles críticos.
 

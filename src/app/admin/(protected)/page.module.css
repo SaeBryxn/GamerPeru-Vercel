@@ -11,16 +11,46 @@
   gap: var(--space-6);
 }
 
-.lowerGrid {
+.workspaceGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-6);
 }
 
-@media (min-width: 1024px) {
-  .lowerGrid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+@media (min-width: 1200px) {
+  .workspaceGrid[data-has-catalog="true"] {
+    grid-template-columns: minmax(0, 1fr) 320px;
   }
+}
+
+.primaryColumn,
+.secondaryColumn,
+.overviewContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+.overviewDetails {
+  border-top: 1px solid var(--color-border-default);
+}
+.overviewDetails > summary {
+  min-height: 48px;
+  padding: var(--space-4) 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.overviewDetails > summary:hover {
+  color: var(--color-text-primary);
+}
+.overviewDetails > summary:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+.overviewContent {
+  padding-block: var(--space-2) var(--space-4);
 }
 
 /* Separates the operational blocks above from the period metrics below. */

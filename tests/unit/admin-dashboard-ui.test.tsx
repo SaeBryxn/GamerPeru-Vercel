@@ -490,13 +490,7 @@ describe("GP-023 / CHK2 — Admin Dashboard Component & State Rendering Unit Tes
 
   describe("6. DashboardHeader & Period Selection", () => {
     it("15. period selector selected state: renders aria-current='page' on active option", () => {
-      render(
-        <DashboardHeader
-          selectedPeriod="LAST_7_DAYS"
-          actorEmail="admin@gamerperu.pe"
-          actorRoles={["SUPER_ADMIN"]}
-        />
-      );
+      render(<DashboardHeader selectedPeriod="LAST_7_DAYS" />);
 
       const hoyLink = screen.getByRole("link", { name: "Hoy" });
       const sieteDiasLink = screen.getByRole("link", { name: "7 días" });
@@ -517,13 +511,7 @@ describe("GP-023 / CHK2 — Admin Dashboard Component & State Rendering Unit Tes
 
       expect(resolvedPeriod).toBe("LAST_30_DAYS");
 
-      render(
-        <DashboardHeader
-          selectedPeriod={resolvedPeriod}
-          actorEmail="admin@gamerperu.pe"
-          actorRoles={["SUPER_ADMIN"]}
-        />
-      );
+      render(<DashboardHeader selectedPeriod={resolvedPeriod} />);
 
       const treintaDiasLink = screen.getByRole("link", { name: "30 días" });
       expect(treintaDiasLink.getAttribute("aria-current")).toBe("page");

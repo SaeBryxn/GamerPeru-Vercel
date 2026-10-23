@@ -47,6 +47,10 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     payload.catalogOverview.status !== "UNAUTHORIZED" ||
     payload.inventoryOverview.status !== "UNAUTHORIZED";
   const links = buildDashboardLinks(payload.actor.permissions, payload.period);
+  const hasCatalogContext =
+    payload.catalogHealth.status === "READY" ||
+    payload.catalogOverview.status === "READY" ||
+    payload.inventoryOverview.status === "READY";
   // Two views instead of one long page: today's work, or the numbers of the chosen period.
   const view = resolvedParams.vista === "metricas" ? "metrics" : "operations";
   const viewNav = hasAnyMetricAccess ? (
@@ -65,34 +69,40 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
 
   return (
     <div className={styles.container}>
-      <DashboardHeader
-        selectedPeriod={selectedPeriod}
-        actorEmail={payload.actor.email}
-        actorRoles={payload.actor.roles}
-        showPeriodSelector={!hasAnyMetricAccess}
-        aside={viewNav}
-      />
+      <DashboardHeader selectedPeriod={selectedPeriod} showPeriodSelector={false} aside={viewNav} />
 
       {hasAnyMetricAccess && view === "operations" ? (
         <Stagger className={styles.dashboardBody}>
           <AttentionSection payload={payload} links={links} />
-          <QuickActions links={links} />
-          <div className={styles.lowerGrid}>
-            <HomeStatusSection homeStatus={payload.homeStatus} href={links.home} />
-            <CatalogHealthSection
-              catalogHealth={payload.catalogHealth}
-              productsHref={links.products?.({ pending: "issues" }) ?? null}
-            />
-          </div>
-          <div className={styles.lowerGrid}>
-            <CatalogOverviewSection
-              catalogOverview={payload.catalogOverview}
-              productsHref={links.products}
-            />
-            <InventoryOverviewSection
-              inventoryOverview={payload.inventoryOverview}
-              outOfStockHref={links.products?.({ pending: "stock" })}
-            />
+          <div className={styles.workspaceGrid} data-has-catalog={hasCatalogContext}>
+            {hasCatalogContext && (
+              <div className={styles.primaryColumn}>
+                <CatalogHealthSection
+                  catalogHealth={payload.catalogHealth}
+                  productsHref={links.products?.({ pending: "issues" }) ?? null}
+                />
+                {(payload.catalogOverview.status === "READY" ||
+                  payload.inventoryOverview.status === "READY") && (
+                  <details className={styles.overviewDetails}>
+                    <summary>Resumen del catálogo y existencias</summary>
+                    <div className={styles.overviewContent}>
+                      <CatalogOverviewSection
+                        catalogOverview={payload.catalogOverview}
+                        productsHref={links.products}
+                      />
+                      <InventoryOverviewSection
+                        inventoryOverview={payload.inventoryOverview}
+                        outOfStockHref={links.products?.({ pending: "stock" })}
+                      />
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+            <div className={styles.secondaryColumn}>
+              <QuickActions links={links} />
+              <HomeStatusSection homeStatus={payload.homeStatus} href={links.home} />
+            </div>
           </div>
         </Stagger>
       ) : hasAnyMetricAccess ? (

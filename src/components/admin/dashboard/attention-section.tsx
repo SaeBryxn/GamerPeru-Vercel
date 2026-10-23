@@ -71,8 +71,8 @@ export function buildAttentionItems({
   if (inventoryOverview.status === "READY") {
     items.push({
       id: "out-of-stock",
-      label: "SKUs agotados",
-      hint: "Variantes activas sin unidades disponibles",
+      label: "Colores o tallas sin stock",
+      hint: "Versiones activas sin unidades disponibles",
       count: inventoryOverview.data.outOfStockActiveSkus,
       href: links.products?.({ pending: "stock" }) ?? null,
       tone: "attention",
@@ -101,42 +101,44 @@ export function AttentionSection(props: AttentionSectionProps) {
     <AdminSection
       id="attention-heading"
       title="Requiere tu atención"
-      caption="Estado actual, sin importar el período elegido"
+      caption="Pendientes actuales · sin filtro de fechas"
     >
       {pending.length === 0 ? (
         <p className={styles.allClear} data-testid="attention-all-clear">
           <CheckCircle2 size={16} aria-hidden="true" />
-          Todo al día: no hay pagos, pedidos ni SKUs pendientes.
+          Sin pendientes en las colas que puedes consultar
         </p>
       ) : (
         <>
-          {next && (
-            <p className={styles.notice}>
-              Siguiente tarea: <Link href={next.href!}>{next.label}</Link>. Primero se muestra el
-              trabajo de mayor impacto y, dentro de él, el más antiguo.
-            </p>
-          )}
           <ul className={styles.attentionGrid}>
             {pending.map((item) => {
               const content = (
                 <>
-                  <span className={styles.attentionLabel}>
-                    <StatusDot tone={item.tone} />
-                    {item.label}
-                  </span>
                   <span className={styles.attentionCount}>{formatInteger(item.count)}</span>
-                  <span className={styles.attentionHint}>{item.hint}</span>
-                  {item.oldestAt && (
-                    <time className={styles.attentionHint} dateTime={item.oldestAt}>
-                      Pendiente más antiguo:{" "}
-                      {new Date(item.oldestAt).toLocaleString("es-PE", {
-                        timeZone: "America/Lima",
-                      })}
-                    </time>
-                  )}
+                  <span className={styles.attentionCopy}>
+                    {item === next && <span className={styles.nextTask}>Siguiente tarea</span>}
+                    <span className={styles.attentionLabel}>
+                      <StatusDot tone={item.tone} />
+                      {item.label}
+                    </span>
+                    <span className={styles.attentionHint}>{item.hint}</span>
+                    {item.oldestAt && (
+                      <time className={styles.attentionHint} dateTime={item.oldestAt}>
+                        Más antiguo:{" "}
+                        {new Date(item.oldestAt).toLocaleString("es-PE", {
+                          timeZone: "America/Lima",
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </time>
+                    )}
+                  </span>
                   {item.href && (
                     <span className={styles.attentionCta}>
-                      Resolver <ArrowRight size={14} aria-hidden="true" />
+                      <span>Revisar</span> <ArrowRight size={16} aria-hidden="true" />
                     </span>
                   )}
                 </>
@@ -144,7 +146,11 @@ export function AttentionSection(props: AttentionSectionProps) {
               return (
                 <li key={item.id} data-testid={`attention-${item.id}`}>
                   {item.href ? (
-                    <Link href={item.href} className={styles.attentionCard}>
+                    <Link
+                      href={item.href}
+                      className={styles.attentionCard}
+                      data-priority={item === next ? "next" : undefined}
+                    >
                       {content}
                     </Link>
                   ) : (

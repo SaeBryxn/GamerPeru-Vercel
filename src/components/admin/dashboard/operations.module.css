@@ -29,51 +29,69 @@
 
 .attentionGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: var(--space-3);
+  overflow: hidden;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--admin-card-radius);
+  background: var(--color-surface-card);
+}
+.attentionGrid > li + li {
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .attentionCard {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  height: 100%;
-  padding: var(--admin-card-padding);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--admin-card-radius);
-  background-color: var(--color-surface-card);
-  box-shadow: var(--admin-card-shadow);
+  display: grid;
+  grid-template-columns: minmax(3ch, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 88px;
+  padding: var(--space-4) var(--space-5);
   color: inherit;
   text-decoration: none;
 }
 
 a.attentionCard:hover {
-  border-color: var(--color-border-default);
+  background: var(--color-surface-secondary);
+}
+.attentionCard[data-priority="next"] {
+  background: var(--admin-accent-soft);
+}
+.attentionCopy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.nextTask {
+  color: var(--color-status-info-text);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .attentionLabel {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
 }
 
 .attentionCount {
   font-family: var(--font-heading);
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-primary);
+  text-align: right;
 }
 
 .attentionHint {
   font-size: 12px;
   line-height: 1.45;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .attentionCta,
@@ -89,7 +107,7 @@ a.attentionCard:hover {
 }
 
 .attentionCta {
-  margin-top: auto;
+  white-space: nowrap;
 }
 
 .sectionLink,
@@ -107,27 +125,27 @@ a.attentionCard:hover .attentionCta {
 }
 
 .actionGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-3);
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-card-radius);
+  background: var(--color-surface-card);
+}
+.actionGrid > li + li {
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .actionCard {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  height: 100%;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--admin-card-radius);
-  background-color: var(--color-surface-card);
-  box-shadow: var(--admin-card-shadow);
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 72px;
+  padding: var(--space-3) var(--space-4);
   color: inherit;
   text-decoration: none;
 }
 
 .actionCard:hover {
-  border-color: var(--color-border-default);
+  background: var(--color-surface-secondary);
 }
 
 .actionCard:hover .actionTitle {
@@ -135,20 +153,51 @@ a.attentionCard:hover .attentionCta {
   text-underline-offset: 3px;
 }
 
-.actionThumb {
-  margin-bottom: var(--space-1);
+.actionIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--color-status-info-text);
+  background: var(--color-status-info-background);
+}
+.actionCard[data-section="home"] .actionIcon {
+  color: var(--color-status-danger-text);
+  background: var(--color-status-danger-background);
+}
+.actionCard[data-section="orders"] .actionIcon {
+  color: var(--color-status-success-text);
+  background: var(--color-status-success-background);
+}
+.actionCard[data-section="menu"] .actionIcon {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-secondary);
+}
+.actionCopy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1;
+}
+.actionArrow {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
 }
 
 .actionTitle {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--color-text-primary);
 }
 
 .actionDescription {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.5;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .healthCard {
@@ -195,7 +244,7 @@ a.attentionCard:hover .attentionCta {
   padding: 1px 8px;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-full);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -222,7 +271,7 @@ a.attentionCard:hover .attentionCta {
 .severity {
   padding: 1px 6px;
   border-radius: var(--radius-sm, 4px);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -260,20 +309,23 @@ a.attentionCard:hover .attentionCta {
   outline-offset: 2px;
 }
 
-@media (max-width: 639px) {
-  /* A full-width schematic per card made the block over 1300px tall on phones. */
-  .actionCard {
-    display: grid;
-    grid-template-columns: 96px minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
-    column-gap: var(--space-3);
-    row-gap: 2px;
-    align-items: start;
-  }
+.attentionCard:focus-visible {
+  outline-offset: -3px;
+}
+.actionCard:focus-visible {
+  outline-offset: -3px;
+}
 
-  .actionThumb {
-    grid-row: 1 / span 2;
-    margin-bottom: 0;
+@media (max-width: 639px) {
+  .attentionCard {
+    gap: var(--space-3);
+    padding-inline: var(--space-4);
+  }
+  .attentionCount {
+    font-size: 24px;
+  }
+  .attentionCta > span {
+    display: none;
   }
 
   .healthRow {
