@@ -1,0 +1,84 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  color: var(--admin-text-primary, var(--color-text-primary));
+}
+.root h1,
+.root h2,
+.root p {
+  margin: 0;
+}
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+}
+.root label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 13px;
+}
+.root input,
+.root select,
+.root button {
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--radius-md);
+  background: var(--admin-panel);
+  color: inherit;
+  font: inherit;
+}
+.root button,
+.root summary {
+  cursor: pointer;
+}
+.root a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.scroll {
+  overflow-x: auto;
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background: var(--admin-panel);
+}
+.root table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.root th,
+.root td {
+  padding: var(--space-3);
+  vertical-align: top;
+  border-bottom: 1px solid var(--admin-panel-border);
+}
+.root small {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+.root form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.root details form {
+  width: 240px;
+  padding-block: var(--space-2);
+  flex-direction: column;
+}
+.root summary {
+  padding-bottom: var(--space-2);
+}
+.root section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}

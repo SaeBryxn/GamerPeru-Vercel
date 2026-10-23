@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   ChevronDown,
+  Boxes,
   Cpu,
   FolderTree,
   Gauge,
@@ -25,6 +26,7 @@ import styles from "./admin-shell.module.css";
 const ICONS: Record<AdminNavItem["iconName"] | AdminNavFolder["iconName"], typeof Gauge> = {
   Gauge,
   ShoppingBag,
+  Boxes,
   ReceiptText,
   Mouse,
   FolderTree,

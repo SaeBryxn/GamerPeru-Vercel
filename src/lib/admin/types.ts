@@ -24,6 +24,7 @@ export interface AdminNavItem {
   folder?: AdminNavFolderId;
   iconName:
     | "Gauge"
+    | "Boxes"
     | "ShoppingBag"
     | "ReceiptText"
     | "Mouse"

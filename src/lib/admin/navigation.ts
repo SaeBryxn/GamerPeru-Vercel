@@ -58,6 +58,15 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Gestión de catálogo y productos",
   },
   {
+    id: "inventory",
+    label: "Inventario",
+    href: "/admin/inventario",
+    group: "operations",
+    iconName: "Boxes",
+    requiredPermission: "inventory:manage",
+    description: "Existencias, conteos y movimientos del almacén principal",
+  },
+  {
     id: "taxonomy",
     label: "Categorías y marcas",
     href: "/admin/taxonomia",

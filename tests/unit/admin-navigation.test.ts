@@ -15,6 +15,7 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
       ["orders", "/admin/orders", "orders:manage"],
       ["payment-verification", "/admin/pagos", "orders:verify"],
       ["products", "/admin/products", "catalog:manage"],
+      ["inventory", "/admin/inventario", "inventory:manage"],
       ["taxonomy", "/admin/taxonomia", "catalog:manage"],
       ["storefront-home", "/admin/home", "catalog:manage"],
       ["storefront-menu", "/admin/menu", "catalog:manage"],
@@ -29,7 +30,6 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
       "/admin/dashboard",
       "/admin/productos",
       "/admin/pedidos",
-      "/admin/inventario",
       "/admin/clientes",
       "/admin/asistente-ia",
     ];
@@ -104,7 +104,7 @@ describe("Admin navigation sections", () => {
 
   it("groups destinations into sections with collapsible folders in display order", () => {
     expect(shape()).toEqual([
-      ["Operaciones", ["overview", "orders", "payment-verification"]],
+      ["Operaciones", ["overview", "orders", "payment-verification", "inventory"]],
       ["Catálogo", ["products", "taxonomy"]],
       ["Tienda y contenido", [["Diseño de tienda", ["storefront-home", "storefront-menu"]]]],
       ["IA y sistema", [["Motor IA", ["ai-product-assistant", "ai-settings"]], "team"]],
