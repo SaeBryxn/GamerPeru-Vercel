@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { MotionConfig } from "framer-motion";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import { getAdminNavigation } from "@/lib/admin/navigation";
+import type { AdminIdentity } from "@/lib/admin/staff/identity";
 import { AdminSidebar } from "./admin-sidebar";
-import { resolveActiveNavId } from "./admin-nav-sections";
+import { buildAdminBreadcrumbs } from "./admin-breadcrumbs";
 import { AdminHeader } from "./admin-header";
 import { AdminMobileNav } from "./admin-mobile-nav";
 import { useAdminTheme } from "./use-admin-theme";
@@ -39,27 +40,20 @@ function useSidebarCollapsed(): [boolean, () => void] {
 
 interface AdminShellProps {
   authContext: VerifiedAuthContextReady;
+  identity: AdminIdentity;
   children: React.ReactNode;
 }
 
-export function AdminShell({ authContext, children }: AdminShellProps) {
+export function AdminShell({ authContext, identity, children }: AdminShellProps) {
   const currentPath = usePathname();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const { theme, toggle } = useAdminTheme();
   const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed();
 
-  const staff = {
-    authUserId: authContext.authUserId,
-    email: authContext.email,
-    roles: authContext.roles,
-    permissions: authContext.permissions,
-  };
-
   const navItems = getAdminNavigation(authContext.permissions);
-  // The breadcrumb names the section the current screen belongs to.
-  const activeId = resolveActiveNavId(navItems, currentPath);
-  const pageTitle = navItems.find((item) => item.id === activeId)?.label ?? "Inicio";
+  // Inicio › section › sub-screen, so any level is one click away.
+  const crumbs = buildAdminBreadcrumbs(navItems, currentPath);
 
   return (
     <MotionConfig reducedMotion="user">
@@ -71,7 +65,6 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
         <div className={styles.layoutContainer}>
           <AdminSidebar
             navItems={navItems}
-            staff={staff}
             currentPath={currentPath}
             collapsed={sidebarCollapsed}
             onToggleCollapsed={toggleSidebar}
@@ -82,10 +75,10 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
               onOpenMobileNav={() => setIsMobileNavOpen(true)}
               isMobileNavOpen={isMobileNavOpen}
               triggerRef={menuButtonRef}
-              pageTitle={pageTitle}
+              crumbs={crumbs}
               theme={theme}
               onToggleTheme={toggle}
-              email={authContext.email}
+              identity={identity}
               roles={authContext.roles}
             />
 
@@ -104,7 +97,6 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
           isOpen={isMobileNavOpen}
           onClose={() => setIsMobileNavOpen(false)}
           navItems={navItems}
-          staff={staff}
           currentPath={currentPath}
           triggerRef={menuButtonRef}
         />

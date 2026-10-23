@@ -128,7 +128,7 @@
 }
 
 .metricValueLarge {
-  font-size: var(--admin-metric-large-size, 36px);
+  font-size: var(--admin-metric-large-size, var(--admin-kpi-size, 28px));
 }
 
 .metricValueSmall {
@@ -265,6 +265,118 @@
   }
 
   .metricValueLarge {
-    font-size: 30px;
+    font-size: min(24px, var(--admin-metric-large-size, 24px));
+  }
+}
+
+.sectionLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--admin-control-height);
+  font-size: var(--admin-meta-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sectionLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sectionLink:focus-visible,
+.statLink:focus-visible {
+  outline: 2px solid var(--admin-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.statList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.statList > li + li {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.statRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  color: inherit;
+  text-decoration: none;
+}
+
+.statLink:hover {
+  background: var(--color-surface-secondary);
+}
+
+.statLink:hover .statLabel {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.statLabel {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--admin-meta-size);
+  color: var(--color-text-secondary);
+}
+
+.statNote {
+  font-size: var(--admin-caption-size);
+  color: var(--color-text-muted);
+}
+
+.statValue {
+  flex-shrink: 0;
+  font-size: var(--admin-text-size);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.empty {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.emptyIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--color-text-muted);
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: var(--admin-text-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.emptyText {
+  margin: 2px 0 0;
+  font-size: var(--admin-meta-size);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+@media (pointer: coarse) {
+  .sectionLink {
+    min-height: var(--admin-tap-target);
   }
 }

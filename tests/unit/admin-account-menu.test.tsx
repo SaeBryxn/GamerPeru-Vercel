@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useState } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AdminAccountMenu } from "@/components/admin/admin-account-menu";
@@ -60,8 +60,10 @@ it("agrupa la identidad verificada y los destinos existentes sin inventar un nom
   render(<Account />);
   expect(screen.queryByRole("dialog")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Abrir menú de cuenta" }));
-  expect(screen.getByRole("dialog", { name: "Mi cuenta" })).toBeTruthy();
-  expect(screen.getByText("catalogo@example.test")).toBeTruthy();
+  const dialog = screen.getByRole("dialog", { name: "Mi cuenta" });
+  // Without a profile name the email is the name, written once.
+  expect(within(dialog).getByRole("heading", { name: "catalogo@example.test" })).toBeTruthy();
+  expect(within(dialog).getAllByText("catalogo@example.test")).toHaveLength(1);
   expect(screen.getByText("Catálogo")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Datos de mi cuenta" }).getAttribute("href")).toBe(
     "/cuenta/perfil"
@@ -164,6 +166,32 @@ it("mantiene el acceso de cuenta cuando no hay correo disponible", () => {
     <AdminAccountMenu email={null} roles={["SUPER_ADMIN"]} theme="dark" onToggleTheme={() => {}} />
   );
   fireEvent.click(screen.getByRole("button", { name: "Abrir menú de cuenta" }));
-  expect(screen.getByText("Sesión administrativa")).toBeTruthy();
-  expect(screen.getByText("Superadministrador")).toBeTruthy();
+  const dialog = screen.getByRole("dialog", { name: "Mi cuenta" });
+  expect(within(dialog).getByRole("heading", { name: "Sesión administrativa" })).toBeTruthy();
+  expect(within(dialog).getByText("Superadministrador")).toBeTruthy();
+});
+
+it("muestra el nombre del perfil con su avatar y cae a las iniciales si Gravatar no tiene foto", () => {
+  const { container } = render(
+    <AdminAccountMenu
+      email="ana@example.test"
+      displayName="Ana Torres"
+      avatarUrl="https://gravatar.com/avatar/abc?s=80&d=404"
+      roles={["SUPER_ADMIN"]}
+      theme="light"
+      onToggleTheme={() => undefined}
+    />
+  );
+  const trigger = screen.getByRole("button", { name: "Abrir menú de cuenta" });
+  expect(trigger.textContent).toContain("Ana Torres");
+  const image = trigger.querySelector("img")!;
+  expect(image.getAttribute("src")).toContain("gravatar.com/avatar/abc");
+  fireEvent.error(image);
+  expect(trigger.querySelector("img")).toBeNull();
+  expect(trigger.textContent).toContain("AT");
+  fireEvent.click(trigger);
+  const dialog = screen.getByRole("dialog", { name: "Mi cuenta" });
+  expect(within(dialog).getByText("ana@example.test")).toBeTruthy();
+  expect(within(dialog).getByText("Superadministrador")).toBeTruthy();
+  expect(container.querySelectorAll("img[alt='']").length).toBeGreaterThan(0);
 });

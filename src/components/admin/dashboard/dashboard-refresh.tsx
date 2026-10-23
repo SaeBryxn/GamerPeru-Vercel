@@ -16,7 +16,7 @@ export function DashboardRefresh() {
       onClick={() => startTransition(() => router.refresh())}
     >
       <RefreshCw size={15} aria-hidden="true" />
-      {pending ? "Actualizando…" : "Actualizar datos"}
+      <span className={styles.refreshLabel}>{pending ? "Actualizando…" : "Actualizar datos"}</span>
     </button>
   );
 }

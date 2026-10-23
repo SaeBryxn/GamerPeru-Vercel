@@ -2,171 +2,159 @@ import React from "react";
 import {
   CANONICAL_PERIOD_SELECTORS,
   type DashboardPeriodSelector,
+  type ResolvedDashboardPeriod,
 } from "@/lib/admin/dashboard-period";
 import { getAdminDashboardData } from "@/lib/admin/dashboard-reader";
-import { DashboardHeader, PeriodSelector } from "@/components/admin/dashboard/dashboard-header";
+import { formatInteger } from "@/lib/admin/dashboard-format";
+import { DashboardHeader } from "@/components/admin/dashboard/dashboard-header";
 import { FinancialCohortSection } from "@/components/admin/dashboard/financial-cohort-section";
 import { OrderPipelineSection } from "@/components/admin/dashboard/order-pipeline-section";
-import { PaymentVerificationSection } from "@/components/admin/dashboard/payment-verification-section";
-import { CatalogOverviewSection } from "@/components/admin/dashboard/catalog-overview-section";
+import { OrderQueueSection } from "@/components/admin/dashboard/order-queue-section";
 import { InventoryOverviewSection } from "@/components/admin/dashboard/inventory-overview-section";
 import { NoMetricsAssigned } from "@/components/admin/dashboard/no-metrics-assigned";
 import { AttentionSection } from "@/components/admin/dashboard/attention-section";
-import { QuickActions } from "@/components/admin/dashboard/quick-actions";
 import { HomeStatusSection } from "@/components/admin/dashboard/home-status-section";
 import { CatalogHealthSection } from "@/components/admin/dashboard/catalog-health-section";
 import { buildDashboardLinks } from "@/components/admin/dashboard/dashboard-links";
-import { OperationsSnapshot } from "@/components/admin/dashboard/operations-snapshot";
-import { SegmentedNav, Stagger } from "@/components/admin/ui";
+import { Stagger } from "@/components/admin/ui";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
 interface AdminDashboardPageProps {
-  searchParams?: Promise<{ period?: string; vista?: string }>;
+  searchParams?: Promise<{ period?: string }>;
+}
+
+const LIMA_DAY = new Intl.DateTimeFormat("es-PE", {
+  timeZone: "America/Lima",
+  day: "numeric",
+  month: "short",
+});
+
+/** What every trend on the page is measured against, in the operator's words. */
+function describeComparison(period: ResolvedDashboardPeriod): string {
+  const { start, end } = period.previous;
+  const lastDay = new Date(end.getTime() - 1);
+  return period.selector === "TODAY"
+    ? `Comparado con ayer, ${LIMA_DAY.format(start)}`
+    : `Comparado con ${LIMA_DAY.format(start)} – ${LIMA_DAY.format(lastDay)}`;
 }
 
 export default async function AdminDashboardPage({ searchParams }: AdminDashboardPageProps) {
   const resolvedParams = searchParams ? await searchParams : {};
   const rawPeriod = resolvedParams.period;
 
-  // Validate search param safely against frozen period selectors with fallback to LAST_30_DAYS
+  // Inicio answers "how is today going" first; other periods stay one click away.
   const selectedPeriod: DashboardPeriodSelector =
     typeof rawPeriod === "string" &&
     (CANONICAL_PERIOD_SELECTORS as readonly string[]).includes(rawPeriod)
       ? (rawPeriod as DashboardPeriodSelector)
-      : "LAST_30_DAYS";
+      : "TODAY";
 
   // Execute canonical aggregate data reader exactly once per page request
   const payload = await getAdminDashboardData({ periodSelector: selectedPeriod });
 
-  // Determine if actor has any authorized metric section
   const hasAnyMetricAccess =
     payload.financialCohort.status !== "UNAUTHORIZED" ||
     payload.orderPipeline.status !== "UNAUTHORIZED" ||
     payload.paymentVerification.status !== "UNAUTHORIZED" ||
     payload.catalogOverview.status !== "UNAUTHORIZED" ||
     payload.inventoryOverview.status !== "UNAUTHORIZED";
+  const hasPeriodMetrics =
+    payload.financialCohort.status !== "UNAUTHORIZED" ||
+    payload.orderPipeline.status !== "UNAUTHORIZED";
   const links = buildDashboardLinks(payload.actor.permissions, payload.period);
-  const hasCatalogContext = payload.catalogHealth.status === "READY";
-  // Two views instead of one long page: today's work, or the numbers of the chosen period.
-  const view = resolvedParams.vista === "metricas" ? "metrics" : "operations";
-  const formatBoundary = (date: Date) =>
-    new Intl.DateTimeFormat("es-PE", {
-      timeZone: "America/Lima",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date);
-  const viewNav = hasAnyMetricAccess ? (
-    <SegmentedNav
-      label="Vista del resumen"
-      options={[
-        { href: "/admin", label: "Resumen operativo", active: view === "operations" },
-        {
-          href: `/admin?vista=metricas&period=${selectedPeriod}`,
-          label: "Métricas del período",
-          active: view === "metrics",
-        },
-      ]}
-    />
-  ) : null;
+  const comparison = describeComparison(payload.period);
+  const now = payload.period.referenceNow;
+  const hasAside =
+    payload.orderQueue.status === "READY" || payload.inventoryOverview.status === "READY";
+  const catalogHealth = payload.catalogHealth.status === "READY" ? payload.catalogHealth : null;
+  // A catalog-only account has no queues or sales here: its upkeep is the whole page, so it opens.
+  const upkeepOpen = !hasPeriodMetrics && !hasAside;
 
   return (
-    <div className={styles.container} data-view={view}>
+    <div className={styles.container}>
       <DashboardHeader
         selectedPeriod={selectedPeriod}
-        showPeriodSelector={false}
-        aside={viewNav}
-        view={view}
-        updatedAt={payload.period.referenceNow.toISOString()}
+        showPeriodSelector={hasPeriodMetrics}
+        updatedAt={now.toISOString()}
+        comparison={comparison}
       />
 
-      {hasAnyMetricAccess && view === "operations" ? (
+      {hasAnyMetricAccess ? (
         <Stagger className={styles.dashboardBody}>
-          <OperationsSnapshot payload={payload} links={links} />
-          <div className={styles.workspaceGrid} data-has-catalog={hasCatalogContext}>
-            <div className={styles.primaryColumn}>
-              <AttentionSection payload={payload} links={links} />
-              {(payload.catalogOverview.status === "READY" ||
-                payload.inventoryOverview.status === "READY") && (
-                <details className={styles.overviewDetails}>
-                  <summary>Resumen del catálogo y existencias</summary>
-                  <div className={styles.overviewContent}>
-                    <CatalogOverviewSection
-                      catalogOverview={payload.catalogOverview}
-                      productsHref={links.products}
-                    />
-                    <InventoryOverviewSection
-                      inventoryOverview={payload.inventoryOverview}
-                      outOfStockHref={links.products?.({ pending: "stock" })}
+          <AttentionSection payload={payload} links={links} />
+
+          <div className={styles.workspace} data-has-aside={hasAside}>
+            {hasPeriodMetrics && (
+              <div className={styles.primary}>
+                <FinancialCohortSection
+                  financialCohort={payload.financialCohort}
+                  paidOrdersHref={links.periodOrders?.({ paymentStatus: "PAID" })}
+                  refunds={
+                    payload.paymentVerification.status === "READY"
+                      ? payload.paymentVerification.data.periodRefunds
+                      : undefined
+                  }
+                  comparisonLabel={comparison}
+                />
+                <OrderPipelineSection
+                  orderPipeline={payload.orderPipeline}
+                  periodOrdersHref={links.periodOrders}
+                  comparisonLabel={comparison}
+                />
+              </div>
+            )}
+            {hasAside && (
+              <aside className={styles.aside} aria-label="Estado actual de pedidos e inventario">
+                <OrderQueueSection orderQueue={payload.orderQueue} links={links} now={now} />
+                <InventoryOverviewSection
+                  inventoryOverview={payload.inventoryOverview}
+                  inventoryHref={links.inventory}
+                  outOfStockHref={links.products?.({ pending: "stock" })}
+                />
+              </aside>
+            )}
+          </div>
+
+          {(catalogHealth !== null || payload.homeStatus.status !== "UNAUTHORIZED") && (
+            <div className={styles.secondary}>
+              {catalogHealth && (
+                <details className={styles.fold} open={upkeepOpen}>
+                  <summary>
+                    <span>Catálogo por completar</span>
+                    <span className={styles.foldCount}>
+                      {catalogHealth.data.productsWithIssues === 0
+                        ? "Todo listo"
+                        : `${formatInteger(catalogHealth.data.productsWithIssues)} productos · ${formatInteger(catalogHealth.data.productsWithBlockers)} con bloqueos`}
+                    </span>
+                  </summary>
+                  <div className={styles.foldBody}>
+                    <CatalogHealthSection
+                      catalogHealth={catalogHealth}
+                      productsHref={links.products?.({ pending: "issues" }) ?? null}
                     />
                   </div>
                 </details>
               )}
-            </div>
-            {hasCatalogContext && (
-              <CatalogHealthSection
-                catalogHealth={payload.catalogHealth}
-                productsHref={links.products?.({ pending: "issues" }) ?? null}
-              />
-            )}
-            <div className={styles.secondaryColumn}>
-              <QuickActions links={links} />
-              <HomeStatusSection homeStatus={payload.homeStatus} href={links.home} />
-            </div>
-          </div>
-        </Stagger>
-      ) : hasAnyMetricAccess ? (
-        <Stagger className={styles.dashboardBody}>
-          <div className={styles.metricsDivider}>
-            <PeriodSelector selectedPeriod={selectedPeriod} />
-            <details className={styles.comparisonDetails}>
-              <summary>Fechas de comparación</summary>
-              <div
-                className={styles.comparisonContext}
-                aria-label="Fechas de las métricas y de su comparación"
-              >
-                <p>
-                  <strong>Período seleccionado:</strong>{" "}
-                  {formatBoundary(payload.period.current.start)} –{" "}
-                  {formatBoundary(payload.period.current.end)}
-                </p>
-                <p>
-                  <strong>Comparado con:</strong> {formatBoundary(payload.period.previous.start)} –{" "}
-                  {formatBoundary(payload.period.previous.end)} · hora de Lima
-                </p>
-              </div>
-            </details>
-          </div>
-          {payload.financialCohort.status !== "UNAUTHORIZED" && (
-            <div className={styles.financialPanel}>
-              <FinancialCohortSection
-                financialCohort={payload.financialCohort}
-                paidOrdersHref={links.periodOrders?.({ paymentStatus: "PAID" })}
-              />
+              {payload.homeStatus.status !== "UNAUTHORIZED" && (
+                <details className={styles.fold} open={upkeepOpen}>
+                  <summary>
+                    <span>Portada de la tienda</span>
+                    {payload.homeStatus.status === "READY" && (
+                      <span className={styles.foldCount}>
+                        {formatInteger(payload.homeStatus.data.visible)} de{" "}
+                        {formatInteger(payload.homeStatus.data.total)} secciones visibles
+                      </span>
+                    )}
+                  </summary>
+                  <div className={styles.foldBody}>
+                    <HomeStatusSection homeStatus={payload.homeStatus} href={links.home} />
+                  </div>
+                </details>
+              )}
             </div>
           )}
-          <div className={styles.metricsGrid}>
-            {payload.orderPipeline.status !== "UNAUTHORIZED" && (
-              <div className={styles.metricPane}>
-                <OrderPipelineSection
-                  orderPipeline={payload.orderPipeline}
-                  periodOrdersHref={links.periodOrders}
-                />
-              </div>
-            )}
-            {payload.paymentVerification.status !== "UNAUTHORIZED" && (
-              <div className={styles.metricPane}>
-                <PaymentVerificationSection
-                  paymentVerification={payload.paymentVerification}
-                  queueHref={links.payments ?? undefined}
-                />
-              </div>
-            )}
-          </div>
         </Stagger>
       ) : (
         <div className={styles.dashboardBody}>

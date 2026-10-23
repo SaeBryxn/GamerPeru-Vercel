@@ -1,128 +1,35 @@
 .summary {
-  padding: var(--space-2) var(--space-3);
-}
-.summaryHead {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
-  font-size: 12px;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.summaryLabel {
+  font-size: var(--admin-meta-size);
   color: var(--color-text-secondary);
 }
+
 .total {
+  min-width: 24px;
   margin-left: auto;
-  font-size: 22px;
-  line-height: 1.1;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  font-variant-numeric: tabular-nums;
-  text-decoration: none;
-}
-a.total:hover {
-  text-decoration: underline;
-}
-a.total:focus-visible {
-  outline: 2px solid var(--color-border-focus);
-  outline-offset: 2px;
-}
-
-.steps {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.step {
-  padding: 2px var(--space-3);
-  border-top: 1px solid var(--color-border-subtle);
-}
-
-.step > div {
-  display: grid;
-  grid-template-columns: 112px minmax(3ch, auto) minmax(32px, 1fr);
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.stepLabel {
-  min-height: 24px;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-
-.stepCount {
-  line-height: 1.2;
+  text-align: right;
   font-family: var(--font-heading);
-  font-size: 15px;
+  font-size: var(--admin-count-size);
   font-weight: 700;
-  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-primary);
-}
-
-@media (pointer: coarse) {
-  .stepLabel {
-    min-height: 44px;
-  }
-}
-
-/* 2px share of the period's orders: present, never the loudest thing on the card. */
-.track {
-  display: block;
-  width: 100%;
-  height: 5px;
-  overflow: hidden;
-  border-radius: 9999px;
-  background-color: var(--color-surface-secondary);
-}
-
-.fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  transition: width 0.4s ease;
-}
-
-.fillOpen {
-  background-color: var(--color-text-primary);
-}
-
-.fillClosed {
-  background-color: var(--color-border-strong);
-}
-.step[data-state="fulfilled"] .fillOpen {
-  background: var(--color-status-success-text);
-}
-.step[data-state="pending"] .fillOpen {
-  background: var(--color-status-warning-text);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fill {
-    transition: none;
-  }
-}
-
-.stepLink {
-  color: inherit;
   text-decoration: none;
 }
 
-.stepLink:hover {
-  color: var(--color-text-primary);
+a.total:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.stepLink:focus-visible {
-  outline: 2px solid var(--admin-focus-ring, var(--admin-accent));
+a.total:focus-visible {
+  outline: 2px solid var(--admin-focus-ring);
   outline-offset: 2px;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
 }

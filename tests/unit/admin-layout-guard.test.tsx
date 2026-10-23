@@ -24,6 +24,14 @@ vi.mock("@/lib/auth/rbac", async (importOriginal) => {
   };
 });
 
+vi.mock("@/lib/admin/staff/identity", () => ({
+  getAdminIdentity: vi.fn(async (_id: string, email: string | null) => ({
+    displayName: "Ana Torres",
+    email,
+    avatarUrl: null,
+  })),
+}));
+
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((url: string) => {
     mockState.redirectUrl = url;
@@ -144,8 +152,10 @@ describe("GP-022 / BR1 — AdminProtectedLayout Server Decision & Render Tests",
     const html = renderToString(element);
 
     expect(html).toContain("Active Admin Content");
+    // The account menu names the operator once, with their level in words.
+    expect(html).toContain("Ana Torres");
     expect(html).toContain("superadmin@gamerperu.com");
-    expect(html).toContain("SUPER_ADMIN");
+    expect(html).toContain("Superadministrador");
     expect(html).toContain("Gamer Perú");
   });
 });

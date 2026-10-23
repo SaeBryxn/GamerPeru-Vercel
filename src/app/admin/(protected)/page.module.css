@@ -1,159 +1,85 @@
+/*
+ * Inicio: what needs a person now, how the period is going, and where every open
+ * order and every unit stands. Catalog and storefront upkeep fold away below.
+ */
 .container {
-  --admin-metric-cell-padding: 12px 16px;
-  --admin-metric-large-size: 28px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--admin-section-gap);
   width: 100%;
-  min-height: 0;
+  min-width: 0;
 }
-.container > header {
-  flex-shrink: 0;
-}
+
 .dashboardBody {
   display: flex;
-  flex: 1;
   flex-direction: column;
-  gap: var(--space-3);
-  min-height: 0;
-}
-.workspaceGrid {
-  display: grid;
-  flex: 1;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-  min-height: 0;
-}
-.workspaceGrid > * {
+  gap: var(--admin-section-gap);
   min-width: 0;
-  min-height: 0;
 }
-.primaryColumn,
-.secondaryColumn,
-.overviewContent {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-  min-height: 0;
-}
-.primaryColumn > section,
-.secondaryColumn > section,
-.financialPanel > section {
+
+.dashboardBody section {
   gap: var(--space-2);
 }
-.metricPane > section {
-  gap: 6px;
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--admin-section-gap);
+  align-items: start;
 }
-.overviewDetails {
-  border-top: 1px solid var(--color-border-default);
+
+@media (min-width: 1100px) {
+  .workspace[data-has-aside="true"] {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  }
 }
-.overviewDetails > summary,
-.comparisonDetails > summary {
-  min-height: 40px;
-  padding-block: 10px;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
+
+.primary,
+.aside,
+.secondary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--admin-section-gap);
+  min-width: 0;
 }
-.overviewDetails > summary:hover,
-.comparisonDetails > summary:hover {
-  color: var(--color-text-primary);
+
+.secondary {
+  gap: 0;
+  border-top: 1px solid var(--color-border-subtle);
 }
-.overviewDetails > summary:focus-visible,
-.comparisonDetails > summary:focus-visible {
-  outline: 2px solid var(--color-border-focus);
-  outline-offset: 2px;
+
+.fold {
+  border-bottom: 1px solid var(--color-border-subtle);
 }
-.overviewContent {
-  padding-block: var(--space-2) var(--space-3);
-}
-.metricsDivider {
+
+.fold > summary {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  flex-shrink: 0;
-}
-.comparisonDetails {
-  position: relative;
-}
-.comparisonContext {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  max-width: 100%;
-  padding: var(--space-3);
-  border: 1px solid var(--color-status-info-border);
-  border-radius: 10px;
-  background: var(--color-surface-card);
-  box-shadow: var(--admin-shadow);
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
-}
-.comparisonContext > p {
-  margin: 0;
-}
-.comparisonContext strong {
-  color: var(--color-text-primary);
+  gap: var(--space-1) var(--space-3);
+  min-height: var(--admin-tap-target);
+  padding-block: var(--space-2);
+  font-size: var(--admin-text-size);
   font-weight: 600;
+  color: var(--color-text-primary);
+  cursor: pointer;
 }
-.financialPanel {
-  min-width: 0;
-  flex-shrink: 0;
+
+.fold > summary:hover {
+  color: var(--color-text-secondary);
 }
-.metricsGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-  flex: 1;
-  min-height: 0;
+
+.fold > summary:focus-visible {
+  outline: 2px solid var(--admin-focus-ring);
+  outline-offset: 2px;
 }
-.metricPane {
-  min-width: 0;
-  min-height: 0;
+
+.foldCount {
+  font-size: var(--admin-meta-size);
+  font-weight: 400;
+  color: var(--color-text-secondary);
 }
-@media (min-width: 900px) {
-  .workspaceGrid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .workspaceGrid[data-has-catalog="true"] > :last-child {
-    grid-column: 1 / -1;
-  }
-  .metricsGrid {
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  }
-  .comparisonContext {
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
-    z-index: 10;
-    width: 410px;
-    max-width: calc(100vw - 96px);
-  }
-}
-@media (min-width: 1280px) and (min-height: 700px) {
-  /* Main content has 24px above and 40px below; the shell header is 60px. */
-  .container {
-    --dashboard-catalog-max-height: none;
-    height: calc(100dvh - var(--admin-header-height) - 64px);
-  }
-  .workspaceGrid {
-    grid-template-columns: minmax(0, 1fr) 240px;
-  }
-  .workspaceGrid[data-has-catalog="true"] {
-    grid-template-columns: minmax(230px, 0.9fr) minmax(280px, 1.25fr) 240px;
-  }
-  .workspaceGrid[data-has-catalog="true"] > :last-child {
-    grid-column: auto;
-  }
-  .primaryColumn,
-  .secondaryColumn,
-  .metricPane {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
+
+.foldBody {
+  padding-bottom: var(--space-4);
 }

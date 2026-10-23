@@ -20,7 +20,7 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    color-mix(in srgb, var(--action-accent, var(--color-status-info-text)) 13%, transparent),
+    color-mix(in srgb, var(--action-accent, var(--color-text-primary)) 7%, transparent),
     transparent 70%
   );
   opacity: 0;

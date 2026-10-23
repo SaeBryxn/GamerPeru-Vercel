@@ -5,20 +5,12 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { CANONICAL_ADMIN_NAV_ITEMS } from "@/lib/admin/navigation";
 
-const staff = {
-  authUserId: "018f0000-0000-7000-8000-000000000001",
-  email: "admin@gamerperu.pe",
-  roles: ["SUPER_ADMIN" as const],
-  permissions: new Set<never>(),
-};
-
 describe("Admin sidebar collapse", () => {
   it("shows section titles and folders while expanded", () => {
     const onToggle = vi.fn();
     render(
       <AdminSidebar
         navItems={CANONICAL_ADMIN_NAV_ITEMS}
-        staff={staff}
         currentPath="/admin/orders"
         collapsed={false}
         onToggleCollapsed={onToggle}
@@ -37,7 +29,6 @@ describe("Admin sidebar collapse", () => {
     render(
       <AdminSidebar
         navItems={CANONICAL_ADMIN_NAV_ITEMS}
-        staff={staff}
         currentPath="/admin/home"
         collapsed
         onToggleCollapsed={() => undefined}
@@ -60,7 +51,6 @@ describe("Admin sidebar collapse", () => {
     render(
       <AdminSidebar
         navItems={CANONICAL_ADMIN_NAV_ITEMS}
-        staff={staff}
         currentPath="/admin/home"
         collapsed={false}
         onToggleCollapsed={() => undefined}

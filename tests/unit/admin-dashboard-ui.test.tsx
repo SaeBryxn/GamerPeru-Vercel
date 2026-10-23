@@ -5,8 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { FinancialCohortSection } from "@/components/admin/dashboard/financial-cohort-section";
 import { OrderPipelineSection } from "@/components/admin/dashboard/order-pipeline-section";
-import { PaymentVerificationSection } from "@/components/admin/dashboard/payment-verification-section";
-import { CatalogOverviewSection } from "@/components/admin/dashboard/catalog-overview-section";
 import { InventoryOverviewSection } from "@/components/admin/dashboard/inventory-overview-section";
 import { DashboardHeader } from "@/components/admin/dashboard/dashboard-header";
 import { NoMetricsAssigned } from "@/components/admin/dashboard/no-metrics-assigned";
@@ -15,11 +13,9 @@ import {
   type DashboardPeriodSelector,
 } from "@/lib/admin/dashboard-period";
 import type {
-  CatalogOverviewResult,
   CohortFinancialsResult,
   InventoryOverviewResult,
   OrderPipelineResult,
-  PaymentVerificationResult,
 } from "@/lib/admin/dashboard-types";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
@@ -84,9 +80,9 @@ describe("GP-023 / CHK2 — Admin Dashboard Component & State Rendering Unit Tes
 
       render(<FinancialCohortSection financialCohort={readyCohort} />);
 
-      expect(screen.getByText("Resumen Financiero")).toBeDefined();
-      expect(screen.getByText("Valor neto de pedidos")).toBeDefined();
-      expect(screen.getByText("Valor bruto confirmado")).toBeDefined();
+      expect(screen.getByText("Ventas")).toBeDefined();
+      expect(screen.getByText("Ventas netas")).toBeDefined();
+      expect(screen.getByText(/Bruto/)).toBeDefined();
       expect(screen.getByText("Pedidos pagados")).toBeDefined();
       expect(screen.getByText("Ticket promedio")).toBeDefined();
 
@@ -96,11 +92,7 @@ describe("GP-023 / CHK2 — Admin Dashboard Component & State Rendering Unit Tes
       expect(screen.getByTestId("kpi-aov-cents").textContent).toBe("S/ 120.00");
 
       // Explanatory cohort realization caption
-      expect(
-        screen.getByText(
-          "Pedidos creados en el período seleccionado, según su estado de pago actual."
-        )
-      ).toBeDefined();
+      expect(screen.getByText("Pedidos creados en el período, según su pago actual")).toBeDefined();
     });
 
     it("2. financial CURRENCY_INTEGRITY_ERROR state: renders sanitized warning without fake money or SQL leakage", () => {
@@ -252,8 +244,12 @@ describe("GP-023 / CHK2 — Admin Dashboard Component & State Rendering Unit Tes
       };
 
       render(<FinancialCohortSection financialCohort={zeroTrendCohort} />);
-      const zeroPills = screen.getAllByText("0.0%");
-      expect(zeroPills.length).toBeGreaterThanOrEqual(4);
+      // Both periods at zero: no percentage, no decorative "Nuevo".
+      expect(screen.getAllByText("Sin cambios").length).toBeGreaterThanOrEqual(3);
+      expect(screen.queryByText("Nuevo")).toBeNull();
+      expect(screen.getByTestId("financial-no-sales").textContent).toContain(
+        "El período anterior tampoco tuvo ventas pagadas."
+      );
     });
   });
 
@@ -296,7 +292,7 @@ describe("GP-023 / CHK2 — Admin Dashboard Component & State Rendering Unit Tes
 
       render(<OrderPipelineSection orderPipeline={readyPipeline} />);
 
-      expect(screen.getByText("Flujo de Pedidos")).toBeDefined();
+      expect(screen.getByText("Pedidos del período")).toBeDefined();
       expect(screen.getByTestId("orders-total-created").textContent).toBe("42");
       expect(screen.getByTestId("order-status-pending").textContent).toContain("5");
       expect(screen.getByTestId("order-status-confirmed").textContent).toContain("10");
@@ -308,185 +304,103 @@ describe("GP-023 / CHK2 — Admin Dashboard Component & State Rendering Unit Tes
     });
   });
 
-  describe("3. PaymentVerificationSection", () => {
-    it("4. payment queue READY amount: renders count and formatted PEN amount", () => {
-      const readyPayment: PaymentVerificationResult = {
-        status: "READY",
-        data: {
-          snapshotQueue: {
-            queueCount: 3,
-            queueAmount: {
-              status: "READY",
-              amountCents: 35000n,
-            },
-          },
-          periodActivity: {
-            submissionAttemptsCount: 12,
-            distinctPaymentsSubmittedCount: 10,
-          },
-          periodRefunds: {
-            refundCount: 1,
-            refundOutflow: {
-              status: "READY",
-              outflowCents: 5000n,
-            },
-          },
-        },
-      };
-
-      render(<PaymentVerificationSection paymentVerification={readyPayment} />);
-
-      expect(screen.getByText("Por verificar ahora")).toBeDefined();
-      expect(screen.getByTestId("payment-queue-count").textContent).toBe("3");
-      expect(screen.getByTestId("payment-queue-amount").textContent).toBe("S/ 350.00");
-      expect(screen.getByTestId("payment-submission-attempts").textContent).toContain("12");
-      expect(screen.getByTestId("payment-distinct-submissions").textContent).toContain("10");
-      expect(screen.getByTestId("payment-refunds-count").textContent).toContain("1");
-      expect(screen.getByTestId("payment-refunds-outflow").textContent).toContain("S/ 50.00");
-    });
-
-    it("5. payment queue count READY + amount UNAVAILABLE: renders count and 'No disponible' without S/ 0.00", () => {
-      const partialQueuePayment: PaymentVerificationResult = {
-        status: "READY",
-        data: {
-          snapshotQueue: {
-            queueCount: 2,
-            queueAmount: {
-              status: "UNAVAILABLE",
-              error: "CURRENCY_INTEGRITY_ERROR",
-              message: "Queue currency error.",
-            },
-          },
-          periodActivity: {
-            submissionAttemptsCount: 2,
-            distinctPaymentsSubmittedCount: 2,
-          },
-          periodRefunds: {
-            refundCount: 0,
-            refundOutflow: {
-              status: "READY",
-              outflowCents: 0n,
-            },
-          },
-        },
-      };
-
-      render(<PaymentVerificationSection paymentVerification={partialQueuePayment} />);
-
-      expect(screen.getByTestId("payment-queue-count").textContent).toBe("2");
-      expect(screen.getByTestId("payment-queue-amount-unavailable").textContent).toContain(
-        "No disponible"
-      );
-      expect(screen.queryByTestId("payment-queue-amount")).toBeNull();
-    });
-
-    it("6. refund count READY + refund amount UNAVAILABLE: renders count and 'No disponible' without S/ 0.00", () => {
-      const partialRefundPayment: PaymentVerificationResult = {
-        status: "READY",
-        data: {
-          snapshotQueue: {
-            queueCount: 0,
-            queueAmount: {
-              status: "READY",
-              amountCents: 0n,
-            },
-          },
-          periodActivity: {
-            submissionAttemptsCount: 0,
-            distinctPaymentsSubmittedCount: 0,
-          },
-          periodRefunds: {
-            refundCount: 2,
-            refundOutflow: {
-              status: "UNAVAILABLE",
-              error: "CURRENCY_INTEGRITY_ERROR",
-              message: "Refund currency error.",
-            },
-          },
-        },
-      };
-
-      render(<PaymentVerificationSection paymentVerification={partialRefundPayment} />);
-
-      expect(screen.getByTestId("payment-refunds-count").textContent).toContain("2");
-      expect(screen.getByTestId("payment-refunds-outflow").textContent).toContain("No disponible");
-    });
-  });
-
-  describe("4. CatalogOverviewSection", () => {
-    it("11. catalog section rendering: displays published, drafts, active sellable SKUs, and without SKUs count", () => {
-      const readyCatalog: CatalogOverviewResult = {
-        status: "READY",
-        data: {
-          publishedProducts: 15,
-          draftProducts: 3,
-          archivedProducts: 0,
-          activeSellableSkus: 45,
-          totalActiveVariants: 50,
-          totalVariants: 50,
-          publishedProductsWithoutSkus: 1,
-        },
-      };
-
-      render(<CatalogOverviewSection catalogOverview={readyCatalog} />);
-
-      expect(screen.getByText("Resumen de Catálogo")).toBeDefined();
-      expect(screen.getByTestId("catalog-published-products").textContent).toContain("15");
-      expect(screen.getByTestId("catalog-draft-products").textContent).toContain("3");
-      expect(screen.getByTestId("catalog-active-skus").textContent).toContain("45");
-      expect(screen.getByTestId("catalog-published-no-skus").textContent).toContain("1");
-    });
-  });
-
   describe("5. InventoryOverviewSection", () => {
-    it("12. inventory section rendering: displays global balances ATS/On-Hand/Reserved/Allocated", () => {
+    const balances = {
+      totalPositions: 8,
+      onHandUnits: 120,
+      reservedUnits: 15,
+      allocatedUnits: 5,
+      availableToSellUnits: 100,
+    };
+
+    it("12. inventory panel: available units, set-aside units and links to the stock screen", () => {
       const readyInventory: InventoryOverviewResult = {
         status: "READY",
         data: {
-          globalPhysicalBalances: {
-            totalPositions: 8,
-            onHandUnits: 120,
-            reservedUnits: 15,
-            allocatedUnits: 5,
-            availableToSellUnits: 100,
-          },
+          globalPhysicalBalances: balances,
           outOfStockActiveSkus: 2,
           lowStockActivePositions: 4,
+          restockItems: [],
         },
       };
 
-      render(<InventoryOverviewSection inventoryOverview={readyInventory} />);
+      render(
+        <InventoryOverviewSection
+          inventoryOverview={readyInventory}
+          inventoryHref={(filters = {}) =>
+            `/admin/inventario${Object.keys(filters).length ? `?${new URLSearchParams(filters)}` : ""}`
+          }
+        />
+      );
 
-      expect(screen.getByText("Resumen de Inventario")).toBeDefined();
+      expect(screen.getByText("Inventario")).toBeDefined();
       expect(screen.getByTestId("inventory-ats-units").textContent).toBe("100");
-      expect(screen.getByTestId("inventory-on-hand").textContent).toContain("120");
-      expect(screen.getByTestId("inventory-reserved").textContent).toContain("15");
-      expect(screen.getByTestId("inventory-allocated").textContent).toContain("5");
+      expect(screen.getByText("20 apartadas")).toBeDefined();
+      expect(
+        screen.getByTestId("inventory-out-of-stock-skus").closest("a")?.getAttribute("href")
+      ).toBe("/admin/inventario?stock=out");
+      expect(screen.getByTestId("inventory-restock-empty")).toBeDefined();
     });
 
-    it("13 & 14. OOS SKU label and low-stock POSITION label are truthful", () => {
+    it("13 & 14. out-of-stock counts variants and low stock counts locations", () => {
       const readyInventory: InventoryOverviewResult = {
         status: "READY",
         data: {
-          globalPhysicalBalances: {
-            totalPositions: 5,
-            onHandUnits: 50,
-            reservedUnits: 0,
-            allocatedUnits: 0,
-            availableToSellUnits: 50,
-          },
+          globalPhysicalBalances: balances,
           outOfStockActiveSkus: 3,
           lowStockActivePositions: 5,
+          restockItems: [],
         },
       };
 
       render(<InventoryOverviewSection inventoryOverview={readyInventory} />);
 
-      // Truthful label assertions
-      expect(screen.getByText("SKUs activos agotados")).toBeDefined();
-      expect(screen.getByText("Posiciones con stock bajo")).toBeDefined();
-      // Must NOT label low-stock positions as "SKUs con stock bajo"
-      expect(screen.queryByText("SKUs con stock bajo")).toBeNull();
+      expect(screen.getByText("Variantes agotadas")).toBeDefined();
+      expect(screen.getByText("Ubicaciones con stock bajo")).toBeDefined();
+      // Low stock is counted per location, never presented as products.
+      expect(screen.queryByText("Productos con stock bajo")).toBeNull();
+    });
+
+    it("lists what to restock with its state in words, lowest first", () => {
+      const readyInventory: InventoryOverviewResult = {
+        status: "READY",
+        data: {
+          globalPhysicalBalances: balances,
+          outOfStockActiveSkus: 1,
+          lowStockActivePositions: 1,
+          restockItems: [
+            {
+              variantId: "v1",
+              productName: "ATK A9 PRO MAX",
+              variantTitle: "White",
+              sku: "ATK-A9-W",
+              availableUnits: 0,
+              reorderPoint: 2,
+            },
+            {
+              variantId: "v2",
+              productName: "Mchose A7",
+              variantTitle: "Black",
+              sku: "MCH-A7-B",
+              availableUnits: 1,
+              reorderPoint: 3,
+            },
+          ],
+        },
+      };
+
+      render(
+        <InventoryOverviewSection
+          inventoryOverview={readyInventory}
+          inventoryHref={(filters = {}) => `/admin/inventario?${new URLSearchParams(filters)}`}
+        />
+      );
+
+      expect(screen.getByTestId("restock-v1").textContent).toContain("Agotado");
+      expect(screen.getByTestId("restock-v2").textContent).toContain("Quedan 1");
+      expect(screen.getByTestId("restock-v1").querySelector("a")?.getAttribute("href")).toBe(
+        "/admin/inventario?variant=v1"
+      );
     });
   });
 

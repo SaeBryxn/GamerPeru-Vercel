@@ -1,100 +1,112 @@
 import React from "react";
+import Link from "next/link";
+import { PackageCheck } from "lucide-react";
 import type { InventoryOverviewResult } from "@/lib/admin/dashboard-types";
 import { formatInteger } from "@/lib/admin/dashboard-format";
-import { AdminCard, AdminSection, MetricRow, MetricWidget, StaggerItem } from "../ui";
+import { AdminCard, AdminSection, EmptyState, SectionLink, StatList, StatusBadge } from "../ui";
 import styles from "./inventory-overview-section.module.css";
 
 interface InventoryOverviewSectionProps {
   inventoryOverview: InventoryOverviewResult;
+  /** Stock screen, optionally narrowed by `stock` or `variant`. */
+  inventoryHref?: ((filters?: Record<string, string>) => string) | null;
+  /** Fallback for out-of-stock when the stock screen is not available. */
   outOfStockHref?: string;
 }
 
 export function InventoryOverviewSection({
   inventoryOverview,
+  inventoryHref,
   outOfStockHref,
 }: InventoryOverviewSectionProps) {
   if (inventoryOverview.status === "UNAUTHORIZED") {
     return null;
   }
 
-  const { globalPhysicalBalances, outOfStockActiveSkus, lowStockActivePositions } =
+  const { globalPhysicalBalances, outOfStockActiveSkus, lowStockActivePositions, restockItems } =
     inventoryOverview.data;
 
   return (
     <AdminSection
       id="inventory-heading"
-      title="Resumen de Inventario"
-      caption="Todas las ubicaciones"
+      title="Inventario"
+      caption={
+        inventoryHref ? <SectionLink href={inventoryHref()}>Ir a Inventario</SectionLink> : null
+      }
     >
       <AdminCard>
-        <StaggerItem className={styles.headline}>
-          <MetricWidget
-            label="Disponible para venta (ATS)"
-            value={formatInteger(globalPhysicalBalances.availableToSellUnits)}
-            valueTestId="inventory-ats-units"
-            size="large"
-            footnote="Unidades físicas comercializables inmediatamente"
-          />
-        </StaggerItem>
-
-        <MetricRow minCellWidth={120}>
-          <StaggerItem>
-            <MetricWidget
-              label="En almacén"
-              value={formatInteger(globalPhysicalBalances.onHandUnits)}
-              size="small"
-              testId="inventory-on-hand"
-            />
-          </StaggerItem>
-          <StaggerItem>
-            <MetricWidget
-              label="Reservadas"
-              value={formatInteger(globalPhysicalBalances.reservedUnits)}
-              size="small"
-              testId="inventory-reserved"
-            />
-          </StaggerItem>
-          <StaggerItem>
-            <MetricWidget
-              label="Asignadas"
-              value={formatInteger(globalPhysicalBalances.allocatedUnits)}
-              size="small"
-              testId="inventory-allocated"
-            />
-          </StaggerItem>
-        </MetricRow>
-
-        <MetricRow>
-          <StaggerItem>
-            <MetricWidget
-              label="SKUs activos agotados"
-              value={formatInteger(outOfStockActiveSkus)}
-              size="small"
-              dot={outOfStockActiveSkus > 0 ? "critical" : "ok"}
-              footnote={
-                outOfStockActiveSkus === 0
-                  ? "Sin SKUs activos con stock cero"
-                  : "SKUs con balance ATS igual a 0"
-              }
-              testId="inventory-out-of-stock-skus"
-              href={outOfStockHref}
-            />
-          </StaggerItem>
-          <StaggerItem>
-            <MetricWidget
-              label="Posiciones con stock bajo"
-              value={formatInteger(lowStockActivePositions)}
-              size="small"
-              dot={lowStockActivePositions > 0 ? "attention" : "ok"}
-              footnote={
-                lowStockActivePositions === 0
-                  ? "Posiciones por encima del punto de reorden"
-                  : "Ubicaciones con ATS menor o igual al reorden"
-              }
-              testId="inventory-low-stock-positions"
-            />
-          </StaggerItem>
-        </MetricRow>
+        <StatList
+          label="Estado del stock en todas las ubicaciones"
+          testIdPrefix="inventory"
+          items={[
+            {
+              id: "out-of-stock-skus",
+              label: "Variantes agotadas",
+              value: formatInteger(outOfStockActiveSkus),
+              dot: outOfStockActiveSkus > 0 ? "critical" : "ok",
+              href: inventoryHref?.({ stock: "out" }) ?? outOfStockHref ?? null,
+            },
+            {
+              id: "low-stock-positions",
+              label: "Ubicaciones con stock bajo",
+              value: formatInteger(lowStockActivePositions),
+              dot: lowStockActivePositions > 0 ? "attention" : "ok",
+              href: inventoryHref?.({ stock: "low" }) ?? null,
+            },
+            {
+              id: "ats-units",
+              label: "Unidades disponibles para vender",
+              note: `${formatInteger(globalPhysicalBalances.reservedUnits + globalPhysicalBalances.allocatedUnits)} apartadas`,
+              value: formatInteger(globalPhysicalBalances.availableToSellUnits),
+            },
+          ]}
+        />
+        <div className={styles.restock}>
+          <h3 className={styles.restockTitle}>Por reponer</h3>
+          {restockItems.length === 0 ? (
+            <EmptyState
+              icon={<PackageCheck size={18} />}
+              title="Nada por reponer"
+              testId="inventory-restock-empty"
+            >
+              Todas las variantes activas están por encima de su punto de reorden.
+            </EmptyState>
+          ) : (
+            <ul className={styles.restockList}>
+              {restockItems.map((item) => {
+                const body = (
+                  <>
+                    <span className={styles.restockName}>
+                      {item.productName}
+                      <span className={styles.restockVariant}>
+                        {item.variantTitle} · {item.sku}
+                      </span>
+                    </span>
+                    {item.availableUnits === 0 ? (
+                      <StatusBadge tone="danger">Agotado</StatusBadge>
+                    ) : (
+                      <StatusBadge tone="warning">
+                        Quedan {formatInteger(item.availableUnits)}
+                      </StatusBadge>
+                    )}
+                  </>
+                );
+                const href = inventoryHref?.({ variant: item.variantId });
+                return (
+                  <li key={item.variantId} data-testid={`restock-${item.variantId}`}>
+                    {href ? (
+                      <Link href={href} className={`${styles.restockRow} ${styles.restockLink}`}>
+                        {body}
+                      </Link>
+                    ) : (
+                      <div className={styles.restockRow}>{body}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </AdminCard>
     </AdminSection>
   );

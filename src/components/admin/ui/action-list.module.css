@@ -1,0 +1,152 @@
+/* Queue rows: a tabular count, the queue and its wait, and the way to resolve it. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-card-radius);
+  background: var(--color-surface-card);
+  box-shadow: var(--admin-card-shadow);
+}
+
+.rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Two columns on wide screens so the whole queue fits in one glance. */
+@media (min-width: 1024px) {
+  .rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rows > li:nth-child(even) {
+    box-shadow: -1px 0 0 0 var(--color-border-subtle);
+  }
+  .rows > li:nth-child(n + 3) {
+    border-top: 1px solid var(--color-border-subtle);
+  }
+}
+
+@media (max-width: 1023px) {
+  .rows > li + li {
+    border-top: 1px solid var(--color-border-subtle);
+  }
+}
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.5ch minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 64px;
+  height: 100%;
+  padding: var(--space-3) var(--space-4);
+  color: inherit;
+  text-decoration: none;
+}
+
+a.row:hover {
+  background: var(--color-surface-secondary);
+}
+
+a.row:hover .label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+a.row:focus-visible {
+  outline: 2px solid var(--admin-focus-ring);
+  outline-offset: -3px;
+}
+
+/* The next task keeps the card surface; a crimson rule and tag point at it. */
+.row[data-priority="next"] {
+  background: var(--admin-priority-soft);
+  box-shadow: inset 3px 0 0 0 var(--admin-priority);
+}
+
+.count {
+  font-family: var(--font-heading);
+  font-size: var(--admin-count-size);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--color-text-primary);
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--admin-text-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.nextTag {
+  padding: 1px 6px;
+  border: 1px solid var(--admin-priority);
+  border-radius: var(--admin-badge-radius);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-status-danger-text);
+}
+
+.meta {
+  font-size: var(--admin-meta-size);
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.arrow {
+  color: var(--color-text-muted);
+}
+
+a.row:hover .arrow {
+  color: var(--color-text-primary);
+}
+
+.allClear,
+.clearLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.allClear {
+  min-height: 64px;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--admin-text-size);
+}
+
+.clearLine {
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--admin-inset);
+  font-size: var(--admin-caption-size);
+}
+
+.allClear svg,
+.clearLine svg {
+  flex-shrink: 0;
+  color: var(--color-status-success-text);
+}

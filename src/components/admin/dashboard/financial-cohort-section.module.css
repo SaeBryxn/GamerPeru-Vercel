@@ -1,15 +1,30 @@
 .summaryCard {
-  border-color: var(--color-status-info-border);
-  box-shadow:
-    inset 0 2px 0 var(--color-status-info-text),
-    var(--admin-card-shadow);
+  --admin-metric-cell-padding: var(--space-4);
+  container-type: inline-size;
 }
-.netCell {
-  background: linear-gradient(
-    135deg,
-    var(--color-status-info-background),
-    var(--color-surface-card)
-  );
+
+/* The metric grid follows the card, not the window: 2×2, or one row when it fits. */
+.summaryCard > :last-child {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container (min-width: 320px) {
+  .summaryCard > :last-child {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 880px) {
+  .summaryCard > :last-child {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .summaryCard {
+    --admin-metric-cell-padding: var(--space-3);
+    --admin-metric-large-size: 22px;
+  }
 }
 
 .anomaly {

@@ -79,17 +79,13 @@ describe("GP-023 / CHK2-BR3 — Admin Dashboard CSS Module Contract Regression S
     }
   });
 
-  it("2. asserts the conditional order flow bar classes exist in order-pipeline-section.module.css", () => {
-    const cssPath = path.join(dashboardDir, "order-pipeline-section.module.css");
-    const cssContent = fs.readFileSync(cssPath, "utf-8");
-    const definedClasses = extractCssClasses(cssContent);
-
-    // Open orders draw a dark share bar, closed ones a light one; both are chosen at runtime.
-    for (const fillClass of ["fill", "fillOpen", "fillClosed"]) {
-      expect(
-        definedClasses.has(fillClass),
-        `order-pipeline-section.module.css must define conditional class .${fillClass}`
-      ).toBe(true);
+  it("2. asserts the bar list used by the order flow defines its track and fill", () => {
+    const cssPath = path.resolve(process.cwd(), "src/components/admin/ui/bar-list.module.css");
+    const definedClasses = extractCssClasses(fs.readFileSync(cssPath, "utf-8"));
+    for (const barClass of ["track", "fill", "value", "label"]) {
+      expect(definedClasses.has(barClass), `bar-list.module.css must define .${barClass}`).toBe(
+        true
+      );
     }
   });
 
@@ -108,18 +104,12 @@ describe("GP-023 / CHK2-BR3 — Admin Dashboard CSS Module Contract Regression S
     }
   });
 
-  it("4. asserts obsolete / dead selectors do not remain in repaired Inventory and Payment stylesheets", () => {
+  it("4. asserts obsolete / dead selectors do not remain in the repaired Inventory stylesheet", () => {
     const inventoryCss = fs.readFileSync(
       path.join(dashboardDir, "inventory-overview-section.module.css"),
       "utf-8"
     );
     const inventoryClasses = extractCssClasses(inventoryCss);
-
-    const paymentCss = fs.readFileSync(
-      path.join(dashboardDir, "payment-verification-section.module.css"),
-      "utf-8"
-    );
-    const paymentClasses = extractCssClasses(paymentCss);
 
     // Old obsolete inventory selectors
     expect(inventoryClasses.has("cardTitleGroup")).toBe(false);
@@ -130,10 +120,22 @@ describe("GP-023 / CHK2-BR3 — Admin Dashboard CSS Module Contract Regression S
     expect(inventoryClasses.has("balanceValue")).toBe(false);
     expect(inventoryClasses.has("cardIconAlerts")).toBe(false);
     expect(inventoryClasses.has("alertsGrid")).toBe(false);
+  });
 
-    // Old obsolete payment selectors
-    expect(paymentClasses.has("cardTitleGroup")).toBe(false);
-    expect(paymentClasses.has("cardIconSnapshot")).toBe(false);
-    expect(paymentClasses.has("cardIconActivity")).toBe(false);
+  it("5. Inicio takes colors from the admin tokens, never hard-coded values", () => {
+    const files = [
+      ...fs
+        .readdirSync(dashboardDir)
+        .filter((f) => f.endsWith(".css"))
+        .map((f) => path.join(dashboardDir, f)),
+      path.resolve(process.cwd(), "src/app/admin/(protected)/page.module.css"),
+      path.resolve(process.cwd(), "src/app/admin/(protected)/loading.module.css"),
+      path.resolve(process.cwd(), "src/components/admin/ui/action-list.module.css"),
+      path.resolve(process.cwd(), "src/components/admin/ui/bar-list.module.css"),
+    ];
+    for (const file of files) {
+      const css = fs.readFileSync(file, "utf-8");
+      expect(css.match(/#[0-9a-fA-F]{3,8}|rgba?\(/g), path.basename(file)).toBeNull();
+    }
   });
 });

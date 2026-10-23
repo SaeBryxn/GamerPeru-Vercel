@@ -72,6 +72,30 @@
   --admin-sidebar-surface: #09090b;
   --admin-header-surface: rgba(249, 250, 251, 0.85);
   --admin-scrim: rgba(17, 24, 39, 0.4);
+
+  /*
+   * Operación (Inicio, Pedidos, Pagos, Inventario). Medidas y roles compartidos:
+   * cada pantalla de trabajo los consume en vez de declarar tamaños o colores sueltos.
+   * Los estados de pedido y pago usan los --color-status-* de arriba, siempre con texto.
+   */
+  --admin-title-size: 24px;
+  --admin-kpi-size: 28px;
+  --admin-count-size: 22px;
+  --admin-text-size: 14px;
+  --admin-meta-size: 13px;
+  --admin-caption-size: 12px;
+  --admin-control-height: 36px;
+  --admin-tap-target: 44px;
+  --admin-control-radius: var(--radius-md);
+  --admin-badge-radius: 6px;
+  --admin-section-gap: var(--space-6);
+  --admin-focus-ring: var(--color-border-focus);
+  /* La siguiente tarea: el único lugar donde Inicio usa el carmesí de la marca. */
+  --admin-priority: var(--admin-brand);
+  --admin-priority-soft: #fff1f2;
+  /* Gráficos de magnitud: un solo tono neutro, la identidad la dan las etiquetas. */
+  --admin-bar-fill: #52525b;
+  --admin-bar-track: #f4f4f5;
 }
 
 [data-admin-theme="dark"] {
@@ -120,6 +144,9 @@
   --admin-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   --admin-inset: #1a1b21;
   --admin-inset-border: #25272f;
+  --admin-priority-soft: rgba(244, 63, 94, 0.1);
+  --admin-bar-fill: #a1a1aa;
+  --admin-bar-track: #23252d;
   --admin-sidebar-surface: #0f1014;
   --admin-header-surface: rgba(11, 12, 16, 0.85);
   --admin-scrim: rgba(0, 0, 0, 0.6);

@@ -6,8 +6,8 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  min-height: 42px;
-  padding: 4px 10px 4px 5px;
+  min-height: 40px;
+  padding: 4px 8px 4px 5px;
   border: 1px solid var(--color-border-subtle);
   border-radius: 9px;
   background: var(--color-surface-card);
@@ -20,22 +20,25 @@
   border-color: var(--color-border-default);
   background: var(--color-surface-secondary);
 }
-.avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
-  background: var(--admin-accent);
-  color: var(--admin-accent-contrast);
-  font-size: 13px;
-  font-weight: 650;
-}
 .triggerLabel {
+  max-width: 180px;
+  overflow: hidden;
   font-size: 13px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 639px) {
+  .triggerLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
+.identity h2 + .level {
+  margin-top: var(--space-2);
 }
 .chevron {
   color: var(--color-text-secondary);
@@ -71,18 +74,6 @@
 }
 .identity > div {
   min-width: 0;
-}
-.identityIcon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 9px;
-  background: var(--color-surface-canvas);
-  color: var(--color-text-secondary);
 }
 .identity h2 {
   margin: 0;

@@ -13,6 +13,8 @@ export interface DashboardLinks {
   /** Orders by current status, independent of the period. */
   orders: ((filters: Record<string, string>) => string) | null;
   payments: string | null;
+  /** Stock screen, optionally narrowed (`stock: "low" | "out"`, `variant`). */
+  inventory: ((filters?: Record<string, string>) => string) | null;
   products: ((filters?: Record<string, string>) => string) | null;
   home: string | null;
   menu: string | null;
@@ -37,6 +39,9 @@ export function buildDashboardLinks(
       : null,
     orders: can("orders:manage") ? (filters) => query("/admin/orders", filters) : null,
     payments: can("orders:verify") ? "/admin/pagos" : null,
+    inventory: can("inventory:manage")
+      ? (filters = {}) => query("/admin/inventario", filters)
+      : null,
     products: can("catalog:manage") ? (filters = {}) => query("/admin/products", filters) : null,
     home: can("catalog:manage") ? "/admin/home" : null,
     menu: can("catalog:manage") ? "/admin/menu" : null,

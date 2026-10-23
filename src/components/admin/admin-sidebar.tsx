@@ -3,13 +3,12 @@
 import React from "react";
 import Link from "next/link";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import type { AdminNavItem, AdminStaffProfile } from "@/lib/admin/types";
+import type { AdminNavItem } from "@/lib/admin/types";
 import { AdminNavSections } from "./admin-nav-sections";
 import styles from "./admin-shell.module.css";
 
 interface AdminSidebarProps {
   navItems: AdminNavItem[];
-  staff: AdminStaffProfile;
   currentPath?: string;
   collapsed: boolean;
   onToggleCollapsed: () => void;
@@ -17,7 +16,6 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({
   navItems,
-  staff,
   currentPath = "/admin",
   collapsed,
   onToggleCollapsed,
@@ -54,25 +52,6 @@ export function AdminSidebar({
             collapsed={collapsed}
           />
         </nav>
-      </div>
-
-      <div
-        className={styles.staffProfileCard}
-        title={collapsed ? (staff.email ?? undefined) : undefined}
-      >
-        <span className={styles.staffAvatar} aria-hidden="true">
-          {(staff.email ?? "A").slice(0, 1).toUpperCase()}
-        </span>
-        <span className={collapsed ? styles.visuallyHidden : styles.staffDetails}>
-          <span className={styles.staffEmail}>{staff.email ?? staff.authUserId}</span>
-          <span className={styles.staffRoles}>
-            {staff.roles.map((role) => (
-              <span key={role} className={styles.rolePill}>
-                {role}
-              </span>
-            ))}
-          </span>
-        </span>
       </div>
     </aside>
   );

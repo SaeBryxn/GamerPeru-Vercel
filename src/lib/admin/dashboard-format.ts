@@ -150,3 +150,30 @@ export function formatCountTrend(trend: CountTrend): FormattedTrend {
     }
   }
 }
+
+const LIMA_DATE_TIME = new Intl.DateTimeFormat("es-PE", {
+  timeZone: "America/Lima",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/**
+ * How long something has waited, for queue rows: "hace 25 min", "hace 3 h", "hace 2 días".
+ * Measured against the request's reference instant so one page reads one clock.
+ */
+export function formatWaiting(
+  since: string,
+  now: Date
+): { text: string; dateTime: string; title: string } {
+  const minutes = Math.max(0, Math.floor((now.getTime() - Date.parse(since)) / 60_000));
+  const text =
+    minutes < 60
+      ? `hace ${minutes} min`
+      : minutes < 60 * 24
+        ? `hace ${Math.floor(minutes / 60)} h`
+        : `hace ${Math.floor(minutes / (60 * 24))} ${Math.floor(minutes / (60 * 24)) === 1 ? "día" : "días"}`;
+  return { text, dateTime: since, title: `Desde ${LIMA_DATE_TIME.format(new Date(since))}` };
+}

@@ -4,6 +4,7 @@ import { getVerifiedAuthContext, hasAdminShellAccess } from "@/lib/auth/rbac";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { AdminError } from "@/components/admin/admin-error";
+import { getAdminIdentity } from "@/lib/admin/staff/identity";
 
 export const dynamic = "force-dynamic";
 
@@ -22,5 +23,11 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
     return <AdminForbidden email={authContext.email} />;
   }
 
-  return <AdminShell authContext={authContext}>{children}</AdminShell>;
+  const identity = await getAdminIdentity(authContext.authUserId, authContext.email);
+
+  return (
+    <AdminShell authContext={authContext} identity={identity}>
+      {children}
+    </AdminShell>
+  );
 }

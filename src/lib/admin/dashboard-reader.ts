@@ -277,10 +277,15 @@ async function fetchPaymentVerification(
   const submissionsPromise = db.execute<{
     submission_attempts_count: string | number;
     distinct_payments_count: string | number;
+    rejected_decisions_count?: string | number;
   }>(sql`
     SELECT
       COUNT(id) AS submission_attempts_count,
-      COUNT(DISTINCT payment_id) AS distinct_payments_count
+      COUNT(DISTINCT payment_id) AS distinct_payments_count,
+      (SELECT COUNT(*) FROM payment_verifications
+        WHERE decision <> 'APPROVED'
+          AND verified_at >= ${startIso}::timestamptz AND verified_at < ${endIso}::timestamptz
+      ) AS rejected_decisions_count
     FROM payment_submissions
     WHERE submitted_at >= ${startIso}::timestamptz AND submitted_at < ${endIso}::timestamptz
   `);
@@ -339,6 +344,9 @@ async function fetchPaymentVerification(
   };
   const submissionAttemptsCount = Number(subRow.submission_attempts_count ?? 0);
   const distinctPaymentsSubmittedCount = Number(subRow.distinct_payments_count ?? 0);
+  const rejectedDecisionsCount = Number(
+    "rejected_decisions_count" in subRow ? (subRow.rejected_decisions_count ?? 0) : 0
+  );
 
   const refRow = refundRows[0] ?? {
     refund_count: 0,
@@ -381,6 +389,7 @@ async function fetchPaymentVerification(
       periodActivity: {
         submissionAttemptsCount,
         distinctPaymentsSubmittedCount,
+        rejectedDecisionsCount,
       },
       periodRefunds: {
         refundCount,
@@ -454,7 +463,7 @@ async function fetchCatalogOverview(): Promise<CatalogOverviewResult> {
  * 3. Low-Stock active location positions (where 0 < ATS <= reorder_point).
  */
 async function fetchInventoryOverview(): Promise<InventoryOverviewResult> {
-  const [balanceRows, oosRows, lowStockRows] = await Promise.all([
+  const [balanceRows, oosRows, lowStockRows, restockRows] = await Promise.all([
     db.execute<{
       total_positions: string | number;
       on_hand_units: string | number;
@@ -494,6 +503,31 @@ async function fetchInventoryOverview(): Promise<InventoryOverviewResult> {
         AND (II.quantity_on_hand - II.quantity_reserved - II.quantity_allocated) <= II.reorder_point
         AND (II.quantity_on_hand - II.quantity_reserved - II.quantity_allocated) > 0
     `),
+
+    db.execute<{
+      variant_id: string;
+      product_name: string;
+      variant_title: string;
+      sku: string;
+      available_units: string | number;
+      reorder_point: string | number;
+    }>(sql`
+      SELECT
+        PV.id AS variant_id,
+        P.name AS product_name,
+        PV.title AS variant_title,
+        PV.sku,
+        SUM(II.quantity_on_hand - II.quantity_reserved - II.quantity_allocated) AS available_units,
+        SUM(II.reorder_point) AS reorder_point
+      FROM inventory_items II
+      INNER JOIN product_variants PV ON PV.id = II.variant_id
+      INNER JOIN products P ON P.id = PV.product_id
+      WHERE PV.status = 'ACTIVE'
+      GROUP BY PV.id, P.name, PV.title, PV.sku
+      HAVING SUM(II.quantity_on_hand - II.quantity_reserved - II.quantity_allocated) <= SUM(II.reorder_point)
+      ORDER BY available_units ASC, P.name ASC
+      LIMIT 5
+    `),
   ]);
 
   const bRow = balanceRows[0] ?? {
@@ -519,6 +553,16 @@ async function fetchInventoryOverview(): Promise<InventoryOverviewResult> {
       },
       outOfStockActiveSkus: Number(oRow.oos_skus ?? 0),
       lowStockActivePositions: Number(lRow.low_stock_active_positions ?? 0),
+      restockItems: restockRows
+        .filter((row) => typeof row.variant_id === "string")
+        .map((row) => ({
+          variantId: row.variant_id,
+          productName: row.product_name,
+          variantTitle: row.variant_title,
+          sku: row.sku,
+          availableUnits: Math.max(0, Number(row.available_units ?? 0)),
+          reorderPoint: Number(row.reorder_point ?? 0),
+        })),
     },
   };
 }

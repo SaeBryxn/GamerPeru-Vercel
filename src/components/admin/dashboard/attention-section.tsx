@@ -1,24 +1,15 @@
 import React from "react";
-import Link from "next/link";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
 import type { AdminDashboardPayload } from "@/lib/admin/dashboard-types";
-import { formatInteger } from "@/lib/admin/dashboard-format";
-import { AdminSection, StatusDot } from "../ui";
+import { formatCentsToPen, formatInteger, formatWaiting } from "@/lib/admin/dashboard-format";
+import { ActionList, AdminSection, type ActionItem } from "../ui";
 import type { DashboardLinks } from "./dashboard-links";
-import styles from "./operations.module.css";
-
-interface AttentionItem {
-  id: string;
-  label: string;
-  hint: string;
-  count: number;
-  href: string | null;
-  tone: "critical" | "attention";
-  oldestAt?: string | null;
-}
+import { SpotlightLink } from "./spotlight-link";
 
 interface AttentionSectionProps {
-  payload: Pick<AdminDashboardPayload, "paymentVerification" | "orderQueue" | "inventoryOverview">;
+  payload: Pick<
+    AdminDashboardPayload,
+    "paymentVerification" | "orderQueue" | "inventoryOverview" | "period"
+  >;
   links: DashboardLinks;
 }
 
@@ -26,17 +17,24 @@ interface AttentionSectionProps {
 export function buildAttentionItems({
   payload,
   links,
-}: AttentionSectionProps): AttentionItem[] | null {
-  const items: AttentionItem[] = [];
+}: AttentionSectionProps): ActionItem[] | null {
+  const items: ActionItem[] = [];
   const { paymentVerification, orderQueue, inventoryOverview } = payload;
+  const now = payload.period.referenceNow;
+  const waiting = (since?: string | null) => (since ? formatWaiting(since, now) : null);
 
   if (paymentVerification.status === "READY") {
+    const { queueCount, queueAmount, oldestPendingAt } = paymentVerification.data.snapshotQueue;
     items.push({
       id: "payments-to-verify",
-      oldestAt: paymentVerification.data.snapshotQueue.oldestPendingAt,
       label: "Pagos por verificar",
-      hint: "Comprobantes de Yape o Plin esperando revisión",
-      count: paymentVerification.data.snapshotQueue.queueCount,
+      // Money waiting for a decision is not collected money; never shown as zero when unknown.
+      detail:
+        queueAmount.status === "READY"
+          ? `${formatCentsToPen(queueAmount.amountCents)} por confirmar`
+          : "Importe no disponible",
+      waiting: waiting(oldestPendingAt),
+      count: queueCount,
       href: links.payments,
       tone: "critical",
     });
@@ -45,9 +43,9 @@ export function buildAttentionItems({
     items.push(
       {
         id: "orders-to-prepare",
-        oldestAt: orderQueue.data.oldestToPrepareAt,
         label: "Pedidos por preparar",
-        hint: "Pagados y listos para armar el envío",
+        detail: "Pagados, listos para armar el envío",
+        waiting: waiting(orderQueue.data.oldestToPrepareAt),
         count: orderQueue.data.toPrepare,
         href:
           links.orders?.({
@@ -59,24 +57,45 @@ export function buildAttentionItems({
       },
       {
         id: "orders-awaiting-payment",
-        oldestAt: orderQueue.data.oldestAwaitingPaymentAt,
         label: "Pedidos sin pagar",
-        hint: "Creados y esperando el pago del cliente",
+        detail: "Esperando el pago del cliente",
+        waiting: waiting(orderQueue.data.oldestAwaitingPaymentAt),
         count: orderQueue.data.awaitingPayment,
         href: links.orders?.({ orderStatus: "PENDING", paymentStatus: "UNPAID" }) ?? null,
         tone: "attention",
       }
     );
   }
-  if (inventoryOverview.status === "READY") {
+  if (paymentVerification.status === "READY") {
     items.push({
-      id: "out-of-stock",
-      label: "Colores o tallas sin stock",
-      hint: "Versiones activas sin unidades disponibles",
-      count: inventoryOverview.data.outOfStockActiveSkus,
-      href: links.products?.({ pending: "stock" }) ?? null,
+      id: "payments-rejected",
+      label: "Pagos rechazados",
+      detail: "Comprobantes no aprobados en el período",
+      count: paymentVerification.data.periodActivity.rejectedDecisionsCount ?? 0,
+      href: links.payments,
       tone: "attention",
     });
+  }
+  if (inventoryOverview.status === "READY") {
+    const { outOfStockActiveSkus, lowStockActivePositions } = inventoryOverview.data;
+    items.push(
+      {
+        id: "out-of-stock",
+        label: "Variantes agotadas",
+        detail: "Activas y sin unidades para vender",
+        count: outOfStockActiveSkus,
+        href: links.inventory?.({ stock: "out" }) ?? links.products?.({ pending: "stock" }) ?? null,
+        tone: "attention",
+      },
+      {
+        id: "low-stock",
+        label: "Stock bajo",
+        detail: `${formatInteger(lowStockActivePositions)} ${lowStockActivePositions === 1 ? "ubicación" : "ubicaciones"} en el punto de reorden`,
+        count: lowStockActivePositions,
+        href: links.inventory?.({ stock: "low" }) ?? null,
+        tone: "attention",
+      }
+    );
   }
   return items.length > 0 ? items : null;
 }
@@ -84,84 +103,14 @@ export function buildAttentionItems({
 export function AttentionSection(props: AttentionSectionProps) {
   const items = buildAttentionItems(props);
   if (!items) return null;
-  const pending = items
-    .filter((item) => item.count > 0)
-    .sort((a, b) => {
-      const priority = (item: AttentionItem) => (item.tone === "critical" ? 0 : 1);
-      return (
-        priority(a) - priority(b) ||
-        (a.oldestAt ? Date.parse(a.oldestAt) : Infinity) -
-          (b.oldestAt ? Date.parse(b.oldestAt) : Infinity) ||
-        0
-      );
-    });
-  const next = pending.find((item) => item.href);
-
   return (
-    <AdminSection id="attention-heading" title="Para resolver ahora">
-      {pending.length === 0 ? (
-        <p className={styles.allClear} data-testid="attention-all-clear">
-          <CheckCircle2 size={16} aria-hidden="true" />
-          Sin pendientes en las colas que puedes consultar
-        </p>
-      ) : (
-        <>
-          <ul className={styles.attentionGrid}>
-            {pending.map((item) => {
-              const oldestLabel = item.oldestAt
-                ? `Pendiente más antiguo: ${new Date(item.oldestAt).toLocaleString("es-PE", { timeZone: "America/Lima", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`
-                : undefined;
-              const content = (
-                <>
-                  <span className={styles.attentionCount}>{formatInteger(item.count)}</span>
-                  <span className={styles.attentionCopy}>
-                    {item === next && <span className={styles.nextTask}>Siguiente tarea</span>}
-                    <span className={styles.attentionLabel}>
-                      <StatusDot tone={item.tone} />
-                      {item.label}
-                    </span>
-                    {item.oldestAt && (
-                      <time
-                        className={styles.attentionHint}
-                        dateTime={item.oldestAt}
-                        title={oldestLabel}
-                        aria-label={oldestLabel}
-                      >
-                        Desde{" "}
-                        {new Date(item.oldestAt).toLocaleString("es-PE", {
-                          timeZone: "America/Lima",
-                          day: "numeric",
-                          month: "short",
-                        })}
-                      </time>
-                    )}
-                  </span>
-                  {item.href && (
-                    <span className={styles.attentionCta}>
-                      <span>Revisar</span> <ArrowRight size={16} aria-hidden="true" />
-                    </span>
-                  )}
-                </>
-              );
-              return (
-                <li key={item.id} data-testid={`attention-${item.id}`}>
-                  {item.href ? (
-                    <Link
-                      href={item.href}
-                      className={styles.attentionCard}
-                      data-priority={item === next ? "next" : undefined}
-                    >
-                      {content}
-                    </Link>
-                  ) : (
-                    <div className={styles.attentionCard}>{content}</div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
+    <AdminSection id="attention-heading" title="Requiere acción">
+      <ActionList
+        items={items}
+        allClearLabel="Todo al día: no hay pendientes en las colas que puedes consultar"
+        LinkComponent={SpotlightLink}
+        testIdPrefix="attention"
+      />
     </AdminSection>
   );
 }

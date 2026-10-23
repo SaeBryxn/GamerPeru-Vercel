@@ -1,81 +1,108 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: var(--admin-section-gap);
 }
 
 .headerSkeleton {
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.titleBlock,
+.column {
+  display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--color-border-subtle, var(--color-border-subtle));
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.column {
+  gap: var(--admin-section-gap);
+}
+
+.titleSkeleton,
+.subtitleSkeleton,
+.controlsSkeleton {
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-secondary);
 }
 
 .titleSkeleton {
-  width: 12rem;
-  height: 2rem;
-  background-color: var(--color-surface-secondary, var(--admin-inset));
-  border-radius: var(--radius-sm, 0.25rem);
+  width: 7rem;
+  height: 1.75rem;
 }
 
 .subtitleSkeleton {
-  width: 20rem;
+  width: 16rem;
   max-width: 100%;
-  height: 1rem;
-  background-color: var(--color-surface-secondary, var(--admin-inset));
-  border-radius: var(--radius-sm, 0.25rem);
+  height: 0.875rem;
 }
 
 .controlsSkeleton {
-  width: 15rem;
-  height: 2.25rem;
-  background-color: var(--color-surface-secondary, var(--admin-inset));
-  border-radius: var(--radius-md, 0.5rem);
-  margin-top: 0.5rem;
+  width: 20rem;
+  max-width: 100%;
+  height: var(--admin-control-height);
+  border-radius: var(--admin-control-radius);
 }
 
-.kpiGridSkeleton {
+.actionSkeleton,
+.kpiCardSkeleton,
+.cardSkeleton,
+.sideCardSkeleton {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--color-surface-card);
+}
+
+.actionSkeleton {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
+  overflow: hidden;
 }
 
-@media (min-width: 640px) {
-  .kpiGridSkeleton {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.rowSkeleton {
+  height: 64px;
 }
 
-@media (min-width: 1024px) {
-  .kpiGridSkeleton {
-    grid-template-columns: repeat(4, 1fr);
-  }
+.rowSkeleton + .rowSkeleton {
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .kpiCardSkeleton {
-  height: 8rem;
-  background-color: var(--color-surface-card, var(--admin-panel));
-  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
-  border-radius: var(--radius-lg, 0.75rem);
-}
-
-.sectionSkeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.sectionHeaderSkeleton {
-  width: 14rem;
-  height: 1.5rem;
-  background-color: var(--color-surface-secondary, var(--admin-inset));
-  border-radius: var(--radius-sm, 0.25rem);
+  height: 8.5rem;
 }
 
 .cardSkeleton {
-  height: 14rem;
-  background-color: var(--color-surface-card, var(--admin-panel));
-  border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
-  border-radius: var(--radius-lg, 0.75rem);
+  height: 17rem;
+}
+
+.sideCardSkeleton {
+  height: 12rem;
+}
+
+.workspaceSkeleton {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--admin-section-gap);
+}
+
+@media (min-width: 1024px) {
+  .actionSkeleton {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rowSkeleton:nth-child(2) {
+    border-top: 0;
+  }
+  .rowSkeleton:nth-child(even) {
+    box-shadow: -1px 0 0 0 var(--color-border-subtle);
+  }
+}
+
+@media (min-width: 1100px) {
+  .workspaceSkeleton {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  }
 }

@@ -203,3 +203,91 @@ export function SegmentedNav({ label, options }: { label: string; options: Segme
     </nav>
   );
 }
+
+/** "Ir a Pedidos →": the way from a summary to the screen that resolves it. */
+export function SectionLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className={styles.sectionLink}>
+      {children}
+      <span aria-hidden="true">→</span>
+    </Link>
+  );
+}
+
+export interface StatListItem {
+  id: string;
+  label: string;
+  value: React.ReactNode;
+  /** Quiet context after the value, such as how long the oldest one waited. */
+  note?: React.ReactNode;
+  href?: string | null;
+  dot?: StatusDotTone;
+}
+
+/** Label and number per line inside one card; each line may open its filtered list. */
+export function StatList({
+  items,
+  label,
+  testIdPrefix = "stat",
+}: {
+  items: StatListItem[];
+  label: string;
+  testIdPrefix?: string;
+}) {
+  return (
+    <ul className={styles.statList} aria-label={label}>
+      {items.map((item) => {
+        const body = (
+          <>
+            <span className={styles.statLabel}>
+              {item.dot ? <StatusDot tone={item.dot} /> : null}
+              {item.label}
+              {item.note ? <span className={styles.statNote}>{item.note}</span> : null}
+            </span>
+            <span className={styles.statValue} data-testid={`${testIdPrefix}-${item.id}`}>
+              {item.value}
+            </span>
+          </>
+        );
+        return (
+          <li key={item.id}>
+            {item.href ? (
+              <Link href={item.href} className={`${styles.statRow} ${styles.statLink}`}>
+                {body}
+              </Link>
+            ) : (
+              <div className={styles.statRow}>{body}</div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** What a block shows when it has nothing to list: what it means, never a bare zero. */
+export function EmptyState({
+  icon,
+  title,
+  children,
+  testId,
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  children?: React.ReactNode;
+  testId?: string;
+}) {
+  return (
+    <div className={styles.empty} data-testid={testId}>
+      {icon ? (
+        <span className={styles.emptyIcon} aria-hidden="true">
+          {icon}
+        </span>
+      ) : null}
+      <div>
+        <p className={styles.emptyTitle}>{title}</p>
+        {children ? <p className={styles.emptyText}>{children}</p> : null}
+      </div>
+    </div>
+  );
+}

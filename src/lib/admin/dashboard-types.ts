@@ -115,6 +115,8 @@ export interface PaymentVerificationData {
   periodActivity: {
     submissionAttemptsCount: number;
     distinctPaymentsSubmittedCount: number;
+    /** Staff decisions in the period that did not approve the submission. */
+    rejectedDecisionsCount: number;
   };
   periodRefunds: {
     refundCount: number;
@@ -158,10 +160,22 @@ export interface GlobalPhysicalBalances {
   availableToSellUnits: number;
 }
 
+/** An active variant at or below its reorder point, summed over every location. */
+export interface RestockItem {
+  variantId: string;
+  productName: string;
+  variantTitle: string;
+  sku: string;
+  availableUnits: number;
+  reorderPoint: number;
+}
+
 export interface InventoryOverviewData {
   globalPhysicalBalances: GlobalPhysicalBalances;
   outOfStockActiveSkus: number;
   lowStockActivePositions: number;
+  /** Lowest availability first, at most five. */
+  restockItems: RestockItem[];
 }
 
 export type InventoryOverviewResult =

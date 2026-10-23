@@ -1,4 +1,4 @@
-/* Operational blocks of the dashboard: attention, quick actions, home status, catalog health. */
+/* Upkeep blocks folded under Inicio: catalog health and the storefront home status. */
 
 .allClear,
 .notice {
@@ -10,7 +10,7 @@
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--admin-card-radius);
   background-color: var(--color-surface-card);
-  font-size: 14px;
+  font-size: var(--admin-text-size);
   color: var(--color-text-secondary);
 }
 
@@ -18,8 +18,6 @@
   color: var(--color-status-success-text);
 }
 
-.attentionGrid,
-.actionGrid,
 .healthList,
 .issueList {
   margin: 0;
@@ -27,281 +25,93 @@
   list-style: none;
 }
 
-.attentionGrid {
-  display: grid;
-  overflow: hidden;
-  border: 1px solid var(--color-status-info-border);
-  border-radius: var(--admin-card-radius);
-  background: var(--color-surface-card);
-}
-.attentionGrid > li + li {
-  border-top: 1px solid var(--color-border-subtle);
-}
-
-.attentionCard {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(2ch, auto) minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 60px;
-  padding: var(--space-3) 32px var(--space-3) var(--space-3);
-  color: inherit;
-  text-decoration: none;
-}
-
-a.attentionCard:hover {
-  background: var(--color-surface-secondary);
-}
-.attentionCard[data-priority="next"] {
-  min-height: 100px;
-  padding-block: var(--space-3);
-  background: linear-gradient(120deg, #1e3a8a, #172554);
-  color: #ffffff;
-}
-.attentionCard[data-priority="next"] .attentionCount {
-  font-size: 30px;
-  color: #ffffff;
-}
-.attentionCard[data-priority="next"] .attentionLabel {
-  font-size: 15px;
-  color: #ffffff;
-}
-.attentionCard[data-priority="next"] .attentionHint {
-  color: #dbeafe;
-}
-.attentionCard[data-priority="next"] .nextTask {
-  padding: 3px 8px;
-  border: 1px solid #93c5fd;
-  border-radius: 6px;
-  color: #dbeafe;
-}
-.attentionCard[data-priority="next"] .attentionCta {
-  color: #ffffff;
-}
-.attentionCard[data-priority="next"]:hover {
-  background: #1e3a8a;
-}
-.attentionCard[data-priority="next"]:focus-visible {
-  outline-color: #ffffff;
-}
 .mediaDetails {
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: var(--admin-caption-size);
   line-height: 1.5;
 }
+
 .mediaDetails > summary {
-  min-height: 44px;
+  min-height: var(--admin-tap-target);
   padding-block: var(--space-3);
   cursor: pointer;
 }
+
 .mediaDetails > summary:focus-visible {
-  outline: 2px solid var(--color-border-focus);
+  outline: 2px solid var(--admin-focus-ring);
   outline-offset: 2px;
 }
-.attentionCopy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.nextTask {
-  color: var(--color-status-info-text);
-  font-size: 12px;
-  font-weight: 600;
-}
 
-.attentionLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.attentionCount {
-  font-family: var(--font-heading);
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-primary);
-  text-align: right;
-}
-
-.attentionHint {
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--color-text-secondary);
-}
-
-.attentionCta,
 .sectionLink,
 .rowAction,
 .healthFooter {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px;
+  font-size: var(--admin-meta-size);
   font-weight: 600;
   color: var(--color-text-primary);
-}
-
-.attentionCta {
-  position: absolute;
-  right: 10px;
-  top: 16px;
-  white-space: nowrap;
-}
-.attentionCta > span {
-  display: none;
+  text-decoration: none;
 }
 
 .sectionLink,
-.rowAction,
-.healthFooter {
-  text-decoration: none;
+.rowAction {
+  min-height: var(--admin-control-height);
+}
+
+.rowAction {
+  flex-shrink: 0;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--admin-control-radius);
+}
+
+.rowAction:hover {
+  background: var(--color-surface-secondary);
 }
 
 .sectionLink:hover,
-.rowAction:hover,
-.healthFooter:hover,
-a.attentionCard:hover .attentionCta {
+.healthFooter:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.actionGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-.actionGrid > li + li {
-  border: 0;
-}
-
-.actionCard {
-  --action-accent: var(--color-status-info-text);
-  position: relative;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 56px;
-  height: 100%;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-status-info-border);
-  border-radius: 12px;
-  background: var(--color-surface-card);
-  color: inherit;
-  text-decoration: none;
-}
-
-.actionCard:hover {
-  box-shadow: var(--admin-shadow);
-}
-.actionCard[data-section="home"] {
-  --action-accent: var(--color-status-danger-text);
-  border-color: var(--color-status-danger-border);
-}
-.actionCard[data-section="orders"] {
-  --action-accent: var(--color-status-success-text);
-  border-color: var(--color-status-success-border);
-}
-.actionCard[data-section="menu"] {
-  --action-accent: var(--color-text-secondary);
-  border-color: var(--color-border-default);
-}
-
-.actionCard:hover .actionTitle {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.actionIcon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
-  color: var(--color-status-info-text);
-  background: var(--color-status-info-background);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--action-accent) 16%, transparent);
-}
-.actionCard[data-section="home"] .actionIcon {
-  color: var(--color-status-danger-text);
-  background: var(--color-status-danger-background);
-}
-.actionCard[data-section="orders"] .actionIcon {
-  color: var(--color-status-success-text);
-  background: var(--color-status-success-background);
-}
-.actionCard[data-section="menu"] .actionIcon {
-  color: var(--color-text-secondary);
-  background: var(--color-surface-secondary);
-}
-.actionCopy {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-  flex: 1;
-}
-.actionArrow {
-  display: none;
-  flex-shrink: 0;
-  color: var(--color-text-secondary);
-}
-
-.actionTitle {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.actionDescription {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--color-text-secondary);
+.sectionLink:focus-visible,
+.rowAction:focus-visible,
+.healthFooter:focus-visible {
+  outline: 2px solid var(--admin-focus-ring);
+  outline-offset: 2px;
 }
 
 .healthCard {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--admin-card-radius);
   background-color: var(--color-surface-card);
   box-shadow: var(--admin-card-shadow);
 }
+
 .catalogPanel {
   display: flex;
-  min-height: 0;
+  min-width: 0;
 }
+
 .catalogPanel > section {
   flex: 1;
   min-width: 0;
-  min-height: 0;
-  gap: var(--space-2);
 }
+
 .healthScroller {
-  min-height: 0;
-  max-height: var(--dashboard-catalog-max-height, 420px);
-  flex: 1;
+  max-height: 420px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
+
 .healthScroller:focus-visible {
-  outline: 2px solid var(--color-border-focus);
+  outline: 2px solid var(--admin-focus-ring);
   outline-offset: -2px;
 }
 
@@ -310,7 +120,7 @@ a.attentionCard:hover .attentionCta {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
 }
 
 .healthRow + .healthRow {
@@ -332,16 +142,16 @@ a.attentionCard:hover .attentionCta {
 }
 
 .healthName {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--admin-text-size);
+  font-weight: 600;
   color: var(--color-text-primary);
 }
 
 .healthStatus {
   padding: 1px 8px;
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-full);
-  font-size: 12px;
+  border-radius: var(--admin-badge-radius);
+  font-size: var(--admin-caption-size);
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -357,7 +167,7 @@ a.attentionCard:hover .attentionCta {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  font-size: 13px;
+  font-size: var(--admin-meta-size);
   color: var(--color-text-secondary);
 }
 
@@ -367,9 +177,9 @@ a.attentionCard:hover .attentionCta {
 
 .severity {
   padding: 1px 6px;
-  border-radius: var(--radius-sm, 4px);
-  font-size: 12px;
-  font-weight: 700;
+  border-radius: var(--radius-sm);
+  font-size: var(--admin-caption-size);
+  font-weight: 600;
 }
 
 .blocker {
@@ -383,103 +193,60 @@ a.attentionCard:hover .attentionCta {
 }
 
 .suggestion {
-  background-color: var(--admin-inset, var(--color-surface-secondary));
+  background-color: var(--admin-inset);
   color: var(--color-text-secondary);
 }
 
-.rowAction {
-  flex-shrink: 0;
-}
-
 .healthFooter {
-  flex-shrink: 0;
   width: 100%;
-  padding: var(--space-3) var(--admin-card-padding);
+  min-height: var(--admin-tap-target);
+  padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--color-border-subtle);
 }
+
 .homeSummary {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-4);
   border: 1px solid var(--color-border-subtle);
-  border-radius: 10px;
+  border-radius: var(--admin-card-radius);
   background: var(--color-surface-card);
 }
+
 .homeSummary > div {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
-  padding-block: 3px;
+  padding-block: var(--space-1);
 }
+
 .homeSummary dt {
-  font-size: 12px;
+  font-size: var(--admin-meta-size);
   color: var(--color-text-secondary);
 }
+
 .homeSummary dd {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--admin-meta-size);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
 .homeNote {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--admin-caption-size);
   color: var(--color-text-secondary);
 }
 
-@media (min-width: 1280px) and (min-height: 700px) {
-  .actionGrid {
-    gap: var(--space-2);
+@media (pointer: coarse) {
+  .sectionLink,
+  .rowAction {
+    min-height: var(--admin-tap-target);
   }
-  .actionCard {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    min-height: 70px;
-    padding: 6px 8px;
-  }
-  .actionIcon {
-    width: 22px;
-    height: 22px;
-  }
-  .actionTitle {
-    line-height: 1.25;
-  }
-  .actionDescription {
-    display: none;
-  }
-}
-
-.attentionCard:focus-visible,
-.actionCard:focus-visible,
-.sectionLink:focus-visible,
-.rowAction:focus-visible,
-.healthFooter:focus-visible {
-  outline: 2px solid var(--admin-focus-ring, var(--admin-accent));
-  outline-offset: 2px;
-}
-
-.attentionCard:focus-visible {
-  outline-offset: -3px;
-}
-.actionCard:focus-visible {
-  outline-offset: -3px;
 }
 
 @media (max-width: 639px) {
-  .attentionCard {
-    gap: var(--space-3);
-    padding-inline: var(--space-4);
-    padding-right: 32px;
-  }
-  .attentionCount {
-    font-size: 24px;
-  }
-  .attentionCta > span {
-    display: none;
-  }
-
   .healthRow {
     flex-direction: column;
     align-items: flex-start;

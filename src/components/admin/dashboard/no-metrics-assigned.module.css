@@ -15,7 +15,7 @@
   background-color: var(--color-surface-card, var(--color-surface-card));
   border: 1px solid var(--color-border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-lg, 0.75rem);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--admin-card-shadow);
 }
 
 @media (min-width: 640px) {

@@ -1,3 +1,60 @@
-.headline {
-  padding: var(--admin-card-padding);
+.restock {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.restockTitle {
+  margin: 0;
+  padding: var(--space-3) var(--space-4) var(--space-1);
+  font-size: var(--admin-caption-size);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.restockList {
+  margin: 0;
+  padding: 0 0 var(--space-2);
+  list-style: none;
+}
+
+.restockRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  color: inherit;
+  text-decoration: none;
+}
+
+.restockLink:hover {
+  background: var(--color-surface-secondary);
+}
+
+.restockLink:hover .restockName {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.restockLink:focus-visible {
+  outline: 2px solid var(--admin-focus-ring);
+  outline-offset: -2px;
+}
+
+.restockName {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--admin-meta-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.restockVariant {
+  font-size: var(--admin-caption-size);
+  font-weight: 400;
+  color: var(--color-text-muted);
 }

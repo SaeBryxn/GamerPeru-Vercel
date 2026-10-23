@@ -1,8 +1,8 @@
 import React from "react";
-import { AlertTriangle } from "lucide-react";
-import type { CohortFinancialsResult } from "@/lib/admin/dashboard-types";
-import { formatCentsToPen } from "@/lib/admin/dashboard-format";
-import { AdminCard, AdminSection, MetricRow, MetricWidget, StaggerItem } from "../ui";
+import { AlertTriangle, Moon } from "lucide-react";
+import type { CohortFinancialsResult, PaymentVerificationData } from "@/lib/admin/dashboard-types";
+import { formatCentsToPen, formatInteger } from "@/lib/admin/dashboard-format";
+import { AdminCard, AdminSection, EmptyState, MetricRow, MetricWidget, StaggerItem } from "../ui";
 import { MonetaryTrendBadge, CountTrendBadge } from "./trend-badge";
 import styles from "./financial-cohort-section.module.css";
 import { AnimatedCounter } from "./animated-counter";
@@ -11,13 +11,17 @@ interface FinancialCohortSectionProps {
   financialCohort: CohortFinancialsResult;
   /** Paid orders of the period in the orders list. */
   paidOrdersHref?: string;
+  /** Refunds recorded in the period, when the operator may see payments. */
+  refunds?: PaymentVerificationData["periodRefunds"];
+  /** Tooltip of every trend: what the period is compared with. */
+  comparisonLabel?: string;
 }
-
-const COMPARISON = "Comparación vs período anterior";
 
 export function FinancialCohortSection({
   financialCohort,
   paidOrdersHref,
+  refunds,
+  comparisonLabel = "Comparación vs período anterior",
 }: FinancialCohortSectionProps) {
   if (financialCohort.status === "UNAUTHORIZED") {
     return null;
@@ -25,7 +29,7 @@ export function FinancialCohortSection({
 
   if (financialCohort.status === "UNAVAILABLE") {
     return (
-      <AdminSection id="financial-heading" title="Resumen Financiero">
+      <AdminSection id="financial-heading" title="Ventas">
         <StaggerItem>
           <AdminCard padded className={styles.anomaly} role="alert">
             <AlertTriangle className={styles.anomalyIcon} aria-hidden="true" />
@@ -42,34 +46,45 @@ export function FinancialCohortSection({
     );
   }
 
-  const { current, trends } = financialCohort.data;
+  const { current, previous, trends } = financialCohort.data;
+  const noSales = current.cohortPaidOrders === 0;
 
   return (
     <AdminSection
       id="financial-heading"
-      title="Resumen Financiero"
-      caption="Pedidos creados en el período seleccionado, según su estado de pago actual."
+      title="Ventas"
+      caption="Pedidos creados en el período, según su pago actual"
     >
       <AdminCard className={styles.summaryCard}>
-        <MetricRow>
-          <StaggerItem className={styles.netCell}>
-            <MetricWidget
-              label="Valor neto de pedidos"
-              value={formatCentsToPen(current.cohortNetCents)}
-              valueTestId="kpi-net-cents"
-              href={paidOrdersHref}
-              trend={<MonetaryTrendBadge trend={trends.net} comparisonLabel={COMPARISON} />}
-              footnote="Neto realizado después de devoluciones"
-            />
-          </StaggerItem>
+        {noSales && (
+          <EmptyState
+            icon={<Moon size={18} />}
+            title="Sin ventas pagadas en este período"
+            testId="financial-no-sales"
+          >
+            {previous.cohortPaidOrders > 0
+              ? `Período anterior: ${formatCentsToPen(previous.cohortNetCents)} en ${formatInteger(previous.cohortPaidOrders)} ${previous.cohortPaidOrders === 1 ? "pedido" : "pedidos"}.`
+              : "El período anterior tampoco tuvo ventas pagadas."}
+          </EmptyState>
+        )}
+        <MetricRow minCellWidth={230}>
           <StaggerItem>
             <MetricWidget
-              label="Valor bruto confirmado"
-              value={formatCentsToPen(current.cohortGrossCents)}
-              valueTestId="kpi-gross-cents"
+              label="Ventas netas"
+              value={formatCentsToPen(current.cohortNetCents)}
+              valueTestId="kpi-net-cents"
+              size="large"
               href={paidOrdersHref}
-              trend={<MonetaryTrendBadge trend={trends.gross} comparisonLabel={COMPARISON} />}
-              footnote="Bruto total de pedidos con pago confirmado"
+              trend={<MonetaryTrendBadge trend={trends.net} comparisonLabel={comparisonLabel} />}
+              footnote={
+                <>
+                  Bruto{" "}
+                  <span data-testid="kpi-gross-cents">
+                    {formatCentsToPen(current.cohortGrossCents)}
+                  </span>{" "}
+                  · después de devoluciones
+                </>
+              }
             />
           </StaggerItem>
           <StaggerItem>
@@ -78,9 +93,12 @@ export function FinancialCohortSection({
               value={
                 <AnimatedCounter value={current.cohortPaidOrders} valueTestId="kpi-paid-orders" />
               }
+              size="large"
               href={paidOrdersHref}
-              trend={<CountTrendBadge trend={trends.paidOrders} comparisonLabel={COMPARISON} />}
-              footnote={`${current.cohortActivePaidOrders} pedidos pagados activos`}
+              trend={
+                <CountTrendBadge trend={trends.paidOrders} comparisonLabel={comparisonLabel} />
+              }
+              footnote={`${formatInteger(current.cohortActivePaidOrders)} activos, sin reembolsar`}
             />
           </StaggerItem>
           <StaggerItem>
@@ -88,11 +106,27 @@ export function FinancialCohortSection({
               label="Ticket promedio"
               value={formatCentsToPen(current.aovCents)}
               valueTestId="kpi-aov-cents"
+              size="large"
               href={paidOrdersHref}
-              trend={<MonetaryTrendBadge trend={trends.aov} comparisonLabel={COMPARISON} />}
-              footnote="Valor neto por pedido pagado activo"
+              trend={<MonetaryTrendBadge trend={trends.aov} comparisonLabel={comparisonLabel} />}
+              footnote="Neto por pedido pagado activo"
             />
           </StaggerItem>
+          {refunds && (
+            <StaggerItem>
+              <MetricWidget
+                label="Reembolsos"
+                value={formatInteger(refunds.refundCount)}
+                valueTestId="kpi-refund-count"
+                size="large"
+                footnote={
+                  refunds.refundOutflow.status === "READY"
+                    ? `${formatCentsToPen(refunds.refundOutflow.outflowCents)} devueltos`
+                    : "Importe no disponible"
+                }
+              />
+            </StaggerItem>
+          )}
         </MetricRow>
       </AdminCard>
     </AdminSection>

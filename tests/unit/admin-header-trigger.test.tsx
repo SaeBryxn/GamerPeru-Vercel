@@ -11,7 +11,6 @@ describe("GP-022 / BR1 — AdminHeader Mobile Trigger & ARIA Contract Tests", ()
         onOpenMobileNav={() => {}}
         isMobileNavOpen={false}
         triggerRef={triggerRef}
-        pageTitle="Inicio"
         theme="light"
         onToggleTheme={() => {}}
       />
@@ -29,7 +28,6 @@ describe("GP-022 / BR1 — AdminHeader Mobile Trigger & ARIA Contract Tests", ()
         onOpenMobileNav={() => {}}
         isMobileNavOpen={true}
         triggerRef={triggerRef}
-        pageTitle="Inicio"
         theme="light"
         onToggleTheme={() => {}}
       />
@@ -40,19 +38,26 @@ describe("GP-022 / BR1 — AdminHeader Mobile Trigger & ARIA Contract Tests", ()
     expect(html).toContain('aria-controls="admin-mobile-nav"');
   });
 
-  it("renders breadcrumb title and navigation landmark properly", () => {
+  it("renders a navigable breadcrumb trail with a back link to the level above", () => {
     const html = renderToString(
       <AdminHeader
         onOpenMobileNav={() => {}}
         isMobileNavOpen={false}
-        pageTitle="Catálogo"
+        crumbs={[
+          { label: "Inicio", href: "/admin" },
+          { label: "Productos", href: "/admin/products" },
+          { label: "Nuevo", href: null },
+        ]}
         theme="light"
         onToggleTheme={() => {}}
       />
     );
 
     expect(html).toContain('aria-label="Ruta de navegación"');
-    expect(html).toContain("Administración");
-    expect(html).toContain("Catálogo");
+    // Every level above the current screen is a link back; the current one is marked.
+    expect(html).toContain('href="/admin"');
+    expect(html).toContain('href="/admin/products"');
+    expect(html).toMatch(/aria-current="page"[^>]*>Nuevo</);
+    expect(html).toContain('aria-label="Volver a Productos"');
   });
 });

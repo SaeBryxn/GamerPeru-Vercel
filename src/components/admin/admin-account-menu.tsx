@@ -3,6 +3,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ExternalLink, Moon, Sun, UserRound } from "lucide-react";
+import { UserAvatar } from "./ui/user-avatar";
 import type { RoleName } from "@/lib/auth/rbac";
 import { standingOf, STANDING_LABELS } from "@/lib/admin/staff/levels";
 import { requestAdminLeave } from "@/lib/admin/navigation-guard";
@@ -12,6 +13,10 @@ import styles from "./admin-account-menu.module.css";
 
 interface AdminAccountMenuProps {
   email: string | null;
+  /** Name from the operator's profile; the email when there is none. */
+  displayName?: string;
+  /** Gravatar; initials are shown when it is missing or fails to load. */
+  avatarUrl?: string | null;
   roles: readonly RoleName[];
   theme: AdminTheme;
   onToggleTheme: () => void;
@@ -19,7 +24,14 @@ interface AdminAccountMenuProps {
 
 const FOCUSABLE = "a[href], button:not([disabled])";
 
-export function AdminAccountMenu({ email, roles, theme, onToggleTheme }: AdminAccountMenuProps) {
+export function AdminAccountMenu({
+  email,
+  displayName,
+  avatarUrl,
+  roles,
+  theme,
+  onToggleTheme,
+}: AdminAccountMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -29,6 +41,9 @@ export function AdminAccountMenu({ email, roles, theme, onToggleTheme }: AdminAc
   const standing = standingOf(roles);
   const level = standing ? STANDING_LABELS[standing] : "Acceso administrativo";
   const isDark = theme === "dark";
+  const name = displayName ?? email ?? "Sesión administrativa";
+  // The email already identifies the account; repeat it under the name only when they differ.
+  const showEmail = !!email && name !== email;
 
   useEffect(() => {
     if (!open) return;
@@ -90,10 +105,8 @@ export function AdminAccountMenu({ email, roles, theme, onToggleTheme }: AdminAc
           setOpen((value) => !value);
         }}
       >
-        <span className={styles.avatar} aria-hidden="true">
-          {email?.trim() ? email.trim()[0]!.toUpperCase() : <UserRound size={17} />}
-        </span>
-        <span className={styles.triggerLabel}>Mi cuenta</span>
+        <UserAvatar name={name} src={avatarUrl} />
+        <span className={styles.triggerLabel}>{name}</span>
         <ChevronDown className={styles.chevron} size={14} aria-hidden="true" />
       </button>
       <div
@@ -102,15 +115,13 @@ export function AdminAccountMenu({ email, roles, theme, onToggleTheme }: AdminAc
         hidden={!open}
         className={styles.panel}
         role="dialog"
-        aria-labelledby={`${id}-title`}
+        aria-label="Mi cuenta"
       >
         <div className={styles.identity}>
-          <span className={styles.identityIcon} aria-hidden="true">
-            <UserRound size={19} />
-          </span>
+          <UserAvatar name={name} src={avatarUrl} size="lg" />
           <div>
-            <h2 id={`${id}-title`}>Mi cuenta</h2>
-            <p className={styles.email}>{email ?? "Sesión administrativa"}</p>
+            <h2 id={`${id}-title`}>{name}</h2>
+            {showEmail && <p className={styles.email}>{email}</p>}
             <span className={styles.level}>{level}</span>
           </div>
         </div>

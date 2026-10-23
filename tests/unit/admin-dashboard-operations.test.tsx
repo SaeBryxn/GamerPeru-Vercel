@@ -24,12 +24,11 @@ import type { AdminDashboardPayload } from "@/lib/admin/dashboard-types";
 import { DEFAULT_HOME_SECTIONS } from "@/lib/home/default-sections";
 import { buildDashboardLinks } from "@/components/admin/dashboard/dashboard-links";
 import { AttentionSection } from "@/components/admin/dashboard/attention-section";
-import { QuickActions, buildQuickActions } from "@/components/admin/dashboard/quick-actions";
 import { CatalogHealthSection } from "@/components/admin/dashboard/catalog-health-section";
 import { HomeStatusSection } from "@/components/admin/dashboard/home-status-section";
+import { OrderQueueSection } from "@/components/admin/dashboard/order-queue-section";
 import AdminDashboardPage from "@/app/admin/(protected)/page";
 import { getAdminDashboardData } from "@/lib/admin/dashboard-reader";
-import { OperationsSnapshot } from "@/components/admin/dashboard/operations-snapshot";
 
 const routerMocks = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: routerMocks.refresh }) }));
@@ -328,12 +327,14 @@ describe("Dashboard links", () => {
     const links = buildDashboardLinks(["catalog:manage"], period);
     expect(links.orders).toBeNull();
     expect(links.payments).toBeNull();
+    expect(links.inventory).toBeNull();
     expect(links.products?.({ pending: "stock" })).toBe("/admin/products?pending=stock");
-    expect(buildQuickActions(links).map((action) => action.id)).toEqual([
-      "home",
-      "catalog",
-      "menu",
-    ]);
+  });
+
+  it("send stock work to the inventory screen with its filter", () => {
+    const links = buildDashboardLinks(["inventory:manage"], period);
+    expect(links.inventory?.({ stock: "low" })).toBe("/admin/inventario?stock=low");
+    expect(links.inventory?.()).toBe("/admin/inventario");
   });
 });
 
@@ -343,11 +344,16 @@ function attentionPayload(
   > = {}
 ) {
   return {
+    period,
     paymentVerification: {
       status: "READY",
       data: {
         snapshotQueue: { queueCount: 2, queueAmount: { status: "READY", amountCents: 10000n } },
-        periodActivity: { submissionAttemptsCount: 0, distinctPaymentsSubmittedCount: 0 },
+        periodActivity: {
+          submissionAttemptsCount: 0,
+          distinctPaymentsSubmittedCount: 0,
+          rejectedDecisionsCount: 0,
+        },
         periodRefunds: { refundCount: 0, refundOutflow: { status: "READY", outflowCents: 0n } },
       },
     },
@@ -364,10 +370,14 @@ function attentionPayload(
         },
         outOfStockActiveSkus: 1,
         lowStockActivePositions: 0,
+        restockItems: [],
       },
     },
     ...overrides,
-  } as Pick<AdminDashboardPayload, "paymentVerification" | "orderQueue" | "inventoryOverview">;
+  } as Pick<
+    AdminDashboardPayload,
+    "paymentVerification" | "orderQueue" | "inventoryOverview" | "period"
+  >;
 }
 
 describe("Attention section", () => {
@@ -385,7 +395,7 @@ describe("Attention section", () => {
       },
     });
     if (payload.paymentVerification.status === "READY")
-      payload.paymentVerification.data.snapshotQueue.oldestPendingAt = "2026-10-01T12:00:00Z";
+      payload.paymentVerification.data.snapshotQueue.oldestPendingAt = "2026-08-01T12:00:00Z";
     const { container } = render(<AttentionSection payload={payload} links={links} />);
     const next = container.querySelector('[data-priority="next"]');
     expect(next?.textContent).toContain("Pedidos por preparar");
@@ -394,6 +404,26 @@ describe("Attention section", () => {
     );
     expect(container.querySelectorAll('[data-priority="next"]')).toHaveLength(1);
   });
+
+  it("dice cuánto lleva esperando el pendiente más antiguo", () => {
+    const links = buildDashboardLinks(["orders:manage"], period);
+    const payload = attentionPayload({
+      orderQueue: {
+        status: "READY",
+        data: {
+          awaitingPayment: 0,
+          toPrepare: 1,
+          inProgress: 0,
+          oldestToPrepareAt: "2026-08-31T12:00:00Z",
+        },
+      },
+    });
+    render(<AttentionSection payload={payload} links={links} />);
+    const row = screen.getByTestId("attention-orders-to-prepare");
+    expect(row.textContent).toContain("hace 2 días");
+    expect(row.querySelector("time")?.getAttribute("dateTime")).toBe("2026-08-31T12:00:00Z");
+  });
+
   it("shows only pending work, each linked to its filtered view", () => {
     const links = buildDashboardLinks(
       ["orders:manage", "orders:verify", "catalog:manage", "inventory:manage"],
@@ -413,7 +443,52 @@ describe("Attention section", () => {
     ).toBe("/admin/orders?orderStatus=CONFIRMED&paymentStatus=PAID&shipmentStatus=UNFULFILLED");
     expect(
       within(screen.getByTestId("attention-out-of-stock")).getByRole("link").getAttribute("href")
+    ).toBe("/admin/inventario?stock=out");
+    // Queues at zero are still named, so "nothing to do" is explicit.
+    expect(screen.getByTestId("attention-clear-queues").textContent).toContain("Pedidos sin pagar");
+  });
+
+  it("sin acceso a inventario, los agotados llevan al catálogo filtrado", () => {
+    const links = buildDashboardLinks(["catalog:manage"], period);
+    render(<AttentionSection payload={attentionPayload()} links={links} />);
+    expect(
+      within(screen.getByTestId("attention-out-of-stock")).getByRole("link").getAttribute("href")
     ).toBe("/admin/products?pending=stock");
+  });
+
+  it("muestra los pagos rechazados del período como trabajo pendiente", () => {
+    const payload = attentionPayload();
+    if (payload.paymentVerification.status === "READY")
+      payload.paymentVerification.data.periodActivity.rejectedDecisionsCount = 2;
+    render(
+      <AttentionSection payload={payload} links={buildDashboardLinks(["orders:verify"], period)} />
+    );
+    expect(screen.getByTestId("attention-payments-rejected").textContent).toContain("2");
+  });
+
+  it("muestra importes por verificar sin presentarlos como cobrados", () => {
+    render(
+      <AttentionSection
+        payload={attentionPayload()}
+        links={buildDashboardLinks(["orders:verify"], period)}
+      />
+    );
+    expect(screen.getByText(/S\/ 100\.00 por confirmar/)).toBeTruthy();
+  });
+
+  it("un importe no disponible sigue sin convertirse en cero", () => {
+    const payload = attentionPayload();
+    if (payload.paymentVerification.status === "READY")
+      payload.paymentVerification.data.snapshotQueue.queueAmount = {
+        status: "UNAVAILABLE",
+        error: "CURRENCY_INTEGRITY_ERROR",
+        message: "No disponible",
+      };
+    render(
+      <AttentionSection payload={payload} links={buildDashboardLinks(["orders:verify"], period)} />
+    );
+    expect(screen.getByText(/Importe no disponible/)).toBeTruthy();
+    expect(screen.queryByText(/S\/ 0\.00 por confirmar/)).toBeNull();
   });
 
   it("says everything is up to date when nothing is pending", () => {
@@ -430,13 +505,6 @@ describe("Attention section", () => {
 });
 
 describe("Operational sections", () => {
-  it("render quick actions as compact links with icons", () => {
-    const links = buildDashboardLinks(["catalog:manage", "orders:manage"], period);
-    render(<QuickActions links={links} />);
-    expect(screen.getByTestId("quick-action-home").getAttribute("href")).toBe("/admin/home");
-    expect(screen.getByTestId("quick-action-orders").querySelector("svg")).toBeTruthy();
-  });
-
   it("render catalog health rows with a direct edit link", () => {
     render(
       <CatalogHealthSection
@@ -483,11 +551,38 @@ describe("Operational sections", () => {
     render(<HomeStatusSection homeStatus={{ status: "UNAVAILABLE" }} href="/admin/home" />);
     expect(screen.getByTestId("home-status-unavailable")).toBeTruthy();
   });
+
+  it("la cola de pedidos enlaza cada etapa con su filtro y no inventa una vista para en preparación", () => {
+    render(
+      <OrderQueueSection
+        orderQueue={{
+          status: "READY",
+          data: {
+            awaitingPayment: 2,
+            toPrepare: 1,
+            inProgress: 4,
+            oldestAwaitingPaymentAt: "2026-09-02T09:00:00Z",
+          },
+        }}
+        links={buildDashboardLinks(["orders:manage"], period)}
+        now={period.referenceNow}
+      />
+    );
+    expect(screen.getByTestId("queue-awaiting-payment").closest("a")?.getAttribute("href")).toBe(
+      "/admin/orders?orderStatus=PENDING&paymentStatus=UNPAID"
+    );
+    expect(screen.getByText("hace 3 h")).toBeTruthy();
+    expect(screen.getByTestId("queue-in-progress").closest("a")).toBeNull();
+    expect(screen.getByRole("link", { name: /Ir a Pedidos/ }).getAttribute("href")).toBe(
+      "/admin/orders"
+    );
+  });
 });
 
 describe("Jerarquía de Inicio", () => {
   function dashboardPayload(withCatalog: boolean): AdminDashboardPayload {
     return {
+      ...attentionPayload(),
       period,
       actor: {
         authUserId: "test",
@@ -497,53 +592,60 @@ describe("Jerarquía de Inicio", () => {
       },
       financialCohort: { status: "UNAUTHORIZED" },
       orderPipeline: { status: "UNAUTHORIZED" },
-      ...attentionPayload(),
       inventoryOverview: { status: "UNAUTHORIZED" },
-      catalogOverview: withCatalog
+      catalogOverview: { status: "UNAUTHORIZED" },
+      homeStatus: withCatalog
         ? {
             status: "READY",
             data: {
-              publishedProducts: 7,
-              draftProducts: 2,
-              archivedProducts: 0,
-              activeSellableSkus: 8,
-              totalActiveVariants: 9,
-              totalVariants: 9,
-              publishedProductsWithoutSkus: 0,
+              total: 10,
+              visible: 7,
+              hidden: 3,
+              neverEdited: 6,
+              emptyImageSlots: 1,
+              invalid: 0,
             },
           }
         : { status: "UNAUTHORIZED" },
-      homeStatus: { status: "UNAUTHORIZED" },
       catalogHealth: { status: "UNAUTHORIZED" },
     };
   }
 
-  it("mantiene las cifras secundarias disponibles al desplegar y conserva el filtro de métricas", async () => {
+  it("pliega el mantenimiento de la tienda debajo del trabajo del día", async () => {
     vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(true));
     render(await AdminDashboardPage({}));
-    const summary = screen.getByText("Resumen del catálogo y existencias");
+    const summary = screen.getByText("Portada de la tienda");
     const details = summary.closest("details")!;
     expect(details.open).toBe(false);
+    expect(details.textContent).toContain("7 de 10 secciones visibles");
     fireEvent.click(summary);
     expect(details.open).toBe(true);
-    expect(within(details).getByTestId("catalog-published-products").textContent).toContain("7");
-    expect(screen.getByRole("link", { name: "Métricas del período" }).getAttribute("href")).toBe(
-      "/admin?vista=metricas&period=LAST_30_DAYS"
-    );
+    expect(within(details).getByTestId("home-status-visible").textContent).toContain("7");
     expect(screen.queryByText("operador@example.test")).toBeNull();
     expect(screen.queryByText("ADMIN_ORDERS")).toBeNull();
   });
 
-  it("una cuenta de pedidos conserva sus accesos y sus pendientes sin mostrar catálogo", async () => {
+  it("abre en Hoy, comparado con ayer, y cada período queda en la URL", async () => {
+    vi.mocked(getAdminDashboardData).mockResolvedValue({
+      ...dashboardPayload(false),
+      financialCohort: readyFinancial(),
+    });
+    render(await AdminDashboardPage({}));
+    expect(vi.mocked(getAdminDashboardData)).toHaveBeenLastCalledWith({ periodSelector: "TODAY" });
+    expect(screen.getByRole("heading", { name: "Inicio" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "7 días" }).getAttribute("href")).toBe(
+      "/admin?period=LAST_7_DAYS"
+    );
+    expect(screen.getByTestId("financial-no-sales")).toBeTruthy();
+  });
+
+  it("una cuenta de pedidos ve sus colas sin bloques de catálogo", async () => {
     vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(false));
     const { container } = render(await AdminDashboardPage({}));
-    expect(screen.getByTestId("quick-action-orders").getAttribute("href")).toBe("/admin/orders");
-    expect(screen.queryByTestId("quick-action-catalog")).toBeNull();
     expect(container.querySelector("details")).toBeNull();
-    expect(container.querySelector('[data-has-catalog="false"]')?.children).toHaveLength(2);
-    expect(screen.queryByTestId("snapshot-catalog")).toBeNull();
-    expect(screen.queryByTestId("snapshot-inventory")).toBeNull();
-    expect(screen.getByTestId("snapshot-prepare").textContent).toBe("3");
+    expect(screen.getByTestId("queue-to-prepare").textContent).toBe("3");
+    expect(screen.getByTestId("attention-orders-to-prepare")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Inventario" })).toBeNull();
   });
 
   it("actualiza la lectura de datos con el botón de Inicio", async () => {
@@ -554,54 +656,48 @@ describe("Jerarquía de Inicio", () => {
     expect(routerMocks.refresh).toHaveBeenCalledOnce();
   });
 
-  it("la vista de métricas identifica ambas fechas de comparación y conserva separados los pendientes", async () => {
+  it("sin métricas de período no muestra el selector ni la comparación", async () => {
     vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(false));
-    render(
-      await AdminDashboardPage({
-        searchParams: Promise.resolve({ vista: "metricas", period: "LAST_7_DAYS" }),
-      })
-    );
-    expect(screen.getByRole("heading", { name: "Métricas de la tienda" })).toBeTruthy();
-    const comparison = screen.getByLabelText("Fechas de las métricas y de su comparación");
-    const dates = screen.getByText("Fechas de comparación").closest("details")!;
-    expect(dates.open).toBe(false);
-    fireEvent.click(screen.getByText("Fechas de comparación"));
-    expect(dates.open).toBe(true);
-    expect(comparison.textContent).toContain("Período seleccionado:");
-    expect(comparison.textContent).toContain("Comparado con:");
-    expect(comparison.textContent).toContain("hora de Lima");
-    expect(screen.queryByTestId("snapshot-prepare")).toBeNull();
-  });
-
-  it("muestra importes por verificar sin presentarlos como cobrados y lleva cada cola al filtro correcto", () => {
-    const payload = { ...attentionPayload(), catalogOverview: { status: "UNAUTHORIZED" as const } };
-    const links = buildDashboardLinks(["orders:manage", "orders:verify", "catalog:manage"], period);
-    render(<OperationsSnapshot payload={payload} links={links} />);
-    expect(screen.getByTestId("snapshot-payments").closest("a")?.getAttribute("href")).toBe(
-      "/admin/pagos"
-    );
-    expect(screen.getByText("S/ 100.00 por verificar")).toBeTruthy();
-    expect(screen.getByTestId("snapshot-unpaid").closest("a")?.getAttribute("href")).toBe(
-      "/admin/orders?orderStatus=PENDING&paymentStatus=UNPAID"
-    );
-    expect(screen.getByTestId("snapshot-inventory").textContent).toBe("1");
-  });
-
-  it("un importe no disponible sigue sin convertirse en cero en el resumen", () => {
-    const payload = attentionPayload();
-    if (payload.paymentVerification.status === "READY")
-      payload.paymentVerification.data.snapshotQueue.queueAmount = {
-        status: "UNAVAILABLE",
-        error: "CURRENCY_INTEGRITY_ERROR",
-        message: "No disponible",
-      };
-    render(
-      <OperationsSnapshot
-        payload={{ ...payload, catalogOverview: { status: "UNAUTHORIZED" } }}
-        links={buildDashboardLinks(["orders:verify"], period)}
-      />
-    );
-    expect(screen.getByText("Importe no disponible")).toBeTruthy();
-    expect(screen.queryByText("S/ 0.00 por verificar")).toBeNull();
+    render(await AdminDashboardPage({ searchParams: Promise.resolve({ period: "LAST_7_DAYS" }) }));
+    expect(screen.queryByRole("navigation", { name: "Seleccionar período de reporte" })).toBeNull();
+    expect(screen.queryByText(/Comparado con/)).toBeNull();
   });
 });
+
+function readyFinancial(): AdminDashboardPayload["financialCohort"] {
+  const summary = {
+    cohortGrossCents: 0n,
+    cohortNetCents: 0n,
+    cohortPendingCents: 0n,
+    cohortPaidOrders: 0,
+    cohortActivePaidOrders: 0,
+    aovCents: 0n,
+  };
+  const flat = {
+    currentValue: 0n,
+    previousValue: 0n,
+    absoluteDelta: 0n,
+    percentageNumerator: null,
+    percentageDenominator: null,
+    semanticState: "ZERO_BASELINE" as const,
+  };
+  return {
+    status: "READY",
+    data: {
+      current: summary,
+      previous: summary,
+      trends: {
+        gross: flat,
+        net: flat,
+        aov: flat,
+        paidOrders: {
+          currentValue: 0,
+          previousValue: 0,
+          absoluteDelta: 0,
+          percentageDelta: null,
+          semanticState: "ZERO_BASELINE",
+        },
+      },
+    },
+  };
+}

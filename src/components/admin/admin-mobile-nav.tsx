@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import type { AdminNavItem, AdminStaffProfile } from "@/lib/admin/types";
+import type { AdminNavItem } from "@/lib/admin/types";
 import { AdminNavSections } from "./admin-nav-sections";
 import styles from "./admin-shell.module.css";
 
@@ -10,7 +10,6 @@ interface AdminMobileNavProps {
   isOpen: boolean;
   onClose: () => void;
   navItems: AdminNavItem[];
-  staff: AdminStaffProfile;
   currentPath?: string;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
 }
@@ -19,7 +18,6 @@ export function AdminMobileNav({
   isOpen,
   onClose,
   navItems,
-  staff,
   currentPath = "/admin",
   triggerRef,
 }: AdminMobileNavProps) {
@@ -120,17 +118,6 @@ export function AdminMobileNav({
               }}
             />
           </nav>
-        </div>
-
-        <div className={styles.staffProfileCard}>
-          <span className={styles.staffEmail}>{staff.email ?? staff.authUserId}</span>
-          <div className={styles.staffRoles}>
-            {staff.roles.map((role) => (
-              <span key={role} className={styles.rolePill}>
-                {role}
-              </span>
-            ))}
-          </div>
         </div>
       </div>
     </>
