@@ -46,6 +46,12 @@ import { findWeightSpecField } from "@/lib/admin/catalog/weight-spec";
 import { VariantBoard } from "@/components/admin/products/variant-board";
 import { AutofillBar } from "@/components/admin/products/autofill-bar";
 import type { ProductAutofillContextDto } from "@/lib/ai/admin/readers";
+import {
+  EditorSafetyProvider,
+  useEditorDirty,
+  useEditorSafety,
+} from "@/components/admin/products/editor-safety";
+import { productEditorVersion } from "@/lib/admin/catalog/editor-version";
 import { ProductPageStep } from "@/components/admin/products/product-page-step";
 import { uploadDirect, type DirectUploadStage } from "@/lib/media/direct-upload-client";
 import { requestUpload, completeUpload } from "@/lib/media/upload-api-client";
@@ -106,7 +112,21 @@ const EDITOR_STEPS: Array<{ section: ProductEditorSection; title: string; hint: 
 ];
 const EDITOR_SECTION_ORDER: ProductEditorSection[] = EDITOR_STEPS.map((step) => step.section);
 
-export function ProductEditor({
+export function ProductEditor(props: ProductEditorProps) {
+  return (
+    <EditorSafetyProvider
+      productId={props.initialDetail.product.id}
+      version={productEditorVersion(
+        props.initialDetail.product,
+        props.initialDetail.variants,
+        props.initialDetail.media
+      )}
+    >
+      <ProductEditorBody {...props} />
+    </EditorSafetyProvider>
+  );
+}
+function ProductEditorBody({
   initialDetail,
   brands,
   categories,
@@ -116,6 +136,7 @@ export function ProductEditor({
   autofill,
 }: ProductEditorProps) {
   const router = useRouter();
+  const safety = useEditorSafety();
   const uploadController = useRef<AbortController | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   useEffect(() => () => uploadController.current?.abort(), []);
@@ -143,6 +164,24 @@ export function ProductEditor({
   });
   // When the category's technical sheet has a weight field, weight is edited only there.
   const weightSpecField = findWeightSpecField(currentSpecSchema?.fieldDefinitions);
+
+  const stepStorageKey = `gp:product-step:${product.id}`;
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(stepStorageKey);
+      if (!location.hash && EDITOR_SECTION_ORDER.includes(saved as ProductEditorSection))
+        setActiveSection(saved as ProductEditorSection);
+    } catch {
+      /* Optional per-tab memory. */
+    }
+  }, [stepStorageKey]);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(stepStorageKey, activeSection);
+    } catch {
+      /* Optional per-tab memory. */
+    }
+  }, [stepStorageKey, activeSection]);
 
   // A deep link from the product list ("#imagenes") opens that step.
   useEffect(() => {
@@ -186,14 +225,18 @@ export function ProductEditor({
   }, {});
 
   /** Opens a step and brings it into view; the summary panel uses it to jump to what is missing. */
-  const openStep = useCallback((section: ProductEditorSection) => {
-    setActiveSection(section);
-    window.requestAnimationFrame(() => {
-      document
-        .getElementById(`panel-${section}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, []);
+  const openStep = useCallback(
+    (section: ProductEditorSection) => {
+      if (safety && !safety.canLeave()) return;
+      setActiveSection(section);
+      window.requestAnimationFrame(() => {
+        document
+          .getElementById(`panel-${section}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    },
+    [safety]
+  );
 
   const renderStepHeader = (section: ProductEditorSection) => {
     const index = EDITOR_STEPS.findIndex((step) => step.section === section);
@@ -205,20 +248,31 @@ export function ProductEditor({
       <button
         type="button"
         className={styles.stepHeader}
-        onClick={() => (isOpen ? setActiveSection("resumen") : openStep(section))}
+        onClick={() => {
+          if (isOpen) {
+            if (!safety || safety.canLeave()) setActiveSection("resumen");
+          } else openStep(section);
+        }}
         aria-expanded={isOpen}
         data-testid={`section-nav-${section}`}
       >
         <span
-          className={`${styles.stepNumber} ${missing === 0 ? styles.stepNumberDone : ""}`}
+          className={`${styles.stepNumber} ${missing === 0 && section !== "historia" ? styles.stepNumberDone : ""}`}
           aria-hidden="true"
         >
-          {missing === 0 ? <Check size={14} /> : index + 1}
+          {missing === 0 && section !== "historia" ? <Check size={14} /> : index + 1}
         </span>
         <span className={styles.stepText}>
           <span className={styles.stepTitle}>{step.title}</span>
           <span className={styles.stepHint}>{step.hint}</span>
         </span>
+        {missing === 0 && (
+          <span className={styles.stepHint}>
+            {section === "historia"
+              ? "Opcional: solo se muestran bloques con datos"
+              : "Requisitos de publicación completos"}
+          </span>
+        )}
         {missing > 0 && (
           <span className={styles.stepMissing}>
             {missing === 1 ? "Falta 1 cosa" : `Faltan ${missing} cosas`}
@@ -246,6 +300,31 @@ export function ProductEditor({
   const [specValues, setSpecValues] = useState<Record<string, unknown>>(() => {
     return (specifications?.specValues as Record<string, unknown>) ?? {};
   });
+
+  const dirtyDetails =
+    JSON.stringify([
+      name.trim(),
+      slug.trim(),
+      brandId,
+      categoryId,
+      subtitle.trim(),
+      description.trim(),
+      isFeatured,
+    ]) !==
+    JSON.stringify([
+      product.name,
+      product.slug,
+      product.brandId,
+      product.categoryId,
+      product.subtitle ?? "",
+      product.description ?? "",
+      product.isFeatured,
+    ]);
+  const dirtySpecs =
+    JSON.stringify(specValues) !== JSON.stringify(specifications?.specValues ?? {});
+  useEditorDirty("basics", dirtyDetails);
+  useEditorDirty("specifications", dirtySpecs);
+  const dirtyAuthoring = dirtyDetails || dirtySpecs;
 
   // UI Feedback State
   const [isSavingDetails, setIsSavingDetails] = useState(false);
@@ -286,6 +365,8 @@ export function ProductEditor({
   const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const [mediaOpError, setMediaOpError] = useState<string | null>(null);
+
+  useEditorDirty("media", isUploadingMedia || selectedFiles.length > 0 || isReorderingMedia);
 
   // Alt Text Modal State
   const [altTextModalMedia, setAltTextModalMedia] = useState<
@@ -433,6 +514,10 @@ export function ProductEditor({
   // When initialDetail updates (from router refresh, category reconciliation, or identity change),
   // synchronize ALL client state from the authoritative server payload.
   useEffect(() => {
+    if (dirtyAuthoring && initialDetail.product.id === product.id) {
+      setStaleConflict(true);
+      return;
+    }
     setDetail(initialDetail);
     setName(initialDetail.product.name);
     setSlug(initialDetail.product.slug);
@@ -1942,6 +2027,18 @@ export function ProductEditor({
             {activeSection === "historia" && (
               <section id="historia" className={styles.card} data-testid="product-story-entry">
                 <ProductPageStep
+                  technicalFieldNames={Object.entries(specifications?.specValues ?? {})
+                    .filter(
+                      ([, value]) =>
+                        value !== null &&
+                        value !== undefined &&
+                        value !== "" &&
+                        (!Array.isArray(value) || value.length > 0)
+                    )
+                    .map(
+                      ([key]) =>
+                        `${key} ${currentSpecSchema?.fieldDefinitions.find((field) => field.key === key)?.label ?? ""}`
+                    )}
                   product={product}
                   pdpConfig={product.pdpConfig}
                   variants={variants}

@@ -23,6 +23,7 @@ import {
 } from "@/lib/catalog/product-pdp-config";
 import { ProductPdpFields } from "./product-pdp-fields";
 import styles from "./product-page-step.module.css";
+import { useEditorDirty } from "./editor-safety";
 
 export interface ProductPageStepProps {
   product: Pick<AdminProductUiDetail["product"], "id" | "name" | "updatedAt">;
@@ -32,6 +33,7 @@ export interface ProductPageStepProps {
   media: AdminProductUiDetail["media"];
   storySummary: StoryLifecycleSummary;
   onChanged: () => void;
+  technicalFieldNames?: string[];
 }
 
 const BLOCKS = [
@@ -99,17 +101,26 @@ function visible(block: Block, config: ProductPdpConfig, story: StoryLifecycleSu
   }
 }
 
-function blockSummary(block: Block, config: ProductPdpConfig, story: StoryLifecycleSummary) {
+function blockSummary(
+  block: Block,
+  config: ProductPdpConfig,
+  story: StoryLifecycleSummary,
+  technicalFieldNames: string[] = []
+) {
   const hasContent: Partial<Record<Block, boolean>> = {
     gift: Boolean(config.gift.title.trim()),
     accessories: config.accessories.variantIds.length > 0,
     sizeGuide: config.sizeGuide.sizes.some((size) => Boolean(size.name.trim())),
-    dimensions: config.sizeGuide.sizes.some((size) =>
-      Boolean(size.name.trim() && (formatDimensions(size) ?? size.weight.trim()))
-    ),
-    specifications: config.specifications.some((row) =>
-      Boolean(row.label.trim() && row.value.trim())
-    ),
+    dimensions:
+      technicalFieldNames.some((name) =>
+        /largo|ancho|alto|length|width|height|dimens|peso|weight/i.test(name)
+      ) ||
+      config.sizeGuide.sizes.some((size) =>
+        Boolean(size.name.trim() && (formatDimensions(size) ?? size.weight.trim()))
+      ),
+    specifications:
+      technicalFieldNames.length > 0 ||
+      config.specifications.some((row) => Boolean(row.label.trim() && row.value.trim())),
     packageContents: config.packageContents.editions.some((edition) =>
       edition.items.some((item) => Boolean(item.name.trim()))
     ),
@@ -386,6 +397,7 @@ export function ProductPageStep({
   media,
   storySummary,
   onChanged,
+  technicalFieldNames = [],
 }: ProductPageStepProps) {
   const id = useId();
   const version = new Date(product.updatedAt).toISOString();
@@ -400,6 +412,7 @@ export function ProductPageStep({
   const [active, setActive] = useState<Block | null>("story");
   const [accessories, setAccessories] = useState<ProductPdpAccessory[]>([]);
   const [dirty, setDirty] = useState(false);
+  useEditorDirty("pdp", dirty);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
@@ -533,7 +546,7 @@ export function ProductPageStep({
                     <span>
                       <strong id={`${id}-${block}-title`}>{title}</strong>
                       <span className={styles.summary}>
-                        {blockSummary(block, config, storySummary)}
+                        {blockSummary(block, config, storySummary, technicalFieldNames)}
                       </span>
                     </span>
                     <ChevronDown size={16} aria-hidden="true" />

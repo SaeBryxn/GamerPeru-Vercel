@@ -17,6 +17,7 @@ import { setVariantStockAction } from "@/lib/admin/inventory/actions";
 import type { VariantStockRow } from "@/lib/admin/inventory/readers";
 import { formatCurrency } from "@/lib/utils/currency";
 import styles from "./variant-board.module.css";
+import { useEditorDirty } from "./editor-safety";
 
 export interface VariantBoardProps {
   productId: string;
@@ -66,6 +67,8 @@ export function VariantBoard({
 }: VariantBoardProps) {
   const id = useId();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const initialDraft = useRef("");
+  useEditorDirty("variant", draft !== null && JSON.stringify(draft) !== initialDraft.current);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorStage, setErrorStage] = useState<"variant" | "stock" | "photo">("variant");
@@ -86,7 +89,7 @@ export function VariantBoard({
   const open = (variant: AdminProductDetailVariant | null) => {
     const photo = variant ? photos.find((item) => item.variantId === variant.id) : undefined;
     const stock = variant ? String(variantStock[variant.id]?.onHand ?? 0) : "0";
-    setDraft({
+    const next: Draft = {
       variant,
       title: variant?.title ?? "",
       price: variant ? moneyInput(variant.priceCents) : "",
@@ -99,7 +102,9 @@ export function VariantBoard({
       status: variant?.status ?? "ACTIVE",
       photoId: photo?.id ?? "",
       initialPhotoId: photo?.id ?? "",
-    });
+    };
+    initialDraft.current = JSON.stringify(next);
+    setDraft(next);
     setError(null);
     setNotice(null);
   };
@@ -206,6 +211,7 @@ export function VariantBoard({
         stage = "stock";
         setErrorStage("stock");
         const stockResult = await setVariantStockAction({
+          expectedOnHand: Number(draft.initialStock),
           productId,
           variantId: saved.id,
           quantity,
