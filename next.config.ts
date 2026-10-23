@@ -2,10 +2,10 @@ import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
-// Exposes the wrangler.jsonc bindings (IMAGES, R2, Durable Objects) to `next dev` through
-// getCloudflareContext(), so local development runs against the same interfaces as the Worker.
+// Next dev only needs the application bindings. The deployed OpenNext cache Durable Objects
+// are not exported by Wrangler's development proxy and must stay in the deployment config.
 if (process.env.NODE_ENV === "development") {
-  void initOpenNextCloudflareForDev();
+  void initOpenNextCloudflareForDev({ configPath: "wrangler.dev.jsonc" });
 }
 
 const securityHeaders = [

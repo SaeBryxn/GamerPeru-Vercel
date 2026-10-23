@@ -26,8 +26,33 @@ npx wrangler r2 bucket create gamerperu-next-cache
   ```
 
   Put the returned id in the `hyperdrive` block of `wrangler.jsonc` (already done for
-  `gamerperu-db`). For `next dev`, `.env.local` needs
-  `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=$DATABASE_URL` (see `.env.example`).
+  `gamerperu-db`). Next dev uses the Node database client with `DATABASE_URL` directly;
+  its development proxy does not need a Hyperdrive binding.
+
+### Desarrollo local con Next.js
+
+`next.config.ts` carga `wrangler.dev.jsonc` para el proxy de desarrollo. Conserva los bindings
+de aplicación `AI` e `IMAGES`; Next dev utiliza su propia caché y su cliente Node de base de datos.
+La configuración de despliegue sigue en `wrangler.jsonc`, con la caché R2, Durable Objects,
+la referencia al Worker e Hyperdrive.
+
+Esto evita las advertencias sobre `DOQueueHandler` y `DOShardedTagCache`: esas clases forman
+parte del Worker generado por OpenNext y no están exportadas por el proxy de `next dev`.
+Workers AI conserva su conexión remota explícita y usa la cuota de la cuenta al ejecutar IA.
+
+Para abrir el admin local:
+
+```powershell
+cd C:\Users\bryan\GamerPeru
+$env:NEXT_PUBLIC_SITE_URL = "http://localhost:3001"
+pnpm dev --port 3001
+```
+
+Abre `http://localhost:3001/admin`. El destino de datos lo determinan las variables de entorno:
+si apuntan a producción, guardar desde la web local modifica los datos reales. Este cambio de
+configuración no lee, copia ni modifica `.env.local`. Tras cambiar la configuración, reinicia
+el servidor si Next no lo ha reiniciado automáticamente. No hace falta compilar ni desplegar
+para revisar cambios de interfaz.
 
 ## 2. Environment variables
 

@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gamerperu-dev",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // Workers AI runs on Cloudflare even when Next.js runs locally.
+  "ai": {
+    "binding": "AI",
+    "remote": true,
+  },
+  "images": {
+    "binding": "IMAGES",
+  },
+  // Next dev uses its own cache. The Node database client reads DATABASE_URL directly.
+  // Deployment-only cache buckets, Durable Objects and Hyperdrive live in wrangler.jsonc.
+}
