@@ -7,7 +7,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  Copy,
   FileImage,
   Loader2,
   RefreshCw,
@@ -24,6 +23,7 @@ import {
 import type { PaymentInstructionDTO } from "@/lib/payments/reader";
 import { formatCurrency } from "@/lib/utils/currency";
 import styles from "./manual-payment-card.module.css";
+import { CopyPaymentValue } from "./copy-payment-value";
 
 const ACCEPTED_PROOF_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PROOF_BYTES = 5 * 1024 * 1024;
@@ -67,7 +67,6 @@ export function ManualPaymentCard({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [copiedAccount, setCopiedAccount] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isExpiredError, setIsExpiredError] = useState(false);
@@ -88,16 +87,6 @@ export function ManualPaymentCard({
   const isEligible =
     currentStatus === "UNPAID" ||
     (currentStatus === "REJECTED" && instructions.isEligibleForSubmission);
-
-  const handleCopyAccount = async () => {
-    try {
-      await navigator.clipboard.writeText(instructions.accountIdentifier);
-      setCopiedAccount(true);
-      setTimeout(() => setCopiedAccount(false), 2000);
-    } catch {
-      // Fallback
-    }
-  };
 
   const handleOpCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setOperationCode(e.target.value);
@@ -356,7 +345,8 @@ export function ManualPaymentCard({
           <div className={styles.detailRow}>
             <dt className={styles.detailLabel}>Monto exacto a pagar</dt>
             <dd className={styles.amount} data-testid="manual-payment-amount">
-              {formatCurrency(instructions.amountCents)}
+              {formatCurrency(instructions.amountCents)}{" "}
+              <CopyPaymentValue value={(instructions.amountCents / 100).toFixed(2)} label="monto" />
             </dd>
           </div>
 
@@ -366,22 +356,25 @@ export function ManualPaymentCard({
               <span className={styles.detailValue} data-testid="manual-payment-account-number">
                 {instructions.accountIdentifier}
               </span>
-              <button
-                type="button"
-                onClick={handleCopyAccount}
-                className={styles.copyButton}
-                aria-label="Copiar número de cuenta o teléfono"
-              >
-                <Icon icon={copiedAccount ? CheckCircle2 : Copy} size="sm" aria-hidden="true" />
-                <span>{copiedAccount ? "Copiado" : "Copiar"}</span>
-              </button>
+              <CopyPaymentValue
+                value={instructions.accountIdentifier}
+                label="número de cuenta o teléfono"
+              />
             </dd>
           </div>
 
           <div className={styles.detailRow}>
             <dt className={styles.detailLabel}>Titular</dt>
             <dd className={styles.detailValue} data-testid="manual-payment-recipient-name">
-              {instructions.recipientName}
+              {instructions.recipientName}{" "}
+              <CopyPaymentValue value={instructions.recipientName} label="destinatario" />
+            </dd>
+          </div>
+          <div className={styles.detailRow}>
+            <dt className={styles.detailLabel}>Pedido</dt>
+            <dd className={styles.detailValue}>
+              {instructions.orderNumber}{" "}
+              <CopyPaymentValue value={instructions.orderNumber} label="número de pedido" />
             </dd>
           </div>
         </dl>

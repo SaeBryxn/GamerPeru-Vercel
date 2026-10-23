@@ -520,3 +520,10 @@
     transition: none;
   }
 }
+
+.copyFeedback {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}

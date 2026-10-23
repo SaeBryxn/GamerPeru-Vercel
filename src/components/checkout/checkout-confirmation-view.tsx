@@ -12,6 +12,10 @@ import { formatCurrency } from "@/lib/utils/currency";
 import { ManualPaymentCard } from "./manual-payment-card";
 import { cancelUnpaidOrderAction } from "@/lib/orders/actions";
 import styles from "./checkout-confirmation-view.module.css";
+import { PurchaseProgress } from "./purchase-progress";
+import { ReservationNotice } from "./reservation-notice";
+import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
+import { loadOrderProgressAction } from "@/lib/checkout/actions";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -117,9 +121,11 @@ function heroCopy(
 }
 
 export function CheckoutConfirmationView({
-  confirmation,
+  confirmation: initialConfirmation,
   paymentInstructions,
 }: CheckoutConfirmationViewProps): React.JSX.Element {
+  const [confirmation, setConfirmation] = useState(initialConfirmation);
+  const [statusReadError, setStatusReadError] = useState(false);
   const {
     orderNumber,
     subtotalCents,
@@ -148,7 +154,35 @@ export function CheckoutConfirmationView({
   const modalDescId = useId();
   const reasonSelectId = useId();
 
-  const isCancelled = orderStatus === "CANCELLED" || orderStatus === "REFUNDED";
+  const isCancelled = ["CANCELLED", "REFUNDED", "EXPIRED"].includes(orderStatus);
+  useVisiblePolling(
+    orderNumber,
+    !isCancelled && confirmation.progress.shipmentStatus !== "DELIVERED",
+    async () => {
+      const result = await loadOrderProgressAction(orderNumber);
+      if (!result?.success) {
+        setStatusReadError(true);
+        return false;
+      }
+      setStatusReadError(false);
+      const previous = JSON.stringify([
+        orderStatus,
+        paymentStatus,
+        confirmation.progress,
+        confirmation.reservationExpiresAt,
+      ]);
+      const next = JSON.stringify([
+        result.data.status,
+        result.data.paymentStatus,
+        result.data.progress,
+        result.data.reservationExpiresAt,
+      ]);
+      setConfirmation((current) => ({ ...current, ...result.data }));
+      setOrderStatus(result.data.status);
+      setPaymentStatus(result.data.paymentStatus);
+      return previous !== next;
+    }
+  );
   const isEligibleForCancellation =
     !isCancelled && orderStatus === "PENDING" && paymentStatus === "UNPAID";
   const hero = heroCopy(paymentStatus, confirmation.progress);
@@ -276,6 +310,18 @@ export function CheckoutConfirmationView({
             )}
           </section>
 
+          <PurchaseProgress current={paymentStatus === "UNPAID" ? 3 : 4} />
+          {statusReadError && (
+            <p role="status" className={styles.bodyText}>
+              No se pudo actualizar el estado. Lo reintentaremos; también puedes recargar la página.
+            </p>
+          )}
+          {paymentStatus === "UNPAID" && !isCancelled && (
+            <ReservationNotice
+              expiresAt={confirmation.reservationExpiresAt}
+              serverNow={confirmation.serverNow}
+            />
+          )}
           <motion.div variants={RISE_VARIANTS} custom={STEP.payment}>
             {isCancelled ? (
               <div
@@ -295,7 +341,8 @@ export function CheckoutConfirmationView({
               </div>
             ) : paymentInstructions ? (
               <ManualPaymentCard
-                instructions={paymentInstructions}
+                key={paymentStatus}
+                instructions={{ ...paymentInstructions, paymentStatus }}
                 onStatusChange={setPaymentStatus}
               />
             ) : (

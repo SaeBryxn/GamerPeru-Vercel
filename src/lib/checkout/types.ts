@@ -154,6 +154,8 @@ export interface CheckoutConfirmationDTO {
   items: CheckoutConfirmationItemDTO[];
   createdAt: string;
   progress: CustomerOrderProgressDTO;
+  reservationExpiresAt?: string | null;
+  serverNow?: string;
 }
 
 export type CheckoutConfirmationResult =

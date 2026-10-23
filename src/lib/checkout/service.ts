@@ -1175,9 +1175,19 @@ export async function loadCheckoutConfirmation(
     }
   }
 
+  const [activeReservation] = await db
+    .select({ expiresAt: sql<Date | null>`min(${inventoryReservations.expiresAt})` })
+    .from(inventoryReservations)
+    .where(
+      and(eq(inventoryReservations.orderId, order.id), eq(inventoryReservations.status, "ACTIVE"))
+    );
   return {
     success: true,
     confirmation: {
+      reservationExpiresAt: activeReservation?.expiresAt
+        ? new Date(activeReservation.expiresAt).toISOString()
+        : null,
+      serverNow: new Date().toISOString(),
       orderNumber: order.orderNumber,
       status: order.status as "PENDING" | "CONFIRMED" | "CANCELLED",
       paymentStatus: (payment?.status ?? "UNPAID") as

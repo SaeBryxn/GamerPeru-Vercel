@@ -25,3 +25,14 @@ export async function loadCheckoutConfirmationAction(
 ): Promise<CheckoutConfirmationResult> {
   return await loadCheckoutConfirmation(orderNumber);
 }
+
+/** Minimal authorized status read: no address, email or signed media in polling responses. */
+export async function loadOrderProgressAction(orderNumber: string) {
+  const result = await loadCheckoutConfirmation(orderNumber);
+  if (!result.success) return { success: false as const };
+  const { status, paymentStatus, progress, reservationExpiresAt, serverNow } = result.confirmation;
+  return {
+    success: true as const,
+    data: { status, paymentStatus, progress, reservationExpiresAt, serverNow },
+  };
+}
