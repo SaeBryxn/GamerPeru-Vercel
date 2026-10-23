@@ -31,6 +31,11 @@ vi.mock("@/lib/checkout/actions", () => ({
   loadCheckoutConfirmationAction: vi.fn(),
 }));
 
+function submitReviewed(button: HTMLElement) {
+  if (button.textContent?.includes("Revisar pedido")) fireEvent.click(button);
+  fireEvent.click(button);
+}
+
 describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite", () => {
   const originalCrypto = globalThis.crypto;
 
@@ -138,6 +143,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
   };
 
   beforeEach(() => {
+    sessionStorage.clear();
     vi.clearAllMocks();
     mockLoadCheckoutContextAction.mockResolvedValue(sampleContext);
   });
@@ -231,7 +237,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       );
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       expect(mockSubmitCheckoutAction).not.toHaveBeenCalled();
       expect(await screen.findByText("El correo electrónico es obligatorio.")).toBeDefined();
@@ -266,7 +272,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
@@ -298,7 +304,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       const submitBtn = screen.getByTestId("checkout-submit-button");
       expect(submitBtn.hasAttribute("disabled")).toBe(true);
 
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
       expect(mockSubmitCheckoutAction).not.toHaveBeenCalled();
       expect(mathRandomSpy).not.toHaveBeenCalled();
     });
@@ -345,7 +351,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
@@ -373,7 +379,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       expect(submitBtn.hasAttribute("disabled")).toBe(true);
 
       // 7. Clicking disabled submit button triggers zero calls to submitCheckoutAction
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
       expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
 
       // Step 2: Customer explicitly selects PROVINCIA_REGULAR
@@ -398,7 +404,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
         replayed: false,
       });
 
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(2);
@@ -453,7 +459,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
@@ -496,7 +502,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
         replayed: false,
       });
 
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(2);
@@ -538,7 +544,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
@@ -583,7 +589,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
@@ -618,7 +624,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
@@ -664,7 +670,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
@@ -710,7 +716,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
@@ -756,7 +762,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
@@ -764,7 +770,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
 
       expect(submitBtn.hasAttribute("disabled")).toBe(true);
 
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
       expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
 
       expect(screen.getByTestId("checkout-cart-converted-actions")).toBeDefined();
@@ -827,7 +833,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(1);
@@ -853,7 +859,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
         replayed: false,
       });
 
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(mockSubmitCheckoutAction).toHaveBeenCalledTimes(2);
@@ -890,7 +896,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(screen.getByTestId("checkout-general-error")).toBeDefined();
@@ -923,7 +929,7 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
       });
 
       const submitBtn = screen.getByTestId("checkout-submit-button");
-      fireEvent.click(submitBtn);
+      submitReviewed(submitBtn);
 
       await waitFor(() => {
         expect(screen.getByTestId("checkout-general-error")).toBeDefined();

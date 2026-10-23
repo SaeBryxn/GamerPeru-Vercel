@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -24,6 +24,13 @@ import type {
   CheckoutSubmitResult,
 } from "@/lib/checkout/types";
 import styles from "./checkout-page-client.module.css";
+import { PurchaseProgress } from "./purchase-progress";
+import {
+  CHECKOUT_DRAFT_KEY,
+  readCheckoutDraft,
+  serializeCheckoutDraft,
+} from "@/lib/checkout/form-draft";
+import { describeCheckoutChanges } from "@/lib/checkout/review-changes";
 import {
   PERU_DEPARTMENTS,
   districtSuggestions,
@@ -103,8 +110,81 @@ export function CheckoutPageClient({
   // 3. Fail-Closed & Terminal Execution States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshingContext, setIsRefreshingContext] = useState(false);
-  const [discountCode, setDiscountCode] = useState("");
-  const [discountNotice, setDiscountNotice] = useState<string | null>(null);
+  const [reviewReady, setReviewReady] = useState(false);
+  const [reviewChanges, setReviewChanges] = useState<string[]>([]);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const summaryRef = useRef<HTMLHeadingElement>(null);
+  const [loadedDraftScope, setLoadedDraftScope] = useState("");
+  const draftScope = JSON.stringify([
+    initialContext.auth.status,
+    initialContext.auth.email ?? "",
+    initialContext.cart?.items.map((item) => item.variantId).sort(),
+  ]);
+  useEffect(() => {
+    try {
+      const saved = readCheckoutDraft(sessionStorage.getItem(CHECKOUT_DRAFT_KEY), draftScope);
+      if (saved) {
+        if (initialContext.auth.status === "GUEST") setEmail(saved.email);
+        setInlineAddress(saved.inlineAddress);
+        const addressExists = savedAddresses.some(
+          (address) => address.id === saved.selectedAddressId
+        );
+        setDeliveryMode(
+          saved.deliveryMode === "SAVED_ADDRESS" && addressExists ? "SAVED_ADDRESS" : "INLINE"
+        );
+        if (addressExists) setSelectedAddressId(saved.selectedAddressId);
+        if (
+          initialContext.shippingMethods.some(
+            (method) => method.code === saved.selectedShippingCode
+          )
+        ) {
+          setSelectedShippingCode(saved.selectedShippingCode);
+          const shipping = initialContext.shippingMethods.find(
+            (method) => method.code === saved.selectedShippingCode
+          )!.basePriceCents;
+          setReviewedShippingCents(shipping);
+          setReviewedTotalCents((initialContext.cart?.subtotalCents ?? 0) + shipping);
+        }
+        if (
+          initialContext.paymentMethods.some((method) => method.code === saved.selectedPaymentCode)
+        )
+          setSelectedPaymentCode(saved.selectedPaymentCode);
+        setDraftRestored(true);
+      }
+    } catch {
+      /* Storage can be disabled; checkout remains usable. */
+    }
+    setLoadedDraftScope(draftScope);
+    // Restore once for this checkout identity; the server still validates all selections.
+  }, [draftScope]);
+  useEffect(() => {
+    setReviewReady(false);
+    if (loadedDraftScope !== draftScope) return;
+    try {
+      sessionStorage.setItem(
+        CHECKOUT_DRAFT_KEY,
+        serializeCheckoutDraft(draftScope, {
+          email,
+          inlineAddress,
+          deliveryMode,
+          selectedAddressId,
+          selectedShippingCode,
+          selectedPaymentCode,
+        })
+      );
+    } catch {
+      /* Optional draft. */
+    }
+  }, [
+    loadedDraftScope,
+    draftScope,
+    email,
+    inlineAddress,
+    deliveryMode,
+    selectedAddressId,
+    selectedShippingCode,
+    selectedPaymentCode,
+  ]);
   const [isCryptoUnavailable, setIsCryptoUnavailable] = useState(false);
   const [isConfigurationUnavailable, setIsConfigurationUnavailable] = useState(false);
   const [isCartConverted, setIsCartConverted] = useState(false);
@@ -277,6 +357,7 @@ export function CheckoutPageClient({
     return Object.keys(errors).length === 0;
   };
 
+  const payloadReviewedTotal = useRef(reviewedTotalCents);
   // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -292,6 +373,12 @@ export function CheckoutPageClient({
     }
 
     if (!validateForm()) {
+      return;
+    }
+
+    if (!reviewReady) {
+      setReviewReady(true);
+      summaryRef.current?.focus();
       return;
     }
 
@@ -329,11 +416,17 @@ export function CheckoutPageClient({
       reviewedTotalCents: reviewedTotalCents,
     };
 
+    payloadReviewedTotal.current = reviewedTotalCents;
     setIsSubmitting(true);
     try {
       const res: CheckoutSubmitResult = await submitCheckoutAction(payload);
 
       if (res.success) {
+        try {
+          sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
+        } catch {
+          /* Optional storage. */
+        }
         router.replace(`/checkout/confirmacion/${res.orderNumber}`);
         return;
       }
@@ -349,8 +442,16 @@ export function CheckoutPageClient({
           res.error ||
             "Los precios o costos de envío han cambiado. Hemos actualizado los totales a continuación. Por favor revisa y haz clic en 'Realizar Pedido' para confirmar con los nuevos montos."
         );
-        // Reconcile line items and options from authoritative context reader
-        await refreshAuthoritativeContext({ type: "PRESERVE_VALID_SELECTIONS" });
+        const refreshed = await refreshAuthoritativeContext({ type: "PRESERVE_VALID_SELECTIONS" });
+        setReviewChanges(
+          describeCheckoutChanges(
+            cart,
+            refreshed?.cart ?? cart,
+            reviewedShippingCents,
+            res.details?.authoritativeShippingCents ?? reviewedShippingCents
+          )
+        );
+        setReviewReady(false);
         if (res.details) {
           setReviewedSubtotalCents(res.details.authoritativeSubtotalCents);
           setReviewedShippingCents(res.details.authoritativeShippingCents);
@@ -539,10 +640,29 @@ export function CheckoutPageClient({
           data-testid="checkout-review-changed-alert"
         >
           <Icon icon={AlertTriangle} size="md" aria-hidden="true" />
-          <span>{reviewChangedWarning}</span>
+          <div>
+            <span>{reviewChangedWarning}</span>
+            {reviewChanges.length > 0 && (
+              <ul>
+                {reviewChanges.map((change) => (
+                  <li key={change}>{change}</li>
+                ))}
+              </ul>
+            )}
+            <p>
+              Total anterior: {formatCurrency(payloadReviewedTotal.current)}. Total actualizado:{" "}
+              {formatCurrency(reviewedTotalCents)}.
+            </p>
+          </div>
         </div>
       )}
 
+      <PurchaseProgress current={reviewReady ? 2 : 1} />
+      {draftRestored && (
+        <p role="status" className={styles.helpText}>
+          Recuperamos los datos que escribiste en esta pestaña. Revisa que sigan correctos.
+        </p>
+      )}
       <form onSubmit={handleSubmit} className={styles.checkoutGrid} noValidate>
         {/* Left Column: Checkout Sections */}
         <div className={styles.formColumn}>
@@ -1029,7 +1149,15 @@ export function CheckoutPageClient({
         {/* Right Column: Order Summary & Review */}
         <div className={styles.summaryColumn}>
           <div className={styles.stickySummary} data-testid="checkout-order-summary">
-            <h2 className={styles.summaryHeading}>Resumen del Pedido</h2>
+            <h2 ref={summaryRef} tabIndex={-1} className={styles.summaryHeading}>
+              Resumen del Pedido
+            </h2>
+            {reviewReady && (
+              <p role="status" className={styles.helpText}>
+                Revisa dirección, envío y total. Al confirmar registrarás el pedido; el pago se
+                realiza después.
+              </p>
+            )}
 
             {/* Items List */}
             <div className={styles.itemsList}>
@@ -1049,49 +1177,6 @@ export function CheckoutPageClient({
                 </div>
               ))}
             </div>
-
-            <div className={styles.discountRow}>
-              <label htmlFor="checkout-discount" className={styles.visuallyHidden}>
-                Código de descuento
-              </label>
-              <input
-                id="checkout-discount"
-                type="text"
-                value={discountCode}
-                onChange={(event) => {
-                  setDiscountCode(event.target.value);
-                  setDiscountNotice(null);
-                }}
-                placeholder="Código de descuento"
-                className={styles.discountInput}
-                data-testid="checkout-discount-input"
-              />
-              <button
-                type="button"
-                onClick={() => setDiscountNotice("Todavía no hay códigos de descuento activos.")}
-                disabled={discountCode.trim() === ""}
-                className={styles.discountButton}
-                data-testid="checkout-discount-apply"
-              >
-                Aplicar
-              </button>
-            </div>
-
-            <AnimatePresence initial={false}>
-              {discountNotice && (
-                <motion.p
-                  className={styles.discountNotice}
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                  role="status"
-                  data-testid="checkout-discount-notice"
-                >
-                  {discountNotice}
-                </motion.p>
-              )}
-            </AnimatePresence>
 
             {/* Pricing Totals */}
             <div className={styles.pricingRows}>
@@ -1139,7 +1224,9 @@ export function CheckoutPageClient({
                 ? "Procesando pedido..."
                 : isRefreshingContext
                   ? "Actualizando..."
-                  : "Realizar Pedido"}
+                  : reviewReady
+                    ? "Confirmar pedido"
+                    : "Revisar pedido"}
               {!isSubmitting && !isRefreshingContext && (
                 <Icon
                   icon={ArrowRight}
