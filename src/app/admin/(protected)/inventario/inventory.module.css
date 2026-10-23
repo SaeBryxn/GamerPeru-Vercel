@@ -1,84 +1,463 @@
 .root {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  color: var(--admin-text-primary, var(--color-text-primary));
+  gap: var(--space-6);
+  min-width: 0;
+  color: var(--color-text-primary);
 }
-.root h1,
-.root h2,
-.root p {
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.pageHeader h1 {
   margin: 0;
+  font-family: var(--font-heading);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.pageHeader p {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.location {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.card {
+  min-width: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--admin-card-radius);
+  background: var(--color-surface-card);
+  box-shadow: var(--admin-card-shadow);
+}
+.toolbar,
+.resultsHeader,
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+.toolbar {
+  border-bottom: 1px solid var(--color-border-subtle);
+  padding-block: var(--space-3);
+}
+.caption,
+.resultsHeader p,
+.footer {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.resultsHeader h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.resultsHeader p {
+  margin: var(--space-1) 0 0;
 }
 .filters {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  align-items: end;
-  gap: var(--space-3);
-}
-.root label {
-  display: flex;
-  flex-direction: column;
   gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.searchField {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.searchField > svg {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+.input,
+.select {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  padding: 0.375rem 0.625rem;
+  font: inherit;
   font-size: 13px;
 }
-.root input,
-.root select,
-.root button {
-  min-height: 40px;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--admin-panel-border);
-  border-radius: var(--radius-md);
-  background: var(--admin-panel);
-  color: inherit;
-  font: inherit;
+.input {
+  width: 100%;
 }
-.root button,
-.root summary {
+.searchField .input {
+  padding-left: 35px;
+}
+.select {
+  flex: 0 1 170px;
+}
+.primaryButton,
+.secondaryButton,
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0.4rem 0.875rem;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
 }
-.root a {
-  color: inherit;
+.primaryButton {
+  background: var(--admin-accent);
+  border-color: var(--admin-accent);
+  color: var(--admin-accent-contrast);
+}
+.primaryButton:hover {
+  background: var(--admin-accent-strong);
+}
+.secondaryButton:hover,
+.iconButton:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+}
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.iconButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.iconButton {
+  padding: 0;
+  width: 36px;
+}
+.textLink {
+  color: var(--color-text-secondary);
+  font-size: 12px;
   text-underline-offset: 3px;
+}
+.root :is(a, button, input, select, summary):focus-visible,
+.scroll:focus-visible,
+.countForm :is(input, textarea, button):focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
 }
 .scroll {
   overflow-x: auto;
-  border: 1px solid var(--admin-panel-border);
-  border-radius: var(--admin-card-radius);
-  background: var(--admin-panel);
+  max-width: 100%;
 }
-.root table {
+.table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
   text-align: left;
 }
-.root th,
-.root td {
-  padding: var(--space-3);
-  vertical-align: top;
-  border-bottom: 1px solid var(--admin-panel-border);
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
 }
-.root small {
+.table thead th {
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-page, var(--color-surface-card));
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.table tbody th {
+  font-weight: 500;
+}
+.table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.table tbody tr:hover {
+  background: var(--admin-accent-soft);
+}
+.table .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.table .available {
+  font-size: 16px;
+  font-weight: 650;
+}
+.product {
+  min-width: 190px;
+}
+.productLink {
+  color: var(--color-text-primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+.productLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.subtext {
   display: block;
   margin-top: var(--space-1);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
+  font-size: 12px;
   font-weight: 400;
+  overflow-wrap: anywhere;
 }
-.root form {
+.actions {
+  min-width: 142px;
+}
+.actions > .textLink {
+  display: block;
+  margin-top: var(--space-2);
+}
+.help {
+  max-width: 360px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.help summary,
+.movementDetail summary {
+  cursor: pointer;
+  text-underline-offset: 3px;
+}
+.help summary:hover,
+.movementDetail summary:hover {
+  text-decoration: underline;
+}
+.help p,
+.movementDetail p {
+  margin: var(--space-2) 0 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.movementsTable {
+  table-layout: auto;
+}
+.movementsTable th {
+  min-width: 150px;
+}
+.movementDetail {
+  min-width: 140px;
+  max-width: 280px;
+}
+.empty {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+.empty h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+.empty p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.footer {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-block: var(--space-3);
+}
+.pagination {
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
 }
-.root details form {
-  width: 240px;
-  padding-block: var(--space-2);
-  flex-direction: column;
+.pagination > span {
+  margin-right: var(--space-2);
 }
-.root summary {
-  padding-bottom: var(--space-2);
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
-.root section {
+.countForm {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-5);
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+  color: var(--color-text-primary);
+}
+.countContext {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.countForm label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.countForm textarea {
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.6;
+}
+.countSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding-block: var(--space-3);
+  border-block: 1px solid var(--color-border-subtle);
+  font-size: 13px;
+}
+.countSummary div {
+  flex: 1;
+}
+.countSummary dt {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.countSummary dd {
+  margin: var(--space-1) 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.countActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+@media (max-width: 640px) {
+  .pageHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .pageHeader h1 {
+    font-size: 26px;
+  }
+  .toolbar .caption {
+    display: none;
+  }
+  .searchField {
+    flex-basis: 100%;
+  }
+  .select {
+    flex: 1 1 120px;
+  }
+  .input,
+  .select,
+  .primaryButton,
+  .secondaryButton,
+  .iconButton {
+    min-height: 44px;
+  }
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .table,
+  .table tbody {
+    display: block;
+  }
+  .table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-top: 1px solid var(--color-border-subtle);
+  }
+  .table tbody tr:hover {
+    background: transparent;
+  }
+  .table tbody th,
+  .table tbody td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+  .table tbody th,
+  .table .actions {
+    grid-column: 1 / -1;
+  }
+  .table td::before {
+    display: block;
+    content: attr(data-label);
+    margin-bottom: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  .table .numeric {
+    text-align: left;
+  }
+  .table .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--space-3);
+  }
+  .actions::before {
+    display: none !important;
+  }
+  .actions > .textLink {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: 0;
+  }
+  .movementDetail {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .movementsTable td:last-child {
+    grid-column: 1 / -1;
+  }
+  .help summary,
+  .movementDetail summary {
+    padding-block: var(--space-2);
+  }
 }
