@@ -104,7 +104,7 @@
   border-radius: 5px;
   background: var(--color-surface-secondary);
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .actions {
@@ -152,7 +152,7 @@
 }
 .themeName {
   margin-left: 4px;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 400;
 }
@@ -184,8 +184,8 @@
 }
 .newTab {
   margin-left: auto;
-  color: var(--color-text-muted);
-  font-size: 10px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
   white-space: nowrap;
 }
 .logout {
