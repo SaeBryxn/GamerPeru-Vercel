@@ -16,6 +16,7 @@ import { ForbiddenError, requirePermission } from "@/lib/auth/rbac";
 import type { VerifiedAuthContextReady } from "@/lib/auth/rbac";
 import { AI_AUDIT_ACTIONS } from "../audit-actions";
 import { createProfileSnapshot } from "../profile-service";
+import { RESEARCH_PROVIDER_KEYS } from "../gateway/registry";
 import { createResearchMutationDigest, createResearchRequestFingerprint } from "./idempotency";
 import { createResearchJobInputSchema, profileSnapshotSchema } from "./schemas";
 import type { CreateResearchJobInput } from "./schemas";
@@ -199,7 +200,11 @@ export async function createResearchJob(
       .from(aiProviders)
       .where(eq(aiProviders.id, profile.providerId))
       .limit(1);
-    if (!provider || !provider.isEnabled || provider.providerKey !== "google") {
+    if (
+      !provider ||
+      !provider.isEnabled ||
+      !(RESEARCH_PROVIDER_KEYS as readonly string[]).includes(provider.providerKey)
+    ) {
       throw new Error("AI_PROVIDER_DISABLED: Selected AI provider is unavailable.");
     }
 

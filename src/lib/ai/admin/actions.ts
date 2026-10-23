@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { ZodError } from "zod";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { createResearchJobAction } from "@/lib/ai/research/actions";
@@ -155,7 +155,6 @@ export async function submitResearchJobAdminAction(
     const input = adminResearchSubmissionSchema.parse(rawInput);
     await assertAdminResearchSubmissionEligibility(input, { authContext });
     const result = await createResearchJobAction(input);
-    revalidatePath("/admin/products/ai-import");
     return { jobId: result.jobId, replayed: result.replayed };
   });
 }
@@ -184,7 +183,6 @@ export async function initializeProposalReviewAdminAction(
   return await runAction(async () => {
     const input = adminProposalVersionSchema.parse(rawInput);
     const result = await initializeCatalogSelectionReviewsAction(input);
-    revalidatePath(`/admin/products/ai-import/proposals/${input.proposalId}`);
     return { proposalUpdatedAt: result.proposalUpdatedAt, replayed: result.replayed };
   });
 }
@@ -195,7 +193,6 @@ export async function reviewProposalFieldAdminAction(
   return await runAction(async () => {
     const input = adminProposalFieldDecisionSchema.parse(rawInput);
     const result = await reviewProposalFieldAction(input);
-    revalidatePath(`/admin/products/ai-import/proposals/${input.proposalId}`);
     return { proposalUpdatedAt: result.proposalUpdatedAt, replayed: result.replayed };
   });
 }
@@ -206,7 +203,6 @@ export async function setHumanVariantPlanAdminAction(
   return await runAction(async () => {
     const input = adminVariantPlanSchema.parse(rawInput);
     const result = await setHumanVariantPlanAction(input);
-    revalidatePath(`/admin/products/ai-import/proposals/${input.proposalId}`);
     return { proposalUpdatedAt: result.proposalUpdatedAt, replayed: result.replayed };
   });
 }
@@ -217,7 +213,6 @@ export async function approveProposalAdminAction(
   return await runAction(async () => {
     const input = adminProposalVersionSchema.parse(rawInput);
     const result = await approveProposalAction(input);
-    revalidatePath(`/admin/products/ai-import/proposals/${input.proposalId}`);
     return { status: "APPROVED", proposalUpdatedAt: result.proposalUpdatedAt };
   });
 }
@@ -228,7 +223,6 @@ export async function rejectProposalAdminAction(
   return await runAction(async () => {
     const input = adminProposalVersionSchema.parse(rawInput);
     const result = await rejectProposalAction(input);
-    revalidatePath(`/admin/products/ai-import/proposals/${input.proposalId}`);
     return { status: "REJECTED", proposalUpdatedAt: result.proposalUpdatedAt };
   });
 }
@@ -241,8 +235,7 @@ export async function applyProposalAdminAction(
   return await runAction(async () => {
     const input = adminProposalReadSchema.parse(rawInput);
     const result = await applyProposalAction(input);
-    revalidatePath(`/admin/products/ai-import/proposals/${input.proposalId}`);
-    revalidatePath("/admin/products");
+    if (result.status === "APPLIED") revalidateStorefrontCatalog();
     return { status: result.status, canonicalProductId: result.canonicalProductId };
   });
 }
@@ -288,7 +281,6 @@ export async function configureProviderAdminAction(
       },
       { authContext }
     );
-    revalidatePath("/admin/settings/ai");
     return { providerId: provider.id };
   });
 }
@@ -301,7 +293,6 @@ export async function saveCredentialAdminAction(
   return await runAction(async () => {
     const input = adminCredentialSaveSchema.parse(rawInput);
     const credential = await saveCredential(input, { authContext });
-    revalidatePath("/admin/settings/ai");
     return toCredentialDto(credential);
   });
 }
@@ -314,7 +305,6 @@ export async function revokeCredentialAdminAction(
   return await runAction(async () => {
     const input = adminCredentialMutationSchema.parse(rawInput);
     const credential = await revokeCredential(input, { authContext });
-    revalidatePath("/admin/settings/ai");
     return toCredentialDto(credential);
   });
 }
@@ -327,7 +317,6 @@ export async function rotateCredentialKeyAdminAction(
   return await runAction(async () => {
     const input = adminCredentialMutationSchema.parse(rawInput);
     const credential = await rotateCredentialKey(input, { authContext });
-    revalidatePath("/admin/settings/ai");
     return toCredentialDto(credential);
   });
 }
@@ -346,7 +335,6 @@ export async function testCredentialAdminAction(rawInput: unknown): Promise<
     const input = adminProviderOperationSchema.parse(rawInput);
     await assertAdminProviderHealthCheckSupported(input.providerId, { authContext });
     const result = await executeCredentialHealthCheck(input.providerId, { authContext });
-    revalidatePath("/admin/settings/ai");
     return {
       ...result,
       message: result.ok
@@ -365,7 +353,6 @@ export async function configureProfileAdminAction(
     const input = adminProfileConfigurationSchema.parse(rawInput);
     await assertAdminProfileRuntimeCompatibility(input, { authContext });
     const profile = await configureProfile(input, { authContext });
-    revalidatePath("/admin/settings/ai");
     return { profileId: profile.id };
   });
 }

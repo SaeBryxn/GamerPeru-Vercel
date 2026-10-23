@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as AuthRbac from "@/lib/auth/rbac";
 
 const mocks = vi.hoisted(() => ({
+  revalidatePath: vi.fn(),
+  revalidateStorefrontCatalog: vi.fn(),
   getVerifiedAuthContext: vi.fn(),
   assertResearchEligibility: vi.fn(),
   assertProfileCompatibility: vi.fn(),
@@ -9,9 +11,13 @@ const mocks = vi.hoisted(() => ({
   createResearchJobAction: vi.fn(),
   executeCredentialHealthCheck: vi.fn(),
   configureProfile: vi.fn(),
+  applyProposal: vi.fn(),
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
+vi.mock("@/lib/catalog/catalog-cache", () => ({
+  revalidateStorefrontCatalog: mocks.revalidateStorefrontCatalog,
+}));
 
 vi.mock("@/lib/auth/rbac", async (importOriginal) => {
   const actual = await importOriginal<typeof AuthRbac>();
@@ -23,7 +29,7 @@ vi.mock("@/lib/ai/research/actions", () => ({
 }));
 
 vi.mock("@/lib/ai/proposals/actions", () => ({
-  applyProposalAction: vi.fn(),
+  applyProposalAction: mocks.applyProposal,
   approveProposalAction: vi.fn(),
   getProposalApplyStatusAction: vi.fn(),
   getProposalReviewDetailAction: vi.fn(),
@@ -49,6 +55,7 @@ vi.mock("@/lib/ai/admin/readers", () => ({
 }));
 
 import {
+  applyProposalAdminAction,
   configureProfileAdminAction,
   submitResearchJobAdminAction,
   testCredentialAdminAction,
@@ -69,6 +76,19 @@ describe("GP-025 / CHK4-BR1 — Admin action runtime admission", () => {
       permissions: new Set(["catalog:ai_research", "ai:manage_credentials"]),
     });
   });
+
+  it.each(["APPLYING", "APPLIED"])(
+    "invalida el catálogo con max solo al terminar (%s)",
+    async (status) => {
+      mocks.applyProposal.mockResolvedValueOnce({ status, canonicalProductId: productId });
+      expect(await applyProposalAdminAction({ proposalId: profileId })).toMatchObject({
+        success: true,
+        data: { status },
+      });
+      expect(mocks.revalidatePath).not.toHaveBeenCalled();
+      expect(mocks.revalidateStorefrontCatalog).toHaveBeenCalledTimes(status === "APPLIED" ? 1 : 0);
+    }
+  );
 
   it.each(["openai", "anthropic"])(
     "rejects a manipulated %s research submission before frozen job creation",
@@ -104,6 +124,7 @@ describe("GP-025 / CHK4-BR1 — Admin action runtime admission", () => {
       expect.objectContaining({ authContext: expect.objectContaining({ status: "READY" }) })
     );
     expect(mocks.createResearchJobAction).toHaveBeenCalledWith(input);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
   it("rejects a manipulated non-DRAFT ENRICH target before frozen job creation", async () => {
