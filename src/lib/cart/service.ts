@@ -22,7 +22,12 @@ import {
   resolveExistingAnonymousMutationCart,
   retireCartById,
 } from "./persistence";
-import { clearAnonymousCartCookie, resolveCartAuthority, setAnonymousCartCookie } from "./session";
+import {
+  clearAnonymousCartCookie,
+  resolveCartAuthority,
+  setAnonymousCartCookie,
+  setCartHintCookie,
+} from "./session";
 import type {
   AddCartItemInput,
   CartActionResult,
@@ -177,6 +182,8 @@ export async function getCurrentCart(): Promise<CartReadResult> {
     return { success: true, cart: createEmptyCartSnapshot() };
   }
 
+  // Carts created before the hint existed get it on their next read.
+  await setCartHintCookie();
   const lines = await queryCartHydrationLines(guestCart.id);
   return { success: true, cart: buildCartSnapshot(lines) };
 }

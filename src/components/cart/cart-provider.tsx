@@ -8,6 +8,35 @@ import {
 } from "@/lib/cart/actions";
 import { loadCurrentCartAction } from "@/lib/cart/bootstrap-action";
 import type { CartSnapshot } from "@/lib/cart/types";
+import { CANONICAL_CART_CURRENCY, CART_HINT_COOKIE_NAME } from "@/lib/cart/constants";
+
+const BOOTSTRAPPED_KEY = "gp-cart-bootstrapped";
+
+const EMPTY_CART: CartSnapshot = {
+  currency: CANONICAL_CART_CURRENCY,
+  lineCount: 0,
+  itemCount: 0,
+  subtotalCents: 0,
+  hasUnavailableItems: false,
+  lines: [],
+};
+
+/**
+ * Whether this page view can know, without asking the server, that there is no cart: no session
+ * (signed-in carts live on the account), no guest-cart hint, and a previous visit already did one
+ * real read (so carts created before the hint existed got it). Each skipped read is a Worker
+ * request saved on every page view of a visitor who never added anything.
+ */
+function knowsCartIsEmpty(): boolean {
+  try {
+    const names = document.cookie.split(";").map((part) => part.trim().split("=")[0] ?? "");
+    const signedIn = names.some((name) => name.includes("-auth-token"));
+    const hasGuestCart = names.includes(CART_HINT_COOKIE_NAME);
+    return !signedIn && !hasGuestCart && window.localStorage.getItem(BOOTSTRAPPED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export type CartStatus = "UNINITIALIZED" | "LOADING" | "READY" | "PROFILE_REQUIRED" | "ERROR";
 
@@ -67,8 +96,19 @@ export function CartProvider({ children }: CartProviderProps): React.JSX.Element
     setStatus("LOADING");
     setLastError(null);
 
+    if (knowsCartIsEmpty()) {
+      setSnapshot(EMPTY_CART);
+      setStatus("READY");
+      return;
+    }
+
     try {
       const result = await loadCurrentCartAction();
+      try {
+        window.localStorage.setItem(BOOTSTRAPPED_KEY, "1");
+      } catch {
+        // Without storage every visit simply keeps reading the cart.
+      }
 
       // Discard older bootstrap response if a newer request/mutation took over
       if (generation !== requestGenerationRef.current) {

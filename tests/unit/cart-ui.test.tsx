@@ -69,6 +69,8 @@ vi.mock("next/image", () => ({
 
 // Mock HTMLDialogElement methods in jsdom
 beforeEach(() => {
+  // A previous test's real bootstrap would let the provider skip the read in the next one.
+  window.localStorage.clear();
   HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
     this.open = true;
   });
@@ -185,6 +187,48 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
 
       expect(screen.getByTestId("count").textContent).toBe("3");
       expect(mockLoadCurrentCartAction).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips the server read for a returning visitor without session or cart hint", async () => {
+      window.localStorage.setItem("gp-cart-bootstrapped", "1");
+      function TestConsumer() {
+        const { status, itemCount } = useCart();
+        return (
+          <div>
+            <span data-testid="status">{status}</span>
+            <span data-testid="count">{itemCount}</span>
+          </div>
+        );
+      }
+      render(
+        <CartProvider>
+          <TestConsumer />
+        </CartProvider>
+      );
+      await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("READY"));
+      expect(screen.getByTestId("count").textContent).toBe("0");
+      expect(mockLoadCurrentCartAction).not.toHaveBeenCalled();
+    });
+
+    it("still reads the cart when the guest-cart hint cookie is present", async () => {
+      window.localStorage.setItem("gp-cart-bootstrapped", "1");
+      document.cookie = "gp_cart_hint=1; path=/";
+      mockLoadCurrentCartAction.mockResolvedValueOnce({ success: true, cart: sampleCart });
+      function TestConsumer() {
+        const { status } = useCart();
+        return <span data-testid="status">{status}</span>;
+      }
+      try {
+        render(
+          <CartProvider>
+            <TestConsumer />
+          </CartProvider>
+        );
+        await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("READY"));
+        expect(mockLoadCurrentCartAction).toHaveBeenCalledTimes(1);
+      } finally {
+        document.cookie = "gp_cart_hint=; path=/; max-age=0";
+      }
     });
 
     it("throws developer error when useCart is used outside CartProvider", () => {

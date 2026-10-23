@@ -10,6 +10,7 @@ import {
   ANONYMOUS_CART_COOKIE_NAME_PROD,
   ANONYMOUS_TOKEN_BYTES,
   CART_COOKIE_MAX_AGE_SECONDS,
+  CART_HINT_COOKIE_NAME,
   CART_COOKIE_PATH,
   CART_COOKIE_SAME_SITE,
 } from "./constants";
@@ -72,6 +73,19 @@ export async function setAnonymousCartCookie(token: string): Promise<void> {
     path: CART_COOKIE_PATH,
     maxAge: CART_COOKIE_MAX_AGE_SECONDS,
   });
+  await setCartHintCookie();
+}
+
+/** Marks, readably and without the token, that this browser has a guest cart. */
+export async function setCartHintCookie(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(CART_HINT_COOKIE_NAME, "1", {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: CART_COOKIE_SAME_SITE,
+    path: CART_COOKIE_PATH,
+    maxAge: CART_COOKIE_MAX_AGE_SECONDS,
+  });
 }
 
 /**
@@ -82,6 +96,7 @@ export async function clearAnonymousCartCookie(): Promise<void> {
   const cookieStore = await cookies();
   const cookieName = getCartCookieName();
   cookieStore.delete(cookieName);
+  cookieStore.delete(CART_HINT_COOKIE_NAME);
 }
 
 /**

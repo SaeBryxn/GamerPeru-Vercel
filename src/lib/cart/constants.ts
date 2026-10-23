@@ -8,6 +8,12 @@
 export const ANONYMOUS_CART_COOKIE_NAME_DEV = "gp_cart_session";
 export const ANONYMOUS_CART_COOKIE_NAME_PROD = "__Secure-gp_cart_session";
 
+/**
+ * Readable companion of the httpOnly cart cookie: it carries no token, only "a cart exists", so
+ * the browser can skip the cart read on every page view of visitors who never added anything.
+ */
+export const CART_HINT_COOKIE_NAME = "gp_cart_hint";
+
 export const CART_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days in seconds
 export const CART_COOKIE_PATH = "/";
 export const CART_COOKIE_SAME_SITE = "lax" as const;

@@ -4,6 +4,7 @@ import {
   ANONYMOUS_CART_COOKIE_NAME_PROD,
   ANONYMOUS_TOKEN_REGEX,
   CART_COOKIE_MAX_AGE_SECONDS,
+  CART_HINT_COOKIE_NAME,
 } from "@/lib/cart/constants";
 import {
   clearAnonymousCartCookie,
@@ -680,7 +681,13 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
       expect(result.success).toBe(true);
 
       // Verify cookie was set with 30-day maxAge
-      expect(mockCookieStore.set).toHaveBeenCalledTimes(1);
+      // The httpOnly token cookie plus its readable hint (no token) for the browser.
+      expect(mockCookieStore.set).toHaveBeenCalledTimes(2);
+      expect(mockCookieStore.set).toHaveBeenCalledWith(
+        CART_HINT_COOKIE_NAME,
+        "1",
+        expect.objectContaining({ httpOnly: false })
+      );
       expect(mockCookieStore.set).toHaveBeenCalledWith(
         expect.any(String),
         existingToken,
@@ -756,7 +763,13 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
         quantity: 3,
       });
       expect(result.success).toBe(true);
-      expect(mockCookieStore.set).toHaveBeenCalledTimes(1);
+      // The httpOnly token cookie plus its readable hint (no token) for the browser.
+      expect(mockCookieStore.set).toHaveBeenCalledTimes(2);
+      expect(mockCookieStore.set).toHaveBeenCalledWith(
+        CART_HINT_COOKIE_NAME,
+        "1",
+        expect.objectContaining({ httpOnly: false })
+      );
       expect(mockCookieStore.set).toHaveBeenCalledWith(
         expect.any(String),
         existingToken,
@@ -817,7 +830,13 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
 
       const result = await removeCartItemAction(null, { variantId: validUuid });
       expect(result.success).toBe(true);
-      expect(mockCookieStore.set).toHaveBeenCalledTimes(1);
+      // The httpOnly token cookie plus its readable hint (no token) for the browser.
+      expect(mockCookieStore.set).toHaveBeenCalledTimes(2);
+      expect(mockCookieStore.set).toHaveBeenCalledWith(
+        CART_HINT_COOKIE_NAME,
+        "1",
+        expect.objectContaining({ httpOnly: false })
+      );
       expect(mockCookieStore.set).toHaveBeenCalledWith(
         expect.any(String),
         existingToken,
@@ -987,6 +1006,7 @@ describe("GP-017 CART4-R1 — Server-Side Cart Runtime Unit Suite", () => {
       expect(executionOrder).toEqual([
         "ADVISORY_LOCK_ACQUIRED",
         "DB_TRANSACTION_COMMITTED",
+        "COOKIE_WRITTEN",
         "COOKIE_WRITTEN",
       ]);
     });
