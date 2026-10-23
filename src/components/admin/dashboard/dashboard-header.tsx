@@ -51,15 +51,9 @@ export function DashboardHeader({
   return (
     <header className={styles.header}>
       <div className={styles.titleBlock}>
-        <span className={styles.eyebrow}>Gamer Perú · Administración</span>
         <h1 className={styles.title}>
           {view === "metrics" ? "Métricas de la tienda" : "Centro de operaciones"}
         </h1>
-        <p className={styles.subtitle}>
-          {view === "metrics"
-            ? "Resultados del período y su comparación"
-            : "Pagos, preparación y catálogo: cada pendiente tiene su siguiente paso"}
-        </p>
         {updatedAt && (
           <time className={styles.updated} dateTime={updatedAt}>
             Actualizado{" "}
@@ -75,9 +69,11 @@ export function DashboardHeader({
         )}
       </div>
 
-      <DashboardRefresh />
-      {aside && <div className={styles.views}>{aside}</div>}
-      {showPeriodSelector && <PeriodSelector selectedPeriod={selectedPeriod} />}
+      <div className={styles.controls}>
+        {aside && <div className={styles.views}>{aside}</div>}
+        {showPeriodSelector && <PeriodSelector selectedPeriod={selectedPeriod} />}
+        <DashboardRefresh />
+      </div>
     </header>
   );
 }

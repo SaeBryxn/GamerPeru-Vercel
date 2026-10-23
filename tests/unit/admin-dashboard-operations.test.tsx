@@ -471,6 +471,9 @@ describe("Operational sections", () => {
       />
     );
     const link = screen.getByRole("link", { name: "Editar JINMS X7 Ultra Black en Fotos" });
+    expect(
+      screen.getByRole("region", { name: "Productos con pendientes" }).getAttribute("tabindex")
+    ).toBe("0");
     expect(link.getAttribute("href")).toBe("/admin/products/p1#imagenes");
     expect(screen.getByText("Sube al menos una foto")).toBeTruthy();
     expect(screen.getByText(/Ver los 9 productos/)).toBeTruthy();
@@ -560,6 +563,10 @@ describe("Jerarquía de Inicio", () => {
     );
     expect(screen.getByRole("heading", { name: "Métricas de la tienda" })).toBeTruthy();
     const comparison = screen.getByLabelText("Fechas de las métricas y de su comparación");
+    const dates = screen.getByText("Fechas de comparación").closest("details")!;
+    expect(dates.open).toBe(false);
+    fireEvent.click(screen.getByText("Fechas de comparación"));
+    expect(dates.open).toBe(true);
     expect(comparison.textContent).toContain("Período seleccionado:");
     expect(comparison.textContent).toContain("Comparado con:");
     expect(comparison.textContent).toContain("hora de Lima");

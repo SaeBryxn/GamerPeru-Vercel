@@ -18,8 +18,8 @@
 .activity {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--admin-card-padding);
+  gap: 6px;
+  padding: 10px;
 }
 
 .activity {
@@ -30,12 +30,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .blockTitle {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text-primary);
 }
@@ -43,7 +44,7 @@
 .blockCaption,
 .live {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .live {
@@ -54,20 +55,20 @@
 
 .queueMetrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--space-6);
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  gap: var(--space-3);
 }
 
 .activityGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-5) var(--space-6);
+  gap: var(--space-3);
 }
 
 .note {
   margin: 0;
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .unavailable {

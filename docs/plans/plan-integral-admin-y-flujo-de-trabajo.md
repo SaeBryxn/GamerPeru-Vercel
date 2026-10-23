@@ -134,6 +134,10 @@ Validación: formato, TypeScript, lint y 38 pruebas dirigidas correctos. Por ind
 
 Esta revisión permanece local y sin push. Se prueban la actualización, los filtros de cada cola, el acceso por permisos y la separación entre métricas y pendientes. El contraste de los colores nuevos se calcula sobre sus fondos; la composición visual sigue pendiente de revisión del dueño porque pidió trabajar sin capturas.
 
+**Tercera revisión: aprovechar el alto de pantalla.** Se compactan cabecera, tarjetas y accesos; en escritorio se distribuyen pendientes, catálogo y herramientas en columnas. El catálogo tiene su propia región desplazable y accesible por teclado. La vista de métricas dispone finanzas arriba y pedidos/pagos lado a lado; las fechas de comparación se consultan al desplegarlas. Se conservan los datos, filtros, precisión de importes y permisos. En pantallas estrechas, bajas o ampliadas se permite lectura vertical; las columnas tienen desplazamiento de respaldo para no recortar información.
+
+Comprobación de dimensiones offline, con componentes reales y datos ficticios: a 1280×720, 1366×768, 1440×900 y 1920×1080 ambas vistas quedan dentro del alto de la página y solo la lista del catálogo tiene desbordamiento vertical. PageDown desplaza esa lista con el foco dentro y mantiene fija la página. A 360 y 768 px se comprobó ausencia de desbordamiento horizontal, conservando lectura vertical. Sin capturas, servidor nuevo ni acceso a producción. Esta medición no sustituye la revisión visual del dueño con sus fuentes, zoom y datos reales.
+
 ### O2. Pagos
 
 **Tarea:** decidir con evidencia. Compactar filtros y resumen; el panel mantiene importe, pedido, comprobante, asignación y decisiones en orden de lectura.

@@ -48,10 +48,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     payload.catalogOverview.status !== "UNAUTHORIZED" ||
     payload.inventoryOverview.status !== "UNAUTHORIZED";
   const links = buildDashboardLinks(payload.actor.permissions, payload.period);
-  const hasCatalogContext =
-    payload.catalogHealth.status === "READY" ||
-    payload.catalogOverview.status === "READY" ||
-    payload.inventoryOverview.status === "READY";
+  const hasCatalogContext = payload.catalogHealth.status === "READY";
   // Two views instead of one long page: today's work, or the numbers of the chosen period.
   const view = resolvedParams.vista === "metricas" ? "metrics" : "operations";
   const formatBoundary = (date: Date) =>
@@ -78,7 +75,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
   ) : null;
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} data-view={view}>
       <DashboardHeader
         selectedPeriod={selectedPeriod}
         showPeriodSelector={false}
@@ -93,10 +90,6 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
           <div className={styles.workspaceGrid} data-has-catalog={hasCatalogContext}>
             <div className={styles.primaryColumn}>
               <AttentionSection payload={payload} links={links} />
-              <CatalogHealthSection
-                catalogHealth={payload.catalogHealth}
-                productsHref={links.products?.({ pending: "issues" }) ?? null}
-              />
               {(payload.catalogOverview.status === "READY" ||
                 payload.inventoryOverview.status === "READY") && (
                 <details className={styles.overviewDetails}>
@@ -114,6 +107,12 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
                 </details>
               )}
             </div>
+            {hasCatalogContext && (
+              <CatalogHealthSection
+                catalogHealth={payload.catalogHealth}
+                productsHref={links.products?.({ pending: "issues" }) ?? null}
+              />
+            )}
             <div className={styles.secondaryColumn}>
               <QuickActions links={links} />
               <HomeStatusSection homeStatus={payload.homeStatus} href={links.home} />
@@ -123,34 +122,51 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
       ) : hasAnyMetricAccess ? (
         <Stagger className={styles.dashboardBody}>
           <div className={styles.metricsDivider}>
-            <h2 className={styles.metricsTitle}>Métricas del período</h2>
             <PeriodSelector selectedPeriod={selectedPeriod} />
+            <details className={styles.comparisonDetails}>
+              <summary>Fechas de comparación</summary>
+              <div
+                className={styles.comparisonContext}
+                aria-label="Fechas de las métricas y de su comparación"
+              >
+                <p>
+                  <strong>Período seleccionado:</strong>{" "}
+                  {formatBoundary(payload.period.current.start)} –{" "}
+                  {formatBoundary(payload.period.current.end)}
+                </p>
+                <p>
+                  <strong>Comparado con:</strong> {formatBoundary(payload.period.previous.start)} –{" "}
+                  {formatBoundary(payload.period.previous.end)} · hora de Lima
+                </p>
+              </div>
+            </details>
           </div>
-          <div
-            className={styles.comparisonContext}
-            aria-label="Fechas de las métricas y de su comparación"
-          >
-            <p>
-              <strong>Período seleccionado:</strong> {formatBoundary(payload.period.current.start)}{" "}
-              – {formatBoundary(payload.period.current.end)}
-            </p>
-            <p>
-              <strong>Comparado con:</strong> {formatBoundary(payload.period.previous.start)} –{" "}
-              {formatBoundary(payload.period.previous.end)} · hora de Lima
-            </p>
+          {payload.financialCohort.status !== "UNAUTHORIZED" && (
+            <div className={styles.financialPanel}>
+              <FinancialCohortSection
+                financialCohort={payload.financialCohort}
+                paidOrdersHref={links.periodOrders?.({ paymentStatus: "PAID" })}
+              />
+            </div>
+          )}
+          <div className={styles.metricsGrid}>
+            {payload.orderPipeline.status !== "UNAUTHORIZED" && (
+              <div className={styles.metricPane}>
+                <OrderPipelineSection
+                  orderPipeline={payload.orderPipeline}
+                  periodOrdersHref={links.periodOrders}
+                />
+              </div>
+            )}
+            {payload.paymentVerification.status !== "UNAUTHORIZED" && (
+              <div className={styles.metricPane}>
+                <PaymentVerificationSection
+                  paymentVerification={payload.paymentVerification}
+                  queueHref={links.payments ?? undefined}
+                />
+              </div>
+            )}
           </div>
-          <FinancialCohortSection
-            financialCohort={payload.financialCohort}
-            paidOrdersHref={links.periodOrders?.({ paymentStatus: "PAID" })}
-          />
-          <OrderPipelineSection
-            orderPipeline={payload.orderPipeline}
-            periodOrdersHref={links.periodOrders}
-          />
-          <PaymentVerificationSection
-            paymentVerification={payload.paymentVerification}
-            queueHref={links.payments ?? undefined}
-          />
         </Stagger>
       ) : (
         <div className={styles.dashboardBody}>

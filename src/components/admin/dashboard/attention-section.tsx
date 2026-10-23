@@ -98,11 +98,7 @@ export function AttentionSection(props: AttentionSectionProps) {
   const next = pending.find((item) => item.href);
 
   return (
-    <AdminSection
-      id="attention-heading"
-      title="Para resolver ahora"
-      caption="Por prioridad y antigüedad"
-    >
+    <AdminSection id="attention-heading" title="Para resolver ahora">
       {pending.length === 0 ? (
         <p className={styles.allClear} data-testid="attention-all-clear">
           <CheckCircle2 size={16} aria-hidden="true" />
@@ -112,6 +108,9 @@ export function AttentionSection(props: AttentionSectionProps) {
         <>
           <ul className={styles.attentionGrid}>
             {pending.map((item) => {
+              const oldestLabel = item.oldestAt
+                ? `Pendiente más antiguo: ${new Date(item.oldestAt).toLocaleString("es-PE", { timeZone: "America/Lima", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`
+                : undefined;
               const content = (
                 <>
                   <span className={styles.attentionCount}>{formatInteger(item.count)}</span>
@@ -121,17 +120,18 @@ export function AttentionSection(props: AttentionSectionProps) {
                       <StatusDot tone={item.tone} />
                       {item.label}
                     </span>
-                    <span className={styles.attentionHint}>{item.hint}</span>
                     {item.oldestAt && (
-                      <time className={styles.attentionHint} dateTime={item.oldestAt}>
-                        Más antiguo:{" "}
+                      <time
+                        className={styles.attentionHint}
+                        dateTime={item.oldestAt}
+                        title={oldestLabel}
+                        aria-label={oldestLabel}
+                      >
+                        Desde{" "}
                         {new Date(item.oldestAt).toLocaleString("es-PE", {
                           timeZone: "America/Lima",
                           day: "numeric",
                           month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
                         })}
                       </time>
                     )}

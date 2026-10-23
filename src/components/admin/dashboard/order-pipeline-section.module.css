@@ -1,52 +1,83 @@
 .summary {
-  padding: var(--admin-card-padding);
+  padding: var(--space-2) var(--space-3);
+}
+.summaryHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.total {
+  margin-left: auto;
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+a.total:hover {
+  text-decoration: underline;
+}
+a.total:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
 }
 
 .steps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-  margin: -1px 0 0 -1px;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .step {
-  padding: var(--space-5) var(--admin-card-padding);
-  box-shadow:
-    -1px 0 0 0 var(--color-border-subtle),
-    0 -1px 0 0 var(--color-border-subtle);
+  padding: 2px var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .step > div {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  display: grid;
+  grid-template-columns: 112px minmax(3ch, auto) minmax(32px, 1fr);
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .stepLabel {
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
 .stepCount {
+  line-height: 1.2;
   font-family: var(--font-heading);
-  font-size: 22px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-primary);
 }
 
+@media (pointer: coarse) {
+  .stepLabel {
+    min-height: 44px;
+  }
+}
+
 /* 2px share of the period's orders: present, never the loudest thing on the card. */
 .track {
   display: block;
   width: 100%;
-  height: 2px;
+  height: 5px;
   overflow: hidden;
   border-radius: 9999px;
   background-color: var(--color-surface-secondary);
@@ -65,6 +96,12 @@
 
 .fillClosed {
   background-color: var(--color-border-strong);
+}
+.step[data-state="fulfilled"] .fillOpen {
+  background: var(--color-status-success-text);
+}
+.step[data-state="pending"] .fillOpen {
+  background: var(--color-status-warning-text);
 }
 
 @media (prefers-reduced-motion: reduce) {

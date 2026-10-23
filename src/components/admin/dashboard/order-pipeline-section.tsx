@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import type { OrderPipelineResult } from "@/lib/admin/dashboard-types";
 import { formatInteger } from "@/lib/admin/dashboard-format";
-import { AdminCard, AdminSection, MetricWidget, StaggerItem, StatusDot } from "../ui";
+import { AdminCard, AdminSection, StaggerItem, StatusDot } from "../ui";
 import type { StatusDotTone } from "../ui";
 import { CountTrendBadge } from "./trend-badge";
 import styles from "./order-pipeline-section.module.css";
@@ -99,26 +99,38 @@ export function OrderPipelineSection({
     <AdminSection id="orders-heading" title="Flujo de Pedidos">
       <AdminCard>
         <StaggerItem className={styles.summary}>
-          <MetricWidget
-            label="Total de pedidos creados"
-            value={formatInteger(total)}
-            valueTestId="orders-total-created"
-            href={periodOrdersHref?.()}
-            size="large"
-            trend={
-              <CountTrendBadge
-                trend={trends.totalCreatedOrders}
-                comparisonLabel="Comparación vs período anterior"
-              />
-            }
-          />
+          <div className={styles.summaryHead}>
+            <span>Total de pedidos creados</span>
+            {periodOrdersHref ? (
+              <Link
+                href={periodOrdersHref()}
+                className={styles.total}
+                data-testid="orders-total-created"
+              >
+                {formatInteger(total)}
+              </Link>
+            ) : (
+              <strong className={styles.total} data-testid="orders-total-created">
+                {formatInteger(total)}
+              </strong>
+            )}
+            <CountTrendBadge
+              trend={trends.totalCreatedOrders}
+              comparisonLabel="Comparación vs período anterior"
+            />
+          </div>
         </StaggerItem>
 
         <ol className={styles.steps} aria-label="Pedidos por estado">
           {statuses.map((status) => {
             const share = total > 0 ? (status.count / total) * 100 : 0;
             return (
-              <li key={status.id} className={styles.step} data-testid={`order-status-${status.id}`}>
+              <li
+                key={status.id}
+                className={styles.step}
+                data-state={status.id}
+                data-testid={`order-status-${status.id}`}
+              >
                 <StaggerItem>
                   {periodOrdersHref ? (
                     <Link

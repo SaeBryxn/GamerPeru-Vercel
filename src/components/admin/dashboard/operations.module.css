@@ -39,12 +39,13 @@
 }
 
 .attentionCard {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(3ch, auto) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(2ch, auto) minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-4);
-  min-height: 88px;
-  padding: var(--space-4) var(--space-5);
+  gap: var(--space-3);
+  min-height: 60px;
+  padding: var(--space-3) 32px var(--space-3) var(--space-3);
   color: inherit;
   text-decoration: none;
 }
@@ -53,17 +54,17 @@ a.attentionCard:hover {
   background: var(--color-surface-secondary);
 }
 .attentionCard[data-priority="next"] {
-  min-height: 160px;
-  padding-block: var(--space-6);
+  min-height: 100px;
+  padding-block: var(--space-3);
   background: linear-gradient(120deg, #1e3a8a, #172554);
   color: #ffffff;
 }
 .attentionCard[data-priority="next"] .attentionCount {
-  font-size: 40px;
+  font-size: 30px;
   color: #ffffff;
 }
 .attentionCard[data-priority="next"] .attentionLabel {
-  font-size: 18px;
+  font-size: 15px;
   color: #ffffff;
 }
 .attentionCard[data-priority="next"] .attentionHint {
@@ -76,11 +77,7 @@ a.attentionCard:hover {
   color: #dbeafe;
 }
 .attentionCard[data-priority="next"] .attentionCta {
-  min-height: 40px;
-  padding: var(--space-2) var(--space-3);
-  border-radius: 8px;
-  background: #ffffff;
-  color: #1e3a8a;
+  color: #ffffff;
 }
 .attentionCard[data-priority="next"]:hover {
   background: #1e3a8a;
@@ -127,7 +124,7 @@ a.attentionCard:hover {
 
 .attentionCount {
   font-family: var(--font-heading);
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.03em;
@@ -155,7 +152,13 @@ a.attentionCard:hover {
 }
 
 .attentionCta {
+  position: absolute;
+  right: 10px;
+  top: 16px;
   white-space: nowrap;
+}
+.attentionCta > span {
+  display: none;
 }
 
 .sectionLink,
@@ -184,12 +187,12 @@ a.attentionCard:hover .attentionCta {
 .actionCard {
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
-  min-height: 148px;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 56px;
   height: 100%;
-  padding: var(--space-4);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-status-info-border);
   border-radius: 12px;
   background: var(--color-status-info-background);
@@ -249,15 +252,13 @@ a.attentionCard:hover .attentionCta {
   flex: 1;
 }
 .actionArrow {
-  position: absolute;
-  top: 16px;
-  right: 16px;
+  display: none;
   flex-shrink: 0;
   color: var(--color-text-secondary);
 }
 
 .actionTitle {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text-primary);
 }
@@ -269,19 +270,45 @@ a.attentionCard:hover .attentionCta {
 }
 
 .healthCard {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--admin-card-radius);
   background-color: var(--color-surface-card);
   box-shadow: var(--admin-card-shadow);
 }
+.catalogPanel {
+  display: flex;
+  min-height: 0;
+}
+.catalogPanel > section {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  gap: var(--space-2);
+}
+.healthScroller {
+  min-height: 0;
+  max-height: var(--dashboard-catalog-max-height, 420px);
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.healthScroller:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
 
 .healthRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--admin-card-padding);
+  gap: var(--space-3);
+  padding: var(--space-3);
 }
 
 .healthRow + .healthRow {
@@ -363,9 +390,63 @@ a.attentionCard:hover .attentionCta {
 }
 
 .healthFooter {
+  flex-shrink: 0;
   width: 100%;
   padding: var(--space-3) var(--admin-card-padding);
   border-top: 1px solid var(--color-border-subtle);
+}
+.homeSummary {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background: var(--color-surface-card);
+}
+.homeSummary > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: 3px;
+}
+.homeSummary dt {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.homeSummary dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.homeNote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+@media (min-width: 1280px) and (min-height: 700px) {
+  .actionGrid {
+    gap: var(--space-2);
+  }
+  .actionCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-height: 70px;
+    padding: 6px 8px;
+  }
+  .actionIcon {
+    width: 22px;
+    height: 22px;
+  }
+  .actionTitle {
+    line-height: 1.25;
+  }
+  .actionDescription {
+    display: none;
+  }
 }
 
 .attentionCard:focus-visible,
@@ -388,6 +469,7 @@ a.attentionCard:hover .attentionCta {
   .attentionCard {
     gap: var(--space-3);
     padding-inline: var(--space-4);
+    padding-right: 32px;
   }
   .attentionCount {
     font-size: 24px;
