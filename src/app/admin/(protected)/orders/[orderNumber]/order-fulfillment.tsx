@@ -2,6 +2,7 @@
 
 import React, { useId, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Check, ExternalLink, PackageCheck, PencilLine, Truck } from "lucide-react";
 import { DrawerHeader, SideDrawer, ToastViewport, useToasts } from "@/components/admin/ui";
@@ -25,6 +26,7 @@ const EASE = [0.25, 0.1, 0.25, 1] as const;
 /** Index of the step the order has reached, or null when it will not be fulfilled here. */
 function reachedStep(detail: AdminOrderDetail, shipment: Shipment | null): number | null {
   const { order, payment } = detail;
+  if (!detail.moneyActionsAllowed) return null;
   if (order.status === "FULFILLED" || shipment?.status === "DELIVERED") return 3;
   if (order.status !== "CONFIRMED" || payment?.status !== "PAID" || !shipment) return null;
   if (shipment.status === "SHIPPED") return 2;
@@ -35,6 +37,8 @@ function reachedStep(detail: AdminOrderDetail, shipment: Shipment | null): numbe
 
 function blockedReason(detail: AdminOrderDetail): React.ReactNode {
   const { order, payment } = detail;
+  if (!detail.moneyActionsAllowed)
+    return "Los datos del pedido requieren revisión. Corrige las inconsistencias antes de operar.";
   if (detail.shipments.length > 1) {
     return "Este pedido tiene más de un envío registrado; revísalo antes de despacharlo.";
   }
@@ -56,6 +60,7 @@ function blockedReason(detail: AdminOrderDetail): React.ReactNode {
 }
 
 export function OrderFulfillment({ detail }: { detail: AdminOrderDetail }) {
+  const router = useRouter();
   const reduceMotion = useReducedMotion();
   const titleId = useId();
   const { toasts, notify } = useToasts();
@@ -77,6 +82,7 @@ export function OrderFulfillment({ detail }: { detail: AdminOrderDetail }) {
       if (result.success) {
         notify("success", result.replayed ? "Ya estaba registrado." : successMessage);
         onSuccess?.();
+        router.refresh();
       } else {
         notify("error", result.error);
       }
@@ -137,6 +143,17 @@ export function OrderFulfillment({ detail }: { detail: AdminOrderDetail }) {
       )}
 
       <div className={styles.body}>
+        <p className={styles.note}>
+          <strong>Siguiente acción: </strong>
+          {step === null
+            ? "Resolver el bloqueo indicado abajo."
+            : [
+                "Iniciar preparación del pedido pagado.",
+                "Registrar transportista y despachar cuando esté listo.",
+                "Registrar entrega cuando el courier la confirme.",
+                "Ninguna: entrega completada.",
+              ][step]}
+        </p>
         {step === null && <p className={styles.note}>{blockedReason(detail)}</p>}
 
         {step === 0 && (

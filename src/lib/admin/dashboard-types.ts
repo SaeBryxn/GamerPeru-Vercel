@@ -109,6 +109,7 @@ export type MonetaryRefundOutflowResult =
 export interface PaymentVerificationData {
   snapshotQueue: {
     queueCount: number;
+    oldestPendingAt?: string | null;
     queueAmount: MonetaryQueueAmountResult;
   };
   periodActivity: {
@@ -175,6 +176,8 @@ export type InventoryOverviewResult =
 export interface OrderQueueSnapshot {
   /** Created and not paid yet. */
   awaitingPayment: number;
+  oldestAwaitingPaymentAt?: string | null;
+  oldestToPrepareAt?: string | null;
   /** Paid and waiting to be prepared. */
   toPrepare: number;
   inProgress: number;

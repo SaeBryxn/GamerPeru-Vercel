@@ -20,14 +20,28 @@ export {
 
 /** Orders waiting on the store right now, independent of the selected period. */
 export async function fetchOrderQueue(): Promise<OrderQueueSnapshot> {
-  const rows = await db.execute<{ status: string; total: string | number }>(sql`
-    SELECT status, COUNT(*) AS total
-    FROM orders
-    WHERE status IN ('PENDING', 'CONFIRMED', 'PROCESSING')
-    GROUP BY status
+  const rows = await db.execute<{
+    status: string;
+    total: string | number;
+    oldest_at?: Date | string | null;
+  }>(sql`
+    SELECT stage AS status, COUNT(*) AS total, MIN(created_at) AS oldest_at FROM (
+      SELECT o.created_at, CASE WHEN o.status = 'PENDING' THEN 'PENDING'
+        WHEN EXISTS (SELECT 1 FROM shipments s WHERE s.order_id = o.id AND s.status = 'UNFULFILLED') THEN 'CONFIRMED'
+        ELSE 'PROCESSING' END AS stage
+      FROM orders o JOIN payments p ON p.order_id = o.id
+      WHERE (o.status = 'PENDING' AND p.status = 'UNPAID')
+        OR (o.status = 'CONFIRMED' AND p.status = 'PAID')
+    ) queue GROUP BY stage
   `);
   const count = (status: string) => Number(rows.find((row) => row.status === status)?.total ?? 0);
+  const oldest = (status: string) => {
+    const value = rows.find((row) => row.status === status)?.oldest_at;
+    return value ? new Date(value).toISOString() : null;
+  };
   return {
+    oldestAwaitingPaymentAt: oldest("PENDING"),
+    oldestToPrepareAt: oldest("CONFIRMED"),
     awaitingPayment: count("PENDING"),
     toPrepare: count("CONFIRMED"),
     inProgress: count("PROCESSING"),

@@ -14,6 +14,7 @@ interface AttentionItem {
   count: number;
   href: string | null;
   tone: "critical" | "attention";
+  oldestAt?: string | null;
 }
 
 interface AttentionSectionProps {
@@ -32,6 +33,7 @@ export function buildAttentionItems({
   if (paymentVerification.status === "READY") {
     items.push({
       id: "payments-to-verify",
+      oldestAt: paymentVerification.data.snapshotQueue.oldestPendingAt,
       label: "Pagos por verificar",
       hint: "Comprobantes de Yape o Plin esperando revisión",
       count: paymentVerification.data.snapshotQueue.queueCount,
@@ -43,18 +45,25 @@ export function buildAttentionItems({
     items.push(
       {
         id: "orders-to-prepare",
+        oldestAt: orderQueue.data.oldestToPrepareAt,
         label: "Pedidos por preparar",
         hint: "Pagados y listos para armar el envío",
         count: orderQueue.data.toPrepare,
-        href: links.orders?.({ orderStatus: "CONFIRMED" }) ?? null,
+        href:
+          links.orders?.({
+            orderStatus: "CONFIRMED",
+            paymentStatus: "PAID",
+            shipmentStatus: "UNFULFILLED",
+          }) ?? null,
         tone: "critical",
       },
       {
         id: "orders-awaiting-payment",
+        oldestAt: orderQueue.data.oldestAwaitingPaymentAt,
         label: "Pedidos sin pagar",
         hint: "Creados y esperando el pago del cliente",
         count: orderQueue.data.awaitingPayment,
-        href: links.orders?.({ orderStatus: "PENDING" }) ?? null,
+        href: links.orders?.({ orderStatus: "PENDING", paymentStatus: "UNPAID" }) ?? null,
         tone: "attention",
       }
     );
@@ -75,7 +84,18 @@ export function buildAttentionItems({
 export function AttentionSection(props: AttentionSectionProps) {
   const items = buildAttentionItems(props);
   if (!items) return null;
-  const pending = items.filter((item) => item.count > 0);
+  const pending = items
+    .filter((item) => item.count > 0)
+    .sort((a, b) => {
+      const priority = (item: AttentionItem) => (item.tone === "critical" ? 0 : 1);
+      return (
+        priority(a) - priority(b) ||
+        (a.oldestAt ? Date.parse(a.oldestAt) : Infinity) -
+          (b.oldestAt ? Date.parse(b.oldestAt) : Infinity) ||
+        0
+      );
+    });
+  const next = pending.find((item) => item.href);
 
   return (
     <AdminSection
@@ -89,36 +109,52 @@ export function AttentionSection(props: AttentionSectionProps) {
           Todo al día: no hay pagos, pedidos ni SKUs pendientes.
         </p>
       ) : (
-        <ul className={styles.attentionGrid}>
-          {pending.map((item) => {
-            const content = (
-              <>
-                <span className={styles.attentionLabel}>
-                  <StatusDot tone={item.tone} />
-                  {item.label}
-                </span>
-                <span className={styles.attentionCount}>{formatInteger(item.count)}</span>
-                <span className={styles.attentionHint}>{item.hint}</span>
-                {item.href && (
-                  <span className={styles.attentionCta}>
-                    Resolver <ArrowRight size={14} aria-hidden="true" />
+        <>
+          {next && (
+            <p className={styles.notice}>
+              Siguiente tarea: <Link href={next.href!}>{next.label}</Link>. Primero se muestra el
+              trabajo de mayor impacto y, dentro de él, el más antiguo.
+            </p>
+          )}
+          <ul className={styles.attentionGrid}>
+            {pending.map((item) => {
+              const content = (
+                <>
+                  <span className={styles.attentionLabel}>
+                    <StatusDot tone={item.tone} />
+                    {item.label}
                   </span>
-                )}
-              </>
-            );
-            return (
-              <li key={item.id} data-testid={`attention-${item.id}`}>
-                {item.href ? (
-                  <Link href={item.href} className={styles.attentionCard}>
-                    {content}
-                  </Link>
-                ) : (
-                  <div className={styles.attentionCard}>{content}</div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                  <span className={styles.attentionCount}>{formatInteger(item.count)}</span>
+                  <span className={styles.attentionHint}>{item.hint}</span>
+                  {item.oldestAt && (
+                    <time className={styles.attentionHint} dateTime={item.oldestAt}>
+                      Pendiente más antiguo:{" "}
+                      {new Date(item.oldestAt).toLocaleString("es-PE", {
+                        timeZone: "America/Lima",
+                      })}
+                    </time>
+                  )}
+                  {item.href && (
+                    <span className={styles.attentionCta}>
+                      Resolver <ArrowRight size={14} aria-hidden="true" />
+                    </span>
+                  )}
+                </>
+              );
+              return (
+                <li key={item.id} data-testid={`attention-${item.id}`}>
+                  {item.href ? (
+                    <Link href={item.href} className={styles.attentionCard}>
+                      {content}
+                    </Link>
+                  ) : (
+                    <div className={styles.attentionCard}>{content}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </AdminSection>
   );

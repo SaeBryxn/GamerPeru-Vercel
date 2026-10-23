@@ -259,11 +259,13 @@ async function fetchPaymentVerification(
 
   // 1. Current Snapshot Queue (Real-Time snapshot regardless of order creation date)
   const queuePromise = db.execute<{
+    oldest_pending_at?: Date | string | null;
     queue_count: string | number;
     queue_currency_anomaly_count: string | number;
     queue_amount_cents: string | number;
   }>(sql`
     SELECT
+      MIN((SELECT MAX(ps.submitted_at) FROM payment_submissions ps WHERE ps.payment_id = payments.id)) AS oldest_pending_at,
       COUNT(id) AS queue_count,
       COUNT(id) FILTER (WHERE currency != 'PEN') AS queue_currency_anomaly_count,
       COALESCE(SUM(amount_cents) FILTER (WHERE currency = 'PEN'), 0) AS queue_amount_cents
@@ -370,6 +372,10 @@ async function fetchPaymentVerification(
     data: {
       snapshotQueue: {
         queueCount,
+        oldestPendingAt:
+          "oldest_pending_at" in queueRow && queueRow.oldest_pending_at
+            ? new Date(queueRow.oldest_pending_at).toISOString()
+            : null,
         queueAmount,
       },
       periodActivity: {

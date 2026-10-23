@@ -364,6 +364,24 @@ function attentionPayload(
 }
 
 describe("Attention section", () => {
+  it("prioriza el pedido pagado más antiguo dentro de los pendientes críticos", () => {
+    const links = buildDashboardLinks(["orders:manage", "orders:verify"], period);
+    const payload = attentionPayload({
+      orderQueue: {
+        status: "READY",
+        data: {
+          awaitingPayment: 0,
+          toPrepare: 1,
+          inProgress: 0,
+          oldestToPrepareAt: "2026-01-01T12:00:00Z",
+        },
+      },
+    });
+    if (payload.paymentVerification.status === "READY")
+      payload.paymentVerification.data.snapshotQueue.oldestPendingAt = "2026-10-01T12:00:00Z";
+    const { container } = render(<AttentionSection payload={payload} links={links} />);
+    expect(container.querySelector("a")?.textContent).toBe("Pedidos por preparar");
+  });
   it("shows only pending work, each linked to its filtered view", () => {
     const links = buildDashboardLinks(
       ["orders:manage", "orders:verify", "catalog:manage", "inventory:manage"],
@@ -380,7 +398,7 @@ describe("Attention section", () => {
       within(screen.getByTestId("attention-orders-to-prepare"))
         .getByRole("link")
         .getAttribute("href")
-    ).toBe("/admin/orders?orderStatus=CONFIRMED");
+    ).toBe("/admin/orders?orderStatus=CONFIRMED&paymentStatus=PAID&shipmentStatus=UNFULFILLED");
     expect(
       within(screen.getByTestId("attention-out-of-stock")).getByRole("link").getAttribute("href")
     ).toBe("/admin/products?pending=stock");

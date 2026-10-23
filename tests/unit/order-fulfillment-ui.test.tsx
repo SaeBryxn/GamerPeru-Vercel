@@ -13,6 +13,7 @@ const actions = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/admin/orders/fulfillment-actions", () => actions);
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 import { OrderFulfillment } from "@/app/admin/(protected)/orders/[orderNumber]/order-fulfillment";
 
