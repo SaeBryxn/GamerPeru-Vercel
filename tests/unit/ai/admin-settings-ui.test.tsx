@@ -98,6 +98,83 @@ describe("GP-025 / CHK4 — safe credential UI", () => {
     });
   });
 
+  it("prepara el perfil nuevo con Cloudflare predeterminado y permite guardarlo", async () => {
+    const user = userEvent.setup();
+    const cloudflare = {
+      ...settings.providers[0]!,
+      id: "018f0025-4000-7000-8000-000000000009",
+      providerKey: "cloudflare" as const,
+      displayName: "Cloudflare Workers AI",
+    };
+    render(
+      <AiSettingsWorkspace
+        initialSettings={{
+          ...settings,
+          providers: [
+            { ...settings.providers[0]!, isEnabled: false, isDefault: false },
+            cloudflare,
+          ],
+        }}
+      />
+    );
+    const profile = within(screen.getByTestId("profile-PRODUCT_RESEARCH_FAST"));
+    expect(profile.getByLabelText<HTMLSelectElement>("Proveedor").value).toBe(cloudflare.id);
+    expect(profile.getByLabelText<HTMLInputElement>("Modelo").value).toBe(
+      "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+    );
+    expect(
+      screen.getByRole("link", { name: "Configurar autocompletado" }).getAttribute("href")
+    ).toBe("#autofill-profile");
+    await user.click(profile.getByRole("button", { name: "Guardar perfil" }));
+    await waitFor(() =>
+      expect(configureProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          profileKey: "PRODUCT_RESEARCH_FAST",
+          providerId: cloudflare.id,
+          modelId: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+          isEnabled: true,
+        })
+      )
+    );
+  });
+
+  it("al cambiar un perfil de Google a Cloudflare propone un modelo compatible", async () => {
+    const user = userEvent.setup();
+    const cloudflare = {
+      ...settings.providers[0]!,
+      id: "018f0025-4000-7000-8000-000000000009",
+      providerKey: "cloudflare" as const,
+      displayName: "Cloudflare Workers AI",
+    };
+    render(
+      <AiSettingsWorkspace
+        initialSettings={{
+          ...settings,
+          providers: [...settings.providers, cloudflare],
+          profiles: [
+            {
+              id: "profile-fast",
+              profileKey: "PRODUCT_RESEARCH_FAST",
+              providerId: settings.providers[0]!.id,
+              providerDisplayName: "Google Gemini",
+              modelId: "gemini-configured",
+              temperature: "0.20",
+              maxTokens: 4096,
+              isEnabled: true,
+              researchExecutionSupported: true,
+              updatedAt: "2026-10-22T12:00:00Z",
+            },
+          ],
+        }}
+      />
+    );
+    const profile = within(screen.getByTestId("profile-PRODUCT_RESEARCH_FAST"));
+    await user.selectOptions(profile.getByLabelText("Proveedor"), cloudflare.id);
+    expect(profile.getByLabelText<HTMLInputElement>("Modelo").value).toBe(
+      "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+    );
+  });
+
   it("clears plaintext credential input immediately after a successful encrypted save", async () => {
     const user = userEvent.setup();
     render(<AiSettingsWorkspace initialSettings={settings} />);

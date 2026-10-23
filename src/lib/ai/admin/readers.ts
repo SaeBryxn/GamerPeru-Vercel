@@ -450,7 +450,7 @@ export async function getAdminAiSettings(
       .from(aiProviders)
       .where(inArray(aiProviders.providerKey, [...ADMIN_AI_PROVIDER_KEYS]))
       .orderBy(asc(aiProviders.providerKey))
-      .limit(3),
+      .limit(ADMIN_AI_PROVIDER_KEYS.length),
     db
       .select({
         id: aiProviderCredentials.id,
@@ -472,7 +472,7 @@ export async function getAdminAiSettings(
         )
       )
       .orderBy(desc(aiProviderCredentials.updatedAt))
-      .limit(3),
+      .limit(ADMIN_AI_PROVIDER_KEYS.length),
     db
       .select({
         id: aiProfiles.id,
@@ -490,7 +490,7 @@ export async function getAdminAiSettings(
       .innerJoin(aiProviders, eq(aiProfiles.providerId, aiProviders.id))
       .where(inArray(aiProfiles.profileKey, [...ADMIN_AI_PROFILE_KEYS]))
       .orderBy(asc(aiProfiles.profileKey))
-      .limit(4),
+      .limit(ADMIN_AI_PROFILE_KEYS.length),
   ]);
   const credentialByProvider = new Map<string, AdminAiCredentialDto>(
     credentialRows.map((credential) => [
@@ -560,6 +560,7 @@ export async function getProductAutofillContext(
         id: aiProfiles.id,
         profileKey: aiProfiles.profileKey,
         providerKey: aiProviders.providerKey,
+        providerDefault: aiProviders.isDefault,
       })
       .from(aiProfiles)
       .innerJoin(aiProviders, eq(aiProfiles.providerId, aiProviders.id))
@@ -581,6 +582,11 @@ export async function getProductAutofillContext(
     (RESEARCH_PROVIDER_KEYS as readonly string[]).includes(profile.providerKey)
   );
   const profile =
-    usable.find((candidate) => candidate.profileKey === "PRODUCT_RESEARCH_FAST") ?? usable[0];
+    usable.find(
+      (candidate) => candidate.providerDefault && candidate.profileKey === "PRODUCT_RESEARCH_FAST"
+    ) ??
+    usable.find((candidate) => candidate.providerDefault) ??
+    usable.find((candidate) => candidate.profileKey === "PRODUCT_RESEARCH_FAST") ??
+    usable[0];
   return { profileId: profile?.id ?? null, latestJobId: latest?.jobId ?? null };
 }

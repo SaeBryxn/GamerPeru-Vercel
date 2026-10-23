@@ -51,6 +51,7 @@ const DEFAULT_PROVIDER_NAMES: Record<AdminAiProviderKey, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
 };
+const WORKERS_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 function formatDate(value: string | null): string {
   if (!value) return "Nunca";
@@ -223,7 +224,9 @@ function ProviderCard({
         <div className={styles.inlineEmpty} role="note">
           No necesita clave: usa el binding AI del Worker y la cuota diaria gratis de la cuenta de
           Cloudflare. Habilítalo y elige un modelo de Workers AI en el perfil, por ejemplo
-          <code> @cf/meta/llama-3.3-70b-instruct-fp8-fast</code>.
+          <code> {WORKERS_AI_MODEL}</code>.{" "}
+          <a href="#autofill-profile">Configurar autocompletado</a>: también debes guardar un perfil
+          de investigación habilitado con este proveedor.
         </div>
       ) : (
         <section className={styles.credentialSection} aria-label={`Credencial de ${providerKey}`}>
@@ -364,10 +367,17 @@ function ProfileCard({
   onNotice: (notice: Notice) => void;
 }) {
   const router = useRouter();
-  const defaultProviderId =
-    providers.find((provider) => provider.researchExecutionSupported)?.id ?? providers[0]?.id ?? "";
-  const [providerId, setProviderId] = useState(profile?.providerId ?? defaultProviderId);
-  const [modelId, setModelId] = useState(profile?.modelId ?? "");
+  const defaultProvider =
+    providers.find(
+      (provider) => provider.isEnabled && provider.isDefault && provider.researchExecutionSupported
+    ) ??
+    providers.find((provider) => provider.isEnabled && provider.researchExecutionSupported) ??
+    providers.find((provider) => provider.researchExecutionSupported) ??
+    providers[0];
+  const [providerId, setProviderId] = useState(profile?.providerId ?? defaultProvider?.id ?? "");
+  const [modelId, setModelId] = useState(
+    profile?.modelId ?? (defaultProvider?.providerKey === "cloudflare" ? WORKERS_AI_MODEL : "")
+  );
   const [temperature, setTemperature] = useState(profile?.temperature ?? "0.20");
   const [maxTokens, setMaxTokens] = useState(profile?.maxTokens ?? 4096);
   const [enabled, setEnabled] = useState(profile?.isEnabled ?? true);
@@ -392,7 +402,11 @@ function ProfileCard({
     });
   }
   return (
-    <article className={styles.profileCard} data-testid={`profile-${profileKey}`}>
+    <article
+      className={styles.profileCard}
+      data-testid={`profile-${profileKey}`}
+      id={profileKey === "PRODUCT_RESEARCH_FAST" ? "autofill-profile" : undefined}
+    >
       <header>
         <div>
           <h3>{profileKey.replaceAll("_", " ")}</h3>
@@ -413,7 +427,20 @@ function ProfileCard({
           <span>Proveedor</span>
           <select
             value={providerId}
-            onChange={(event) => setProviderId(event.target.value)}
+            onChange={(event) => {
+              const nextId = event.target.value;
+              setProviderId(nextId);
+              const nextProvider = providers.find((provider) => provider.id === nextId);
+              setModelId((current) =>
+                nextProvider?.providerKey === "cloudflare"
+                  ? current.startsWith("@cf/")
+                    ? current
+                    : WORKERS_AI_MODEL
+                  : current.startsWith("@cf/")
+                    ? ""
+                    : current
+              );
+            }}
             disabled={pending}
           >
             <option value="">Selecciona</option>
@@ -562,9 +589,14 @@ export function AiSettingsWorkspace({ initialSettings }: AiSettingsWorkspaceProp
           </div>
           <ServerCog aria-hidden="true" />
         </div>
+        <p>
+          Para usar Autocompletar desde la web, guarda PRODUCT RESEARCH FAST con un proveedor
+          activo, su modelo y la casilla Habilitado marcada. La conexión del proveedor y el perfil
+          son dos pasos de configuración.
+        </p>
         {initialSettings.profiles.length === 0 && (
           <div className={styles.emptyStrip}>
-            No hay perfiles configurados. Sólo se admiten las cuatro claves canónicas de GP-025.
+            Aún no hay perfiles guardados. Completa PRODUCT RESEARCH FAST y pulsa Guardar perfil.
           </div>
         )}
         <div className={styles.profileGrid}>

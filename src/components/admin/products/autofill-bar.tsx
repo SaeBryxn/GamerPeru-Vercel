@@ -133,8 +133,10 @@ export function AutofillBar({ productId, productName, isDraft, context }: Autofi
   if (!context.profileId) {
     return (
       <p className={styles.note}>
-        Para autocompletar desde la web, activa un proveedor en{" "}
-        <Link href="/admin/settings/ai">Configuración IA</Link>.
+        Falta un perfil de investigación habilitado con un proveedor activo. En{" "}
+        <Link href="/admin/settings/ai#autofill-profile">Configurar autocompletado</Link>, elige el
+        proveedor y el modelo en PRODUCT RESEARCH FAST, marca Habilitado y pulsa Guardar perfil.
+        Activar solo el proveedor no completa la configuración.
       </p>
     );
   }
