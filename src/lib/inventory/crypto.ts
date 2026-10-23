@@ -57,6 +57,7 @@ export function computeInventoryReceivingFingerprint(params: {
  * Computes request fingerprint (SHA-256) for manual adjustment operations.
  */
 export function computeInventoryAdjustmentFingerprint(params: {
+  expectedOnHand?: number;
   inventoryItemId?: string;
   variantId?: string;
   locationCode?: string;
@@ -86,6 +87,7 @@ export function computeInventoryAdjustmentFingerprint(params: {
     params.referenceId.trim(),
     params.actorId.trim(),
     params.authorityBindingDigest.trim(),
+    ...(params.expectedOnHand === undefined ? [] : [`EXPECTED:${params.expectedOnHand}`]),
   ].join("|");
 
   return createHash("sha256").update(payload).digest("hex");

@@ -7,6 +7,7 @@ import { adjustInventory, getVariantAvailability } from "@/lib/inventory/service
 import type { ActionResult } from "@/lib/admin/catalog/actions";
 
 export interface SetVariantStockInput {
+  expectedOnHand?: number;
   productId: string;
   variantId: string;
   /** Units physically present at the primary location. */
@@ -55,6 +56,7 @@ export async function setVariantStockAction(
   }
 
   const result = await adjustInventory({
+    expectedOnHand: input.expectedOnHand,
     attemptId: randomUUID(),
     variantId: input.variantId,
     commandKind: "PHYSICAL_COUNT",

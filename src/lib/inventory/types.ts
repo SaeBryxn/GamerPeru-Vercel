@@ -45,6 +45,7 @@ export interface ReceiveInventoryResult {
 export type ManualAdjustmentCommandKind = "DELTA" | "PHYSICAL_COUNT";
 
 export interface AdjustInventoryInput {
+  expectedOnHand?: number;
   attemptId: string;
   inventoryItemId?: string;
   variantId?: string;

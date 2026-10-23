@@ -55,6 +55,7 @@ import {
   validateReason,
   validateReferenceId,
   validateUuid,
+  validateExpectedPhysicalCount,
 } from "./validation";
 
 export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -489,6 +490,7 @@ export async function adjustInventory(input: AdjustInventoryInput): Promise<Adju
   const namespacedKey = `INVENTORY_ADJUSTMENT:${input.attemptId}`;
   const authorityBindingDigest = computeInventoryAuthorityBindingDigest(actorId, hmacSecret);
   const requestFingerprint = computeInventoryAdjustmentFingerprint({
+    expectedOnHand: input.expectedOnHand,
     inventoryItemId: input.inventoryItemId,
     variantId: input.variantId,
     locationCode: resolvedLocationCode,
@@ -637,6 +639,8 @@ export async function adjustInventory(input: AdjustInventoryInput): Promise<Adju
       await testInventoryTransactionHook("after_lock");
     }
 
+    const stockConflict = validateExpectedPhysicalCount(input.expectedOnHand, item.quantityOnHand);
+    if (stockConflict) return { success: false, code: "STALE_INVENTORY", error: stockConflict };
     let appliedDelta = 0;
     if (input.commandKind === "DELTA") {
       appliedDelta = deltaQuantity!;

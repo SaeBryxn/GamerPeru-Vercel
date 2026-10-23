@@ -153,3 +153,15 @@ export function validateUuid(id: unknown, fieldName = "id"): ValidationResult<st
 
   return { valid: true, normalized: trimmed };
 }
+
+export function validateExpectedPhysicalCount(
+  expected: number | undefined,
+  actual: number
+): string | null {
+  if (expected === undefined) return null;
+  if (!Number.isInteger(expected) || expected < 0)
+    return "La lectura anterior del stock no es válida.";
+  return expected === actual
+    ? null
+    : "El stock físico cambió desde que abriste el formulario. Actualiza las existencias y vuelve a contar antes de guardar.";
+}
