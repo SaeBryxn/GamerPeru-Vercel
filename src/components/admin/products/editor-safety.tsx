@@ -2,6 +2,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { getProductEditorVersionAction } from "@/lib/admin/catalog/version-actions";
 import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
+import { ADMIN_BEFORE_LEAVE_EVENT } from "@/lib/admin/navigation-guard";
 import styles from "./product-page-step.module.css";
 const SafetyContext = createContext<{
   dirty: (key: string, value: boolean) => void;
@@ -74,9 +75,14 @@ export function EditorSafetyProvider({
       }
     };
     window.addEventListener("beforeunload", unload);
+    const beforeLeave = (event: Event) => {
+      if (!event.defaultPrevented && !canLeave()) event.preventDefault();
+    };
+    window.addEventListener(ADMIN_BEFORE_LEAVE_EVENT, beforeLeave);
     document.addEventListener("click", navigate, true);
     return () => {
       window.removeEventListener("beforeunload", unload);
+      window.removeEventListener(ADMIN_BEFORE_LEAVE_EVENT, beforeLeave);
       document.removeEventListener("click", navigate, true);
     };
   }, [canLeave]);

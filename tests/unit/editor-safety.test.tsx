@@ -8,6 +8,7 @@ import {
   productEditorVersion,
   specificationDraftVersion,
 } from "@/lib/admin/catalog/editor-version";
+import { requestAdminLeave } from "@/lib/admin/navigation-guard";
 vi.mock("@/lib/admin/catalog/version-actions", () => ({ getProductEditorVersionAction: vi.fn() }));
 afterEach(() => {
   cleanup();
@@ -46,6 +47,24 @@ it("la versión detecta cambios de variante y no depende del orden de las filas"
   expect(productEditorVersion(product, [a], [])).not.toBe(
     productEditorVersion(product, [{ ...a, updatedAt: "2026-10-23T00:00:00Z" }], [])
   );
+});
+
+it("protege las acciones de salida que no son enlaces y retira el guard al desmontarse", () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  const view = render(
+    <EditorSafetyProvider productId="p" version="v1">
+      <Form />
+    </EditorSafetyProvider>
+  );
+  expect(requestAdminLeave()).toBe(true);
+  expect(confirm).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("Editar"), { target: { value: "Sin guardar" } });
+  expect(requestAdminLeave()).toBe(false);
+  confirm.mockReturnValue(true);
+  expect(requestAdminLeave()).toBe(true);
+  view.unmount();
+  expect(requestAdminLeave()).toBe(true);
+  expect(confirm).toHaveBeenCalledTimes(2);
 });
 
 it("el borrador de especificaciones compara valores guardables, sin vacíos ni dependencia del orden", () => {

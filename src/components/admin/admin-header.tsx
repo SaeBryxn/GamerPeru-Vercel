@@ -1,10 +1,9 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
-import { ExternalLink, Menu } from "lucide-react";
-import { LogoutButton } from "@/components/auth/logout-button";
-import { AdminThemeToggle } from "./admin-theme-toggle";
+import { Menu } from "lucide-react";
+import type { RoleName } from "@/lib/auth/rbac";
+import { AdminAccountMenu } from "./admin-account-menu";
 import type { AdminTheme } from "./use-admin-theme";
 import styles from "./admin-shell.module.css";
 
@@ -15,6 +14,8 @@ interface AdminHeaderProps {
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
   theme: AdminTheme;
   onToggleTheme: () => void;
+  email?: string | null;
+  roles?: readonly RoleName[];
 }
 
 export function AdminHeader({
@@ -24,6 +25,8 @@ export function AdminHeader({
   triggerRef,
   theme,
   onToggleTheme,
+  email = null,
+  roles = [],
 }: AdminHeaderProps) {
   return (
     <header className={styles.header}>
@@ -50,18 +53,7 @@ export function AdminHeader({
       </div>
 
       <div className={styles.headerRight}>
-        <AdminThemeToggle theme={theme} onToggle={onToggleTheme} />
-        <Link
-          href="/"
-          className={styles.storefrontLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Ir a la tienda"
-        >
-          <span>Ir a la tienda</span>
-          <ExternalLink className={styles.navIcon} aria-hidden="true" />
-        </Link>
-        <LogoutButton appearance="ghost" />
+        <AdminAccountMenu email={email} roles={roles} theme={theme} onToggleTheme={onToggleTheme} />
       </div>
     </header>
   );

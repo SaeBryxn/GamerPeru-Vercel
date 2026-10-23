@@ -85,6 +85,8 @@ export function AdminShell({ authContext, children }: AdminShellProps) {
               pageTitle={pageTitle}
               theme={theme}
               onToggleTheme={toggle}
+              email={authContext.email}
+              roles={authContext.roles}
             />
 
             {/*
