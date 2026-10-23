@@ -1,6 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { notFound, redirect } from "next/navigation";
 import { Search } from "lucide-react";
 import { Container } from "@/components/ui";

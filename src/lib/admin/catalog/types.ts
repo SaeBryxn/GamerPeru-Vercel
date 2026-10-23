@@ -207,6 +207,11 @@ export interface StatusTransitionInput {
   mutationRequestId?: string;
 }
 
+export interface DeleteProductInput {
+  productId: string;
+  expectedUpdatedAt: Date | string;
+}
+
 export class CatalogDomainError extends Error {
   readonly code: string;
   readonly httpStatus: number;

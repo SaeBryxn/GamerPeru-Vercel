@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { ArrowUpRight, MessageCircle } from "lucide-react";
 import { getSoftwareEntries, type SoftwareKind } from "@/content/software/brand-software";
 import styles from "./software.module.css";

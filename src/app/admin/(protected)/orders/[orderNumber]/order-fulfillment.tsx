@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useId, useState, useTransition } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Check, ExternalLink, PackageCheck, PencilLine, Truck } from "lucide-react";

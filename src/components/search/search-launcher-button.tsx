@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { Search } from "lucide-react";
 import { Icon } from "@/components/ui";
 import { SearchDrawer } from "./search-drawer";

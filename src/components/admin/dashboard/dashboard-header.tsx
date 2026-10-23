@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import type { DashboardPeriodSelector } from "@/lib/admin/dashboard-period";
 import styles from "./dashboard-header.module.css";
 import { DashboardRefresh } from "./dashboard-refresh";

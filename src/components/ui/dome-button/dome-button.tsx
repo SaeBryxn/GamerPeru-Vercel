@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { motion, type HTMLMotionProps, type Transition, type Variants } from "framer-motion";
 import styles from "./dome-button.module.css";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useId, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import styles from "./account.module.css";
 

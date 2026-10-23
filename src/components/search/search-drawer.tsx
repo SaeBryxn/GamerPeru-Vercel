@@ -2,7 +2,7 @@
 
 import React, { useId, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Mic, Package, Search, X } from "lucide-react";

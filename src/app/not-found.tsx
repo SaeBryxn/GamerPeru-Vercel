@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { Button, Card, Container, Stack } from "@/components/ui";
 
 export default function NotFound() {

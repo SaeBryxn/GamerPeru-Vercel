@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AnimatePresence, motion, type Transition, type Variants } from "framer-motion";
 import type { ProductCardImage } from "@/lib/catalog/types";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";

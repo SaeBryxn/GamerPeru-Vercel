@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
 import { Eye, MailCheck, MailX } from "lucide-react";
 import { StatusBadge } from "@/components/admin/ui";

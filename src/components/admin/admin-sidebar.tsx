@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { AdminNavItem } from "@/lib/admin/types";
 import { AdminNavSections } from "./admin-nav-sections";

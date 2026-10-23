@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { Cpu, Keyboard, Mouse, Usb, type LucideIcon } from "lucide-react";
 import { Reveal } from "@/components/support/reveal";
 import { SupportAsideCard, SupportShell } from "@/components/support/support-shell";

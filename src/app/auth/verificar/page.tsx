@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AuthCard } from "@/components/auth/auth-card";
 import styles from "@/components/auth/auth.module.css";
 

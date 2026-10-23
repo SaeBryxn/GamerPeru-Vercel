@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/app-link";
 import React, { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { formatDimensions, formatHandRange, pdpSizeSchema } from "@/lib/catalog/product-pdp-config";
 import {

@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import styles from "./catalog-empty-state.module.css";
 
 export interface CatalogEmptyStateProps {

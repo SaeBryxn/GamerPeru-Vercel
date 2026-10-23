@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { recoveryRequestSchema } from "@/lib/auth/validation";
 import { mapAuthError } from "@/lib/auth/errors";

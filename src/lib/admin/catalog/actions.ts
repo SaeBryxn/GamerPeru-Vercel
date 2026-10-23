@@ -9,6 +9,7 @@ import {
   updateVariant,
   duplicateProduct,
   transitionProductStatus,
+  deleteProduct,
 } from "./service";
 import {
   updateMediaAssetAltText,
@@ -517,6 +518,40 @@ export async function transitionProductStatusAction(
     revalidateStorefront();
 
     return { success: true, data: { product } };
+  } catch (err) {
+    const uiError = mapDomainErrorToUi(err);
+    return { success: false, ...uiError };
+  }
+}
+
+export interface DeleteProductActionInput {
+  productId: string;
+  expectedUpdatedAt: string;
+}
+
+/**
+ * Server Action: permanently delete a product that was never ordered. The service decides the
+ * permission (publish for a live product) and refuses products with order history.
+ */
+export async function deleteProductAction(
+  input: DeleteProductActionInput
+): Promise<ActionResult<{ productId: string; name: string }>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
+    return {
+      success: false,
+      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
+      code: "AUTHENTICATION_REQUIRED",
+    };
+  }
+
+  try {
+    const result = await deleteProduct(
+      { productId: input.productId, expectedUpdatedAt: input.expectedUpdatedAt },
+      { authContext }
+    );
+    revalidateStorefront();
+    return { success: true, data: result };
   } catch (err) {
     const uiError = mapDomainErrorToUi(err);
     return { success: false, ...uiError };

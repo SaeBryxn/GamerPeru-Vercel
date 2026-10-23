@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";

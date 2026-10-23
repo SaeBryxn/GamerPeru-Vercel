@@ -1,5 +1,5 @@
 import React, { type ComponentProps, type ComponentType } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { StatusDot } from "./admin-ui";
 import styles from "./action-list.module.css";

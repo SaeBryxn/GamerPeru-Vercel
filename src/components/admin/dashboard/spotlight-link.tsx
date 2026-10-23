@@ -7,7 +7,7 @@
  * Versión para navegación: una luz local sin bucle, inclinación ni seguimiento global.
  */
 import React, { useRef, type ComponentProps, type PointerEvent } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import styles from "./spotlight-link.module.css";
 
 export function SpotlightLink({

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { ArrowRight } from "lucide-react";
 import { motion, type Variants } from "framer-motion";
 import { Icon, type IconSize } from "@/components/ui";

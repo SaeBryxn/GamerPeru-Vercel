@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { X } from "lucide-react";
 import type { AppliedFilterChip } from "@/lib/discovery-filters/types";
 import styles from "./applied-filters.module.css";

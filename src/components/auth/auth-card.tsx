@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { MotionConfig, motion } from "framer-motion";
 import { AUTH_CARD_VARIANTS } from "./auth-motion";
 import styles from "./auth.module.css";

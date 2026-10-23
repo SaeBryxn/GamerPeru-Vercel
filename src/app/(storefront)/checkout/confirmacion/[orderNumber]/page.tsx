@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AlertCircle } from "lucide-react";
 import { Container, Icon } from "@/components/ui";
 import { loadCheckoutConfirmation } from "@/lib/checkout/service";

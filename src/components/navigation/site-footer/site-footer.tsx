@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { BrandGlyph, Container } from "@/components/ui";
 import { LEGAL_ENTITY_NAME, LEGAL_LINKS } from "@/config/legal-links";
 import { SOCIAL_LINKS } from "@/config/social-links";

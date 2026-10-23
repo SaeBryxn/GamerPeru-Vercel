@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AlertCircle, Inbox, RotateCcw } from "lucide-react";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { SegmentedNav } from "@/components/admin/ui";

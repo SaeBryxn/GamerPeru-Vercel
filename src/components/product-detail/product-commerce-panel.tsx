@@ -3,7 +3,7 @@
 import type { ProductCommerceConfig } from "@/lib/catalog/product-pdp-config";
 
 import React, { useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import {
   AlertCircle,
   Award,

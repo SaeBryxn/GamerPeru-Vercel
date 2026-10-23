@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { motion, type Variants } from "framer-motion";
 import { MapPin, Package, ShoppingBag, UserRound, type LucideIcon } from "lucide-react";
 import { useCart } from "@/components/cart/cart-provider";

@@ -1,6 +1,5 @@
 import "server-only";
 
-import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import type {
   AiExecutionOptions,
@@ -67,12 +66,21 @@ const geminiResponseSchema = z.object({
 
 const GEMINI_INTERACTION_TIMEOUT_MS = 60_000;
 
+/**
+ * The Gemini SDK is ~600 KB of server code. Loaded on first use instead of at import, so the
+ * product editor and other screens that only reference AI actions do not compile it on Workers.
+ */
+async function createSdkClient(apiKey: string): Promise<GeminiSdkClient> {
+  const { GoogleGenAI } = await import("@google/genai");
+  return new GoogleGenAI({ apiKey, vertexai: false });
+}
+
 function createSdkTransport(): GeminiInteractionTransport {
   return {
     async create(apiKey, request, signal) {
       // The 2.22.0 generated type omits temperature although the official
       // Interactions API accepts it; its runtime forwards this trusted body unchanged.
-      const client = new GoogleGenAI({ apiKey, vertexai: false }) as unknown as GeminiSdkClient;
+      const client = await createSdkClient(apiKey);
       return await client.interactions.create(request, {
         timeout_ms: GEMINI_INTERACTION_TIMEOUT_MS,
         retries: { strategy: "none" },
@@ -80,7 +88,7 @@ function createSdkTransport(): GeminiInteractionTransport {
       });
     },
     async healthCheck(apiKey) {
-      const client = new GoogleGenAI({ apiKey, vertexai: false }) as unknown as GeminiSdkClient;
+      const client = await createSdkClient(apiKey);
       await client.models.list({ config: { pageSize: 1 } });
     },
   };

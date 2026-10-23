@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { getVerifiedIdentity } from "@/lib/auth/claims";
 import { AuthCard } from "@/components/auth/auth-card";
 import { PasswordChangeForm } from "@/components/auth/password-change-form";

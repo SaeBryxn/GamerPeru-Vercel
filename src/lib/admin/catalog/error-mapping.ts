@@ -131,6 +131,8 @@ export function mapDomainErrorToUi(err: unknown): { error: string; code: string 
           error: "El producto tiene bloqueadores de publicación activos.",
           code: "NOT_PUBLISHABLE",
         };
+      case "PRODUCT_HAS_ORDERS":
+        return { error: err.message, code: "PRODUCT_HAS_ORDERS" };
       case "PRODUCT_NOT_FOUND":
         return {
           error: "El producto solicitado no existe o no se encuentra disponible.",

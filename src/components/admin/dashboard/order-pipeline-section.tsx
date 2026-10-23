@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { Inbox } from "lucide-react";
 import type { OrderPipelineResult } from "@/lib/admin/dashboard-types";
 import { formatInteger } from "@/lib/admin/dashboard-format";

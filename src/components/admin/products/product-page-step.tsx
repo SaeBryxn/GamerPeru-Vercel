@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/app-link";
 import React, { useId, useRef, useState } from "react";
 import { Award, BookOpen, ChevronDown, ExternalLink, Gift, Truck, Zap } from "lucide-react";
 import { StatusBadge } from "@/components/admin/ui";

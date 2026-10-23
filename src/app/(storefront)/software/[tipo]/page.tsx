@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { notFound } from "next/navigation";
 import { TriangleAlert } from "lucide-react";
 import { BrandSoftwareList } from "@/components/software/brand-software-list";

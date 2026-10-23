@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import type { RoleName } from "@/lib/auth/rbac";
 import type { AdminIdentity } from "@/lib/admin/staff/identity";

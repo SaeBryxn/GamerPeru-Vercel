@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, MotionConfig, motion, type Variants } from "framer-motion";
 import { Container, FloatingClose, MagneticWrapper, useFloatingClose } from "@/components/ui";

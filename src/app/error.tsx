@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { Button, Card, Container, Stack } from "@/components/ui";
 import { reportClientError } from "@/lib/observability/report-client-error";
 

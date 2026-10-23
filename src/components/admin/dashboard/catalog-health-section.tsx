@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import type { CatalogHealthIssue, CatalogHealthResult } from "@/lib/admin/dashboard-types";
 import { formatInteger } from "@/lib/admin/dashboard-format";

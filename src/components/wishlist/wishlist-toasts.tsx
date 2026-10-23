@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { CircleAlert, Heart, LogIn } from "lucide-react";
 import styles from "./wishlist-toasts.module.css";

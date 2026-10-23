@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { ArrowLeft } from "lucide-react";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";

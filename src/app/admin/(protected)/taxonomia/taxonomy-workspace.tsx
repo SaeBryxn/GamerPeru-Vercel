@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 
 import React, { useState, useTransition } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Pencil, Plus, X } from "lucide-react";
 import { createTaxonomyAction, updateTaxonomyAction } from "@/lib/admin/taxonomy/actions";

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { motion, type Transition, type Variants } from "framer-motion";
 import { Eye } from "lucide-react";
 import { DomeButton, DomeLink } from "@/components/ui";

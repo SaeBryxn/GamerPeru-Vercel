@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { PackageCheck } from "lucide-react";
 import type { InventoryOverviewResult } from "@/lib/admin/dashboard-types";
 import { formatInteger } from "@/lib/admin/dashboard-format";

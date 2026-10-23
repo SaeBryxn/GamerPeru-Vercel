@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
 import { ArrowRight, ChevronDown, HelpCircle, User, X } from "lucide-react";
 import { Icon, IconButton } from "@/components/ui";

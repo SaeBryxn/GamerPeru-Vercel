@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/app-link";
 import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ArrowRight, Loader2, RotateCcw, Search } from "lucide-react";
 import {

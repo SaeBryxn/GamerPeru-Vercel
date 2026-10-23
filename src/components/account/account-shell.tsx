@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { LayoutDashboard, Package, Truck } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { AccountNavigation } from "./account-navigation";

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { ChevronDown, ExternalLink, Moon, Sun, UserRound } from "lucide-react";
 import { UserAvatar } from "./ui/user-avatar";
 import type { RoleName } from "@/lib/auth/rbac";
@@ -105,7 +105,7 @@ export function AdminAccountMenu({
           setOpen((value) => !value);
         }}
       >
-        <UserAvatar name={name} src={avatarUrl} />
+        <UserAvatar name={name} seed={email} src={avatarUrl} />
         <span className={styles.triggerLabel}>{name}</span>
         <ChevronDown className={styles.chevron} size={14} aria-hidden="true" />
       </button>
@@ -118,7 +118,7 @@ export function AdminAccountMenu({
         aria-label="Mi cuenta"
       >
         <div className={styles.identity}>
-          <UserAvatar name={name} src={avatarUrl} size="lg" />
+          <UserAvatar name={name} seed={email} src={avatarUrl} size="lg" />
           <div>
             <h2 id={`${id}-title`}>{name}</h2>
             {showEmail && <p className={styles.email}>{email}</p>}

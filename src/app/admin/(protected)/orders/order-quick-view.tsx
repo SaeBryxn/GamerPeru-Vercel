@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { ExternalLink, LoaderCircle, Package } from "lucide-react";
 import { DrawerHeader, SideDrawer, StatusBadge } from "@/components/admin/ui";
 import {

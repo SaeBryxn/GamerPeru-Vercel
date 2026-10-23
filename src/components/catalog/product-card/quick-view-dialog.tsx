@@ -2,7 +2,7 @@
 
 import React, { useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { CloseButton, DomeLink } from "@/components/ui";

@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import type { LucideIcon, LucideProps } from "lucide-react";
 import { Icon } from "@/components/ui";
 import styles from "./header-utilities.module.css";

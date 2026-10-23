@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AlertCircle, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button, Container, Icon } from "@/components/ui";
 import { CartEmptyState } from "./cart-empty-state";

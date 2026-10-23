@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useActionState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { verifyConfirmationOtpAction, type VerifyOtpState } from "@/lib/auth/actions";
 import { AuthSubmitButton } from "./auth-submit-button";
 import styles from "./auth.module.css";

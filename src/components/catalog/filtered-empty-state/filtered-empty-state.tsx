@@ -1,5 +1,5 @@
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { FilterX } from "lucide-react";
 import styles from "./filtered-empty-state.module.css";
 

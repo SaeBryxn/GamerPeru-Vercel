@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useRouter } from "next/navigation";
 import { Loader2, AlertCircle } from "lucide-react";
 import { createProductAction } from "@/lib/admin/catalog/actions";

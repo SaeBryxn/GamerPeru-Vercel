@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -59,6 +59,7 @@ import { ProductPageStep } from "@/components/admin/products/product-page-step";
 import { uploadDirect, type DirectUploadStage } from "@/lib/media/direct-upload-client";
 import { requestUpload, completeUpload } from "@/lib/media/upload-api-client";
 import styles from "./product-editor.module.css";
+import { DeleteProductButton } from "./delete-product-button";
 
 interface ProductEditorProps {
   initialDetail: AdminProductUiDetail;
@@ -1373,6 +1374,13 @@ function ProductEditorBody({
                 <span>Restaurar a Borrador</span>
               </button>
             )}
+            <DeleteProductButton
+              productId={product.id}
+              productName={product.name}
+              status={product.status}
+              updatedAt={product.updatedAt}
+              canDeleteLive={hasPublishPermission}
+            />
           </div>
         </div>
       </header>

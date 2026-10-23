@@ -12,6 +12,7 @@ import type { Product, ProductVariant } from "@/db/schema";
 import type {
   CreateProductInput,
   CreateVariantInput,
+  DeleteProductInput,
   DuplicateProductInput,
   StatusTransitionInput,
   UpdateProductInput,
@@ -1873,6 +1874,127 @@ export async function duplicateProduct(
       `);
 
       return duplicatedProduct;
+    });
+  } catch (err) {
+    handleDatabaseError(err);
+  }
+}
+
+/**
+ * Permanently deletes a product that was never ordered.
+ *
+ * Order lines keep a restrict reference to variants, so a product that was ever sold stays and
+ * must be archived instead; that refusal is checked under the row lock and reported in words.
+ * Otherwise the product goes with everything that only exists for it: variants, gallery links,
+ * specifications, story (cascades), plus its stock rows, their manual movements and any lines
+ * in abandoned carts. Media assets stay in the library. An audit event keeps a snapshot of
+ * what was removed. Deleting a live product needs catalog:publish, like taking it down.
+ */
+export async function deleteProduct(
+  input: DeleteProductInput,
+  options?: ServiceOptions
+): Promise<{ productId: string; name: string }> {
+  const authContext = await resolveAuthContext(options);
+
+  try {
+    return await db.transaction(async (tx) => {
+      const [rawProduct] = (await tx.execute(sql`
+        SELECT * FROM products WHERE id = ${input.productId}::uuid FOR UPDATE LIMIT 1;
+      `)) as unknown as Record<string, unknown>[];
+      if (!rawProduct) {
+        throw new CatalogDomainError("El producto no existe.", "PRODUCT_NOT_FOUND", 404);
+      }
+      const product = mapProductRow(rawProduct);
+
+      const requiredPermission =
+        product.status === "PUBLISHED" ? "catalog:publish" : "catalog:manage";
+      if (!authContext.permissions.has(requiredPermission)) {
+        throw new CatalogDomainError(
+          product.status === "PUBLISHED"
+            ? "Eliminar un producto que está en la tienda requiere permiso de publicación."
+            : "No tienes permisos de gestión de catálogo.",
+          "FORBIDDEN",
+          403
+        );
+      }
+
+      const expectedTime = new Date(input.expectedUpdatedAt).getTime();
+      if (Number.isNaN(expectedTime)) {
+        throw new CatalogDomainError(
+          "El timestamp expectedUpdatedAt es inválido.",
+          "INVALID_TIMESTAMP",
+          400
+        );
+      }
+      if (expectedTime !== new Date(product.updatedAt).getTime()) {
+        throw new StaleWriteConflictError();
+      }
+
+      const [usage] = (await tx.execute(sql`
+        SELECT
+          (SELECT COUNT(*) FROM order_items oi
+             JOIN product_variants v ON v.id = oi.variant_id
+            WHERE v.product_id = ${product.id}::uuid) AS order_lines,
+          (SELECT COALESCE(json_agg(v.sku ORDER BY v.sku), '[]'::json) FROM product_variants v
+            WHERE v.product_id = ${product.id}::uuid) AS skus,
+          (SELECT COALESCE(SUM(ii.quantity_on_hand), 0) FROM inventory_items ii
+             JOIN product_variants v ON v.id = ii.variant_id
+            WHERE v.product_id = ${product.id}::uuid) AS units_on_hand
+      `)) as unknown as {
+        order_lines: string | number;
+        skus: string[];
+        units_on_hand: string | number;
+      }[];
+
+      if (Number(usage?.order_lines ?? 0) > 0) {
+        throw new CatalogDomainError(
+          "Este producto ya tiene pedidos, así que no se puede eliminar sin romper su historial. Archívalo para retirarlo de la tienda.",
+          "PRODUCT_HAS_ORDERS",
+          409
+        );
+      }
+
+      await tx.execute(sql`
+        DELETE FROM cart_items
+        WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = ${product.id}::uuid);
+      `);
+      await tx.execute(sql`
+        DELETE FROM inventory_ledger_entries
+        WHERE inventory_item_id IN (
+          SELECT ii.id FROM inventory_items ii
+          JOIN product_variants v ON v.id = ii.variant_id
+          WHERE v.product_id = ${product.id}::uuid
+        );
+      `);
+      await tx.execute(sql`
+        DELETE FROM inventory_items
+        WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = ${product.id}::uuid);
+      `);
+      await tx.execute(sql`DELETE FROM products WHERE id = ${product.id}::uuid;`);
+
+      await tx.execute(sql`
+        INSERT INTO audit_events (
+          id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
+        ) VALUES (
+          ${generateUuidV7()}::uuid,
+          NOW(),
+          'ADMIN',
+          ${authContext.authUserId},
+          'catalog:product:delete',
+          'product',
+          ${product.id},
+          ${JSON.stringify({
+            name: product.name,
+            slug: product.slug,
+            from_status: product.status,
+            skus: usage?.skus ?? [],
+            units_on_hand: Number(usage?.units_on_hand ?? 0),
+          })}::jsonb,
+          NULL
+        );
+      `);
+
+      return { productId: product.id, name: product.name };
     });
   } catch (err) {
     handleDatabaseError(err);

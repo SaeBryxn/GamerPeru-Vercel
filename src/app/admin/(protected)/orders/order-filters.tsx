@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { Search } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ORDER_STATUSES, PAYMENT_STATUSES, SHIPMENT_STATUSES } from "./order-status-options";

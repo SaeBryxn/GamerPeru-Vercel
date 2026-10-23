@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Cookie } from "lucide-react";
 import { DomeButton } from "@/components/ui";

@@ -25,6 +25,12 @@
   --avatar-size: 44px;
 }
 
+.avatar[data-kind="blob"] {
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+
 .image {
   width: 100%;
   height: 100%;

@@ -171,7 +171,7 @@ it("mantiene el acceso de cuenta cuando no hay correo disponible", () => {
   expect(within(dialog).getByText("Superadministrador")).toBeTruthy();
 });
 
-it("muestra el nombre del perfil con su avatar y cae a las iniciales si Gravatar no tiene foto", () => {
+it("muestra el nombre del perfil con su avatar y cae a su blobatar si Gravatar no tiene foto", () => {
   const { container } = render(
     <AdminAccountMenu
       email="ana@example.test"
@@ -187,8 +187,10 @@ it("muestra el nombre del perfil con su avatar y cae a las iniciales si Gravatar
   const image = trigger.querySelector("img")!;
   expect(image.getAttribute("src")).toContain("gravatar.com/avatar/abc");
   fireEvent.error(image);
-  expect(trigger.querySelector("img")).toBeNull();
-  expect(trigger.textContent).toContain("AT");
+  // Without a Gravatar photo the blobatar generated from the email takes its place.
+  const blob = trigger.querySelector("img")!;
+  expect(blob.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
+  expect(trigger.textContent).not.toContain("AT");
   fireEvent.click(trigger);
   const dialog = screen.getByRole("dialog", { name: "Mi cuenta" });
   expect(within(dialog).getByText("ana@example.test")).toBeTruthy();

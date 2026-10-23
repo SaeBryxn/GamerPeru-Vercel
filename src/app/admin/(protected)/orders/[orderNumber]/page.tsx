@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { Stagger, StaggerItem } from "@/components/admin/ui";
 import { getAdminOrderDetail, getAdminOrderItemPreviews } from "@/lib/admin/orders/reader";

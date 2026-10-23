@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { ShoppingBag } from "lucide-react";
 import { Button, Icon } from "@/components/ui";
 import styles from "./cart-empty-state.module.css";

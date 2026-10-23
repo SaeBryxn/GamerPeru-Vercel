@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { motion } from "framer-motion";
 import type { MegaMenuCategory } from "../types";
 import { SLIDE_FROM_RIGHT, staggerVariants, useOpenCount } from "./mega-menu-motion";

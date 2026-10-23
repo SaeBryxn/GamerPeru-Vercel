@@ -3,7 +3,6 @@ import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { aiResearchJobs } from "@/db/schema";
-import { inngest } from "@/lib/inngest/client";
 import { AI_RESEARCH_LIMITS } from "./config";
 
 export interface ResearchEventSender {
@@ -16,6 +15,9 @@ export interface ResearchEventSender {
 
 const defaultSender: ResearchEventSender = {
   async send(event) {
+    // The Inngest SDK (~350 KB) loads only when a job is actually queued, not with every
+    // admin screen that imports this module.
+    const { inngest } = await import("@/lib/inngest/client");
     return await inngest.send(event);
   },
 };

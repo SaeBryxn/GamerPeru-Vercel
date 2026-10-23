@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
