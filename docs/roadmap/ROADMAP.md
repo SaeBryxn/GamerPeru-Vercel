@@ -1,6 +1,6 @@
 # Gamer Perú — Lo que falta
 
-Actualizado: 2026-10-20.
+Actualizado: 2026-10-23.
 
 Este documento reemplaza el roadmap v1.2 en inglés y las especificaciones individuales
 `GP-XXX.md`. Los GPs cumplidos se eliminaron del repositorio; su detalle sigue disponible en el
@@ -58,12 +58,18 @@ Integrado en `70188e1` (cola de verificación, aprobación, rechazo, reembolso e
 - [ ] CORS del bucket con PUT desde el dominio principal y `www`.
 - [ ] Retirar la configuración HMAC de medios y la variable de staging.
 - [ ] Confirmar que llegaron a producción el arreglo de acciones rápidas en móvil y el filtro `pending=issues` del dashboard (GP-054).
+- [ ] Decidir el paso a Workers Paid. Medido el 2026-10-23: el plan Free corta a 10 ms de CPU (716 Error 1102 ese día) y Next.js en Workers cuesta 6-8 ms por petición vacía, 12-26 ms por página caliente y 70-430 ms en frío. El código ya se recortó (prefetch por intención, SDKs diferidos, ISR de 1 h, carrito sin lectura en cada página); por debajo de 10 ms no hay margen.
 
 ### Home administrable (GP-053)
 
+- [ ] La portada `/` nunca se regenera en Workers: `x-opennext-cache: STALE` permanente y el Durable Object de la cola registra `TimeoutError` y "failed after 6 retries". La tienda muestra los datos del último deploy y los cambios hechos en `/admin/home` no aparecen hasta desplegar. Las fichas de producto (ISR dinámico) sí se regeneran. Reproducir en Linux con `opennextjs-cloudflare preview` (el build falla en Windows por los symlinks de pnpm).
 - [ ] Subida real de imagen, video y póster desde `/admin/home`, guardar y publicar.
 - [ ] Agregar y eliminar secciones de la home.
 - [ ] Limpieza explícita de medios huérfanos.
+
+### Pruebas
+
+- [ ] `tests/unit/inventory-count-ui.test.tsx` ("conserva el motivo ante un error…") falla de forma intermitente en la suite completa y pasa sola; ya ocurría antes del 2026-10-23. Ajustar los `waitFor` o aislarla.
 
 ### QA funcional de subidas
 
