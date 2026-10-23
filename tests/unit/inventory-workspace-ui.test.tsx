@@ -80,7 +80,10 @@ it("conserva los filtros al paginar y abre el historial solo de la variante eleg
   expect(screen.getByRole("heading", { name: "Movimientos de la variante" })).toBeTruthy();
   expect(screen.getByText("+2")).toBeTruthy();
   expect(screen.getByText("−1")).toBeTruthy();
-  expect(screen.getByText("Conteo diario").closest("details")?.hasAttribute("open")).toBe(false);
+  expect(screen.getByText("Conteo diario")).toBeTruthy();
+  expect(screen.getByText("ID del autor: autor-id").closest("details")?.hasAttribute("open")).toBe(
+    false
+  );
   const all = new URL(
     screen.getByRole("link", { name: "Ver todo el almacén" }).getAttribute("href")!,
     "https://local.invalid"
@@ -113,4 +116,38 @@ it("distingue agotados de disponibles aunque el punto de reposición sea cero", 
   expect(screen.getByRole("table").querySelector('[data-tone="success"]')?.textContent).toBe(
     "Disponible"
   );
+});
+
+it("separa el stock negativo y limita el resumen a las variantes de esta página", async () => {
+  await show({}, [
+    { ...row, available: -2 },
+    { ...row, variant_id: "agotada", available: 0 },
+  ]);
+  const summary = screen.getByRole("region", { name: "Resumen de esta página" });
+  expect(within(summary).getByText("2 variantes · Según tus filtros")).toBeTruthy();
+  const table = screen.getByRole("table");
+  expect(within(table).getByText("Revisar inventario").getAttribute("data-tone")).toBe("danger");
+  expect(within(table).getByText("-2")).toBeTruthy();
+  expect(screen.getByRole("note").textContent).toContain("disponible negativo");
+});
+
+it("reinicia la página al cambiar de estado o quitar la búsqueda", async () => {
+  await show({ q: "Mouse", stock: "low", page: "4" });
+  const filters = screen.getByRole("navigation", { name: "Filtrar por disponibilidad" });
+  const out = new URL(
+    within(filters).getByRole("link", { name: "Sin disponibilidad" }).getAttribute("href")!,
+    "https://local.invalid"
+  );
+  expect(Object.fromEntries(out.searchParams)).toMatchObject({
+    q: "Mouse",
+    stock: "out",
+    page: "1",
+  });
+  const clear = new URL(
+    screen.getByRole("link", { name: "Quitar búsqueda: Mouse" }).getAttribute("href")!,
+    "https://local.invalid"
+  );
+  expect(clear.searchParams.has("q")).toBe(false);
+  expect(clear.searchParams.get("stock")).toBe("low");
+  expect(clear.searchParams.get("page")).toBe("1");
 });
