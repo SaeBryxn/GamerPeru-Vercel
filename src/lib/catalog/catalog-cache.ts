@@ -5,10 +5,12 @@ import { revalidateTag, unstable_cache } from "next/cache";
 export const CATALOG_CACHE_TAG = "storefront-catalog";
 
 /**
- * Upper bound on how stale public catalog data may be when no admin write invalidates it. Prices
- * shown here are informational: checkout re-reads prices and stock from the database.
+ * Upper bound on how stale public catalog data may be when no write invalidates it. Every catalog,
+ * stock and order write already invalidates on demand, so this is only a safety net; on Workers
+ * Free each expiry costs a background render of 150-550 ms of CPU against a 10 ms budget, so it
+ * is kept long. Prices shown here are informational: checkout re-reads prices and stock.
  */
-export const CATALOG_REVALIDATE_SECONDS = 300;
+export const CATALOG_REVALIDATE_SECONDS = 3600;
 
 /** Only production caches: development and the E2E suites (on `next dev`) must see writes at once. */
 export function isCatalogCacheEnabled(): boolean {

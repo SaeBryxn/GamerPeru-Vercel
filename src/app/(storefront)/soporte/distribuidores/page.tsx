@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/soporte/distribuidores" },
 };
 
-export const revalidate = 300;
+export const revalidate = 3600;
 
 /** How we work with partners, not commercial terms: those are agreed case by case. */
 const BENEFITS = [

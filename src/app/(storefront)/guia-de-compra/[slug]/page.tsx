@@ -20,7 +20,7 @@ interface GuidePageProps {
   params: Promise<{ slug: string }>;
 }
 
-export const revalidate = 300;
+export const revalidate = 3600;
 export const dynamicParams = false;
 
 export function generateStaticParams() {

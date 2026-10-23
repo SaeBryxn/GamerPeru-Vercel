@@ -7,7 +7,7 @@ import styles from "./page.module.css";
 
 // Must be a literal for static analysis; keep in step with CATALOG_REVALIDATE_SECONDS. Without it
 // the home page would keep the products read at build time until the next deploy.
-export const revalidate = 300;
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: "Gamer Perú | Periféricos Gaming de Alto Rendimiento",

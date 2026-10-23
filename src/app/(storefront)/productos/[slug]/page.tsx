@@ -23,7 +23,7 @@ interface ProductPageProps {
 
 // Must be a literal for static analysis; keep in step with CATALOG_REVALIDATE_SECONDS. Admin
 // catalog writes revalidate on demand, so this only bounds staleness when nothing invalidates.
-export const revalidate = 300;
+export const revalidate = 3600;
 
 /** No product is prerendered at build: each page is generated on first visit, then cached (ISR). */
 export function generateStaticParams(): { slug: string }[] {
