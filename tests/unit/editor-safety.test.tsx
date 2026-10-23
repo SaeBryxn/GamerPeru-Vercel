@@ -4,7 +4,10 @@ import Link from "next/link";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { EditorSafetyProvider, useEditorDirty } from "@/components/admin/products/editor-safety";
-import { productEditorVersion } from "@/lib/admin/catalog/editor-version";
+import {
+  productEditorVersion,
+  specificationDraftVersion,
+} from "@/lib/admin/catalog/editor-version";
 vi.mock("@/lib/admin/catalog/version-actions", () => ({ getProductEditorVersionAction: vi.fn() }));
 afterEach(() => {
   cleanup();
@@ -43,4 +46,11 @@ it("la versión detecta cambios de variante y no depende del orden de las filas"
   expect(productEditorVersion(product, [a], [])).not.toBe(
     productEditorVersion(product, [{ ...a, updatedAt: "2026-10-23T00:00:00Z" }], [])
   );
+});
+
+it("el borrador de especificaciones compara valores guardables, sin vacíos ni dependencia del orden", () => {
+  expect(specificationDraftVersion({ sensor: "test", peso: 45, empty: "" })).toBe(
+    specificationDraftVersion({ peso: 45, sensor: "test" })
+  );
+  expect(specificationDraftVersion({ peso: 46 })).not.toBe(specificationDraftVersion({ peso: 45 }));
 });

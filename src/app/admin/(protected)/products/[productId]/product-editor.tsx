@@ -51,7 +51,10 @@ import {
   useEditorDirty,
   useEditorSafety,
 } from "@/components/admin/products/editor-safety";
-import { productEditorVersion } from "@/lib/admin/catalog/editor-version";
+import {
+  productEditorVersion,
+  specificationDraftVersion,
+} from "@/lib/admin/catalog/editor-version";
 import { ProductPageStep } from "@/components/admin/products/product-page-step";
 import { uploadDirect, type DirectUploadStage } from "@/lib/media/direct-upload-client";
 import { requestUpload, completeUpload } from "@/lib/media/upload-api-client";
@@ -301,6 +304,7 @@ function ProductEditorBody({
     return (specifications?.specValues as Record<string, unknown>) ?? {};
   });
 
+  const [savedSpecValues, setSavedSpecValues] = useState(specValues);
   const dirtyDetails =
     JSON.stringify([
       name.trim(),
@@ -321,7 +325,7 @@ function ProductEditorBody({
       product.isFeatured,
     ]);
   const dirtySpecs =
-    JSON.stringify(specValues) !== JSON.stringify(specifications?.specValues ?? {});
+    specificationDraftVersion(specValues) !== specificationDraftVersion(savedSpecValues);
   useEditorDirty("basics", dirtyDetails);
   useEditorDirty("specifications", dirtySpecs);
   const dirtyAuthoring = dirtyDetails || dirtySpecs;
@@ -527,6 +531,7 @@ function ProductEditorBody({
     setDescription(initialDetail.product.description ?? "");
     setIsFeatured(initialDetail.product.isFeatured);
     setSpecValues((initialDetail.specifications?.specValues as Record<string, unknown>) ?? {});
+    setSavedSpecValues((initialDetail.specifications?.specValues as Record<string, unknown>) ?? {});
     setDuplicateName(`${initialDetail.product.name} (Copia)`);
     setDuplicateSlug(`${initialDetail.product.slug}-copia`);
   }, [initialDetail]);
@@ -618,6 +623,8 @@ function ProductEditorBody({
           ...prev,
           product: res.data!.product,
         }));
+        setSpecValues(cleaned);
+        setSavedSpecValues(cleaned);
         setGeneralSuccess("Especificaciones técnicas guardadas exitosamente.");
         router.refresh();
       } else {

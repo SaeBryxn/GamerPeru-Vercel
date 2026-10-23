@@ -21,3 +21,11 @@ export function productEditorVersion(
       .sort(),
   ]);
 }
+
+export function specificationDraftVersion(values: Record<string, unknown>) {
+  return JSON.stringify(
+    Object.entries(values)
+      .filter(([, value]) => value !== "" && value !== null && value !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+  );
+}
