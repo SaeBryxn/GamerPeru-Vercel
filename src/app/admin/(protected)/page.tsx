@@ -16,6 +16,7 @@ import { QuickActions } from "@/components/admin/dashboard/quick-actions";
 import { HomeStatusSection } from "@/components/admin/dashboard/home-status-section";
 import { CatalogHealthSection } from "@/components/admin/dashboard/catalog-health-section";
 import { buildDashboardLinks } from "@/components/admin/dashboard/dashboard-links";
+import { OperationsSnapshot } from "@/components/admin/dashboard/operations-snapshot";
 import { SegmentedNav, Stagger } from "@/components/admin/ui";
 import styles from "./page.module.css";
 
@@ -53,6 +54,15 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     payload.inventoryOverview.status === "READY";
   // Two views instead of one long page: today's work, or the numbers of the chosen period.
   const view = resolvedParams.vista === "metricas" ? "metrics" : "operations";
+  const formatBoundary = (date: Date) =>
+    new Intl.DateTimeFormat("es-PE", {
+      timeZone: "America/Lima",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
   const viewNav = hasAnyMetricAccess ? (
     <SegmentedNav
       label="Vista del resumen"
@@ -69,36 +79,41 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
 
   return (
     <div className={styles.container}>
-      <DashboardHeader selectedPeriod={selectedPeriod} showPeriodSelector={false} aside={viewNav} />
+      <DashboardHeader
+        selectedPeriod={selectedPeriod}
+        showPeriodSelector={false}
+        aside={viewNav}
+        view={view}
+        updatedAt={payload.period.referenceNow.toISOString()}
+      />
 
       {hasAnyMetricAccess && view === "operations" ? (
         <Stagger className={styles.dashboardBody}>
-          <AttentionSection payload={payload} links={links} />
+          <OperationsSnapshot payload={payload} links={links} />
           <div className={styles.workspaceGrid} data-has-catalog={hasCatalogContext}>
-            {hasCatalogContext && (
-              <div className={styles.primaryColumn}>
-                <CatalogHealthSection
-                  catalogHealth={payload.catalogHealth}
-                  productsHref={links.products?.({ pending: "issues" }) ?? null}
-                />
-                {(payload.catalogOverview.status === "READY" ||
-                  payload.inventoryOverview.status === "READY") && (
-                  <details className={styles.overviewDetails}>
-                    <summary>Resumen del catálogo y existencias</summary>
-                    <div className={styles.overviewContent}>
-                      <CatalogOverviewSection
-                        catalogOverview={payload.catalogOverview}
-                        productsHref={links.products}
-                      />
-                      <InventoryOverviewSection
-                        inventoryOverview={payload.inventoryOverview}
-                        outOfStockHref={links.products?.({ pending: "stock" })}
-                      />
-                    </div>
-                  </details>
-                )}
-              </div>
-            )}
+            <div className={styles.primaryColumn}>
+              <AttentionSection payload={payload} links={links} />
+              <CatalogHealthSection
+                catalogHealth={payload.catalogHealth}
+                productsHref={links.products?.({ pending: "issues" }) ?? null}
+              />
+              {(payload.catalogOverview.status === "READY" ||
+                payload.inventoryOverview.status === "READY") && (
+                <details className={styles.overviewDetails}>
+                  <summary>Resumen del catálogo y existencias</summary>
+                  <div className={styles.overviewContent}>
+                    <CatalogOverviewSection
+                      catalogOverview={payload.catalogOverview}
+                      productsHref={links.products}
+                    />
+                    <InventoryOverviewSection
+                      inventoryOverview={payload.inventoryOverview}
+                      outOfStockHref={links.products?.({ pending: "stock" })}
+                    />
+                  </div>
+                </details>
+              )}
+            </div>
             <div className={styles.secondaryColumn}>
               <QuickActions links={links} />
               <HomeStatusSection homeStatus={payload.homeStatus} href={links.home} />
@@ -110,6 +125,19 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
           <div className={styles.metricsDivider}>
             <h2 className={styles.metricsTitle}>Métricas del período</h2>
             <PeriodSelector selectedPeriod={selectedPeriod} />
+          </div>
+          <div
+            className={styles.comparisonContext}
+            aria-label="Fechas de las métricas y de su comparación"
+          >
+            <p>
+              <strong>Período seleccionado:</strong> {formatBoundary(payload.period.current.start)}{" "}
+              – {formatBoundary(payload.period.current.end)}
+            </p>
+            <p>
+              <strong>Comparado con:</strong> {formatBoundary(payload.period.previous.start)} –{" "}
+              {formatBoundary(payload.period.previous.end)} · hora de Lima
+            </p>
           </div>
           <FinancialCohortSection
             financialCohort={payload.financialCohort}

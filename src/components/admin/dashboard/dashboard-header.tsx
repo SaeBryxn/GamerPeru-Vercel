@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import type { DashboardPeriodSelector } from "@/lib/admin/dashboard-period";
 import styles from "./dashboard-header.module.css";
+import { DashboardRefresh } from "./dashboard-refresh";
 
 interface DashboardHeaderProps {
   selectedPeriod: DashboardPeriodSelector;
@@ -9,6 +10,8 @@ interface DashboardHeaderProps {
   showPeriodSelector?: boolean;
   /** Controls shown at the right of the title, such as the view switcher. */
   aside?: React.ReactNode;
+  view?: "operations" | "metrics";
+  updatedAt?: string;
 }
 
 const PERIOD_OPTIONS: Array<{ id: DashboardPeriodSelector; label: string }> = [
@@ -42,15 +45,38 @@ export function DashboardHeader({
   selectedPeriod,
   showPeriodSelector = true,
   aside,
+  view = "operations",
+  updatedAt,
 }: DashboardHeaderProps) {
   return (
     <header className={styles.header}>
       <div className={styles.titleBlock}>
-        <h1 className={styles.title}>Inicio</h1>
-        <p className={styles.subtitle}>Datos actualizados al abrir esta página</p>
+        <span className={styles.eyebrow}>Gamer Perú · Administración</span>
+        <h1 className={styles.title}>
+          {view === "metrics" ? "Métricas de la tienda" : "Centro de operaciones"}
+        </h1>
+        <p className={styles.subtitle}>
+          {view === "metrics"
+            ? "Resultados del período y su comparación"
+            : "Pagos, preparación y catálogo: cada pendiente tiene su siguiente paso"}
+        </p>
+        {updatedAt && (
+          <time className={styles.updated} dateTime={updatedAt}>
+            Actualizado{" "}
+            {new Date(updatedAt).toLocaleString("es-PE", {
+              timeZone: "America/Lima",
+              day: "numeric",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}{" "}
+            · hora de Lima
+          </time>
+        )}
       </div>
 
-      {aside}
+      <DashboardRefresh />
+      {aside && <div className={styles.views}>{aside}</div>}
       {showPeriodSelector && <PeriodSelector selectedPeriod={selectedPeriod} />}
     </header>
   );

@@ -38,7 +38,7 @@ export function PaymentVerificationSection({
             <h3 className={styles.blockTitle}>Por verificar ahora</h3>
             <span className={styles.live}>
               <StatusDot tone={hasQueue ? "critical" : "ok"} />
-              Tiempo real
+              Al cargar la página
             </span>
           </div>
 
@@ -69,7 +69,7 @@ export function PaymentVerificationSection({
 
           <p className={styles.note}>
             {hasQueue
-              ? "Pagos en estado SUBMITTED y VERIFYING"
+              ? "Comprobantes enviados o en revisión; todavía no son pagos confirmados"
               : "Cola al día, sin pagos pendientes"}
           </p>
         </StaggerItem>

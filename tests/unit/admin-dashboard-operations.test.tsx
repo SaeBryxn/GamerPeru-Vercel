@@ -29,6 +29,10 @@ import { CatalogHealthSection } from "@/components/admin/dashboard/catalog-healt
 import { HomeStatusSection } from "@/components/admin/dashboard/home-status-section";
 import AdminDashboardPage from "@/app/admin/(protected)/page";
 import { getAdminDashboardData } from "@/lib/admin/dashboard-reader";
+import { OperationsSnapshot } from "@/components/admin/dashboard/operations-snapshot";
+
+const routerMocks = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: routerMocks.refresh }) }));
 
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/admin/dashboard-reader", () => ({ getAdminDashboardData: vi.fn() }));
@@ -527,12 +531,70 @@ describe("Jerarquía de Inicio", () => {
     expect(screen.queryByText("ADMIN_ORDERS")).toBeNull();
   });
 
-  it("una cuenta de pedidos conserva los accesos autorizados sin una columna vacía de catálogo", async () => {
+  it("una cuenta de pedidos conserva sus accesos y sus pendientes sin mostrar catálogo", async () => {
     vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(false));
     const { container } = render(await AdminDashboardPage({}));
     expect(screen.getByTestId("quick-action-orders").getAttribute("href")).toBe("/admin/orders");
     expect(screen.queryByTestId("quick-action-catalog")).toBeNull();
     expect(container.querySelector("details")).toBeNull();
-    expect(container.querySelector('[data-has-catalog="false"]')?.children).toHaveLength(1);
+    expect(container.querySelector('[data-has-catalog="false"]')?.children).toHaveLength(2);
+    expect(screen.queryByTestId("snapshot-catalog")).toBeNull();
+    expect(screen.queryByTestId("snapshot-inventory")).toBeNull();
+    expect(screen.getByTestId("snapshot-prepare").textContent).toBe("3");
+  });
+
+  it("actualiza la lectura de datos con el botón de Inicio", async () => {
+    routerMocks.refresh.mockClear();
+    vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(false));
+    render(await AdminDashboardPage({}));
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar datos" }));
+    expect(routerMocks.refresh).toHaveBeenCalledOnce();
+  });
+
+  it("la vista de métricas identifica ambas fechas de comparación y conserva separados los pendientes", async () => {
+    vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(false));
+    render(
+      await AdminDashboardPage({
+        searchParams: Promise.resolve({ vista: "metricas", period: "LAST_7_DAYS" }),
+      })
+    );
+    expect(screen.getByRole("heading", { name: "Métricas de la tienda" })).toBeTruthy();
+    const comparison = screen.getByLabelText("Fechas de las métricas y de su comparación");
+    expect(comparison.textContent).toContain("Período seleccionado:");
+    expect(comparison.textContent).toContain("Comparado con:");
+    expect(comparison.textContent).toContain("hora de Lima");
+    expect(screen.queryByTestId("snapshot-prepare")).toBeNull();
+  });
+
+  it("muestra importes por verificar sin presentarlos como cobrados y lleva cada cola al filtro correcto", () => {
+    const payload = { ...attentionPayload(), catalogOverview: { status: "UNAUTHORIZED" as const } };
+    const links = buildDashboardLinks(["orders:manage", "orders:verify", "catalog:manage"], period);
+    render(<OperationsSnapshot payload={payload} links={links} />);
+    expect(screen.getByTestId("snapshot-payments").closest("a")?.getAttribute("href")).toBe(
+      "/admin/pagos"
+    );
+    expect(screen.getByText("S/ 100.00 por verificar")).toBeTruthy();
+    expect(screen.getByTestId("snapshot-unpaid").closest("a")?.getAttribute("href")).toBe(
+      "/admin/orders?orderStatus=PENDING&paymentStatus=UNPAID"
+    );
+    expect(screen.getByTestId("snapshot-inventory").textContent).toBe("1");
+  });
+
+  it("un importe no disponible sigue sin convertirse en cero en el resumen", () => {
+    const payload = attentionPayload();
+    if (payload.paymentVerification.status === "READY")
+      payload.paymentVerification.data.snapshotQueue.queueAmount = {
+        status: "UNAVAILABLE",
+        error: "CURRENCY_INTEGRITY_ERROR",
+        message: "No disponible",
+      };
+    render(
+      <OperationsSnapshot
+        payload={{ ...payload, catalogOverview: { status: "UNAUTHORIZED" } }}
+        links={buildDashboardLinks(["orders:verify"], period)}
+      />
+    );
+    expect(screen.getByText("Importe no disponible")).toBeTruthy();
+    expect(screen.queryByText("S/ 0.00 por verificar")).toBeNull();
   });
 });

@@ -31,13 +31,21 @@ export function CatalogHealthSection({ catalogHealth, productsHref }: CatalogHea
       : `${formatInteger(productsWithIssues)} de ${formatInteger(evaluatedProducts)} con pendientes · ${formatInteger(productsWithBlockers)} con bloqueos`;
 
   return (
-    <AdminSection id="catalog-health-heading" title="Salud del catálogo" caption={caption}>
-      {catalogHealth.data.unreferencedAssetCount !== undefined && (
-        <p data-testid="media-orphans-count">
-          {formatInteger(catalogHealth.data.unreferencedAssetCount)} medios sin referencias desde
-          hace más de 30 días. Informe de solo lectura.
-        </p>
-      )}
+    <AdminSection
+      id="catalog-health-heading"
+      title="Productos que necesitan un ajuste"
+      caption={caption}
+    >
+      {catalogHealth.data.unreferencedAssetCount !== undefined &&
+        catalogHealth.data.unreferencedAssetCount > 0 && (
+          <details className={styles.mediaDetails}>
+            <summary>Archivos sin uso en el catálogo</summary>
+            <p data-testid="media-orphans-count">
+              {formatInteger(catalogHealth.data.unreferencedAssetCount)} medios sin referencias
+              desde hace más de 30 días. Informe de solo lectura.
+            </p>
+          </details>
+        )}
       {items.length === 0 ? (
         <p className={styles.allClear} data-testid="catalog-health-all-clear">
           <CheckCircle2 size={16} aria-hidden="true" />

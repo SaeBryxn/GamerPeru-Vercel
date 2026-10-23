@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { FinancialCohortSection } from "@/components/admin/dashboard/financial-cohort-section";
 import { OrderPipelineSection } from "@/components/admin/dashboard/order-pipeline-section";
@@ -21,6 +21,8 @@ import type {
   OrderPipelineResult,
   PaymentVerificationResult,
 } from "@/lib/admin/dashboard-types";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 describe("GP-023 / CHK2 — Admin Dashboard Component & State Rendering Unit Tests", () => {
   describe("1. FinancialCohortSection", () => {

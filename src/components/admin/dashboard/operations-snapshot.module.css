@@ -1,0 +1,103 @@
+.snapshot {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: var(--space-4);
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--snapshot-border);
+  border-top: 3px solid var(--snapshot-ink);
+  border-radius: 14px;
+  background: var(--snapshot-bg);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+.card[data-tone="amber"] {
+  --snapshot-bg: var(--color-status-warning-background);
+  --snapshot-ink: var(--color-status-warning-text);
+  --snapshot-border: var(--color-status-warning-border);
+}
+.card[data-tone="blue"] {
+  --snapshot-bg: var(--color-status-info-background);
+  --snapshot-ink: var(--color-status-info-text);
+  --snapshot-border: var(--color-status-info-border);
+}
+.card[data-tone="green"] {
+  --snapshot-bg: var(--color-status-success-background);
+  --snapshot-ink: var(--color-status-success-text);
+  --snapshot-border: var(--color-status-success-border);
+}
+.card[data-tone="violet"] {
+  --snapshot-bg: #f3f0ff;
+  --snapshot-ink: #6441a5;
+  --snapshot-border: #ddd3f3;
+}
+:global([data-admin-theme="dark"]) .card[data-tone="violet"] {
+  --snapshot-bg: #211b32;
+  --snapshot-ink: #c4b5fd;
+  --snapshot-border: #44345f;
+}
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  color: var(--snapshot-ink);
+}
+.icon {
+  display: inline-flex;
+  padding: 8px;
+  border: 1px solid var(--snapshot-border);
+  border-radius: 10px;
+}
+.value {
+  margin-top: var(--space-4);
+  font-family: var(--font-heading);
+  font-size: 36px;
+  font-weight: 750;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.label {
+  margin-top: var(--space-1);
+  font-size: 14px;
+  font-weight: 650;
+}
+.note {
+  margin-top: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+a.card:hover {
+  box-shadow: var(--admin-shadow);
+}
+a.card:hover .label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+a.card:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 3px;
+}
+@media (max-width: 639px) {
+  .snapshot {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+  .card {
+    padding: var(--space-4);
+  }
+  .value {
+    font-size: 30px;
+  }
+  .label {
+    font-size: 13px;
+  }
+}

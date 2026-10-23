@@ -100,8 +100,8 @@ export function AttentionSection(props: AttentionSectionProps) {
   return (
     <AdminSection
       id="attention-heading"
-      title="Requiere tu atención"
-      caption="Pendientes actuales · sin filtro de fechas"
+      title="Para resolver ahora"
+      caption="Por prioridad y antigüedad"
     >
       {pending.length === 0 ? (
         <p className={styles.allClear} data-testid="attention-all-clear">

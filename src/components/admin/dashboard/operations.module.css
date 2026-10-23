@@ -30,7 +30,7 @@
 .attentionGrid {
   display: grid;
   overflow: hidden;
-  border: 1px solid var(--color-border-default);
+  border: 1px solid var(--color-status-info-border);
   border-radius: var(--admin-card-radius);
   background: var(--color-surface-card);
 }
@@ -53,7 +53,54 @@ a.attentionCard:hover {
   background: var(--color-surface-secondary);
 }
 .attentionCard[data-priority="next"] {
-  background: var(--admin-accent-soft);
+  min-height: 160px;
+  padding-block: var(--space-6);
+  background: linear-gradient(120deg, #1e3a8a, #172554);
+  color: #ffffff;
+}
+.attentionCard[data-priority="next"] .attentionCount {
+  font-size: 40px;
+  color: #ffffff;
+}
+.attentionCard[data-priority="next"] .attentionLabel {
+  font-size: 18px;
+  color: #ffffff;
+}
+.attentionCard[data-priority="next"] .attentionHint {
+  color: #dbeafe;
+}
+.attentionCard[data-priority="next"] .nextTask {
+  padding: 3px 8px;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
+  color: #dbeafe;
+}
+.attentionCard[data-priority="next"] .attentionCta {
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1e3a8a;
+}
+.attentionCard[data-priority="next"]:hover {
+  background: #1e3a8a;
+}
+.attentionCard[data-priority="next"]:focus-visible {
+  outline-color: #ffffff;
+}
+.mediaDetails {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.mediaDetails > summary {
+  min-height: 44px;
+  padding-block: var(--space-3);
+  cursor: pointer;
+}
+.mediaDetails > summary:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
 }
 .attentionCopy {
   display: flex;
@@ -61,6 +108,7 @@ a.attentionCard:hover {
   align-items: flex-start;
   gap: var(--space-1);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .nextTask {
   color: var(--color-status-info-text);
@@ -125,27 +173,44 @@ a.attentionCard:hover .attentionCta {
 }
 
 .actionGrid {
-  overflow: hidden;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--admin-card-radius);
-  background: var(--color-surface-card);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
 }
 .actionGrid > li + li {
-  border-top: 1px solid var(--color-border-subtle);
+  border: 0;
 }
 
 .actionCard {
+  position: relative;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-3);
-  min-height: 72px;
-  padding: var(--space-3) var(--space-4);
+  min-height: 148px;
+  height: 100%;
+  padding: var(--space-4);
+  border: 1px solid var(--color-status-info-border);
+  border-radius: 12px;
+  background: var(--color-status-info-background);
   color: inherit;
   text-decoration: none;
 }
 
 .actionCard:hover {
+  box-shadow: var(--admin-shadow);
+}
+.actionCard[data-section="home"] {
+  background: var(--color-status-danger-background);
+  border-color: var(--color-status-danger-border);
+}
+.actionCard[data-section="orders"] {
+  background: var(--color-status-success-background);
+  border-color: var(--color-status-success-border);
+}
+.actionCard[data-section="menu"] {
   background: var(--color-surface-secondary);
+  border-color: var(--color-border-default);
 }
 
 .actionCard:hover .actionTitle {
@@ -184,12 +249,15 @@ a.attentionCard:hover .attentionCta {
   flex: 1;
 }
 .actionArrow {
+  position: absolute;
+  top: 16px;
+  right: 16px;
   flex-shrink: 0;
   color: var(--color-text-secondary);
 }
 
 .actionTitle {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-text-primary);
 }

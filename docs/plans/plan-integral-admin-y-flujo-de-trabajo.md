@@ -130,6 +130,10 @@ Archivos candidatos: página de `/admin` y `src/components/admin/dashboard/`.
 
 Validación: formato, TypeScript, lint y 38 pruebas dirigidas correctos. Por indicación del dueño no se hicieron capturas ni pruebas visuales; la revisión de la composición y el funcionamiento con sus datos queda a su cargo en el servidor local. El dueño autorizó ejecutar la web local contra el Supabase de producción y pidió dejar de hacer pushes automáticos. No se cambiaron datos ni se probó el sitio de producción durante este rediseño.
 
+**Segunda revisión, tras la devolución del dueño:** la primera pasada se consideró insuficiente en composición y color. Inicio pasa a un Centro de operaciones con cabecera propia, hora de actualización y botón para volver a leer los datos; tarjetas de pagos por revisar, pedidos por preparar, pedidos sin pagar y faltantes de stock, o productos publicados según el acceso disponible. La tarea prioritaria se distingue con un panel azul y las acciones rápidas tienen superficies de color. Las métricas indican las fechas reales del período y de la comparación; se retira la etiqueta «Tiempo real» de datos que solo se leen al cargar. Se conserva el lector existente y sus importes exactos: un importe por revisar nunca se presenta como dinero confirmado ni se sustituye un importe no disponible por cero.
+
+Esta revisión permanece local y sin push. Se prueban la actualización, los filtros de cada cola, el acceso por permisos y la separación entre métricas y pendientes. El contraste de los colores nuevos se calcula sobre sus fondos; la composición visual sigue pendiente de revisión del dueño porque pidió trabajar sin capturas.
+
 ### O2. Pagos
 
 **Tarea:** decidir con evidencia. Compactar filtros y resumen; el panel mantiene importe, pedido, comprobante, asignación y decisiones en orden de lectura.
