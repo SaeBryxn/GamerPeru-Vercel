@@ -52,3 +52,13 @@ La edición, fecha y base del pie se toman del Markdown para evitar dos versione
 - Validación del dueño sobre la interfaz desplegada y sus permisos reales.
 - Rotación de la contraseña de base de datos de producción previamente expuesta, a cargo del dueño. Este trabajo no lee ni reproduce ese secreto.
 - Medición de tareas y usabilidad antes del rediseño global.
+
+## Actualización 1.1: cabecera y cuenta
+
+Base implementada: `1505dcd`, 23 de octubre de 2026. Se actualizaron acceso, navegación y recorrido del cliente para explicar Mi cuenta y el enlace al perfil existente. Se retiró la afirmación de que el menú seguía siendo una propuesta.
+
+Contraejemplo detectado: proteger enlaces no protege el formulario de cierre de sesión. La cabecera solicita ahora autorización al editor mediante un evento cancelable; cancelar conserva el borrador y evita ejecutar el cierre de sesión. Los errores de la acción existente permanecen visibles.
+
+Evidencia de código: TypeScript y lint correctos, 4 archivos y 20 pruebas unitarias correctas, incluidos navegación por teclado, tema, salida cancelada y conservación del borrador. Revisión visual estática offline a 360, 768 y 1440 px, claro y oscuro, sin desbordamiento. Se usaron componentes reales con datos ficticios; no equivale a probar navegación o autenticación en Cloudflare.
+
+El PDF de la edición 1.1 se regeneró desde el Markdown: 20 páginas renderizadas e inspeccionadas, 18 capítulos y 18 marcadores, sin caracteres de sustitución ni palabras fuera de los márgenes comprobados. Se compactaron referencias duplicadas para evitar una página final con una sola entrada. La prueba funcional alojada y la conveniencia del nuevo acceso a la tienda quedan pendientes del dueño.

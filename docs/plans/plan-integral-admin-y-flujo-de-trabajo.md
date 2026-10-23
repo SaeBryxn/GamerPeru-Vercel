@@ -1,6 +1,6 @@
 # Plan integral: flujo de trabajo y rediseño del admin
 
-Fecha: 23 de octubre de 2026. Rama: `feat/cloudflare-workers`. Base funcional revisada: `4f9a814`.
+Fecha: 23 de octubre de 2026. Rama: `feat/cloudflare-workers`. Base funcional revisada: `1505dcd`.
 
 ## 1. Objetivo y orden acordado
 
@@ -14,7 +14,7 @@ Orden de esta entrega:
 4. Establecer este plan de rediseño por secciones.
 5. Ejecutar después cada pieza visual en orden, con revisión del dueño.
 
-Esta entrega documenta y planifica. No instala las herramientas recomendadas ni implementa el nuevo perfil, la cabecera o el resto del rediseño.
+La documentación y la primera pieza de cabecera y cuenta están implementadas. Las herramientas recomendadas y las demás piezas siguen pendientes; no se ha creado una pantalla administrativa nueva de perfil.
 
 Entregables relacionados:
 
@@ -36,7 +36,7 @@ Son observaciones del mismo dueño, no resultados de entrevistas con varios usua
 
 ### Hechos verificados en el código
 
-- La cabecera actual contiene ruta de navegación, tema, Ir a la tienda y Cerrar sesión. No tiene menú de cuenta administrativo.
+- La cabecera actual conserva la ruta y agrupa identidad, datos de cuenta, tema, Ir a la tienda y Cerrar sesión en Mi cuenta.
 - Existe perfil de cliente en `/cuenta/perfil`; no equivale a un perfil administrativo nuevo.
 - El menú tiene cuatro grupos: Operaciones, Catálogo, Tienda y contenido, IA y sistema. Equipo pertenece al último.
 - Inicio separa operación y métricas por período.
@@ -90,16 +90,16 @@ Foco visible, orden de tabulación lógico, cierre predecible y devolución del 
 
 Una cabecera que ubique al operador y un menú de cuenta que reúna acciones personales. El menú lateral mantiene las áreas de trabajo.
 
-### Composición propuesta
+### Composición implementada
 
 | Zona                     | Contenido                                                                                                         |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
 | Izquierda de la cabecera | Abrir navegación en móvil y ruta breve de la sección.                                                             |
-| Derecha                  | Control de cuenta reconocible, con nombre si está disponible y alternativa Mi cuenta.                             |
+| Derecha                  | Control Mi cuenta con inicial del correo verificado o icono de persona.                                           |
 | Menú de cuenta           | Resumen de identidad y nivel, acceso a datos de cuenta cuando exista, Ir a la tienda, apariencia y Cerrar sesión. |
 | Lateral                  | Áreas operativas, elemento activo y carpetas actuales; posibilidad de contraer.                                   |
 
-No inventar nombre, foto ni un nivel de acceso. Evaluar primero reutilizar los datos verificados y la página de cuenta existente. Una pantalla administrativa de edición de perfil necesitaría un alcance propio; el primer cambio puede resolver la agrupación sin añadirla.
+Se reutilizan el correo y nivel verificados y la página `/cuenta/perfil`. Una pantalla administrativa nueva de edición de perfil necesitaría un alcance propio.
 
 Mover Ir a la tienda al menú añade un paso. Comprobar con el dueño su frecuencia de uso y, si es una acción diaria constante, conservar un acceso discreto sin saturar la cabecera. Es una decisión a validar, no una conclusión asumida.
 
@@ -112,7 +112,9 @@ Mover Ir a la tienda al menú añade un paso. Comprobar con el dueño su frecuen
 - La salida respeta la protección de cambios sin guardar de los editores.
 - No aparecen enlaces a funciones inexistentes ni se modifica autenticación por estética.
 
-Archivos candidatos: `src/components/admin/admin-header.tsx`, `admin-shell.tsx`, `admin-shell.module.css` y un componente local de menú de cuenta. Confirmar el contrato de identidad antes de editar. Un commit para esta pieza.
+Implementado en `1505dcd`: cabecera, shell y `admin-account-menu.*`. El editor escucha un evento cancelable para proteger también el cierre de sesión; se reutiliza la acción de autenticación existente.
+
+Validación: formato, TypeScript, lint y 20 pruebas afectadas correctos. Capturas estáticas de componentes reales con datos ficticios a 360, 768 y 1440 px, en claro y oscuro, sin desbordamiento. No se inició servidor ni se realizaron E2E o accesos a producción. Pendiente: comprobación funcional del dueño tras el despliegue y frecuencia de uso de Ir a la tienda.
 
 ## 6. Operaciones: una pantalla cada vez
 
@@ -243,9 +245,9 @@ Este registro comunica decisiones y resultados, no una transcripción de razonam
 
 Mantener la prohibición de peticiones a `gamerperu.com`, acceso a la base de producción, servidor y E2E locales durante el trabajo actual. Las pruebas funcionales alojadas las realiza el dueño. Una futura habilitación de entorno de pruebas se tratará explícitamente.
 
-## 13. Primer siguiente cambio propuesto
+## 13. Siguiente cambio propuesto
 
-Empezar por **cabecera y menú de cuenta**. Resuelve la ubicación de tema, Ir a la tienda y cierre de sesión sin obligar a rehacer las pantallas de negocio. Después seguir Inicio, Pagos, Pedidos y la consolidación de Inventario, en ese orden.
+La cabecera y el menú de cuenta están implementados. El siguiente cambio es **Inicio**: priorizar pendientes y siguiente acción, manteniendo operación y métricas separadas. Después seguir Pagos, Pedidos y la consolidación de Inventario, en ese orden.
 
 La cantidad de pasos y el tiempo actual se medirán antes de prometer una reducción. Como guía, el dueño debería poder ubicar una sección y completar su tarea con menos dudas, manteniendo los controles críticos.
 

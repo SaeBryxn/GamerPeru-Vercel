@@ -2,11 +2,11 @@
 
 Manual de uso y operación
 
-Edición 1.0 - 23 de octubre de 2026
+Edición 1.1 - 23 de octubre de 2026
 
 Para el dueño de la tienda, su equipo y quienes atienden pedidos. Incluye el recorrido del cliente para que la atención sea coherente con lo que ve el comprador.
 
-Base revisada: código de la rama `feat/cloudflare-workers`, commit `4f9a814`. Las instrucciones describen funciones implementadas. La disponibilidad real de correo, IA y otros servicios necesita comprobarse en el entorno alojado.
+Base revisada: código de la rama `feat/cloudflare-workers`, commit `1505dcd`. Las instrucciones describen funciones implementadas. La disponibilidad real de correo, IA y otros servicios necesita comprobarse en el entorno alojado.
 
 > Regla principal: un comprobante enviado por el cliente no equivale a un pago confirmado. Comprueba la recepción real del dinero antes de aprobarlo.
 
@@ -39,7 +39,7 @@ Si hay un error de conexión, conserva lo escrito y comprueba el estado antes de
 
 ### Entrar y salir
 
-Usa el inicio de sesión de la tienda. Si olvidaste la contraseña, utiliza la recuperación que ofrece esa pantalla. Para terminar tu sesión administrativa, pulsa Cerrar sesión en la cabecera actual.
+Usa el inicio de sesión de la tienda. Si olvidaste la contraseña, utiliza la recuperación que ofrece esa pantalla. Para terminar tu sesión administrativa, abre Mi cuenta en la esquina superior derecha y pulsa Cerrar sesión. Si el editor avisa de cambios pendientes, cancela la salida para guardarlos primero.
 
 Una sesión puede vencer mientras trabajas. Vuelve a identificarte si el sistema lo solicita. Una pantalla abierta no garantiza que conserve autorización para guardar.
 
@@ -73,15 +73,16 @@ Abre las carpetas Diseño de tienda y Motor IA para encontrar sus pantallas. Pue
 ### Cabecera actual
 
 - La ruta Administración / sección indica dónde estás.
-- El control de tema cambia entre claro y oscuro.
+- Mi cuenta, arriba a la derecha, reúne correo, nivel y acciones personales. En móvil se reconoce por la inicial o el icono de persona.
+- Datos de mi cuenta abre el perfil existente en `/cuenta/perfil`.
 - Ir a la tienda abre la tienda pública en otra pestaña.
-- Cerrar sesión termina la sesión.
+- Apariencia cambia entre claro y oscuro; Cerrar sesión termina la sesión.
 
-### Perfil: distinguir presente y propuesta
+### Usar el menú de cuenta
 
-El cliente tiene una página de perfil en `/cuenta/perfil`. La cabecera administrativa revisada todavía no reúne sus acciones en un menú de perfil.
+Abre Mi cuenta con clic o teclado. Recorre las acciones con Tab o las flechas; Escape cierra el panel y devuelve el foco al botón. El cambio de apariencia mantiene el menú abierto.
 
-El plan de rediseño propone crear ese menú y agrupar allí las acciones de cuenta. Esa propuesta no es una instrucción de uso de la interfaz actual.
+Datos de mi cuenta utiliza el perfil de la misma cuenta de la tienda. El menú muestra el nivel administrativo, pero no lo cambia. Si hay cambios pendientes en el editor de producto, salir al perfil o cerrar sesión solicita confirmación.
 
 > Si una acción no aparece, primero revisa los permisos y la sección abierta. No asumas que el menú lateral muestra todas las funciones a todos los usuarios.
 
@@ -419,7 +420,7 @@ Con sesión, el comprador utiliza Mi cuenta y sus pedidos. Como invitado, puede 
 
 La entrega del correo depende del servicio y la cola configurados. Si no llega, revisa spam y solicita atención sin compartir enlaces privados.
 
-> El perfil del cliente está en `/cuenta/perfil`. Es distinto del menú de perfil administrativo propuesto para una próxima mejora.
+> El perfil está en `/cuenta/perfil`. El menú Mi cuenta del admin también permite abrirlo mediante Datos de mi cuenta.
 
 ## 17. Resolver problemas y cerrar el día
 
@@ -466,16 +467,16 @@ Este manual se contrastó con el código local y con las decisiones vigentes. No
 | Enviar un comprobante confirma el dinero             | Una persona debe comprobar los fondos y aprobar.                 |
 | Aprobar el pago equivale a restar físico manualmente | Revisar reservado, asignado y despacho; no duplicar movimientos. |
 | Dar acceso crea una cuenta e invita por correo       | La persona debe tener previamente una cuenta.                    |
-| El menú de perfil del admin ya existe                | Es una propuesta; el perfil del cliente sí tiene ruta propia.    |
+| Datos de mi cuenta modifica permisos del admin       | Abre el perfil existente; los niveles se gestionan en Equipo.    |
 | El historial contiene todos los movimientos          | Muestra como máximo los 50 más recientes.                        |
 
 ### Fuentes de implementación
 
-- Navegación y cabecera: `src/lib/admin/navigation.ts`, `src/components/admin/admin-header.tsx`.
+- Cuenta y cabecera: `src/components/admin/`; navegación: `src/lib/admin/navigation.ts`.
 - Roles: `src/lib/admin/staff/levels.ts`; Equipo: `src/app/admin/(protected)/equipo/team-workspace.tsx`.
 - Inventario: `src/app/admin/(protected)/inventario/` y `src/lib/admin/inventory/page-reader.ts`.
 - Productos: creación y editor en `src/app/admin/(protected)/products/`; bloques en `src/components/admin/products/`.
-- IA: `src/lib/ai/research/schemas.ts`, `src/lib/ai/proposals/apply-service.ts` y `src/components/admin/products/autofill-bar.tsx`.
+- IA: `src/lib/ai/` y `src/components/admin/products/autofill-bar.tsx`.
 - Pagos y pedidos: `src/app/admin/(protected)/pagos/` y `src/app/admin/(protected)/orders/`.
 - Contenido: `src/app/admin/(protected)/home/section-form.tsx` y `src/app/admin/(protected)/menu/menu-workspace.tsx`.
-- Cliente: `src/components/checkout/`, `src/app/(storefront)/checkout/` y `src/app/(storefront)/cuenta/`.
+- Cliente: `src/components/checkout/` y `src/app/(storefront)/`.
