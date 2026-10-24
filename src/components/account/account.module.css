@@ -40,6 +40,7 @@
   min-width: 0;
 }
 
+/* The blobatar has a transparent backdrop: it sits on the dark hero without a disc. */
 .heroAvatar {
   display: inline-flex;
   flex-shrink: 0;
@@ -47,13 +48,11 @@
   justify-content: center;
   width: 64px;
   height: 64px;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, var(--color-brand-primary), var(--color-brand-active));
-  box-shadow: 0 0 0 4px rgb(255 255 255 / 8%);
-  font-family: var(--font-heading);
-  font-size: 26px;
-  font-weight: 800;
-  color: var(--color-brand-text-on-accent);
+}
+
+.heroAvatarImage {
+  width: 100%;
+  height: 100%;
 }
 
 .eyebrow {
@@ -892,7 +891,6 @@
   .heroAvatar {
     width: 52px;
     height: 52px;
-    font-size: 22px;
   }
 
   .heroAside,

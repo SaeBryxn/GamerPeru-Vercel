@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "@/components/app-link";
 import { LayoutDashboard, Package, Truck } from "lucide-react";
+import { Blobatar } from "@blobatar/react";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { AccountNavigation } from "./account-navigation";
 import { AccountSection, AccountTransitionProvider } from "./account-transition";
@@ -37,8 +38,14 @@ export function AccountShell({
       <header className={styles.hero}>
         <div className={styles.heroInner}>
           <div className={styles.heroIdentity}>
+            {/* Same seed as the admin avatar, so a person sees one face across the store. */}
             <span className={styles.heroAvatar} aria-hidden="true">
-              {(firstName ?? displayEmail ?? "G").charAt(0).toUpperCase()}
+              <Blobatar
+                name={displayEmail ?? firstName ?? "cliente"}
+                size={64}
+                alt=""
+                className={styles.heroAvatarImage}
+              />
             </span>
             <div>
               <p className={styles.eyebrow}>Mi cuenta</p>
