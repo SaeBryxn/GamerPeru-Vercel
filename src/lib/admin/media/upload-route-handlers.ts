@@ -3,16 +3,16 @@ import { z } from "zod";
 import { db } from "@/db";
 import { requestUploadSchema, completeUploadSchema } from "@/lib/media/upload-api-schema";
 import { guardAdminMediaRequest, mediaJson, mediaRouteError } from "./upload-route-guard";
-import {
-  requestGalleryImageUpload,
-  confirmGalleryImageUpload,
-} from "@/lib/admin/catalog/gallery-media-service";
-import {
-  requestStoryMediaUpload,
-  confirmStoryMediaUpload,
-} from "@/lib/admin/catalog/story-media-service";
-import { requestHomeMediaUpload, confirmHomeMediaUpload } from "@/lib/home/home-media-service";
 import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
+
+/*
+ * Each upload is for one purpose, so only that purpose's service is loaded. On Workers every
+ * module a route imports is compiled on its first request in an isolate, and the confirmation
+ * step was being cut by the 10 ms CPU limit; gallery, story and home services stay apart.
+ */
+const galleryService = () => import("@/lib/admin/catalog/gallery-media-service");
+const storyService = () => import("@/lib/admin/catalog/story-media-service");
+const homeService = () => import("@/lib/home/home-media-service");
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import { abortUpload } from "./upload-ledger";
 
@@ -27,10 +27,10 @@ export async function initAdminMediaUpload(request: Request): Promise<Response> 
     const options = { authContext: guard.authContext };
     const data =
       input.purpose === "gallery_image"
-        ? await requestGalleryImageUpload(input, options)
+        ? await (await galleryService()).requestGalleryImageUpload(input, options)
         : input.purpose === "story_image" || input.purpose === "story_video"
-          ? await requestStoryMediaUpload(input, options)
-          : await requestHomeMediaUpload(input, options);
+          ? await (await storyService()).requestStoryMediaUpload(input, options)
+          : await (await homeService()).requestHomeMediaUpload(input, options);
     return mediaJson(data);
   } catch (error) {
     return mediaRouteError(error);
@@ -53,12 +53,14 @@ export async function completeAdminMediaUpload(request: Request): Promise<Respon
     ) {
       const data =
         input.purpose === "gallery_image"
-          ? await confirmGalleryImageUpload(input, options)
-          : await confirmStoryMediaUpload({ ...input, purpose: input.purpose }, options);
+          ? await (await galleryService()).confirmGalleryImageUpload(input, options)
+          : await (
+              await storyService()
+            ).confirmStoryMediaUpload({ ...input, purpose: input.purpose }, options);
       if (data.productStatus === "PUBLISHED") revalidateStorefrontCatalog();
       return mediaJson({ ...data, src: resolvePublicMediaUrl(data.objectKey) });
     }
-    const data = await confirmHomeMediaUpload(input, options);
+    const data = await (await homeService()).confirmHomeMediaUpload(input, options);
     return mediaJson({ ...data, src: resolvePublicMediaUrl(data.objectKey) });
   } catch (error) {
     return mediaRouteError(error);

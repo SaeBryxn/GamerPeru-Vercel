@@ -178,8 +178,8 @@ export async function uploadDirect<Confirmed>({
       try {
         confirmed = await confirm({ uploadId: signed.data.uploadId, ...dimensions });
       } catch (error) {
-        if (!(error instanceof TypeError) || attempt >= 2) throw error;
-        await retryDelay(attempt, signal);
+        if (!(error instanceof TypeError) || attempt >= CONFIRM_RETRY_MS.length) throw error;
+        await retryDelay(attempt, signal, CONFIRM_RETRY_MS);
         continue;
       }
       if (confirmed.success && confirmed.data !== undefined) {
@@ -187,12 +187,12 @@ export async function uploadDirect<Confirmed>({
         return { ok: true, data: confirmed.data };
       }
       if (
-        attempt >= 2 ||
+        attempt >= CONFIRM_RETRY_MS.length ||
         (confirmed.status !== 0 && !(confirmed.status && confirmed.status >= 500))
       ) {
         return { ok: false, error: confirmed.error ?? "No se pudo registrar el archivo." };
       }
-      await retryDelay(attempt, signal);
+      await retryDelay(attempt, signal, CONFIRM_RETRY_MS);
     }
   } catch (error) {
     if (signal?.aborted) return { ok: false, error: "Subida cancelada." };
@@ -220,7 +220,19 @@ class UploadTransferError extends Error {
   }
 }
 
-function retryDelay(attempt: number, signal?: AbortSignal): Promise<void> {
+/**
+ * Waits before retrying a confirmation. When Workers cuts a request for CPU (503, Error 1102) the
+ * next requests of that Worker are cut too for a few seconds; in production the retries at +2, +3
+ * and +4 s all failed and the upload was then aborted, deleting a file that was already stored.
+ * Confirmation is idempotent, so it waits out that window instead (2, 4, 8 and 12 s).
+ */
+const CONFIRM_RETRY_MS = [2000, 4000, 8000, 12000] as const;
+
+function retryDelay(
+  attempt: number,
+  signal?: AbortSignal,
+  schedule: readonly number[] = [500, 1500]
+): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new DOMException("Subida cancelada", "AbortError"));
@@ -236,7 +248,7 @@ function retryDelay(attempt: number, signal?: AbortSignal): Promise<void> {
         signal?.removeEventListener("abort", abort);
         resolve();
       },
-      attempt === 0 ? 500 : 1500
+      schedule[Math.min(attempt, schedule.length - 1)]
     );
     signal?.addEventListener("abort", abort, { once: true });
   });

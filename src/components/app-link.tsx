@@ -23,8 +23,12 @@ export default function AppLink({
   ...props
 }: AppLinkProps) {
   const [intent, setIntent] = useState(false);
+  // Admin screens are dynamic and render per request: a hover prefetch is a full server render
+  // that saves the operator little, so admin links never prefetch.
+  const href = typeof props.href === "string" ? props.href : (props.href.pathname ?? "");
+  const neverPrefetch = prefetch === false || href.startsWith("/admin");
   const signal = () => {
-    if (!intent && prefetch !== false) setIntent(true);
+    if (!intent && !neverPrefetch) setIntent(true);
   };
 
   return (

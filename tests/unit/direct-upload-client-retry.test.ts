@@ -132,6 +132,15 @@ describe("reintentos de subida directa", () => {
     expect(values.at(-1)).toBe(100);
     expect(values).toEqual([...values].sort((a, b) => a - b));
   });
+  it("complete espera la ventana de corte de Workers antes de rendirse (5 intentos)", async () => {
+    const opts = options();
+    for (let i = 0; i < 4; i++)
+      opts.confirm.mockResolvedValueOnce({ success: false, status: 503, data: { id: "" } });
+    const promise = uploadDirect(opts);
+    await vi.runAllTimersAsync();
+    expect((await promise).ok).toBe(true);
+    expect(opts.confirm).toHaveBeenCalledTimes(5);
+  });
   it("complete reintenta solo red o 5xx", async () => {
     const opts = options();
     opts.confirm
