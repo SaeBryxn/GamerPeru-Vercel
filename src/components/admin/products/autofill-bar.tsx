@@ -96,8 +96,10 @@ export function AutofillBar({ productId, productName, isDraft, context }: Autofi
     jobId ?? "",
     Boolean(jobId && (!job || shouldPollResearchJob(job.jobStatus))),
     () => (jobId ? refresh(jobId) : Promise.resolve(false)),
-    5000,
-    60000
+    10000,
+    60000,
+    // A research job that has not settled in ten minutes is stuck; stop spending requests on it.
+    10 * 60 * 1000
   );
 
   const item = job?.items.find((candidate) => candidate.targetProductId === productId) ?? null;
