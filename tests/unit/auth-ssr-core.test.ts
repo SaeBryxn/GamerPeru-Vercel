@@ -59,11 +59,13 @@ describe("GP-015 AUTH4 — Core Supabase SSR Infrastructure Suite", () => {
       "/auth/completar-perfil",
       "/api/admin/:path*",
     ];
+    // Catalog listings pass through only to pick their route; they never reach updateSession.
+    const catalogPatterns = ["/categorias/:slug", "/marcas/:slug"];
 
-    expect(config.matcher).toEqual(expectedPatterns);
+    expect(config.matcher).toEqual([...expectedPatterns, ...catalogPatterns]);
 
     function matchesProxy(pathname: string): boolean {
-      return config.matcher.some((pattern: string) => {
+      return expectedPatterns.some((pattern: string) => {
         if (pattern.endsWith("/:path*")) {
           const prefix = pattern.replace("/:path*", "");
           return pathname === prefix || pathname.startsWith(prefix + "/");
@@ -98,6 +100,28 @@ describe("GP-015 AUTH4 — Core Supabase SSR Infrastructure Suite", () => {
     expect(matchesProxy("/_next/static/chunks/app.js")).toBe(false);
     expect(matchesProxy("/media/products/mouse.png")).toBe(false);
     expect(matchesProxy("/favicon.ico")).toBe(false);
+  });
+
+  it("C2. routes catalog listings without touching the auth session", async () => {
+    const { proxy } = await import("@/proxy");
+    const withSession = { headers: { cookie: "sb-project-auth-token=abc" } };
+
+    const clean = await proxy(new NextRequest("http://localhost/categorias/mouses", withSession));
+    expect(clean.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(clean.headers.get("Cache-Control")).toBeNull();
+
+    const filtered = await proxy(
+      new NextRequest("http://localhost/categorias/mouses?marca=wlmouse&orden=precio", withSession)
+    );
+    expect(filtered.headers.get("x-middleware-rewrite")).toBe(
+      "http://localhost/categorias/mouses/filtros?marca=wlmouse&orden=precio"
+    );
+    expect(filtered.headers.get("Cache-Control")).toBeNull();
+
+    const brand = await proxy(new NextRequest("http://localhost/marcas/wlmouse?page=2"));
+    expect(brand.headers.get("x-middleware-rewrite")).toBe(
+      "http://localhost/marcas/wlmouse/filtros?page=2"
+    );
   });
 
   it("D & E. proves proxy adapter invokes getClaims and never calls getSession", async () => {

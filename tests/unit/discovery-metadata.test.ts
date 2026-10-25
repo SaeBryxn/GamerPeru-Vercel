@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { generateMetadata as generateCategoryMetadata } from "@/app/(storefront)/categorias/[slug]/page";
-import { generateMetadata as generateBrandMetadata } from "@/app/(storefront)/marcas/[slug]/page";
+import { generateMetadata as generateCategoryMetadata } from "@/app/(storefront)/categorias/[slug]/filtros/page";
+import { generateMetadata as generateBrandMetadata } from "@/app/(storefront)/marcas/[slug]/filtros/page";
 import { generateMetadata as generateSearchMetadata } from "@/app/(storefront)/buscar/page";
 
 function setNodeEnv(value: string): void {
