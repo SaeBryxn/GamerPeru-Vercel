@@ -1,0 +1,2 @@
+ALTER TABLE "ai_research_job_items" DROP CONSTRAINT "ai_research_job_items_mode_product_snapshot_check";--> statement-breakpoint
+ALTER TABLE "ai_research_job_items" ADD CONSTRAINT "ai_research_job_items_mode_product_snapshot_check" CHECK (("ai_research_job_items"."mode" = 'CREATE' AND "ai_research_job_items"."target_product_id" IS NULL AND "ai_research_job_items"."target_product_version_snapshot" IS NULL) OR ("ai_research_job_items"."mode" = 'ENRICH' AND "ai_research_job_items"."target_product_version_snapshot" IS NOT NULL));

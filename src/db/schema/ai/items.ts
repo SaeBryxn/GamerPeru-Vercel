@@ -65,9 +65,12 @@ export const aiResearchJobItems = pgTable(
       "ai_research_job_items_status_check",
       sql`${table.status} IN ('PENDING', 'RESEARCHING', 'READY_FOR_REVIEW', 'NEEDS_ATTENTION', 'AMBIGUOUS', 'SOURCE_CONFLICT', 'FAILED', 'APPROVED', 'APPLIED')`
     ),
+    // An ENRICH item may outlive its product: deleting the product sets target_product_id to NULL
+    // (the FK above), and requiring it here made every product ever enriched undeletable. The
+    // snapshot stays as the record that it was an enrichment; applying such an item is refused.
     check(
       "ai_research_job_items_mode_product_snapshot_check",
-      sql`(${table.mode} = 'CREATE' AND ${table.targetProductId} IS NULL AND ${table.targetProductVersionSnapshot} IS NULL) OR (${table.mode} = 'ENRICH' AND ${table.targetProductId} IS NOT NULL AND ${table.targetProductVersionSnapshot} IS NOT NULL)`
+      sql`(${table.mode} = 'CREATE' AND ${table.targetProductId} IS NULL AND ${table.targetProductVersionSnapshot} IS NULL) OR (${table.mode} = 'ENRICH' AND ${table.targetProductVersionSnapshot} IS NOT NULL)`
     ),
     index("ai_research_job_items_job_status_idx").on(table.jobId, table.status),
     index("ai_research_job_items_lease_reclaim_idx")

@@ -169,6 +169,13 @@
       "when": 1792655748328,
       "tag": "0023_product_pdp_config",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792967540245,
+      "tag": "0024_ai_enrich_item_outlives_product",
+      "breakpoints": true
     }
   ]
 }
