@@ -1,0 +1,9 @@
+/**
+ * Product AI assistant switch.
+ *
+ * Off while the research worker is unreliable on Workers Free: jobs failed to dispatch and the
+ * editor kept polling for them. Turning it off hides the assistant in the admin, stops the editor
+ * banner and its polling, and refuses new or retried jobs. Saved jobs, proposals and the provider
+ * settings are kept, so setting this back to true restores everything as it was.
+ */
+export const AI_ASSISTANT_ENABLED = false;

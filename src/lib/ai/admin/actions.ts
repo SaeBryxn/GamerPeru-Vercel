@@ -2,6 +2,7 @@
 
 import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { ZodError } from "zod";
+import { AI_ASSISTANT_ENABLED } from "@/config/features";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { createResearchJobAction } from "@/lib/ai/research/actions";
 import { dispatchResearchJob } from "@/lib/ai/research/dispatch-service";
@@ -57,6 +58,14 @@ function unauthenticated<T>(): AdminAiActionResult<T> {
     success: false,
     code: "AUTHENTICATION_REQUIRED",
     error: "Inicia sesión con una cuenta de personal autorizada.",
+  };
+}
+
+function assistantDisabled<T>(): AdminAiActionResult<T> {
+  return {
+    success: false,
+    code: "AI_ASSISTANT_DISABLED",
+    error: "El Asistente IA está desactivado por ahora.",
   };
 }
 
@@ -150,6 +159,7 @@ async function runAction<T>(operation: () => Promise<T>): Promise<AdminAiActionR
 export async function submitResearchJobAdminAction(
   rawInput: unknown
 ): Promise<AdminAiActionResult<{ jobId: string; replayed: boolean }>> {
+  if (!AI_ASSISTANT_ENABLED) return assistantDisabled();
   const authContext = await getVerifiedAuthContext();
   if (authContext.status !== "READY") return unauthenticated();
   return await runAction(async () => {
@@ -172,6 +182,7 @@ export async function getResearchJobAdminAction(
 export async function retryResearchDispatchAdminAction(
   rawInput: unknown
 ): Promise<AdminAiActionResult<{ message: string }>> {
+  if (!AI_ASSISTANT_ENABLED) return assistantDisabled();
   return await runAction(async () => {
     const { jobId } = adminResearchJobReadSchema.parse(rawInput);
     // The reader enforces catalog:ai_research before revealing or retrying any work.

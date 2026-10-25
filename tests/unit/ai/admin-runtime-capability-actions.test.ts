@@ -16,6 +16,13 @@ const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
 }));
 
+const features = vi.hoisted(() => ({ aiAssistant: true }));
+vi.mock("@/config/features", () => ({
+  get AI_ASSISTANT_ENABLED() {
+    return features.aiAssistant;
+  },
+}));
+
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/lib/catalog/catalog-cache", () => ({
   revalidateStorefrontCatalog: mocks.revalidateStorefrontCatalog,
@@ -79,6 +86,23 @@ describe("GP-025 / CHK4-BR1 — Admin action runtime admission", () => {
       roles: ["SUPER_ADMIN"],
       permissions: new Set(["catalog:ai_research", "ai:manage_credentials"]),
     });
+  });
+
+  it("con el Asistente desactivado no crea ni reenvía trabajos", async () => {
+    features.aiAssistant = false;
+    try {
+      expect(
+        await submitResearchJobAdminAction({ items: [{ query: "ATK A9", mode: "CREATE" }] })
+      ).toMatchObject({ success: false, code: "AI_ASSISTANT_DISABLED" });
+      expect(await retryResearchDispatchAdminAction({ jobId: productId })).toMatchObject({
+        success: false,
+        code: "AI_ASSISTANT_DISABLED",
+      });
+      expect(mocks.createResearchJobAction).not.toHaveBeenCalled();
+      expect(mocks.dispatch).not.toHaveBeenCalled();
+    } finally {
+      features.aiAssistant = true;
+    }
   });
 
   it("reenvía el mismo trabajo fallido y no crea investigaciones nuevas", async () => {

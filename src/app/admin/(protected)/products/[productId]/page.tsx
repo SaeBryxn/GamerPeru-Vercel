@@ -1,5 +1,6 @@
 import React from "react";
 import { notFound } from "next/navigation";
+import { AI_ASSISTANT_ENABLED } from "@/config/features";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { getVariantStockMap } from "@/lib/admin/inventory/readers";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
@@ -46,9 +47,10 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   const story = await getAdminProductStory(productId, { authContext });
   const variantStock = await getVariantStockMap(detail.variants.map((v) => v.id));
   const sanitizedDetail = sanitizeProductDetailForUi(detail);
-  const autofill = authContext.permissions.has("catalog:ai_research")
-    ? await getProductAutofillContext(productId, { authContext })
-    : null;
+  const autofill =
+    AI_ASSISTANT_ENABLED && authContext.permissions.has("catalog:ai_research")
+      ? await getProductAutofillContext(productId, { authContext })
+      : null;
 
   return (
     <ProductEditor

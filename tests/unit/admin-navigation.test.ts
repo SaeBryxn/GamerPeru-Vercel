@@ -1,4 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+
+const features = vi.hoisted(() => ({ aiAssistant: true }));
+vi.mock("@/config/features", () => ({
+  get AI_ASSISTANT_ENABLED() {
+    return features.aiAssistant;
+  },
+}));
+
+afterEach(() => {
+  features.aiAssistant = true;
+});
 import {
   getAdminNavigation,
   groupAdminNavigation,
@@ -54,6 +65,10 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
       "/admin",
       "/admin/products/ai-import",
     ]);
+
+    features.aiAssistant = false;
+    expect(getAdminNavigation(researchPerms).map((item) => item.href)).toEqual(["/admin"]);
+    features.aiAssistant = true;
 
     const credentialsPerms = new Set<PermissionName>(["ai:manage_credentials"]);
     expect(getAdminNavigation(credentialsPerms).map((item) => item.href)).toEqual([

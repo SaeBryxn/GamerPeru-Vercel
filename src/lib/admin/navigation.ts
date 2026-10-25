@@ -1,3 +1,4 @@
+import { AI_ASSISTANT_ENABLED } from "@/config/features";
 import type { PermissionName } from "@/lib/auth/rbac";
 import type { AdminNavFolder, AdminNavFolderId, AdminNavGroup, AdminNavItem } from "./types";
 
@@ -159,6 +160,9 @@ export function groupAdminNavigation(
  */
 export function getAdminNavigation(permissions: Set<PermissionName>): AdminNavItem[] {
   return CANONICAL_ADMIN_NAV_ITEMS.filter((item) => {
+    if (item.id === "ai-product-assistant" && !AI_ASSISTANT_ENABLED) {
+      return false;
+    }
     if (!item.requiredPermission) {
       return true;
     }
