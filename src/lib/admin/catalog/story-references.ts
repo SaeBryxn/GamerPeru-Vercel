@@ -565,7 +565,15 @@ export async function validatePersistedStoryReferences(
   executor: StoryExecutor,
   productId: string,
   document: StrictPersistedStoryDocument,
-  options: { requirePublicRelatedProducts: boolean }
+  options: {
+    requirePublicRelatedProducts: boolean;
+    /**
+     * Related products are stored by slug, so deleting a product or changing its slug leaves
+     * other stories pointing at nothing. Admin reads skip those instead of failing the whole
+     * editor; saving still validates strictly, so the next save drops them for good.
+     */
+    skipMissingRelatedProducts?: boolean;
+  }
 ): Promise<void> {
   const mediaReferences = collectPersistedMedia(document);
   const mediaByObjectKey = await loadMediaByObjectKeys(
@@ -589,6 +597,7 @@ export async function validatePersistedStoryReferences(
       return;
     }
     block.payload.productSlugs.forEach((slug, relatedIndex) => {
+      if (options.skipMissingRelatedProducts && !relatedBySlug.has(slug)) return;
       assertRelatedProduct(
         relatedBySlug.get(slug),
         productId,
@@ -606,6 +615,7 @@ export async function convertPersistedStoryToAuthoring(
 ): Promise<AuthoringStoryDocument> {
   await validatePersistedStoryReferences(executor, productId, document, {
     requirePublicRelatedProducts: false,
+    skipMissingRelatedProducts: true,
   });
   const mediaByObjectKey = await loadMediaByObjectKeys(
     executor,
@@ -734,7 +744,10 @@ export async function convertPersistedStoryToAuthoring(
           type: block.type,
           payload: {
             title: block.payload.title,
-            productIds: block.payload.productSlugs.map((slug) => relatedBySlug.get(slug)?.id ?? ""),
+            productIds: block.payload.productSlugs.flatMap((slug) => {
+              const relatedId = relatedBySlug.get(slug)?.id;
+              return relatedId ? [relatedId] : [];
+            }),
           },
         };
     }

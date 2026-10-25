@@ -520,6 +520,7 @@ export async function getAdminProductStoryPreview(
 
   await validatePersistedStoryReferences(db, productId, persistedDocument, {
     requirePublicRelatedProducts: false,
+    skipMissingRelatedProducts: true,
   });
 
   const validatedBlocks = validateStoryBlocks(persistedDocument, {
