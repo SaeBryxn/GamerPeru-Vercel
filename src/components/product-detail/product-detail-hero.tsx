@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { MotionConfig } from "framer-motion";
 import type { ProductVariantDetail } from "@/lib/catalog/product-detail-types";
 import type { FormattedSpecRow } from "./hardware-specifications";
@@ -12,6 +12,7 @@ import {
   resolveDefaultFocusedIndex,
 } from "./product-media-gallery";
 import { ProductCommercePanel } from "./product-commerce-panel";
+import { buildVariantHref, findVariantFromSearch } from "./variant-url";
 import styles from "./product-detail-hero.module.css";
 
 export interface ProductDetailHeroProps {
@@ -62,6 +63,23 @@ export function ProductDetailHero({
   const defaultVariant = useMemo(() => resolveCanonicalDefaultVariant(variants), [variants]);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariantDetail>(defaultVariant);
 
+  // Each color has its own link (?color=blanco), as on other brand stores. The page itself stays
+  // one cached document: reading the query on the server would render it on every request, so the
+  // link is applied here after hydration and kept in sync without a navigation.
+  useEffect(() => {
+    const linked = findVariantFromSearch(variants, window.location.search);
+    if (linked) setSelectedVariant(linked);
+  }, [variants]);
+
+  const selectVariant = useCallback((variant: ProductVariantDetail) => {
+    setSelectedVariant(variant);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      buildVariantHref(window.location.href, variant)
+    );
+  }, []);
+
   // The photo the gallery opens on for this variant, reused as the sticky bar's thumbnail.
   const thumbnailKey = useMemo(() => {
     const gallery = buildEligibleGallery(media, primaryMedia, selectedVariant.id);
@@ -98,7 +116,7 @@ export function ProductDetailHero({
             variants={variants}
             media={media}
             selectedVariant={selectedVariant}
-            onSelectVariant={setSelectedVariant}
+            onSelectVariant={selectVariant}
             thumbnailKey={thumbnailKey}
             specHighlights={specHighlights}
             accessories={accessories}
