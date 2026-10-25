@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "@/components/app-link";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import {
   ArrowLeft,
   Copy,
@@ -2147,7 +2147,7 @@ function ProductEditorBody({
       <div className={styles.toastStack} aria-live="polite" data-testid="media-op-success">
         <AnimatePresence initial={false}>
           {toasts.map((toast) => (
-            <motion.div
+            <m.div
               key={toast.id}
               layout
               className={`${styles.toast} ${toast.tone === "error" ? styles.toastError : styles.toastSuccess}`}
@@ -2163,7 +2163,7 @@ function ProductEditorBody({
                 <CheckCircle2 size={15} aria-hidden="true" />
               )}
               <span>{toast.text}</span>
-            </motion.div>
+            </m.div>
           ))}
         </AnimatePresence>
       </div>

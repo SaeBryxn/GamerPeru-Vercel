@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import Link from "@/components/app-link";
 import { usePathname } from "next/navigation";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { Heart, LayoutGrid, MapPin, Package, UserRound, type LucideIcon } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { useAccountNavigate } from "./account-transition";
@@ -69,7 +69,7 @@ export function AccountNavigation({ ordersInTransit }: AccountNavigationProps) {
                 }}
               >
                 {isActive && (
-                  <motion.span
+                  <m.span
                     layoutId="account-nav-pill"
                     className={styles.navPill}
                     transition={prefersReducedMotion ? { duration: 0 } : PILL_TRANSITION}

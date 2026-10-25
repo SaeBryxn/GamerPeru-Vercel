@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AnimatePresence, motion, type Transition, type Variants } from "framer-motion";
+import { AnimatePresence, m, type Transition, type Variants } from "framer-motion";
 import {
   BatteryFull,
   Cpu,
@@ -93,7 +93,7 @@ export function SpecSwapBar({ specs, active }: SpecSwapBarProps): React.JSX.Elem
         ))}
       </dl>
       <AnimatePresence initial={false} custom={direction}>
-        <motion.div
+        <m.div
           key={showActive ? "active" : "rest"}
           className={styles.specRow}
           custom={direction}
@@ -107,7 +107,7 @@ export function SpecSwapBar({ specs, active }: SpecSwapBarProps): React.JSX.Elem
           {pair.map((spec) => (
             <SpecCell key={spec.key} spec={spec} />
           ))}
-        </motion.div>
+        </m.div>
       </AnimatePresence>
     </div>
   );

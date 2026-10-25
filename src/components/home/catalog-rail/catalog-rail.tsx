@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "@/components/app-link";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ProductCard } from "@/components/catalog";
 import { DomeButton, Icon } from "@/components/ui";
@@ -44,7 +44,7 @@ export function CatalogRail({ id, eyebrow, title, products, seeAll }: CatalogRai
 
       <div className={styles.stage}>
         <div className={styles.viewport} ref={rail.viewportRef}>
-          <motion.ul
+          <m.ul
             ref={rail.trackRef}
             className={styles.track}
             style={rail.isTouch ? undefined : { x: rail.x }}
@@ -63,7 +63,7 @@ export function CatalogRail({ id, eyebrow, title, products, seeAll }: CatalogRai
                 />
               </li>
             ))}
-          </motion.ul>
+          </m.ul>
         </div>
 
         <span className={`${styles.arrowSlot} ${styles.arrowSlotPrev}`}>

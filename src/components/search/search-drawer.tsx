@@ -4,7 +4,7 @@ import React, { useId, useLayoutEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "@/components/app-link";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, m, type Variants } from "framer-motion";
 import { Mic, Package, Search, X } from "lucide-react";
 import { CloseButton, FloatingClose, Icon, useFloatingClose } from "@/components/ui";
 import { getQueryCodePointLength } from "@/lib/search/normalization";
@@ -128,7 +128,7 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
     >
       <AnimatePresence onExitComplete={handleExitComplete}>
         {isOpen && (
-          <motion.div
+          <m.div
             key="overlay"
             {...floatingClose.targetProps}
             className={`${styles.overlay} ${floatingClose.targetProps.className}`}
@@ -142,7 +142,7 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
         )}
 
         {isOpen && (
-          <motion.div
+          <m.div
             key="panel"
             className={styles.panel}
             variants={PANEL_VARIANTS}
@@ -162,7 +162,7 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
               />
             </div>
 
-            <motion.form
+            <m.form
               role="search"
               aria-labelledby={titleId}
               className={styles.form}
@@ -210,7 +210,7 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
                   data-testid="search-voice-button"
                 >
                   {voice.isListening && (
-                    <motion.span
+                    <m.span
                       className={styles.listeningPulse}
                       initial={{ scale: 0.8, opacity: 0.6 }}
                       animate={{ scale: 1.6, opacity: 0 }}
@@ -221,25 +221,25 @@ export function SearchDrawer({ isOpen, onClose, suggestions = [] }: SearchDrawer
                   <Icon icon={Mic} size="md" aria-hidden="true" />
                 </button>
               </div>
-            </motion.form>
+            </m.form>
 
-            <motion.div className={styles.results} variants={SECTION_VARIANTS} aria-live="polite">
+            <m.div className={styles.results} variants={SECTION_VARIANTS} aria-live="polite">
               <DrawerSuggestions
                 state={predictive}
                 query={cleanQuery}
                 defaults={suggestions}
                 onNavigate={close}
               />
-            </motion.div>
+            </m.div>
 
             {canSearchAll && (
-              <motion.div className={styles.footer} variants={SECTION_VARIANTS}>
+              <m.div className={styles.footer} variants={SECTION_VARIANTS}>
                 <Link href={searchAllHref} className={styles.searchAllLink} onClick={close}>
                   Ver todos los resultados para &ldquo;{cleanQuery}&rdquo;
                 </Link>
-              </motion.div>
+              </m.div>
             )}
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
       {/*
@@ -277,9 +277,9 @@ function DefaultSuggestions({
     return <p className={styles.hintText}>Busca por producto, marca o categoría.</p>;
   }
   return (
-    <motion.div initial="hidden" animate="visible" variants={LIST_VARIANTS}>
+    <m.div initial="hidden" animate="visible" variants={LIST_VARIANTS}>
       {groups.map((group) => (
-        <motion.section
+        <m.section
           key={group.href}
           className={styles.suggestGroup}
           aria-label={group.title}
@@ -299,9 +299,9 @@ function DefaultSuggestions({
               </li>
             ))}
           </ul>
-        </motion.section>
+        </m.section>
       ))}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -350,13 +350,13 @@ function DrawerSuggestions({
   }
 
   return (
-    <motion.div key={query} initial="hidden" animate="visible" variants={LIST_VARIANTS}>
+    <m.div key={query} initial="hidden" animate="visible" variants={LIST_VARIANTS}>
       {products.length > 0 && (
         <section className={styles.group} aria-label="Productos sugeridos">
           <h3 className={styles.groupTitle}>Productos</h3>
-          <motion.ul className={styles.productList} variants={LIST_VARIANTS}>
+          <m.ul className={styles.productList} variants={LIST_VARIANTS}>
             {products.map((product) => (
-              <motion.li key={product.id} variants={ROW_VARIANTS}>
+              <m.li key={product.id} variants={ROW_VARIANTS}>
                 <Link
                   href={`/productos/${product.slug}`}
                   className={styles.productRow}
@@ -383,14 +383,14 @@ function DrawerSuggestions({
                     {formatCurrency(product.startingPriceCents)}
                   </span>
                 </Link>
-              </motion.li>
+              </m.li>
             ))}
-          </motion.ul>
+          </m.ul>
         </section>
       )}
 
       {(brands.length > 0 || categories.length > 0) && (
-        <motion.section
+        <m.section
           className={styles.group}
           aria-label="Marcas y categorías sugeridas"
           variants={ROW_VARIANTS}
@@ -416,8 +416,8 @@ function DrawerSuggestions({
               </li>
             ))}
           </ul>
-        </motion.section>
+        </m.section>
       )}
-    </motion.div>
+    </m.div>
   );
 }

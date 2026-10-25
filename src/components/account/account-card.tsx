@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useId, useState } from "react";
 import Link from "@/components/app-link";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import styles from "./account.module.css";
 
 const AccountCardContext = createContext<{ close: () => void } | null>(null);
@@ -66,15 +66,15 @@ export function AccountCard({ title, editLabel, editor, action, children }: Acco
       <div id={panelId} className={styles.cardBody}>
         <AnimatePresence mode="wait" initial={false}>
           {isEditing ? (
-            <motion.div key="editor" {...fade}>
+            <m.div key="editor" {...fade}>
               <AccountCardContext.Provider value={{ close: () => setIsEditing(false) }}>
                 <div className={styles.readable}>{editor}</div>
               </AccountCardContext.Provider>
-            </motion.div>
+            </m.div>
           ) : (
-            <motion.div key="summary" {...fade}>
+            <m.div key="summary" {...fade}>
               {children}
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
       </div>

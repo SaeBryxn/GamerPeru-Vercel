@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import styles from "./page-hero.module.css";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
@@ -33,22 +33,22 @@ export function PageHero({ title, description, meta, eyebrow }: PageHeroProps) {
   return (
     <header className={styles.hero}>
       {eyebrow && (
-        <motion.p className={styles.eyebrow} {...enter(0)}>
+        <m.p className={styles.eyebrow} {...enter(0)}>
           {eyebrow}
-        </motion.p>
+        </m.p>
       )}
-      <motion.h1 className={styles.title} {...enter(0.04)}>
+      <m.h1 className={styles.title} {...enter(0.04)}>
         {title}
-      </motion.h1>
+      </m.h1>
       {description && (
-        <motion.p className={styles.description} {...enter(0.12)}>
+        <m.p className={styles.description} {...enter(0.12)}>
           {description}
-        </motion.p>
+        </m.p>
       )}
       {meta && (
-        <motion.p className={styles.meta} {...enter(0.18)}>
+        <m.p className={styles.meta} {...enter(0.18)}>
           {meta}
-        </motion.p>
+        </m.p>
       )}
     </header>
   );

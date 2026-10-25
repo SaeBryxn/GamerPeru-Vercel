@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, m, type Variants } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import { CloseButton, DomeButton, Icon } from "@/components/ui";
 import { formatCentsToPenDecimal, parsePenStringToCents } from "@/lib/discovery-filters/pen-parser";
@@ -300,7 +300,7 @@ export function FilterDrawer({
     >
       <AnimatePresence onExitComplete={handleExitComplete}>
         {isOpen && (
-          <motion.div
+          <m.div
             key="overlay"
             className={styles.overlay}
             onClick={onClose}
@@ -311,7 +311,7 @@ export function FilterDrawer({
           />
         )}
         {isOpen && (
-          <motion.div
+          <m.div
             key="panel"
             className={styles.panel}
             variants={PANEL_VARIANTS}
@@ -333,7 +333,7 @@ export function FilterDrawer({
             </header>
 
             <div className={styles.body}>
-              <motion.div className={styles.sortField} variants={SECTION_VARIANTS}>
+              <m.div className={styles.sortField} variants={SECTION_VARIANTS}>
                 <label htmlFor="filter-drawer-sort" className={styles.sortFieldLabel}>
                   Ordenar por
                 </label>
@@ -358,9 +358,9 @@ export function FilterDrawer({
                   className={styles.sortChevron}
                   aria-hidden="true"
                 />
-              </motion.div>
+              </m.div>
 
-              <motion.div className={styles.group} variants={SECTION_VARIANTS}>
+              <m.div className={styles.group} variants={SECTION_VARIANTS}>
                 <button
                   type="button"
                   className={styles.accordionTrigger}
@@ -369,19 +369,19 @@ export function FilterDrawer({
                   onClick={() => setIsPriceOpen((open) => !open)}
                 >
                   <span className={styles.groupTitle}>Precio</span>
-                  <motion.span
+                  <m.span
                     className={styles.accordionChevron}
                     initial={false}
                     animate={{ rotate: isPriceOpen ? 180 : 0 }}
                     transition={{ type: "spring", stiffness: 420, damping: 30 }}
                   >
                     <Icon icon={ChevronDown} size="sm" aria-hidden="true" />
-                  </motion.span>
+                  </m.span>
                 </button>
 
                 <AnimatePresence initial={false}>
                   {isPriceOpen && (
-                    <motion.div
+                    <m.div
                       id="filter-drawer-price"
                       className={styles.accordionContent}
                       initial={{ height: 0, opacity: 0 }}
@@ -435,13 +435,13 @@ export function FilterDrawer({
                           </label>
                         </div>
                       </div>
-                    </motion.div>
+                    </m.div>
                   )}
                 </AnimatePresence>
-              </motion.div>
+              </m.div>
 
               {showCategoryFilter && (
-                <motion.div className={styles.group} variants={SECTION_VARIANTS}>
+                <m.div className={styles.group} variants={SECTION_VARIANTS}>
                   <h3 className={styles.groupTitle}>Categorías</h3>
                   <div className={styles.checkboxList}>
                     {facets.categories.map((cat) => (
@@ -457,11 +457,11 @@ export function FilterDrawer({
                       </label>
                     ))}
                   </div>
-                </motion.div>
+                </m.div>
               )}
 
               {showBrandFilter && (
-                <motion.div className={styles.group} variants={SECTION_VARIANTS}>
+                <m.div className={styles.group} variants={SECTION_VARIANTS}>
                   <h3 className={styles.groupTitle}>Marcas</h3>
                   <div className={styles.checkboxList}>
                     {facets.brands.map((brand) => (
@@ -477,14 +477,14 @@ export function FilterDrawer({
                       </label>
                     ))}
                   </div>
-                </motion.div>
+                </m.div>
               )}
 
               {facets.technicalFacets.map((facet) => {
                 if (facet.kind === "ENUM_MULTI") {
                   const selectedValues = (draftTechnical[facet.field.key] as string[]) ?? [];
                   return (
-                    <motion.div
+                    <m.div
                       key={facet.field.key}
                       className={styles.group}
                       variants={SECTION_VARIANTS}
@@ -504,14 +504,14 @@ export function FilterDrawer({
                           </label>
                         ))}
                       </div>
-                    </motion.div>
+                    </m.div>
                   );
                 }
 
                 if (facet.kind === "NUMBER_RANGE") {
                   const rawRange = draftTechRawNumbers[facet.field.key] ?? {};
                   return (
-                    <motion.div
+                    <m.div
                       key={facet.field.key}
                       className={styles.group}
                       variants={SECTION_VARIANTS}
@@ -563,13 +563,13 @@ export function FilterDrawer({
                           />
                         </div>
                       </div>
-                    </motion.div>
+                    </m.div>
                   );
                 }
 
                 if (facet.kind === "BOOLEAN") {
                   return (
-                    <motion.div
+                    <m.div
                       key={facet.field.key}
                       className={styles.group}
                       variants={SECTION_VARIANTS}
@@ -580,7 +580,7 @@ export function FilterDrawer({
                         onChange={() => handleTechBooleanToggle(facet.field.key)}
                         testId={`filter-tech-${facet.field.key}`}
                       />
-                    </motion.div>
+                    </m.div>
                   );
                 }
 
@@ -588,7 +588,7 @@ export function FilterDrawer({
               })}
             </div>
 
-            <motion.footer className={styles.footer} variants={SECTION_VARIANTS}>
+            <m.footer className={styles.footer} variants={SECTION_VARIANTS}>
               <DomeButton
                 tone="dark"
                 className={styles.applyButton}
@@ -605,8 +605,8 @@ export function FilterDrawer({
               >
                 Limpiar
               </button>
-            </motion.footer>
-          </motion.div>
+            </m.footer>
+          </m.div>
         )}
       </AnimatePresence>
     </dialog>

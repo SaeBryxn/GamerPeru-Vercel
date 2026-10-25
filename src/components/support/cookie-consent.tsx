@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "@/components/app-link";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { Cookie } from "lucide-react";
 import { DomeButton } from "@/components/ui";
 import styles from "./cookie-consent.module.css";
@@ -47,7 +47,7 @@ export function CookieConsent() {
   return (
     <AnimatePresence>
       {isVisible && (
-        <motion.section
+        <m.section
           className={styles.banner}
           role="region"
           aria-label="Aviso de cookies"
@@ -74,7 +74,7 @@ export function CookieConsent() {
               Entendido
             </DomeButton>
           </div>
-        </motion.section>
+        </m.section>
       )}
     </AnimatePresence>
   );

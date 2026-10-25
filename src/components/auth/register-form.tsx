@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "@/components/app-link";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Check, Circle } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { signupSchema } from "@/lib/auth/validation";
@@ -104,16 +104,16 @@ export function RegisterForm() {
   const isBusy = isSubmitting || isGoogleSubmitting;
 
   return (
-    <motion.div variants={AUTH_LIST_VARIANTS} initial="hidden" animate="visible">
+    <m.div variants={AUTH_LIST_VARIANTS} initial="hidden" animate="visible">
       {serverError ? (
-        <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.alerts}>
+        <m.div variants={AUTH_ITEM_VARIANTS} className={styles.alerts}>
           <div role="alert" className={`${styles.alert} ${styles.alertError}`}>
             {serverError}
           </div>
-        </motion.div>
+        </m.div>
       ) : null}
 
-      <motion.div variants={AUTH_ITEM_VARIANTS}>
+      <m.div variants={AUTH_ITEM_VARIANTS}>
         <button
           type="button"
           onClick={handleGoogleRegister}
@@ -124,14 +124,14 @@ export function RegisterForm() {
           <GoogleIcon className={styles.googleIcon} />
           <span>{isGoogleSubmitting ? "Conectando con Google..." : "Continuar con Google"}</span>
         </button>
-      </motion.div>
+      </m.div>
 
-      <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.divider}>
+      <m.div variants={AUTH_ITEM_VARIANTS} className={styles.divider}>
         o
-      </motion.div>
+      </m.div>
 
       <form onSubmit={handleSubmit} noValidate className={styles.form}>
-        <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.nameRow}>
+        <m.div variants={AUTH_ITEM_VARIANTS} className={styles.nameRow}>
           <AuthField
             id="register-firstName"
             name="firstName"
@@ -157,9 +157,9 @@ export function RegisterForm() {
             error={fieldErrors.lastName}
             disabled={isSubmitting || isGoogleSubmitting}
           />
-        </motion.div>
+        </m.div>
 
-        <motion.div variants={AUTH_ITEM_VARIANTS}>
+        <m.div variants={AUTH_ITEM_VARIANTS}>
           <AuthField
             id="register-email"
             name="email"
@@ -172,9 +172,9 @@ export function RegisterForm() {
             error={fieldErrors.email}
             disabled={isSubmitting || isGoogleSubmitting}
           />
-        </motion.div>
+        </m.div>
 
-        <motion.div variants={AUTH_ITEM_VARIANTS}>
+        <m.div variants={AUTH_ITEM_VARIANTS}>
           <PasswordField
             id="register-password"
             name="password"
@@ -213,9 +213,9 @@ export function RegisterForm() {
             error={fieldErrors.password}
             disabled={isSubmitting || isGoogleSubmitting}
           />
-        </motion.div>
+        </m.div>
 
-        <motion.div variants={AUTH_ITEM_VARIANTS}>
+        <m.div variants={AUTH_ITEM_VARIANTS}>
           <PasswordField
             id="register-confirmPassword"
             name="confirmPassword"
@@ -227,9 +227,9 @@ export function RegisterForm() {
             error={fieldErrors.confirmPassword}
             disabled={isSubmitting || isGoogleSubmitting}
           />
-        </motion.div>
+        </m.div>
 
-        <motion.p variants={AUTH_ITEM_VARIANTS} className={styles.legalNote}>
+        <m.p variants={AUTH_ITEM_VARIANTS} className={styles.legalNote}>
           Al crear tu cuenta aceptas los{" "}
           <Link href="/legal/terminos" className={styles.link} target="_blank">
             Términos de servicio
@@ -239,21 +239,21 @@ export function RegisterForm() {
             Política de privacidad
           </Link>
           .
-        </motion.p>
+        </m.p>
 
         <AuthSubmitButton disabled={isBusy} variants={AUTH_ITEM_VARIANTS}>
           {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}
         </AuthSubmitButton>
       </form>
 
-      <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.footerLinks}>
+      <m.div variants={AUTH_ITEM_VARIANTS} className={styles.footerLinks}>
         <p>
           ¿Ya tienes una cuenta?{" "}
           <Link href="/auth/login" className={styles.link}>
             Inicia sesión aquí
           </Link>
         </p>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }

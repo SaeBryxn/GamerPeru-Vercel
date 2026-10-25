@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "@/components/app-link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import type { User } from "@supabase/supabase-js";
 import { CheckCircle2 } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -130,7 +130,7 @@ export function LoginForm() {
       */}
       {welcomeName !== null
         ? createPortal(
-            <motion.div
+            <m.div
               className={styles.welcome}
               role="status"
               aria-live="polite"
@@ -138,28 +138,28 @@ export function LoginForm() {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.35, ease: "easeOut" }}
             >
-              <motion.p
+              <m.p
                 className={styles.welcomeTitle}
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
               >
                 {welcomeName ? `Bienvenido, ${welcomeName}` : "Bienvenido"}
-              </motion.p>
-              <motion.p
+              </m.p>
+              <m.p
                 className={styles.welcomeHint}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
               >
                 Preparando tu cuenta…
-              </motion.p>
-            </motion.div>,
+              </m.p>
+            </m.div>,
             document.body
           )
         : null}
 
-      <motion.div
+      <m.div
         variants={AUTH_LIST_VARIANTS}
         initial="hidden"
         animate="visible"
@@ -167,7 +167,7 @@ export function LoginForm() {
         inert={welcomeName !== null ? true : undefined}
       >
         {successMessage || errorMessage ? (
-          <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.alerts}>
+          <m.div variants={AUTH_ITEM_VARIANTS} className={styles.alerts}>
             {successMessage ? (
               <div role="status" className={`${styles.alert} ${styles.alertSuccess}`}>
                 <CheckCircle2 className={styles.alertIcon} aria-hidden="true" />
@@ -179,10 +179,10 @@ export function LoginForm() {
                 {errorMessage}
               </div>
             ) : null}
-          </motion.div>
+          </m.div>
         ) : null}
 
-        <motion.div variants={AUTH_ITEM_VARIANTS}>
+        <m.div variants={AUTH_ITEM_VARIANTS}>
           <button
             type="button"
             onClick={handleGoogleLogin}
@@ -193,14 +193,14 @@ export function LoginForm() {
             <GoogleIcon className={styles.googleIcon} />
             <span>{isGoogleSubmitting ? "Conectando con Google..." : "Continuar con Google"}</span>
           </button>
-        </motion.div>
+        </m.div>
 
-        <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.divider}>
+        <m.div variants={AUTH_ITEM_VARIANTS} className={styles.divider}>
           o
-        </motion.div>
+        </m.div>
 
         <form onSubmit={handleSubmit} noValidate className={styles.form}>
-          <motion.div variants={AUTH_ITEM_VARIANTS}>
+          <m.div variants={AUTH_ITEM_VARIANTS}>
             <AuthField
               id="login-email"
               name="email"
@@ -213,9 +213,9 @@ export function LoginForm() {
               error={fieldErrors.email}
               disabled={isBusy}
             />
-          </motion.div>
+          </m.div>
 
-          <motion.div variants={AUTH_ITEM_VARIANTS}>
+          <m.div variants={AUTH_ITEM_VARIANTS}>
             <PasswordField
               id="login-password"
               name="password"
@@ -227,14 +227,14 @@ export function LoginForm() {
               error={fieldErrors.password}
               disabled={isBusy}
             />
-          </motion.div>
+          </m.div>
 
           <AuthSubmitButton disabled={isBusy} variants={AUTH_ITEM_VARIANTS}>
             {isSubmitting ? "Iniciando sesión..." : "Iniciar sesión"}
           </AuthSubmitButton>
         </form>
 
-        <motion.div variants={AUTH_ITEM_VARIANTS} className={styles.footerLinks}>
+        <m.div variants={AUTH_ITEM_VARIANTS} className={styles.footerLinks}>
           <Link href="/auth/olvide-password" className={styles.link}>
             ¿Olvidaste tu contraseña?
           </Link>
@@ -244,8 +244,8 @@ export function LoginForm() {
               Regístrate aquí
             </Link>
           </p>
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
     </>
   );
 }

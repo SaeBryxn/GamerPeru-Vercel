@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { HomeImage } from "../home-image";
 import styles from "./bento-showcase.module.css";
 
@@ -39,7 +39,7 @@ export function BentoShowcase({ title, description, images }: BentoShowcaseProps
   const [wide, square, tall] = images;
 
   return (
-    <motion.section
+    <m.section
       className={styles.section}
       aria-labelledby="bento-title"
       variants={SECTION_VARIANTS}
@@ -48,39 +48,39 @@ export function BentoShowcase({ title, description, images }: BentoShowcaseProps
       viewport={{ once: true, amount: 0.2 }}
       data-testid="bento-showcase"
     >
-      <motion.div className={styles.content} variants={TILE_VARIANTS}>
+      <m.div className={styles.content} variants={TILE_VARIANTS}>
         <h2 id="bento-title" className={styles.title}>
           {title[0]} <span className={styles.titleAccent}>{title[1]}</span>
         </h2>
         <p className={styles.description}>{description}</p>
-      </motion.div>
+      </m.div>
 
       <div className={styles.grid}>
-        <motion.div
+        <m.div
           className={`${styles.tile} ${styles.tileWide}`}
           variants={TILE_VARIANTS}
           whileHover={{ scale: 1.03 }}
           transition={HOVER_SPRING}
         >
           <HomeImage src={wide.src} alt={wide.alt} sizes="(max-width: 1023px) 90vw, 30vw" />
-        </motion.div>
-        <motion.div
+        </m.div>
+        <m.div
           className={`${styles.tile} ${styles.tileSquare}`}
           variants={TILE_VARIANTS}
           whileHover={{ scale: 1.03 }}
           transition={HOVER_SPRING}
         >
           <HomeImage src={square.src} alt={square.alt} sizes="(max-width: 1023px) 45vw, 30vw" />
-        </motion.div>
-        <motion.div
+        </m.div>
+        <m.div
           className={`${styles.tile} ${styles.tileTall}`}
           variants={TILE_VARIANTS}
           whileHover={{ scale: 1.03 }}
           transition={HOVER_SPRING}
         >
           <HomeImage src={tall.src} alt={tall.alt} sizes="(max-width: 1023px) 45vw, 30vw" />
-        </motion.div>
+        </m.div>
       </div>
-    </motion.section>
+    </m.section>
   );
 }

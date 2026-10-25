@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { BrandGlyph, DomeButton, DomeLink } from "@/components/ui";
 import { PROMO_PILL, SOCIAL_LINKS } from "@/config/social-links";
 import styles from "./social-rail.module.css";
@@ -15,7 +15,7 @@ const HOVER_SPRING = { type: "spring", stiffness: 420, damping: 24 } as const;
  */
 export function SocialRail() {
   return (
-    <motion.aside
+    <m.aside
       className={styles.rail}
       aria-label="Redes sociales de Gamer Perú"
       initial={{ opacity: 0, x: -24, y: "-50%" }}
@@ -60,7 +60,7 @@ export function SocialRail() {
       </ul>
 
       {PROMO_PILL.href ? (
-        <motion.a
+        <m.a
           href={PROMO_PILL.href}
           className={styles.promo}
           whileHover={{ scale: 1.06 }}
@@ -69,9 +69,9 @@ export function SocialRail() {
           data-testid="social-rail-promo"
         >
           {PROMO_PILL.label}
-        </motion.a>
+        </m.a>
       ) : (
-        <motion.span
+        <m.span
           className={styles.promo}
           whileHover={{ scale: 1.06 }}
           transition={HOVER_SPRING}
@@ -80,8 +80,8 @@ export function SocialRail() {
           data-testid="social-rail-promo"
         >
           {PROMO_PILL.label}
-        </motion.span>
+        </m.span>
       )}
-    </motion.aside>
+    </m.aside>
   );
 }

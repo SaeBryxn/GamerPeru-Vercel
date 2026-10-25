@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { DomeButton } from "@/components/ui";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -66,7 +66,7 @@ export function StickyBuyBar({
   return (
     <AnimatePresence>
       {isVisible && (
-        <motion.div
+        <m.div
           className={styles.bar}
           role="region"
           aria-label="Compra rápida"
@@ -95,7 +95,7 @@ export function StickyBuyBar({
           >
             {label}
           </DomeButton>
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

@@ -2,7 +2,7 @@
 
 import React, { useLayoutEffect, useRef, useState } from "react";
 import {
-  motion,
+  m,
   useMotionValueEvent,
   useScroll,
   useTransform,
@@ -105,14 +105,14 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
   };
 
   return (
-    <motion.section
+    <m.section
       ref={sectionRef}
       className={styles.hero}
       aria-label="Portada principal de Gamer Perú"
       data-video-hero=""
       data-testid="video-hero"
     >
-      <motion.div
+      <m.div
         className={styles.curtain}
         drag={isLite ? false : "y"}
         dragConstraints={{ top: 0, bottom: 0 }}
@@ -158,7 +158,7 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
           )}
         </div>
         <div className={styles.scrim} aria-hidden="true" />
-        <motion.div
+        <m.div
           className={styles.dim}
           style={isLite ? undefined : { opacity: dim }}
           aria-hidden="true"
@@ -167,7 +167,7 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
         {/* The page still needs its H1; the stage itself stays wordless. */}
         <h1 className={styles.heading}>{heading}</h1>
 
-        <motion.button
+        <m.button
           type="button"
           className={styles.scrollHint}
           onClick={reveal}
@@ -177,17 +177,17 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
           data-testid="video-hero-scroll-hint"
         >
           <span className={styles.scrollHintLabel}>{scrollHintLabel}</span>
-          <motion.span className={styles.scrollHintTint} variants={HINT_TINT_VARIANTS}>
-            <motion.span
+          <m.span className={styles.scrollHintTint} variants={HINT_TINT_VARIANTS}>
+            <m.span
               className={styles.scrollHintIcon}
               animate={allowMotion ? { y: [0, 8, 0] } : undefined}
               transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
             >
               <Icon icon={ChevronDown} size="md" aria-hidden="true" />
-            </motion.span>
-          </motion.span>
-        </motion.button>
-      </motion.div>
-    </motion.section>
+            </m.span>
+          </m.span>
+        </m.button>
+      </m.div>
+    </m.section>
   );
 }

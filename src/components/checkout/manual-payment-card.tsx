@@ -2,7 +2,7 @@
 
 import React, { useId, useRef, useState } from "react";
 import Image from "next/image";
-import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion, type Variants } from "framer-motion";
 import {
   AlertCircle,
   CheckCircle2,
@@ -432,7 +432,7 @@ export function ManualPaymentCard({
 
           <AnimatePresence initial={false}>
             {errorMessage && (
-              <motion.div
+              <m.div
                 key="error"
                 className={styles.noticeMotion}
                 initial={prefersReducedMotion ? false : { opacity: 0, height: 0, y: -4 }}
@@ -468,7 +468,7 @@ export function ManualPaymentCard({
                     )}
                   </div>
                 </div>
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
 
@@ -507,7 +507,7 @@ export function ManualPaymentCard({
             </span>
 
             {!selectedFile ? (
-              <motion.label
+              <m.label
                 htmlFor={fileInputId}
                 className={`${styles.dropzone} ${isDragging ? styles.dropzoneActive : ""}`}
                 data-testid="manual-payment-dropzone"
@@ -537,21 +537,21 @@ export function ManualPaymentCard({
                   onChange={handleFileChange}
                   disabled={isSubmitting}
                 />
-                <motion.span
+                <m.span
                   className={styles.dropzoneIcon}
                   variants={prefersReducedMotion ? undefined : DROPZONE_ICON_VARIANTS}
                   transition={SPRING}
                   aria-hidden="true"
                 >
                   <UploadCloud size={26} />
-                </motion.span>
+                </m.span>
                 <span className={styles.dropzoneTitle}>
                   {isDragging
                     ? "Suelta la imagen aquí"
                     : "Arrastra tu comprobante o haz clic para adjuntarlo"}
                 </span>
                 <span className={styles.helperText}>JPG, PNG o WebP · máximo 5 MB</span>
-              </motion.label>
+              </m.label>
             ) : (
               <div className={styles.filePreview} data-testid="manual-payment-file-preview">
                 <div className={styles.filePreviewInfo}>
@@ -605,7 +605,7 @@ export function ManualPaymentCard({
             />
           </div>
 
-          <motion.button
+          <m.button
             type="submit"
             disabled={isSubmitting}
             className={styles.submitButton}
@@ -625,7 +625,7 @@ export function ManualPaymentCard({
                 <span>Enviar Comprobante de Pago</span>
               </>
             )}
-          </motion.button>
+          </m.button>
         </form>
       )}
     </section>

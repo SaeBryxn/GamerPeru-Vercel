@@ -3,16 +3,16 @@
 import React from "react";
 import Link from "@/components/app-link";
 import { ArrowRight } from "lucide-react";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { Icon, type IconSize } from "@/components/ui";
 import styles from "./mega-menu-arrow-link.module.css";
 
-const MotionLink = motion.create(Link);
+const MotionLink = m.create(Link);
 
 /**
  * Hover state shared by every arrow in the mega-menus: the arrow turns to
  * point straight down and dips slightly. Exported so whole-card links can drive
- * their own arrow with the same motion.
+ * their own arrow with the same m.
  */
 export const ARROW_VARIANTS: Variants = {
   rest: { rotate: 0, y: 0 },
@@ -26,9 +26,9 @@ export interface ArrowProps {
 /** Arrow that follows the nearest ancestor animating the "rest"/"hover" variants. */
 export function MegaMenuArrow({ size = "sm" }: ArrowProps) {
   return (
-    <motion.span className={styles.arrow} variants={ARROW_VARIANTS}>
+    <m.span className={styles.arrow} variants={ARROW_VARIANTS}>
       <Icon icon={ArrowRight} size={size} aria-hidden="true" />
-    </motion.span>
+    </m.span>
   );
 }
 

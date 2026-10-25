@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import styles from "./auth.module.css";
 
 interface AuthSubmitButtonProps {
@@ -13,7 +13,7 @@ interface AuthSubmitButtonProps {
 
 export function AuthSubmitButton({ disabled = false, variants, children }: AuthSubmitButtonProps) {
   return (
-    <motion.button
+    <m.button
       type="submit"
       variants={variants}
       disabled={disabled}
@@ -22,6 +22,6 @@ export function AuthSubmitButton({ disabled = false, variants, children }: AuthS
       whileTap={disabled ? undefined : { scale: 0.98 }}
     >
       {children}
-    </motion.button>
+    </m.button>
   );
 }

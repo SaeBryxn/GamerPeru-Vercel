@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { formatCurrency } from "@/lib/utils/currency";
 import styles from "./filter-drawer.module.css";
 
@@ -34,7 +34,7 @@ export function PriceRangeSlider({
   return (
     <div className={styles.slider}>
       <div className={styles.sliderTrack} aria-hidden="true">
-        <motion.span
+        <m.span
           className={styles.sliderFill}
           initial={false}
           animate={{

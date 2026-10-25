@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { Heart } from "lucide-react";
 import { useOptionalWishlist } from "./wishlist-provider";
 import styles from "./wishlist-button.module.css";
@@ -34,7 +34,7 @@ export function WishlistButton({
   const saved = isSaved(productId);
 
   return (
-    <motion.button
+    <m.button
       type="button"
       className={[styles.button, styles[variant], className].filter(Boolean).join(" ")}
       aria-pressed={saved}
@@ -57,7 +57,7 @@ export function WishlistButton({
         <Heart className={styles.outline} size={18} strokeWidth={2} />
         <AnimatePresence initial={false}>
           {saved && (
-            <motion.span
+            <m.span
               key="fill"
               className={styles.fill}
               initial={reduceMotion ? { opacity: 0 } : { scale: 0, opacity: 0 }}
@@ -70,12 +70,12 @@ export function WishlistButton({
               transition={POP}
             >
               <Heart size={18} strokeWidth={2} fill="currentColor" />
-            </motion.span>
+            </m.span>
           )}
         </AnimatePresence>
         <AnimatePresence>
           {saved && !reduceMotion && (
-            <motion.span
+            <m.span
               key="burst"
               className={styles.burst}
               initial={{ scale: 0.6, opacity: 0.55 }}
@@ -86,6 +86,6 @@ export function WishlistButton({
           )}
         </AnimatePresence>
       </span>
-    </motion.button>
+    </m.button>
   );
 }

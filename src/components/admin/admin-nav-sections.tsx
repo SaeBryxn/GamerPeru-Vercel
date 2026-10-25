@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "@/components/app-link";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import {
   ChevronDown,
   Boxes,
@@ -131,7 +131,7 @@ export function AdminNavSections({
         >
           {/* One shared marker glides between entries: a tween, never a bounce. */}
           {isActive && (
-            <motion.span
+            <m.span
               layoutId={markerId}
               className={styles.navActiveMarker}
               transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}

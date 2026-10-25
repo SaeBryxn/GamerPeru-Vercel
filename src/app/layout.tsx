@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { MotionProvider } from "@/components/ui/motion-provider/motion-provider";
 import { APP_CONFIG } from "@/config/app";
 import "./globals.css";
 
@@ -43,7 +44,9 @@ export default function RootLayout({
       // The admin theme script sets data-admin-theme here before hydration, on purpose.
       suppressHydrationWarning
     >
-      <body>{children}</body>
+      <body>
+        <MotionProvider>{children}</MotionProvider>
+      </body>
     </html>
   );
 }

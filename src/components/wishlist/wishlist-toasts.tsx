@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import Link from "@/components/app-link";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { CircleAlert, Heart, LogIn } from "lucide-react";
 import styles from "./wishlist-toasts.module.css";
 
@@ -34,7 +34,7 @@ export function WishlistToasts({ toasts }: { toasts: WishlistToast[] }) {
     <div ref={viewportRef} popover="manual" className={styles.viewport} aria-live="polite">
       <AnimatePresence>
         {toasts.map((toast) => (
-          <motion.div
+          <m.div
             key={toast.id}
             role={toast.tone === "error" ? "alert" : "status"}
             className={styles.toast}
@@ -58,7 +58,7 @@ export function WishlistToasts({ toasts }: { toasts: WishlistToast[] }) {
                 {toast.action.label}
               </Link>
             )}
-          </motion.div>
+          </m.div>
         ))}
       </AnimatePresence>
     </div>

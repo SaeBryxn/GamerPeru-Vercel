@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, useReducedMotion, type Variants } from "framer-motion";
+import { m, useReducedMotion, type Variants } from "framer-motion";
 import { HomeImage } from "../home-image";
 import styles from "./split-showcase.module.css";
 
@@ -41,7 +41,7 @@ export function SplitShowcase({ eyebrow, title, features, image }: SplitShowcase
   const prefersReducedMotion = useReducedMotion();
 
   return (
-    <motion.section
+    <m.section
       className={styles.section}
       aria-labelledby="split-showcase-title"
       variants={SECTION_VARIANTS}
@@ -50,34 +50,34 @@ export function SplitShowcase({ eyebrow, title, features, image }: SplitShowcase
       viewport={{ once: true, amount: 0.2 }}
       data-testid="split-showcase"
     >
-      <motion.div className={styles.stage} variants={BLOCK_VARIANTS}>
+      <m.div className={styles.stage} variants={BLOCK_VARIANTS}>
         <div className={styles.panel} aria-hidden="true" />
-        <motion.div
+        <m.div
           className={styles.floatingImage}
           animate={prefersReducedMotion ? undefined : { y: [0, -18, 0] }}
           transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
         >
           <HomeImage src={image.src} alt={image.alt} sizes="(max-width: 1023px) 90vw, 40vw" />
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
 
       <div className={styles.content}>
-        <motion.h2 id="split-showcase-title" className={styles.title} variants={BLOCK_VARIANTS}>
+        <m.h2 id="split-showcase-title" className={styles.title} variants={BLOCK_VARIANTS}>
           {title}
-        </motion.h2>
-        <motion.p className={styles.eyebrow} variants={BLOCK_VARIANTS}>
+        </m.h2>
+        <m.p className={styles.eyebrow} variants={BLOCK_VARIANTS}>
           {eyebrow}
-        </motion.p>
+        </m.p>
 
-        <motion.dl className={styles.features} variants={BLOCK_VARIANTS}>
+        <m.dl className={styles.features} variants={BLOCK_VARIANTS}>
           {features.map((feature) => (
             <div key={feature.title} className={styles.feature}>
               <dt className={styles.featureTitle}>{feature.title}</dt>
               <dd className={styles.featureText}>{feature.description}</dd>
             </div>
           ))}
-        </motion.dl>
+        </m.dl>
       </div>
-    </motion.section>
+    </m.section>
   );
 }

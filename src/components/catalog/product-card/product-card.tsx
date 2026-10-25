@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "@/components/app-link";
-import { motion, type Transition, type Variants } from "framer-motion";
+import { m, type Transition, type Variants } from "framer-motion";
 import { Eye } from "lucide-react";
 import { DomeButton, DomeLink } from "@/components/ui";
 import { WishlistButton } from "@/components/wishlist";
@@ -99,7 +99,7 @@ export function ProductCard({
 
   const overlays = href ? (
     <>
-      <motion.div
+      <m.div
         className={styles.quickViewSlot}
         variants={OVERLAY_VARIANTS}
         initial={false}
@@ -122,9 +122,9 @@ export function ProductCard({
         >
           <Eye size={18} aria-hidden="true" />
         </DomeButton>
-      </motion.div>
+      </m.div>
 
-      <motion.div
+      <m.div
         className={styles.actionSlot}
         variants={OVERLAY_VARIANTS}
         initial={false}
@@ -133,7 +133,7 @@ export function ProductCard({
         style={{ pointerEvents: isActive ? "auto" : "none" }}
       >
         {primaryAction}
-      </motion.div>
+      </m.div>
     </>
   ) : null;
 

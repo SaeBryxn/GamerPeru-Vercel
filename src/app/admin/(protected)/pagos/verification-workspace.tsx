@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 
 import React, { useCallback, useMemo, useState, useTransition } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { ArrowRight, Inbox } from "lucide-react";
 import {
   AdminCard,
@@ -157,7 +157,7 @@ export function VerificationWorkspace({
                 onClick={() => setFilter(option.id)}
               >
                 {filter === option.id && (
-                  <motion.span
+                  <m.span
                     layoutId="verification-filter"
                     className={styles.segmentThumb}
                     transition={{ duration: reduceMotion ? 0 : 0.2, ease: EASE }}
@@ -186,7 +186,7 @@ export function VerificationWorkspace({
           </AdminCard>
         ) : (
           <AdminCard>
-            <motion.ul
+            <m.ul
               className={styles.queueList}
               initial="hidden"
               animate="visible"
@@ -211,7 +211,7 @@ export function VerificationWorkspace({
                   />
                 ))}
               </AnimatePresence>
-            </motion.ul>
+            </m.ul>
           </AdminCard>
         )}
       </section>
@@ -271,7 +271,7 @@ function QueueRow({
     new Date(renderedAt).getTime() - new Date(item.claimedAt).getTime() > STALE_CLAIM_MS;
 
   return (
-    <motion.li
+    <m.li
       layout={!reduceMotion}
       className={styles.queueRow}
       variants={{
@@ -374,6 +374,6 @@ function QueueRow({
           </button>
         )}
       </div>
-    </motion.li>
+    </m.li>
   );
 }

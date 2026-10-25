@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { usePrefersReducedMotion } from "@/components/ui/use-prefers-reduced-motion";
 
 export interface RevealProps {
@@ -17,7 +17,7 @@ export function Reveal({ children, delay = 0, className, as = "div" }: RevealPro
   // Server and hydration render the animated variant; reduced-motion visitors switch to the
   // plain element right after, instead of hydrating a different tree.
   const reduceMotion = usePrefersReducedMotion() === true;
-  const Component = motion[as];
+  const Component = m[as];
 
   if (reduceMotion) {
     return <Component className={className}>{children}</Component>;

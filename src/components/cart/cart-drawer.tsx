@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "@/components/app-link";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, m, type Variants } from "framer-motion";
 import {
   AlertCircle,
   AlertTriangle,
@@ -149,7 +149,7 @@ export function CartDrawer(): React.JSX.Element | null {
       <AnimatePresence onExitComplete={() => dialogRef.current?.close()}>
         {isDrawerOpen && (
           <>
-            <motion.div
+            <m.div
               className={styles.backdrop}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -158,7 +158,7 @@ export function CartDrawer(): React.JSX.Element | null {
               onClick={closeDrawer}
               aria-hidden="true"
             />
-            <motion.div
+            <m.div
               className={styles.drawerPanel}
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
@@ -178,7 +178,7 @@ export function CartDrawer(): React.JSX.Element | null {
                   <span className={styles.headerMuted}>Vistos recientemente</span>
                 </div>
 
-                <motion.button
+                <m.button
                   ref={closeButtonRef}
                   type="button"
                   onClick={closeDrawer}
@@ -189,7 +189,7 @@ export function CartDrawer(): React.JSX.Element | null {
                   whileTap={{ scale: 0.92 }}
                 >
                   <X size={20} aria-hidden="true" />
-                </motion.button>
+                </m.button>
               </header>
 
               {lastError && (
@@ -280,7 +280,7 @@ export function CartDrawer(): React.JSX.Element | null {
 
                     <AnimatePresence initial={false} mode="popLayout">
                       {lines.map((line) => (
-                        <motion.div
+                        <m.div
                           key={line.variantId}
                           layout
                           initial={{ opacity: 0, y: 8 }}
@@ -295,7 +295,7 @@ export function CartDrawer(): React.JSX.Element | null {
                             onRemove={() => removeItem(line.variantId)}
                             disabled={isMutating || pendingVariantIds.has(line.variantId)}
                           />
-                        </motion.div>
+                        </m.div>
                       ))}
                     </AnimatePresence>
                   </div>
@@ -326,7 +326,7 @@ export function CartDrawer(): React.JSX.Element | null {
 
                   <AnimatePresence initial={false}>
                     {openTab && (
-                      <motion.div
+                      <m.div
                         key={openTab}
                         className={styles.utilityPanel}
                         initial={{ opacity: 0, height: 0 }}
@@ -361,7 +361,7 @@ export function CartDrawer(): React.JSX.Element | null {
                             Los códigos de descuento se aplican en el checkout.
                           </p>
                         )}
-                      </motion.div>
+                      </m.div>
                     )}
                   </AnimatePresence>
 
@@ -377,7 +377,7 @@ export function CartDrawer(): React.JSX.Element | null {
                     </div>
                   </div>
 
-                  <motion.div
+                  <m.div
                     variants={CHECKOUT_VARIANTS}
                     initial="rest"
                     animate="rest"
@@ -390,12 +390,12 @@ export function CartDrawer(): React.JSX.Element | null {
                       className={styles.checkoutDrawerButton}
                       data-testid="cart-drawer-checkout-button"
                     >
-                      <motion.span className={styles.checkoutLock} variants={LOCK_VARIANTS}>
+                      <m.span className={styles.checkoutLock} variants={LOCK_VARIANTS}>
                         <Lock size={15} aria-hidden="true" />
-                      </motion.span>
+                      </m.span>
                       <span>Finalizar compra</span>
                     </Link>
-                  </motion.div>
+                  </m.div>
 
                   <Link
                     href="/carrito"
@@ -407,7 +407,7 @@ export function CartDrawer(): React.JSX.Element | null {
                   </Link>
                 </footer>
               )}
-            </motion.div>
+            </m.div>
           </>
         )}
       </AnimatePresence>

@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { ArrowDown } from "lucide-react";
 import { HomeImage } from "@/components/home/home-image";
 import { DomeLink } from "@/components/ui";
@@ -55,22 +55,22 @@ export function DistributorHero({ products }: { products: ProductDiscoveryItem[]
 
       <div className={styles.inner}>
         <div className={styles.copy}>
-          <motion.p className={styles.eyebrow} {...enter(0)}>
+          <m.p className={styles.eyebrow} {...enter(0)}>
             Distribuidores
-          </motion.p>
-          <motion.h1 id="distribuidores-title" className={styles.title} {...enter(0.08)}>
+          </m.p>
+          <m.h1 id="distribuidores-title" className={styles.title} {...enter(0.08)}>
             Lleva periféricos de alto rendimiento a tu negocio
-          </motion.h1>
-          <motion.p className={styles.lead} {...enter(0.16)}>
+          </m.h1>
+          <m.p className={styles.lead} {...enter(0.16)}>
             Trabajamos con tiendas, centros gamer y equipos de esports de todo el Perú. Cuéntanos
             sobre tu negocio y conversemos.
-          </motion.p>
-          <motion.div {...enter(0.24)}>
+          </m.p>
+          <m.div {...enter(0.24)}>
             <DomeLink href="#solicitud" tone="light" domeRise="-60%" className={styles.cta}>
               Solicitar información
               <ArrowDown size={16} aria-hidden="true" />
             </DomeLink>
-          </motion.div>
+          </m.div>
         </div>
 
         {floating.length > 0 && (
@@ -80,7 +80,7 @@ export function DistributorHero({ products }: { products: ProductDiscoveryItem[]
               const url = resolvePublicMediaUrl(product.primaryMedia?.objectKey);
               if (!url) return null;
               return (
-                <motion.div
+                <m.div
                   key={product.id}
                   className={styles.floatItem}
                   style={{ left: offset.x, top: offset.y }}
@@ -108,7 +108,7 @@ export function DistributorHero({ products }: { products: ProductDiscoveryItem[]
                     sizes="(max-width: 1023px) 40vw, 320px"
                     className={styles.productImage}
                   />
-                </motion.div>
+                </m.div>
               );
             })}
           </div>

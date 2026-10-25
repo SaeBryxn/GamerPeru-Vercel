@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "@/components/app-link";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import type { MegaMenuCategory } from "../types";
 import { MegaMenuArrow, MegaMenuArrowLink } from "./mega-menu-arrow-link";
 import { MegaMenuImage } from "./mega-menu-image";
@@ -14,7 +14,7 @@ import {
 } from "./mega-menu-motion";
 import styles from "./mega-menu-series.module.css";
 
-const MotionLink = motion.create(Link);
+const MotionLink = m.create(Link);
 
 const LAYOUT_VARIANTS = staggerVariants(0.12, 0.12);
 const SERIES_VARIANTS = staggerVariants(0.08);
@@ -36,22 +36,18 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
   const promos = category.promos ?? [];
 
   return (
-    <motion.div
+    <m.div
       key={openCount}
       className={styles.seriesLayout}
       variants={LAYOUT_VARIANTS}
       initial="hidden"
       animate="visible"
     >
-      <motion.div className={styles.seriesZone} variants={SERIES_VARIANTS}>
+      <m.div className={styles.seriesZone} variants={SERIES_VARIANTS}>
         <h2 className={styles.visuallyHidden}>Series de {category.label}</h2>
         <div className={styles.seriesGrid}>
           {series.map((group) => (
-            <motion.section
-              key={group.title}
-              className={styles.seriesGroup}
-              variants={SLIDE_FROM_RIGHT}
-            >
+            <m.section key={group.title} className={styles.seriesGroup} variants={SLIDE_FROM_RIGHT}>
               <h3 className={styles.seriesTitle}>{group.title}</h3>
               <ul className={styles.seriesList}>
                 {group.items.map((item) => (
@@ -62,11 +58,11 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
                   </li>
                 ))}
               </ul>
-            </motion.section>
+            </m.section>
           ))}
         </div>
 
-        <motion.div className={styles.seriesFooter} variants={SLIDE_FROM_RIGHT}>
+        <m.div className={styles.seriesFooter} variants={SLIDE_FROM_RIGHT}>
           {category.guide && (
             <div className={styles.guideRow}>
               <MegaMenuArrowLink
@@ -83,12 +79,12 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
           <MegaMenuArrowLink href={category.href} className={styles.allLink} onClick={onNavigate}>
             Ver todo en {category.label}
           </MegaMenuArrowLink>
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
 
-      <motion.div className={styles.promoGrid} variants={PROMO_VARIANTS}>
+      <m.div className={styles.promoGrid} variants={PROMO_VARIANTS}>
         {promos.map((promo) => (
-          <motion.div key={promo.href} className={styles.promoItem} variants={RISE_FROM_BELOW}>
+          <m.div key={promo.href} className={styles.promoItem} variants={RISE_FROM_BELOW}>
             <MotionLink
               href={promo.href}
               className={styles.promoCard}
@@ -111,9 +107,9 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
                 <MegaMenuArrow size="md" />
               </span>
             </MotionLink>
-          </motion.div>
+          </m.div>
         ))}
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }

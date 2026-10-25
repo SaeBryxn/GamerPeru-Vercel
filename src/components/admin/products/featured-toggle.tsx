@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useId } from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Star } from "lucide-react";
 import styles from "./featured-toggle.module.css";
 
@@ -20,7 +20,7 @@ export function FeaturedToggle({ checked, onChange, disabled }: FeaturedTogglePr
 
   return (
     <label className={`${styles.card} ${checked ? styles.cardOn : ""}`}>
-      <motion.span
+      <m.span
         className={styles.icon}
         initial={false}
         animate={{ rotate: checked ? 72 : 0, scale: checked ? 1.05 : 1 }}
@@ -28,7 +28,7 @@ export function FeaturedToggle({ checked, onChange, disabled }: FeaturedTogglePr
         aria-hidden="true"
       >
         <Star size={16} fill={checked ? "currentColor" : "none"} />
-      </motion.span>
+      </m.span>
       <span className={styles.copy}>
         <span className={styles.title}>Producto destacado</span>
         <span id={descriptionId} className={styles.description}>
@@ -47,7 +47,7 @@ export function FeaturedToggle({ checked, onChange, disabled }: FeaturedTogglePr
         data-testid="input-featured"
       />
       <span className={styles.track} aria-hidden="true">
-        <motion.span
+        <m.span
           className={styles.knob}
           initial={false}
           animate={{ x: checked ? 16 : 0 }}

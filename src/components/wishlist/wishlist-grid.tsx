@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { Heart } from "lucide-react";
 import { ProductCard } from "@/components/catalog/product-card/product-card";
 import { DomeLink } from "@/components/ui";
@@ -43,7 +43,7 @@ export function WishlistGrid({ products }: { products: ProductDiscoveryItem[] })
     <ul className={styles.grid} data-testid="wishlist-grid">
       <AnimatePresence initial={false}>
         {visible.map((product) => (
-          <motion.li
+          <m.li
             key={product.id}
             className={styles.item}
             layout={!reduceMotion}
@@ -51,7 +51,7 @@ export function WishlistGrid({ products }: { products: ProductDiscoveryItem[] })
             transition={{ type: "spring", stiffness: 420, damping: 36 }}
           >
             <ProductCard product={product} href={`/productos/${product.slug}`} />
-          </motion.li>
+          </m.li>
         ))}
       </AnimatePresence>
     </ul>

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import Link from "@/components/app-link";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -1198,7 +1198,7 @@ export function CheckoutPageClient({
 
               <div className={styles.totalRow}>
                 <span className={styles.totalLabel}>Total</span>
-                <motion.span
+                <m.span
                   key={reviewedTotalCents}
                   className={styles.totalValue}
                   data-testid="checkout-total-value"
@@ -1207,7 +1207,7 @@ export function CheckoutPageClient({
                   transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                 >
                   {formatCurrency(reviewedTotalCents)}
-                </motion.span>
+                </m.span>
               </div>
             </div>
 

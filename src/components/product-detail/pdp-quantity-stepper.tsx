@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, m, type Variants } from "framer-motion";
 import { Minus, Plus } from "lucide-react";
 import { Icon, VisuallyHidden } from "@/components/ui";
 import styles from "./pdp-quantity-stepper.module.css";
@@ -54,7 +54,7 @@ export function PdpQuantityStepper({
   const renderStep = (delta: 1 | -1) => {
     const isDisabled = disabled || (delta < 0 ? value <= min : value >= max);
     return (
-      <motion.button
+      <m.button
         type="button"
         className={styles.stepButton}
         onClick={() => step(delta)}
@@ -69,7 +69,7 @@ export function PdpQuantityStepper({
         data-testid={delta < 0 ? "pdp-quantity-decrease" : "pdp-quantity-increase"}
       >
         <Icon icon={delta < 0 ? Minus : Plus} size="sm" aria-hidden="true" />
-      </motion.button>
+      </m.button>
     );
   };
 
@@ -82,7 +82,7 @@ export function PdpQuantityStepper({
       */}
       <span className={styles.value} aria-hidden="true">
         <AnimatePresence mode="popLayout" initial={false} custom={direction}>
-          <motion.span
+          <m.span
             key={value}
             className={styles.valueDigit}
             custom={direction}
@@ -92,7 +92,7 @@ export function PdpQuantityStepper({
             exit="exit"
           >
             {value}
-          </motion.span>
+          </m.span>
         </AnimatePresence>
       </span>
       <VisuallyHidden aria-live="polite" data-testid="pdp-quantity-value">

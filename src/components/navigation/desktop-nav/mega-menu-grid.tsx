@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "@/components/app-link";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Cpu, Keyboard, Mouse, Usb, type LucideIcon } from "lucide-react";
 import type { MegaMenuCategory, MegaMenuTileIcon } from "../types";
 import { MegaMenuArrow, MegaMenuArrowLink } from "./mega-menu-arrow-link";
@@ -15,7 +15,7 @@ import {
 } from "./mega-menu-motion";
 import styles from "./mega-menu-grid.module.css";
 
-const MotionLink = motion.create(Link);
+const MotionLink = m.create(Link);
 
 const TILE_ICONS: Record<MegaMenuTileIcon, LucideIcon> = {
   mouse: Mouse,
@@ -38,17 +38,17 @@ export function MegaMenuGrid({ category, isOpen, onNavigate }: MegaMenuGridProps
   const tiles = category.tiles ?? [];
 
   return (
-    <motion.div key={openCount} variants={LAYOUT_VARIANTS} initial="hidden" animate="visible">
-      <motion.div className={styles.gridHeader} variants={SLIDE_FROM_RIGHT}>
+    <m.div key={openCount} variants={LAYOUT_VARIANTS} initial="hidden" animate="visible">
+      <m.div className={styles.gridHeader} variants={SLIDE_FROM_RIGHT}>
         <h2 className={styles.gridEyebrow}>{category.label}</h2>
         <MegaMenuArrowLink href={category.href} className={styles.viewAll} onClick={onNavigate}>
           Ver todo
         </MegaMenuArrowLink>
-      </motion.div>
+      </m.div>
 
       <div className={styles.tileRow}>
         {tiles.map((tile) => (
-          <motion.div key={tile.href} variants={RISE_FROM_BELOW}>
+          <m.div key={tile.href} variants={RISE_FROM_BELOW}>
             <MotionLink
               href={tile.href}
               className={[styles.tile, tile.tone === "feature" ? styles.tileFeature : ""]
@@ -76,10 +76,10 @@ export function MegaMenuGrid({ category, isOpen, onNavigate }: MegaMenuGridProps
                 <MegaMenuArrow size="md" />
               </span>
             </MotionLink>
-          </motion.div>
+          </m.div>
         ))}
       </div>
-    </motion.div>
+    </m.div>
   );
 }
 

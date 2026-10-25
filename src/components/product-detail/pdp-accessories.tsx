@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useId } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import {
   Briefcase,
   Cable,
@@ -81,19 +81,19 @@ export function PdpAccessories({ accessories, selected, onToggle, disabled }: Pd
           <Icon icon={Tag} size="sm" aria-hidden="true" />
           <span id={`${id}-title`}>Más Accesorios</span>
         </span>
-        <motion.span
+        <m.span
           className={styles.headerToggle}
           initial={false}
           animate={{ rotate: isOpen ? 45 : 0 }}
           transition={{ type: "spring", stiffness: 420, damping: 30 }}
         >
           <Icon icon={Plus} size="sm" aria-hidden="true" />
-        </motion.span>
+        </m.span>
       </button>
 
       <AnimatePresence initial={false}>
         {isOpen && (
-          <motion.ul
+          <m.ul
             id={`${id}-list`}
             className={styles.list}
             initial={{ height: 0, opacity: 0 }}
@@ -129,7 +129,7 @@ export function PdpAccessories({ accessories, selected, onToggle, disabled }: Pd
                 </label>
               </li>
             ))}
-          </motion.ul>
+          </m.ul>
         )}
       </AnimatePresence>
     </section>

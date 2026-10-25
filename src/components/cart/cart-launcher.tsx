@@ -2,14 +2,14 @@
 
 import React, { useRef } from "react";
 import Link from "@/components/app-link";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { ShoppingCart } from "lucide-react";
 import { Icon } from "@/components/ui";
 import { CountPulse } from "./count-pulse";
 import { useCart } from "./cart-provider";
 import styles from "./cart-launcher.module.css";
 
-const MotionLink = motion.create(Link);
+const MotionLink = m.create(Link);
 
 // Hovering the cart gives the badge one soft beat, a nudge toward checkout.
 const BADGE_VARIANTS: Variants = {
@@ -62,7 +62,7 @@ export function CartLauncher({
     >
       <Icon icon={ShoppingCart} size="lg" aria-hidden="true" />
       {showBadge && (
-        <motion.span
+        <m.span
           className={styles.badgeAnchor}
           variants={BADGE_VARIANTS}
           aria-hidden="true"
@@ -73,7 +73,7 @@ export function CartLauncher({
             label={itemCount > 99 ? "99+" : undefined}
             className={styles.badge}
           />
-        </motion.span>
+        </m.span>
       )}
     </MotionLink>
   );

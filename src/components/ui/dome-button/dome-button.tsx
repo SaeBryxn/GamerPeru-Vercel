@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "@/components/app-link";
-import { motion, type HTMLMotionProps, type Transition, type Variants } from "framer-motion";
+import { m, type HTMLMotionProps, type Transition, type Variants } from "framer-motion";
 import styles from "./dome-button.module.css";
 
 /**
@@ -41,7 +41,7 @@ export interface DomeButtonProps extends Omit<HTMLMotionProps<"button">, "childr
  * same timing. Size, radius and border come from the consumer through
  * --dome-* custom properties.
  */
-const MotionLink = motion.create(Link);
+const MotionLink = m.create(Link);
 
 function domeVariantsFor(domeRise: string): Variants {
   return {
@@ -87,20 +87,12 @@ function DomeLayers({
   return (
     <>
       {tone === "dark" && (
-        <motion.span
-          className={styles.accentRing}
-          variants={ACCENT_RING_VARIANTS}
-          aria-hidden="true"
-        />
+        <m.span className={styles.accentRing} variants={ACCENT_RING_VARIANTS} aria-hidden="true" />
       )}
-      <motion.span
-        className={styles.dome}
-        variants={domeVariantsFor(domeRise)}
-        aria-hidden="true"
-      />
-      <motion.span className={styles.content} variants={contentVariantsFor(tone, hoverColor)}>
+      <m.span className={styles.dome} variants={domeVariantsFor(domeRise)} aria-hidden="true" />
+      <m.span className={styles.content} variants={contentVariantsFor(tone, hoverColor)}>
         {children}
-      </motion.span>
+      </m.span>
     </>
   );
 }
@@ -115,7 +107,7 @@ export function DomeButton({
   ...rest
 }: DomeButtonProps) {
   return (
-    <motion.button
+    <m.button
       type={type}
       className={[styles.domeButton, styles[tone], className].filter(Boolean).join(" ")}
       variants={tone === "dark" ? DARK_ROOT_VARIANTS : undefined}
@@ -127,7 +119,7 @@ export function DomeButton({
       <DomeLayers tone={tone} domeRise={domeRise} hoverColor={hoverColor}>
         {children}
       </DomeLayers>
-    </motion.button>
+    </m.button>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { X } from "lucide-react";
 import { Icon } from "../icon";
 import { DOME_TRANSITION, DomeButton, type DomeButtonProps } from "./dome-button";
@@ -23,9 +23,9 @@ export function CloseButton({ className, ...rest }: CloseButtonProps) {
       className={[styles.closeButton, className].filter(Boolean).join(" ")}
       {...rest}
     >
-      <motion.span className={styles.closeIcon} variants={ICON_VARIANTS}>
+      <m.span className={styles.closeIcon} variants={ICON_VARIANTS}>
         <Icon icon={X} size="md" aria-hidden="true" />
-      </motion.span>
+      </m.span>
     </DomeButton>
   );
 }

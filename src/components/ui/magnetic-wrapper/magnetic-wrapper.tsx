@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
+import { m, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
 import styles from "./magnetic-wrapper.module.css";
 
 export interface MagneticWrapperProps {
@@ -49,9 +49,9 @@ export function MagneticWrapper({
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
-      <motion.span className={styles.content} style={{ x: springX, y: springY }}>
+      <m.span className={styles.content} style={{ x: springX, y: springY }}>
         {children}
-      </motion.span>
+      </m.span>
     </span>
   );
 }

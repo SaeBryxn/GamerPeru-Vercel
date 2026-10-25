@@ -1,13 +1,7 @@
 "use client";
 
 import React, { useLayoutEffect, useRef, useState } from "react";
-import {
-  motion,
-  useMotionValue,
-  useMotionValueEvent,
-  useTransform,
-  type Variants,
-} from "framer-motion";
+import { m, useMotionValue, useMotionValueEvent, useTransform, type Variants } from "framer-motion";
 import { GripVertical } from "lucide-react";
 import { Icon } from "@/components/ui";
 import { HomeImage } from "../home-image";
@@ -155,11 +149,11 @@ export function CompareSlider({ eyebrow, title, left, right }: CompareSliderProp
         <div className={styles.layer} aria-hidden="true">
           <HomeImage src={right.image.src} alt={right.image.alt} sizes="100vw" />
         </div>
-        <motion.div className={styles.layer} style={{ clipPath }} aria-hidden="true">
+        <m.div className={styles.layer} style={{ clipPath }} aria-hidden="true">
           <HomeImage src={left.image.src} alt={left.image.alt} sizes="100vw" />
-        </motion.div>
+        </m.div>
 
-        <motion.div
+        <m.div
           className={styles.handle}
           style={{ x }}
           initial="idle"
@@ -174,15 +168,15 @@ export function CompareSlider({ eyebrow, title, left, right }: CompareSliderProp
           onKeyDown={handleKeyDown}
           data-testid="compare-slider-handle"
         >
-          <motion.span
+          <m.span
             className={styles.handleLine}
             variants={HANDLE_LINE_VARIANTS}
             aria-hidden="true"
           />
-          <motion.span className={styles.handleGrip} variants={HANDLE_GRIP_VARIANTS}>
+          <m.span className={styles.handleGrip} variants={HANDLE_GRIP_VARIANTS}>
             <Icon icon={GripVertical} size="sm" aria-hidden="true" />
-          </motion.span>
-        </motion.div>
+          </m.span>
+        </m.div>
 
         <div className={`${styles.caption} ${styles.captionLeft}`}>
           <span className={styles.captionKicker}>{left.kicker}</span>

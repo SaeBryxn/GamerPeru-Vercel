@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { CircleAlert, CircleCheck } from "lucide-react";
 import styles from "./toasts.module.css";
 
@@ -38,7 +38,7 @@ export function ToastViewport({ toasts }: { toasts: Toast[] }) {
     <div className={styles.viewport} aria-live="polite" aria-atomic="false">
       <AnimatePresence>
         {toasts.map((toast) => (
-          <motion.div
+          <m.div
             key={toast.id}
             role={toast.tone === "error" ? "alert" : "status"}
             className={`${styles.toast} ${toast.tone === "error" ? styles.error : ""}`}
@@ -53,7 +53,7 @@ export function ToastViewport({ toasts }: { toasts: Toast[] }) {
               <CircleCheck size={16} aria-hidden="true" />
             )}
             <span>{toast.message}</span>
-          </motion.div>
+          </m.div>
         ))}
       </AnimatePresence>
     </div>

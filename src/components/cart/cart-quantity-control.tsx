@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import styles from "./cart-quantity-control.module.css";
 
@@ -29,7 +29,7 @@ export function CartQuantityControl({
 
   return (
     <div className={styles.container} role="group" aria-label={`Cantidad para ${productName}`}>
-      <motion.span
+      <m.span
         key={quantity}
         className={styles.quantity}
         aria-live="polite"
@@ -39,10 +39,10 @@ export function CartQuantityControl({
         transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
       >
         {quantity}
-      </motion.span>
+      </m.span>
 
       <div className={styles.steppers}>
-        <motion.button
+        <m.button
           type="button"
           onClick={onIncrement}
           disabled={disabled || isMax}
@@ -53,8 +53,8 @@ export function CartQuantityControl({
           whileTap={{ scale: 0.95 }}
         >
           <ChevronUp size={13} aria-hidden="true" />
-        </motion.button>
-        <motion.button
+        </m.button>
+        <m.button
           type="button"
           onClick={onDecrement}
           disabled={disabled || isMin}
@@ -65,7 +65,7 @@ export function CartQuantityControl({
           whileTap={{ scale: 0.95 }}
         >
           <ChevronDown size={13} aria-hidden="true" />
-        </motion.button>
+        </m.button>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useId, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { Plus } from "lucide-react";
 import type { FaqGroup, FaqItem } from "@/content/support/faq";
 import styles from "./faq-accordion.module.css";
@@ -25,19 +25,19 @@ function FaqRow({ item }: { item: FaqItem }) {
         >
           <span>{item.question}</span>
           {/* A quarter of a turn would only redraw the plus; 45° turns it into an x. */}
-          <motion.span
+          <m.span
             className={styles.icon}
             animate={{ rotate: isOpen ? 45 : 0 }}
             transition={reduceMotion ? { duration: 0 } : OPEN_TRANSITION}
             aria-hidden="true"
           >
             <Plus size={16} strokeWidth={2} />
-          </motion.span>
+          </m.span>
         </button>
       </h3>
       <AnimatePresence initial={false}>
         {isOpen && (
-          <motion.div
+          <m.div
             id={panelId}
             role="region"
             className={styles.panel}
@@ -51,7 +51,7 @@ function FaqRow({ item }: { item: FaqItem }) {
                 <p key={paragraph}>{paragraph}</p>
               ))}
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

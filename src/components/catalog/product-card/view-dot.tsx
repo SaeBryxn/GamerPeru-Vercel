@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, type Transition } from "framer-motion";
+import { m, type Transition } from "framer-motion";
 import styles from "./view-dot.module.css";
 
 // Underdamped so the fill overshoots and settles: the active dot lands with a small bounce.
@@ -19,7 +19,7 @@ export interface ViewDotProps {
  */
 export function ViewDot({ isActive, size = 7 }: ViewDotProps): React.JSX.Element {
   return (
-    <motion.span
+    <m.span
       className={styles.dot}
       style={{ width: size, height: size }}
       data-active={isActive}
@@ -29,12 +29,12 @@ export function ViewDot({ isActive, size = 7 }: ViewDotProps): React.JSX.Element
       }}
       transition={TINT_TRANSITION}
     >
-      <motion.span
+      <m.span
         className={styles.fill}
         initial={false}
         animate={{ scale: isActive ? 1 : 0 }}
         transition={FILL_TRANSITION}
       />
-    </motion.span>
+    </m.span>
   );
 }

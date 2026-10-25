@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 
 import React, { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import {
   AlertTriangle,
   Check,
@@ -470,7 +470,7 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
       <footer className={styles.drawerFooter}>
         <AnimatePresence initial={false}>
           {decision && (
-            <motion.div
+            <m.div
               key="decision-form"
               className={styles.decisionForm}
               initial={{ height: 0, opacity: 0 }}
@@ -584,7 +584,7 @@ export function ReviewDrawer({ item, renderedAt, onClose, notify }: ReviewDrawer
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
 

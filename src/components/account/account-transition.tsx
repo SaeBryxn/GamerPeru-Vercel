@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion, type Transition } from "framer-motion";
 
 const ENTER_TRANSITION: Transition = { duration: 0.28, ease: [0.22, 1, 0.36, 1] };
 const LEAVE_TRANSITION: Transition = { duration: 0.14, ease: [0.4, 0, 1, 1] };
@@ -82,7 +82,7 @@ export function AccountSection({ children }: { children: React.ReactNode }) {
 
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <motion.div
+      <m.div
         key={pathname}
         initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
         animate={isLeaving ? { opacity: 0, y: -6 } : { opacity: 1, y: 0 }}
@@ -93,7 +93,7 @@ export function AccountSection({ children }: { children: React.ReactNode }) {
         }}
       >
         {children}
-      </motion.div>
+      </m.div>
     </AnimatePresence>
   );
 }

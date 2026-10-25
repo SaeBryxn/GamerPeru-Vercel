@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useTransition } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { Check, Loader2 } from "lucide-react";
 import { setVariantStockAction } from "@/lib/admin/inventory/actions";
 import type { VariantStockRow } from "@/lib/admin/inventory/readers";
@@ -81,7 +81,7 @@ export function VariantStockCell({
         />
         <AnimatePresence initial={false}>
           {(isDirty || isPending) && (
-            <motion.button
+            <m.button
               type="button"
               onClick={save}
               className={styles.saveButton}
@@ -98,7 +98,7 @@ export function VariantStockCell({
               ) : (
                 "Guardar"
               )}
-            </motion.button>
+            </m.button>
           )}
         </AnimatePresence>
       </div>
@@ -116,14 +116,14 @@ export function VariantStockCell({
       )}
 
       {!error && savedAt !== null && !isDirty && (
-        <motion.span
+        <m.span
           key={savedAt}
           className={styles.saved}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
         >
           <Check size={12} aria-hidden="true" /> Guardado
-        </motion.span>
+        </m.span>
       )}
     </div>
   );

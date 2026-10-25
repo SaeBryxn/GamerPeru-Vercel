@@ -3,7 +3,7 @@
 import React, { useEffect, useId } from "react";
 import {
   animate,
-  motion,
+  m,
   useMotionValue,
   useReducedMotion,
   useTransform,
@@ -90,7 +90,7 @@ export function LiquidIcon({ active, size = 16, className }: LiquidIconProps) {
       <svg viewBox="0 0 24 24" focusable="false" className={styles.svg}>
         <defs>
           <clipPath id={clipId}>
-            <motion.path d={liquidPath} />
+            <m.path d={liquidPath} />
           </clipPath>
         </defs>
         <path

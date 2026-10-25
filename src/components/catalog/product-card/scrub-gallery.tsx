@@ -3,7 +3,7 @@
 import React, { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "@/components/app-link";
-import { AnimatePresence, motion, type Transition, type Variants } from "framer-motion";
+import { AnimatePresence, m, type Transition, type Variants } from "framer-motion";
 import type { ProductCardImage } from "@/lib/catalog/types";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import { ProductCardFallback } from "./product-card-fallback";
@@ -109,7 +109,7 @@ export function ScrubGallery({
   const photos = currentUrl ? (
     <div className={styles.imageStack}>
       <AnimatePresence initial={false} custom={direction}>
-        <motion.div
+        <m.div
           key={current?.objectKey}
           className={styles.imageLayer}
           custom={direction}
@@ -126,7 +126,7 @@ export function ScrubGallery({
             sizes={IMAGE_SIZES}
             className={styles.image}
           />
-        </motion.div>
+        </m.div>
       </AnimatePresence>
 
       {/* Same sizes as the visible photo, so the browser caches exactly the files a swipe needs. */}
@@ -179,7 +179,7 @@ export function ScrubGallery({
       {children}
 
       {images.length > 1 && (
-        <motion.div
+        <m.div
           className={styles.dotsTab}
           variants={TAB_VARIANTS}
           initial={false}
@@ -190,7 +190,7 @@ export function ScrubGallery({
           {images.map((image, i) => (
             <ViewDot key={image.objectKey} isActive={i === index} />
           ))}
-        </motion.div>
+        </m.div>
       )}
     </div>
   );

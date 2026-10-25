@@ -3,7 +3,7 @@
 import React, { useId, useState, useTransition } from "react";
 import Link from "@/components/app-link";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { ArrowRight, Check, ExternalLink, PackageCheck, PencilLine, Truck } from "lucide-react";
 import { DrawerHeader, SideDrawer, ToastViewport, useToasts } from "@/components/admin/ui";
 import {
@@ -128,7 +128,7 @@ export function OrderFulfillment({ detail }: { detail: AdminOrderDetail }) {
                 </span>
                 {index < STEPS.length - 1 && (
                   <span className={styles.stepTrack} aria-hidden="true">
-                    <motion.span
+                    <m.span
                       className={styles.stepFill}
                       initial={false}
                       animate={{ scaleX: index < step ? 1 : 0 }}
@@ -230,7 +230,7 @@ export function OrderFulfillment({ detail }: { detail: AdminOrderDetail }) {
 
         <AnimatePresence initial={false}>
           {step === 2 && confirmDelivery && (
-            <motion.div
+            <m.div
               key="confirm-delivery"
               className={styles.confirm}
               initial={{ height: 0, opacity: 0 }}
@@ -268,7 +268,7 @@ export function OrderFulfillment({ detail }: { detail: AdminOrderDetail }) {
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
 

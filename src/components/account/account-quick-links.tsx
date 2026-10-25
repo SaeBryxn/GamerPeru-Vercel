@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "@/components/app-link";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { MapPin, Package, ShoppingBag, UserRound, type LucideIcon } from "lucide-react";
 import { useCart } from "@/components/cart/cart-provider";
 import { useAccountNavigate } from "./account-transition";
@@ -70,13 +70,8 @@ export function AccountQuickLinks({ links }: { links: QuickLink[] }) {
   const { itemCount, openDrawer } = useCart();
 
   return (
-    <motion.div
-      className={styles.quickGrid}
-      variants={GRID_VARIANTS}
-      initial="hidden"
-      animate="visible"
-    >
-      <motion.div variants={TILE_VARIANTS}>
+    <m.div className={styles.quickGrid} variants={GRID_VARIANTS} initial="hidden" animate="visible">
+      <m.div variants={TILE_VARIANTS}>
         <button
           type="button"
           className={`${styles.quickCard} ${styles.quickCardButton}`}
@@ -93,10 +88,10 @@ export function AccountQuickLinks({ links }: { links: QuickLink[] }) {
             }
           />
         </button>
-      </motion.div>
+      </m.div>
 
       {links.map((link) => (
-        <motion.div key={link.href} variants={TILE_VARIANTS}>
+        <m.div key={link.href} variants={TILE_VARIANTS}>
           <Link
             href={link.href}
             className={styles.quickCard}
@@ -113,8 +108,8 @@ export function AccountQuickLinks({ links }: { links: QuickLink[] }) {
               text={link.text}
             />
           </Link>
-        </motion.div>
+        </m.div>
       ))}
-    </motion.div>
+    </m.div>
   );
 }

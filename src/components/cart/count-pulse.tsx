@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, type Transition } from "framer-motion";
+import { m, type Transition } from "framer-motion";
 import { usePrefersReducedMotion } from "@/components/ui/use-prefers-reduced-motion";
 import styles from "./count-pulse.module.css";
 
@@ -24,7 +24,7 @@ export function CountPulse({ value, label, className }: CountPulseProps): React.
   const allowMotion = usePrefersReducedMotion() === false;
 
   return (
-    <motion.span
+    <m.span
       key={value}
       className={[styles.root, className].filter(Boolean).join(" ")}
       initial={false}
@@ -32,7 +32,7 @@ export function CountPulse({ value, label, className }: CountPulseProps): React.
       transition={BEAT}
     >
       {allowMotion && (
-        <motion.span
+        <m.span
           className={styles.ring}
           initial={{ opacity: 0.6, scale: 1 }}
           animate={{ opacity: 0, scale: 1.9 }}
@@ -41,6 +41,6 @@ export function CountPulse({ value, label, className }: CountPulseProps): React.
         />
       )}
       {label ?? value}
-    </motion.span>
+    </m.span>
   );
 }

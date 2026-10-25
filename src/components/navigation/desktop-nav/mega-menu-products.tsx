@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useId, useRef, useState } from "react";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, m, type Variants } from "framer-motion";
 import type { MegaMenuCategory, MegaMenuShelves, NavLink } from "../types";
 import { MegaMenuArrowLink } from "./mega-menu-arrow-link";
 import {
@@ -80,21 +80,17 @@ export function MegaMenuProducts({
 
   return (
     <div className={styles.productsLayout}>
-      <motion.div
+      <m.div
         key={openCount}
         className={styles.megaSide}
         variants={SIDE_VARIANTS}
         initial="hidden"
         animate="visible"
       >
-        <motion.h2
-          id={`${baseId}-heading`}
-          className={styles.sideHeading}
-          variants={SLIDE_FROM_RIGHT}
-        >
+        <m.h2 id={`${baseId}-heading`} className={styles.sideHeading} variants={SLIDE_FROM_RIGHT}>
           Colecciones
-        </motion.h2>
-        <motion.div
+        </m.h2>
+        <m.div
           variants={TAB_LIST_VARIANTS}
           role="tablist"
           aria-orientation="vertical"
@@ -104,7 +100,7 @@ export function MegaMenuProducts({
           {collections.map((collection, index) => {
             const isActive = index === activeIndex;
             return (
-              <motion.button
+              <m.button
                 key={collection.href}
                 variants={SLIDE_FROM_RIGHT}
                 ref={(el) => {
@@ -123,12 +119,12 @@ export function MegaMenuProducts({
                 onKeyDown={handleTabKeyDown}
               >
                 <span className={styles.collectionsLabel}>{collection.label}</span>
-              </motion.button>
+              </m.button>
             );
           })}
-        </motion.div>
+        </m.div>
 
-        <motion.div className={styles.footerRow} variants={SLIDE_FROM_RIGHT}>
+        <m.div className={styles.footerRow} variants={SLIDE_FROM_RIGHT}>
           <MegaMenuArrowLink
             href={category.href}
             className={styles.footerRowLink}
@@ -138,8 +134,8 @@ export function MegaMenuProducts({
           >
             Ver todos los productos
           </MegaMenuArrowLink>
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
 
       <div
         id={tabPanelId}
@@ -157,14 +153,14 @@ export function MegaMenuProducts({
         <div key={openCount}>
           <AnimatePresence mode="wait">
             {activeCollection && (
-              <motion.div
+              <m.div
                 key={activeCollection.href}
                 variants={SHELF_VARIANTS}
                 initial="hidden"
                 animate="visible"
                 exit="exit"
               >
-                <motion.div className={styles.previewsHeader} variants={RISE_FROM_BELOW}>
+                <m.div className={styles.previewsHeader} variants={RISE_FROM_BELOW}>
                   <p className={styles.sideEyebrow}>Más populares</p>
                   <MegaMenuArrowLink
                     href={activeCollection.href}
@@ -174,26 +170,26 @@ export function MegaMenuProducts({
                     Ver todo en {activeCollection.label}
                     {shelf && <span className={styles.viewAllCount}> ({shelf.totalCount})</span>}
                   </MegaMenuArrowLink>
-                </motion.div>
+                </m.div>
 
                 {shelf && shelf.products.length > 0 ? (
                   <div className={styles.previewGrid}>
                     {shelf.products.map((product) => (
-                      <motion.div key={product.id} variants={RISE_FROM_BELOW} onClick={onNavigate}>
+                      <m.div key={product.id} variants={RISE_FROM_BELOW} onClick={onNavigate}>
                         <ProductCard
                           product={product}
                           href={`/productos/${product.slug}`}
                           action="add-to-cart"
                         />
-                      </motion.div>
+                      </m.div>
                     ))}
                   </div>
                 ) : (
-                  <motion.p className={styles.emptyShelf} variants={RISE_FROM_BELOW}>
+                  <m.p className={styles.emptyShelf} variants={RISE_FROM_BELOW}>
                     Muy pronto.
-                  </motion.p>
+                  </m.p>
                 )}
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, m, type Variants } from "framer-motion";
 import { CloseButton, DOME_TRANSITION, DomeButton } from "@/components/ui";
 import type { DiscoverySort, DiscoverySurface } from "@/lib/discovery-filters/types";
 import { getSortLabel, getSortOptions } from "./sort-options";
@@ -120,7 +120,7 @@ export function SortDropdown({ surface, value, onChange }: SortDropdownProps) {
 
       <AnimatePresence>
         {isOpen && (
-          <motion.div
+          <m.div
             id={menuId}
             className={styles.menu}
             role="menu"
@@ -146,8 +146,8 @@ export function SortDropdown({ surface, value, onChange }: SortDropdownProps) {
               {options.map((option, index) => {
                 const isSelected = index === selectedIndex;
                 return (
-                  <motion.li key={option.label} role="none" variants={OPTION_VARIANTS}>
-                    <motion.button
+                  <m.li key={option.label} role="none" variants={OPTION_VARIANTS}>
+                    <m.button
                       ref={(el) => {
                         optionRefs.current[index] = el;
                       }}
@@ -169,19 +169,19 @@ export function SortDropdown({ surface, value, onChange }: SortDropdownProps) {
                     >
                       <span className={styles.optionLabel}>
                         {option.label}
-                        <motion.span
+                        <m.span
                           className={styles.underline}
                           variants={UNDERLINE_VARIANTS}
                           aria-hidden="true"
                         />
                       </span>
                       {isSelected && <span className={styles.selectedDot} aria-hidden="true" />}
-                    </motion.button>
-                  </motion.li>
+                    </m.button>
+                  </m.li>
                 );
               })}
             </ul>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 
 // Client-only: flips after the first page hydrates, so every later template mount is a navigation.
 let hasHydrated = false;
@@ -31,7 +31,7 @@ export default function StorefrontTemplate({
   }, []);
 
   return (
-    <motion.div
+    <m.div
       initial={
         isNavigation ? (prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }) : false
       }
@@ -41,6 +41,6 @@ export default function StorefrontTemplate({
       style={hasLanded ? { transform: "none" } : undefined}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }

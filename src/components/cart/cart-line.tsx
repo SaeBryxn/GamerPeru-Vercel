@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { formatCurrency } from "@/lib/utils/currency";
 import type { CartLineSnapshot } from "@/lib/cart/types";
 import { CartQuantityControl } from "./cart-quantity-control";
@@ -73,7 +73,7 @@ export function CartLine({
           disabled={disabled || !line.available}
         />
 
-        <motion.button
+        <m.button
           type="button"
           onClick={onRemove}
           disabled={disabled}
@@ -84,7 +84,7 @@ export function CartLine({
           whileTap={{ scale: 0.95 }}
         >
           Quitar
-        </motion.button>
+        </m.button>
 
         <span className={styles.lineSubtotal} data-testid="cart-line-subtotal">
           {formatCurrency(line.lineSubtotalCents)}

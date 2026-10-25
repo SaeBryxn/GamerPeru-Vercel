@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import type { AdminNotePage, AdminTimelinePage, AdminTimelineType } from "@/lib/admin/orders/types";
 import { createAdminOrderNoteAction } from "@/lib/admin/orders/actions";
@@ -194,7 +194,7 @@ export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: Or
           <ol className={styles.timelineList}>
             <AnimatePresence initial={false}>
               {timeline.map((entry) => (
-                <motion.li
+                <m.li
                   key={entry.id}
                   {...entryMotion}
                   className={
@@ -208,7 +208,7 @@ export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: Or
                   {entry.type === "INTERNAL_NOTE" && entry.noteBody && (
                     <p className={styles.multiline}>{entry.noteBody}</p>
                   )}
-                </motion.li>
+                </m.li>
               ))}
             </AnimatePresence>
           </ol>
@@ -270,10 +270,10 @@ export function OrderActivity({ orderNumber, initialNotes, initialTimeline }: Or
           <div className={styles.noteList}>
             <AnimatePresence initial={false}>
               {notes.map((note) => (
-                <motion.article className={styles.noteCard} key={note.id} {...entryMotion}>
+                <m.article className={styles.noteCard} key={note.id} {...entryMotion}>
                   <time dateTime={note.createdAt}>{formatLimaDateTime(note.createdAt)}</time>
                   <p className={styles.multiline}>{note.body}</p>
-                </motion.article>
+                </m.article>
               ))}
             </AnimatePresence>
           </div>

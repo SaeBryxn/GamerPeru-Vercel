@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "@/components/app-link";
-import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion, type Transition } from "framer-motion";
 import { ArrowRight, ChevronDown, HelpCircle, User, X } from "lucide-react";
 import { Icon, IconButton } from "@/components/ui";
 import { BrandMark } from "../brand-mark";
@@ -86,7 +86,7 @@ export function MobileDrawer({
     >
       <AnimatePresence onExitComplete={handleExitComplete}>
         {isVisible && (
-          <motion.div
+          <m.div
             key="drawer-panel"
             className={styles.drawerPanel}
             role="document"
@@ -121,19 +121,19 @@ export function MobileDrawer({
                       onClick={() => setExpandedId(isExpanded ? null : category.id)}
                     >
                       <span>{category.label}</span>
-                      <motion.span
+                      <m.span
                         className={styles.groupChevron}
                         initial={false}
                         animate={{ rotate: isExpanded ? 180 : 0 }}
                         transition={accordionTransition}
                       >
                         <Icon icon={ChevronDown} size="sm" aria-hidden="true" />
-                      </motion.span>
+                      </m.span>
                     </button>
 
                     <AnimatePresence initial={false}>
                       {isExpanded && (
-                        <motion.div
+                        <m.div
                           id={sectionId}
                           className={styles.accordion}
                           initial={{ height: 0, opacity: 0 }}
@@ -170,7 +170,7 @@ export function MobileDrawer({
                               </div>
                             ))}
                           </div>
-                        </motion.div>
+                        </m.div>
                       )}
                     </AnimatePresence>
                   </div>
@@ -196,7 +196,7 @@ export function MobileDrawer({
                 </Link>
               </div>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </dialog>

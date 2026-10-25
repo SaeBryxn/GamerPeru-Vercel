@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "@/components/app-link";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import type { MegaMenuCategory } from "../types";
 import { SLIDE_FROM_RIGHT, staggerVariants, useOpenCount } from "./mega-menu-motion";
 import styles from "./mega-menu-links.module.css";
@@ -21,7 +21,7 @@ export function MegaMenuLinks({ category, isOpen, onNavigate }: MegaMenuLinksPro
   const links = category.sections.flatMap((section) => section.items);
 
   return (
-    <motion.ul
+    <m.ul
       key={openCount}
       className={styles.linkRow}
       variants={ROW_VARIANTS}
@@ -29,12 +29,12 @@ export function MegaMenuLinks({ category, isOpen, onNavigate }: MegaMenuLinksPro
       animate="visible"
     >
       {links.map((link) => (
-        <motion.li key={link.href} variants={SLIDE_FROM_RIGHT}>
+        <m.li key={link.href} variants={SLIDE_FROM_RIGHT}>
           <Link href={link.href} className={styles.link} onClick={onNavigate}>
             {link.label}
           </Link>
-        </motion.li>
+        </m.li>
       ))}
-    </motion.ul>
+    </m.ul>
   );
 }

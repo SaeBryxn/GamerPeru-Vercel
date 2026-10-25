@@ -3,7 +3,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "@/components/app-link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { CloseButton, DomeLink } from "@/components/ui";
 import { WishlistButton } from "@/components/wishlist";
@@ -76,7 +76,7 @@ export function QuickViewDialog({
       >
         {isVisible && (
           <>
-            <motion.div
+            <m.div
               className={styles.backdrop}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -85,7 +85,7 @@ export function QuickViewDialog({
               onClick={requestClose}
               aria-hidden="true"
             />
-            <motion.div
+            <m.div
               className={styles.panel}
               initial={{ opacity: 0, y: 24, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -99,7 +99,7 @@ export function QuickViewDialog({
               <div className={styles.gallery}>
                 <div className={styles.stage}>
                   <AnimatePresence initial={false} mode="popLayout">
-                    <motion.div
+                    <m.div
                       key={activeImage}
                       className={styles.stageImage}
                       initial={{ opacity: 0 }}
@@ -118,7 +118,7 @@ export function QuickViewDialog({
                       ) : (
                         <ProductCardFallback />
                       )}
-                    </motion.div>
+                    </m.div>
                   </AnimatePresence>
                 </div>
 
@@ -200,7 +200,7 @@ export function QuickViewDialog({
                   </Link>
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           </>
         )}
       </AnimatePresence>

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { Moon, Sun } from "lucide-react";
 import type { AdminTheme } from "./use-admin-theme";
 import styles from "./admin-shell.module.css";
@@ -18,7 +18,7 @@ export function AdminThemeToggle({ theme, onToggle }: AdminThemeToggleProps) {
   const isDark = theme === "dark";
 
   return (
-    <motion.button
+    <m.button
       type="button"
       onClick={onToggle}
       className={styles.themeToggle}
@@ -30,7 +30,7 @@ export function AdminThemeToggle({ theme, onToggle }: AdminThemeToggleProps) {
       data-testid="admin-theme-toggle"
     >
       <AnimatePresence mode="wait" initial={false}>
-        <motion.span
+        <m.span
           key={theme}
           className={styles.themeToggleIcon}
           initial={{ opacity: 0, rotate: -90, scale: 0.6 }}
@@ -39,8 +39,8 @@ export function AdminThemeToggle({ theme, onToggle }: AdminThemeToggleProps) {
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
         >
           {isDark ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
-        </motion.span>
+        </m.span>
       </AnimatePresence>
-    </motion.button>
+    </m.button>
   );
 }

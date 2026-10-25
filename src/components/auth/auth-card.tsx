@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "@/components/app-link";
-import { MotionConfig, motion } from "framer-motion";
+import { MotionConfig, m } from "framer-motion";
 import { AUTH_CARD_VARIANTS } from "./auth-motion";
 import styles from "./auth.module.css";
 
@@ -21,7 +21,7 @@ export function AuthCard({ title, subtitle, children, footer }: AuthCardProps) {
   return (
     <main className={styles.pageContainer}>
       <MotionConfig reducedMotion="user">
-        <motion.div
+        <m.div
           className={styles.authColumn}
           variants={AUTH_CARD_VARIANTS}
           initial="hidden"
@@ -39,7 +39,7 @@ export function AuthCard({ title, subtitle, children, footer }: AuthCardProps) {
           {children}
 
           {footer ? <div className={styles.footerLinks}>{footer}</div> : null}
-        </motion.div>
+        </m.div>
       </MotionConfig>
     </main>
   );

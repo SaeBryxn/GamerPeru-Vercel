@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "@/components/app-link";
-import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion, type Variants } from "framer-motion";
 import { Eye, MailCheck, MailX } from "lucide-react";
 import { StatusBadge } from "@/components/admin/ui";
 import type { AdminOrderListRow } from "@/lib/admin/orders/types";
@@ -75,9 +75,9 @@ export function OrderTable({ rows, canVerify }: { rows: AdminOrderListRow[]; can
             <th scope="col">Creado</th>
           </tr>
         </thead>
-        <motion.tbody variants={group} initial="hidden" animate="visible">
+        <m.tbody variants={group} initial="hidden" animate="visible">
           {rows.map((row) => (
-            <motion.tr
+            <m.tr
               key={row.orderNumber}
               variants={item}
               className={styles.clickableRow}
@@ -160,9 +160,9 @@ export function OrderTable({ rows, canVerify }: { rows: AdminOrderListRow[]; can
                   Act. {limaShortDateTime.format(new Date(row.latestOperationalAt))}
                 </span>
               </td>
-            </motion.tr>
+            </m.tr>
           ))}
-        </motion.tbody>
+        </m.tbody>
       </table>
       <AnimatePresence>
         {quickView && (
@@ -182,7 +182,7 @@ export function OrderCards({ rows, canVerify }: { rows: AdminOrderListRow[]; can
   const [quickView, setQuickView] = useState<string | null>(null);
 
   return (
-    <motion.div
+    <m.div
       className={styles.cardList}
       data-testid="orders-mobile-list"
       variants={group}
@@ -190,7 +190,7 @@ export function OrderCards({ rows, canVerify }: { rows: AdminOrderListRow[]; can
       animate="visible"
     >
       {rows.map((row) => (
-        <motion.article
+        <m.article
           key={row.orderNumber}
           variants={item}
           className={styles.orderCard}
@@ -270,7 +270,7 @@ export function OrderCards({ rows, canVerify }: { rows: AdminOrderListRow[]; can
             <Eye size={15} aria-hidden="true" />
             Vista rápida
           </button>
-        </motion.article>
+        </m.article>
       ))}
       <AnimatePresence>
         {quickView && (
@@ -281,6 +281,6 @@ export function OrderCards({ rows, canVerify }: { rows: AdminOrderListRow[]; can
           />
         )}
       </AnimatePresence>
-    </motion.div>
+    </m.div>
   );
 }

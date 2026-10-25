@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AnimatePresence,
-  motion,
+  m,
   useMotionValue,
   useSpring,
   type MotionValue,
@@ -90,7 +90,7 @@ export function FloatingClose({
   const content = (
     <AnimatePresence>
       {active && state.isVisible && (
-        <motion.div
+        <m.div
           key="floating-close"
           className={styles.floatingClose}
           style={{ x: state.x, y: state.y }}
@@ -101,7 +101,7 @@ export function FloatingClose({
           data-testid={testId}
         >
           <Icon icon={X} size="lg" />
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

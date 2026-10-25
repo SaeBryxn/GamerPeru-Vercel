@@ -2,7 +2,7 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, m, type Variants } from "framer-motion";
 import { ChevronLeft, ChevronRight, Package, Video } from "lucide-react";
 import { DomeButton, Icon } from "@/components/ui";
 import type { ProductMediaItem, ProductVariantDetail } from "@/lib/catalog/product-detail-types";
@@ -382,7 +382,7 @@ export function ProductMediaGallery({
       >
         {activeMediaUrl && activeMediaType === "image" ? (
           <AnimatePresence initial={false} custom={direction}>
-            <motion.div
+            <m.div
               key={activeMedia?.mediaAssetId}
               className={styles.stageSlide}
               custom={direction}
@@ -399,7 +399,7 @@ export function ProductMediaGallery({
                 sizes="(max-width: 768px) 100vw, (max-width: 1280px) 52vw, 760px"
                 className={styles.mainImage}
               />
-            </motion.div>
+            </m.div>
           </AnimatePresence>
         ) : activeMediaUrl && activeMediaType === "video" ? (
           <video

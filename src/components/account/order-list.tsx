@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { Package } from "lucide-react";
 import { DomeLink } from "@/components/ui";
 import type { CustomerOrderSummaryDTO } from "@/lib/account/orders";
@@ -33,17 +33,12 @@ export function OrderList({ orders }: { orders: CustomerOrderSummaryDTO[] }) {
   }
 
   return (
-    <motion.ul
-      className={styles.orderList}
-      variants={LIST_VARIANTS}
-      initial="hidden"
-      animate="visible"
-    >
+    <m.ul className={styles.orderList} variants={LIST_VARIANTS} initial="hidden" animate="visible">
       {orders.map((order) => (
         <li key={order.orderNumber}>
           <OrderCard order={order} />
         </li>
       ))}
-    </motion.ul>
+    </m.ul>
   );
 }

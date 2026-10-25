@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { DomeLink } from "@/components/ui";
 import { SOCIAL_LINKS } from "@/config/social-links";
 import { HomeImage } from "../home-image";
@@ -46,7 +46,7 @@ export function CommunityBanner({
   const discordHref = ctaHref ?? SOCIAL_LINKS.find((link) => link.id === "discord")?.href ?? "";
 
   return (
-    <motion.section
+    <m.section
       className={styles.section}
       aria-labelledby="community-title"
       variants={BANNER_VARIANTS}
@@ -61,7 +61,7 @@ export function CommunityBanner({
         </div>
         <div className={styles.scrim} aria-hidden="true" />
 
-        <motion.div className={styles.content} variants={BLOCK_VARIANTS}>
+        <m.div className={styles.content} variants={BLOCK_VARIANTS}>
           <p className={styles.eyebrow}>{eyebrow}</p>
           <h2 id="community-title" className={styles.title}>
             {title[0]} <br />
@@ -91,8 +91,8 @@ export function CommunityBanner({
               {ctaLabel}
             </span>
           )}
-        </motion.div>
+        </m.div>
       </div>
-    </motion.section>
+    </m.section>
   );
 }

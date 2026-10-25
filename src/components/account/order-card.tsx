@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { Package, Truck } from "lucide-react";
 import { DomeLink } from "@/components/ui";
 import type { CustomerOrderSummaryDTO } from "@/lib/account/orders";
@@ -86,7 +86,7 @@ export function OrderCard({ order }: { order: CustomerOrderSummaryDTO }) {
   const detailHref = `/checkout/confirmacion/${encodeURIComponent(order.orderNumber)}`;
 
   return (
-    <motion.article
+    <m.article
       className={styles.orderCard}
       variants={ORDER_CARD_VARIANTS}
       aria-label={`Pedido ${order.orderNumber}`}
@@ -131,6 +131,6 @@ export function OrderCard({ order }: { order: CustomerOrderSummaryDTO }) {
           </DomeLink>
         </div>
       </div>
-    </motion.article>
+    </m.article>
   );
 }

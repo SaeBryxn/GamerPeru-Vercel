@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { BrandGlyph } from "@/components/ui";
 import { buildWhatsAppHref } from "@/lib/support/whatsapp";
 import styles from "./whatsapp-button.module.css";
@@ -18,7 +18,7 @@ export function WhatsAppButton() {
   if (!href) return null;
 
   return (
-    <motion.a
+    <m.a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
@@ -33,6 +33,6 @@ export function WhatsAppButton() {
     >
       <BrandGlyph id="whatsapp" size={20} />
       <span className={styles.label}>WhatsApp</span>
-    </motion.a>
+    </m.a>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { AnimatePresence, m, type Variants } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -97,7 +97,7 @@ export function MediaTile({
       : "Hacer principal";
 
   return (
-    <motion.div layout transition={{ layout: { type: "spring", stiffness: 420, damping: 38 } }}>
+    <m.div layout transition={{ layout: { type: "spring", stiffness: 420, damping: 38 } }}>
       <div
         className={`${styles.tile} ${isDragSource ? styles.tileDragging : ""} ${
           isDropTarget ? styles.tileDropTarget : ""
@@ -155,13 +155,13 @@ export function MediaTile({
             )}
           </div>
 
-          <motion.div
+          <m.div
             className={styles.overlay}
             variants={overlayVariants}
             initial={false}
             animate={showOverlay ? "visible" : "hidden"}
           >
-            <motion.button
+            <m.button
               type="button"
               variants={actionVariants}
               onClick={onSetPrimary}
@@ -176,9 +176,9 @@ export function MediaTile({
                 <Star size={16} fill={isPrimary ? "currentColor" : "none"} aria-hidden="true" />
               )}
               <span className={styles.srOnly}>{isPrimary ? "Principal" : "Hacer Principal"}</span>
-            </motion.button>
+            </m.button>
 
-            <motion.button
+            <m.button
               type="button"
               variants={actionVariants}
               onClick={(event) => onEditVariant(event.currentTarget)}
@@ -188,9 +188,9 @@ export function MediaTile({
             >
               <Tag size={16} aria-hidden="true" />
               <span className={styles.srOnly}>Variante</span>
-            </motion.button>
+            </m.button>
 
-            <motion.button
+            <m.button
               type="button"
               variants={actionVariants}
               onClick={(event) => onEditAlt(event.currentTarget)}
@@ -200,9 +200,9 @@ export function MediaTile({
             >
               <Pencil size={16} aria-hidden="true" />
               <span className={styles.srOnly}>Alt Text</span>
-            </motion.button>
+            </m.button>
 
-            <motion.button
+            <m.button
               type="button"
               variants={actionVariants}
               onClick={onRequestDetach}
@@ -221,12 +221,12 @@ export function MediaTile({
               ) : (
                 <Trash2 size={16} aria-hidden="true" />
               )}
-            </motion.button>
-          </motion.div>
+            </m.button>
+          </m.div>
 
           <AnimatePresence>
             {isConfirmingDetach && (
-              <motion.div
+              <m.div
                 className={styles.confirm}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -247,7 +247,7 @@ export function MediaTile({
                     Quitar
                   </button>
                 </div>
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
         </div>
@@ -310,6 +310,6 @@ export function MediaTile({
           </div>
         </div>
       </div>
-    </motion.div>
+    </m.div>
   );
 }

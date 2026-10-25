@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useId } from "react";
-import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion, type Variants } from "framer-motion";
 import { AlertTriangle, Clock, ListChecks, MapPin, Package, XCircle } from "lucide-react";
 import { DomeLink, Icon } from "@/components/ui";
 import { OrderTimeline } from "@/components/account/order-timeline";
@@ -62,7 +62,7 @@ function SuccessMark() {
 
   return (
     <svg className={styles.checkMark} viewBox="0 0 64 64" aria-hidden="true">
-      <motion.circle
+      <m.circle
         cx="32"
         cy="32"
         r="30"
@@ -70,7 +70,7 @@ function SuccessMark() {
         className={styles.checkCircle}
         {...draw(0.15)}
       />
-      <motion.path
+      <m.path
         d="M20 33 L28.5 41.5 L44.5 24.5"
         strokeWidth="4"
         strokeLinecap="round"
@@ -240,7 +240,7 @@ export function CheckoutConfirmationView({
   };
 
   return (
-    <motion.div
+    <m.div
       className={styles.container}
       data-testid="checkout-confirmation-view"
       initial={prefersReducedMotion ? false : "hidden"}
@@ -251,25 +251,21 @@ export function CheckoutConfirmationView({
           <section className={`${styles.card} ${styles.hero}`} aria-live="polite">
             {isCancelled ? (
               <>
-                <motion.span
-                  className={styles.cancelMark}
-                  variants={RISE_VARIANTS}
-                  custom={STEP.mark}
-                >
+                <m.span className={styles.cancelMark} variants={RISE_VARIANTS} custom={STEP.mark}>
                   <Icon icon={XCircle} size="xl" aria-hidden="true" />
-                </motion.span>
-                <motion.h1 className={styles.title} variants={RISE_VARIANTS} custom={STEP.title}>
+                </m.span>
+                <m.h1 className={styles.title} variants={RISE_VARIANTS} custom={STEP.title}>
                   Pedido Cancelado
-                </motion.h1>
-                <motion.div
+                </m.h1>
+                <m.div
                   className={`${styles.orderNumberBadge} ${styles.cancelledBadge}`}
                   data-testid="confirmation-order-number"
                   variants={RISE_VARIANTS}
                   custom={STEP.lead}
                 >
                   <span>Pedido #{orderNumber}</span>
-                </motion.div>
-                <motion.p
+                </m.div>
+                <m.p
                   className={styles.statusMessage}
                   data-testid="confirmation-cancelled-message"
                   variants={RISE_VARIANTS}
@@ -277,35 +273,27 @@ export function CheckoutConfirmationView({
                 >
                   Este pedido ha sido cancelado. Si deseas adquirir estos productos, puedes realizar
                   una nueva orden desde el catálogo.
-                </motion.p>
+                </m.p>
               </>
             ) : (
               <>
-                <motion.span
-                  className={styles.markSlot}
-                  variants={RISE_VARIANTS}
-                  custom={STEP.mark}
-                >
+                <m.span className={styles.markSlot} variants={RISE_VARIANTS} custom={STEP.mark}>
                   <SuccessMark />
-                </motion.span>
-                <motion.h1 className={styles.title} variants={RISE_VARIANTS} custom={STEP.title}>
+                </m.span>
+                <m.h1 className={styles.title} variants={RISE_VARIANTS} custom={STEP.title}>
                   {hero.title}
-                </motion.h1>
-                <motion.div
+                </m.h1>
+                <m.div
                   className={styles.orderNumberBadge}
                   data-testid="confirmation-order-number"
                   variants={RISE_VARIANTS}
                   custom={STEP.lead}
                 >
                   <span>Pedido #{orderNumber}</span>
-                </motion.div>
-                <motion.p
-                  className={styles.statusMessage}
-                  variants={RISE_VARIANTS}
-                  custom={STEP.lead}
-                >
+                </m.div>
+                <m.p className={styles.statusMessage} variants={RISE_VARIANTS} custom={STEP.lead}>
                   {hero.lead} Correo de contacto: <strong>{customerEmail}</strong>.
-                </motion.p>
+                </m.p>
               </>
             )}
           </section>
@@ -327,7 +315,7 @@ export function CheckoutConfirmationView({
               serverNow={confirmation.serverNow}
             />
           )}
-          <motion.div variants={RISE_VARIANTS} custom={STEP.payment}>
+          <m.div variants={RISE_VARIANTS} custom={STEP.payment}>
             {isCancelled ? (
               <div
                 className={`${styles.card} ${styles.statusRow}`}
@@ -369,9 +357,9 @@ export function CheckoutConfirmationView({
                 </p>
               </div>
             )}
-          </motion.div>
+          </m.div>
 
-          <motion.section
+          <m.section
             className={styles.card}
             aria-labelledby="order-timeline-title"
             variants={RISE_VARIANTS}
@@ -382,9 +370,9 @@ export function CheckoutConfirmationView({
               Seguimiento del pedido
             </h2>
             <OrderTimeline steps={timeline} trackingUrl={confirmation.progress.trackingUrl} />
-          </motion.section>
+          </m.section>
 
-          <motion.div className={styles.actions} variants={RISE_VARIANTS} custom={STEP.actions}>
+          <m.div className={styles.actions} variants={RISE_VARIANTS} custom={STEP.actions}>
             {confirmation.isGuestOrder && (
               <DomeLink href="/checkout/recuperar" tone="light" className={styles.ghostButton}>
                 Recuperar acceso por correo
@@ -406,7 +394,7 @@ export function CheckoutConfirmationView({
             >
               Ver mis pedidos
             </DomeLink>
-          </motion.div>
+          </m.div>
 
           {isEligibleForCancellation && (
             <div className={styles.cancelRow} data-testid="confirmation-cancellation-section">
@@ -424,7 +412,7 @@ export function CheckoutConfirmationView({
         </div>
 
         <aside className={styles.summaryColumn} aria-label="Resumen del pedido">
-          <motion.section
+          <m.section
             className={styles.card}
             data-testid="confirmation-summary-card"
             variants={RISE_VARIANTS}
@@ -478,9 +466,9 @@ export function CheckoutConfirmationView({
                 </span>
               </div>
             </div>
-          </motion.section>
+          </m.section>
 
-          <motion.section
+          <m.section
             className={styles.card}
             data-testid="confirmation-delivery-card"
             variants={RISE_VARIANTS}
@@ -527,13 +515,13 @@ export function CheckoutConfirmationView({
                 </dd>
               </div>
             </dl>
-          </motion.section>
+          </m.section>
         </aside>
       </div>
 
       <AnimatePresence>
         {isModalOpen && (
-          <motion.div
+          <m.div
             className={styles.modalBackdrop}
             onClick={handleCloseModal}
             role="dialog"
@@ -545,7 +533,7 @@ export function CheckoutConfirmationView({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
           >
-            <motion.div
+            <m.div
               className={styles.modalContent}
               onClick={(e) => e.stopPropagation()}
               data-testid="cancel-order-modal"
@@ -620,10 +608,10 @@ export function CheckoutConfirmationView({
                   {isCancelling ? "Cancelando..." : "Sí, cancelar pedido"}
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </m.div>
   );
 }

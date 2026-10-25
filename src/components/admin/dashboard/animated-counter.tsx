@@ -11,7 +11,7 @@ import type { ComponentProps, ReactNode, Ref } from "react";
 import {
   animate,
   AnimatePresence,
-  motion,
+  m,
   useMotionValue,
   useReducedMotion,
   useTransform,
@@ -194,15 +194,15 @@ const fades = (reduced: boolean) => ({
 
 function Fixed({ children, ...slot }: SlotProps & { children: ReactNode }) {
   return (
-    <motion.span {...shifts(slot)} className={styles.mark}>
+    <m.span {...shifts(slot)} className={styles.mark}>
       {children}
-    </motion.span>
+    </m.span>
   );
 }
 
 function Mark({ char, ref, ...slot }: SlotProps & { char: string; ref?: Ref<HTMLSpanElement> }) {
   return (
-    <motion.span
+    <m.span
       ref={ref}
       data-slot="animated-counter-mark"
       {...shifts(slot)}
@@ -210,7 +210,7 @@ function Mark({ char, ref, ...slot }: SlotProps & { char: string; ref?: Ref<HTML
       className={styles.mark}
     >
       {char}
-    </motion.span>
+    </m.span>
   );
 }
 
@@ -233,7 +233,7 @@ const Digit = memo(function Digit({
   const transform = useTransform(y, (offset) => `translateY(${offset})`);
 
   return (
-    <motion.span
+    <m.span
       ref={ref}
       data-slot="animated-counter-digit"
       {...shifts(slot)}
@@ -248,15 +248,15 @@ const Digit = memo(function Digit({
     >
       {/* widest-face width, for fonts with no tabular figures */}
       {SIZER}
-      <motion.span
+      <m.span
         style={{
           transform: slot.reduced ? `translateY(${(-digit * 100) / WHEEL.length}%)` : transform,
         }}
         className={styles.wheel}
       >
         {STACK}
-      </motion.span>
-    </motion.span>
+      </m.span>
+    </m.span>
   );
 });
 

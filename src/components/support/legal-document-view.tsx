@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import type { LegalDocument } from "@/content/legal/types";
 import { SupportAsideCard, SupportShell } from "./support-shell";
 import styles from "./legal-document-view.module.css";
@@ -46,7 +46,7 @@ export function LegalDocumentView({ document }: { document: LegalDocument }) {
         </nav>
       }
     >
-      <motion.article
+      <m.article
         className={styles.prose}
         initial={reduceMotion ? false : { opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -67,7 +67,7 @@ export function LegalDocumentView({ document }: { document: LegalDocument }) {
             )}
           </section>
         ))}
-      </motion.article>
+      </m.article>
     </SupportShell>
   );
 }

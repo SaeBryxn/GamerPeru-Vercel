@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useActionState, useEffect, useRef } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { CircleAlert, CircleCheck } from "lucide-react";
 import { DomeButton } from "@/components/ui";
 import {
@@ -30,7 +30,7 @@ function useStartedAtRef() {
 function SuccessPanel({ title, text }: { title: string; text: string }) {
   const reduceMotion = useReducedMotion();
   return (
-    <motion.div
+    <m.div
       className={styles.success}
       role="status"
       initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
@@ -40,7 +40,7 @@ function SuccessPanel({ title, text }: { title: string; text: string }) {
       <CircleCheck size={28} aria-hidden="true" className={styles.successIcon} />
       <h3 className={styles.successTitle}>{title}</h3>
       <p className={styles.successText}>{text}</p>
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -48,7 +48,7 @@ function FormError({ state }: { state: InquiryFormState }) {
   return (
     <AnimatePresence initial={false}>
       {state.status === "error" && (
-        <motion.p
+        <m.p
           key={state.message}
           role="alert"
           className={styles.formError}
@@ -58,7 +58,7 @@ function FormError({ state }: { state: InquiryFormState }) {
         >
           <CircleAlert size={16} aria-hidden="true" />
           {state.message}
-        </motion.p>
+        </m.p>
       )}
     </AnimatePresence>
   );

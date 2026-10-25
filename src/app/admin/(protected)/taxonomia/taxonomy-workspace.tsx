@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 
 import React, { useState, useTransition } from "react";
 import Link from "@/components/app-link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { Check, Pencil, Plus, X } from "lucide-react";
 import { createTaxonomyAction, updateTaxonomyAction } from "@/lib/admin/taxonomy/actions";
 import type { TaxonomyKind, TaxonomyRow, TaxonomyStatus } from "@/lib/admin/taxonomy/service";
@@ -105,7 +105,7 @@ function TaxonomyPanel({
   };
 
   const form = (
-    <motion.div
+    <m.div
       className={styles.form}
       initial={{ opacity: 0, height: 0 }}
       animate={{ opacity: 1, height: "auto" }}
@@ -192,7 +192,7 @@ function TaxonomyPanel({
           {isPending ? "Guardando..." : "Guardar"}
         </button>
       </div>
-    </motion.div>
+    </m.div>
   );
 
   return (

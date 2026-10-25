@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "@/components/app-link";
 import { usePathname } from "next/navigation";
-import { AnimatePresence, MotionConfig, motion, type Variants } from "framer-motion";
+import { AnimatePresence, MotionConfig, m, type Variants } from "framer-motion";
 import { Container, FloatingClose, MagneticWrapper, useFloatingClose } from "@/components/ui";
 import type { MegaMenuCategory, MegaMenuShelves, NavLink } from "../types";
 import { MegaMenuGrid } from "./mega-menu-grid";
@@ -103,7 +103,7 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
   const underlineId = hoveredId ?? activeCategoryId ?? routeActiveId;
 
   const underline = (
-    <motion.span
+    <m.span
       layoutId="desktop-nav-underline"
       className={styles.underline}
       initial={{ opacity: 0 }}
@@ -171,7 +171,7 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
                   <AnimatePresence>{underlineId === category.id && underline}</AnimatePresence>
                 </button>
 
-                <motion.div
+                <m.div
                   id={panelId}
                   className={styles.megaMenuPanel}
                   role="region"
@@ -209,7 +209,7 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
                       />
                     )}
                   </Container>
-                </motion.div>
+                </m.div>
               </li>
             );
           })}
@@ -218,7 +218,7 @@ export function DesktopNav({ items, productTypes = [], shelves, className }: Des
         {/* One backdrop shared by every panel, so switching menus never flickers it. */}
         <AnimatePresence>
           {activeCategoryId && (
-            <motion.div
+            <m.div
               key="mega-menu-backdrop"
               {...floatingClose.targetProps}
               className={`${styles.megaMenuBackdrop} ${floatingClose.targetProps.className}`}

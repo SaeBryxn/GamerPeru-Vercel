@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 
 import React, { useOptimistic, useState, useTransition } from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { AlertTriangle, ArrowDown, ArrowUp, Eye, EyeOff } from "lucide-react";
 import { reorderMenuEntriesAction, setMenuEntryVisibilityAction } from "@/lib/admin/menu/actions";
 import styles from "./menu.module.css";
@@ -43,7 +43,7 @@ function VisibilityToggle({
       className={`${styles.switch} ${isVisible ? styles.switchOn : ""}`}
       data-testid={`menu-toggle-${label.toLowerCase()}`}
     >
-      <motion.span
+      <m.span
         className={styles.switchKnob}
         layout
         transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.7 }}

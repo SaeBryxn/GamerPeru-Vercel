@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { Pause, Play } from "lucide-react";
 import { DomeLink, Icon, usePrefersReducedMotion } from "@/components/ui";
 import { useAutoplayAllowed, type HomeVideoSource } from "../home-video";
@@ -100,7 +100,7 @@ export function FeatureVideo({ video, eyebrow, title, subtitle, cta }: FeatureVi
   };
 
   return (
-    <motion.section
+    <m.section
       className={styles.section}
       aria-label={title}
       variants={SECTION_VARIANTS}
@@ -140,16 +140,16 @@ export function FeatureVideo({ video, eyebrow, title, subtitle, cta }: FeatureVi
         </div>
         <div className={styles.scrim} aria-hidden="true" />
 
-        <motion.div className={styles.overlay} variants={OVERLAY_VARIANTS}>
+        <m.div className={styles.overlay} variants={OVERLAY_VARIANTS}>
           <p className={styles.eyebrow}>{eyebrow}</p>
           <h2 className={styles.title}>{title}</h2>
           <p className={styles.subtitle}>{subtitle}</p>
           <DomeLink href={cta.href} tone="light" className={styles.cta}>
             {cta.label}
           </DomeLink>
-        </motion.div>
+        </m.div>
 
-        <motion.button
+        <m.button
           type="button"
           className={styles.playToggle}
           onClick={togglePlayback}
@@ -161,8 +161,8 @@ export function FeatureVideo({ video, eyebrow, title, subtitle, cta }: FeatureVi
           data-testid="feature-video-toggle"
         >
           <Icon icon={isPlaying ? Pause : Play} size="sm" aria-hidden="true" />
-        </motion.button>
+        </m.button>
       </div>
-    </motion.section>
+    </m.section>
   );
 }

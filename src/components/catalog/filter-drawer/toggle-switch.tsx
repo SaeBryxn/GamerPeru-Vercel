@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import styles from "./filter-drawer.module.css";
 
 export interface ToggleSwitchProps {
@@ -27,7 +27,7 @@ export function ToggleSwitch({ label, checked, onChange, testId }: ToggleSwitchP
         onChange={onChange}
         data-testid={testId}
       />
-      <motion.span
+      <m.span
         className={styles.toggleTrack}
         initial={false}
         animate={{
@@ -38,13 +38,13 @@ export function ToggleSwitch({ label, checked, onChange, testId }: ToggleSwitchP
         transition={{ duration: 0.3 }}
         aria-hidden="true"
       >
-        <motion.span
+        <m.span
           className={styles.toggleKnob}
           initial={false}
           animate={{ x: checked ? 20 : 0 }}
           transition={{ type: "spring", stiffness: 500, damping: 32 }}
         />
-      </motion.span>
+      </m.span>
     </label>
   );
 }

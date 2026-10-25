@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { motion, useReducedMotion } from "framer-motion";
+import { m, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import styles from "./side-drawer.module.css";
 
@@ -80,7 +80,7 @@ export function SideDrawer({
 
   return createPortal(
     <div className={styles.root}>
-      <motion.div
+      <m.div
         className={styles.scrim}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -89,7 +89,7 @@ export function SideDrawer({
         onClick={() => !busy && onClose()}
         aria-hidden="true"
       />
-      <motion.div
+      <m.div
         ref={panelRef}
         className={`${styles.panel} ${size === "wide" ? styles.panelWide : ""}`}
         role="dialog"
@@ -103,7 +103,7 @@ export function SideDrawer({
         data-testid={testId}
       >
         {children}
-      </motion.div>
+      </m.div>
     </div>,
     document.body
   );

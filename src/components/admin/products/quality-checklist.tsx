@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { AlertTriangle, ArrowRight, XCircle } from "lucide-react";
 import {
   getReadinessGuidance,
@@ -54,11 +54,11 @@ export function QualityChecklist({
         <strong>{title}</strong>
         <span className={styles.count}>{issues.length}</span>
       </div>
-      <motion.ul className={styles.list} variants={listVariants} initial="hidden" animate="visible">
+      <m.ul className={styles.list} variants={listVariants} initial="hidden" animate="visible">
         {issues.map((issue) => {
           const guidance = getReadinessGuidance(issue.code);
           return (
-            <motion.li
+            <m.li
               key={issue.code}
               className={styles.row}
               variants={rowVariants}
@@ -73,7 +73,7 @@ export function QualityChecklist({
                 <span className={styles.action}>{guidance.action}</span>
                 <span className={styles.detail}>{issue.message}</span>
               </div>
-              <motion.a
+              <m.a
                 href={`#${guidance.section}`}
                 onClick={(event) => {
                   event.preventDefault();
@@ -88,14 +88,14 @@ export function QualityChecklist({
                 data-testid={`${itemTestIdPrefix}-jump-${issue.code}`}
               >
                 <span>Ir</span>
-                <motion.span variants={arrowVariants} className={styles.arrow}>
+                <m.span variants={arrowVariants} className={styles.arrow}>
                   <ArrowRight size={13} aria-hidden="true" />
-                </motion.span>
-              </motion.a>
-            </motion.li>
+                </m.span>
+              </m.a>
+            </m.li>
           );
         })}
-      </motion.ul>
+      </m.ul>
     </div>
   );
 }

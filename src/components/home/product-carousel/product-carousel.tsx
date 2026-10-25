@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ProductCard } from "@/components/catalog";
 import { DomeButton, Icon } from "@/components/ui";
@@ -36,7 +36,7 @@ export function ProductCarousel({ id, eyebrow, title, products }: ProductCarouse
       {products.length > 0 && (
         <div className={styles.stage}>
           <div className={styles.viewport} ref={rail.viewportRef}>
-            <motion.ul
+            <m.ul
               ref={rail.trackRef}
               className={styles.track}
               style={rail.isTouch ? undefined : { x: rail.x }}
@@ -55,7 +55,7 @@ export function ProductCarousel({ id, eyebrow, title, products }: ProductCarouse
                   />
                 </li>
               ))}
-            </motion.ul>
+            </m.ul>
           </div>
 
           <span className={`${styles.arrowSlot} ${styles.arrowSlotPrev}`}>

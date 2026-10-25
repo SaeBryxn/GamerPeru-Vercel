@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useId, useState } from "react";
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { Plus } from "lucide-react";
 import { Icon } from "@/components/ui";
 import styles from "./pdp-accordion.module.css";
@@ -68,17 +68,17 @@ export function PdpAccordion({ items }: PdpAccordionProps) {
                 data-testid={`pdp-accordion-${item.id}`}
               >
                 <span>{item.title}</span>
-                <motion.span
+                <m.span
                   className={styles.icon}
                   initial={false}
                   animate={{ rotate: isOpen ? 45 : 0 }}
                   transition={{ type: "spring", stiffness: 420, damping: 30 }}
                 >
                   <Icon icon={Plus} size="sm" aria-hidden="true" />
-                </motion.span>
+                </m.span>
               </button>
             </h3>
-            <motion.div
+            <m.div
               id={panelId}
               className={styles.panel}
               role="region"
@@ -88,7 +88,7 @@ export function PdpAccordion({ items }: PdpAccordionProps) {
               animate={isOpen ? "open" : "closed"}
             >
               <div className={styles.panelInner}>{item.content}</div>
-            </motion.div>
+            </m.div>
           </div>
         );
       })}
