@@ -34,6 +34,11 @@ export interface ProductVariantDetail {
   displayOrder: number;
   status: "ACTIVE";
   attributes: Record<string, string | number | boolean>;
+  /**
+   * False when inventory has no units left to sell (on hand minus reserved and allocated).
+   * Undefined where stock is unknown, which stays buyable.
+   */
+  inStock?: boolean;
 }
 
 export interface ProductMediaItem {

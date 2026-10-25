@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   brands,
@@ -72,6 +72,12 @@ export function buildActiveProductVariantsByProductIdQuery(productId: string) {
       displayOrder: productVariants.displayOrder,
       status: productVariants.status,
       attributes: productVariants.attributes,
+      // Qualified by hand: in a single-table select Drizzle renders ${productVariants.id} as a bare
+      // "id", which inside this subquery would resolve to inventory_items.id.
+      availableUnits: sql<number>`(
+        SELECT COALESCE(SUM(ii.quantity_on_hand - ii.quantity_reserved - ii.quantity_allocated), 0)
+        FROM inventory_items ii WHERE ii.variant_id = "product_variants"."id"
+      )`.mapWith(Number),
     })
     .from(productVariants)
     .where(and(eq(productVariants.productId, productId), eq(productVariants.status, "ACTIVE")))

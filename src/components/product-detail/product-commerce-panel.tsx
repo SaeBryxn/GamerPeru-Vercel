@@ -18,6 +18,7 @@ import {
 import { useCart } from "@/components/cart";
 import { DomeButton, DomeLink, Icon } from "@/components/ui";
 import { WishlistButton } from "@/components/wishlist";
+import { STOCK_INQUIRY_WHATSAPP } from "@/config/features";
 import { publicEnv } from "@/config/public-env";
 import { MAX_CART_LINE_QUANTITY } from "@/lib/cart/constants";
 import type { ProductVariantDetail } from "@/lib/catalog/product-detail-types";
@@ -70,6 +71,12 @@ function buildWhatsAppHref(productName: string, variantTitle: string): string | 
   return `https://wa.me/${number ?? ""}?text=${encodeURIComponent(message)}`;
 }
 
+/** Prefilled question for a sold-out variant, sent to whoever handles restocks. */
+function buildStockInquiryHref(productName: string, variantTitle: string): string {
+  const message = `Hola, vi que ${productName} (${variantTitle}) está agotado en la web. ¿Cuándo vuelve a haber stock?`;
+  return `https://wa.me/${STOCK_INQUIRY_WHATSAPP}?text=${encodeURIComponent(message)}`;
+}
+
 export function ProductCommercePanel({
   product,
   brand,
@@ -92,7 +99,8 @@ export function ProductCommercePanel({
   const pdpConfig = product.pdpConfig;
 
   const isPending = isMutating || pendingVariantIds.has(selectedVariant.id);
-  const isAvailable = selectedVariant.status === "ACTIVE";
+  const isSoldOut = selectedVariant.inStock === false;
+  const isAvailable = selectedVariant.status === "ACTIVE" && !isSoldOut;
   const isProfileRequired = status === "PROFILE_REQUIRED";
 
   const handleSelectVariant = (variant: ProductVariantDetail) => {
@@ -112,11 +120,13 @@ export function ProductCommercePanel({
     }
   };
 
-  const addLabel = !isAvailable
-    ? "No disponible"
-    : isPending
-      ? "Añadiendo..."
-      : "Añadir al carrito";
+  const addLabel = isSoldOut
+    ? "Agotado"
+    : !isAvailable
+      ? "No disponible"
+      : isPending
+        ? "Añadiendo..."
+        : "Añadir al carrito";
 
   const showCompareAt =
     selectedVariant.compareAtPriceCents !== null &&
@@ -268,18 +278,32 @@ export function ProductCommercePanel({
           </div>
         )}
 
-        {whatsappHref && (
+        {isSoldOut ? (
           <DomeLink
-            href={whatsappHref}
-            tone="light"
+            href={buildStockInquiryHref(product.name, selectedVariant.title)}
+            tone="dark"
             className={styles.secondaryAction}
             target="_blank"
             rel="noopener noreferrer"
-            data-testid="pdp-whatsapp-button"
+            data-testid="pdp-stock-inquiry-button"
           >
             <WhatsAppIcon size={18} />
-            Contactar por WhatsApp
+            Consultar
           </DomeLink>
+        ) : (
+          whatsappHref && (
+            <DomeLink
+              href={whatsappHref}
+              tone="light"
+              className={styles.secondaryAction}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="pdp-whatsapp-button"
+            >
+              <WhatsAppIcon size={18} />
+              Contactar por WhatsApp
+            </DomeLink>
+          )
         )}
 
         {showPdpError && (

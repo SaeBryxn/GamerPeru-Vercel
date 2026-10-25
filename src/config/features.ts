@@ -7,3 +7,9 @@
  * settings are kept, so setting this back to true restores everything as it was.
  */
 export const AI_ASSISTANT_ENABLED = false;
+
+/**
+ * WhatsApp that answers "Consultar" on a sold-out product (international format, digits only).
+ * Separate from NEXT_PUBLIC_WHATSAPP_NUMBER so stock questions reach whoever handles restocks.
+ */
+export const STOCK_INQUIRY_WHATSAPP = "51975231129";

@@ -497,6 +497,32 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
       expect(html).not.toContain("Sin stock");
       expect(html).not.toContain("Últimas unidades");
       expect(html).not.toContain("Llega mañana");
+      expect(html).not.toContain("pdp-stock-inquiry-button");
+    });
+
+    it("sin unidades: bloquea el carrito y ofrece Consultar por WhatsApp", () => {
+      const soldOut: ProductVariantDetail = { ...MOCK_VARIANT_1, inStock: false };
+      const html = renderToStaticMarkup(
+        <CartProvider>
+          <ProductCommercePanel
+            product={{ id: "prod-1", name: "Beast X Pro", subtitle: null }}
+            brand={{ name: "WLMOUSE", slug: "wlmouse" }}
+            variants={[soldOut]}
+            selectedVariant={soldOut}
+            onSelectVariant={() => {}}
+          />
+        </CartProvider>
+      );
+
+      expect(html).toContain("Agotado");
+      expect(html).toMatch(
+        /data-testid="pdp-add-to-cart-button"[^>]*disabled|disabled[^>]*data-testid="pdp-add-to-cart-button"/
+      );
+      expect(html).toContain('data-testid="pdp-stock-inquiry-button"');
+      expect(html).toContain("Consultar");
+      expect(html).toContain("https://wa.me/51975231129?text=");
+      expect(html).toContain(encodeURIComponent("Beast X Pro"));
+      expect(html).not.toContain('data-testid="pdp-whatsapp-button"');
     });
   });
 
