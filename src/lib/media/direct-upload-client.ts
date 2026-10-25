@@ -133,10 +133,29 @@ export async function uploadDirect<Confirmed>({
 
   if (signal?.aborted) return { ok: false, error: "Subida cancelada." };
   onStage?.("authorizing");
-  const [signed, dimensions] = await Promise.all([
-    request({ mimeType: prepared.type, fileSizeBytes: prepared.size }),
-    policy.mediaType === "VIDEO" ? measureVideo(prepared) : measureImage(prepared),
-  ]);
+  const authorize = async () => {
+    // Same window as confirmation: the first request after a deploy or an idle spell lands on a
+    // cold Worker and is cut for CPU (503), and so are the next ones for a few seconds. Nothing
+    // was stored yet, so retrying the authorization is safe.
+    for (let attempt = 0; ; attempt++) {
+      const result = await request({ mimeType: prepared.type, fileSizeBytes: prepared.size });
+      const transient =
+        result.status === 0 || (result.status !== undefined && result.status >= 500);
+      if (result.success || !transient || attempt >= CONFIRM_RETRY_MS.length) return result;
+      await retryDelay(attempt, signal, CONFIRM_RETRY_MS);
+    }
+  };
+  let signed: Awaited<ReturnType<typeof request>>;
+  let dimensions: Dimensions;
+  try {
+    [signed, dimensions] = await Promise.all([
+      authorize(),
+      policy.mediaType === "VIDEO" ? measureVideo(prepared) : measureImage(prepared),
+    ]);
+  } catch (error) {
+    if (signal?.aborted) return { ok: false, error: "Subida cancelada." };
+    throw error;
+  }
   if (!signed.success || !signed.data) {
     return { ok: false, error: signed.error ?? "No se pudo autorizar la subida." };
   }

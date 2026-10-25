@@ -141,6 +141,34 @@ describe("reintentos de subida directa", () => {
     expect((await promise).ok).toBe(true);
     expect(opts.confirm).toHaveBeenCalledTimes(5);
   });
+  it.each([503, 0])("la autorización %s espera la ventana de corte y sigue", async (status) => {
+    const opts = options();
+    opts.request
+      .mockResolvedValueOnce({ success: false, status, error: "cortado" } as never)
+      .mockResolvedValueOnce({ success: false, status, error: "cortado" } as never);
+    const promise = uploadDirect(opts);
+    await vi.runAllTimersAsync();
+    expect((await promise).ok).toBe(true);
+    expect(opts.request).toHaveBeenCalledTimes(3);
+    expect(opts.confirm).toHaveBeenCalledOnce();
+  });
+  it("la autorización se rinde tras 5 intentos con 503", async () => {
+    const opts = options();
+    opts.request.mockResolvedValue({ success: false, status: 503, error: "cortado" } as never);
+    const promise = uploadDirect(opts);
+    await vi.runAllTimersAsync();
+    expect(await promise).toMatchObject({ ok: false, error: "cortado" });
+    expect(opts.request).toHaveBeenCalledTimes(5);
+    expect(calls).toBe(0);
+  });
+  it.each([400, 403, 413])("la autorización %s no se reintenta", async (status) => {
+    const opts = options();
+    opts.request.mockResolvedValueOnce({ success: false, status, error: "no" } as never);
+    const promise = uploadDirect(opts);
+    await vi.runAllTimersAsync();
+    expect((await promise).ok).toBe(false);
+    expect(opts.request).toHaveBeenCalledOnce();
+  });
   it("complete reintenta solo red o 5xx", async () => {
     const opts = options();
     opts.confirm
