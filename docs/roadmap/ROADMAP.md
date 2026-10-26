@@ -169,7 +169,7 @@ Surgieron del cierre del MVP (`docs/project/10-limitaciones-y-futuro.md`):
 
 Hechos en `feat/cloudflare-workers`: página `/productos`, tope de stock en ficha y carrito,
 orden de versiones en el admin, foto de la variante sin atributo de color, bolitas de color en
-las tarjetas, redes sociales, interruptor del 5%, "Ver más" en los menús, guías en Soporte,
+las tarjetas, redes sociales, interruptor del 5%, "Ver más" en los menús, guías de compra,
 medidas sin repetir, franja de marcas y el botón flotante de WhatsApp con el
 975 231 129 (`STORE_WHATSAPP`).
 
@@ -179,7 +179,24 @@ editables en `/admin/home`, ordenable y ocultable; cuatro tarjetas completas por
 carruseles de escritorio; retirada de «Completa tu setup»; orden y visibilidad de historia y
 opiniones desde el paso «Página del producto»; hasta tres fotos por reseña, con subida directa,
 validación de compra/propiedad/producto, límite diario y moderación de texto y fotos en
-`/admin/resenas`. No se aplicaron migraciones alojadas ni se hicieron escrituras de prueba. Falta:
+`/admin/resenas`.
+
+Revisión visual posterior: `/admin/menu` representa la barra y el desplegable. Los destacados del
+menú y del home se eligen en un panel lateral como el de Pedidos, con fotos, búsqueda y posiciones
+numeradas. Otro panel permite cambiar el nombre, destino, orden y visibilidad de los enlaces.
+Soporte queda con Preguntas frecuentes, Contacto, Distribuidores y Tienda oficial; las guías salen
+del navbar. Inicio prioriza una acción y tres cifras; colas, inventario y mantenimiento quedan
+plegados. La migración `0027` añade `home_section_products` y `storefront_menu_products` (FK al
+producto y al contenedor, posición única) y `storefront_menu_links` (FK al menú, grupo, destino,
+orden y visibilidad), convierte los slugs anteriores a relaciones y habilita RLS con acceso solo
+desde el servidor autorizado. Las secciones conservan sus textos en JSON, y las fotos siguen
+usando `media_assets`/`home_section_media`.
+
+No se aplicaron migraciones alojadas ni se hicieron escrituras de prueba. Falta:
+
+- [ ] **Aplicar `0027_navegacion_visual_relaciones.sql` después de `0025` y `0026`.** Verificar
+      que se conservaron los destacados elegidos, guardar una selección con fotos desde cada
+      panel y comprobar la navegación en escritorio y móvil.
 
 - [ ] **Aplicar `0026_contenido_editable_fotos_resenas.sql` después de `0025`.** Agrega el tipo
       de sección de marcas, la selección de productos del menú y las fotos de opiniones.

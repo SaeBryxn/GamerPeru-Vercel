@@ -8,6 +8,7 @@ import styles from "./financial-cohort-section.module.css";
 import { AnimatedCounter } from "./animated-counter";
 
 interface FinancialCohortSectionProps {
+  compact?: boolean;
   financialCohort: CohortFinancialsResult;
   /** Paid orders of the period in the orders list. */
   paidOrdersHref?: string;
@@ -19,6 +20,7 @@ interface FinancialCohortSectionProps {
 
 export function FinancialCohortSection({
   financialCohort,
+  compact = false,
   paidOrdersHref,
   refunds,
   comparisonLabel = "Comparación vs período anterior",
@@ -48,6 +50,49 @@ export function FinancialCohortSection({
 
   const { current, previous, trends } = financialCohort.data;
   const noSales = current.cohortPaidOrders === 0;
+  if (compact)
+    return (
+      <section className={styles.compact} aria-labelledby="financial-heading">
+        <div className={styles.compactHeading}>
+          <h2 id="financial-heading">Ventas del período</h2>
+          <span>Según el pago actual de los pedidos creados en estas fechas</span>
+        </div>
+        <dl className={styles.compactMetrics}>
+          <div>
+            <dt>Ventas netas</dt>
+            <dd data-testid="kpi-net-cents">{formatCentsToPen(current.cohortNetCents)}</dd>
+            <span>
+              {previous.cohortNetCents > 0n ? (
+                <MonetaryTrendBadge trend={trends.net} comparisonLabel={comparisonLabel} />
+              ) : (
+                "Después de devoluciones"
+              )}
+            </span>
+          </div>
+          <div>
+            <dt>Pedidos pagados</dt>
+            <dd data-testid="kpi-paid-orders">{formatInteger(current.cohortPaidOrders)}</dd>
+            <span>
+              {previous.cohortPaidOrders > 0 ? (
+                <CountTrendBadge trend={trends.paidOrders} comparisonLabel={comparisonLabel} />
+              ) : (
+                "Compras con pago confirmado"
+              )}
+            </span>
+          </div>
+          <div>
+            <dt>Ticket promedio</dt>
+            <dd data-testid="kpi-aov-cents">{formatCentsToPen(current.aovCents)}</dd>
+            <span>Neto por pedido pagado activo</span>
+          </div>
+        </dl>
+        {noSales && (
+          <p className={styles.compactEmpty} data-testid="financial-no-sales">
+            Todavía no hay ventas pagadas en este período.
+          </p>
+        )}
+      </section>
+    );
 
   return (
     <AdminSection

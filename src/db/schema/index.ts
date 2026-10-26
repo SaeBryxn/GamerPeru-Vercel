@@ -58,3 +58,5 @@ export * from "./navigation/menu-entries";
 export * from "./content/home-sections";
 export * from "./ai";
 export * from "./catalog/media-uploads";
+
+export * from "./navigation/storefront-content";

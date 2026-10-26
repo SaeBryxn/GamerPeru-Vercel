@@ -1,10 +1,17 @@
 import "server-only";
+import {
+  featuredSlugsByOwner,
+  hydrateHomeSelection,
+  readHomeFeaturedProducts,
+  writeFeaturedProducts,
+} from "@/lib/catalog/featured-product-storage";
 
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditEvents,
   homeSectionMedia,
+  homeSectionProducts,
   homeSections,
   mediaAssets,
   type HomeSectionType,
@@ -86,17 +93,15 @@ export async function createHomeSection(
         updatedByAuthUserId: actorId,
       })
       .returning();
-    if (!row) throw new Error("No se pudo crear la sección.");
-    await tx
-      .insert(auditEvents)
-      .values({
-        actorType: "ADMIN",
-        actorId,
-        action: "home:section:create",
-        targetType: "home_section",
-        targetId: row.id,
-        metadata: { section_type: row.sectionType },
-      });
+    if (!row) throw new Error("No se pudo crear la secciÃ³n.");
+    await tx.insert(auditEvents).values({
+      actorType: "ADMIN",
+      actorId,
+      action: "home:section:create",
+      targetType: "home_section",
+      targetId: row.id,
+      metadata: { section_type: row.sectionType },
+    });
     return {
       id: row.id,
       type: row.sectionType,
@@ -114,7 +119,7 @@ async function authorize(options?: HomeSectionsServiceOptions): Promise<string> 
   if (options?.authContext) {
     if (!options.authContext.permissions.has("catalog:manage")) {
       throw new CatalogDomainError(
-        "No tienes permisos suficientes para realizar esta acción.",
+        "No tienes permisos suficientes para realizar esta acciÃ³n.",
         "FORBIDDEN",
         403
       );
@@ -130,7 +135,7 @@ async function lockHome(tx: Transaction): Promise<void> {
 
 function conflict(): CatalogDomainError {
   return new CatalogDomainError(
-    "Otra persona cambió el home mientras editabas. Recarga para ver la versión actual.",
+    "Otra persona cambiÃ³ el home mientras editabas. Recarga para ver la versiÃ³n actual.",
     "HOME_SECTION_CONFLICT",
     409
   );
@@ -139,7 +144,7 @@ function conflict(): CatalogDomainError {
 async function lockedSection(tx: Transaction, sectionId: string, expectedVersion: number) {
   const [row] = await tx.select().from(homeSections).where(eq(homeSections.id, sectionId));
   if (!row) {
-    throw new CatalogDomainError("La sección no existe.", "HOME_SECTION_NOT_FOUND", 404);
+    throw new CatalogDomainError("La secciÃ³n no existe.", "HOME_SECTION_NOT_FOUND", 404);
   }
   if (row.version !== expectedVersion) throw conflict();
   return row;
@@ -157,13 +162,24 @@ export async function getAdminHomeState(
     .from(homeSections)
     .orderBy(asc(homeSections.displayOrder), asc(homeSections.id));
 
+  let featured = new Map<string, string[]>();
+  try {
+    featured = featuredSlugsByOwner(
+      await readHomeFeaturedProducts(
+        rows.map((row) => row.id),
+        database
+      )
+    );
+  } catch {
+    /* Legacy payload until migration 0027. */
+  }
   const sections: AdminHomeSection[] = rows.map((row) => ({
     id: row.id,
     type: row.sectionType,
     displayOrder: row.displayOrder,
     isVisible: row.isVisible,
     version: row.version,
-    content: row.content,
+    content: hydrateHomeSelection(row.content, featured.get(row.id)),
     contentValid:
       row.contentSchemaVersion === HOME_CONTENT_SCHEMA_VERSION &&
       parseHomeSectionContent(row.sectionType, row.content).success,
@@ -221,7 +237,7 @@ export async function updateHomeSectionContent(
       const issue = parsed.error.issues[0];
       const where = issue?.path.length ? ` (${issue.path.join(".")})` : "";
       throw new CatalogDomainError(
-        `El contenido no es válido${where}: ${issue?.message ?? "revisa los campos."}`,
+        `El contenido no es vÃ¡lido${where}: ${issue?.message ?? "revisa los campos."}`,
         "HOME_SECTION_INVALID",
         422
       );
@@ -257,11 +273,39 @@ export async function updateHomeSectionContent(
       }
     }
 
+    let storedContent = parsed.data;
+    let previousFeaturedProducts: { productId: string; displayOrder: number }[] = [];
+    if (
+      (section.type === "product_carousel" || section.type === "catalog_rail") &&
+      section.content.selection
+    ) {
+      const categorySlug =
+        section.type === "catalog_rail"
+          ? section.content.categorySlug
+          : section.content.source.kind === "category"
+            ? section.content.source.categorySlug
+            : undefined;
+      previousFeaturedProducts = await tx
+        .select({
+          productId: homeSectionProducts.productId,
+          displayOrder: homeSectionProducts.displayOrder,
+        })
+        .from(homeSectionProducts)
+        .where(eq(homeSectionProducts.sectionId, row.id))
+        .orderBy(asc(homeSectionProducts.displayOrder));
+      const selection = await writeFeaturedProducts(
+        tx,
+        { sectionId: row.id },
+        section.content.selection,
+        categorySlug
+      );
+      storedContent = { ...parsed.data, selection };
+    }
     const version = row.version + 1;
     await tx
       .update(homeSections)
       .set({
-        content: parsed.data,
+        content: storedContent,
         contentSchemaVersion: HOME_CONTENT_SCHEMA_VERSION,
         version,
         updatedByAuthUserId: actorId,
@@ -288,6 +332,7 @@ export async function updateHomeSectionContent(
         section_type: row.sectionType,
         previous_version: row.version,
         previous_content: row.content,
+        previous_featured_products: previousFeaturedProducts,
       },
     });
 

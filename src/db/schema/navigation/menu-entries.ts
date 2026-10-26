@@ -18,6 +18,9 @@ export const storefrontMenuEntries = pgTable("storefront_menu_entries", {
   entryId: varchar("entry_id", { length: 64 }).primaryKey(),
   isVisible: boolean("is_visible").notNull().default(true),
   displayOrder: integer("display_order").notNull().default(0),
+  label: varchar("label", { length: 100 }),
+  href: varchar("href", { length: 500 }),
+  linksConfigured: boolean("links_configured").notNull().default(false),
   productSelection: jsonb("product_selection").$type<ProductSelection>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

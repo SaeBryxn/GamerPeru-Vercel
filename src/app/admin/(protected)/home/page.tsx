@@ -1,3 +1,4 @@
+import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import React from "react";
 import type { Metadata } from "next";
 import { getMenuCatalogEntries } from "@/lib/navigation/menu-catalog";
@@ -38,6 +39,9 @@ export default async function AdminHomePage() {
     .orderBy(asc(categories.displayOrder), asc(categories.name));
 
   const products = (await getMenuCatalogEntries()).map((product) => ({
+    id: product.productId,
+    imageUrl: product.objectKey ? resolvePublicMediaUrl(product.objectKey) : null,
+    brandName: product.brandName,
     slug: product.slug,
     name: product.name,
     categorySlug: product.categorySlug,

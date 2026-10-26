@@ -1,5 +1,7 @@
 import "server-only";
 import { ProductSelectionSchema, type ProductSelection } from "@/lib/catalog/curated-products";
+import { getMenuFeaturedProducts } from "./menu-content";
+import { featuredSlugsByOwner } from "@/lib/catalog/featured-product-storage";
 import { db } from "@/db";
 import { storefrontMenuEntries } from "@/db/schema";
 import { cacheCatalogQuery } from "@/lib/catalog/catalog-cache";
@@ -8,6 +10,9 @@ import { MENU_ENTRY_DESCRIPTORS, isKnownMenuEntry, type MenuEntryDescriptor } fr
 
 export interface MenuEntrySetting extends MenuEntryDescriptor {
   productSelection?: ProductSelection;
+  label?: string;
+  href?: string;
+  linksConfigured?: boolean;
   isVisible: boolean;
   displayOrder: number;
   /** True while the entry still uses the configuration default (no stored decision yet). */
@@ -25,6 +30,19 @@ const readStoredMenuEntries = cacheCatalogQuery("menu-entry-settings", async () 
     .select({
       entryId: storefrontMenuEntries.entryId,
       productSelection: storefrontMenuEntries.productSelection,
+      label: storefrontMenuEntries.label,
+      href: storefrontMenuEntries.href,
+      linksConfigured: storefrontMenuEntries.linksConfigured,
+      isVisible: storefrontMenuEntries.isVisible,
+      displayOrder: storefrontMenuEntries.displayOrder,
+    })
+    .from(storefrontMenuEntries)
+);
+
+const readLegacyMenuEntries = cacheCatalogQuery("menu-entry-settings-legacy", async () =>
+  db
+    .select({
+      entryId: storefrontMenuEntries.entryId,
       isVisible: storefrontMenuEntries.isVisible,
       displayOrder: storefrontMenuEntries.displayOrder,
     })
@@ -37,6 +55,9 @@ export async function getMenuEntrySettings(): Promise<MenuEntrySetting[]> {
     isVisible: boolean;
     displayOrder: number;
     productSelection?: unknown;
+    label?: string | null;
+    href?: string | null;
+    linksConfigured?: boolean;
   }[] = [];
 
   // Fixture runs must not inherit whatever the operator configured in the connected database.
@@ -44,10 +65,15 @@ export async function getMenuEntrySettings(): Promise<MenuEntrySetting[]> {
     try {
       stored = await readStoredMenuEntries();
     } catch {
-      stored = [];
+      try {
+        stored = await readLegacyMenuEntries();
+      } catch {
+        stored = [];
+      }
     }
   }
 
+  const relational = featuredSlugsByOwner((await getMenuFeaturedProducts()) ?? []);
   const byId = new Map(
     stored.filter((row) => isKnownMenuEntry(row.entryId)).map((r) => [r.entryId, r])
   );
@@ -57,7 +83,15 @@ export async function getMenuEntrySettings(): Promise<MenuEntrySetting[]> {
     const selection = ProductSelectionSchema.safeParse(row?.productSelection);
     return {
       ...descriptor,
-      productSelection: selection.success ? selection.data : undefined,
+      label: row?.label ?? undefined,
+      href: row?.href ?? undefined,
+      linksConfigured: row?.linksConfigured ?? false,
+      productSelection: selection.success
+        ? {
+            ...selection.data,
+            productSlugs: relational.get(descriptor.id) ?? selection.data.productSlugs,
+          }
+        : undefined,
       isVisible: row ? row.isVisible : descriptor.defaultVisible,
       displayOrder: row ? row.displayOrder : descriptor.defaultOrder,
       isDefault: !row,

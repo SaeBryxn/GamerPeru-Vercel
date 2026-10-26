@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ProductSelection } from "@/components/admin/product-selection";
@@ -12,7 +12,7 @@ describe("Selección de productos sin editar código", () => {
     { slug: "b", name: "Mouse B", categorySlug: "mouses" },
     { slug: "pad", name: "Mousepad", categorySlug: "mousepads" },
   ];
-  it("solo ofrece productos de la categoría elegida", () => {
+  it("solo ofrece productos de la categoría elegida al abrir el panel", async () => {
     render(
       <ProductSelection
         products={products}
@@ -21,10 +21,14 @@ describe("Selección de productos sin editar código", () => {
         categorySlug="mousepads"
       />
     );
-    expect(screen.queryByRole("option", { name: "Mouse A" })).toBeNull();
-    expect(screen.getByRole("option", { name: "Mousepad" })).toBeTruthy();
+    const user = userEvent.setup();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Elegir productos" }));
+    const dialog = screen.getByRole("dialog", { name: "Elige los productos" });
+    expect(within(dialog).queryByRole("button", { name: "Agregar Mouse A" })).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Agregar Mousepad" })).toBeTruthy();
   });
-  it("sube, quita y agrega productos conservando el resto de la selección", async () => {
+  it("previsualiza el orden sin guardar hasta aplicar y permite cancelar", async () => {
     const onChange = vi.fn();
     render(
       <ProductSelection
@@ -34,12 +38,34 @@ describe("Selección de productos sin editar código", () => {
       />
     );
     const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Elegir productos" }));
     await user.click(screen.getByRole("button", { name: "Subir Mouse B" }));
-    expect(onChange).toHaveBeenLastCalledWith({ mode: "manual", productSlugs: ["b", "a"] });
-    await user.click(screen.getByRole("button", { name: "Quitar Mouse A" }));
-    expect(onChange).toHaveBeenLastCalledWith({ mode: "manual", productSlugs: ["b"] });
-    await user.selectOptions(screen.getByLabelText("Agregar producto (2/24)"), "pad");
-    expect(onChange).toHaveBeenLastCalledWith({ mode: "manual", productSlugs: ["a", "b", "pad"] });
+    await user.click(screen.getByRole("button", { name: "Quitar de la selección Mouse A" }));
+    await user.click(screen.getByRole("button", { name: "Agregar Mousepad" }));
+    expect(onChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Aplicar selección" }));
+    expect(onChange).toHaveBeenLastCalledWith({ mode: "manual", productSlugs: ["b", "pad"] });
+  });
+  it("mantiene el panel y los productos elegidos si guardar falla", async () => {
+    const onChange = vi.fn();
+    const onApply = vi.fn().mockResolvedValue({ success: false, error: "No se pudo guardar." });
+    render(
+      <ProductSelection
+        products={products}
+        value={{ mode: "manual", productSlugs: [] }}
+        onChange={onChange}
+        onApply={onApply}
+      />
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Elegir productos" }));
+    await user.click(screen.getByRole("button", { name: "Agregar Mouse A" }));
+    await user.click(screen.getByRole("button", { name: "Guardar selección" }));
+    expect(screen.getByRole("alert").textContent).toContain("No se pudo guardar.");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(onChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(onChange).not.toHaveBeenCalled();
   });
 });
 

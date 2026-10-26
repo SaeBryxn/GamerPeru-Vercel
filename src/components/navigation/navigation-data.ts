@@ -277,14 +277,6 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
             { label: "Tienda oficial", href: "/soporte/tienda-oficial" },
           ],
         },
-        {
-          title: "Guías de compra",
-          items: [
-            { label: "Cómo elegir tu mouse", href: "/guia-de-compra/mouses" },
-            { label: "Cómo elegir tu mousepad", href: "/guia-de-compra/mousepads" },
-            { label: "Cómo elegir tu teclado", href: "/guia-de-compra/teclados" },
-          ],
-        },
       ],
     },
     {

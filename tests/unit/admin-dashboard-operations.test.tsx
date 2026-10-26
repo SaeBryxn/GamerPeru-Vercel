@@ -642,7 +642,8 @@ describe("Jerarquía de Inicio", () => {
   it("una cuenta de pedidos ve sus colas sin bloques de catálogo", async () => {
     vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(false));
     const { container } = render(await AdminDashboardPage({}));
-    expect(container.querySelector("details")).toBeNull();
+    expect(container.querySelector("details")?.open).toBe(false);
+    expect(screen.getByText("Estado de pedidos")).toBeTruthy();
     expect(screen.getByTestId("queue-to-prepare").textContent).toBe("3");
     expect(screen.getByTestId("attention-orders-to-prepare")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Inventario" })).toBeNull();

@@ -5,8 +5,15 @@ import {
   getMenuEntryDescriptor,
   isKnownMenuEntry,
 } from "@/lib/navigation/menu-entries";
+import type { EditableMenuLink } from "@/lib/navigation/menu-content-schema";
 import type { MenuEntrySetting } from "@/lib/navigation/menu-settings";
 
+const contentMock = vi.hoisted(() => ({
+  value: null as Record<string, EditableMenuLink[]> | null,
+}));
+vi.mock("@/lib/navigation/menu-content", () => ({
+  getEditableMenuLinks: async () => contentMock.value,
+}));
 const settingsMock = vi.hoisted(() => ({ value: [] as MenuEntrySetting[] }));
 const factsMock = vi.hoisted(() => ({
   byCategory: new Map<
@@ -70,6 +77,7 @@ describe("Menu entry registry", () => {
 describe("Resolved storefront navigation", () => {
   beforeEach(() => {
     vi.resetModules();
+    contentMock.value = null;
     settingsMock.value = defaultSettings();
     factsMock.byCategory = new Map();
     factsMock.allBrands = [
@@ -82,6 +90,46 @@ describe("Resolved storefront navigation", () => {
     const mod = await import("@/lib/navigation/resolve-navigation");
     return mod.getStorefrontNavigation();
   }
+
+  it("usa enlaces editados, oculta los desactivados y admite una lista vacía", async () => {
+    settingsMock.value = settingsMock.value.map((entry) =>
+      entry.id === "soporte"
+        ? { ...entry, label: "Ayuda", href: "/soporte/contacto", linksConfigured: true }
+        : entry
+    );
+    contentMock.value = {
+      soporte: [
+        {
+          id: "01a1c000-0000-7000-8000-000000000101",
+          label: "Habla con nosotros",
+          href: "/soporte/contacto",
+          sectionTitle: "Ayuda",
+          placement: "section",
+          icon: null,
+          isVisible: true,
+        },
+        {
+          id: "01a1c000-0000-7000-8000-000000000102",
+          label: "Oculto",
+          href: "/soporte/distribuidores",
+          sectionTitle: "Ayuda",
+          placement: "section",
+          icon: null,
+          isVisible: false,
+        },
+      ],
+    };
+    const support = (await resolve()).primaryNav.find((entry) => entry.id === "soporte")!;
+    expect(support.label).toBe("Ayuda");
+    expect(support.href).toBe("/soporte/contacto");
+    expect(support.sections).toEqual([
+      { title: "Ayuda", items: [{ label: "Habla con nosotros", href: "/soporte/contacto" }] },
+    ]);
+    contentMock.value = {};
+    expect((await resolve()).primaryNav.find((entry) => entry.id === "soporte")?.sections).toEqual(
+      []
+    );
+  });
 
   it("omits hidden entries from the top-level menu", async () => {
     const config = await resolve();

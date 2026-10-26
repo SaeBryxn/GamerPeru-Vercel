@@ -66,7 +66,7 @@ export const MENU_ENTRY_DESCRIPTORS: MenuEntryDescriptor[] = [
   {
     id: "soporte",
     adminLabel: "Soporte",
-    description: "Preguntas frecuentes, contacto, distribuidores, tienda oficial y garantía.",
+    description: "Preguntas frecuentes, contacto, distribuidores y tienda oficial.",
     defaultVisible: true,
     defaultOrder: 5,
   },

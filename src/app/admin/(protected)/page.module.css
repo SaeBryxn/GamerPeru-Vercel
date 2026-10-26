@@ -7,6 +7,7 @@
   flex-direction: column;
   gap: var(--admin-section-gap);
   width: 100%;
+  max-width: 1280px;
   min-width: 0;
 }
 
@@ -82,4 +83,13 @@
 
 .foldBody {
   padding-bottom: var(--space-4);
+}
+
+.refundNote {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.refundNote a {
+  color: var(--color-text-primary);
+  text-underline-offset: 3px;
 }

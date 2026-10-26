@@ -1,4 +1,5 @@
 import "server-only";
+import { getEditableMenuLinks } from "./menu-content";
 import { selectProducts } from "@/lib/catalog/curated-products";
 import { NAVIGATION_CONFIG } from "@/components/navigation/navigation-data";
 import type {
@@ -77,10 +78,11 @@ function buildFooterColumns(
  *    from every menu, tile and footer column at once.
  */
 export async function getStorefrontNavigation(): Promise<NavigationConfig> {
-  const [settings, facts, catalogEntries] = await Promise.all([
+  const [settings, facts, catalogEntries, editableLinks] = await Promise.all([
     getMenuEntrySettings(),
     getCatalogNavigationFacts(),
     getMenuCatalogEntries(),
+    getEditableMenuLinks(),
   ]);
 
   const isHidden = buildHiddenMatcher(settings);
@@ -110,6 +112,8 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
       );
       const resolved: MegaMenuCategory = {
         ...item,
+        label: settingById.get(item.id)?.label ?? item.label,
+        href: settingById.get(item.id)?.href ?? item.href,
         sections: filterSections(item.sections, isHidden),
       };
 
@@ -149,6 +153,23 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
         else delete resolved.brands;
       }
 
+      if (settingById.get(item.id)?.linksConfigured && editableLinks) {
+        const links = (editableLinks[item.id] ?? []).filter(
+          (link) => link.isVisible && !isHidden(link.href)
+        );
+        const groups = new Map<string, NavLink[]>();
+        for (const link of links.filter((link) => link.placement === "section")) {
+          groups.set(link.sectionTitle, [
+            ...(groups.get(link.sectionTitle) ?? []),
+            { label: link.label, href: link.href },
+          ]);
+        }
+        resolved.sections = [...groups].map(([title, items]) => ({ title, items }));
+        if (item.tiles)
+          resolved.tiles = links
+            .filter((link) => link.placement === "tile")
+            .map((link) => ({ title: link.label, href: link.href, icon: link.icon ?? undefined }));
+      }
       return resolved;
     });
 

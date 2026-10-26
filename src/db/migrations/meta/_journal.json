@@ -190,6 +190,13 @@
       "when": 1793007709553,
       "tag": "0026_contenido_editable_fotos_resenas",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793009840549,
+      "tag": "0027_navegacion_visual_relaciones",
+      "breakpoints": true
     }
   ]
 }

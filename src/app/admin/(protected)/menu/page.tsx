@@ -1,3 +1,7 @@
+import { getEditableMenuLinks } from "@/lib/navigation/menu-content";
+import { defaultMenuContent } from "@/lib/navigation/menu-content-schema";
+import { NAVIGATION_CONFIG } from "@/components/navigation/navigation-data";
+import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 import React from "react";
 import type { Metadata } from "next";
 import { getVerifiedAuthContext } from "@/lib/auth/rbac";
@@ -24,10 +28,21 @@ export default async function MenuPage() {
 
   const [settings, facts] = await Promise.all([getMenuEntrySettings(), getCategoryCatalogFacts()]);
 
+  const editableLinks = await getEditableMenuLinks();
   const entries: MenuEntryView[] = settings.map((entry) => ({
     id: entry.id,
     productSelection: entry.productSelection,
-    label: entry.adminLabel,
+    label: entry.label ?? entry.adminLabel,
+    layout: NAVIGATION_CONFIG.primaryNav.find((item) => item.id === entry.id)?.menuLayout,
+    content: {
+      ...defaultMenuContent(entry.id),
+      label: entry.label ?? defaultMenuContent(entry.id).label,
+      href: entry.href ?? defaultMenuContent(entry.id).href,
+      links:
+        entry.linksConfigured && editableLinks
+          ? (editableLinks[entry.id] ?? [])
+          : defaultMenuContent(entry.id).links,
+    },
     description: entry.description,
     isVisible: entry.isVisible,
     categorySlug: entry.categorySlug ?? null,
@@ -38,6 +53,9 @@ export default async function MenuPage() {
   }));
 
   const products = (await getMenuCatalogEntries()).map((product) => ({
+    id: product.productId,
+    imageUrl: product.objectKey ? resolvePublicMediaUrl(product.objectKey) : null,
+    brandName: product.brandName,
     slug: product.slug,
     name: product.name,
     categorySlug: product.categorySlug,

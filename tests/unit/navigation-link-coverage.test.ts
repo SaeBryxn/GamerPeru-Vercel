@@ -46,7 +46,14 @@ const paths = hrefs.map((href) => new URL(href, "https://gamerperu.com").pathnam
 describe("Navigation link coverage", () => {
   it("collects the menu links", () => {
     expect(paths.length).toBeGreaterThan(20);
-    expect(paths).toContain("/guia-de-compra/mouses");
+    expect(paths).not.toContain("/guia-de-compra/mouses");
+    const support = NAVIGATION_CONFIG.primaryNav.find((entry) => entry.id === "soporte")!;
+    expect(support.sections.flatMap((section) => section.items.map((item) => item.label))).toEqual([
+      "Preguntas frecuentes",
+      "Contacto",
+      "Distribuidores",
+      "Tienda oficial",
+    ]);
     expect(paths).toContain("/software/firmware");
     expect(paths).toContain("/soporte/tienda-oficial");
     expect(routes.some((route) => route.test("/ruta-que-no-existe"))).toBe(false);

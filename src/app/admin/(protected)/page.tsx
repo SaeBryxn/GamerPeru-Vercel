@@ -12,7 +12,7 @@ import { OrderPipelineSection } from "@/components/admin/dashboard/order-pipelin
 import { OrderQueueSection } from "@/components/admin/dashboard/order-queue-section";
 import { InventoryOverviewSection } from "@/components/admin/dashboard/inventory-overview-section";
 import { NoMetricsAssigned } from "@/components/admin/dashboard/no-metrics-assigned";
-import { AttentionSection } from "@/components/admin/dashboard/attention-section";
+import { DashboardFocus } from "@/components/admin/dashboard/dashboard-focus";
 import { HomeStatusSection } from "@/components/admin/dashboard/home-status-section";
 import { CatalogHealthSection } from "@/components/admin/dashboard/catalog-health-section";
 import { buildDashboardLinks } from "@/components/admin/dashboard/dashboard-links";
@@ -83,37 +83,72 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
 
       {hasAnyMetricAccess ? (
         <Stagger className={styles.dashboardBody}>
-          <AttentionSection payload={payload} links={links} />
+          <DashboardFocus payload={payload} links={links} />
 
-          <div className={styles.workspace} data-has-aside={hasAside}>
+          {hasPeriodMetrics && (
+            <FinancialCohortSection
+              compact
+              financialCohort={payload.financialCohort}
+              paidOrdersHref={links.periodOrders?.({ paymentStatus: "PAID" })}
+              comparisonLabel={comparison}
+            />
+          )}
+
+          <div className={styles.secondary}>
             {hasPeriodMetrics && (
-              <div className={styles.primary}>
-                <FinancialCohortSection
-                  financialCohort={payload.financialCohort}
-                  paidOrdersHref={links.periodOrders?.({ paymentStatus: "PAID" })}
-                  refunds={
-                    payload.paymentVerification.status === "READY"
-                      ? payload.paymentVerification.data.periodRefunds
-                      : undefined
-                  }
-                  comparisonLabel={comparison}
-                />
-                <OrderPipelineSection
-                  orderPipeline={payload.orderPipeline}
-                  periodOrdersHref={links.periodOrders}
-                  comparisonLabel={comparison}
-                />
-              </div>
+              <details className={styles.fold}>
+                <summary>
+                  <span>Detalle del período</span>
+                  <span className={styles.foldCount}>Estados de pedidos y devoluciones</span>
+                </summary>
+                <div className={styles.foldBody}>
+                  <OrderPipelineSection
+                    orderPipeline={payload.orderPipeline}
+                    periodOrdersHref={links.periodOrders}
+                    comparisonLabel={comparison}
+                  />
+                  {payload.paymentVerification.status === "READY" &&
+                    payload.paymentVerification.data.periodRefunds.refundCount > 0 && (
+                      <p className={styles.refundNote}>
+                        {formatInteger(payload.paymentVerification.data.periodRefunds.refundCount)}{" "}
+                        reembolsos registrados en este período. <a href="/admin/pagos">Ver pagos</a>
+                      </p>
+                    )}
+                </div>
+              </details>
             )}
-            {hasAside && (
-              <aside className={styles.aside} aria-label="Estado actual de pedidos e inventario">
-                <OrderQueueSection orderQueue={payload.orderQueue} links={links} now={now} />
-                <InventoryOverviewSection
-                  inventoryOverview={payload.inventoryOverview}
-                  inventoryHref={links.inventory}
-                  outOfStockHref={links.products?.({ pending: "stock" })}
-                />
-              </aside>
+            {payload.orderQueue.status === "READY" && (
+              <details className={styles.fold}>
+                <summary>
+                  <span>Estado de pedidos</span>
+                  <span className={styles.foldCount}>
+                    {formatInteger(payload.orderQueue.data.inProgress)} en preparación o envío
+                  </span>
+                </summary>
+                <div className={styles.foldBody}>
+                  <OrderQueueSection orderQueue={payload.orderQueue} links={links} now={now} />
+                </div>
+              </details>
+            )}
+            {payload.inventoryOverview.status === "READY" && (
+              <details className={styles.fold}>
+                <summary>
+                  <span>Inventario</span>
+                  <span className={styles.foldCount}>
+                    {formatInteger(
+                      payload.inventoryOverview.data.globalPhysicalBalances.availableToSellUnits
+                    )}{" "}
+                    unidades disponibles
+                  </span>
+                </summary>
+                <div className={styles.foldBody}>
+                  <InventoryOverviewSection
+                    inventoryOverview={payload.inventoryOverview}
+                    inventoryHref={links.inventory}
+                    outOfStockHref={links.products?.({ pending: "stock" })}
+                  />
+                </div>
+              </details>
             )}
           </div>
 

@@ -1,9 +1,19 @@
 import "server-only";
+import {
+  readHomeFeaturedProducts,
+  isMissingFeaturedRelation,
+  featuredSlugsByOwner,
+  hydrateHomeSelection,
+} from "@/lib/catalog/featured-product-storage";
 import { asc, eq, inArray } from "drizzle-orm";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { db } from "@/db";
 import { homeSectionMedia, homeSections, mediaAssets, type HomeSectionType } from "@/db/schema";
-import { CATALOG_REVALIDATE_SECONDS, isCatalogCacheEnabled } from "@/lib/catalog/catalog-cache";
+import {
+  CATALOG_CACHE_TAG,
+  CATALOG_REVALIDATE_SECONDS,
+  isCatalogCacheEnabled,
+} from "@/lib/catalog/catalog-cache";
 import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
 import { logger } from "@/lib/logger";
 import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
@@ -77,13 +87,27 @@ async function queryStoredHome(): Promise<StoredHome> {
       )
     );
 
-  return { rows, media };
+  try {
+    const featured = featuredSlugsByOwner(
+      await readHomeFeaturedProducts(rows.map((row) => row.id))
+    );
+    return {
+      rows: rows.map((row) => ({
+        ...row,
+        content: hydrateHomeSelection(row.content, featured.get(row.id)),
+      })),
+      media,
+    };
+  } catch (error) {
+    if (isMissingFeaturedRelation(error)) return { rows, media };
+    throw error;
+  }
 }
 
 // Throws on failure so a database outage is never cached as an empty home.
 const readStoredHome = isCatalogCacheEnabled()
   ? unstable_cache(queryStoredHome, ["storefront-home", "sections"], {
-      tags: [HOME_CACHE_TAG],
+      tags: [HOME_CACHE_TAG, CATALOG_CACHE_TAG],
       revalidate: CATALOG_REVALIDATE_SECONDS,
     })
   : queryStoredHome;
