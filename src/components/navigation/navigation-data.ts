@@ -67,7 +67,6 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
       href: "/categorias/mouses",
       menuLayout: "series",
       series: [],
-      guide: { label: "Guía de compra", href: "/guia-de-compra/mouses" },
       promos: [],
       sections: [
         {
@@ -121,7 +120,6 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
       href: "/categorias/teclados",
       menuLayout: "series",
       series: [],
-      guide: { label: "Guía de compra", href: "/guia-de-compra/teclados" },
       promos: [],
       sections: [
         {
@@ -213,7 +211,6 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
       href: "/categorias/mousepads",
       menuLayout: "series",
       series: [],
-      guide: { label: "Guía de compra", href: "/guia-de-compra/mousepads" },
       promos: [],
       sections: [
         {
@@ -278,6 +275,14 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
             { label: "Contacto", href: "/soporte/contacto" },
             { label: "Distribuidores", href: "/soporte/distribuidores" },
             { label: "Tienda oficial", href: "/soporte/tienda-oficial" },
+          ],
+        },
+        {
+          title: "Guías de compra",
+          items: [
+            { label: "Cómo elegir tu mouse", href: "/guia-de-compra/mouses" },
+            { label: "Cómo elegir tu mousepad", href: "/guia-de-compra/mousepads" },
+            { label: "Cómo elegir tu teclado", href: "/guia-de-compra/teclados" },
           ],
         },
       ],

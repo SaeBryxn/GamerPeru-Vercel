@@ -27,7 +27,7 @@ export interface MegaMenuSeriesProps {
 }
 
 /**
- * Series lists on the left (with a guide link underneath) and large promo
+ * Series lists on the left (with a "Ver más" link to the category underneath) and large promo
  * cards on the right. Used by "Mouses", "Teclados" and "Mousepads".
  */
 export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesProps) {
@@ -62,23 +62,19 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
           ))}
         </div>
 
+        {/* Leads to the whole category, so a short list never reads as everything there is. */}
         <m.div className={styles.seriesFooter} variants={SLIDE_FROM_RIGHT}>
-          {category.guide && (
-            <div className={styles.guideRow}>
-              <MegaMenuArrowLink
-                href={category.guide.href}
-                className={styles.guideLink}
-                arrowSize="lg"
-                fullWidth
-                onClick={onNavigate}
-              >
-                {category.guide.label}
-              </MegaMenuArrowLink>
-            </div>
-          )}
-          <MegaMenuArrowLink href={category.href} className={styles.allLink} onClick={onNavigate}>
-            Ver todo en {category.label}
-          </MegaMenuArrowLink>
+          <div className={styles.moreRow}>
+            <MegaMenuArrowLink
+              href={category.href}
+              className={styles.moreLink}
+              arrowSize="lg"
+              fullWidth
+              onClick={onNavigate}
+            >
+              Ver más
+            </MegaMenuArrowLink>
+          </div>
         </m.div>
       </m.div>
 

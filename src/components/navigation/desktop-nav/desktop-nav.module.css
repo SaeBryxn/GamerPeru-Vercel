@@ -226,16 +226,26 @@
   color: var(--color-text-muted);
 }
 
+/* A solid pill, so "there is more" reads at first glance instead of hiding in the corner. */
 .topRightViewAll {
+  padding: 10px 18px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-dark-canvas);
   font-family: var(--font-heading);
   font-size: 15px;
   font-weight: 700;
-  color: var(--color-text-primary);
+  color: var(--color-text-dark-primary);
+  transition: background-color var(--motion-duration-normal) var(--motion-easing-standard);
+}
+
+.topRightViewAll:hover {
+  background-color: var(--color-brand-primary);
 }
 
 .viewAllCount {
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: inherit;
+  opacity: 0.75;
 }
 
 .previewGrid {

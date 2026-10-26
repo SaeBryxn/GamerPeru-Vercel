@@ -76,25 +76,17 @@
   padding-top: var(--space-10);
 }
 
-.guideRow {
+.moreRow {
   padding-top: var(--space-5);
   border-top: 1px solid var(--color-border-strong);
 }
 
-.guideLink {
+.moreLink {
   font-family: var(--font-heading);
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--color-text-primary);
-}
-
-.allLink {
-  margin-top: var(--space-3);
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
 }
 
 .promoGrid {
