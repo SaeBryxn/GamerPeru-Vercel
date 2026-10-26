@@ -16,6 +16,15 @@ export interface HomeSectionGuide {
 
 /** Admin copy and schematic for every section type, in the storefront's visual language. */
 export const HOME_SECTION_GUIDES: Record<HomeSectionType, HomeSectionGuide> = {
+  brand_strip: {
+    label: "Carrusel de marcas",
+    description: "Logos e imágenes con enlaces a marcas o categorías de la tienda.",
+    needs: "El nombre de cada marca, su imagen y su enlace interno.",
+    wireframe: [
+      ["h", 8, 8, 50, 6],
+      ...columns([8, 35, 62, 89], (x): Shape[] => [["img", x, 30, 22, 25]]),
+    ],
+  },
   video_hero: {
     label: "Portada con video",
     description:

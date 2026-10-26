@@ -59,6 +59,57 @@ export interface AdminHomeState {
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+/** Adds the editable brand strip without changing any existing home section. */
+export async function createHomeSection(
+  input: { type: "brand_strip"; expectedOrder: string[] },
+  options?: HomeSectionsServiceOptions
+): Promise<AdminHomeSection> {
+  const actorId = await authorize(options);
+  return (options?.database ?? db).transaction(async (tx) => {
+    await lockHome(tx);
+    const rows = await tx
+      .select()
+      .from(homeSections)
+      .orderBy(asc(homeSections.displayOrder), asc(homeSections.id));
+    if (
+      rows.length !== input.expectedOrder.length ||
+      rows.some((row, index) => row.id !== input.expectedOrder[index])
+    )
+      throw conflict();
+    if (rows.some((row) => row.sectionType === "brand_strip")) throw conflict();
+    const [row] = await tx
+      .insert(homeSections)
+      .values({
+        sectionType: "brand_strip",
+        displayOrder: Math.max(-1, ...rows.map((row) => row.displayOrder)) + 1,
+        content: { title: "Nuestras marcas", items: [] },
+        updatedByAuthUserId: actorId,
+      })
+      .returning();
+    if (!row) throw new Error("No se pudo crear la sección.");
+    await tx
+      .insert(auditEvents)
+      .values({
+        actorType: "ADMIN",
+        actorId,
+        action: "home:section:create",
+        targetType: "home_section",
+        targetId: row.id,
+        metadata: { section_type: row.sectionType },
+      });
+    return {
+      id: row.id,
+      type: row.sectionType,
+      displayOrder: row.displayOrder,
+      isVisible: row.isVisible,
+      version: row.version,
+      content: row.content,
+      contentValid: true,
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  });
+}
+
 async function authorize(options?: HomeSectionsServiceOptions): Promise<string> {
   if (options?.authContext) {
     if (!options.authContext.permissions.has("catalog:manage")) {

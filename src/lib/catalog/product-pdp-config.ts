@@ -34,7 +34,13 @@ export const pdpSizeSchema = z
     "La longitud mínima debe ser menor que la máxima."
   );
 
+export const PDP_CONTENT_SECTIONS = ["story", "reviews"] as const;
 export const productPdpConfigSchema = z.object({
+  contentSections: z
+    .array(z.enum(PDP_CONTENT_SECTIONS))
+    .max(2)
+    .refine((sections) => new Set(sections).size === sections.length, "No repitas secciones.")
+    .default(["reviews", "story"]),
   rating: z
     .object({
       enabled: z.boolean().default(false),

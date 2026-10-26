@@ -1,5 +1,6 @@
 "use client";
 
+import { ReviewPhotoUpload } from "./review-photo-upload";
 import React, { useEffect, useId, useState } from "react";
 import Link from "@/components/app-link";
 import { DomeButton } from "@/components/ui";
@@ -30,13 +31,19 @@ export function PdpReviewForm({ productId }: { productId: string }): React.JSX.E
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [pending, setPending] = useState(false);
+  const [photos, setPhotos] = useState<{ id: string; url: string | null }[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    void getReviewEligibilityAction(productId).then((result) => {
-      if (active) setEligibility(result);
-    });
+    void getReviewEligibilityAction(productId)
+      .then((result) => {
+        if (active) setEligibility(result);
+      })
+      .catch(() => {
+        if (active) setEligibility({ state: "NOT_PURCHASED" });
+      });
     return () => {
       active = false;
     };
@@ -70,14 +77,27 @@ export function PdpReviewForm({ productId }: { productId: string }): React.JSX.E
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pending) return;
+    if (pending || uploading) return;
     if (rating === 0) {
       setError("Elige de 1 a 5 estrellas.");
       return;
     }
     setPending(true);
     setError(null);
-    const result = await submitReviewAction({ productId, rating, title, body });
+    let result;
+    try {
+      result = await submitReviewAction({
+        productId,
+        rating,
+        title,
+        body,
+        photoAssetIds: photos.map((photo) => photo.id),
+      });
+    } catch {
+      setPending(false);
+      setError("No se pudo conectar. Vuelve a intentarlo.");
+      return;
+    }
     setPending(false);
     if (result.ok) {
       setEligibility({ state: "ALREADY_REVIEWED", status: "PENDING" });
@@ -139,6 +159,14 @@ export function PdpReviewForm({ productId }: { productId: string }): React.JSX.E
         </small>
       </label>
 
+      <ReviewPhotoUpload
+        productId={productId}
+        photos={photos}
+        onChange={setPhotos}
+        onBusy={setUploading}
+        disabled={pending}
+      />
+
       {error && (
         <p className={styles.formError} role="alert">
           {error}
@@ -146,10 +174,15 @@ export function PdpReviewForm({ productId }: { productId: string }): React.JSX.E
       )}
 
       <div className={styles.formActions}>
-        <DomeButton type="submit" tone="dark" disabled={pending}>
+        <DomeButton type="submit" tone="dark" disabled={pending || uploading}>
           {pending ? "Enviando…" : "Enviar opinión"}
         </DomeButton>
-        <button type="button" className={styles.cancel} onClick={() => setIsOpen(false)}>
+        <button
+          type="button"
+          className={styles.cancel}
+          disabled={pending || uploading}
+          onClick={() => setIsOpen(false)}
+        >
           Cancelar
         </button>
       </div>

@@ -1,4 +1,7 @@
 "use client";
+import { ProductSelection, type ProductOption } from "@/components/admin/product-selection";
+import type { ProductSelection as Selection } from "@/lib/catalog/curated-products";
+import { setMenuProductSelectionAction } from "@/lib/admin/menu/actions";
 import { useRouter } from "next/navigation";
 
 import React, { useOptimistic, useState, useTransition } from "react";
@@ -8,6 +11,7 @@ import { reorderMenuEntriesAction, setMenuEntryVisibilityAction } from "@/lib/ad
 import styles from "./menu.module.css";
 
 export interface MenuEntryView {
+  productSelection?: Selection;
   id: string;
   label: string;
   description: string;
@@ -18,6 +22,7 @@ export interface MenuEntryView {
 }
 
 interface MenuWorkspaceProps {
+  products?: readonly ProductOption[];
   entries: MenuEntryView[];
 }
 
@@ -52,7 +57,7 @@ function VisibilityToggle({
   );
 }
 
-export function MenuWorkspace({ entries }: MenuWorkspaceProps) {
+export function MenuWorkspace({ entries, products = [] }: MenuWorkspaceProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +143,13 @@ export function MenuWorkspace({ entries }: MenuWorkspaceProps) {
               </div>
               <p className={styles.itemDescription}>{entry.description}</p>
 
+              {entry.categorySlug && (
+                <MenuSelectionEditor
+                  key={`${entry.id}-${JSON.stringify(entry.productSelection)}`}
+                  entry={entry}
+                  products={products}
+                />
+              )}
               <div className={styles.warnings}>
                 {entry.publishedProducts === 0 && (
                   <span className={styles.warning} data-testid={`menu-warning-empty-${entry.id}`}>
@@ -193,5 +205,53 @@ export function MenuWorkspace({ entries }: MenuWorkspaceProps) {
         que todavía no existen: si la dejas visible, el cliente verá un error 404.
       </p>
     </div>
+  );
+}
+
+function MenuSelectionEditor({
+  entry,
+  products,
+}: {
+  entry: MenuEntryView;
+  products: readonly ProductOption[];
+}) {
+  const router = useRouter();
+  const [selection, setSelection] = useState<Selection>(
+    entry.productSelection ?? { mode: "automatic", productSlugs: [] }
+  );
+  const [pending, startTransition] = useTransition();
+  const [notice, setNotice] = useState("");
+  return (
+    <details>
+      <summary>Editar productos destacados</summary>
+      <ProductSelection
+        products={products}
+        categorySlug={entry.categorySlug ?? undefined}
+        value={selection}
+        onChange={setSelection}
+        disabled={pending}
+      />
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            setNotice("");
+            try {
+              const result = await setMenuProductSelectionAction(entry.id, selection);
+              setNotice(
+                result.success ? "Selección guardada." : (result.error ?? "No se pudo guardar.")
+              );
+              if (result.success) router.refresh();
+            } catch {
+              setNotice("No se pudo conectar. Vuelve a intentarlo.");
+            }
+          })
+        }
+      >
+        {pending ? "Guardando…" : "Guardar productos del menú"}
+      </button>
+      <p role="status">{notice}</p>
+    </details>
   );
 }

@@ -1,4 +1,5 @@
-import { boolean, integer, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
+import type { ProductSelection } from "@/lib/catalog/curated-products";
+import { boolean, integer, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
 
 /**
  * Storefront Menu Entries
@@ -17,6 +18,7 @@ export const storefrontMenuEntries = pgTable("storefront_menu_entries", {
   entryId: varchar("entry_id", { length: 64 }).primaryKey(),
   isVisible: boolean("is_visible").notNull().default(true),
   displayOrder: integer("display_order").notNull().default(0),
+  productSelection: jsonb("product_selection").$type<ProductSelection>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

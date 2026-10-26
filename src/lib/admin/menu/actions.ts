@@ -1,5 +1,7 @@
 "use server";
 
+import { ProductSelectionSchema } from "@/lib/catalog/curated-products";
+
 import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -61,7 +63,7 @@ export async function reorderMenuEntriesAction(orderedIds: string[]): Promise<Ac
   if (denied) return denied;
 
   const known = orderedIds.filter((id) => getMenuEntryDescriptor(id));
-  if (known.length !== MENU_ENTRY_DESCRIPTORS.length) {
+  if (known.length !== MENU_ENTRY_DESCRIPTORS.length || new Set(known).size !== known.length) {
     return {
       success: false,
       error: "El orden enviado no incluye todas las secciones.",
@@ -88,4 +90,38 @@ export async function reorderMenuEntriesAction(orderedIds: string[]): Promise<Ac
 
   revalidateStorefrontMenu();
   return { success: true };
+}
+
+export async function setMenuProductSelectionAction(
+  entryId: string,
+  input: unknown
+): Promise<ActionResult> {
+  const denied = await requireCatalogManager();
+  if (denied) return denied;
+  const descriptor = getMenuEntryDescriptor(entryId);
+  const parsed = ProductSelectionSchema.safeParse(input);
+  if (!descriptor?.categorySlug || !parsed.success)
+    return { success: false, error: "Revisa los productos elegidos.", code: "INVALID_INPUT" };
+  try {
+    await db
+      .insert(storefrontMenuEntries)
+      .values({
+        entryId,
+        isVisible: descriptor.defaultVisible,
+        displayOrder: descriptor.defaultOrder,
+        productSelection: parsed.data,
+      })
+      .onConflictDoUpdate({
+        target: storefrontMenuEntries.entryId,
+        set: { productSelection: parsed.data, updatedAt: sql`now()` },
+      });
+    revalidateStorefrontMenu();
+    return { success: true };
+  } catch {
+    return {
+      success: false,
+      error: "No se pudo guardar la selección. Comprueba que la migración del menú esté aplicada.",
+      code: "SYSTEM_ERROR",
+    };
+  }
 }

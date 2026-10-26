@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ProductSelectionSchema } from "@/lib/catalog/curated-products";
 import { SafeString } from "@/lib/validation/safe-string";
 import type { HomeSectionType } from "@/db/schema";
 
@@ -90,6 +91,7 @@ export const ProductCarouselContentSchema = z
       z.object({ kind: z.literal("category"), categorySlug: CategorySlug }).strict(),
     ]),
     maxItems: z.number().int().min(4).max(24),
+    selection: ProductSelectionSchema.optional(),
   })
   .strict();
 
@@ -139,6 +141,7 @@ export const CatalogRailContentSchema = z
     categorySlug: CategorySlug,
     seeAllLabel: SafeString(1, 40),
     maxItems: z.number().int().min(4).max(24),
+    selection: ProductSelectionSchema.optional(),
   })
   .strict();
 
@@ -188,7 +191,25 @@ export const TrustStripContentSchema = z
   })
   .strict();
 
+export const BrandStripContentSchema = z
+  .object({
+    title: SafeString(1, 120),
+    items: z
+      .array(
+        z
+          .object({
+            name: SafeString(1, 80),
+            href: InternalHref,
+            image: HomeImageSlotSchema,
+          })
+          .strict()
+      )
+      .max(24),
+  })
+  .strict();
+
 export const HOME_SECTION_CONTENT_SCHEMAS = {
+  brand_strip: BrandStripContentSchema,
   video_hero: VideoHeroContentSchema,
   product_carousel: ProductCarouselContentSchema,
   feature_video: FeatureVideoContentSchema,
@@ -248,6 +269,9 @@ export function listHomeSectionMediaSlots(section: HomeSection): Map<string, str
   };
 
   switch (section.type) {
+    case "brand_strip":
+      section.content.items.forEach((item, index) => add(`items.${index}.image`, item.image));
+      break;
     case "video_hero":
     case "feature_video":
       addVideo(section.content.video);

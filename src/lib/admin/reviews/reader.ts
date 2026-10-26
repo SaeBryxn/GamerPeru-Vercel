@@ -3,7 +3,10 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { productReviews, products, type ReviewStatus } from "@/db/schema";
 
+import { readReviewPhotos } from "@/lib/reviews/photo-reader";
+
 export interface AdminReviewRow {
+  photos?: { id: string; url: string }[];
   id: string;
   rating: number;
   title: string | null;
@@ -26,6 +29,7 @@ export async function listReviewsForAdmin(status: ReviewStatus): Promise<AdminRe
         rating: productReviews.rating,
         title: productReviews.title,
         body: productReviews.body,
+        photoAssetIds: productReviews.photoAssetIds,
         authorName: productReviews.authorName,
         status: productReviews.status,
         orderItemId: productReviews.orderItemId,
@@ -39,7 +43,11 @@ export async function listReviewsForAdmin(status: ReviewStatus): Promise<AdminRe
       .orderBy(desc(productReviews.createdAt))
       .limit(ADMIN_REVIEW_LIMIT);
 
+    const photos = await readReviewPhotos(rows.flatMap((row) => row.photoAssetIds));
     return rows.map((row) => ({
+      photos: row.photoAssetIds.flatMap((id) =>
+        photos.has(id) ? [{ id, url: photos.get(id)! }] : []
+      ),
       id: row.id,
       rating: row.rating,
       title: row.title,

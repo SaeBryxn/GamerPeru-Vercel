@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { productReviews } from "@/db/schema";
 import { cacheCatalogQuery } from "@/lib/catalog/catalog-cache";
 import { logger } from "@/lib/logger";
+import { readReviewPhotos } from "./photo-reader";
 import { EMPTY_REVIEW_SUMMARY, type PublicReview, type ReviewSummary } from "./types";
 
 /** Reviews listed on the product page, newest first. */
@@ -24,6 +25,7 @@ const queryApprovedReviews = cacheCatalogQuery(
           rating: productReviews.rating,
           title: productReviews.title,
           body: productReviews.body,
+          photoAssetIds: productReviews.photoAssetIds,
           authorName: productReviews.authorName,
           createdAt: productReviews.createdAt,
         })
@@ -41,8 +43,15 @@ const queryApprovedReviews = cacheCatalogQuery(
         .groupBy(productReviews.rating),
     ]);
 
+    const photos = await readReviewPhotos(rows.flatMap((row) => row.photoAssetIds));
     return {
-      reviews: rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
+      reviews: rows.map(({ photoAssetIds, ...row }) => ({
+        ...row,
+        photos: photoAssetIds.flatMap((id) =>
+          photos.has(id) ? [{ id, url: photos.get(id)! }] : []
+        ),
+        createdAt: row.createdAt.toISOString(),
+      })),
       summary: summarizeRatingCounts(counts),
     };
   }

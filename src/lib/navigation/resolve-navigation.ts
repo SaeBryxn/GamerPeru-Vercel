@@ -1,4 +1,5 @@
 import "server-only";
+import { selectProducts } from "@/lib/catalog/curated-products";
 import { NAVIGATION_CONFIG } from "@/components/navigation/navigation-data";
 import type {
   FooterColumn,
@@ -102,6 +103,11 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
     .sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0))
     .map((item) => {
       const categorySlug = settingById.get(item.id)?.categorySlug;
+      const selection = settingById.get(item.id)?.productSelection;
+      const selectedEntries = selectProducts(
+        catalogEntries.filter((entry) => entry.categorySlug === categorySlug),
+        selection
+      );
       const resolved: MegaMenuCategory = {
         ...item,
         sections: filterSections(item.sections, isHidden),
@@ -111,13 +117,15 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
       // catalog can answer, it replaces them with real brands and real products; where it cannot,
       // the block is dropped rather than shipping placeholder names and a stock photo.
       if (item.series) {
-        const brandColumns = categorySlug ? buildBrandColumns(catalogEntries, categorySlug) : [];
+        const brandColumns = categorySlug
+          ? buildBrandColumns(selectedEntries, categorySlug, selection?.mode === "manual")
+          : [];
         if (brandColumns.length > 0) resolved.series = brandColumns;
         else delete resolved.series;
       }
 
       if (item.promos) {
-        const promoCards = categorySlug ? buildPromoCards(catalogEntries, categorySlug) : [];
+        const promoCards = categorySlug ? buildPromoCards(selectedEntries, categorySlug) : [];
         if (promoCards.length > 0) resolved.promos = promoCards;
         else delete resolved.promos;
       }
@@ -125,9 +133,13 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
       // Tiles are showcase art for a category's filters until that category has published
       // products of its own; then the real photos take over.
       if (item.tiles) {
-        const productTiles = categorySlug ? buildProductTiles(catalogEntries, categorySlug) : [];
+        const productTiles = categorySlug ? buildProductTiles(selectedEntries, categorySlug) : [];
         resolved.tiles =
-          productTiles.length > 0 ? productTiles : item.tiles.filter((t) => !isHidden(t.href));
+          productTiles.length > 0
+            ? productTiles
+            : selection?.mode === "manual"
+              ? []
+              : item.tiles.filter((t) => !isHidden(t.href));
       }
       if (item.previews) resolved.previews = item.previews.filter((p) => !isHidden(p.href));
 
@@ -145,7 +157,22 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
   return {
     ...NAVIGATION_CONFIG,
     primaryNav,
-    shelves: buildMenuShelves(catalogEntries, productTypes),
+    shelves: buildMenuShelves(
+      [
+        ...settings
+          .filter((setting) => setting.categorySlug)
+          .flatMap((setting) =>
+            selectProducts(
+              catalogEntries.filter((entry) => entry.categorySlug === setting.categorySlug),
+              setting.productSelection
+            )
+          ),
+        ...catalogEntries.filter(
+          (entry) => !settings.some((setting) => setting.categorySlug === entry.categorySlug)
+        ),
+      ],
+      productTypes
+    ),
     productTypes,
     footerColumns: buildFooterColumns(NAVIGATION_CONFIG.footerColumns, {
       productColumns: buildFooterProductColumns(catalogEntries, (slug) =>

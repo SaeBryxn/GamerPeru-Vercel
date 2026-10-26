@@ -4,10 +4,29 @@ import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { mapDomainErrorToUi } from "@/lib/admin/catalog/error-mapping";
 import { revalidateStorefrontHome } from "./read-home-sections";
 import {
+  type AdminHomeSection,
+  createHomeSection,
   reorderHomeSections,
   setHomeSectionVisibility,
   updateHomeSectionContent,
 } from "./home-sections-service";
+
+export async function createHomeSectionAction(input: {
+  type: "brand_strip";
+  expectedOrder: string[];
+}): Promise<HomeSectionActionResult<AdminHomeSection>> {
+  const context = await readyContext();
+  if (context.error) return context.error;
+  if (input.type !== "brand_strip" || !Array.isArray(input.expectedOrder))
+    return { success: false, error: "Solicitud inválida." };
+  try {
+    const data = await createHomeSection(input, { authContext: context.authContext });
+    refresh();
+    return { success: true, data };
+  } catch (err) {
+    return { success: false, ...mapDomainErrorToUi(err) };
+  }
+}
 
 export interface HomeSectionActionResult<T> {
   success: boolean;

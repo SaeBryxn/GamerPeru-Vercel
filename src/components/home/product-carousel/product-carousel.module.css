@@ -68,7 +68,7 @@
 
 .card {
   flex: 0 0 auto;
-  width: 300px;
+  width: calc((100% - 3 * var(--space-5)) / 4);
 }
 
 .arrowSlot {
@@ -111,7 +111,7 @@
   }
 
   .card {
-    width: 260px;
+    width: calc((100% - 2 * var(--space-5)) / 3);
   }
 
   .arrowSlot {
@@ -173,7 +173,8 @@
   }
 
   .track {
-    width: max-content;
+    width: 100%;
+    box-sizing: border-box;
     padding-inline: var(--gutter-desktop-lg);
     cursor: auto;
     touch-action: auto;

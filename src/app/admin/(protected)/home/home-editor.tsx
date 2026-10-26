@@ -1,5 +1,7 @@
 "use client";
 
+import type { ProductOption } from "@/components/admin/product-selection";
+
 import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ExternalLink, Eye, EyeOff, Lock, Pencil } from "lucide-react";
@@ -7,6 +9,7 @@ import { ConfirmationDialog } from "@/components/admin/confirmation-dialog";
 import { Wireframe } from "@/components/admin/wireframe/wireframe";
 import type { AdminHomeSection, AdminHomeState } from "@/lib/home/home-sections-service";
 import {
+  createHomeSectionAction,
   reorderHomeSectionsAction,
   setHomeSectionVisibilityAction,
   updateHomeSectionContentAction,
@@ -17,6 +20,7 @@ import { SectionForm, type CategoryOption } from "./section-form";
 import styles from "./home-editor.module.css";
 
 export interface HomeEditorProps {
+  products?: readonly ProductOption[];
   initialState: AdminHomeState | null;
   categories: readonly CategoryOption[];
 }
@@ -43,7 +47,7 @@ interface PendingVisibility {
   isVisible: boolean;
 }
 
-export function HomeEditor({ initialState, categories }: HomeEditorProps) {
+export function HomeEditor({ initialState, categories, products = [] }: HomeEditorProps) {
   const router = useRouter();
   const [sections, setSections] = useState(initialState?.sections ?? []);
   const [media, setMedia] = useState<Record<string, EditorMedia>>(initialState?.media ?? {});
@@ -199,6 +203,25 @@ export function HomeEditor({ initialState, categories }: HomeEditorProps) {
         {announcement}
       </p>
 
+      <button
+        type="button"
+        className={styles.secondaryButton}
+        disabled={isPending || sections.some((section) => section.type === "brand_strip")}
+        onClick={() => {
+          setError(null);
+          startTransition(async () => {
+            const result = await createHomeSectionAction({
+              type: "brand_strip",
+              expectedOrder: sections.map((section) => section.id),
+            });
+            if (!result.success || !result.data) return fail(result.error, result.code);
+            setSections((current) => [...current, result.data!]);
+            setEditingId(result.data.id);
+          });
+        }}
+      >
+        Agregar carrusel de marcas
+      </button>
       <ul className={styles.list}>
         {sections.map((section, index) => {
           const guide = HOME_SECTION_GUIDES[section.type];
@@ -296,6 +319,7 @@ export function HomeEditor({ initialState, categories }: HomeEditorProps) {
               {isEditing && (
                 <div id={`home-section-form-${section.id}`} className={styles.cardBody}>
                   <SectionForm
+                    products={products}
                     type={section.type}
                     initialContent={section.content}
                     initialMedia={media}

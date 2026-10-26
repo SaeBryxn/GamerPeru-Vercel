@@ -16,6 +16,8 @@ interface ActionResult<T> {
 }
 
 export interface DirectUploadClientOptions<Confirmed> {
+  /** Customer uploads use their own authenticated cancellation action. */
+  abort?: (uploadId: string) => Promise<boolean>;
   purpose: DirectUploadPurpose;
   file: File;
   /** Server action that signs the upload for this exact type and size. */
@@ -83,6 +85,7 @@ function measureVideo(file: File): Promise<Dimensions> {
  * object after a HEAD check. The file never passes through the Worker.
  */
 export async function uploadDirect<Confirmed>({
+  abort,
   purpose,
   file,
   request,
@@ -161,7 +164,7 @@ export async function uploadDirect<Confirmed>({
   }
 
   const uploadId = signed.data.uploadId;
-  trackPendingUpload(uploadId);
+  if (!abort) trackPendingUpload(uploadId);
   let committed = false;
   let progress = 0;
   const report = (pct: number) => {
@@ -223,7 +226,7 @@ export async function uploadDirect<Confirmed>({
           : "No se pudo completar la subida. Vuelve a intentarlo.",
     };
   } finally {
-    if (committed || (await abortUpload(uploadId))) forgetPendingUpload(uploadId);
+    if (committed || (await (abort ?? abortUpload)(uploadId))) forgetPendingUpload(uploadId);
   }
 }
 

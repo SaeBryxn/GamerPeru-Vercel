@@ -1,4 +1,5 @@
 import "server-only";
+import { ProductSelectionSchema, type ProductSelection } from "@/lib/catalog/curated-products";
 import { db } from "@/db";
 import { storefrontMenuEntries } from "@/db/schema";
 import { cacheCatalogQuery } from "@/lib/catalog/catalog-cache";
@@ -6,6 +7,7 @@ import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
 import { MENU_ENTRY_DESCRIPTORS, isKnownMenuEntry, type MenuEntryDescriptor } from "./menu-entries";
 
 export interface MenuEntrySetting extends MenuEntryDescriptor {
+  productSelection?: ProductSelection;
   isVisible: boolean;
   displayOrder: number;
   /** True while the entry still uses the configuration default (no stored decision yet). */
@@ -22,6 +24,7 @@ const readStoredMenuEntries = cacheCatalogQuery("menu-entry-settings", async () 
   db
     .select({
       entryId: storefrontMenuEntries.entryId,
+      productSelection: storefrontMenuEntries.productSelection,
       isVisible: storefrontMenuEntries.isVisible,
       displayOrder: storefrontMenuEntries.displayOrder,
     })
@@ -29,7 +32,12 @@ const readStoredMenuEntries = cacheCatalogQuery("menu-entry-settings", async () 
 );
 
 export async function getMenuEntrySettings(): Promise<MenuEntrySetting[]> {
-  let stored: { entryId: string; isVisible: boolean; displayOrder: number }[] = [];
+  let stored: {
+    entryId: string;
+    isVisible: boolean;
+    displayOrder: number;
+    productSelection?: unknown;
+  }[] = [];
 
   // Fixture runs must not inherit whatever the operator configured in the connected database.
   if (resolveCatalogReaderMode() !== "e2e-fixture") {
@@ -46,8 +54,10 @@ export async function getMenuEntrySettings(): Promise<MenuEntrySetting[]> {
 
   return MENU_ENTRY_DESCRIPTORS.map((descriptor) => {
     const row = byId.get(descriptor.id);
+    const selection = ProductSelectionSchema.safeParse(row?.productSelection);
     return {
       ...descriptor,
+      productSelection: selection.success ? selection.data : undefined,
       isVisible: row ? row.isVisible : descriptor.defaultVisible,
       displayOrder: row ? row.displayOrder : descriptor.defaultOrder,
       isDefault: !row,

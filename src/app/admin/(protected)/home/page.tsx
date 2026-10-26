@@ -1,5 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
+import { getMenuCatalogEntries } from "@/lib/navigation/menu-catalog";
 import { asc } from "drizzle-orm";
 import { db } from "@/db";
 import { categories } from "@/db/schema";
@@ -36,5 +37,10 @@ export default async function AdminHomePage() {
     .from(categories)
     .orderBy(asc(categories.displayOrder), asc(categories.name));
 
-  return <HomeEditor initialState={state} categories={categoryOptions} />;
+  const products = (await getMenuCatalogEntries()).map((product) => ({
+    slug: product.slug,
+    name: product.name,
+    categorySlug: product.categorySlug,
+  }));
+  return <HomeEditor initialState={state} categories={categoryOptions} products={products} />;
 }

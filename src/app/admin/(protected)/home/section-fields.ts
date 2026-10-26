@@ -24,6 +24,7 @@ export type HomeField =
   | { kind: "href"; path: FieldPath; label: string; hint: string; nullable?: boolean }
   | { kind: "image"; path: FieldPath; label: string; hint?: string }
   | { kind: "video"; path: FieldPath; label: string }
+  | { kind: "selection"; path: FieldPath; label: string }
   | { kind: "productSource"; path: FieldPath; label: string }
   | {
       kind: "list";
@@ -50,6 +51,32 @@ const TRUST_ICON_LABELS: Record<(typeof TRUST_STRIP_ICONS)[number], string> = {
  * server.
  */
 export const HOME_SECTION_FIELDS: Record<HomeSectionType, readonly HomeField[]> = {
+  brand_strip: [
+    { kind: "text", path: ["title"], label: "Título", max: 120 },
+    {
+      kind: "list",
+      path: ["items"],
+      label: "Marcas",
+      itemLabel: "Marca",
+      min: 0,
+      max: 24,
+      fields: [
+        { kind: "text", path: ["name"], label: "Nombre de la marca", max: 80 },
+        { kind: "image", path: ["image"], label: "Logo o imagen" },
+        {
+          kind: "href",
+          path: ["href"],
+          label: "Enlace dentro de la tienda",
+          hint: "Por ejemplo /marcas/mchose o /categorias/mouses?marca=mchose. Se abre en esta misma pestaña.",
+        },
+      ],
+      newItem: () => ({
+        name: "",
+        href: "/marcas/",
+        image: { mediaAssetId: null, alt: "Logo de la marca" },
+      }),
+    },
+  ],
   video_hero: [
     {
       kind: "text",
@@ -65,6 +92,7 @@ export const HOME_SECTION_FIELDS: Record<HomeSectionType, readonly HomeField[]> 
     { kind: "text", path: ["eyebrow"], label: "Antetítulo", max: 60 },
     { kind: "text", path: ["title"], label: "Título", max: 120 },
     { kind: "productSource", path: ["source"], label: "Productos que se muestran" },
+    { kind: "selection", path: ["selection"], label: "Productos destacados" },
     { kind: "number", path: ["maxItems"], label: "Cantidad máxima de productos", min: 4, max: 24 },
   ],
   feature_video: [
@@ -123,6 +151,7 @@ export const HOME_SECTION_FIELDS: Record<HomeSectionType, readonly HomeField[]> 
     { kind: "text", path: ["title"], label: "Título", max: 120 },
     { kind: "category", path: ["categorySlug"], label: "Categoría" },
     { kind: "text", path: ["seeAllLabel"], label: "Texto del enlace «ver todo»", max: 40 },
+    { kind: "selection", path: ["selection"], label: "Productos destacados" },
     { kind: "number", path: ["maxItems"], label: "Cantidad máxima de productos", min: 4, max: 24 },
   ],
   bento_showcase: [

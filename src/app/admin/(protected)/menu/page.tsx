@@ -4,6 +4,7 @@ import { getVerifiedAuthContext } from "@/lib/auth/rbac";
 import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { getMenuEntrySettings } from "@/lib/navigation/menu-settings";
 import { getCategoryCatalogFacts } from "@/lib/navigation/catalog-facts";
+import { getMenuCatalogEntries } from "@/lib/navigation/menu-catalog";
 import { MenuWorkspace, type MenuEntryView } from "./menu-workspace";
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default async function MenuPage() {
 
   const entries: MenuEntryView[] = settings.map((entry) => ({
     id: entry.id,
+    productSelection: entry.productSelection,
     label: entry.adminLabel,
     description: entry.description,
     isVisible: entry.isVisible,
@@ -35,5 +37,10 @@ export default async function MenuPage() {
     missingDestinations: entry.missingDestinations ?? [],
   }));
 
-  return <MenuWorkspace entries={entries} />;
+  const products = (await getMenuCatalogEntries()).map((product) => ({
+    slug: product.slug,
+    name: product.name,
+    categorySlug: product.categorySlug,
+  }));
+  return <MenuWorkspace entries={entries} products={products} />;
 }

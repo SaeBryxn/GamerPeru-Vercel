@@ -1,0 +1,66 @@
+.root {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+}
+.root legend {
+  font-weight: 600;
+}
+.root p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.root select,
+.root input {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+}
+.field {
+  font-size: 13px;
+  font-weight: 600;
+}
+.list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+.list li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.list span {
+  flex: 1;
+  min-width: 120px;
+  font-size: 13px;
+}
+.list button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.root :focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+.root :disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

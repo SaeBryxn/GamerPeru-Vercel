@@ -1,10 +1,11 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
   customerProfiles,
+  mediaUploads,
   orderItems,
   orders,
   productReviews,
@@ -33,6 +34,11 @@ const submitReviewSchema = z.object({
     .max(REVIEW_TITLE_MAX)
     .transform((value) => value || null),
   body: z.string().trim().min(REVIEW_BODY_MIN).max(REVIEW_BODY_MAX),
+  photoAssetIds: z
+    .array(z.string().uuid())
+    .max(3)
+    .refine((ids) => new Set(ids).size === ids.length)
+    .default([]),
 });
 
 /** A line of one of the customer's fulfilled orders for this product: the proof of purchase. */
@@ -95,7 +101,7 @@ export async function submitReviewAction(input: unknown): Promise<SubmitReviewRe
       message: `Elige de 1 a 5 estrellas y escribe entre ${REVIEW_BODY_MIN} y ${REVIEW_BODY_MAX} caracteres.`,
     };
   }
-  const { productId, rating, title, body } = parsed.data;
+  const { productId, rating, title, body, photoAssetIds } = parsed.data;
 
   try {
     const customerId = await resolveCurrentCustomerId();
@@ -118,10 +124,37 @@ export async function submitReviewAction(input: unknown): Promise<SubmitReviewRe
     }
 
     const [profile] = await db
-      .select({ firstName: customerProfiles.firstName, lastName: customerProfiles.lastName })
+      .select({
+        firstName: customerProfiles.firstName,
+        lastName: customerProfiles.lastName,
+        authUserId: customerProfiles.authUserId,
+      })
       .from(customerProfiles)
       .where(eq(customerProfiles.id, customerId))
       .limit(1);
+
+    if (photoAssetIds.length) {
+      if (!profile?.authUserId)
+        return { ok: false, reason: "INVALID", message: "No encontramos tu perfil." };
+      const uploads = await db
+        .select({ assetId: mediaUploads.mediaAssetId })
+        .from(mediaUploads)
+        .where(
+          and(
+            inArray(mediaUploads.mediaAssetId, photoAssetIds),
+            eq(mediaUploads.actorAuthUserId, profile.authUserId),
+            eq(mediaUploads.subjectId, productId),
+            eq(mediaUploads.purpose, "review_photo"),
+            eq(mediaUploads.status, "READY")
+          )
+        );
+      if (new Set(uploads.map((upload) => upload.assetId)).size !== photoAssetIds.length)
+        return {
+          ok: false,
+          reason: "INVALID",
+          message: "Una foto no pertenece a esta compra o no terminó de subir.",
+        };
+    }
 
     const inserted = await db
       .insert(productReviews)
@@ -132,6 +165,7 @@ export async function submitReviewAction(input: unknown): Promise<SubmitReviewRe
         rating,
         title,
         body,
+        photoAssetIds,
         authorName: formatReviewAuthor(profile?.firstName ?? "", profile?.lastName ?? ""),
       })
       .onConflictDoNothing()

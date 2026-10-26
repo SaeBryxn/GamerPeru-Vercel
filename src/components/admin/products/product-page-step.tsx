@@ -522,6 +522,61 @@ export function ProductPageStep({
       <p className={styles.hint}>
         Abre un bloque para editarlo y ver cómo quedará. Los campos vacíos se ocultan en la tienda.
       </p>
+      <fieldset disabled={pending} className={styles.contentOrder}>
+        <legend>Orden de las secciones de la ficha</legend>
+        <p className={styles.hint}>
+          La compra aparece primero. Ordena u oculta la historia y las opiniones debajo.
+        </p>
+        {config.contentSections.map((section, index) => (
+          <div key={section} className={styles.contentRow}>
+            <strong>{section === "story" ? "Historia" : "Opiniones"}</strong>
+            <button
+              type="button"
+              aria-label={`Subir ${section === "story" ? "Historia" : "Opiniones"}`}
+              disabled={index === 0}
+              onClick={() =>
+                change({ ...config, contentSections: [...config.contentSections].reverse() })
+              }
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              aria-label={`Bajar ${section === "story" ? "Historia" : "Opiniones"}`}
+              disabled={index === config.contentSections.length - 1}
+              onClick={() =>
+                change({ ...config, contentSections: [...config.contentSections].reverse() })
+              }
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                change({
+                  ...config,
+                  contentSections: config.contentSections.filter((item) => item !== section),
+                })
+              }
+            >
+              Ocultar {section === "story" ? "historia" : "opiniones"}
+            </button>
+          </div>
+        ))}
+        {(["story", "reviews"] as const)
+          .filter((section) => !config.contentSections.includes(section))
+          .map((section) => (
+            <button
+              key={section}
+              type="button"
+              onClick={() =>
+                change({ ...config, contentSections: [...config.contentSections, section] })
+              }
+            >
+              Mostrar {section === "story" ? "historia" : "opiniones"}
+            </button>
+          ))}
+      </fieldset>
       <div className={styles.layout}>
         <div className={styles.blocks}>
           {BLOCKS.map(([block, title]) => {

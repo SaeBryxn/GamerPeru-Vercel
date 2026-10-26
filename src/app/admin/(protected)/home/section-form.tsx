@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useId, useState } from "react";
+import { ProductSelection, type ProductOption } from "@/components/admin/product-selection";
+import type { ProductSelection as Selection } from "@/lib/catalog/curated-products";
 import { Plus, Trash2 } from "lucide-react";
 import type { HomeSectionType } from "@/db/schema";
 import {
@@ -19,6 +21,7 @@ export interface CategoryOption {
 }
 
 interface FieldContext {
+  products: readonly ProductOption[];
   content: Record<string, unknown>;
   errors: Map<string, string>;
   media: Record<string, EditorMedia>;
@@ -110,6 +113,20 @@ function renderField(field: HomeField, base: FieldPath, ctx: FieldContext): Reac
             value: category.slug,
             label: category.name,
           }))}
+        />
+      );
+    case "selection":
+      return (
+        <ProductSelection
+          key={key}
+          products={ctx.products}
+          value={getAt(ctx.content, path) as Selection | undefined}
+          categorySlug={
+            (ctx.content.categorySlug as string | undefined) ??
+            (ctx.content.source as { kind: string; categorySlug?: string } | undefined)
+              ?.categorySlug
+          }
+          onChange={(next) => ctx.update(path, next)}
         />
       );
     case "productSource":
@@ -289,6 +306,23 @@ function ListField({
       {items.map((_, index) => (
         <div key={index} className={styles.listItem}>
           <div className={styles.listItemHeader}>
+            {[-1, 1].map((direction) => (
+              <button
+                key={direction}
+                type="button"
+                className={styles.iconButton}
+                aria-label={`${direction < 0 ? "Subir" : "Bajar"} ${field.itemLabel.toLowerCase()} ${index + 1}`}
+                disabled={index + direction < 0 || index + direction >= items.length}
+                onClick={() => {
+                  const next = [...items];
+                  const target = index + direction;
+                  [next[index], next[target]] = [next[target], next[index]];
+                  ctx.update(path, next);
+                }}
+              >
+                {direction < 0 ? "↑" : "↓"}
+              </button>
+            ))}
             <span className={styles.listItemTitle}>
               {field.itemLabel} {index + 1}
             </span>
@@ -326,6 +360,7 @@ function ListField({
 
 export interface SectionFormProps {
   type: HomeSectionType;
+  products?: readonly ProductOption[];
   initialContent: Record<string, unknown>;
   initialMedia: Record<string, EditorMedia>;
   categories: readonly CategoryOption[];
@@ -339,6 +374,7 @@ export interface SectionFormProps {
 export function SectionForm({
   type,
   initialContent,
+  products = [],
   initialMedia,
   categories,
   busy,
@@ -352,6 +388,7 @@ export function SectionForm({
   const summaryId = useId();
 
   const ctx: FieldContext = {
+    products,
     content,
     errors,
     media,

@@ -9,7 +9,10 @@ import styles from "./brand-strip.module.css";
 const MIN_BRANDS = 2;
 
 export interface BrandStripProps {
-  brands: BrandDiscoveryEntity[];
+  brands?: BrandDiscoveryEntity[];
+  items?: { id: string; name: string; href: string; logoUrl: string | null }[];
+  title?: string;
+  id?: string;
 }
 
 /**
@@ -17,17 +20,30 @@ export interface BrandStripProps {
  * a brand without a logo shows its name. The list is drawn twice so the loop has no seam; the
  * copy is hidden from assistive tech and from the tab order.
  */
-export function BrandStrip({ brands }: BrandStripProps): React.JSX.Element | null {
-  if (brands.length < MIN_BRANDS) return null;
+export function BrandStrip({
+  brands = [],
+  items,
+  title = "Nuestras marcas",
+  id = "home-brands",
+}: BrandStripProps): React.JSX.Element | null {
+  const entries =
+    items ??
+    brands.map((brand) => ({
+      id: brand.id,
+      name: brand.name,
+      href: `/marcas/${brand.slug}`,
+      logoUrl: brand.logo ? resolvePublicMediaUrl(brand.logo.objectKey) : null,
+    }));
+  if (entries.length === 0 || (!items && entries.length < MIN_BRANDS)) return null;
 
   const renderList = (copy: boolean) => (
     <ul className={styles.list} aria-hidden={copy || undefined}>
-      {brands.map((brand) => {
-        const logoUrl = brand.logo ? resolvePublicMediaUrl(brand.logo.objectKey) : null;
+      {entries.map((brand) => {
+        const logoUrl = brand.logoUrl;
         return (
           <li key={brand.id} className={styles.item}>
             <Link
-              href={`/marcas/${brand.slug}`}
+              href={brand.href}
               className={styles.link}
               tabIndex={copy ? -1 : undefined}
               aria-label={copy ? undefined : brand.name}
@@ -45,9 +61,9 @@ export function BrandStrip({ brands }: BrandStripProps): React.JSX.Element | nul
   );
 
   return (
-    <section className={styles.section} aria-labelledby="home-brands-title">
-      <h2 id="home-brands-title" className={styles.title}>
-        Nuestras marcas
+    <section className={styles.section} aria-labelledby={`${id}-title`}>
+      <h2 id={`${id}-title`} className={styles.title}>
+        {title}
       </h2>
       <div className={styles.viewport}>
         <div className={styles.track}>

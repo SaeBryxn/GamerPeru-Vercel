@@ -1,4 +1,5 @@
 import React from "react";
+import { ReviewPhotos } from "./review-photos";
 import type { PublicReview, ReviewSummary } from "@/lib/reviews/types";
 import { PdpReviewForm } from "./pdp-review-form";
 import styles from "./pdp-reviews.module.css";
@@ -94,6 +95,7 @@ export function PdpReviews({
                 </div>
                 {review.title && <h3 className={styles.reviewTitle}>{review.title}</h3>}
                 <p className={styles.reviewBody}>{review.body}</p>
+                <ReviewPhotos photos={review.photos ?? []} productName={productName} />
                 <p className={styles.reviewMeta}>
                   {review.authorName} ·{" "}
                   <time dateTime={review.createdAt}>

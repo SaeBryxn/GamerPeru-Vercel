@@ -59,6 +59,10 @@ describe("Home section forms", () => {
   it("address paths that exist in every default section", () => {
     for (const section of DEFAULT_HOME_SECTIONS) {
       for (const path of fieldPaths(HOME_SECTION_FIELDS[section.type])) {
+        const schema: Record<string, { isOptional(): boolean }> =
+          HOME_SECTION_CONTENT_SCHEMAS[section.type].shape;
+        const fieldSchema = schema[String(path[0])];
+        if (fieldSchema?.isOptional() && getAt(section.content, path) === undefined) continue;
         expect(
           getAt(section.content, path),
           `${section.type} ${path.join(".")}`

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   check,
   index,
+  jsonb,
   pgEnum,
   pgTable,
   smallint,
@@ -52,6 +53,7 @@ export const productReviews = pgTable(
     rating: smallint("rating").notNull(),
     title: varchar("title", { length: 120 }),
     body: text("body").notNull(),
+    photoAssetIds: jsonb("photo_asset_ids").$type<string[]>().notNull().default([]),
     authorName: varchar("author_name", { length: 80 }).notNull(),
     status: reviewStatusEnum("status").notNull().default("PENDING"),
     moderatedAt: timestamp("moderated_at", { withTimezone: true }),
@@ -71,6 +73,10 @@ export const productReviews = pgTable(
     ),
     index("product_reviews_status_created_idx").on(table.status, table.createdAt),
     check("product_reviews_rating_range", sql`${table.rating} BETWEEN 1 AND 5`),
+    check(
+      "product_reviews_photo_limit",
+      sql`jsonb_typeof(${table.photoAssetIds}) = 'array' AND jsonb_array_length(${table.photoAssetIds}) <= 3`
+    ),
     check("product_reviews_body_length", sql`char_length(${table.body}) BETWEEN 10 AND 2000`),
   ]
 );

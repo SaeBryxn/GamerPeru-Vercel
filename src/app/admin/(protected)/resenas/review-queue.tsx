@@ -1,5 +1,6 @@
 "use client";
 
+import { ReviewPhotos } from "@/components/product-detail/review-photos";
 import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "@/components/app-link";
@@ -58,6 +59,7 @@ export function ReviewQueue({ reviews }: { reviews: AdminReviewRow[] }) {
               </div>
               {review.title && <p className={styles.reviewTitle}>{review.title}</p>}
               <p className={styles.body}>{review.body}</p>
+              <ReviewPhotos photos={review.photos ?? []} productName={review.product.name} />
               <div className={styles.meta}>
                 <span>
                   {review.authorName} · {DATE_FORMAT.format(new Date(review.createdAt))}

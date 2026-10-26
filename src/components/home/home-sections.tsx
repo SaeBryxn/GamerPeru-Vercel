@@ -14,6 +14,8 @@ import { CatalogRail } from "./catalog-rail/catalog-rail";
 import { CommunityBanner } from "./community-banner/community-banner";
 import { CompareSlider } from "./compare-slider/compare-slider";
 import { FeatureVideo } from "./feature-video/feature-video";
+import { getCachedStoryRelatedProducts } from "@/lib/catalog/cached-queries";
+import { selectProducts } from "@/lib/catalog/curated-products";
 import { loadRailProducts, loadShowcaseBrands, loadShowcaseProducts } from "./home-catalog";
 import { ProductCarousel } from "./product-carousel/product-carousel";
 import { SplitShowcase } from "./split-showcase/split-showcase";
@@ -21,6 +23,23 @@ import { TrustStrip } from "./trust-strip/trust-strip";
 import { VideoHero } from "./video-hero/video-hero";
 
 async function loadSectionProducts(section: HomeSection): Promise<ProductDiscoveryItem[]> {
+  if (
+    (section.type === "product_carousel" || section.type === "catalog_rail") &&
+    section.content.selection?.mode === "manual"
+  ) {
+    const selection = section.content.selection;
+    const items = await getCachedStoryRelatedProducts(selection.productSlugs);
+    const categorySlug =
+      section.type === "catalog_rail"
+        ? section.content.categorySlug
+        : section.content.source.kind === "category"
+          ? section.content.source.categorySlug
+          : undefined;
+    const scoped = categorySlug
+      ? items.filter((item) => item.category.slug === categorySlug)
+      : items;
+    return selectProducts(scoped, selection).slice(0, section.content.maxItems);
+  }
   if (section.type === "product_carousel") {
     const { source, maxItems } = section.content;
     return source.kind === "showcase"
@@ -90,7 +109,8 @@ export async function HomeSections({ home, storeLayerClassName }: HomeSectionsPr
         {rest.map((section, index) => {
           const sectionProducts = products[index + offset] ?? [];
           // The brand strip follows the first section, right where the store begins.
-          const brandStrip = index === 0 ? <BrandStrip brands={brands} /> : null;
+          const brandStrip =
+            !home.hasBrandSection && index === 0 ? <BrandStrip brands={brands} /> : null;
           const rendered = renderSection(section, sectionProducts);
           return brandStrip ? (
             <React.Fragment key={section.id}>
@@ -101,13 +121,27 @@ export async function HomeSections({ home, storeLayerClassName }: HomeSectionsPr
             rendered
           );
         })}
-        {rest.length === 0 && <BrandStrip brands={brands} />}
+        {!home.hasBrandSection && rest.length === 0 && <BrandStrip brands={brands} />}
       </div>
     </>
   );
 
   function renderSection(section: HomeSection, sectionProducts: ProductDiscoveryItem[]) {
     switch (section.type) {
+      case "brand_strip":
+        return (
+          <BrandStrip
+            key={section.id}
+            id={`brands-${section.id}`}
+            title={section.content.title}
+            items={section.content.items.map((item, index) => ({
+              id: `${section.id}-${index}`,
+              name: item.name,
+              href: item.href,
+              logoUrl: image(item.image).src,
+            }))}
+          />
+        );
       case "video_hero":
         return null;
       case "product_carousel":

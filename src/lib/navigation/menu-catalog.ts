@@ -216,7 +216,8 @@ export function buildMenuShelves(
 /** Brand columns for the "series" layout, replacing invented product lines with real ones. */
 export function buildBrandColumns(
   entries: MenuCatalogEntry[],
-  categorySlug: string
+  categorySlug: string,
+  preserveOrder = false
 ): { title: string; items: NavLink[] }[] {
   const scoped = entries.filter((entry) => entry.categorySlug === categorySlug);
   const byBrand = new Map<string, MenuCatalogEntry[]>();
@@ -228,7 +229,7 @@ export function buildBrandColumns(
   }
 
   return [...byBrand.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => (preserveOrder ? 0 : a.localeCompare(b)))
     .map(([brandName, items]) => ({
       title: brandName,
       items: items.map((item) => ({ label: item.name, href: `/productos/${item.slug}` })),

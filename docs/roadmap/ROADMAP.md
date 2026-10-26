@@ -64,7 +64,7 @@ Integrado en `70188e1` (cola de verificación, aprobación, rechazo, reembolso e
 
 - [ ] La portada `/` nunca se regenera en Workers: `x-opennext-cache: STALE` permanente y el Durable Object de la cola registra `TimeoutError` y "failed after 6 retries". La tienda muestra los datos del último deploy y los cambios hechos en `/admin/home` no aparecen hasta desplegar. Las fichas de producto (ISR dinámico) sí se regeneran. Reproducir en Linux con `opennextjs-cloudflare preview` (el build falla en Windows por los symlinks de pnpm).
 - [ ] Subida real de imagen, video y póster desde `/admin/home`, guardar y publicar.
-- [ ] Agregar y eliminar secciones de la home.
+- [ ] Agregar y eliminar secciones de otros tipos de la home. El carrusel de marcas ya se agrega desde el editor; las secciones existentes se ordenan u ocultan.
 - [ ] Limpieza explícita de medios huérfanos.
 
 ### Pruebas
@@ -170,8 +170,25 @@ Surgieron del cierre del MVP (`docs/project/10-limitaciones-y-futuro.md`):
 Hechos en `feat/cloudflare-workers`: página `/productos`, tope de stock en ficha y carrito,
 orden de versiones en el admin, foto de la variante sin atributo de color, bolitas de color en
 las tarjetas, redes sociales, interruptor del 5%, "Ver más" en los menús, guías en Soporte,
-medidas sin repetir, "Completa tu setup", franja de marcas y el botón flotante de WhatsApp con el
-975 231 129 (`STORE_WHATSAPP`). Falta:
+medidas sin repetir, franja de marcas y el botón flotante de WhatsApp con el
+975 231 129 (`STORE_WHATSAPP`).
+
+También implementado: selección manual y orden de productos en home y menú (incluye selección
+vacía, sin rellenar con otros productos); carrusel de marcas con imágenes y enlaces internos
+editables en `/admin/home`, ordenable y ocultable; cuatro tarjetas completas por vista en los
+carruseles de escritorio; retirada de «Completa tu setup»; orden y visibilidad de historia y
+opiniones desde el paso «Página del producto»; hasta tres fotos por reseña, con subida directa,
+validación de compra/propiedad/producto, límite diario y moderación de texto y fotos en
+`/admin/resenas`. No se aplicaron migraciones alojadas ni se hicieron escrituras de prueba. Falta:
+
+- [ ] **Aplicar `0026_contenido_editable_fotos_resenas.sql` después de `0025`.** Agrega el tipo
+      de sección de marcas, la selección de productos del menú y las fotos de opiniones.
+- [ ] **QA real después de migrar:** guardar productos elegidos y ordenarlos en `/admin/home` y
+      `/admin/menu`; agregar el carrusel de marcas, subir logos, elegir enlaces y verificar su
+      visibilidad; cambiar el orden de historia/opiniones; enviar fotos con un comprador entregado
+      y moderarlas. Las pruebas automáticas usan dobles de base de datos y el QA visual usa
+      fixtures locales, sin conexión a la base alojada. La regeneración de home en Workers sigue
+      siendo el pendiente de GP-053 descrito arriba.
 
 - [ ] **Reseñas: aplicar la migración `0025_product_reviews` en Supabase** (el código ya está y
       funciona sin la tabla: la ficha no muestra opiniones y el admin avisa que falta). Después:

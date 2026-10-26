@@ -5,6 +5,7 @@
  */
 
 export const DIRECT_UPLOAD_PURPOSES = [
+  "review_photo",
   "gallery_image",
   "story_image",
   "story_video",
@@ -33,6 +34,14 @@ const MB = 1024 * 1024;
 const STILL_IMAGE_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
 export const DIRECT_UPLOAD_POLICIES: Readonly<Record<DirectUploadPurpose, DirectUploadPolicy>> = {
+  review_photo: {
+    mimeTypes: { "image/webp": "webp", "image/jpeg": "jpg" },
+    maxBytes: 2 * MB,
+    mediaType: "IMAGE",
+    maxImageDimension: 1600,
+    label: "La foto de la opinión",
+    alwaysReencode: true,
+  },
   gallery_image: {
     mimeTypes: { "image/webp": "webp", "image/jpeg": "jpg" },
     maxBytes: 4 * MB,

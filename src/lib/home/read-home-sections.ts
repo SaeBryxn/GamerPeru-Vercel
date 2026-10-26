@@ -27,6 +27,7 @@ export function revalidateStorefrontHome(): void {
 }
 
 export interface StorefrontHome {
+  hasBrandSection?: boolean;
   /** Visible sections in render order; the hero, when present, is first. */
   sections: HomeSection[];
   /** Public URL of every image the sections reference, keyed by media asset id. */
@@ -147,7 +148,11 @@ export function buildStorefrontHome(stored: StoredHome): StorefrontHome | null {
     }
   }
 
-  return { sections, mediaUrls };
+  return {
+    sections,
+    mediaUrls,
+    hasBrandSection: valid.some((section) => section.type === "brand_strip"),
+  };
 }
 
 /**

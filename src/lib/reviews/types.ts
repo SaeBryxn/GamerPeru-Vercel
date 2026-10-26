@@ -1,5 +1,6 @@
 /** An approved review as the product page shows it. */
 export interface PublicReview {
+  photos?: { id: string; url: string }[];
   id: string;
   rating: number;
   title: string | null;
@@ -26,6 +27,7 @@ export const EMPTY_REVIEW_SUMMARY: ReviewSummary = {
 export const REVIEW_BODY_MIN = 10;
 export const REVIEW_BODY_MAX = 2000;
 export const REVIEW_TITLE_MAX = 120;
+export const REVIEW_PHOTO_LIMIT = 3;
 
 /** What the signed-in visitor can do on a product's review form. */
 export type ReviewEligibility =

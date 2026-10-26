@@ -395,3 +395,48 @@
   border-radius: 9999px;
   font-size: 0.8125rem;
 }
+
+.contentOrder {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background: var(--admin-panel);
+}
+.contentOrder legend {
+  font-size: 14px;
+  font-weight: 600;
+}
+.contentRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.contentRow strong {
+  flex: 1;
+  min-width: 100px;
+  font-size: 13px;
+}
+.contentOrder button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--radius-sm);
+  background: var(--admin-panel);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.contentOrder button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.contentOrder button:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}

@@ -34,6 +34,7 @@ export const homeSectionTypeEnum = pgEnum("home_section_type", [
   "bento_showcase",
   "community_banner",
   "trust_strip",
+  "brand_strip",
 ]);
 
 /**

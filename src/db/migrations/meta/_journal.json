@@ -183,6 +183,13 @@
       "when": 1793006148609,
       "tag": "0025_product_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793007709553,
+      "tag": "0026_contenido_editable_fotos_resenas",
+      "breakpoints": true
     }
   ]
 }
