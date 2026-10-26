@@ -6,7 +6,7 @@
  * of X or YouTube here once the account exists and it appears everywhere.
  */
 
-export type SocialNetworkId = "x" | "instagram" | "youtube" | "tiktok" | "discord";
+export type SocialNetworkId = "x" | "instagram" | "youtube" | "tiktok" | "discord" | "whatsapp";
 
 export interface SocialLink {
   id: SocialNetworkId;
@@ -17,9 +17,15 @@ export interface SocialLink {
 export const SOCIAL_LINKS: SocialLink[] = [
   { id: "x", label: "X", href: "" },
   { id: "instagram", label: "Instagram", href: "https://www.instagram.com/gamerperuoficial/" },
-  { id: "youtube", label: "YouTube", href: "" },
+  { id: "youtube", label: "YouTube", href: "https://www.youtube.com/@GamerPeru-PE" },
   { id: "tiktok", label: "TikTok", href: "https://www.tiktok.com/@gamer_peru" },
   { id: "discord", label: "Discord", href: "https://discord.gg/mehPGmxv7d" },
+  // Community group, not the store line: questions go to the floating WhatsApp button.
+  {
+    id: "whatsapp",
+    label: "Grupo de WhatsApp",
+    href: "https://chat.whatsapp.com/CThB5kZALpSGxIdwJLzPAa",
+  },
 ];
 
 /** The profiles that exist, in display order. */

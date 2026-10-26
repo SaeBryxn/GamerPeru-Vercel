@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "@/components/app-link";
 import { m, type HTMLMotionProps, type Transition, type Variants } from "framer-motion";
 import styles from "./dome-button.module.css";
@@ -72,6 +72,35 @@ function contentVariantsFor(tone: DomeTone, hoverColor?: string): Variants {
   };
 }
 
+/**
+ * Hover state for a dome, from plain pointer enter/leave. Framer's hover gesture defers its end
+ * while the pointer is pressed and only ends it on a later pointerup; a click that opens another
+ * tab never delivers that pointerup, so the fill stayed raised (red on the social icons) for good.
+ * Leaving the page, by blur or by hiding the tab, lowers it as well. Touch never raises it.
+ */
+function useDomeHover() {
+  const [isHovered, setIsHovered] = useState(false);
+
+  useEffect(() => {
+    if (!isHovered) return;
+    const lower = () => setIsHovered(false);
+    window.addEventListener("blur", lower);
+    document.addEventListener("visibilitychange", lower);
+    return () => {
+      window.removeEventListener("blur", lower);
+      document.removeEventListener("visibilitychange", lower);
+    };
+  }, [isHovered]);
+
+  return {
+    animate: isHovered ? "hover" : "rest",
+    onPointerEnter: (event: React.PointerEvent) => {
+      if (event.pointerType !== "touch") setIsHovered(true);
+    },
+    onPointerLeave: () => setIsHovered(false),
+  } as const;
+}
+
 /** The rising dome plus the label layer, shared by the button and link variants. */
 function DomeLayers({
   tone,
@@ -106,14 +135,14 @@ export function DomeButton({
   type = "button",
   ...rest
 }: DomeButtonProps) {
+  const hover = useDomeHover();
   return (
     <m.button
       type={type}
       className={[styles.domeButton, styles[tone], className].filter(Boolean).join(" ")}
       variants={tone === "dark" ? DARK_ROOT_VARIANTS : undefined}
       initial="rest"
-      animate="rest"
-      whileHover="hover"
+      {...hover}
       {...rest}
     >
       <DomeLayers tone={tone} domeRise={domeRise} hoverColor={hoverColor}>
@@ -141,14 +170,14 @@ export function DomeLink({
   children,
   ...rest
 }: DomeLinkProps) {
+  const hover = useDomeHover();
   return (
     <MotionLink
       href={href}
       className={[styles.domeButton, styles[tone], className].filter(Boolean).join(" ")}
       variants={tone === "dark" ? DARK_ROOT_VARIANTS : undefined}
       initial="rest"
-      animate="rest"
-      whileHover="hover"
+      {...hover}
       {...rest}
     >
       <DomeLayers tone={tone} domeRise={domeRise} hoverColor={hoverColor}>
