@@ -173,10 +173,10 @@ las tarjetas, redes sociales, interruptor del 5%, "Ver más" en los menús, guí
 medidas sin repetir, "Completa tu setup", franja de marcas y el botón flotante de WhatsApp con el
 975 231 129 (`STORE_WHATSAPP`). Falta:
 
-- [ ] **Reseñas de clientes en la ficha (debajo de "Completa tu setup").** Requiere tabla de
-      reseñas con migración, solo compradores verificados (pedido entregado), moderación en el
-      admin antes de publicar, promedio y conteo reales en `pdpConfig.rating` y datos
-      estructurados `AggregateRating` para Google.
+- [ ] **Reseñas: aplicar la migración `0025_product_reviews` en Supabase** (el código ya está y
+      funciona sin la tabla: la ficha no muestra opiniones y el admin avisa que falta). Después:
+      probar con un pedido en estado `FULFILLED` que el comprador vea "Escribir una opinión", que
+      la reseña llegue a `/admin/resenas` y que al publicarla salgan las estrellas en la ficha.
 - [ ] **Foto de perfil del cliente.** Requiere columna de avatar en `customer_profiles` con
       migración, subida a R2 con el mismo plano de control de GP-058 (recorte cuadrado, sin EXIF) y
       mostrarla en la cuenta y en sus reseñas.

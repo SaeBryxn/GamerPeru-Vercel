@@ -33,7 +33,8 @@ export interface AdminNavItem {
     | "PanelTop"
     | "Sparkles"
     | "KeyRound"
-    | "UserCog";
+    | "UserCog"
+    | "MessageSquareText";
   requiredPermission?: PermissionName;
   description?: string;
 }

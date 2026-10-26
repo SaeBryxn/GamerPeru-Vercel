@@ -243,6 +243,10 @@
   color: #a17a24;
   letter-spacing: 0;
 }
+.ratingLink {
+  color: inherit;
+}
+
 .rating strong {
   color: var(--color-text-primary);
 }

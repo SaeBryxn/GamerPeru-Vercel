@@ -138,7 +138,9 @@ export function buildProductMetadata(product: ProductDetailEntity): Metadata {
  * Builds Schema.org JSON-LD structured data graph for the Product Detail Page.
  */
 export function buildProductStructuredData(
-  product: ProductDetailEntity
+  product: ProductDetailEntity,
+  /** Approved reviews only; Google ignores (and may penalize) ratings that are not on the page. */
+  rating?: { average: number | null; count: number }
 ): Record<string, unknown> | null {
   const canonicalUrl = `https://${APP_CONFIG.canonicalHost}/productos/${product.slug}`;
   const description = resolveProductDescription(product);
@@ -177,6 +179,16 @@ export function buildProductStructuredData(
 
   if (offers) {
     productNode.offers = offers;
+  }
+
+  if (rating && rating.count > 0 && rating.average !== null) {
+    productNode.aggregateRating = {
+      "@type": "AggregateRating",
+      ratingValue: rating.average.toFixed(1),
+      reviewCount: rating.count,
+      bestRating: "5",
+      worstRating: "1",
+    };
   }
 
   // 3. BreadcrumbList Node

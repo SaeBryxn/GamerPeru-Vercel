@@ -28,6 +28,7 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
       ["products", "/admin/products", "catalog:manage"],
       ["inventory", "/admin/inventario", "inventory:manage"],
       ["taxonomy", "/admin/taxonomia", "catalog:manage"],
+      ["reviews", "/admin/resenas", "catalog:manage"],
       ["storefront-home", "/admin/home", "catalog:manage"],
       ["storefront-menu", "/admin/menu", "catalog:manage"],
       ["ai-product-assistant", "/admin/products/ai-import", "catalog:ai_research"],
@@ -53,12 +54,13 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
   it("D3: returns destinations filtered by authorized staff permissions", () => {
     const catalogPerms = new Set<PermissionName>(["catalog:manage"]);
     const navCatalog = getAdminNavigation(catalogPerms);
-    expect(navCatalog.length).toBe(5);
+    expect(navCatalog.length).toBe(6);
     expect(navCatalog[0]?.href).toBe("/admin");
     expect(navCatalog[1]?.href).toBe("/admin/products");
     expect(navCatalog[2]?.href).toBe("/admin/taxonomia");
-    expect(navCatalog[3]?.href).toBe("/admin/home");
-    expect(navCatalog[4]?.href).toBe("/admin/menu");
+    expect(navCatalog[3]?.href).toBe("/admin/resenas");
+    expect(navCatalog[4]?.href).toBe("/admin/home");
+    expect(navCatalog[5]?.href).toBe("/admin/menu");
 
     const researchPerms = new Set<PermissionName>(["catalog:ai_research"]);
     expect(getAdminNavigation(researchPerms).map((item) => item.href)).toEqual([
@@ -120,7 +122,7 @@ describe("Admin navigation sections", () => {
   it("groups destinations into sections with collapsible folders in display order", () => {
     expect(shape()).toEqual([
       ["Operaciones", ["overview", "orders", "payment-verification", "inventory"]],
-      ["Catálogo", ["products", "taxonomy"]],
+      ["Catálogo", ["products", "taxonomy", "reviews"]],
       ["Tienda y contenido", [["Diseño de tienda", ["storefront-home", "storefront-menu"]]]],
       ["IA y sistema", [["Motor IA", ["ai-product-assistant", "ai-settings"]], "team"]],
     ]);

@@ -373,6 +373,24 @@ describe("GP-014 DB3D — Product SEO & Structured Data Suite", () => {
       expect(productNode?.image).toBeUndefined();
     });
 
+    it("adds AggregateRating only when approved reviews exist", () => {
+      const product = createMockProduct({});
+      const nodeFor = (rating?: { average: number | null; count: number }) =>
+        (
+          buildProductStructuredData(product, rating)?.["@graph"] as Array<Record<string, unknown>>
+        ).find((n) => n["@type"] === "Product");
+
+      expect(nodeFor()?.aggregateRating).toBeUndefined();
+      expect(nodeFor({ average: null, count: 0 })?.aggregateRating).toBeUndefined();
+      expect(nodeFor({ average: 4.5, count: 12 })?.aggregateRating).toEqual({
+        "@type": "AggregateRating",
+        ratingValue: "4.5",
+        reviewCount: 12,
+        bestRating: "5",
+        worstRating: "1",
+      });
+    });
+
     it("F: gracefully omits image on malicious path traversal objectKey", () => {
       const product = createMockProduct({
         primaryMedia: {

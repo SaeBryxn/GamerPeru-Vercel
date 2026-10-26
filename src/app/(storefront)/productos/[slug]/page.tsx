@@ -14,11 +14,13 @@ import {
   type CommerceHeroProjection,
 } from "@/components/product-detail";
 import { PdpComplementaryProducts } from "@/components/product-detail/pdp-complementary-products";
+import { PdpReviews } from "@/components/product-detail/pdp-reviews";
 import { PDP_SPEC_GRID_LIMIT } from "@/components/product-detail/pdp-spec-grid";
 import { PdpTechnicalDetails } from "@/components/product-detail/pdp-technical-details";
 import { EMPTY_PRODUCT_PDP_CONFIG, projectPdpVariants } from "@/lib/catalog/product-pdp-config";
 import { getPreviewExtras } from "@/components/product-detail/pdp-preview-extras";
 import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
+import { getApprovedProductReviews } from "@/lib/reviews/reader";
 import { ProductStoryRenderer } from "@/components/product-story";
 import type { ProductDiscoveryItem } from "@/lib/catalog/types";
 import styles from "./page.module.css";
@@ -61,6 +63,7 @@ export default async function ProductDetailPage({
   }
 
   const pdpConfig = product.pdpConfig ?? EMPTY_PRODUCT_PDP_CONFIG;
+  const { reviews, summary: reviewSummary } = await getApprovedProductReviews(product.id);
 
   // Narrow Client Component projection: strictly excludes specifications and story
   const heroProjection: CommerceHeroProjection = {
@@ -69,7 +72,12 @@ export default async function ProductDetailPage({
       name: product.name,
       subtitle: product.subtitle,
       pdpConfig: {
-        rating: pdpConfig.rating,
+        // Stars come from approved reviews only, never from numbers typed in the editor.
+        rating: {
+          enabled: reviewSummary.count > 0,
+          average: reviewSummary.average,
+          count: reviewSummary.count,
+        },
         gift: pdpConfig.gift,
         support: pdpConfig.support,
         highlightsEnabled: pdpConfig.highlightsEnabled,
@@ -119,7 +127,7 @@ export default async function ProductDetailPage({
   return (
     <main className={styles.page} data-testid="product-detail-page">
       <div className={styles.pageWrapper}>
-        <ProductJsonLd product={product} />
+        <ProductJsonLd product={product} rating={reviewSummary} />
 
         <CommerceHeroContainer
           projection={heroProjection}
@@ -140,6 +148,13 @@ export default async function ProductDetailPage({
         />
 
         <PdpComplementaryProducts products={complementaryProducts} />
+
+        <PdpReviews
+          productId={product.id}
+          productName={product.name}
+          reviews={reviews}
+          summary={reviewSummary}
+        />
       </div>
 
       {product.story && (

@@ -11,6 +11,7 @@ import {
   Gauge,
   KeyRound,
   LayoutTemplate,
+  MessageSquareText,
   Mouse,
   Palette,
   PanelTop,
@@ -35,6 +36,7 @@ const ICONS: Record<AdminNavItem["iconName"] | AdminNavFolder["iconName"], typeo
   Sparkles,
   KeyRound,
   UserCog,
+  MessageSquareText,
   Palette,
   Cpu,
 };

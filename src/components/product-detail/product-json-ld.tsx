@@ -4,6 +4,7 @@ import type { ProductDetailEntity } from "@/lib/catalog/product-detail-types";
 
 export interface ProductJsonLdProps {
   product: ProductDetailEntity;
+  rating?: { average: number | null; count: number };
 }
 
 /**
@@ -12,8 +13,8 @@ export interface ProductJsonLdProps {
  * Renders safe Schema.org JSON-LD structured data (@graph with Product, BreadcrumbList, FAQPage)
  * for the Product Detail Page.
  */
-export function ProductJsonLd({ product }: ProductJsonLdProps): React.JSX.Element | null {
-  const graph = buildProductStructuredData(product);
+export function ProductJsonLd({ product, rating }: ProductJsonLdProps): React.JSX.Element | null {
+  const graph = buildProductStructuredData(product, rating);
 
   if (!graph) {
     return null;

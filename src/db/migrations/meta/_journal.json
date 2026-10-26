@@ -176,6 +176,13 @@
       "when": 1792967540245,
       "tag": "0024_ai_enrich_item_outlives_product",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793006148609,
+      "tag": "0025_product_reviews",
+      "breakpoints": true
     }
   ]
 }

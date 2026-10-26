@@ -168,7 +168,9 @@ export function ProductCommercePanel({
                 {"☆".repeat(5 - Math.round(pdpConfig.rating.average))}
               </span>
               <strong>{pdpConfig.rating.average.toFixed(1)}</strong>
-              <span>({pdpConfig.rating.count} reseñas)</span>
+              <a href="#opiniones" className={styles.ratingLink}>
+                ({pdpConfig.rating.count} {pdpConfig.rating.count === 1 ? "opinión" : "opiniones"})
+              </a>
             </div>
           )}
 

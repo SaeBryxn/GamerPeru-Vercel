@@ -1,0 +1,249 @@
+.section {
+  margin-top: var(--space-16);
+  padding-top: var(--space-10);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.title {
+  margin: 0 0 var(--space-6);
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(1.375rem, 2.2vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+.layout {
+  display: grid;
+  gap: var(--space-10);
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.average {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--color-text-primary);
+}
+
+.stars {
+  font-size: 1.125rem;
+  letter-spacing: 2px;
+  color: var(--color-rating-star, #a17a24);
+}
+
+.starsEmpty {
+  color: var(--color-border-strong);
+}
+
+.count,
+.empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.bars {
+  display: grid;
+  gap: 6px;
+  margin: var(--space-2) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.barRow {
+  display: grid;
+  grid-template-columns: 32px 1fr 28px;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.barTrack {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-secondary);
+  overflow: hidden;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-text-primary);
+}
+
+.barValue {
+  text-align: right;
+}
+
+.list {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review {
+  padding: var(--space-5);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-card);
+}
+
+.reviewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.verified {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-status-success-text);
+}
+
+.reviewTitle {
+  margin: var(--space-3) 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.reviewBody {
+  margin: var(--space-2) 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-line;
+  color: var(--color-text-primary);
+}
+
+.reviewMeta {
+  margin: var(--space-3) 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.writeButton {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.starPicker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.starPicker legend {
+  margin-bottom: var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.starOptions {
+  display: flex;
+  gap: 4px;
+}
+
+.starOption {
+  font-size: 1.75rem;
+  line-height: 1;
+  color: var(--color-border-strong);
+  cursor: pointer;
+}
+
+.starOption[data-active="true"] {
+  color: var(--color-rating-star, #a17a24);
+}
+
+.starOption:focus-within {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-card);
+  font: inherit;
+  font-weight: 400;
+  color: var(--color-text-primary);
+}
+
+.field small {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.formActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.cancel {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.formNote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.formError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-status-danger-text);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

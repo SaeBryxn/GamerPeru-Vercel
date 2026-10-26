@@ -77,6 +77,15 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Árbol del catálogo: categorías y marcas",
   },
   {
+    id: "reviews",
+    label: "Reseñas",
+    href: "/admin/resenas",
+    group: "catalog",
+    iconName: "MessageSquareText",
+    requiredPermission: "catalog:manage",
+    description: "Opiniones de compradores por aprobar antes de publicarlas",
+  },
+  {
     id: "storefront-home",
     label: "Home de la tienda",
     href: "/admin/home",
