@@ -93,3 +93,55 @@ export const getCachedStoryRelatedProducts = cache(
     }
   }
 );
+
+/**
+ * Categories that complete a purchase in another one: a mousepad sells with a mouse and skates,
+ * a mouse with a mousepad. A category without an entry shows no complements.
+ */
+const COMPLEMENTARY_CATEGORIES: Record<string, string[]> = {
+  mouses: ["mousepads", "accesorios"],
+  mousepads: ["mouses", "accesorios"],
+  accesorios: ["mouses", "mousepads"],
+};
+
+/**
+ * Products from the complementary categories, taken in turns so each category shows up. Fail-soft:
+ * a failed read leaves the section out instead of failing the product page.
+ */
+export const getCachedComplementaryProducts = cache(
+  async (categorySlug: string, limit: number): Promise<ProductDiscoveryItem[]> => {
+    const slugs = COMPLEMENTARY_CATEGORIES[categorySlug] ?? [];
+    if (slugs.length === 0) return [];
+
+    try {
+      const reader = getCatalogReader();
+      const lists = await Promise.all(
+        slugs.map(async (slug) => {
+          const category = await getCachedCategory(slug);
+          if (!category) return [];
+          const page = await reader.getPublishedProductsByCategory(category.id, {
+            page: 1,
+            pageSize: limit,
+          });
+          return page.items;
+        })
+      );
+
+      const picked: ProductDiscoveryItem[] = [];
+      for (
+        let index = 0;
+        picked.length < limit && lists.some((list) => index < list.length);
+        index++
+      ) {
+        for (const list of lists) {
+          const item = list[index];
+          if (item && picked.length < limit) picked.push(item);
+        }
+      }
+      return picked;
+    } catch {
+      logger.warn({ event: "pdp_complementary_products_failed", categorySlug });
+      return [];
+    }
+  }
+);

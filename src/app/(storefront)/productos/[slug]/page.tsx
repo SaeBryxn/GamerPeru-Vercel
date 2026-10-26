@@ -1,7 +1,11 @@
 import React from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getCachedProduct, getCachedStoryRelatedProducts } from "@/lib/catalog/cached-queries";
+import {
+  getCachedComplementaryProducts,
+  getCachedProduct,
+  getCachedStoryRelatedProducts,
+} from "@/lib/catalog/cached-queries";
 import { buildProductMetadata } from "@/lib/catalog/pdp-seo";
 import {
   CommerceHeroContainer,
@@ -9,6 +13,8 @@ import {
   buildSpecRows,
   type CommerceHeroProjection,
 } from "@/components/product-detail";
+import { PdpComplementaryProducts } from "@/components/product-detail/pdp-complementary-products";
+import { PDP_SPEC_GRID_LIMIT } from "@/components/product-detail/pdp-spec-grid";
 import { PdpTechnicalDetails } from "@/components/product-detail/pdp-technical-details";
 import { EMPTY_PRODUCT_PDP_CONFIG, projectPdpVariants } from "@/lib/catalog/product-pdp-config";
 import { getPreviewExtras } from "@/components/product-detail/pdp-preview-extras";
@@ -24,6 +30,9 @@ interface ProductPageProps {
 // Must be a literal for static analysis; keep in step with CATALOG_REVALIDATE_SECONDS. Admin
 // catalog writes revalidate on demand, so this only bounds staleness when nothing invalidates.
 export const revalidate = 3600;
+
+/** One row of the catalog grid. */
+const COMPLEMENTARY_PRODUCT_COUNT = 4;
 
 /** No product is prerendered at build: each page is generated on first visit, then cached (ISR). */
 export function generateStaticParams(): { slug: string }[] {
@@ -81,6 +90,11 @@ export default async function ProductDetailPage({
   const previewExtras =
     resolveCatalogReaderMode() === "dev-preview" ? getPreviewExtras(product.category.slug) : null;
 
+  const complementaryProducts = await getCachedComplementaryProducts(
+    product.category.slug,
+    COMPLEMENTARY_PRODUCT_COUNT
+  );
+
   // Single-query page-level RelatedProducts hydration for Story cross-sell
   let relatedProductsMap: Map<string, ProductDiscoveryItem> | undefined;
 
@@ -115,10 +129,17 @@ export default async function ProductDetailPage({
             <PdpTechnicalDetails
               config={pdpConfig}
               specRows={specRows}
+              highlightedKeys={
+                pdpConfig.highlightsEnabled !== false
+                  ? specRows.slice(0, PDP_SPEC_GRID_LIMIT).map((row) => row.key)
+                  : []
+              }
               previewContents={previewExtras?.packageContents}
             />
           }
         />
+
+        <PdpComplementaryProducts products={complementaryProducts} />
       </div>
 
       {product.story && (

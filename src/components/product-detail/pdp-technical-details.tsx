@@ -7,13 +7,17 @@ import styles from "./pdp-technical-details.module.css";
 
 export function PdpTechnicalDetails({
   config,
-  specRows,
+  specRows: allSpecRows,
+  highlightedKeys = [],
   previewContents = [],
 }: {
   config: ProductPdpConfig;
   specRows: FormattedSpecRow[];
+  /** Spec keys already shown in the highlights box above; listing them again only repeats them. */
+  highlightedKeys?: string[];
   previewContents?: string[];
 }) {
+  const specRows = allSpecRows.filter((row) => !highlightedKeys.includes(row.key));
   const sizes = config.sizeGuide.sizes.filter((size) => size.name);
   const dimensionalSizes = sizes.filter(
     (size) => formatDimensions(size) !== null || size.weight !== ""

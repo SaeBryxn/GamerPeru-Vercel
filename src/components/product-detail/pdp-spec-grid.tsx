@@ -47,6 +47,9 @@ function iconFor(row: FormattedSpecRow): LucideIcon {
   return SPEC_ICON_RULES.find(([pattern]) => pattern.test(haystack))?.[1] ?? CircleDot;
 }
 
+/** Rows the highlights box shows; the accordions below skip them instead of repeating them. */
+export const PDP_SPEC_GRID_LIMIT = 8;
+
 export interface PdpSpecGridProps {
   rows: FormattedSpecRow[];
   /** Highlights shown in the grid; the full list lives in the specifications accordion. */
@@ -54,7 +57,7 @@ export interface PdpSpecGridProps {
 }
 
 /** Two-column highlights box: gray icon + label + value per cell. */
-export function PdpSpecGrid({ rows, limit = 8 }: PdpSpecGridProps) {
+export function PdpSpecGrid({ rows, limit = PDP_SPEC_GRID_LIMIT }: PdpSpecGridProps) {
   if (rows.length === 0) return null;
 
   return (
