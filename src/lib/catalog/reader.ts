@@ -40,6 +40,8 @@ export interface CatalogDiscoveryReader {
     filterState?: DiscoveryFilterState,
     schema?: ValidatedSpecificationSchema | null
   ): Promise<PaginatedResult<ProductDiscoveryItem>>;
+  /** Brands with published products, with their logos; the home page's brand strip. */
+  getShowcaseBrands(): Promise<BrandDiscoveryEntity[]>;
   /** Brands and categories that have published products: the base filters of the full catalog. */
   getCatalogFacetOptions(): Promise<{
     brands: BrandFacetOption[];

@@ -9,11 +9,12 @@ import type {
 } from "@/lib/home/section-schemas";
 import type { HomeVideoSource } from "./home-video";
 import { BentoShowcase } from "./bento-showcase/bento-showcase";
+import { BrandStrip } from "./brand-strip/brand-strip";
 import { CatalogRail } from "./catalog-rail/catalog-rail";
 import { CommunityBanner } from "./community-banner/community-banner";
 import { CompareSlider } from "./compare-slider/compare-slider";
 import { FeatureVideo } from "./feature-video/feature-video";
-import { loadRailProducts, loadShowcaseProducts } from "./home-catalog";
+import { loadRailProducts, loadShowcaseBrands, loadShowcaseProducts } from "./home-catalog";
 import { ProductCarousel } from "./product-carousel/product-carousel";
 import { SplitShowcase } from "./split-showcase/split-showcase";
 import { TrustStrip } from "./trust-strip/trust-strip";
@@ -54,7 +55,10 @@ export interface HomeSectionsProps {
  */
 export async function HomeSections({ home, storeLayerClassName }: HomeSectionsProps) {
   const { sections, mediaUrls } = home;
-  const products = await Promise.all(sections.map(loadSectionProducts));
+  const [products, brands] = await Promise.all([
+    Promise.all(sections.map(loadSectionProducts)),
+    loadShowcaseBrands(),
+  ]);
   const image = (slot: HomeImageSlot) => ({
     src: slot.mediaAssetId ? (mediaUrls[slot.mediaAssetId] ?? null) : null,
     alt: slot.alt,
@@ -85,92 +89,107 @@ export async function HomeSections({ home, storeLayerClassName }: HomeSectionsPr
       <div id={storeLayerId} className={storeLayerClassName}>
         {rest.map((section, index) => {
           const sectionProducts = products[index + offset] ?? [];
-          switch (section.type) {
-            case "video_hero":
-              return null;
-            case "product_carousel":
-              return (
-                <ProductCarousel
-                  key={section.id}
-                  id={anchor("coleccion")}
-                  eyebrow={section.content.eyebrow}
-                  title={section.content.title}
-                  products={sectionProducts}
-                />
-              );
-            case "feature_video":
-              return (
-                <FeatureVideo
-                  key={section.id}
-                  video={video(section.content.video)}
-                  eyebrow={section.content.eyebrow}
-                  title={section.content.title}
-                  subtitle={section.content.subtitle}
-                  cta={section.content.cta}
-                />
-              );
-            case "split_showcase":
-              return (
-                <SplitShowcase
-                  key={section.id}
-                  eyebrow={section.content.eyebrow}
-                  title={section.content.title}
-                  features={section.content.features}
-                  image={image(section.content.image)}
-                />
-              );
-            case "compare_slider":
-              return (
-                <CompareSlider
-                  key={section.id}
-                  eyebrow={section.content.eyebrow}
-                  title={section.content.title}
-                  left={{ ...section.content.left, image: image(section.content.left.image) }}
-                  right={{ ...section.content.right, image: image(section.content.right.image) }}
-                />
-              );
-            case "catalog_rail":
-              return (
-                <CatalogRail
-                  key={section.id}
-                  id={anchor(section.content.categorySlug)}
-                  eyebrow={section.content.eyebrow}
-                  title={section.content.title}
-                  products={sectionProducts}
-                  seeAll={{
-                    label: section.content.seeAllLabel,
-                    href: `/categorias/${section.content.categorySlug}`,
-                  }}
-                />
-              );
-            case "bento_showcase": {
-              const [wide, square, tall] = section.content.images;
-              return (
-                <BentoShowcase
-                  key={section.id}
-                  title={section.content.title}
-                  description={section.content.description}
-                  images={[image(wide), image(square), image(tall)]}
-                />
-              );
-            }
-            case "community_banner":
-              return (
-                <CommunityBanner
-                  key={section.id}
-                  eyebrow={section.content.eyebrow}
-                  title={section.content.title}
-                  description={section.content.description}
-                  ctaLabel={section.content.ctaLabel}
-                  ctaHref={section.content.ctaHref}
-                  background={image(section.content.background)}
-                />
-              );
-            case "trust_strip":
-              return <TrustStrip key={section.id} items={section.content.items} />;
-          }
+          // The brand strip follows the first section, right where the store begins.
+          const brandStrip = index === 0 ? <BrandStrip brands={brands} /> : null;
+          const rendered = renderSection(section, sectionProducts);
+          return brandStrip ? (
+            <React.Fragment key={section.id}>
+              {rendered}
+              {brandStrip}
+            </React.Fragment>
+          ) : (
+            rendered
+          );
         })}
+        {rest.length === 0 && <BrandStrip brands={brands} />}
       </div>
     </>
   );
+
+  function renderSection(section: HomeSection, sectionProducts: ProductDiscoveryItem[]) {
+    switch (section.type) {
+      case "video_hero":
+        return null;
+      case "product_carousel":
+        return (
+          <ProductCarousel
+            key={section.id}
+            id={anchor("coleccion")}
+            eyebrow={section.content.eyebrow}
+            title={section.content.title}
+            products={sectionProducts}
+          />
+        );
+      case "feature_video":
+        return (
+          <FeatureVideo
+            key={section.id}
+            video={video(section.content.video)}
+            eyebrow={section.content.eyebrow}
+            title={section.content.title}
+            subtitle={section.content.subtitle}
+            cta={section.content.cta}
+          />
+        );
+      case "split_showcase":
+        return (
+          <SplitShowcase
+            key={section.id}
+            eyebrow={section.content.eyebrow}
+            title={section.content.title}
+            features={section.content.features}
+            image={image(section.content.image)}
+          />
+        );
+      case "compare_slider":
+        return (
+          <CompareSlider
+            key={section.id}
+            eyebrow={section.content.eyebrow}
+            title={section.content.title}
+            left={{ ...section.content.left, image: image(section.content.left.image) }}
+            right={{ ...section.content.right, image: image(section.content.right.image) }}
+          />
+        );
+      case "catalog_rail":
+        return (
+          <CatalogRail
+            key={section.id}
+            id={anchor(section.content.categorySlug)}
+            eyebrow={section.content.eyebrow}
+            title={section.content.title}
+            products={sectionProducts}
+            seeAll={{
+              label: section.content.seeAllLabel,
+              href: `/categorias/${section.content.categorySlug}`,
+            }}
+          />
+        );
+      case "bento_showcase": {
+        const [wide, square, tall] = section.content.images;
+        return (
+          <BentoShowcase
+            key={section.id}
+            title={section.content.title}
+            description={section.content.description}
+            images={[image(wide), image(square), image(tall)]}
+          />
+        );
+      }
+      case "community_banner":
+        return (
+          <CommunityBanner
+            key={section.id}
+            eyebrow={section.content.eyebrow}
+            title={section.content.title}
+            description={section.content.description}
+            ctaLabel={section.content.ctaLabel}
+            ctaHref={section.content.ctaHref}
+            background={image(section.content.background)}
+          />
+        );
+      case "trust_strip":
+        return <TrustStrip key={section.id} items={section.content.items} />;
+    }
+  }
 }

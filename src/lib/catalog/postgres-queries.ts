@@ -89,6 +89,44 @@ export function buildPublishedBrandBySlugQuery(slug: string) {
     .limit(1);
 }
 
+/** Published brands that sell at least one published product, with their logo, by name. */
+export function buildShowcaseBrandsQuery() {
+  return db
+    .select({
+      id: brands.id,
+      name: brands.name,
+      slug: brands.slug,
+      description: brands.description,
+      logoObjectKey: mediaAssets.objectKey,
+      logoAltText: mediaAssets.altText,
+    })
+    .from(brands)
+    .leftJoin(
+      mediaAssets,
+      and(
+        eq(brands.logoMediaId, mediaAssets.id),
+        eq(mediaAssets.securityClass, "PUBLIC_MEDIA"),
+        eq(mediaAssets.mediaType, "IMAGE")
+      )
+    )
+    .where(
+      and(
+        eq(brands.status, "PUBLISHED"),
+        sql`EXISTS (
+          SELECT 1
+          FROM ${products}
+          JOIN ${categories} ON ${categories.id} = ${products.categoryId}
+          JOIN ${productVariants} ON ${productVariants.productId} = ${products.id}
+          WHERE ${products.brandId} = ${brands.id}
+            AND ${products.status} = 'PUBLISHED'
+            AND ${categories.status} = 'PUBLISHED'
+            AND ${productVariants.status} = 'ACTIVE'
+        )`
+      )
+    )
+    .orderBy(brands.name);
+}
+
 export function buildCategorySpecificationSchemaQuery(categoryId: string) {
   return db
     .select({

@@ -1,7 +1,7 @@
 import "server-only";
 import { getCachedCategory } from "@/lib/catalog/cached-queries";
 import { getCatalogReader } from "@/lib/catalog/reader";
-import type { ProductDiscoveryItem } from "@/lib/catalog/types";
+import type { BrandDiscoveryEntity, ProductDiscoveryItem } from "@/lib/catalog/types";
 import { logger } from "@/lib/logger";
 
 /**
@@ -33,6 +33,16 @@ export async function loadShowcaseProducts(limit = 16): Promise<ProductDiscovery
     return await getCatalogReader().getShowcaseProducts(limit);
   } catch {
     logger.warn({ event: "home_showcase_products_unavailable" });
+    return [];
+  }
+}
+
+/** Brands for the strip under the first section; decorative, so a failed read just hides it. */
+export async function loadShowcaseBrands(): Promise<BrandDiscoveryEntity[]> {
+  try {
+    return await getCatalogReader().getShowcaseBrands();
+  } catch {
+    logger.warn({ event: "home_showcase_brands_unavailable" });
     return [];
   }
 }

@@ -390,6 +390,14 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader, Pr
     };
   }
 
+  async getShowcaseBrands(): Promise<BrandDiscoveryEntity[]> {
+    const brandSlugs = new Set(FIXTURE_PRODUCTS.map((p) => p.brand.slug));
+    return Object.values(ALL_FIXTURE_BRANDS)
+      .filter((b) => brandSlugs.has(b.slug))
+      .map((b) => ({ id: b.id, name: b.name, slug: b.slug, description: null, logo: null }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   async getCatalogFacetOptions(): Promise<{
     brands: BrandFacetOption[];
     categories: CategoryFacetOption[];

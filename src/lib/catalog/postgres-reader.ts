@@ -25,6 +25,7 @@ import {
   buildCategorySpecificationSchemaQuery,
   buildPublishedBrandBySlugQuery,
   buildPublishedCategoryBySlugQuery,
+  buildShowcaseBrandsQuery,
   buildShowcaseProductsQuery,
   buildTechnicalRepresentedSpecValuesQuery,
 } from "./postgres-queries";
@@ -303,6 +304,17 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
       pageSize: safePageSize,
       totalPages,
     };
+  }
+
+  async getShowcaseBrands(): Promise<BrandDiscoveryEntity[]> {
+    const rows = await buildShowcaseBrandsQuery();
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      description: row.description,
+      logo: row.logoObjectKey ? { objectKey: row.logoObjectKey, altText: row.logoAltText } : null,
+    }));
   }
 
   async getCatalogFacetOptions(): Promise<{

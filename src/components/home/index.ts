@@ -7,3 +7,4 @@ export * from "./catalog-rail/catalog-rail";
 export * from "./bento-showcase/bento-showcase";
 export * from "./community-banner/community-banner";
 export * from "./trust-strip/trust-strip";
+export * from "./brand-strip/brand-strip";

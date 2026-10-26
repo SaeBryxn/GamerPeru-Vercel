@@ -47,6 +47,7 @@ export function withCatalogCache(reader: CatalogDiscoveryReader): CatalogDiscove
       (...args: Parameters<CatalogDiscoveryReader["getPublishedProductsByBrand"]>) =>
         reader.getPublishedProductsByBrand(...args)
     ),
+    getShowcaseBrands: cacheCatalogQuery("showcase-brands", () => reader.getShowcaseBrands()),
     getCatalogFacetOptions: cacheCatalogQuery("catalog-facet-options", () =>
       reader.getCatalogFacetOptions()
     ),

@@ -359,6 +359,14 @@ export class DevCatalogPreviewReader implements CatalogDiscoveryReader, ProductD
     };
   }
 
+  async getShowcaseBrands(): Promise<BrandDiscoveryEntity[]> {
+    const brandSlugs = new Set(getAllPreviewProducts().map((p) => p.brand.slug));
+    return Object.values(PREVIEW_BRANDS)
+      .filter((b) => brandSlugs.has(b.slug))
+      .map((b) => ({ id: b.id, name: b.name, slug: b.slug, description: null, logo: null }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   async getCatalogFacetOptions(): Promise<{
     brands: BrandFacetOption[];
     categories: CategoryFacetOption[];

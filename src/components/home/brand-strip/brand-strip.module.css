@@ -1,0 +1,119 @@
+.section {
+  width: 100%;
+  padding: var(--space-12) 0;
+  border-top: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border-subtle);
+  background-color: var(--color-surface-card);
+}
+
+.title {
+  margin: 0 0 var(--space-8);
+  font-family: var(--font-body), sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* Soft fade at both edges so brands slide in and out instead of being cut. */
+.viewport {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, currentColor 10%, currentColor 90%, transparent);
+}
+
+.track {
+  display: flex;
+  width: max-content;
+  animation: brand-strip-scroll 32s linear infinite;
+}
+
+.viewport:hover .track,
+.viewport:focus-within .track {
+  animation-play-state: paused;
+}
+
+.list {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  flex-shrink: 0;
+  padding: 0 var(--space-10);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  opacity: 0.7;
+  transition:
+    opacity var(--motion-duration-normal) var(--motion-easing-standard),
+    color var(--motion-duration-normal) var(--motion-easing-standard);
+}
+
+.link:hover,
+.link:focus-visible {
+  color: var(--color-text-primary);
+  opacity: 1;
+}
+
+.logo {
+  width: auto;
+  max-width: 160px;
+  height: 40px;
+  object-fit: contain;
+  filter: grayscale(1);
+}
+
+.link:hover .logo,
+.link:focus-visible .logo {
+  filter: none;
+}
+
+.wordmark {
+  font-family: var(--font-heading), sans-serif;
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+@keyframes brand-strip-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Without motion the brands sit still and wrap, all of them visible. */
+@media (prefers-reduced-motion: reduce) {
+  .viewport {
+    mask-image: none;
+  }
+
+  .track {
+    width: auto;
+    justify-content: center;
+    animation: none;
+  }
+
+  .list {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: var(--space-4);
+  }
+
+  .list[aria-hidden] {
+    display: none;
+  }
+}
