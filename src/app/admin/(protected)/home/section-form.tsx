@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useId, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 import { ProductSelection, type ProductOption } from "@/components/admin/product-selection";
 import type { ProductSelection as Selection } from "@/lib/catalog/curated-products";
 import { Plus, Trash2 } from "lucide-react";
@@ -366,6 +366,7 @@ export interface SectionFormProps {
   categories: readonly CategoryOption[];
   busy: boolean;
   onSave: (content: Record<string, unknown>) => void;
+  onDraftChange?: (content: Record<string, unknown>) => void;
   onCancel: () => void;
   onMediaAdded: (assetId: string, media: EditorMedia) => void;
 }
@@ -379,6 +380,7 @@ export function SectionForm({
   categories,
   busy,
   onSave,
+  onDraftChange,
   onCancel,
   onMediaAdded,
 }: SectionFormProps) {
@@ -386,6 +388,9 @@ export function SectionForm({
   const [media, setMedia] = useState(initialMedia);
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
   const summaryId = useId();
+  useEffect(() => {
+    onDraftChange?.(content);
+  }, [content, onDraftChange]);
 
   const ctx: FieldContext = {
     products,
@@ -423,7 +428,9 @@ export function SectionForm({
           Revisa los campos marcados: {errors.size} por corregir.
         </p>
       )}
-      {HOME_SECTION_FIELDS[type].map((field) => renderField(field, [], ctx))}
+      <fieldset disabled={busy} className={styles.formFields}>
+        {HOME_SECTION_FIELDS[type].map((field) => renderField(field, [], ctx))}
+      </fieldset>
       <div className={styles.formActions}>
         <button type="button" className={styles.secondaryButton} onClick={onCancel} disabled={busy}>
           Descartar cambios

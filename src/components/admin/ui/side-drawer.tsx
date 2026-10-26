@@ -6,6 +6,19 @@ import { m, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import styles from "./side-drawer.module.css";
 
+// Nested selectors share the scroll lock and only the front dialog handles the keyboard.
+const layers: Array<{ token: symbol; root: HTMLDivElement; panel: HTMLDivElement }> = [];
+let unlockedOverflow = "";
+let layerSequence = 0;
+function syncLayers() {
+  layers.forEach((layer, i) => {
+    const covered = i !== layers.length - 1;
+    layer.root.inert = covered;
+    if (covered) layer.panel.setAttribute("aria-hidden", "true");
+    else layer.panel.removeAttribute("aria-hidden");
+  });
+}
+
 const EASE = [0.25, 0.1, 0.25, 1] as const;
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -36,6 +49,7 @@ export function SideDrawer({
 }: SideDrawerProps) {
   const reduceMotion = useReducedMotion();
   const panelRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // Read through refs so the mount effect never re-runs: re-running it would pull focus back to
   // the panel every time the caller's busy state or callback identity changes.
@@ -47,14 +61,24 @@ export function SideDrawer({
   });
 
   useEffect(() => {
-    panelRef.current?.focus();
-    const previousOverflow = document.body.style.overflow;
+    const panel = panelRef.current;
+    const root = rootRef.current;
+    if (!panel || !root) return;
+    const returnFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const token = Symbol("drawer");
+    if (!layers.length) unlockedOverflow = document.body.style.overflow;
+    root.style.zIndex = String(60 + ++layerSequence * 2);
+    layers.push({ token, root, panel });
+    syncLayers();
     document.body.style.overflow = "hidden";
+    panel.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busyRef.current) {
+      if (event.defaultPrevented || layers.at(-1)?.token !== token) return;
+      if (event.key === "Escape") {
         event.preventDefault();
-        onCloseRef.current();
+        if (!busyRef.current) onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !panelRef.current) return;
@@ -62,10 +86,16 @@ export function SideDrawer({
       if (focusable.length === 0) return;
       const first = focusable[0]!;
       const last = focusable[focusable.length - 1]!;
-      if (event.shiftKey && document.activeElement === first) {
+      if (
+        event.shiftKey &&
+        (document.activeElement === first || document.activeElement === panel)
+      ) {
         last.focus();
         event.preventDefault();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === last || document.activeElement === panel)
+      ) {
         first.focus();
         event.preventDefault();
       }
@@ -74,12 +104,20 @@ export function SideDrawer({
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
+      const wasFront = layers.at(-1)?.token === token;
+      const index = layers.findIndex((layer) => layer.token === token);
+      if (index >= 0) layers.splice(index, 1);
+      syncLayers();
+      if (!layers.length) {
+        document.body.style.overflow = unlockedOverflow;
+        layerSequence = 0;
+      }
+      if (wasFront && returnFocus?.isConnected) returnFocus.focus();
     };
   }, []);
 
   return createPortal(
-    <div className={styles.root}>
+    <div ref={rootRef} className={styles.root}>
       <m.div
         className={styles.scrim}
         initial={{ opacity: 0 }}

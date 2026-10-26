@@ -269,3 +269,113 @@
   font-size: 12px;
   color: var(--color-text-muted);
 }
+
+.drawerLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 0;
+  overflow: auto;
+  flex: 1;
+}
+.previewPane {
+  padding: 28px;
+  background: var(--admin-inset);
+  border-right: 1px solid var(--admin-panel-border);
+}
+.previewLabel {
+  margin: 0 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.collectionPreview {
+  border: 1px solid #e5e5e8;
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+  color: #17171b;
+}
+.collectionNav {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #ececef;
+  padding: 14px 18px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.collectionNav span {
+  font-weight: 400;
+  color: #6c6c75;
+}
+.collectionBody {
+  padding: 40px 24px;
+}
+.collectionBody small {
+  display: block;
+  margin: 18px 0 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #6c6c75;
+}
+.collectionBody h3 {
+  font-family: var(--font-heading);
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.collectionBody p {
+  font-size: 12px;
+  color: #6c6c75;
+  margin: 12px 0 24px;
+}
+.collectionStatus {
+  display: inline-flex;
+  padding: 5px 10px;
+  border: 1px solid #e5e5e8;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.previewPath {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+  margin: 16px 0;
+}
+.previewPane > a {
+  display: inline-block;
+  margin-top: 20px;
+}
+.drawerFields {
+  padding: 28px;
+  min-width: 0;
+}
+.drawerFields .form {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.drawerFields .formGrid {
+  grid-template-columns: 1fr;
+}
+.drawerFieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+@media (max-width: 700px) {
+  .drawerLayout {
+    grid-template-columns: 1fr;
+  }
+  .previewPane,
+  .drawerFields {
+    padding: 20px;
+  }
+  .previewPane {
+    border-right: 0;
+    border-bottom: 1px solid var(--admin-panel-border);
+  }
+}

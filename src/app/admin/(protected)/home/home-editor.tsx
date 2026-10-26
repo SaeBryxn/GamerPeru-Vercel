@@ -6,7 +6,10 @@ import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ExternalLink, Eye, EyeOff, Lock, Pencil } from "lucide-react";
 import { ConfirmationDialog } from "@/components/admin/confirmation-dialog";
-import { Wireframe } from "@/components/admin/wireframe/wireframe";
+import { AnimatePresence } from "framer-motion";
+import { DrawerHeader, SideDrawer } from "@/components/admin/ui/side-drawer";
+import { useUnsavedDraft } from "@/components/admin/use-unsaved-draft";
+import { SectionPreview } from "./section-preview";
 import type { AdminHomeSection, AdminHomeState } from "@/lib/home/home-sections-service";
 import {
   createHomeSectionAction,
@@ -51,11 +54,16 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
   const router = useRouter();
   const [sections, setSections] = useState(initialState?.sections ?? []);
   const [media, setMedia] = useState<Record<string, EditorMedia>>(initialState?.media ?? {});
+  const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingVisibility, setPendingVisibility] = useState<PendingVisibility | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [isPending, startTransition] = useTransition();
+  const editedSection = sections.find((section) => section.id === editingId);
+  useUnsavedDraft(
+    !!editedSection && !!draft && JSON.stringify(draft) !== JSON.stringify(editedSection.content)
+  );
 
   if (!initialState) {
     return (
@@ -76,6 +84,15 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
     if (code === "HOME_SECTION_CONFLICT") router.refresh();
   };
 
+  const perform = (work: () => Promise<void>) =>
+    startTransition(async () => {
+      try {
+        await work();
+      } catch {
+        fail("No se pudo confirmar el cambio. Vuelve a intentar.");
+      }
+    });
+
   const move = (index: number, direction: -1 | 1) => {
     const target = index + direction;
     const moved = sections[index];
@@ -86,7 +103,7 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
     next[index] = displaced;
     next[target] = moved;
     setError(null);
-    startTransition(async () => {
+    perform(async () => {
       const result = await reorderHomeSectionsAction({
         orderedIds: next.map((section) => section.id),
         expectedOrder: sections.map((section) => section.id),
@@ -110,7 +127,7 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
     if (!pendingVisibility) return;
     const { section, isVisible } = pendingVisibility;
     setError(null);
-    startTransition(async () => {
+    perform(async () => {
       const result = await setHomeSectionVisibilityAction({
         sectionId: section.id,
         expectedVersion: section.version,
@@ -130,7 +147,7 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
 
   const save = (section: AdminHomeSection, content: Record<string, unknown>) => {
     setError(null);
-    startTransition(async () => {
+    perform(async () => {
       const result = await updateHomeSectionContentAction({
         sectionId: section.id,
         expectedVersion: section.version,
@@ -148,6 +165,24 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
     });
   };
 
+  const editing = sections.find((section) => section.id === editingId);
+  const openEditor = (section: AdminHomeSection) => {
+    setDraft(section.content);
+    setEditingId(section.id);
+    setError(null);
+  };
+  const closeEditor = () => {
+    if (isPending) return;
+    if (
+      editing &&
+      draft &&
+      JSON.stringify(draft) !== JSON.stringify(editing.content) &&
+      !window.confirm("Tienes cambios sin guardar. ¿Descartarlos y cerrar?")
+    )
+      return;
+    setEditingId(null);
+    setDraft(null);
+  };
   const visibleCount = sections.filter((section) => section.isVisible).length;
   const outline = pendingVisibility
     ? sections.map((section) => ({
@@ -182,19 +217,12 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
         </a>
       </header>
 
-      <ol className={styles.steps} aria-label="Cómo editar el home">
-        <li>
-          <span className={styles.stepNumber}>1</span> Elige una sección
-        </li>
-        <li>
-          <span className={styles.stepNumber}>2</span> Edita textos, imágenes o video
-        </li>
-        <li>
-          <span className={styles.stepNumber}>3</span> Guarda y revisa en la tienda
-        </li>
-      </ol>
+      <p className={styles.canvasHint}>
+        Vista de contenido · las secciones aparecen en el orden de la tienda. Abre una para editar y
+        previsualizar tus cambios.
+      </p>
 
-      {error && (
+      {!editing && error && (
         <p className={styles.formError} role="alert" data-testid="home-editor-error">
           {error}
         </p>
@@ -209,14 +237,14 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
         disabled={isPending || sections.some((section) => section.type === "brand_strip")}
         onClick={() => {
           setError(null);
-          startTransition(async () => {
+          perform(async () => {
             const result = await createHomeSectionAction({
               type: "brand_strip",
               expectedOrder: sections.map((section) => section.id),
             });
             if (!result.success || !result.data) return fail(result.error, result.code);
             setSections((current) => [...current, result.data!]);
-            setEditingId(result.data.id);
+            openEditor(result.data);
           });
         }}
       >
@@ -238,7 +266,7 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
               data-testid={`home-section-${section.id}`}
             >
               <div className={styles.cardRow}>
-                <Wireframe shapes={guide.wireframe} className={styles.thumb} />
+                <span className={styles.position}>{String(index + 1).padStart(2, "0")}</span>
                 <div className={styles.cardMain}>
                   <div className={styles.cardHeading}>
                     <span className={styles.cardType}>{guide.label}</span>
@@ -259,9 +287,6 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
                   </div>
                   <p className={styles.cardHeadline}>{headline}</p>
                   <p className={styles.cardDescription}>{guide.description}</p>
-                  <p className={styles.cardNeeds}>
-                    <strong>Necesitas:</strong> {guide.needs}
-                  </p>
                 </div>
                 <div className={styles.cardActions}>
                   {isHero ? (
@@ -307,7 +332,7 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
                     className={styles.secondaryButton}
                     aria-expanded={isEditing}
                     aria-controls={`home-section-form-${section.id}`}
-                    onClick={() => setEditingId(isEditing ? null : section.id)}
+                    onClick={() => openEditor(section)}
                     disabled={isPending && !isEditing}
                   >
                     <Pencil size={14} aria-hidden="true" />
@@ -316,27 +341,81 @@ export function HomeEditor({ initialState, categories, products = [] }: HomeEdit
                 </div>
               </div>
 
-              {isEditing && (
-                <div id={`home-section-form-${section.id}`} className={styles.cardBody}>
-                  <SectionForm
-                    products={products}
-                    type={section.type}
-                    initialContent={section.content}
-                    initialMedia={media}
-                    categories={categories}
-                    busy={isPending}
-                    onSave={(content) => save(section, content)}
-                    onCancel={() => setEditingId(null)}
-                    onMediaAdded={(assetId, added) =>
-                      setMedia((current) => ({ ...current, [assetId]: added }))
-                    }
-                  />
-                </div>
-              )}
+              <div className={styles.sectionCanvas}>
+                <SectionPreview
+                  type={section.type}
+                  content={section.content}
+                  media={media}
+                  products={products}
+                />
+              </div>
             </li>
           );
         })}
       </ul>
+
+      <AnimatePresence>
+        {editing && (
+          <SideDrawer
+            labelledBy="home-drawer-title"
+            onClose={closeEditor}
+            busy={isPending}
+            size="wide"
+            testId="home-section-drawer"
+          >
+            <DrawerHeader
+              titleId="home-drawer-title"
+              title={HOME_SECTION_GUIDES[editing.type].label}
+              eyebrow={`Home · sección ${sections.indexOf(editing) + 1} de ${sections.length}`}
+              onClose={closeEditor}
+              busy={isPending}
+            />
+            <div className={styles.editorLayout}>
+              <aside className={styles.livePreview} aria-label="Vista previa de la sección">
+                <div className={styles.previewCaption}>
+                  <strong>Vista previa</strong>
+                  <span>{editing.isVisible ? "Visible en la tienda" : "Sección oculta"}</span>
+                </div>
+                <SectionPreview
+                  type={editing.type}
+                  content={draft ?? editing.content}
+                  media={media}
+                  products={products}
+                />
+                <p className={styles.canvasHint}>
+                  Los cambios se publican al guardar. La vista previa representa el contenido; el
+                  tamaño final se adapta a la tienda.
+                </p>
+              </aside>
+              <div className={styles.editorFields} id={`home-section-form-${editing.id}`}>
+                {error && (
+                  <p className={styles.formError} role="alert">
+                    {error}
+                  </p>
+                )}
+                <SectionForm
+                  key={editing.id}
+                  products={products}
+                  type={editing.type}
+                  initialContent={editing.content}
+                  initialMedia={media}
+                  categories={categories}
+                  busy={isPending}
+                  onDraftChange={setDraft}
+                  onSave={(content) => save(editing, content)}
+                  onCancel={() => {
+                    setEditingId(null);
+                    setDraft(null);
+                  }}
+                  onMediaAdded={(assetId, added) =>
+                    setMedia((current) => ({ ...current, [assetId]: added }))
+                  }
+                />
+              </div>
+            </div>
+          </SideDrawer>
+        )}
+      </AnimatePresence>
 
       <ConfirmationDialog
         open={pendingVisibility !== null}

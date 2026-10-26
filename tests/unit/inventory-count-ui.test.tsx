@@ -59,6 +59,10 @@ it("conserva el motivo ante un error y pide confirmar antes de descartar", async
   );
   expect(screen.getByLabelText("Motivo")).toHaveProperty("value", "Conteo diario");
   expect(mocks.refresh).not.toHaveBeenCalled();
+  // The error can render before React finishes the action transition and unlocks the form.
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Cancelar" }).hasAttribute("disabled")).toBe(false)
+  );
   fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
   expect(screen.getByText("¿Descartar este conteo?")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Seguir editando" }));

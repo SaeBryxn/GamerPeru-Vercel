@@ -1887,6 +1887,7 @@ function ProductEditorBody({
               <section id="variantes" className={styles.card} data-testid="section-variants">
                 <VariantBoard
                   productId={product.id}
+                  productName={product.name}
                   variants={variants}
                   media={media}
                   variantStock={variantStock}

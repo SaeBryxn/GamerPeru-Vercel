@@ -127,8 +127,10 @@ describe("Home editor", () => {
     const hero = screen.getByTestId(`home-section-${DEFAULT_HOME_SECTIONS[0]!.id}`);
     expect(within(hero).getByText("Primera")).toBeTruthy();
     expect(within(hero).queryByRole("button", { name: /^Subir/ })).toBeNull();
-    expect(screen.getAllByText("Necesitas:")).toHaveLength(DEFAULT_HOME_SECTIONS.length);
-    expect(screen.getByText("Nuestros mousepads")).toBeTruthy();
+    expect(screen.getAllByTestId("home-content-preview")).toHaveLength(
+      DEFAULT_HOME_SECTIONS.length
+    );
+    expect(screen.getAllByText("Nuestros mousepads").length).toBeGreaterThan(0);
   });
 
   it("previews the resulting home before hiding a section", async () => {
@@ -181,18 +183,27 @@ describe("Home editor", () => {
 
     const card = screen.getByTestId(`home-section-${hero.id}`);
     await user.click(within(card).getByRole("button", { name: "Editar" }));
-    const heading = within(card).getByLabelText(/Título principal/);
+    const drawer = screen.getByTestId("home-section-drawer");
+    const heading = within(drawer).getByLabelText(/Título principal/);
     await user.clear(heading);
     await user.type(heading, "<b>Hola</b>");
-    await user.click(within(card).getByRole("button", { name: "Guardar y publicar" }));
+    await user.click(
+      within(screen.getByTestId("home-section-drawer")).getByRole("button", {
+        name: "Guardar y publicar",
+      })
+    );
 
-    expect(within(card).getByRole("alert").textContent).toContain("Revisa los campos");
-    expect(within(card).getByText("No se permiten etiquetas HTML.")).toBeTruthy();
+    expect(within(drawer).getByRole("alert").textContent).toContain("Revisa los campos");
+    expect(within(drawer).getByText("No se permiten etiquetas HTML.")).toBeTruthy();
     expect(actions.updateHomeSectionContentAction).not.toHaveBeenCalled();
 
     await user.clear(heading);
     await user.type(heading, "Periféricos para competir");
-    await user.click(within(card).getByRole("button", { name: "Guardar y publicar" }));
+    await user.click(
+      within(screen.getByTestId("home-section-drawer")).getByRole("button", {
+        name: "Guardar y publicar",
+      })
+    );
     expect(actions.updateHomeSectionContentAction).toHaveBeenCalledWith({
       sectionId: hero.id,
       expectedVersion: 1,
@@ -207,10 +218,20 @@ describe("Home editor", () => {
 
     const card = screen.getByTestId(`home-section-${feature.id}`);
     await user.click(within(card).getByRole("button", { name: "Editar" }));
-    await user.click(within(card).getByRole("radio", { name: "Archivo de video" }));
-    expect(within(card).getByText("Subir video")).toBeTruthy();
-    expect(within(card).getByText("Subir portada")).toBeTruthy();
-    await user.click(within(card).getByRole("button", { name: "Guardar y publicar" }));
+    await user.click(
+      within(screen.getByTestId("home-section-drawer")).getByRole("radio", {
+        name: "Archivo de video",
+      })
+    );
+    expect(within(screen.getByTestId("home-section-drawer")).getByText("Subir video")).toBeTruthy();
+    expect(
+      within(screen.getByTestId("home-section-drawer")).getByText("Subir portada")
+    ).toBeTruthy();
+    await user.click(
+      within(screen.getByTestId("home-section-drawer")).getByRole("button", {
+        name: "Guardar y publicar",
+      })
+    );
     expect(actions.updateHomeSectionContentAction).not.toHaveBeenCalled();
   });
 

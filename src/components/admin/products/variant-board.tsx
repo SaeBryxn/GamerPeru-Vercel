@@ -1,6 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import { AnimatePresence } from "framer-motion";
+import { DrawerHeader, SideDrawer } from "@/components/admin/ui/side-drawer";
+import { StoreCardPreview } from "./store-card-preview";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ImageIcon, Plus } from "lucide-react";
 import { StatusBadge } from "@/components/admin/ui";
@@ -22,6 +25,7 @@ import { useEditorDirty } from "./editor-safety";
 
 export interface VariantBoardProps {
   productId: string;
+  productName?: string;
   variants: AdminProductDetailVariant[];
   media: AdminProductUiDetailMedia[];
   variantStock: Record<string, VariantStockRow>;
@@ -58,6 +62,7 @@ const nameOf = (variant: AdminProductDetailVariant) => {
 /** Independent step: the parent owns refreshed server data and navigation. */
 export function VariantBoard({
   productId,
+  productName = "Producto",
   variants,
   media,
   variantStock,
@@ -126,6 +131,17 @@ export function VariantBoard({
       return;
     }
     onChanged();
+  };
+  const closeEditor = () => {
+    if (pending) return;
+    if (
+      draft &&
+      JSON.stringify(draft) !== initialDraft.current &&
+      !window.confirm("Tienes cambios sin guardar. ¿Descartarlos y cerrar?")
+    )
+      return;
+    setDraft(null);
+    setError(null);
   };
   const patch = (value: Partial<Draft>) =>
     setDraft((current) => (current ? { ...current, ...value } : current));
@@ -306,7 +322,9 @@ export function VariantBoard({
       {error}
     </p>
   ) : null;
-  const selectedPhoto = draft ? photos.find((photo) => photo.id === draft.photoId) : undefined;
+  const selectedPhoto = draft
+    ? photos.find((photo) => photo.id === (draft.photoId || draft.initialPhotoId))
+    : undefined;
   const totalAvailable = variants.reduce(
     (sum, variant) => sum + (variantStock[variant.id]?.available ?? 0),
     0
@@ -326,7 +344,6 @@ export function VariantBoard({
         <label className={styles.field}>
           <span>Color o talla</span>
           <input
-            autoFocus
             required
             maxLength={150}
             value={draft.title}
@@ -499,14 +516,7 @@ export function VariantBoard({
         </p>
       )}
       <div className={styles.actions}>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => {
-            setDraft(null);
-            setError(null);
-          }}
-        >
+        <button type="button" disabled={pending} onClick={closeEditor}>
           Cancelar
         </button>
         <button type="submit" className={styles.primary} disabled={pending}>
@@ -552,7 +562,7 @@ export function VariantBoard({
                   aria-expanded={expanded}
                   aria-controls={expanded ? `${id}-form` : undefined}
                   aria-label={`Editar ${nameOf(variant)}`}
-                  onClick={() => (expanded ? setDraft(null) : open(variant))}
+                  onClick={() => open(variant)}
                 >
                   <span className={styles.photoGroup}>
                     <span className={styles.thumbnail}>
@@ -615,7 +625,6 @@ export function VariantBoard({
                   </span>
                 )}
               </div>
-              {expanded && editor}
             </article>
           );
         })}
@@ -623,9 +632,50 @@ export function VariantBoard({
       {!variants.length && (
         <p className={styles.empty}>Agrega el primer color o talla y su precio.</p>
       )}
-      {draft &&
-        (!draft.variant || !variants.some((variant) => variant.id === draft.variant?.id)) &&
-        editor}
+      <AnimatePresence>
+        {draft && (
+          <SideDrawer
+            labelledBy={`${id}-drawer-title`}
+            onClose={closeEditor}
+            busy={pending}
+            size="wide"
+            testId="variant-drawer"
+          >
+            <DrawerHeader
+              titleId={`${id}-drawer-title`}
+              title={draft.variant ? `Editar ${nameOf(draft.variant)}` : "Agregar color o talla"}
+              eyebrow={productName}
+              onClose={closeEditor}
+              busy={pending}
+            />
+            <div className={styles.drawerLayout}>
+              <aside className={styles.storePreview}>
+                <p className={styles.hint}>Vista previa · precio y fotografía</p>
+                <StoreCardPreview
+                  name={productName}
+                  variant={draft.title}
+                  imageUrl={
+                    selectedPhoto?.publicUrl ??
+                    photos.find((p) => p.mediaAssetId === primaryMediaAssetId)?.publicUrl ??
+                    photos[0]?.publicUrl
+                  }
+                  price={draft.price}
+                  compareAt={draft.compareAt}
+                  status={
+                    draft.status === "ACTIVE"
+                      ? "Versión activa"
+                      : draft.status === "ARCHIVED"
+                        ? "Versión archivada"
+                        : "Versión inactiva"
+                  }
+                />
+                <p className={styles.hint}>Los cambios se aplican a esta versión al guardar.</p>
+              </aside>
+              <div className={styles.drawerFields}>{editor}</div>
+            </div>
+          </SideDrawer>
+        )}
+      </AnimatePresence>
       {!draft && notice && (
         <p role="status" className={styles.hint}>
           {notice}

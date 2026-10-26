@@ -66,10 +66,11 @@ describe("Team workspace", () => {
     });
     render(<TeamWorkspace members={[SELF]} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Dar acceso" }));
     fireEvent.change(screen.getByTestId("team-grant-email"), {
       target: { value: "nuevo@example.pe" },
     });
-    fireEvent.change(screen.getByTestId("team-grant-level"), { target: { value: "ADMIN_ORDERS" } });
+    fireEvent.click(screen.getByRole("radio", { name: /Pedidos y pagos/ }));
     fireEvent.click(screen.getByTestId("team-grant-submit"));
 
     expect(actions.grantStaffAccessAction).not.toHaveBeenCalled();
@@ -86,10 +87,12 @@ describe("Team workspace", () => {
 
   it("rejects an invalid email without opening the confirmation", () => {
     render(<TeamWorkspace members={[SELF]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Dar acceso" }));
     fireEvent.change(screen.getByTestId("team-grant-email"), { target: { value: "sin-arroba" } });
     fireEvent.click(screen.getByTestId("team-grant-submit"));
     expect(screen.getByTestId("team-grant-error").textContent).toMatch(/cuenta registrada/);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(actions.grantStaffAccessAction).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Confirmar acceso" })).toBeNull();
   });
 
   it("explains a revocation and shows the server's refusal", async () => {
@@ -100,9 +103,9 @@ describe("Team workspace", () => {
     });
     render(<TeamWorkspace members={[SELF, OPERATOR]} />);
 
-    fireEvent.change(screen.getByTestId("team-change-operador@example.pe"), {
-      target: { value: "revocar" },
-    });
+    fireEvent.click(screen.getByTestId("team-change-operador@example.pe"));
+    fireEvent.click(screen.getByRole("radio", { name: /Revocar acceso/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Revisar cambio" }));
     expect(screen.getByText(/perderá todo acceso al panel/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Revocar acceso" }));

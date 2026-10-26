@@ -1,4 +1,5 @@
 import React from "react";
+import { ProductQuickView } from "@/components/admin/products/product-quick-view";
 import Link from "@/components/app-link";
 import {
   Plus,
@@ -392,17 +393,20 @@ export default async function AdminProductsPage({ searchParams }: AdminProductsP
                       )}
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <Link
-                        href={
-                          ready
-                            ? `/admin/products/${item.id}`
-                            : `/admin/products/${item.id}#${gaps[0]?.section ?? "resumen"}`
-                        }
-                        className={styles.secondaryButton}
-                        data-testid={`btn-edit-${item.id}`}
-                      >
-                        {ready ? "Abrir" : "Completar"}
-                      </Link>
+                      <div className={styles.rowActions}>
+                        <ProductQuickView productId={item.id} name={item.name} />
+                        <Link
+                          href={
+                            ready
+                              ? `/admin/products/${item.id}`
+                              : `/admin/products/${item.id}#${gaps[0]?.section ?? "resumen"}`
+                          }
+                          className={styles.secondaryButton}
+                          data-testid={`btn-edit-${item.id}`}
+                        >
+                          {ready ? "Editar" : "Completar"}
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 );

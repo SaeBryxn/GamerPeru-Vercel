@@ -192,11 +192,20 @@ orden y visibilidad), convierte los slugs anteriores a relaciones y habilita RLS
 desde el servidor autorizado. Las secciones conservan sus textos en JSON, y las fotos siguen
 usando `media_assets`/`home_section_media`.
 
-No se aplicaron migraciones alojadas ni se hicieron escrituras de prueba. Falta:
+Ampliación del mismo patrón: el home representa sus secciones con textos, imágenes y productos,
+con edición lateral y vista previa del borrador. El catálogo permite abrir una vista rápida y
+editar precio/oferta por versión con foto, control de concurrencia e idempotencia. El editor de
+colores/tallas también usa un panel con vista previa. Categorías y marcas muestran la colección y
+su URL; reseñas muestra las fotos y la opinión completa antes de moderar; Equipo permite revisar
+la persona y el efecto del nivel de acceso antes de confirmarlo. No requiere nuevas tablas.
 
-- [ ] **Aplicar `0027_navegacion_visual_relaciones.sql` después de `0025` y `0026`.** Verificar
-      que se conservaron los destacados elegidos, guardar una selección con fotos desde cada
-      panel y comprobar la navegación en escritorio y móvil.
+El agente no aplicó migraciones alojadas ni hizo escrituras de prueba. El dueño informó que
+aplicó la `0027` el 26 de octubre. Seguimiento:
+
+- [x] **Aplicar `0027_navegacion_visual_relaciones.sql`.** Informado por el dueño; pendiente la
+      comprobación funcional con datos reales indicada en QA.
+- [ ] **Revisión adicional de Inicio/dashboard:** pospuesta por indicación del dueño; esta
+      ampliación trabaja los editores de contenido, catálogo y equipo.
 
 - [ ] **Aplicar `0026_contenido_editable_fotos_resenas.sql` después de `0025`.** Agrega el tipo
       de sección de marcas, la selección de productos del menú y las fotos de opiniones.
