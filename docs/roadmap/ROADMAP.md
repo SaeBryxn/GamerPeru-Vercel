@@ -23,11 +23,13 @@ historial de git (por ejemplo `git log --oneline -- docs/roadmap/GP-024.md`).
 
 ### Catálogo ATK / MCHOSE e inventario visual
 
-Carga solicitada por el dueño el 26 de octubre: 126 fichas publicadas (84 ATK y 42 MCHOSE),
-659 variantes y 126 historias con fotos y características oficiales. Se conservaron las 11
-fichas anteriores. Las 551 URLs de imagen descargadas corresponden a 548 archivos WebP únicos
-verificados en R2. Precios sugeridos en PEN: 109 variantes con referencia minorista peruana y
-550 estimadas desde el PVP oficial en USD. Costos sin completar y stock nuevo en cero.
+Carga solicitada por el dueño el 26 de octubre: 141 fichas publicadas (94 ATK y 47 MCHOSE),
+702 variantes y 141 historias con fotos y características oficiales. Incluye los combos y los
+colores hermanos de las variantes ya mantenidas por el dueño. Se conservaron las 11 fichas
+anteriores y sus existencias. Las 589 URLs de imagen descargadas corresponden a 586 archivos
+WebP únicos verificados en R2 y contabilizados en el presupuesto de medios sin duplicarlo al
+reanudar. Precios sugeridos en PEN: 113 variantes con referencia minorista peruana y 589
+estimadas desde el PVP oficial en USD. Costos sin completar y stock nuevo en cero.
 La preparación, validación y carga reanudable están en `scripts/catalog/`; el manifiesto,
 las fuentes y las comprobaciones de esta carga se conservan localmente en
 `scratch/catalogo-20261026/`. No requiere migraciones nuevas.

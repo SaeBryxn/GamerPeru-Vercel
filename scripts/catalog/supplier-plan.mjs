@@ -40,8 +40,9 @@ export const plain = (value) =>
 const clip = (s, n) => plain(s).slice(0, n).trim();
 
 export function categoryFor(title) {
+  if (/gaming combo|gear bundle|setup bundle/i.test(title)) return "accesorios";
   if (
-    /keycap|switches|switch\s+gt|receiver|dongle|cable|case|bag|sleeve|wrist.rest|stand|earpads|bottle|cap\b|mod kit|plate|grip|tape|skates|puller/i.test(
+    /keycap|keychain|switches|switch\s+gt|receiver|dongle|cable|case|bag|sleeve|wrist.rest|stand|earpads|bottle|cap\b|mod kit|plate|grip|tape|skates|puller/i.test(
       title
     )
   )
@@ -337,17 +338,43 @@ export function buildSupplierPlan({ products, existing, webTexts = {}, market = 
   const existingModels = new Set(
     existing.map((p) => slugify(p.name.replace(/\s+(?:Black Gold|White Gold|White|Black)$/i, "")))
   );
-  const preservedHandles = new Set([
-    "atk-sky-xsoft-esport-gaming-mousepad",
-    "atk-99g-xsoft-esport-gaming-mousepad",
-    "atk-anime-mouse-pad-reverie",
-  ]);
+  // Match only the exact options already maintained by the owner. Sibling colors and
+  // editions still belong in the import; excluding a whole family silently lost them.
+  const preservedOptions = [
+    {
+      handle: "atk-sky-xsoft-esport-gaming-mousepad",
+      owner: /ATK Sky XSoft/i,
+      titles: ["Sky / Black(Large Size)", "Sky / Orange(Large Size)"],
+    },
+    {
+      handle: "atk-99g-xsoft-esport-gaming-mousepad",
+      owner: /ATK 99G Air/i,
+      titles: ["Air / Matcha Green"],
+    },
+    { handle: "atk-anime-mouse-pad-reverie", owner: /ATK Anime.*Reverie.*Pink/i, titles: ["Pink"] },
+    {
+      handle: "atk-dragonfly-a9-series-lightweight-wireless-mouse",
+      owner: /ATK A9 PRO MAX White/i,
+      titles: ["A9 Pro Max / White"],
+    },
+    {
+      handle: "mchose-a7-v3-series-lightweight-wireless-gaming-mouse",
+      owner: /Mchose A7 V3 Pro\+/i,
+      titles: ["A7 V3 Pro+ / White"],
+    },
+    {
+      handle: "mchose-k7-v2-series-wireless-gaming-mouse",
+      owner: /Mchose K7 v2 Ultra\+ Black Gold/i,
+      titles: ["K7 V2 Ultra+ / Black Gold"],
+    },
+    {
+      handle: "mchose-k7-v2-series-wireless-gaming-mouse",
+      owner: /Mchose K7 v2 Ultra\+ White Gold/i,
+      titles: ["K7 V2 Ultra+ / White Gold"],
+    },
+  ].filter((rule) => existing.some((p) => rule.owner.test(p.name)));
   for (const p of products) {
-    if (
-      /after.sales|gaming combo|gear bundle|setup bundle|mystery|gift card|bonus pack/i.test(
-        p.title
-      )
-    ) {
+    if (/after.sales|mystery|gift card|bonus pack/i.test(p.title)) {
       excluded.push({
         title: p.title,
         source: p.url,
@@ -363,14 +390,7 @@ export function buildSupplierPlan({ products, existing, webTexts = {}, market = 
       });
       continue;
     }
-    if (preservedHandles.has(p.handle)) {
-      excluded.push({
-        title: p.title,
-        source: p.url,
-        reason: "Modelo ya administrado en la tienda; se conserva su ficha y existencias.",
-      });
-      continue;
-    }
+    const managed = preservedOptions.filter((rule) => rule.handle === p.handle);
     const category = categoryFor(p.title);
     const facts = extractFacts(p.html, webTexts[p.handle] ?? "");
     const byEdition = new Map();
@@ -381,10 +401,12 @@ export function buildSupplierPlan({ products, existing, webTexts = {}, market = 
       const name = clip(p.title, 190),
         key = slugify(name);
       if (
-        existingModels.has(slugify(editionName)) ||
-        (p.brand === "atk" &&
-          /a9.*pro\s*max/i.test(editionName) &&
-          existing.some((x) => /atk.*a9.*pro.*max/i.test(x.name)))
+        managed.some((rule) => rule.titles.some((title) => slugify(title) === slugify(v.title))) ||
+        (!managed.length &&
+          (existingModels.has(slugify(editionName)) ||
+            (p.brand === "atk" &&
+              /a9.*pro\s*max/i.test(editionName) &&
+              existing.some((x) => /atk.*a9.*pro.*max/i.test(x.name)))))
       ) {
         excluded.push({
           title: name,
@@ -400,13 +422,15 @@ export function buildSupplierPlan({ products, existing, webTexts = {}, market = 
       const id = stableId(`product:${key}`);
       let group = groups.get(key);
       if (!group) {
-        const kind = {
-          mouses: "mouse",
-          teclados: "teclado",
-          mousepads: "mousepad",
-          audio: "producto de audio",
-          accesorios: "accesorio",
-        }[category];
+        const kind = /gaming combo|gear bundle|setup bundle/i.test(name)
+          ? "combo"
+          : {
+              mouses: "mouse",
+              teclados: "teclado",
+              mousepads: "mousepad",
+              audio: "producto de audio",
+              accesorios: "accesorio",
+            }[category];
         const specifications = [
           { label: "Marca", value: p.brand.toUpperCase(), note: "" },
           { label: "Modelo", value: name, note: "" },

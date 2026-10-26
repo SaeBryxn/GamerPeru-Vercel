@@ -28,6 +28,8 @@ describe("Supplier catalog preparation", () => {
     expect(categoryFor("ATK Mouse Pad")).toBe("mousepads");
     expect(categoryFor("MCHOSE 8K Receiver for Wireless Mouse")).toBe("accesorios");
     expect(categoryFor("ATK Keyboard Cable")).toBe("accesorios");
+    expect(categoryFor("ATK RS6 Collectible Mini Metal Keyboard Keychain")).toBe("accesorios");
+    expect(categoryFor("MCHOSE Keyboard + Mouse Gaming Combo")).toBe("accesorios");
     expect(categoryFor("MCHOSE V9 Wireless Gaming Headset")).toBe("audio");
   });
   it("extracts official HTML line breaks and plain specification lists", () => {
@@ -80,6 +82,71 @@ describe("Supplier catalog preparation", () => {
     expect(plan.products).toHaveLength(0);
     expect(plan.stockPolicy).toContain("Cero");
     expect(plan.excluded).toHaveLength(2);
+  });
+  it("includes fixed supplier combos and keeps gift cards out of physical stock", () => {
+    const item = {
+      brand: "mchose",
+      sourceId: "bundle",
+      title: "MCHOSE Keyboard + L7 Gaming Combo",
+      handle: "combo",
+      url: "https://www.mchose.store/products/combo",
+      html: "",
+      options: [],
+      images: ["https://cdn.shopify.com/image.jpg"],
+      variants: [
+        {
+          sourceId: "bundle1",
+          sku: "combo",
+          title: "White",
+          usdCents: 9900,
+          options: [{ name: "Color", label: "White" }],
+          imageUrl: null,
+        },
+      ],
+    };
+    const result = buildSupplierPlan({
+      products: [item, { ...item, title: "ATK GEAR Gift Card" }],
+      existing: [],
+    });
+    expect(result.products).toHaveLength(1);
+    expect(result.excluded).toHaveLength(1);
+  });
+  it("preserves the owner's exact mousepad color while importing sibling colors", () => {
+    const product = {
+      brand: "atk",
+      sourceId: "reverie",
+      title: "ATK Anime Mouse Pad – Reverie",
+      handle: "atk-anime-mouse-pad-reverie",
+      url: "https://www.atk.store/products/atk-anime-mouse-pad-reverie",
+      html: "",
+      options: [],
+      images: ["https://cdn.shopify.com/image.jpg"],
+      variants: [
+        {
+          sourceId: "pink",
+          sku: "pink",
+          title: "Pink",
+          usdCents: 2500,
+          options: [{ name: "Color", label: "Pink" }],
+          imageUrl: null,
+        },
+        {
+          sourceId: "black-white",
+          sku: "bw",
+          title: "Black-White",
+          usdCents: 2500,
+          options: [{ name: "Color", label: "Black-White" }],
+          imageUrl: null,
+        },
+      ],
+    };
+    const result = buildSupplierPlan({
+      products: [product],
+      existing: [{ name: "ATK Anime Mouse Pad - Reverie Pink" }],
+    });
+    expect(result.products).toHaveLength(1);
+    expect(result.products[0]).toMatchObject({ variants: [{ title: "Black-White" }] });
+    expect(result.excluded).toHaveLength(1);
   });
 });
 

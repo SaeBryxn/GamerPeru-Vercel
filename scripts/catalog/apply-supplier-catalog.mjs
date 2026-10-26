@@ -35,7 +35,7 @@ if (!apply) {
 }
 process.loadEnvFile(".env.local");
 const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 1, connect_timeout: 15 });
-const result = { batch: plan.batch, created: [], skipped: [], failed: [] };
+const result = { batch: plan.batch, created: [], appended: [], skipped: [], failed: [] };
 try {
   const categories =
     await sql`select c.id,c.slug,c.status,c.current_spec_schema_id,s.schema_version,s.field_definitions,s.is_active from categories c left join category_specification_schemas s on s.id=c.current_spec_schema_id`;
@@ -61,11 +61,29 @@ try {
       const written = await sql.begin(async (tx) => {
         await tx`select pg_advisory_xact_lock(hashtextextended(${`supplier-import:${p.id}`},0))`;
         const existing = await tx`select id from products where id=${p.id}::uuid or slug=${p.slug}`;
-        if (existing.length) return false; // Never overwrite a manual or already imported record.
+        if (existing.length && existing[0].id !== p.id) return "skipped";
+        let variantsToInsert = p.variants,
+          orderOffset = 0,
+          mediaOffset = 0;
+        if (existing.length) {
+          const audit =
+            await tx`select id from audit_events where target_id=${p.id} and action='CATALOG_SUPPLIER_IMPORT' and metadata->>'batch'=${plan.batch} limit 1`;
+          if (!audit.length) return "skipped"; // Never modify a manually managed record.
+          const current =
+            await tx`select id,display_order from product_variants where product_id=${p.id}::uuid`;
+          variantsToInsert = p.variants.filter((v) => !current.some((row) => row.id === v.id));
+          if (!variantsToInsert.length) return "skipped";
+          orderOffset = Math.max(-1, ...current.map((v) => v.display_order)) + 1;
+          mediaOffset = Number(
+            (
+              await tx`select coalesce(max(display_order),-1)+1 as next_order from product_media where product_id=${p.id}::uuid`
+            )[0].next_order
+          );
+        }
         const photos = p.images.map((photo, i) => ({
           ...photo,
           asset: media[photo.url],
-          order: i,
+          order: mediaOffset + i,
         }));
         const assets = [
           ...new Map(
@@ -89,8 +107,9 @@ try {
           from jsonb_to_recordset(${tx.json(assets)}::jsonb) as a(id uuid,object_key text,mime_type text,file_size_bytes int,width int,height int,alt_text text,checksum_sha256 text)
           on conflict (object_key) do nothing`;
         const primary = photos[0].asset.id;
-        await tx`insert into products (id,brand_id,category_id,name,slug,description,pdp_config,status,is_featured,primary_media_id) values (${p.id}::uuid,${brand.id}::uuid,${category.id}::uuid,${p.name},${p.slug},${p.description},${tx.json(receipt.pdpConfigs[p.id])},'DRAFT',false,${primary}::uuid)`;
-        const variants = p.variants.map((v, i) => ({
+        if (!existing.length)
+          await tx`insert into products (id,brand_id,category_id,name,slug,description,pdp_config,status,is_featured,primary_media_id) values (${p.id}::uuid,${brand.id}::uuid,${category.id}::uuid,${p.name},${p.slug},${p.description},${tx.json(receipt.pdpConfigs[p.id])},'DRAFT',false,${primary}::uuid)`;
+        const variants = variantsToInsert.map((v, i) => ({
           id: v.id,
           sku: v.sku,
           title: v.title,
@@ -100,7 +119,7 @@ try {
           attributes: Object.fromEntries(
             Object.entries(v.attributes).filter(([key]) => !key.startsWith("supplier_"))
           ),
-          display_order: i,
+          display_order: orderOffset + i,
           inventory_id: stableId(`inventory:${v.id}:${location.id}`),
         }));
         await tx`insert into product_variants (id,product_id,sku,title,price_cents,compare_at_price_cents,cost_cents,weight_grams,attributes,status,display_order)
@@ -118,6 +137,10 @@ try {
         await tx`insert into product_media (id,product_id,media_asset_id,variant_id,display_order,placement)
           select id,${p.id}::uuid,media_asset_id,variant_id,display_order,'GALLERY' from jsonb_to_recordset(${tx.json(attachments)}::jsonb) as a(id uuid,media_asset_id uuid,variant_id uuid,display_order int)
           on conflict (id) do nothing`;
+        if (existing.length) {
+          await tx`insert into audit_events (id,actor_type,actor_id,action,target_type,target_id,metadata,request_id) values (${stableId(`append:${p.id}:${variantsToInsert.map((v) => v.id).join(",")}`)}::uuid,'SYSTEM','supplier-catalog-import','CATALOG_SUPPLIER_VARIANTS_APPEND','PRODUCT',${p.id},${tx.json({ batch: plan.batch, variants: variantsToInsert.map((v) => v.id), stock: 0 })},${plan.batch})`;
+          return "appended";
+        }
         if (category.current_spec_schema_id)
           await tx`insert into product_specifications (product_id,schema_id,schema_version,spec_values) values (${p.id}::uuid,${category.current_spec_schema_id}::uuid,${expected.schema_version},${tx.json(structuredSpecs(p))})`;
         const revisionId = stableId(`story:${p.id}:1`);
@@ -125,17 +148,25 @@ try {
         await tx`insert into product_stories (product_id,published_revision_id) values (${p.id}::uuid,${revisionId}::uuid)`;
         await tx`update products set status='PUBLISHED',updated_at=now() where id=${p.id}::uuid`;
         await tx`insert into audit_events (id,actor_type,actor_id,action,target_type,target_id,metadata,request_id) values (${stableId(`audit:${p.id}:${plan.batch}`)}::uuid,'SYSTEM','supplier-catalog-import','CATALOG_SUPPLIER_IMPORT','PRODUCT',${p.id},${tx.json({ batch: plan.batch, source: p.source, variants: p.variants.length, stock: 0, pricesProvisional: true, existingProductsPreserved: true })},${plan.batch})`;
-        return true;
+        return "created";
       });
-      (written ? result.created : result.skipped).push({ id: p.id, name: p.name, slug: p.slug });
+      result[written].push({ id: p.id, name: p.name, slug: p.slug });
     } catch (error) {
       result.failed.push({ name: p.name, error: error.message });
     }
     fs.writeFileSync(path.join(directory, "resultado-carga.json"), JSON.stringify(result, null, 2));
-    if ((result.created.length + result.skipped.length + result.failed.length) % 10 === 0)
+    if (
+      (result.created.length +
+        result.appended.length +
+        result.skipped.length +
+        result.failed.length) %
+        10 ===
+      0
+    )
       console.log(
         JSON.stringify({
           created: result.created.length,
+          appended: result.appended.length,
           skipped: result.skipped.length,
           failed: result.failed.length,
         })
@@ -154,6 +185,33 @@ try {
     await sql`insert into audit_events (id,actor_type,actor_id,action,target_type,target_id,metadata,request_id)
     values (${stableId(`supplier-options:${plan.batch}`)}::uuid,'SYSTEM','supplier-catalog-import','CATALOG_SUPPLIER_OPTIONS_NORMALIZED','CATALOG',${plan.batch},${sql.json({ batch: plan.batch, variants: normalized.length })},${plan.batch}) on conflict (id) do nothing`;
   result.normalizedVariantAttributes = normalized.length;
+  // Direct supplier uploads also consume the existing media budget. Account the actual
+  // registered objects once per batch, preserving reservations from concurrent admin uploads.
+  result.storageBytesAccounted = await sql.begin(async (tx) => {
+    await tx`select pg_advisory_xact_lock(hashtextextended(${`supplier-storage:${plan.batch}`},0))`;
+    const keys = [
+      ...new Set(plan.products.flatMap((p) => p.images.map((i) => media[i.url].objectKey))),
+    ];
+    const total = Number(
+      (
+        await tx`select coalesce(sum(file_size_bytes),0) as bytes from media_assets where object_key in ${tx(keys)}`
+      )[0].bytes
+    );
+    const accounted = Number(
+      (
+        await tx`select coalesce(sum((metadata->>'bytesAdded')::bigint),0) as bytes from audit_events where action='MEDIA_SUPPLIER_IMPORT_ACCOUNTED' and metadata->>'batch'=${plan.batch}`
+      )[0].bytes
+    );
+    const delta = Math.max(0, total - accounted);
+    if (!delta) return 0;
+    const budget =
+      await tx`update media_storage_budget set used_bytes=used_bytes+${delta},updated_at=now() where id=1 and used_bytes+reserved_bytes+${delta}<=budget_bytes returning id`;
+    if (!budget.length)
+      throw new Error("No queda presupuesto de medios para contabilizar la carga de proveedores.");
+    await tx`insert into audit_events (id,actor_type,actor_id,action,target_type,target_id,metadata,request_id)
+      values (${stableId(`supplier-storage:${plan.batch}:${total}`)}::uuid,'SYSTEM','supplier-catalog-import','MEDIA_SUPPLIER_IMPORT_ACCOUNTED','CATALOG',${plan.batch},${tx.json({ batch: plan.batch, bytesAdded: delta, totalBytes: total })},${plan.batch})`;
+    return delta;
+  });
   fs.writeFileSync(
     path.join(
       directory,
@@ -164,6 +222,7 @@ try {
   console.log(
     JSON.stringify({
       created: result.created.length,
+      appended: result.appended.length,
       skipped: result.skipped.length,
       failed: result.failed.length,
     })

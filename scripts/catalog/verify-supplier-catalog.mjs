@@ -57,6 +57,26 @@ try {
       );
     }
   }
+  const ownerVariantsPath = path.join(directory, "opciones-anteriores.json");
+  if (fs.existsSync(ownerVariantsPath)) {
+    const expected = JSON.parse(fs.readFileSync(ownerVariantsPath));
+    const actual =
+      await sql`select v.id,v.title,v.sku,v.attributes,v.price_cents,i.quantity_on_hand,i.quantity_reserved,i.quantity_allocated from product_variants v join inventory_items i on i.variant_id=v.id join inventory_locations l on l.id=i.location_id where v.id in ${sql(expected.map((v) => v.id))} and l.code='LOC-LIM-01'`;
+    for (const previous of expected) {
+      const current = actual.find((v) => v.id === previous.id);
+      assert.ok(current, previous.sku);
+      for (const key of [
+        "title",
+        "sku",
+        "attributes",
+        "price_cents",
+        "quantity_on_hand",
+        "quantity_reserved",
+        "quantity_allocated",
+      ])
+        assert.equal(normalize(current[key]), normalize(previous[key]), `${previous.sku}: ${key}`);
+    }
+  }
   const report = {
     verifiedAt: new Date().toISOString(),
     published: ids.length,
