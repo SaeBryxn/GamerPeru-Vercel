@@ -177,12 +177,40 @@ export function resolveVariantForOption(
   return match ?? null;
 }
 
+/**
+ * A colour added from the admin can carry only its title ("Naranja") while its siblings carry a
+ * `color` attribute. Reading the title as that colour keeps the colour picker, with its photos,
+ * instead of dropping every variant to the plain list of titles. Only variants with no attributes
+ * at all are filled, so a real size/colour matrix is never reinterpreted.
+ */
+export function withTitleAsMissingColor(variants: ProductVariantDetail[]): ProductVariantDetail[] {
+  const colorOf = (variant: ProductVariantDetail, key: "color" | "colorway") =>
+    String(variant.attributes[key] ?? "").trim();
+  const key = variants.some((variant) => colorOf(variant, "colorway")) ? "colorway" : "color";
+  const colored = variants.filter((variant) => colorOf(variant, key));
+  if (colored.length === 0 || colored.length === variants.length) return variants;
+  const fillable = (variant: ProductVariantDetail) =>
+    colorOf(variant, key) !== "" || Object.keys(variant.attributes).length === 0;
+  if (!variants.every(fillable)) return variants;
+  return variants.map((variant) =>
+    colorOf(variant, key)
+      ? variant
+      : { ...variant, attributes: { ...variant.attributes, [key]: variant.title } }
+  );
+}
+
 export function VariantSelector({
-  variants,
+  variants: storedVariants,
   media = [],
-  selectedVariant,
-  onSelectVariant,
+  selectedVariant: storedSelectedVariant,
+  onSelectVariant: onSelectStoredVariant,
 }: VariantSelectorProps): React.JSX.Element {
+  const variants = useMemo(() => withTitleAsMissingColor(storedVariants), [storedVariants]);
+  const selectedVariant =
+    variants.find((variant) => variant.id === storedSelectedVariant.id) ?? storedSelectedVariant;
+  // Hands the caller its own variant object, not the normalized copy.
+  const onSelectVariant = (variant: ProductVariantDetail) =>
+    onSelectStoredVariant(storedVariants.find((stored) => stored.id === variant.id) ?? variant);
   const { dimensions, useFallback } = useMemo(() => resolveDimensions(variants), [variants]);
 
   if (variants.length <= 1) {

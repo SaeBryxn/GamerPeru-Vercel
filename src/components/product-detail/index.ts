@@ -30,6 +30,7 @@ export type { ProductCommercePanelProps } from "./product-commerce-panel";
 export {
   VariantSelector,
   resolveDimensions,
+  withTitleAsMissingColor,
   isVariantOptionCompatible,
   resolveVariantForOption,
   SWATCH_ALLOWLIST,

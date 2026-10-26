@@ -25,6 +25,7 @@ import {
   isVariantOptionCompatible,
   resolveVariantForOption,
   resolveDimensions,
+  withTitleAsMissingColor,
   SWATCH_ALLOWLIST,
   type CommerceHeroProjection,
 } from "@/components/product-detail";
@@ -229,6 +230,22 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
       expect(dimensions[0]?.key).toBe("colorway"); // Color dimension first
       expect(dimensions[1]?.key).toBe("switch"); // Remaining dimensions alphabetical
       expect(dimensions.some((d) => d.key === "color")).toBe(false); // Never render both
+    });
+
+    it("reads the title as the colour of a variant saved without attributes", () => {
+      const orange: ProductVariantDetail = { ...MOCK_VARIANT_1, title: "Naranja", attributes: {} };
+      const black: ProductVariantDetail = { ...MOCK_VARIANT_2, attributes: { color: "Negro" } };
+
+      const normalized = withTitleAsMissingColor([orange, black]);
+      expect(normalized[0]?.attributes).toEqual({ color: "Naranja" });
+      expect(normalized[1]).toBe(black);
+      const { dimensions, useFallback } = resolveDimensions(normalized);
+      expect(useFallback).toBe(false);
+      expect(dimensions[0]).toMatchObject({ key: "color", options: ["Naranja", "Negro"] });
+
+      // A variant with other attributes is never reinterpreted.
+      const sized: ProductVariantDetail = { ...orange, attributes: { size: "XL" } };
+      expect(withTitleAsMissingColor([sized, black])).toEqual([sized, black]);
     });
 
     it("preserves remaining valid dimensions when Color modeling is ambiguous", () => {

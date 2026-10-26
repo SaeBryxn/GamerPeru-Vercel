@@ -210,6 +210,12 @@ export function VariantBoard({
                 ...payload,
                 // A new version goes last, so it never displaces the one shown first.
                 displayOrder: Math.max(-1, ...variants.map((variant) => variant.displayOrder)) + 1,
+                // When the other versions are colours, the new name is its colour too, so the
+                // store keeps the colour picker with photos.
+                ...(variants.length > 0 &&
+                variants.every((variant) => firstFilled(variant.attributes.color))
+                  ? { attributes: { color: payload.title } }
+                  : {}),
                 mutationRequestId,
               });
         variantTracker.current.complete();
