@@ -9,6 +9,7 @@ import { WishlistButton } from "@/components/wishlist";
 import type { ProductCardImage, ProductDiscoveryItem } from "@/lib/catalog/types";
 import { formatCurrency } from "@/lib/utils/currency";
 import { CardAddToCartButton } from "./card-add-to-cart-button";
+import { ColorDots } from "./color-dots";
 import { QuickViewDialog } from "./quick-view-dialog";
 import { ScrubGallery } from "./scrub-gallery";
 import { SpecSwapBar } from "./spec-swap-bar";
@@ -202,6 +203,8 @@ export function ProductCard({
             </s>
           )}
         </div>
+
+        {product.colors && <ColorDots colors={product.colors} href={href} />}
       </div>
 
       {product.specs && <SpecSwapBar specs={product.specs} active={isActive} />}

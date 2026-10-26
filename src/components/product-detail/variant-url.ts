@@ -1,3 +1,4 @@
+import { variantTitleSlug } from "@/lib/catalog/card-colors";
 import type { ProductVariantDetail } from "@/lib/catalog/product-detail-types";
 
 /** Query parameter that names the selected variant: /productos/atk-a9?color=blanco */
@@ -5,12 +6,7 @@ export const VARIANT_URL_PARAM = "color";
 
 /** "Negro / Dorado" -> "negro-dorado": accents stripped, anything else collapsed to dashes. */
 export function variantUrlSlug(variant: Pick<ProductVariantDetail, "title">): string {
-  return variant.title
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  return variantTitleSlug(variant.title);
 }
 
 /** The variant a shared link points at, or null when the parameter is missing or unknown. */

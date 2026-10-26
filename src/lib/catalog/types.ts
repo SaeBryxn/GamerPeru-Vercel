@@ -48,6 +48,14 @@ export interface ProductDiscoveryItem {
   compareAtPriceCents?: number | null;
   /** Set only when the product sells exactly one active variant, so a card can add it directly. */
   singleVariantId?: string | null;
+  /** Colours of its active variants, in display order; empty when it is sold in one colour. */
+  colors?: ProductCardColor[];
+}
+
+export interface ProductCardColor {
+  name: string;
+  /** Value for the product page's `?color=` parameter, which preselects this colour. */
+  variantSlug: string;
 }
 
 export interface ProductCardImage {

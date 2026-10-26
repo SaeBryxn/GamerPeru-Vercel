@@ -21,7 +21,12 @@ import type {
   DiscoverySurface,
   ValidatedSpecificationSchema,
 } from "@/lib/discovery-filters/types";
-import { cardCompareAtSql, cardGallerySql, cardSingleVariantSql } from "./card-sql";
+import {
+  cardCompareAtSql,
+  cardGallerySql,
+  cardSingleVariantSql,
+  cardVariantColorsSql,
+} from "./card-sql";
 
 /**
  * Asset shown on a discovery card.
@@ -324,6 +329,7 @@ function buildDiscoveryProductsQuery({
       compareAtPriceCents: cardCompareAtSql(startingPriceSql),
       gallery: cardGallerySql,
       singleVariantId: cardSingleVariantSql,
+      variantColors: cardVariantColorsSql,
       specValues: productSpecifications.specValues,
       specFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
     })

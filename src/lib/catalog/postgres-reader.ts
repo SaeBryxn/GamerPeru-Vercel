@@ -1,4 +1,5 @@
 import "server-only";
+import { buildCardColors } from "./card-colors";
 import { buildCardGallery } from "./card-gallery";
 import { buildProductCardSpecs } from "./card-specs";
 import { validateSpecificationSchema } from "@/lib/discovery-filters/schema-validation";
@@ -144,6 +145,7 @@ export function toDiscoveryItem(row: ProductRow): ProductDiscoveryItem {
     compareAtPriceCents: row.compareAtPriceCents,
     gallery: buildCardGallery(primaryMedia, row.gallery),
     singleVariantId: row.singleVariantId,
+    colors: buildCardColors(row.variantColors),
     specs: buildProductCardSpecs(row.specValues, row.specFieldDefinitions),
   };
 }

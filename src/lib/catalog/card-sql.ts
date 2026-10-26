@@ -1,6 +1,7 @@
 import "server-only";
 import { sql, type SQL } from "drizzle-orm";
 import { products } from "@/db/schema";
+import type { CardVariantColorRow } from "./card-colors";
 import type { ProductCardImage } from "./types";
 
 /** Photos fetched per card; one more than shown, so a primary outside the gallery still leaves three. */
@@ -43,6 +44,20 @@ export function cardCompareAtSql(startingPriceSql: SQL<number>): SQL<number | nu
     LIMIT 1
   )`;
 }
+
+/** Active variants in display order, with their colour, for the card's colour dots. */
+export const cardVariantColorsSql = sql<CardVariantColorRow[] | null>`(
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'title', v.title,
+      'color', COALESCE(NULLIF(v.attributes->>'colorway', ''), NULLIF(v.attributes->>'color', '')),
+      'bare', COALESCE(v.attributes, '{}'::jsonb) = '{}'::jsonb
+    )
+    ORDER BY v.display_order ASC, v.created_at ASC, v.id ASC
+  )
+  FROM product_variants v
+  WHERE v.product_id = ${products.id} AND v.status = 'ACTIVE'
+)`;
 
 /** The variant id when the product sells exactly one active variant; otherwise null. */
 export const cardSingleVariantSql = sql<string | null>`(
