@@ -119,10 +119,14 @@ describe("WhatsApp button", () => {
     expect(link.getAttribute("rel")).toContain("noopener");
   });
 
-  it("renders nothing while no store number is configured", () => {
+  it("falls back to the store number when the deployment sets none", () => {
     publicEnvMock.NEXT_PUBLIC_WHATSAPP_NUMBER = undefined;
-    const { container } = render(<WhatsAppButton />);
-    expect(container.innerHTML).toBe("");
+    render(<WhatsAppButton />);
+
+    const href = new URL(
+      screen.getByRole("link", { name: "Escríbenos por WhatsApp" }).getAttribute("href")!
+    );
+    expect(href.origin + href.pathname).toBe("https://wa.me/51975231129");
   });
 });
 

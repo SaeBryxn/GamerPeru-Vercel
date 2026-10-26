@@ -19,7 +19,7 @@ import { useCart } from "@/components/cart";
 import { DomeButton, DomeLink, Icon } from "@/components/ui";
 import { WishlistButton } from "@/components/wishlist";
 import { STOCK_INQUIRY_WHATSAPP } from "@/config/features";
-import { publicEnv } from "@/config/public-env";
+import { buildWhatsAppHref } from "@/lib/support/whatsapp";
 import { MAX_CART_LINE_QUANTITY } from "@/lib/cart/constants";
 import type { ProductVariantDetail } from "@/lib/catalog/product-detail-types";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -58,17 +58,9 @@ export interface ProductCommercePanelProps {
   details?: React.ReactNode;
 }
 
-/**
- * wa.me deep link with a prefilled message. Without a configured store number
- * the button only renders outside production, pointing at WhatsApp itself so
- * the layout can be reviewed locally.
- */
-function buildWhatsAppHref(productName: string, variantTitle: string): string | null {
-  const number = publicEnv.NEXT_PUBLIC_WHATSAPP_NUMBER;
-  if (!number && process.env.NODE_ENV === "production") return null;
-
-  const message = `Hola, quiero consultar por ${productName} (${variantTitle}).`;
-  return `https://wa.me/${number ?? ""}?text=${encodeURIComponent(message)}`;
+/** wa.me deep link to the store with a prefilled question about this variant. */
+function buildProductWhatsAppHref(productName: string, variantTitle: string): string | null {
+  return buildWhatsAppHref(`Hola, quiero consultar por ${productName} (${variantTitle}).`);
 }
 
 /** Prefilled question for a sold-out variant, sent to whoever handles restocks. */
@@ -148,7 +140,7 @@ export function ProductCommercePanel({
     : null;
 
   const showPdpError = hasAttemptedAdd && Boolean(lastError) && !isPending && !isProfileRequired;
-  const whatsappHref = buildWhatsAppHref(product.name, selectedVariant.title);
+  const whatsappHref = buildProductWhatsAppHref(product.name, selectedVariant.title);
 
   return (
     <div

@@ -9,7 +9,14 @@
 export const AI_ASSISTANT_ENABLED = false;
 
 /**
- * WhatsApp that answers "Consultar" on a sold-out product (international format, digits only).
- * Separate from NEXT_PUBLIC_WHATSAPP_NUMBER so stock questions reach whoever handles restocks.
+ * Store WhatsApp (international format, digits only): the floating button, the account page, the
+ * contact page and "Contactar por WhatsApp" on a product. NEXT_PUBLIC_WHATSAPP_NUMBER overrides it
+ * for a deployment that needs another line.
  */
-export const STOCK_INQUIRY_WHATSAPP = "51975231129";
+export const STORE_WHATSAPP = "51975231129";
+
+/**
+ * WhatsApp that answers "Consultar" on a sold-out product. Today the same line as the store; kept
+ * apart so stock questions can move to whoever handles restocks.
+ */
+export const STOCK_INQUIRY_WHATSAPP = STORE_WHATSAPP;

@@ -2,13 +2,13 @@ import React from "react";
 import { Clock, Mail, MapPin, MessageCircle, ShieldCheck } from "lucide-react";
 import { BrandGlyph } from "@/components/ui";
 import { COMPANY } from "@/config/company";
-import { publicEnv } from "@/config/public-env";
 import { ACTIVE_SOCIAL_LINKS } from "@/config/social-links";
+import { storeWhatsAppNumber } from "@/lib/support/whatsapp";
 import styles from "./contact-details.module.css";
 
 /** Company facts beside the contact form. Only configured channels are listed. */
 export function ContactDetails() {
-  const whatsapp = publicEnv.NEXT_PUBLIC_WHATSAPP_NUMBER;
+  const whatsapp = storeWhatsAppNumber();
   const socials = ACTIVE_SOCIAL_LINKS;
 
   const rows = [

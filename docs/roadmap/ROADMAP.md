@@ -170,11 +170,9 @@ Surgieron del cierre del MVP (`docs/project/10-limitaciones-y-futuro.md`):
 Hechos en `feat/cloudflare-workers`: página `/productos`, tope de stock en ficha y carrito,
 orden de versiones en el admin, foto de la variante sin atributo de color, bolitas de color en
 las tarjetas, redes sociales, interruptor del 5%, "Ver más" en los menús, guías en Soporte,
-medidas sin repetir, "Completa tu setup" y franja de marcas. Falta:
+medidas sin repetir, "Completa tu setup", franja de marcas y el botón flotante de WhatsApp con el
+975 231 129 (`STORE_WHATSAPP`). Falta:
 
-- [ ] **Número del botón flotante de WhatsApp.** El botón ya existe, pero no aparece porque
-      `NEXT_PUBLIC_WHATSAPP_NUMBER` no está configurado en el build de Cloudflare. Falta definir qué
-      número atiende consultas generales (el de stock es `STOCK_INQUIRY_WHATSAPP`).
 - [ ] **Reseñas de clientes en la ficha (debajo de "Completa tu setup").** Requiere tabla de
       reseñas con migración, solo compradores verificados (pedido entregado), moderación en el
       admin antes de publicar, promedio y conteo reales en `pdpConfig.rating` y datos
