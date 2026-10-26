@@ -3,6 +3,7 @@ import { buildCardGallery } from "./card-gallery";
 import { buildProductCardSpecs } from "./card-specs";
 import { validateSpecificationSchema } from "@/lib/discovery-filters/schema-validation";
 import type {
+  BrandFacetOption,
   CategoryFacetOption,
   DiscoveryFacets,
   DiscoveryFilterState,
@@ -15,6 +16,8 @@ import {
   buildBrandCategoryFacetOptionsQuery,
   buildBrandFilteredProductCountQuery,
   buildBrandFilteredProductsQuery,
+  buildCatalogProductCountQuery,
+  buildCatalogProductsQuery,
   buildCategoryBrandFacetOptionsQuery,
   buildCategoryFilteredProductCountQuery,
   buildCategoryFilteredProductsQuery,
@@ -297,6 +300,41 @@ export class PostgresCatalogDiscoveryReader implements CatalogDiscoveryReader {
       page: safePage,
       pageSize: safePageSize,
       totalPages,
+    };
+  }
+
+  async getCatalogFacetOptions(): Promise<{
+    brands: BrandFacetOption[];
+    categories: CategoryFacetOption[];
+  }> {
+    const [brands, categories] = await Promise.all([
+      buildCategoryBrandFacetOptionsQuery(null),
+      buildBrandCategoryFacetOptionsQuery(null),
+    ]);
+    return { brands, categories };
+  }
+
+  async getPublishedProducts(
+    pagination: PaginationOptions,
+    filterState?: DiscoveryFilterState,
+    schema?: ValidatedSpecificationSchema | null
+  ): Promise<PaginatedResult<ProductDiscoveryItem>> {
+    const safePage = Math.max(1, Math.trunc(pagination.page));
+    const safePageSize = Math.max(1, Math.trunc(pagination.pageSize));
+
+    const [countRows, productRows] = await Promise.all([
+      buildCatalogProductCountQuery(filterState, schema),
+      buildCatalogProductsQuery(safePage, safePageSize, filterState, schema),
+    ]);
+
+    const totalItems = countRows[0]?.count ?? 0;
+
+    return {
+      items: productRows.map(toDiscoveryItem),
+      totalItems,
+      page: safePage,
+      pageSize: safePageSize,
+      totalPages: Math.ceil(totalItems / safePageSize),
     };
   }
 }

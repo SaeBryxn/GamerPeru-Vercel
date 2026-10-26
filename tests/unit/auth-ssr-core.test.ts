@@ -60,7 +60,7 @@ describe("GP-015 AUTH4 — Core Supabase SSR Infrastructure Suite", () => {
       "/api/admin/:path*",
     ];
     // Catalog listings pass through only to pick their route; they never reach updateSession.
-    const catalogPatterns = ["/categorias/:slug", "/marcas/:slug"];
+    const catalogPatterns = ["/categorias/:slug", "/marcas/:slug", "/productos"];
 
     expect(config.matcher).toEqual([...expectedPatterns, ...catalogPatterns]);
 

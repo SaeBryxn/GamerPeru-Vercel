@@ -25,7 +25,7 @@ export function OrderList({ orders }: { orders: CustomerOrderSummaryDTO[] }) {
         <p className={styles.cardText}>
           Cuando compres en Gamer Perú, aquí verás cada pedido con su estado y seguimiento.
         </p>
-        <DomeLink href="/buscar" tone="dark" className={styles.domeSmall}>
+        <DomeLink href="/productos" tone="dark" className={styles.domeSmall}>
           Explorar la tienda
         </DomeLink>
       </div>

@@ -45,7 +45,7 @@ export function DiscoveryToolbar({
   activeFiltersCount += Object.keys(filterState.technical).length;
 
   const countText =
-    surface === "search"
+    surface === "search" && searchQuery
       ? `${totalProducts} ${totalProducts === 1 ? "resultado" : "resultados"}`
       : `${totalProducts} ${totalProducts === 1 ? "producto" : "productos"}`;
 
@@ -89,7 +89,12 @@ export function DiscoveryToolbar({
         <VisuallyHidden aria-live="polite">{countText}</VisuallyHidden>
       </div>
 
-      <SortDropdown surface={surface} value={filterState.sort} onChange={handleSortChange} />
+      <SortDropdown
+        surface={surface}
+        value={filterState.sort}
+        onChange={handleSortChange}
+        hasQuery={Boolean(searchQuery)}
+      />
     </section>
   );
 }

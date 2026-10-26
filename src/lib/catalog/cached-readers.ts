@@ -47,6 +47,14 @@ export function withCatalogCache(reader: CatalogDiscoveryReader): CatalogDiscove
       (...args: Parameters<CatalogDiscoveryReader["getPublishedProductsByBrand"]>) =>
         reader.getPublishedProductsByBrand(...args)
     ),
+    getCatalogFacetOptions: cacheCatalogQuery("catalog-facet-options", () =>
+      reader.getCatalogFacetOptions()
+    ),
+    getPublishedProducts: cacheCatalogQuery(
+      "products-all",
+      (...args: Parameters<CatalogDiscoveryReader["getPublishedProducts"]>) =>
+        reader.getPublishedProducts(...args)
+    ),
   };
 }
 

@@ -9,6 +9,7 @@ import { resolveCatalogReaderMode } from "./resolve-reader-mode";
 import { logger } from "@/lib/logger";
 import type {
   BrandDiscoveryEntity,
+  BrandFacetOption,
   CategoryDiscoveryEntity,
   CategoryFacetOption,
   DiscoveryFacets,
@@ -57,6 +58,13 @@ export const getCachedBrandCategoryFacetOptions = cache(
   async (brandId: string): Promise<CategoryFacetOption[]> => {
     const reader = getCatalogReader();
     return reader.getBrandCategoryFacetOptions(brandId);
+  }
+);
+
+export const getCachedCatalogFacetOptions = cache(
+  async (): Promise<{ brands: BrandFacetOption[]; categories: CategoryFacetOption[] }> => {
+    const reader = getCatalogReader();
+    return reader.getCatalogFacetOptions();
   }
 );
 

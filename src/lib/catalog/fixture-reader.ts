@@ -1,5 +1,6 @@
 import "server-only";
 import type {
+  BrandFacetOption,
   CategoryFacetOption,
   DiscoveryFacets,
   DiscoveryFilterState,
@@ -386,6 +387,60 @@ export class FixtureCatalogDiscoveryReader implements CatalogDiscoveryReader, Pr
       page: safePage,
       pageSize: safePageSize,
       totalPages,
+    };
+  }
+
+  async getCatalogFacetOptions(): Promise<{
+    brands: BrandFacetOption[];
+    categories: CategoryFacetOption[];
+  }> {
+    const baseProducts = FIXTURE_PRODUCTS;
+    const brandSlugs = new Set(baseProducts.map((p) => p.brand.slug));
+    const categorySlugs = new Set(baseProducts.map((p) => p.category.slug));
+    return {
+      brands: Object.values(ALL_FIXTURE_BRANDS)
+        .filter((b) => brandSlugs.has(b.slug))
+        .map((b) => ({ id: b.id, name: b.name, slug: b.slug }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      categories: Object.values(ALL_FIXTURE_CATEGORIES)
+        .filter((c) => c.status === "PUBLISHED" && categorySlugs.has(c.slug))
+        .map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+    };
+  }
+
+  async getPublishedProducts(
+    pagination: PaginationOptions,
+    filterState?: DiscoveryFilterState,
+    schema?: ValidatedSpecificationSchema | null
+  ): Promise<PaginatedResult<ProductDiscoveryItem>> {
+    const filtered = filterAndSortSyntheticProducts(
+      FIXTURE_PRODUCTS,
+      filterState,
+      "search",
+      schema ?? null
+    );
+
+    const safePage = Math.max(1, Math.trunc(pagination.page));
+    const safePageSize = Math.max(1, Math.trunc(pagination.pageSize));
+    const totalItems = filtered.length;
+    const offset = (safePage - 1) * safePageSize;
+    const items = filtered.slice(offset, offset + safePageSize).map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      subtitle: p.subtitle,
+      brand: p.brand,
+      category: p.category,
+      primaryMedia: p.primaryMedia,
+      startingPriceCents: p.startingPriceCents,
+    }));
+
+    return {
+      items,
+      totalItems,
+      page: safePage,
+      pageSize: safePageSize,
+      totalPages: Math.ceil(totalItems / safePageSize),
     };
   }
 }

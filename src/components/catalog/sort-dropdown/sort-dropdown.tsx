@@ -36,6 +36,8 @@ export interface SortDropdownProps {
   surface: DiscoverySurface;
   value: DiscoverySort;
   onChange: (sort: DiscoverySort) => void;
+  /** False on the search surface without a typed query, where there is no relevance to sort by. */
+  hasQuery?: boolean;
 }
 
 /**
@@ -43,18 +45,18 @@ export interface SortDropdownProps {
  * arrow keys move between options, Escape or an outside click closes it, and
  * focus returns to the trigger.
  */
-export function SortDropdown({ surface, value, onChange }: SortDropdownProps) {
+export function SortDropdown({ surface, value, onChange, hasQuery = true }: SortDropdownProps) {
   const menuId = useId();
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const options = getSortOptions(surface);
+  const options = getSortOptions(surface, hasQuery);
   const selectedIndex = Math.max(
     options.findIndex((option) => option.value === value),
     0
   );
-  const selectedLabel = getSortLabel(surface, value);
+  const selectedLabel = getSortLabel(surface, value, hasQuery);
 
   function close(restoreFocus = true) {
     setIsOpen(false);

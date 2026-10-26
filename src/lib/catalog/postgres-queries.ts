@@ -111,7 +111,8 @@ export function buildCategorySpecificationSchemaQuery(categoryId: string) {
     .limit(1);
 }
 
-export function buildCategoryBrandFacetOptionsQuery(categoryId: string) {
+/** Brands with published products in a category, or across the whole catalog when it is null. */
+export function buildCategoryBrandFacetOptionsQuery(categoryId: string | null) {
   return db
     .select({
       id: brands.id,
@@ -128,7 +129,7 @@ export function buildCategoryBrandFacetOptionsQuery(categoryId: string) {
           JOIN ${categories} ON ${categories.id} = ${products.categoryId}
           JOIN ${productVariants} ON ${productVariants.productId} = ${products.id}
           WHERE ${products.brandId} = ${brands.id}
-            AND ${products.categoryId} = ${categoryId}
+            ${categoryId ? sql`AND ${products.categoryId} = ${categoryId}` : sql``}
             AND ${products.status} = 'PUBLISHED'
             AND ${categories.status} = 'PUBLISHED'
             AND ${productVariants.status} = 'ACTIVE'
@@ -138,7 +139,8 @@ export function buildCategoryBrandFacetOptionsQuery(categoryId: string) {
     .orderBy(brands.name);
 }
 
-export function buildBrandCategoryFacetOptionsQuery(brandId: string) {
+/** Categories with published products of a brand, or across the whole catalog when it is null. */
+export function buildBrandCategoryFacetOptionsQuery(brandId: string | null) {
   return db
     .select({
       id: categories.id,
@@ -155,7 +157,7 @@ export function buildBrandCategoryFacetOptionsQuery(brandId: string) {
           JOIN ${brands} ON ${brands.id} = ${products.brandId}
           JOIN ${productVariants} ON ${productVariants.productId} = ${products.id}
           WHERE ${products.categoryId} = ${categories.id}
-            AND ${products.brandId} = ${brandId}
+            ${brandId ? sql`AND ${products.brandId} = ${brandId}` : sql``}
             AND ${products.status} = 'PUBLISHED'
             AND ${brands.status} = 'PUBLISHED'
             AND ${productVariants.status} = 'ACTIVE'
@@ -203,70 +205,6 @@ export function buildTechnicalRepresentedSpecValuesQuery(
     .where(and(...whereConditions));
 }
 
-export function buildCategoryFilteredProductCountQuery(
-  categoryId: string,
-  filterState?: DiscoveryFilterState,
-  schema?: ValidatedSpecificationSchema | null
-) {
-  const state: DiscoveryFilterState = filterState ?? {
-    brands: [],
-    categories: [],
-    price: { minCents: null, maxCents: null },
-    technical: {},
-    sort: null,
-    page: 1,
-  };
-
-  const whereClause = buildProductDiscoveryWhereClause(state, {
-    categoryId,
-    validatedSchema: schema ?? null,
-  });
-
-  return db
-    .select({
-      count: countDistinct(products.id),
-    })
-    .from(products)
-    .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
-    .innerJoin(
-      categories,
-      and(eq(products.categoryId, categories.id), eq(categories.status, "PUBLISHED"))
-    )
-    .where(whereClause);
-}
-
-export function buildBrandFilteredProductCountQuery(
-  brandId: string,
-  filterState?: DiscoveryFilterState,
-  schema?: ValidatedSpecificationSchema | null
-) {
-  const state: DiscoveryFilterState = filterState ?? {
-    brands: [],
-    categories: [],
-    price: { minCents: null, maxCents: null },
-    technical: {},
-    sort: null,
-    page: 1,
-  };
-
-  const whereClause = buildProductDiscoveryWhereClause(state, {
-    brandId,
-    validatedSchema: schema ?? null,
-  });
-
-  return db
-    .select({
-      count: countDistinct(products.id),
-    })
-    .from(products)
-    .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
-    .innerJoin(
-      categories,
-      and(eq(products.categoryId, categories.id), eq(categories.status, "PUBLISHED"))
-    )
-    .where(whereClause);
-}
-
 const UNFILTERED_STATE: Omit<DiscoveryFilterState, "page"> = {
   brands: [],
   categories: [],
@@ -274,6 +212,55 @@ const UNFILTERED_STATE: Omit<DiscoveryFilterState, "page"> = {
   technical: {},
   sort: null,
 };
+
+export function buildCategoryFilteredProductCountQuery(
+  categoryId: string,
+  filterState?: DiscoveryFilterState,
+  schema?: ValidatedSpecificationSchema | null
+) {
+  return buildDiscoveryProductCountQuery({ categoryId }, filterState, schema);
+}
+
+export function buildBrandFilteredProductCountQuery(
+  brandId: string,
+  filterState?: DiscoveryFilterState,
+  schema?: ValidatedSpecificationSchema | null
+) {
+  return buildDiscoveryProductCountQuery({ brandId }, filterState, schema);
+}
+
+/** Published products across every category and brand, filtered by the discovery state. */
+export function buildCatalogProductCountQuery(
+  filterState?: DiscoveryFilterState,
+  schema?: ValidatedSpecificationSchema | null
+) {
+  return buildDiscoveryProductCountQuery({}, filterState, schema);
+}
+
+function buildDiscoveryProductCountQuery(
+  scope: { categoryId?: string; brandId?: string },
+  filterState?: DiscoveryFilterState,
+  schema?: ValidatedSpecificationSchema | null
+) {
+  const state: DiscoveryFilterState = filterState ?? { ...UNFILTERED_STATE, page: 1 };
+
+  const whereClause = buildProductDiscoveryWhereClause(state, {
+    ...scope,
+    validatedSchema: schema ?? null,
+  });
+
+  return db
+    .select({
+      count: countDistinct(products.id),
+    })
+    .from(products)
+    .innerJoin(brands, and(eq(products.brandId, brands.id), eq(brands.status, "PUBLISHED")))
+    .innerJoin(
+      categories,
+      and(eq(products.categoryId, categories.id), eq(categories.status, "PUBLISHED"))
+    )
+    .where(whereClause);
+}
 
 interface DiscoveryProductsQueryOptions {
   scope: { categoryId?: string; brandId?: string; productIds?: readonly string[] };
@@ -395,6 +382,23 @@ export function buildBrandFilteredProductsQuery(
   return buildDiscoveryProductsQuery({
     scope: { brandId },
     surface: "brand",
+    page,
+    pageSize,
+    filterState,
+    schema,
+  });
+}
+
+/** Card rows for the full catalog listing, filtered and sorted like any discovery surface. */
+export function buildCatalogProductsQuery(
+  page: number,
+  pageSize: number,
+  filterState?: DiscoveryFilterState,
+  schema?: ValidatedSpecificationSchema | null
+) {
+  return buildDiscoveryProductsQuery({
+    scope: {},
+    surface: "search",
     page,
     pageSize,
     filterState,

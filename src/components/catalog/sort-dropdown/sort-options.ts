@@ -14,10 +14,11 @@ const SHARED_SORT_OPTIONS: SortOption[] = [
 
 /**
  * Sort choices the catalog readers actually implement. The default (null)
- * means relevance on search and the storefront's default ordering elsewhere.
+ * means relevance on a typed search and the storefront's default ordering
+ * elsewhere, including the full catalog listing (search surface, no query).
  */
-export function getSortOptions(surface: DiscoverySurface): SortOption[] {
-  if (surface === "search") {
+export function getSortOptions(surface: DiscoverySurface, hasQuery = true): SortOption[] {
+  if (surface === "search" && hasQuery) {
     return [
       { value: null, label: "Más relevantes" },
       ...SHARED_SORT_OPTIONS,
@@ -27,7 +28,11 @@ export function getSortOptions(surface: DiscoverySurface): SortOption[] {
   return [{ value: null, label: "Destacados" }, ...SHARED_SORT_OPTIONS];
 }
 
-export function getSortLabel(surface: DiscoverySurface, sort: DiscoverySort): string {
-  const options = getSortOptions(surface);
+export function getSortLabel(
+  surface: DiscoverySurface,
+  sort: DiscoverySort,
+  hasQuery = true
+): string {
+  const options = getSortOptions(surface, hasQuery);
   return (options.find((option) => option.value === sort) ?? options[0])?.label ?? "";
 }

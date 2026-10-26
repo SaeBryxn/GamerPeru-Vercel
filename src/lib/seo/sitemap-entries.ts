@@ -19,6 +19,7 @@ const ORIGIN = `https://${APP_CONFIG.canonicalHost}`;
 export function staticSitemapPaths(): string[] {
   return [
     "/",
+    "/productos",
     "/buscar",
     "/soporte",
     "/soporte/preguntas-frecuentes",

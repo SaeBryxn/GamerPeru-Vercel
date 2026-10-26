@@ -32,7 +32,7 @@ export function WishlistGrid({ products }: { products: ProductDiscoveryItem[] })
         <p className={accountStyles.cardText}>
           Toca el corazón de cualquier producto para guardarlo aquí y volver a él cuando quieras.
         </p>
-        <DomeLink href="/buscar" tone="dark" className={accountStyles.domeSmall}>
+        <DomeLink href="/productos" tone="dark" className={accountStyles.domeSmall}>
           Explorar la tienda
         </DomeLink>
       </div>

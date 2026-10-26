@@ -185,7 +185,7 @@ test.describe("GP-010 Homepage — Sections, Hierarchy, Responsiveness & Accessi
     // Verify "Ver todos los productos" semantic link
     const viewAllLink = panel.getByRole("link", { name: /Ver todos los productos/i });
     await expect(viewAllLink).toBeVisible();
-    await expect(viewAllLink).toHaveAttribute("href", "/buscar");
+    await expect(viewAllLink).toHaveAttribute("href", "/productos");
 
     // Verify zero horizontal overflow with MegaMenu open
     const hasHorizontalOverflow = await page.evaluate(() => {

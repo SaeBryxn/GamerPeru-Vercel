@@ -4,6 +4,9 @@ import { updateSession } from "@/lib/supabase/proxy";
 /** Category and brand listings: `/categorias/<slug>` or `/marcas/<slug>`. */
 const CATALOG_LISTING = /^\/(categorias|marcas)\/([^/]+)\/?$/;
 
+/** Full catalog listing: `/productos` (product pages live one level below). */
+const FULL_CATALOG = /^\/productos\/?$/;
+
 /**
  * Next.js 16 root proxy for protected customer and admin routes.
  * Bypasses all public storefront routes to prevent unnecessary auth overhead.
@@ -21,6 +24,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
+  if (FULL_CATALOG.test(request.nextUrl.pathname)) {
+    if (!request.nextUrl.search) return NextResponse.next();
+    const url = request.nextUrl.clone();
+    url.pathname = "/productos/filtros";
+    return NextResponse.rewrite(url);
+  }
+
   return updateSession(request);
 }
 
@@ -33,5 +43,6 @@ export const config = {
     "/api/admin/:path*",
     "/categorias/:slug",
     "/marcas/:slug",
+    "/productos",
   ],
 };

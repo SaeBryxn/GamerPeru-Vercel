@@ -1,5 +1,6 @@
 import type {
   BrandDiscoveryEntity,
+  BrandFacetOption,
   CategoryDiscoveryEntity,
   CategoryFacetOption,
   DiscoveryFacets,
@@ -35,6 +36,17 @@ export interface CatalogDiscoveryReader {
   getShowcaseProducts(limit: number): Promise<ProductDiscoveryItem[]>;
   getPublishedProductsByBrand(
     brandId: string,
+    pagination: PaginationOptions,
+    filterState?: DiscoveryFilterState,
+    schema?: ValidatedSpecificationSchema | null
+  ): Promise<PaginatedResult<ProductDiscoveryItem>>;
+  /** Brands and categories that have published products: the base filters of the full catalog. */
+  getCatalogFacetOptions(): Promise<{
+    brands: BrandFacetOption[];
+    categories: CategoryFacetOption[];
+  }>;
+  /** Published products across every category and brand; backs the "all products" listing. */
+  getPublishedProducts(
     pagination: PaginationOptions,
     filterState?: DiscoveryFilterState,
     schema?: ValidatedSpecificationSchema | null

@@ -26,6 +26,8 @@ function fakeReader(): CatalogDiscoveryReader {
     getPublishedProductsByCategory: vi.fn(async () => ({ items: [], totalItems: 0 })),
     getShowcaseProducts: vi.fn(async () => []),
     getPublishedProductsByBrand: vi.fn(async () => ({ items: [], totalItems: 0 })),
+    getCatalogFacetOptions: vi.fn(async () => ({ brands: [], categories: [] })),
+    getPublishedProducts: vi.fn(async () => ({ items: [], totalItems: 0 })),
   } as unknown as CatalogDiscoveryReader;
 }
 

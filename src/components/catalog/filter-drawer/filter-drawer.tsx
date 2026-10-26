@@ -287,7 +287,7 @@ export function FilterDrawer({
 
   const showCategoryFilter = surface !== "category" && facets.categories.length > 0;
   const showBrandFilter = surface !== "brand" && facets.brands.length > 0;
-  const sortOptions = getSortOptions(surface);
+  const sortOptions = getSortOptions(surface, Boolean(searchQuery));
 
   return (
     <dialog

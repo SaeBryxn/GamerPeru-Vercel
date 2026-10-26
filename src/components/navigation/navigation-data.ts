@@ -57,7 +57,7 @@ export const NAVIGATION_CONFIG: NavigationConfig = {
     {
       id: "productos",
       label: "Productos",
-      href: "/buscar",
+      href: "/productos",
       menuLayout: "products",
       sections: [{ title: "Colecciones", items: PRODUCT_TYPES }],
     },
