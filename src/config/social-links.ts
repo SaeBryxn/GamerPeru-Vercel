@@ -1,11 +1,9 @@
 /**
- * Public profiles shown in the floating social rail, plus the promo pill at
- * its base.
+ * Public profiles shown in the footer and the home page's floating social rail, plus the promo
+ * pill at the rail's base.
  *
- * Fill in each `href` with the real Gamer Perú profile URL. Entries left empty
- * still render their icon, but as a non-interactive placeholder, so the rail
- * never links visitors to an account that is not ours. The promo pill is
- * hidden until `PROMO_PILL.href` points somewhere real.
+ * Only profiles with an `href` are shown: an icon that leads nowhere reads as broken. Add the URL
+ * of X or YouTube here once the account exists and it appears everywhere.
  */
 
 export type SocialNetworkId = "x" | "instagram" | "youtube" | "tiktok" | "discord";
@@ -18,11 +16,20 @@ export interface SocialLink {
 
 export const SOCIAL_LINKS: SocialLink[] = [
   { id: "x", label: "X", href: "" },
-  { id: "instagram", label: "Instagram", href: "" },
+  { id: "instagram", label: "Instagram", href: "https://www.instagram.com/gamerperuoficial/" },
   { id: "youtube", label: "YouTube", href: "" },
-  { id: "tiktok", label: "TikTok", href: "" },
-  { id: "discord", label: "Discord", href: "" },
+  { id: "tiktok", label: "TikTok", href: "https://www.tiktok.com/@gamer_peru" },
+  { id: "discord", label: "Discord", href: "https://discord.gg/mehPGmxv7d" },
 ];
+
+/** The profiles that exist, in display order. */
+export const ACTIVE_SOCIAL_LINKS = SOCIAL_LINKS.filter((link) => link.href);
+
+/**
+ * Switch for the promo pill. Off while there is no discount to give: set it to true, with a real
+ * `label` and `href`, when a campaign starts.
+ */
+export const PROMO_PILL_ENABLED = false;
 
 export const PROMO_PILL = {
   label: "5% DE DESCUENTO",

@@ -64,7 +64,6 @@
   text-transform: uppercase;
   white-space: nowrap;
   writing-mode: vertical-rl;
-  transform: rotate(180deg);
   cursor: pointer;
 }
 

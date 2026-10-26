@@ -18,7 +18,7 @@ import {
 } from "@/components/home";
 import type { ProductDiscoveryItem } from "@/lib/catalog/types";
 import { SocialRail, WhatsAppButton } from "@/components/floating";
-import { PROMO_PILL, SOCIAL_LINKS } from "@/config/social-links";
+import { ACTIVE_SOCIAL_LINKS, PROMO_PILL, PROMO_PILL_ENABLED } from "@/config/social-links";
 
 const publicEnvMock = vi.hoisted(() => ({
   NEXT_PUBLIC_WHATSAPP_NUMBER: undefined as string | undefined,
@@ -91,17 +91,18 @@ describe("Video hero", () => {
 });
 
 describe("Social rail", () => {
-  it("renders every network without linking to an unconfigured profile", () => {
+  it("links every configured profile and hides the promo pill while it is switched off", () => {
     const html = renderToStaticMarkup(<SocialRail />);
     const svgCount = (html.match(/<svg/g) ?? []).length;
-    expect(svgCount).toBe(SOCIAL_LINKS.length);
+    expect(svgCount).toBe(ACTIVE_SOCIAL_LINKS.length);
     expect(html).not.toContain('href=""');
     expect(html).not.toContain('href="#"');
 
-    for (const link of SOCIAL_LINKS.filter((entry) => entry.href)) {
+    for (const link of ACTIVE_SOCIAL_LINKS) {
       expect(html).toContain(`href="${link.href}"`);
     }
-    expect(html).toContain(PROMO_PILL.label);
+    expect(PROMO_PILL_ENABLED).toBe(false);
+    expect(html).not.toContain(PROMO_PILL.label);
   });
 });
 
@@ -291,8 +292,10 @@ describe("Home sections", () => {
       />
     );
 
-    // SOCIAL_LINKS ships without URLs, so no link may be rendered.
-    expect(screen.queryByRole("link", { name: "Entrar al Discord" })).toBeNull();
+    // Without its own link the banner falls back to the configured Discord invite.
+    expect(screen.getByRole("link", { name: "Entrar al Discord" }).getAttribute("href")).toBe(
+      "https://discord.gg/mehPGmxv7d"
+    );
     expect(screen.getByTestId("community-banner-cta").textContent).toBe("Entrar al Discord");
   });
 

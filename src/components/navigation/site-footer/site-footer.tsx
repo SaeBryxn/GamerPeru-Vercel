@@ -2,7 +2,7 @@ import React from "react";
 import Link from "@/components/app-link";
 import { BrandGlyph, Container } from "@/components/ui";
 import { LEGAL_ENTITY_NAME, LEGAL_LINKS } from "@/config/legal-links";
-import { SOCIAL_LINKS } from "@/config/social-links";
+import { ACTIVE_SOCIAL_LINKS } from "@/config/social-links";
 import { BrandMark } from "../brand-mark";
 import type { FooterColumn } from "../types";
 import styles from "./site-footer.module.css";
@@ -33,29 +33,20 @@ export function SiteFooter({ columns = [], className }: SiteFooterProps) {
           <div className={styles.brandColumn}>
             <BrandMark style={{ color: "var(--color-text-dark-primary)" }} />
 
-            {/* Profiles without a configured URL stay visible but inert. */}
             <ul className={styles.socialList} aria-label="Redes sociales de Gamer Perú">
-              {SOCIAL_LINKS.map((link) =>
-                link.href ? (
-                  <li key={link.id}>
-                    <a
-                      href={link.href}
-                      className={styles.socialLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`${link.label} de Gamer Perú`}
-                    >
-                      <BrandGlyph id={link.id} size={18} />
-                    </a>
-                  </li>
-                ) : (
-                  <li key={link.id} aria-hidden="true">
-                    <span className={`${styles.socialLink} ${styles.socialLinkPending}`}>
-                      <BrandGlyph id={link.id} size={18} />
-                    </span>
-                  </li>
-                )
-              )}
+              {ACTIVE_SOCIAL_LINKS.map((link) => (
+                <li key={link.id}>
+                  <a
+                    href={link.href}
+                    className={styles.socialLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${link.label} de Gamer Perú`}
+                  >
+                    <BrandGlyph id={link.id} size={18} />
+                  </a>
+                </li>
+              ))}
             </ul>
           </div>
 
