@@ -23,6 +23,8 @@ export interface CartLineSnapshot {
   quantity: number;
   lineSubtotalCents: number;
   available: boolean;
+  /** Units left to sell, so the quantity control never offers more than the store can ship. */
+  availableUnits: number;
   primaryMedia: CartMediaSnapshot | null;
 }
 
@@ -42,6 +44,7 @@ export type CartErrorCode =
   | "ITEM_NOT_FOUND"
   | "PRODUCT_UNAVAILABLE"
   | "EXCEEDS_MAX_QUANTITY"
+  | "INSUFFICIENT_STOCK"
   | "SYSTEM_ERROR";
 
 export type CartReadResult =

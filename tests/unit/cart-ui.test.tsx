@@ -95,6 +95,7 @@ const sampleCart: CartSnapshot = {
       quantity: 2,
       lineSubtotalCents: 25980,
       available: true,
+      availableUnits: 10,
       selectedAttributes: { color: "Negro" },
       primaryMedia: {
         url: "https://example.com/media/hero.png",
@@ -112,6 +113,7 @@ const sampleCart: CartSnapshot = {
       quantity: 1,
       lineSubtotalCents: 13990,
       available: true,
+      availableUnits: 10,
       selectedAttributes: { color: "Blanco" },
       primaryMedia: {
         url: "https://example.com/media/hero.png",

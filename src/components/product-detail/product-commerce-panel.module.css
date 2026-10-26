@@ -107,6 +107,24 @@
   gap: var(--space-3);
 }
 
+/* Real units left: always the true count, never a "last one" nudge. */
+.stockLine {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-status-success-text);
+}
+
+.stockDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 /* Quantity stepper and add-to-cart share one row; the button takes the rest. */
 .purchaseRow {
   display: grid;

@@ -452,6 +452,10 @@ export async function queryCartHydrationLines(
       productName: products.name,
       productStatus: products.status,
       quantity: cartItems.quantity,
+      availableUnits: sql<number>`(
+        SELECT COALESCE(SUM(ii.quantity_on_hand - ii.quantity_reserved - ii.quantity_allocated), 0)
+        FROM inventory_items ii WHERE ii.variant_id = ${cartItems.variantId}
+      )`.mapWith(Number),
       mediaObjectKey: mediaAssets.objectKey,
       mediaAltText: mediaAssets.altText,
       mediaWidth: mediaAssets.width,
@@ -497,6 +501,7 @@ export async function queryCartHydrationLines(
     productName: r.productName,
     productStatus: r.productStatus,
     quantity: r.quantity,
+    availableUnits: Math.max(0, r.availableUnits),
     mediaObjectKey: r.mediaObjectKey,
     mediaAltText: r.mediaAltText,
     mediaWidth: r.mediaWidth,

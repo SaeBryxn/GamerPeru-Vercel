@@ -86,6 +86,7 @@ export function buildCartSnapshot(lines: CartHydrationLine[]): CartSnapshot {
       quantity: line.quantity,
       lineSubtotalCents,
       available: isAvailable,
+      availableUnits: line.availableUnits,
       primaryMedia: mediaUrl
         ? {
             url: mediaUrl,
@@ -193,7 +194,7 @@ export async function getCurrentCart(): Promise<CartReadResult> {
  *
  * Invariants:
  * 1. Eligibility Check: products.status = PUBLISHED AND product_variants.status = ACTIVE.
- * 2. Zero Inventory Queries: Stock is decoupled from cart runtime (GP-021).
+ * 2. Stock Ceiling: a line may not hold more units than are left to sell; the write rolls back.
  * 3. Atomic UPSERT: LEAST(quantity + EXCLUDED.quantity, 10).
  * 4. Sliding TTL: +30 days for anonymous (DB + cookie), +60 days for authenticated.
  * 5. Session Fixation Defense: Unauthenticated mutations generate fresh server tokens.
@@ -296,6 +297,7 @@ export async function addCartItemAction(
         await refreshCartTtl(authCart.id, AUTHENTICATED_CART_TTL_MS, tx);
 
         const lines = await queryCartHydrationLines(authCart.id, tx);
+        assertLinesWithinStock(lines, [variantId, ...accessories.data]);
         return buildCartSnapshot(lines);
       });
 
@@ -349,6 +351,7 @@ export async function addCartItemAction(
       await refreshCartTtl(resolution.cart.id, ANONYMOUS_CART_TTL_MS, tx);
 
       const lines = await queryCartHydrationLines(resolution.cart.id, tx);
+      assertLinesWithinStock(lines, [variantId, ...accessories.data]);
       return buildCartSnapshot(lines);
     });
 
@@ -361,6 +364,7 @@ export async function addCartItemAction(
       message: "Producto agregado al carrito.",
     };
   } catch (error) {
+    if (error instanceof InsufficientStockError) return insufficientStockResult(error);
     if (error instanceof UnavailableAccessoryError)
       return {
         success: false,
@@ -492,6 +496,7 @@ export async function updateCartItemQuantityAction(
         await refreshCartTtl(authCart.id, AUTHENTICATED_CART_TTL_MS, tx);
 
         const lines = await queryCartHydrationLines(authCart.id, tx);
+        assertLinesWithinStock(lines, [variantId]);
         return {
           success: true as const,
           cart: buildCartSnapshot(lines),
@@ -564,6 +569,7 @@ export async function updateCartItemQuantityAction(
       await refreshCartTtl(anonCart.id, ANONYMOUS_CART_TTL_MS, tx);
 
       const lines = await queryCartHydrationLines(anonCart.id, tx);
+      assertLinesWithinStock(lines, [variantId]);
       return {
         success: true as const,
         cart: buildCartSnapshot(lines),
@@ -582,7 +588,8 @@ export async function updateCartItemQuantityAction(
       cart: result.cart,
       message: "Cantidad actualizada correctamente.",
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof InsufficientStockError) return insufficientStockResult(error);
     logger.error({ event: "cart_update_quantity_failed" });
     return {
       success: false,
@@ -759,6 +766,36 @@ export async function removeCartItemAction(
 }
 
 class UnavailableAccessoryError extends Error {}
+
+/** Thrown inside a cart transaction so a line asking for more than the stock rolls back. */
+class InsufficientStockError extends Error {
+  constructor(
+    readonly productName: string,
+    readonly availableUnits: number
+  ) {
+    super("insufficient_stock");
+  }
+}
+
+function assertLinesWithinStock(lines: CartHydrationLine[], variantIds: string[]): void {
+  for (const line of lines) {
+    if (variantIds.includes(line.variantId) && line.quantity > line.availableUnits) {
+      throw new InsufficientStockError(line.productName, line.availableUnits);
+    }
+  }
+}
+
+function insufficientStockResult(error: InsufficientStockError): CartActionResult {
+  const units = error.availableUnits;
+  return {
+    success: false,
+    code: "INSUFFICIENT_STOCK",
+    error:
+      units > 0
+        ? `Solo quedan ${units} ${units === 1 ? "unidad" : "unidades"} de ${error.productName}, contando las que ya tienes en el carrito.`
+        : `${error.productName} se agotó.`,
+  };
+}
 
 /** Shares the main line's transaction: a failed accessory rolls back the entire selection. */
 async function addAccessoryCartLines(

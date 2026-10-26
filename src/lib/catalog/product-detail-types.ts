@@ -39,6 +39,8 @@ export interface ProductVariantDetail {
    * Undefined where stock is unknown, which stays buyable.
    */
   inStock?: boolean;
+  /** Units left to sell, shown on the PDP and used to cap the quantity. Undefined where unknown. */
+  availableUnits?: number;
 }
 
 export interface ProductMediaItem {

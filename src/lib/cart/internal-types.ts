@@ -51,6 +51,8 @@ export interface CartHydrationLine {
   productName: string;
   productStatus: string;
   quantity: number;
+  /** Units left to sell: on hand minus reserved and allocated, across every inventory location. */
+  availableUnits: number;
   mediaObjectKey: string | null;
   mediaAltText: string | null;
   mediaWidth: number | null;

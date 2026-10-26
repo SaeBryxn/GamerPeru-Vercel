@@ -101,6 +101,13 @@ export function ProductCommercePanel({
   const isPending = isMutating || pendingVariantIds.has(selectedVariant.id);
   const isSoldOut = selectedVariant.inStock === false;
   const isAvailable = selectedVariant.status === "ACTIVE" && !isSoldOut;
+  const stockUnits = selectedVariant.availableUnits;
+  const maxQuantity =
+    stockUnits === undefined
+      ? MAX_CART_LINE_QUANTITY
+      : Math.max(1, Math.min(MAX_CART_LINE_QUANTITY, stockUnits));
+  // Switching to a variant with less stock keeps the chosen quantity within reach.
+  const effectiveQuantity = Math.min(quantity, maxQuantity);
   const isProfileRequired = status === "PROFILE_REQUIRED";
 
   const handleSelectVariant = (variant: ProductVariantDetail) => {
@@ -112,7 +119,7 @@ export function ProductCommercePanel({
     setHasAttemptedAdd(true);
     const success = await addItem(
       selectedVariant.id,
-      quantity,
+      effectiveQuantity,
       accessories?.filter((item) => selectedAccessoryIds.has(item.id)).map((item) => item.id)
     );
     if (success) {
@@ -257,25 +264,35 @@ export function ProductCommercePanel({
             </Link>
           </div>
         ) : (
-          <div className={styles.purchaseRow}>
-            <PdpQuantityStepper
-              value={quantity}
-              max={MAX_CART_LINE_QUANTITY}
-              onChange={setQuantity}
-              disabled={!isAvailable || isPending}
-            />
-            <DomeButton
-              ref={addButtonRef}
-              tone="dark"
-              className={styles.primaryAction}
-              onClick={() => void handleAddToCart()}
-              disabled={!isAvailable || isPending}
-              data-testid="pdp-add-to-cart-button"
-            >
-              {addLabel}
-            </DomeButton>
-            <WishlistButton productId={product.id} productName={product.name} variant="inline" />
-          </div>
+          <>
+            {isAvailable && stockUnits !== undefined && (
+              <p className={styles.stockLine} data-testid="pdp-stock-units">
+                <span className={styles.stockDot} aria-hidden="true" />
+                {stockUnits === 1
+                  ? "Queda 1 unidad en stock"
+                  : `Quedan ${stockUnits} unidades en stock`}
+              </p>
+            )}
+            <div className={styles.purchaseRow}>
+              <PdpQuantityStepper
+                value={effectiveQuantity}
+                max={maxQuantity}
+                onChange={setQuantity}
+                disabled={!isAvailable || isPending}
+              />
+              <DomeButton
+                ref={addButtonRef}
+                tone="dark"
+                className={styles.primaryAction}
+                onClick={() => void handleAddToCart()}
+                disabled={!isAvailable || isPending}
+                data-testid="pdp-add-to-cart-button"
+              >
+                {addLabel}
+              </DomeButton>
+              <WishlistButton productId={product.id} productName={product.name} variant="inline" />
+            </div>
+          </>
         )}
 
         {isSoldOut ? (

@@ -3,6 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { m } from "framer-motion";
+import { MAX_CART_LINE_QUANTITY } from "@/lib/cart/constants";
 import { formatCurrency } from "@/lib/utils/currency";
 import type { CartLineSnapshot } from "@/lib/cart/types";
 import { CartQuantityControl } from "./cart-quantity-control";
@@ -27,6 +28,8 @@ export function CartLine({
 
   // Variant attributes read as one quiet line under the title ("Mini / Negro").
   const variantText = Object.values(line.selectedAttributes).join(" / ");
+  // Stock can drop after the line was added; checkout re-checks it, the line just warns early.
+  const exceedsStock = line.available && line.quantity > line.availableUnits;
 
   return (
     <div
@@ -62,6 +65,11 @@ export function CartLine({
             No disponible
           </span>
         )}
+        {exceedsStock && (
+          <span className={styles.unavailableBadge} data-testid="cart-line-stock-badge">
+            {line.availableUnits > 0 ? `Solo quedan ${line.availableUnits}` : "Agotado"}
+          </span>
+        )}
       </div>
 
       <div className={styles.actionsCol}>
@@ -70,6 +78,7 @@ export function CartLine({
           productName={line.productName}
           onIncrement={() => onUpdateQuantity(line.quantity + 1)}
           onDecrement={() => onUpdateQuantity(line.quantity - 1)}
+          max={Math.min(MAX_CART_LINE_QUANTITY, Math.max(line.availableUnits, 1))}
           disabled={disabled || !line.available}
         />
 

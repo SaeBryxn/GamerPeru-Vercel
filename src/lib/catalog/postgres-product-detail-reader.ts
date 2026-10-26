@@ -53,6 +53,7 @@ export class PostgresProductDetailReader implements ProductDetailReader {
         status: "ACTIVE",
         attributes: v.attributes ?? {},
         inStock: v.availableUnits > 0,
+        availableUnits: Math.max(0, v.availableUnits),
       });
     }
 
