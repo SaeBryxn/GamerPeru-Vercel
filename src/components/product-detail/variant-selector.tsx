@@ -119,7 +119,44 @@ export function resolveDimensions(variants: ProductVariantDetail[]): {
     signatureSet.add(sig);
   }
 
+  // Exact single-option changes must be able to reach every variant. A sparse catalog can
+  // contain an isolated edition/color pair; separate selectors would leave both disabled.
+  const reachable = new Set([0]);
+  const pending = [0];
+  while (pending.length) {
+    const current = variants[pending.pop()!]!;
+    for (const [index, candidate] of variants.entries()) {
+      if (reachable.has(index)) continue;
+      let differences = 0;
+      for (const key of validKeys) {
+        if (String(current.attributes[key]) !== String(candidate.attributes[key])) differences++;
+        if (differences > 1) break;
+      }
+      if (differences <= 1) {
+        reachable.add(index);
+        pending.push(index);
+      }
+    }
+  }
+  if (reachable.size !== variants.length) return { dimensions: [], useFallback: true };
+
   return { dimensions, useFallback: false };
+}
+
+function imageForVariant(
+  variant: ProductVariantDetail | undefined,
+  media: ProductMediaItem[]
+): string | null {
+  if (!variant) return null;
+  const image =
+    media.find(
+      (item) =>
+        item.mediaAssetId === variant.thumbnailMediaAssetId &&
+        (!item.variantId || item.variantId === variant.id) &&
+        item.asset.mimeType.startsWith("image/")
+    ) ??
+    media.find((item) => item.variantId === variant.id && item.asset.mimeType.startsWith("image/"));
+  return image ? resolvePublicMediaUrl(image.asset.objectKey) : null;
 }
 
 /**
@@ -228,6 +265,7 @@ export function VariantSelector({
           <div className={styles.optionsGroup} role="radiogroup" aria-label="Seleccionar variante">
             {variants.map((variant) => {
               const isSelected = variant.id === selectedVariant.id;
+              const imageUrl = imageForVariant(variant, media);
               const displayLabel = hasDuplicateTitles
                 ? `${variant.title} — ${variant.sku}`
                 : variant.title;
@@ -242,7 +280,16 @@ export function VariantSelector({
                   className={`${styles.optionChip} ${isSelected ? styles.optionChipSelected : ""}`}
                   data-testid={`variant-option-${variant.id}`}
                 >
-                  {displayLabel}
+                  {imageUrl && (
+                    <Image
+                      src={imageUrl}
+                      alt=""
+                      width={44}
+                      height={44}
+                      className={styles.swatchImage}
+                    />
+                  )}
+                  <span>{displayLabel}</span>
                 </button>
               );
             })}
@@ -307,22 +354,7 @@ export function VariantSelector({
                 const optionVariant =
                   resolveVariantForOption(variants, dimensions, selectedVariant, dim.key, option) ??
                   variants.find((variant) => String(variant.attributes[dim.key]) === option);
-                const variantImage = optionVariant
-                  ? (media.find(
-                      (item) =>
-                        item.mediaAssetId === optionVariant.thumbnailMediaAssetId &&
-                        (!item.variantId || item.variantId === optionVariant.id) &&
-                        item.asset.mimeType.startsWith("image/")
-                    ) ??
-                    media.find(
-                      (item) =>
-                        item.variantId === optionVariant.id &&
-                        item.asset.mimeType.startsWith("image/")
-                    ))
-                  : undefined;
-                const variantImageUrl = variantImage
-                  ? resolvePublicMediaUrl(variantImage.asset.objectKey)
-                  : null;
+                const variantImageUrl = imageForVariant(optionVariant, media);
 
                 if (dim.isColor && (swatchClass || variantImageUrl)) {
                   return (

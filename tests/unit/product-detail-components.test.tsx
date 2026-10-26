@@ -224,7 +224,12 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
         attributes: { colorway: "Blanco", color: "White", switch: "Mechanical" },
       };
 
-      const { dimensions, useFallback } = resolveDimensions([v1, v2]);
+      const bridge: ProductVariantDetail = {
+        ...v2,
+        id: "bridge",
+        attributes: { colorway: "Negro", color: "Black", switch: "Mechanical" },
+      };
+      const { dimensions, useFallback } = resolveDimensions([v1, v2, bridge]);
       expect(useFallback).toBe(false);
       expect(dimensions).toHaveLength(2);
       expect(dimensions[0]?.key).toBe("colorway"); // Color dimension first
@@ -852,6 +857,33 @@ describe("Product Detail Components & Rules (GP-014 DB3B)", () => {
   });
 
   describe("Sparse Matrix Pure Resolution & No Arbitrary Fallback", () => {
+    it("keeps disconnected edition/color pairs selectable by their full variant title", () => {
+      const variants = [
+        {
+          ...MOCK_VARIANT_1,
+          id: "sky",
+          title: "Sky / Pink",
+          attributes: { version: "Sky", color: "Pink" },
+        },
+        {
+          ...MOCK_VARIANT_2,
+          id: "sky-pro",
+          title: "Sky Pro / Orange",
+          attributes: { version: "Sky Pro", color: "Orange" },
+        },
+      ];
+      expect(resolveDimensions(variants).useFallback).toBe(true);
+      const html = renderToStaticMarkup(
+        <VariantSelector
+          variants={variants}
+          selectedVariant={variants[0]!}
+          onSelectVariant={() => {}}
+        />
+      );
+      expect(html).toContain('data-testid="variant-selector-fallback"');
+      expect(html).toContain("Sky Pro / Orange");
+      expect(html).not.toContain('disabled=""');
+    });
     const vSparse1: ProductVariantDetail = {
       id: "v-sparse-1",
       productId: "p1",

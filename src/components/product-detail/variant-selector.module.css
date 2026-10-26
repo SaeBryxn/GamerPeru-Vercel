@@ -38,6 +38,8 @@
 
 /* Text Option Chips */
 .optionChip {
+  max-width: 100%;
+  gap: var(--space-2, 8px);
   min-height: 44px;
   min-width: 44px;
   padding: var(--space-2, 8px) var(--space-3, 12px);
@@ -54,6 +56,13 @@
   justify-content: center;
   text-align: center;
   transition: all var(--motion-duration-fast, 150ms) var(--motion-easing-standard, ease);
+}
+.optionChip > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.optionChip > img {
+  flex-shrink: 0;
 }
 
 .optionChip:hover:not(:disabled) {
