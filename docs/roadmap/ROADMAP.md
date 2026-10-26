@@ -164,3 +164,30 @@ Surgieron del cierre del MVP (`docs/project/10-limitaciones-y-futuro.md`):
 ### Idea guardada el 23 de octubre de 2026
 
 - [Armador público de PC y setup con comunidad](../plans/idea-armador-pc-setup-comunidad.md): configuración visual animada, presupuesto, orientación de compatibilidad y experiencias reales. Idea confirmada por el dueño para una incorporación futura; alcance técnico y prioridad pendientes. Por ahora solo se documenta.
+
+### Pedidos de la revisión del 26 de octubre de 2026
+
+Hechos en `feat/cloudflare-workers`: página `/productos`, tope de stock en ficha y carrito,
+orden de versiones en el admin, foto de la variante sin atributo de color, bolitas de color en
+las tarjetas, redes sociales, interruptor del 5%, "Ver más" en los menús, guías en Soporte,
+medidas sin repetir, "Completa tu setup" y franja de marcas. Falta:
+
+- [ ] **Número del botón flotante de WhatsApp.** El botón ya existe, pero no aparece porque
+      `NEXT_PUBLIC_WHATSAPP_NUMBER` no está configurado en el build de Cloudflare. Falta definir qué
+      número atiende consultas generales (el de stock es `STOCK_INQUIRY_WHATSAPP`).
+- [ ] **Reseñas de clientes en la ficha (debajo de "Completa tu setup").** Requiere tabla de
+      reseñas con migración, solo compradores verificados (pedido entregado), moderación en el
+      admin antes de publicar, promedio y conteo reales en `pdpConfig.rating` y datos
+      estructurados `AggregateRating` para Google.
+- [ ] **Foto de perfil del cliente.** Requiere columna de avatar en `customer_profiles` con
+      migración, subida a R2 con el mismo plano de control de GP-058 (recorte cuadrado, sin EXIF) y
+      mostrarla en la cuenta y en sus reseñas.
+- [ ] **Interruptor del 5% desde el admin.** Hoy es `PROMO_PILL_ENABLED` en
+      `src/config/social-links.ts`; moverlo al panel requiere guardar el ajuste en la base.
+- [ ] **Datos que corrige el dueño en el admin:** nombrar los productos por modelo sin el color
+      (por ejemplo "ATK Sky XSoft (Large Size)" en vez de "… Black …"), subir el negro como
+      primera versión con las flechas, cargar los logos de las marcas y corregir los textos de
+      especificaciones del mousepad.
+- [ ] **Más adelante (decidido así):** rangos de Discord en el perfil y sus logos; efecto del video
+      que crece al hacer scroll. Descartados: cambiar los destacados del menú al pasar el cursor y el
+      minijuego.
