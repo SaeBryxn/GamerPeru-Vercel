@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { requirePermission } from "@/lib/auth/rbac";
 import { getInventoryConfig } from "@/lib/inventory/config";
 import { z } from "zod";
+import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
 export const inventoryQuerySchema = z.object({
   q: z.string().trim().max(100).default(""),
   stock: z.enum(["all", "low", "out"]).default("all"),
@@ -21,6 +22,7 @@ export interface InventoryPageRow extends Record<string, unknown> {
   allocated: number;
   available: number;
   reorder_point: number;
+  image_url?: string | null;
 }
 export interface InventoryMovementRow extends Record<string, unknown> {
   id: string;
@@ -50,8 +52,17 @@ export async function getAdminInventoryPage(raw: Record<string, unknown>) {
         COALESCE(i.quantity_on_hand,0) AS on_hand, COALESCE(i.quantity_reserved,0) AS reserved,
         COALESCE(i.quantity_allocated,0) AS allocated,
         COALESCE(i.quantity_on_hand-i.quantity_reserved-i.quantity_allocated,0) AS available,
-        COALESCE(i.reorder_point,0) AS reorder_point
+        COALESCE(i.reorder_point,0) AS reorder_point, photo.object_key AS image_key
       FROM product_variants v JOIN products p ON p.id=v.product_id
+      LEFT JOIN LATERAL (
+        SELECT ma.object_key FROM media_assets ma
+        WHERE ma.security_class='PUBLIC_MEDIA' AND ma.media_type='IMAGE'
+          AND (ma.id=p.primary_media_id OR EXISTS (
+            SELECT 1 FROM product_media pm WHERE pm.media_asset_id=ma.id
+              AND pm.product_id=p.id AND pm.variant_id=v.id AND pm.placement='GALLERY'
+          ))
+        ORDER BY (ma.id=p.primary_media_id) ASC, ma.id LIMIT 1
+      ) photo ON true
       LEFT JOIN inventory_locations l ON l.code=${location}
       LEFT JOIN inventory_items i ON i.variant_id=v.id AND i.location_id=l.id
       WHERE v.status='ACTIVE' AND p.status <> 'ARCHIVED'
@@ -70,7 +81,10 @@ export async function getAdminInventoryPage(raw: Record<string, unknown>) {
   ]);
   return {
     configured: true as const,
-    rows: rows.slice(0, 50),
+    rows: rows.slice(0, 50).map(({ image_key, ...row }) => ({
+      ...row,
+      image_url: resolvePublicMediaUrl(typeof image_key === "string" ? image_key : null),
+    })),
     hasNext: rows.length > 50,
     movements,
     location,

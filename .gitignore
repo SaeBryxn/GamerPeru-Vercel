@@ -63,3 +63,6 @@ package-lock.json
 .wrangler/
 .dev.vars
 .dev.vars.*
+
+# Generated deliverables created for the store owner
+/outputs/

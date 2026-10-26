@@ -1,10 +1,13 @@
 "use client";
 import React, { useEffect, useId, useRef, useState, useTransition } from "react";
 import { AnimatePresence } from "framer-motion";
+import Image from "next/image";
 import {
   ArrowRight,
   CheckCircle2,
   ClipboardCheck,
+  Eye,
+  History,
   LoaderCircle,
   Package,
   ShieldCheck,
@@ -12,9 +15,14 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DrawerHeader, SideDrawer } from "@/components/admin/ui/side-drawer";
-import type { InventoryPageRow } from "@/lib/admin/inventory/page-reader";
-import { setVariantStockAction, type VariantStockSnapshot } from "@/lib/admin/inventory/actions";
-import { formatDelta, formatUnits } from "./inventory-display";
+import type { InventoryMovementRow, InventoryPageRow } from "@/lib/admin/inventory/page-reader";
+import {
+  getInventoryMovementsAction,
+  setVariantStockAction,
+  type VariantStockSnapshot,
+} from "@/lib/admin/inventory/actions";
+import { formatDelta, formatUnits, stockStatus } from "./inventory-display";
+import { StatusBadge } from "@/components/admin/ui/admin-ui";
 import styles from "./inventory.module.css";
 
 const REASONS = ["Conteo periódico", "Diferencia de conteo", "Producto dañado"];
@@ -25,7 +33,13 @@ const snapshotOf = (row: InventoryPageRow): VariantStockSnapshot => ({
   available: row.available,
 });
 
-export function InventoryCountForm({ row }: { row: InventoryPageRow }) {
+export function InventoryCountForm({
+  row,
+  workspace = false,
+}: {
+  row: InventoryPageRow;
+  workspace?: boolean;
+}) {
   const router = useRouter();
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -43,6 +57,27 @@ export function InventoryCountForm({ row }: { row: InventoryPageRow }) {
   const [staleResponse, setStaleResponse] = useState(false);
   const [discard, setDiscard] = useState(false);
   const [pending, start] = useTransition();
+  const [view, setView] = useState<"summary" | "count" | "history">("count");
+  const [history, setHistory] = useState<InventoryMovementRow[] | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const historyRequest = useRef(0);
+  const loadHistory = async () => {
+    const request = ++historyRequest.current;
+    setLoadingHistory(true);
+    setHistoryError("");
+    try {
+      const result = await getInventoryMovementsAction(row.variant_id);
+      if (request !== historyRequest.current) return;
+      if (result.success) setHistory(result.data ?? []);
+      else setHistoryError(result.error ?? "No se pudieron cargar los movimientos.");
+    } catch {
+      if (request === historyRequest.current)
+        setHistoryError("No se pudo conectar. Vuelve a intentar.");
+    } finally {
+      if (request === historyRequest.current) setLoadingHistory(false);
+    }
+  };
   const validQuantity = /^\d+$/.test(quantity.trim()) && Number.isSafeInteger(Number(quantity));
   const counted = Number(quantity);
   const difference = counted - snapshot.onHand;
@@ -65,8 +100,13 @@ export function InventoryCountForm({ row }: { row: InventoryPageRow }) {
   }, [message, conflict]);
   const close = () => {
     if (pending) return;
-    if (dirty) setDiscard(true);
-    else setOpen(false);
+    if (dirty) {
+      setView("count");
+      setDiscard(true);
+    } else {
+      historyRequest.current++;
+      setOpen(false);
+    }
   };
 
   return (
@@ -86,24 +126,212 @@ export function InventoryCountForm({ row }: { row: InventoryPageRow }) {
           setSavedBalances(null);
           setStaleResponse(false);
           setDiscard(false);
+          setView(workspace ? "summary" : "count");
+          setHistory(null);
+          setHistoryError("");
+          setLoadingHistory(false);
+          historyRequest.current++;
           setOpen(true);
         }}
       >
-        <ClipboardCheck size={14} aria-hidden="true" />
-        Registrar conteo
+        {workspace ? (
+          <Eye size={14} aria-hidden="true" />
+        ) : (
+          <ClipboardCheck size={14} aria-hidden="true" />
+        )}
+        {workspace ? "Ver inventario" : "Registrar conteo"}
       </button>
       <AnimatePresence onExitComplete={() => triggerRef.current?.focus()}>
         {open && (
           <SideDrawer labelledBy={titleId} onClose={close} busy={pending}>
             <DrawerHeader
               titleId={titleId}
-              title="Registrar conteo"
+              title={workspace ? row.product_name : "Registrar conteo"}
               eyebrow="CONTROL DE INVENTARIO"
               onClose={close}
               busy={pending}
             />
+            {workspace && (
+              <>
+                <div className={styles.workspaceProduct}>
+                  <div className={styles.workspacePhoto}>
+                    {row.image_url ? (
+                      <Image
+                        src={row.image_url}
+                        alt={row.product_name}
+                        width={112}
+                        height={112}
+                        sizes="112px"
+                      />
+                    ) : (
+                      <Package size={32} aria-hidden="true" />
+                    )}
+                  </div>
+                  <div>
+                    <span className={styles.eyebrow}>VARIANTE SELECCIONADA</span>
+                    <h3>{row.title}</h3>
+                    <p>SKU {row.sku}</p>
+                    <StatusBadge
+                      tone={
+                        stockStatus(savedBalances?.available ?? row.available, row.reorder_point)
+                          .tone
+                      }
+                    >
+                      {
+                        stockStatus(savedBalances?.available ?? row.available, row.reorder_point)
+                          .label
+                      }
+                    </StatusBadge>
+                  </div>
+                </div>
+                <nav className={styles.workspaceTabs} aria-label="Detalle de inventario">
+                  {(
+                    [
+                      ["summary", "Existencias"],
+                      ["count", "Registrar conteo"],
+                      ["history", "Movimientos"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-current={view === key ? "page" : undefined}
+                      disabled={pending}
+                      onClick={() => {
+                        setView(key);
+                        if (key === "history" && !history && !loadingHistory) void loadHistory();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </nav>
+                {view === "summary" && (
+                  <div className={styles.workspaceBody}>
+                    <div className={styles.availableHero}>
+                      <span>Disponible para vender</span>
+                      <strong>
+                        {formatUnits(savedBalances?.available ?? row.available)}{" "}
+                        <small>unidades</small>
+                      </strong>
+                      <p>Físico menos reservado y asignado.</p>
+                    </div>
+                    <dl className={styles.balanceGrid}>
+                      {(
+                        [
+                          [
+                            "Físico",
+                            savedBalances?.onHand ?? row.on_hand,
+                            "Unidades en el almacén",
+                          ],
+                          [
+                            "Reservado",
+                            savedBalances?.reserved ?? row.reserved,
+                            "Pedidos pendientes de pago",
+                          ],
+                          [
+                            "Asignado",
+                            savedBalances?.allocated ?? row.allocated,
+                            "Pedidos pagados por despachar",
+                          ],
+                          ["Reponer en", row.reorder_point, "Umbral de stock bajo"],
+                        ] as const
+                      ).map(([label, value, hint]) => (
+                        <div key={label}>
+                          <dt>{label}</dt>
+                          <dd>{formatUnits(value)}</dd>
+                          <p>{hint}</p>
+                        </div>
+                      ))}
+                    </dl>
+                    <div className={styles.workspaceHint}>
+                      <ClipboardCheck size={20} aria-hidden="true" />
+                      <div>
+                        <h3>¿Recibiste o contaste mercadería?</h3>
+                        <p>
+                          Registra el total físico. Podrás revisar la diferencia antes de guardar.
+                        </p>
+                        <button
+                          className={styles.primaryButton}
+                          type="button"
+                          onClick={() => setView("count")}
+                        >
+                          Registrar conteo
+                          <ArrowRight size={15} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {view === "history" && (
+                  <div className={styles.workspaceBody} aria-busy={loadingHistory}>
+                    <div className={styles.historyHeading}>
+                      <div>
+                        <h3>Movimientos de esta variante</h3>
+                        <p>Los 30 más recientes del almacén principal.</p>
+                      </div>
+                      <button
+                        className={styles.secondaryButton}
+                        type="button"
+                        disabled={loadingHistory}
+                        onClick={() => void loadHistory()}
+                      >
+                        Actualizar
+                      </button>
+                    </div>
+                    {loadingHistory ? (
+                      <p role="status">Cargando movimientos…</p>
+                    ) : historyError ? (
+                      <p role="alert" className={styles.historyError}>
+                        {historyError}
+                      </p>
+                    ) : history?.length ? (
+                      <ol className={styles.historyList}>
+                        {history.map((entry) => (
+                          <li key={entry.id}>
+                            <History size={17} aria-hidden="true" />
+                            <div>
+                              <strong>
+                                {entry.notes?.trim() ? entry.notes : "Movimiento de inventario"}
+                              </strong>
+                              <time dateTime={String(entry.created_at)}>
+                                {new Date(entry.created_at).toLocaleString("es-PE", {
+                                  timeZone: "America/Lima",
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })}
+                              </time>
+                              <p>
+                                Físico {formatDelta(entry.on_hand_delta)} · Reservado{" "}
+                                {formatDelta(entry.reserved_delta)} · Asignado{" "}
+                                {formatDelta(entry.allocated_delta)}
+                              </p>
+                              <details>
+                                <summary>Ver registro</summary>
+                                <p>
+                                  Tipo: {entry.movement_type}
+                                  <br />
+                                  Autor: {entry.actor_id}
+                                </p>
+                              </details>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <div className={styles.empty}>
+                        <History size={28} aria-hidden="true" />
+                        <h3>Aún no hay movimientos</h3>
+                        <p>Los conteos y cambios de pedidos aparecerán aquí.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
             <form
               className={styles.countForm}
+              hidden={workspace && view !== "count"}
               aria-busy={pending}
               onSubmit={(event) => {
                 event.preventDefault();
@@ -127,6 +355,9 @@ export function InventoryCountForm({ row }: { row: InventoryPageRow }) {
                       );
                       setSaved(true);
                       setSavedBalances(result.data ?? null);
+                      historyRequest.current++;
+                      setLoadingHistory(false);
+                      setHistory(null);
                       router.refresh();
                     } else {
                       setMessage(
@@ -144,17 +375,19 @@ export function InventoryCountForm({ row }: { row: InventoryPageRow }) {
               }}
             >
               <div className={styles.countBody}>
-                <div className={styles.countProduct}>
-                  <Package size={20} aria-hidden="true" />
-                  <div>
-                    <strong>{row.product_name}</strong>
-                    <p>
-                      {row.title}
-                      <br />
-                      SKU {row.sku}
-                    </p>
+                {!workspace && (
+                  <div className={styles.countProduct}>
+                    <Package size={20} aria-hidden="true" />
+                    <div>
+                      <strong>{row.product_name}</strong>
+                      <p>
+                        {row.title}
+                        <br />
+                        SKU {row.sku}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
                 {discard && (
                   <div
                     ref={discardRef}

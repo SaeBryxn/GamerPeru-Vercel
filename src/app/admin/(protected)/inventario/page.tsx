@@ -1,8 +1,8 @@
 import React from "react";
+import Image from "next/image";
 import Link from "@/components/app-link";
 import {
   ArrowDownLeft,
-  ArrowRight,
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
@@ -472,14 +472,26 @@ export default async function InventoryPage({
                       return (
                         <tr key={row.variant_id} data-stock={status.key}>
                           <th scope="row" className={styles.product}>
-                            <Link
-                              className={styles.productLink}
-                              href={`/admin/products/${row.product_id}#variantes`}
-                            >
-                              {row.product_name}
-                            </Link>
-                            <span className={styles.variant}>{row.title}</span>
-                            <span className={styles.sku}>SKU {row.sku}</span>
+                            <div className={styles.productIdentity}>
+                              <div className={styles.rowPhoto}>
+                                {row.image_url ? (
+                                  <Image
+                                    src={row.image_url}
+                                    alt=""
+                                    width={52}
+                                    height={52}
+                                    sizes="52px"
+                                  />
+                                ) : (
+                                  <Package size={20} aria-hidden="true" />
+                                )}
+                              </div>
+                              <div>
+                                <span className={styles.productLink}>{row.product_name}</span>
+                                <span className={styles.variant}>{row.title}</span>
+                                <span className={styles.sku}>SKU {row.sku}</span>
+                              </div>
+                            </div>
                           </th>
                           <td data-label="Estado">
                             <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
@@ -509,14 +521,7 @@ export default async function InventoryPage({
                             {formatUnits(row.reorder_point)}
                           </td>
                           <td className={styles.actions}>
-                            <InventoryCountForm row={row} />
-                            <Link
-                              className={styles.textLink}
-                              href={href({ vista: "movimientos", variant: row.variant_id })}
-                            >
-                              Ver movimientos
-                              <ArrowRight size={13} aria-hidden="true" />
-                            </Link>
+                            <InventoryCountForm row={row} workspace />
                           </td>
                         </tr>
                       );

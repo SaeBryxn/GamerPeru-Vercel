@@ -1,6 +1,6 @@
 # Gamer Perú — Lo que falta
 
-Actualizado: 2026-10-23.
+Actualizado: 2026-10-26.
 
 Este documento reemplaza el roadmap v1.2 en inglés y las especificaciones individuales
 `GP-XXX.md`. Los GPs cumplidos se eliminaron del repositorio; su detalle sigue disponible en el
@@ -20,6 +20,29 @@ historial de git (por ejemplo `git log --oneline -- docs/roadmap/GP-024.md`).
 | GP-060                 | Excluido: variantes responsive y loader propio de imágenes. Solo se retoma con alcance nuevo                                                                        |
 
 ## 1. Implementados, pero falta cerrarlos
+
+### Catálogo ATK / MCHOSE e inventario visual
+
+Carga solicitada por el dueño el 26 de octubre: 126 fichas publicadas (84 ATK y 42 MCHOSE),
+659 variantes y 126 historias con fotos y características oficiales. Se conservaron las 11
+fichas anteriores. Las 551 URLs de imagen descargadas corresponden a 548 archivos WebP únicos
+verificados en R2. Precios sugeridos en PEN: 109 variantes con referencia minorista peruana y
+550 estimadas desde el PVP oficial en USD. Costos sin completar y stock nuevo en cero.
+La preparación, validación y carga reanudable están en `scripts/catalog/`; el manifiesto,
+las fuentes y las comprobaciones de esta carga se conservan localmente en
+`scratch/catalogo-20261026/`. No requiere migraciones nuevas.
+
+Inventario incorpora foto y un único panel lateral con existencias, conteo e historial por
+variante, conservando borradores y los controles de concurrencia del conteo. QA con fixtures
+locales a 1440, 768, 390 y 320 px, sin modificar existencias reales.
+
+- [ ] Recibir costos, fletes definitivos y cantidades del proveedor para validar márgenes y
+      registrar las existencias físicas. El PVP oficial y la referencia minorista no son costos.
+- [ ] Completar las características que el fabricante solo publica como imagen o no detalla
+      en su ficha, especialmente accesorios. No se inventaron prestaciones faltantes.
+- [ ] Desplegar el panel de inventario y comprobarlo con la sesión del dueño. Las fichas públicas
+      nuevas se verificaron en localhost; la caché de producción puede conservar el catálogo
+      anterior hasta su revalidación (máximo configurado: una hora).
 
 ### GP-028 — Verificación de pagos en admin
 

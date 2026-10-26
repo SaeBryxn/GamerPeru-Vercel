@@ -12,7 +12,9 @@ vi.mock("@/lib/admin/inventory/page-reader", async (importOriginal) => ({
   getAdminInventoryPage: mocks.read,
 }));
 vi.mock("@/app/admin/(protected)/inventario/stock-count", () => ({
-  InventoryCountForm: () => <button>Registrar conteo</button>,
+  InventoryCountForm: ({ workspace }: { workspace?: boolean }) => (
+    <button>{workspace ? "Ver inventario" : "Registrar conteo"}</button>
+  ),
 }));
 afterEach(() => {
   cleanup();
@@ -56,7 +58,7 @@ async function show(params: Record<string, string> = {}, rows = [row], hasNext =
   return render(await InventoryPage({ searchParams: Promise.resolve(params) }));
 }
 
-it("conserva los filtros al paginar y abre el historial solo de la variante elegida", async () => {
+it("conserva los filtros al paginar, ofrece el panel lateral y mantiene los enlaces al historial", async () => {
   const view = await show({ q: "Mouse", stock: "low", page: "2" }, [row], true);
   const table = screen.getByRole("table");
   expect(within(table).getByText("Stock bajo").getAttribute("data-tone")).toBe("warning");
@@ -69,13 +71,10 @@ it("conserva los filtros al paginar y abre el historial solo de la variante eleg
     stock: "low",
     page: "3",
   });
-  const history = new URL(
-    screen.getByRole("link", { name: "Ver movimientos" }).getAttribute("href")!,
-    "https://local.invalid"
-  );
-  expect(history.searchParams.get("variant")).toBe(variantId);
+  expect(screen.getByRole("button", { name: "Ver inventario" })).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "Mouse" })).toBeNull();
   view.unmount();
-  await show(Object.fromEntries(history.searchParams));
+  await show({ vista: "movimientos", variant: variantId });
   expect(screen.queryByRole("searchbox")).toBeNull();
   expect(screen.getByRole("heading", { name: "Movimientos de la variante" })).toBeTruthy();
   expect(screen.getByText("+2")).toBeTruthy();
