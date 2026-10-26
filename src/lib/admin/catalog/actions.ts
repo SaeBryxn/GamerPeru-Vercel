@@ -7,6 +7,7 @@ import {
   updateProduct,
   createVariant,
   updateVariant,
+  reorderProductVariants,
   duplicateProduct,
   transitionProductStatus,
   deleteProduct,
@@ -87,6 +88,40 @@ export interface CreateVariantActionInput {
   status?: VariantStatus;
   displayOrder?: number;
   mutationRequestId?: string;
+}
+
+/**
+ * Server Action: Sets the order of a product's variants; the first is the storefront default.
+ */
+export async function reorderProductVariantsAction(input: {
+  productId: string;
+  orderedVariantIds: string[];
+}): Promise<ActionResult<null>> {
+  const authContext = await getVerifiedAuthContext();
+  if (authContext.status !== "READY") {
+    return {
+      success: false,
+      error: "Debes iniciar sesión con una cuenta de personal autorizada.",
+      code: "AUTHENTICATION_REQUIRED",
+    };
+  }
+
+  if (!authContext.permissions.has("catalog:manage")) {
+    return {
+      success: false,
+      error: "No tienes permisos de gestión de catálogo (catalog:manage).",
+      code: "FORBIDDEN",
+    };
+  }
+
+  try {
+    await reorderProductVariants(input, { authContext });
+    revalidateStorefront();
+    return { success: true, data: null };
+  } catch (err) {
+    const uiError = mapDomainErrorToUi(err);
+    return { success: false, ...uiError };
+  }
 }
 
 export interface UpdateVariantActionInput {

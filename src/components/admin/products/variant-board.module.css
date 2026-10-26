@@ -33,6 +33,42 @@
 .card:last-child {
   border-bottom: 0;
 }
+.cardRow {
+  display: flex;
+  align-items: center;
+}
+.card[data-expanded="true"] .cardRow {
+  background: var(--admin-inset);
+}
+.orderControls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-right: var(--space-3);
+}
+.orderButton {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 28px;
+  border: 1px solid var(--admin-panel-border);
+  border-radius: 6px;
+  background: var(--admin-panel);
+  color: inherit;
+  cursor: pointer;
+}
+.orderButton:hover:not(:disabled) {
+  background: var(--admin-inset);
+}
+.orderButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.defaultTag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--admin-accent);
+}
 .cardButton {
   display: flex;
   align-items: center;

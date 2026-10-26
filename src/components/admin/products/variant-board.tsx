@@ -2,10 +2,11 @@
 
 import Image from "next/image";
 import React, { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, ImageIcon, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ImageIcon, Plus } from "lucide-react";
 import { StatusBadge } from "@/components/admin/ui";
 import {
   createVariantAction,
+  reorderProductVariantsAction,
   updateVariantAction,
   reassignProductMediaVariantAction,
 } from "@/lib/admin/catalog/actions";
@@ -108,6 +109,24 @@ export function VariantBoard({
     setError(null);
     setNotice(null);
   };
+  // The first version is the one the store selects and lists first (e.g. black before white).
+  const move = async (index: number, delta: -1 | 1) => {
+    const target = index + delta;
+    if (target < 0 || target >= variants.length || saving.current) return;
+    const ordered = variants.map((variant) => variant.id);
+    [ordered[index], ordered[target]] = [ordered[target]!, ordered[index]!];
+    saving.current = true;
+    setPending(true);
+    setNotice(null);
+    const result = await reorderProductVariantsAction({ productId, orderedVariantIds: ordered });
+    saving.current = false;
+    setPending(false);
+    if (!result.success) {
+      setNotice(result.error ?? "No se pudo cambiar el orden. Intenta de nuevo.");
+      return;
+    }
+    onChanged();
+  };
   const patch = (value: Partial<Draft>) =>
     setDraft((current) => (current ? { ...current, ...value } : current));
 
@@ -187,7 +206,12 @@ export function VariantBoard({
         const result =
           "variantId" in payload
             ? await updateVariantAction({ ...payload, mutationRequestId })
-            : await createVariantAction({ ...payload, mutationRequestId });
+            : await createVariantAction({
+                ...payload,
+                // A new version goes last, so it never displaces the one shown first.
+                displayOrder: Math.max(-1, ...variants.map((variant) => variant.displayOrder)) + 1,
+                mutationRequestId,
+              });
         variantTracker.current.complete();
         if (!result.success || !result.data) {
           setError(
@@ -502,7 +526,7 @@ export function VariantBoard({
         </button>
       </header>
       <div className={styles.board}>
-        {variants.map((variant) => {
+        {variants.map((variant, index) => {
           const variantPhoto = photos.find((item) => item.variantId === variant.id);
           const photo = variantPhoto ?? photos.find((item) => item.variantId === null);
           const stock = variantStock[variant.id];
@@ -514,48 +538,77 @@ export function VariantBoard({
               data-expanded={expanded}
               data-testid={`variant-card-${variant.id}`}
             >
-              <button
-                type="button"
-                className={styles.cardButton}
-                disabled={pending}
-                aria-expanded={expanded}
-                aria-controls={expanded ? `${id}-form` : undefined}
-                aria-label={`Editar ${nameOf(variant)}`}
-                onClick={() => (expanded ? setDraft(null) : open(variant))}
-              >
-                <span className={styles.photoGroup}>
-                  <span className={styles.thumbnail}>
-                    {photo?.publicUrl ? (
-                      <Image src={photo.publicUrl} alt="" width={64} height={64} unoptimized />
-                    ) : (
-                      <ImageIcon size={24} aria-hidden="true" />
+              <div className={styles.cardRow}>
+                <button
+                  type="button"
+                  className={styles.cardButton}
+                  disabled={pending}
+                  aria-expanded={expanded}
+                  aria-controls={expanded ? `${id}-form` : undefined}
+                  aria-label={`Editar ${nameOf(variant)}`}
+                  onClick={() => (expanded ? setDraft(null) : open(variant))}
+                >
+                  <span className={styles.photoGroup}>
+                    <span className={styles.thumbnail}>
+                      {photo?.publicUrl ? (
+                        <Image src={photo.publicUrl} alt="" width={64} height={64} unoptimized />
+                      ) : (
+                        <ImageIcon size={24} aria-hidden="true" />
+                      )}
+                    </span>
+                    {photo && !variantPhoto && (
+                      <span className={styles.photoCaption}>Foto general</span>
                     )}
                   </span>
-                  {photo && !variantPhoto && (
-                    <span className={styles.photoCaption}>Foto general</span>
-                  )}
-                </span>
-                <span className={styles.cardInfo}>
-                  <strong>{nameOf(variant)}</strong>
-                  <span className={styles.price}>{formatCurrency(variant.priceCents)}</span>
-                  <span className={styles.hint}>
-                    {stock?.onHand ?? 0} unidades · {stock?.available ?? 0} disponibles
+                  <span className={styles.cardInfo}>
+                    <strong>{nameOf(variant)}</strong>
+                    {index === 0 && variants.length > 1 && (
+                      <span className={styles.defaultTag}>Se muestra primero</span>
+                    )}
+                    <span className={styles.price}>{formatCurrency(variant.priceCents)}</span>
+                    <span className={styles.hint}>
+                      {stock?.onHand ?? 0} unidades · {stock?.available ?? 0} disponibles
+                    </span>
                   </span>
-                </span>
-                <span className={styles.cardState}>
-                  <StatusBadge tone={variant.status === "ACTIVE" ? "success" : "neutral"}>
-                    {variant.status === "ACTIVE"
-                      ? "Activa"
-                      : variant.status === "ARCHIVED"
-                        ? "Archivada"
-                        : "Inactiva"}
-                  </StatusBadge>
-                  {variant.status === "ACTIVE" && stock?.available === 0 && (
-                    <StatusBadge tone="warning">Sin stock</StatusBadge>
-                  )}
-                  <ChevronDown size={16} aria-hidden="true" />
-                </span>
-              </button>
+                  <span className={styles.cardState}>
+                    <StatusBadge tone={variant.status === "ACTIVE" ? "success" : "neutral"}>
+                      {variant.status === "ACTIVE"
+                        ? "Activa"
+                        : variant.status === "ARCHIVED"
+                          ? "Archivada"
+                          : "Inactiva"}
+                    </StatusBadge>
+                    {variant.status === "ACTIVE" && stock?.available === 0 && (
+                      <StatusBadge tone="warning">Sin stock</StatusBadge>
+                    )}
+                    <ChevronDown size={16} aria-hidden="true" />
+                  </span>
+                </button>
+                {variants.length > 1 && (
+                  <span className={styles.orderControls}>
+                    <button
+                      type="button"
+                      className={styles.orderButton}
+                      disabled={pending || index === 0}
+                      onClick={() => void move(index, -1)}
+                      aria-label={`Subir ${nameOf(variant)}`}
+                      title="Subir"
+                    >
+                      <ArrowUp size={16} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.orderButton}
+                      disabled={pending || index === variants.length - 1}
+                      onClick={() => void move(index, 1)}
+                      aria-label={`Bajar ${nameOf(variant)}`}
+                      title="Bajar"
+                    >
+                      <ArrowDown size={16} aria-hidden="true" />
+                    </button>
+                  </span>
+                )}
+              </div>
               {expanded && editor}
             </article>
           );

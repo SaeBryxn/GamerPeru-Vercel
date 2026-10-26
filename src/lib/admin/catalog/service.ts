@@ -1356,6 +1356,75 @@ export async function updateVariant(
 }
 
 /**
+ * Sets the order of a product's variants: the first one is what the storefront selects by default
+ * and lists first. The list must hold exactly the product's variants. Setting an order is
+ * naturally idempotent, so a repeated request needs no replay marker.
+ */
+export async function reorderProductVariants(
+  input: { productId: string; orderedVariantIds: string[] },
+  options?: ServiceOptions
+): Promise<void> {
+  const { authUserId } = await resolveActorAndAssertPermission("catalog:manage", options);
+
+  const ids = input.orderedVariantIds;
+  if (!Array.isArray(ids) || ids.length === 0 || new Set(ids).size !== ids.length) {
+    throw new CatalogDomainError(
+      "La lista de versiones para ordenar no es válida.",
+      "INVALID_REORDER_PAYLOAD",
+      400
+    );
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      const productRows = (await tx.execute(sql`
+        SELECT id FROM products WHERE id = ${input.productId}::uuid FOR UPDATE LIMIT 1;
+      `)) as unknown as { id: string }[];
+      if (!productRows[0]) {
+        throw new CatalogDomainError("El producto solicitado no existe.", "PRODUCT_NOT_FOUND", 404);
+      }
+
+      const currentRows = (await tx.execute(sql`
+        SELECT id FROM product_variants WHERE product_id = ${input.productId}::uuid;
+      `)) as unknown as { id: string }[];
+      const currentIds = new Set(currentRows.map((row) => String(row.id)));
+      if (currentIds.size !== ids.length || !ids.every((id) => currentIds.has(id))) {
+        throw new CatalogDomainError(
+          "La lista debe coincidir con las versiones actuales del producto. Recarga la página.",
+          "VARIANT_NOT_FOUND",
+          409
+        );
+      }
+
+      for (let index = 0; index < ids.length; index++) {
+        await tx.execute(sql`
+          UPDATE product_variants SET display_order = ${index}, updated_at = NOW()
+          WHERE id = ${ids[index]!}::uuid AND product_id = ${input.productId}::uuid;
+        `);
+      }
+
+      await tx.execute(sql`
+        INSERT INTO audit_events (
+          id, timestamp, actor_type, actor_id, action, target_type, target_id, metadata, request_id
+        ) VALUES (
+          ${generateUuidV7()}::uuid,
+          NOW(),
+          'ADMIN',
+          ${authUserId},
+          'catalog:variant:reorder',
+          'product',
+          ${input.productId},
+          ${JSON.stringify({ ordered_ids: ids })}::jsonb,
+          NULL
+        );
+      `);
+    });
+  } catch (err) {
+    handleDatabaseError(err);
+  }
+}
+
+/**
  * Transitions Product Status (DRAFT, PUBLISHED, ARCHIVED).
  * Enforces canonical RBAC permissions (catalog:publish required for publish/unpublish)
  * derived exclusively from the authoritative LOCKED row state to close TOCTOU race conditions.
