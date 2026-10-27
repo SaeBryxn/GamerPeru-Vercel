@@ -80,10 +80,31 @@ it("cambia entre directo y respaldo con eventos reales del reproductor, sin chat
   expect(screen.getByTestId("twitch-live-dock").getAttribute("data-expanded")).toBe("true");
   fireEvent.click(screen.getByRole("button", { name: "Reducir directo" }));
   expect(screen.getByTestId("twitch-live-dock").getAttribute("data-expanded")).toBe("false");
+  fireEvent.click(screen.getByRole("button", { name: "Ocultar directo" }));
+  expect(screen.getByTestId("twitch-live-dock").getAttribute("data-visible")).toBe("false");
+  expect(screen.getByTestId("twitch-live-dock").hasAttribute("inert")).toBe(true);
+  expect(screen.queryByRole("button", { name: "Ampliar directo" })).toBeNull();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Mostrar directo" }));
+  expect(pause).toHaveBeenCalled();
+  const playsBeforeReopen = play.mock.calls.length;
+  fireEvent.click(screen.getByRole("button", { name: "Mostrar directo" }));
+  expect(screen.getByTestId("twitch-live-dock").getAttribute("data-visible")).toBe("true");
+  expect(screen.queryByRole("button", { name: "Mostrar directo" })).toBeNull();
+  expect(play.mock.calls.length).toBeGreaterThan(playsBeforeReopen);
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ampliar directo" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ampliar directo" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ocultar directo" }));
+  expect(screen.getByTestId("twitch-live-dock").getAttribute("data-expanded")).toBe("false");
+  expect(document.documentElement.style.overflow).not.toBe("hidden");
   expect(created).toHaveBeenCalledOnce();
   act(() => events.get("offline")?.());
   expect(changed).toHaveBeenLastCalledWith(false);
   expect(screen.getByTestId("twitch-live-dock").getAttribute("data-visible")).toBe("false");
+  expect(screen.queryByRole("button", { name: "Mostrar directo" })).toBeNull();
+  act(() => events.get("online")?.());
+  expect(screen.getByTestId("twitch-live-dock").getAttribute("data-visible")).toBe("false");
+  expect(screen.getByRole("button", { name: "Mostrar directo" })).toBeTruthy();
+  expect(created).toHaveBeenCalledOnce();
   expect(screen.getByTestId("twitch-channel-link").getAttribute("href")).toBe(
     "https://www.twitch.tv/maxkillgg"
   );

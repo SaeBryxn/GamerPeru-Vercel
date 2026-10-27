@@ -327,6 +327,10 @@ aplicó la `0027` el 26 de octubre. Seguimiento:
   Ampliar abre el mismo reproductor en un diálogo modal nativo; reducir o pulsar Escape
   devuelve la ventana a su estado normal sin crear otra instancia de Twitch. El enlace
   sin directo se oculta al dejar atrás la portada. Se mantiene el límite mínimo de ancho de Twitch.
+- Ocultar pausa el directo y deja una pestaña pequeña en el borde derecho para recuperarlo,
+  incluso después de hacer scroll. Conserva el mismo reproductor y la elección de ocultarlo si
+  el canal se desconecta y vuelve. Ocultar desde la vista ampliada libera el scroll y devuelve
+  el foco a la pestaña; al abrirlo se mantiene disponible la acción de ampliar.
 - Productos obtiene sus colecciones de categorías publicadas con variantes activas. Incluye
   Monitores, Audio y Accesorios, y genera los tipos de accesorios únicamente cuando existen
   productos clasificados. El menú y el editor usan la misma lista; una configuración manual del

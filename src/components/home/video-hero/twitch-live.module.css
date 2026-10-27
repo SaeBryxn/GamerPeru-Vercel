@@ -55,6 +55,36 @@
   outline: 2px solid var(--color-brand-red);
   outline-offset: -3px;
 }
+.reopen {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  z-index: 90;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-dark-default);
+  border-right: 0;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  background: var(--color-surface-dark-canvas);
+  color: var(--color-text-dark-primary);
+  box-shadow: var(--elevation-high);
+  font-size: 13px;
+  cursor: pointer;
+}
+.reopen svg:nth-of-type(2) {
+  color: var(--color-brand-red);
+}
+.reopen:hover {
+  background: var(--color-border-dark-default);
+}
+.reopen:focus-visible {
+  outline: 2px solid var(--color-brand-red);
+  outline-offset: -3px;
+}
 .dock[data-online="true"] {
   overflow: hidden;
   border-radius: var(--radius-lg);
