@@ -10,16 +10,21 @@ import {
   type EditableMenuLink,
 } from "@/lib/navigation/menu-content-schema";
 import { updateMenuContentAction } from "@/lib/admin/menu/actions";
+import type { ProductOption } from "@/components/admin/product-selection";
+import { defaultMenuDisplay } from "@/lib/navigation/menu-display";
+import { MenuDisplayFields } from "./menu-display-fields";
 import styles from "./menu.module.css";
 
 export function MenuContentEditor({
   value,
   onSaved,
   tileLayout = false,
+  catalogProducts,
 }: {
   value: EditableMenuContent;
   onSaved: (next: EditableMenuContent) => void;
   tileLayout?: boolean;
+  catalogProducts?: readonly ProductOption[];
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -83,7 +88,7 @@ export function MenuContentEditor({
           setOpen(true);
         }}
       >
-        <Link2 size={15} /> Editar nombre y enlaces
+        <Link2 size={15} /> {catalogProducts ? "Ajustar vista del menú" : "Editar nombre y enlaces"}
       </button>
       <AnimatePresence>
         {open && (
@@ -97,7 +102,11 @@ export function MenuContentEditor({
             <DrawerHeader
               titleId={`${id}-title`}
               title={draft.label}
-              eyebrow="Menú de la tienda · Nombre y enlaces"
+              eyebrow={
+                catalogProducts
+                  ? "Menú de la tienda · Vista y nombres cortos"
+                  : "Menú de la tienda · Nombre y enlaces"
+              }
               onClose={close}
               busy={pending}
             />
@@ -121,176 +130,185 @@ export function MenuContentEditor({
                 />
               </label>
             </div>
-            <div className={styles.linkWorkspace}>
-              <section className={styles.linkCanvas} aria-label="Orden de los enlaces del menú">
-                <div className={styles.canvasHeading}>
-                  <h3>Contenido del desplegable</h3>
-                  <span>{draft.links.filter((link) => link.isVisible).length} visibles</span>
-                </div>
-                <p className={styles.hint}>
-                  Selecciona un enlace para editarlo. Las flechas cambian dónde aparece.
-                </p>
-                <ol className={styles.linkRows}>
-                  {draft.links.map((link, index) => (
-                    <li
-                      key={link.id}
-                      data-selected={selected === link.id}
-                      data-hidden={!link.isVisible}
-                    >
-                      <button
-                        type="button"
-                        className={styles.selectLink}
-                        disabled={pending}
-                        onClick={() => setSelected(link.id)}
-                      >
-                        <span className={styles.ordinal}>{index + 1}</span>
-                        <span>
-                          <strong>{link.label || "Sin título"}</strong>
-                          <small>{link.href || "Sin destino"}</small>
-                        </span>
-                        {!link.isVisible && <EyeOff size={15} />}
-                      </button>
-                      <div className={styles.linkActions}>
-                        <button
-                          type="button"
-                          className={styles.iconButton}
-                          aria-label={`Subir enlace ${link.label}`}
-                          disabled={pending || index === 0}
-                          onClick={() => move(index, -1)}
-                        >
-                          <ArrowUp size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.iconButton}
-                          aria-label={`Bajar enlace ${link.label}`}
-                          disabled={pending || index === draft.links.length - 1}
-                          onClick={() => move(index, 1)}
-                        >
-                          <ArrowDown size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.iconButton}
-                          aria-label={`${link.isVisible ? "Ocultar" : "Mostrar"} enlace ${link.label}`}
-                          disabled={pending}
-                          onClick={() => update(link.id, { isVisible: !link.isVisible })}
-                        >
-                          {link.isVisible ? <Eye size={15} /> : <EyeOff size={15} />}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-                {!draft.links.length && (
-                  <p className={styles.blank}>
-                    Este desplegable está vacío. Agrega su primer enlace.
+            {catalogProducts ? (
+              <MenuDisplayFields
+                products={catalogProducts}
+                value={draft.display ?? defaultMenuDisplay()}
+                disabled={pending}
+                onChange={(display) => setDraft({ ...draft, display })}
+              />
+            ) : (
+              <div className={styles.linkWorkspace}>
+                <section className={styles.linkCanvas} aria-label="Orden de los enlaces del menú">
+                  <div className={styles.canvasHeading}>
+                    <h3>Contenido del desplegable</h3>
+                    <span>{draft.links.filter((link) => link.isVisible).length} visibles</span>
+                  </div>
+                  <p className={styles.hint}>
+                    Selecciona un enlace para editarlo. Las flechas cambian dónde aparece.
                   </p>
-                )}
-                <button
-                  type="button"
-                  className={styles.addLink}
-                  disabled={pending || draft.links.length >= 32}
-                  onClick={() => {
-                    const link: EditableMenuLink = {
-                      id: crypto.randomUUID(),
-                      label: "Nuevo enlace",
-                      href: "/",
-                      sectionTitle: draft.label || "Enlaces",
-                      placement: tileLayout ? "tile" : "section",
-                      icon: tileLayout ? "mouse" : null,
-                      isVisible: true,
-                    };
-                    setDraft({ ...draft, links: [...draft.links, link] });
-                    setSelected(link.id);
-                  }}
-                >
-                  <Plus size={16} /> Agregar enlace
-                </button>
-              </section>
-              <aside className={styles.linkInspector} aria-label="Editar enlace seleccionado">
-                {current ? (
-                  <fieldset disabled={pending}>
-                    <legend>Editar este enlace</legend>
-                    <label>
-                      Texto que verá el cliente
-                      <input
-                        value={current.label}
-                        maxLength={100}
-                        onChange={(event) => update(current.id, { label: event.target.value })}
-                      />
-                    </label>
-                    <label>
-                      Destino
-                      <input
-                        value={current.href}
-                        maxLength={500}
-                        placeholder="/soporte/contacto"
-                        onChange={(event) => update(current.id, { href: event.target.value })}
-                      />
-                    </label>
-                    <p className={styles.hint}>Una dirección de la tienda o un enlace HTTPS.</p>
-                    {current.placement === "section" && (
+                  <ol className={styles.linkRows}>
+                    {draft.links.map((link, index) => (
+                      <li
+                        key={link.id}
+                        data-selected={selected === link.id}
+                        data-hidden={!link.isVisible}
+                      >
+                        <button
+                          type="button"
+                          className={styles.selectLink}
+                          disabled={pending}
+                          onClick={() => setSelected(link.id)}
+                        >
+                          <span className={styles.ordinal}>{index + 1}</span>
+                          <span>
+                            <strong>{link.label || "Sin título"}</strong>
+                            <small>{link.href || "Sin destino"}</small>
+                          </span>
+                          {!link.isVisible && <EyeOff size={15} />}
+                        </button>
+                        <div className={styles.linkActions}>
+                          <button
+                            type="button"
+                            className={styles.iconButton}
+                            aria-label={`Subir enlace ${link.label}`}
+                            disabled={pending || index === 0}
+                            onClick={() => move(index, -1)}
+                          >
+                            <ArrowUp size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.iconButton}
+                            aria-label={`Bajar enlace ${link.label}`}
+                            disabled={pending || index === draft.links.length - 1}
+                            onClick={() => move(index, 1)}
+                          >
+                            <ArrowDown size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.iconButton}
+                            aria-label={`${link.isVisible ? "Ocultar" : "Mostrar"} enlace ${link.label}`}
+                            disabled={pending}
+                            onClick={() => update(link.id, { isVisible: !link.isVisible })}
+                          >
+                            {link.isVisible ? <Eye size={15} /> : <EyeOff size={15} />}
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  {!draft.links.length && (
+                    <p className={styles.blank}>
+                      Este desplegable está vacío. Agrega su primer enlace.
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.addLink}
+                    disabled={pending || draft.links.length >= 32}
+                    onClick={() => {
+                      const link: EditableMenuLink = {
+                        id: crypto.randomUUID(),
+                        label: "Nuevo enlace",
+                        href: "/",
+                        sectionTitle: draft.label || "Enlaces",
+                        placement: tileLayout ? "tile" : "section",
+                        icon: tileLayout ? "mouse" : null,
+                        isVisible: true,
+                      };
+                      setDraft({ ...draft, links: [...draft.links, link] });
+                      setSelected(link.id);
+                    }}
+                  >
+                    <Plus size={16} /> Agregar enlace
+                  </button>
+                </section>
+                <aside className={styles.linkInspector} aria-label="Editar enlace seleccionado">
+                  {current ? (
+                    <fieldset disabled={pending}>
+                      <legend>Editar este enlace</legend>
                       <label>
-                        Grupo del enlace
+                        Texto que verá el cliente
                         <input
-                          value={current.sectionTitle}
+                          value={current.label}
                           maxLength={100}
-                          onChange={(event) =>
-                            update(current.id, { sectionTitle: event.target.value })
-                          }
+                          onChange={(event) => update(current.id, { label: event.target.value })}
                         />
                       </label>
-                    )}
-                    {current.placement === "tile" && (
                       <label>
-                        Ícono
-                        <select
-                          value={current.icon ?? "mouse"}
-                          onChange={(event) =>
-                            update(current.id, {
-                              icon: event.target.value as EditableMenuLink["icon"],
-                            })
-                          }
-                        >
-                          <option value="mouse">Mouse</option>
-                          <option value="keyboard">Teclado</option>
-                          <option value="usb">Receptor</option>
-                          <option value="cpu">Firmware</option>
-                        </select>
+                        Destino
+                        <input
+                          value={current.href}
+                          maxLength={500}
+                          placeholder="/soporte/contacto"
+                          onChange={(event) => update(current.id, { href: event.target.value })}
+                        />
                       </label>
-                    )}
-                    <label className={styles.checkLabel}>
-                      <input
-                        type="checkbox"
-                        checked={current.isVisible}
-                        onChange={(event) =>
-                          update(current.id, { isVisible: event.target.checked })
-                        }
-                      />
-                      <Check size={14} /> Visible en la tienda
-                    </label>
-                    <button
-                      type="button"
-                      className={styles.deleteLink}
-                      onClick={() => {
-                        setDraft({
-                          ...draft,
-                          links: draft.links.filter((link) => link.id !== current.id),
-                        });
-                        setSelected(null);
-                      }}
-                    >
-                      <Trash2 size={15} /> Quitar enlace
-                    </button>
-                  </fieldset>
-                ) : (
-                  <p className={styles.blank}>
-                    Elige un enlace del desplegable para cambiar su texto o destino.
-                  </p>
-                )}
-              </aside>
-            </div>
+                      <p className={styles.hint}>Una dirección de la tienda o un enlace HTTPS.</p>
+                      {current.placement === "section" && (
+                        <label>
+                          Grupo del enlace
+                          <input
+                            value={current.sectionTitle}
+                            maxLength={100}
+                            onChange={(event) =>
+                              update(current.id, { sectionTitle: event.target.value })
+                            }
+                          />
+                        </label>
+                      )}
+                      {current.placement === "tile" && (
+                        <label>
+                          Ícono
+                          <select
+                            value={current.icon ?? "mouse"}
+                            onChange={(event) =>
+                              update(current.id, {
+                                icon: event.target.value as EditableMenuLink["icon"],
+                              })
+                            }
+                          >
+                            <option value="mouse">Mouse</option>
+                            <option value="keyboard">Teclado</option>
+                            <option value="usb">Receptor</option>
+                            <option value="cpu">Firmware</option>
+                          </select>
+                        </label>
+                      )}
+                      <label className={styles.checkLabel}>
+                        <input
+                          type="checkbox"
+                          checked={current.isVisible}
+                          onChange={(event) =>
+                            update(current.id, { isVisible: event.target.checked })
+                          }
+                        />
+                        <Check size={14} /> Visible en la tienda
+                      </label>
+                      <button
+                        type="button"
+                        className={styles.deleteLink}
+                        onClick={() => {
+                          setDraft({
+                            ...draft,
+                            links: draft.links.filter((link) => link.id !== current.id),
+                          });
+                          setSelected(null);
+                        }}
+                      >
+                        <Trash2 size={15} /> Quitar enlace
+                      </button>
+                    </fieldset>
+                  ) : (
+                    <p className={styles.blank}>
+                      Elige un enlace del desplegable para cambiar su texto o destino.
+                    </p>
+                  )}
+                </aside>
+              </div>
+            )}
             <footer className={styles.drawerFooter}>
               <div>
                 {error ? (

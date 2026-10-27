@@ -26,6 +26,7 @@ describe("Supplier catalog preparation", () => {
   });
   it("classifies pads and accessories before mice and keyboards", () => {
     expect(categoryFor("ATK Mouse Pad")).toBe("mousepads");
+    expect(categoryFor("ATK G640 Esport Mouse Gaming Pad")).toBe("mousepads");
     expect(categoryFor("MCHOSE 8K Receiver for Wireless Mouse")).toBe("accesorios");
     expect(categoryFor("ATK Keyboard Cable")).toBe("accesorios");
     expect(categoryFor("ATK RS6 Collectible Mini Metal Keyboard Keychain")).toBe("accesorios");

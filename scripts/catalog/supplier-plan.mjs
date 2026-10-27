@@ -47,7 +47,7 @@ export function categoryFor(title) {
     )
   )
     return "accesorios";
-  if (/mouse\s*pad|mousepad/i.test(title)) return "mousepads";
+  if (/mouse\s*(?:gaming\s*)?pad|mousepad/i.test(title)) return "mousepads";
   if (/headset|headphone|earphone|soundbar|\biems?\b/i.test(title)) return "audio";
   if (/keyboard/i.test(title)) return "teclados";
   if (/\bmouse\b|\bmice\b/i.test(title)) return "mouses";

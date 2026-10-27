@@ -1,5 +1,5 @@
 import "server-only";
-import { ProductSelectionSchema, type ProductSelection } from "@/lib/catalog/curated-products";
+import { MenuProductSelectionSchema, type MenuProductSelection } from "./menu-display";
 import { getMenuFeaturedProducts } from "./menu-content";
 import { featuredSlugsByOwner } from "@/lib/catalog/featured-product-storage";
 import { db } from "@/db";
@@ -9,7 +9,7 @@ import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
 import { MENU_ENTRY_DESCRIPTORS, isKnownMenuEntry, type MenuEntryDescriptor } from "./menu-entries";
 
 export interface MenuEntrySetting extends MenuEntryDescriptor {
-  productSelection?: ProductSelection;
+  productSelection?: MenuProductSelection;
   label?: string;
   href?: string;
   linksConfigured?: boolean;
@@ -80,7 +80,7 @@ export async function getMenuEntrySettings(): Promise<MenuEntrySetting[]> {
 
   return MENU_ENTRY_DESCRIPTORS.map((descriptor) => {
     const row = byId.get(descriptor.id);
-    const selection = ProductSelectionSchema.safeParse(row?.productSelection);
+    const selection = MenuProductSelectionSchema.safeParse(row?.productSelection);
     return {
       ...descriptor,
       label: row?.label ?? undefined,

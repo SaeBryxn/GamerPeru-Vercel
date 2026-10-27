@@ -45,19 +45,33 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
     >
       <m.div className={styles.seriesZone} variants={SERIES_VARIANTS}>
         <h2 className={styles.visuallyHidden}>Series de {category.label}</h2>
-        <div className={styles.seriesGrid}>
+        <div className={styles.seriesGrid} data-single-brand={series.length === 1}>
           {series.map((group) => (
             <m.section key={group.title} className={styles.seriesGroup} variants={SLIDE_FROM_RIGHT}>
               <h3 className={styles.seriesTitle}>{group.title}</h3>
               <ul className={styles.seriesList}>
                 {group.items.map((item) => (
                   <li key={item.href}>
-                    <Link href={item.href} className={styles.seriesLink} onClick={onNavigate}>
+                    <Link
+                      href={item.href}
+                      title={item.description ?? item.label}
+                      className={styles.seriesLink}
+                      onClick={onNavigate}
+                    >
                       {item.label}
                     </Link>
                   </li>
                 ))}
               </ul>
+              {group.more && (
+                <MegaMenuArrowLink
+                  href={group.more.href}
+                  className={styles.brandMore}
+                  onClick={onNavigate}
+                >
+                  {group.more.label}
+                </MegaMenuArrowLink>
+              )}
             </m.section>
           ))}
         </div>
@@ -72,7 +86,7 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
               fullWidth
               onClick={onNavigate}
             >
-              Ver más
+              Ver todos los productos
             </MegaMenuArrowLink>
           </div>
         </m.div>

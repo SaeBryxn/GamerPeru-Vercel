@@ -224,6 +224,13 @@ colores/tallas también usa un panel con vista previa. Categorías y marcas mues
 su URL; reseñas muestra las fotos y la opinión completa antes de moderar; Equipo permite revisar
 la persona y el efecto del nivel de acceso antes de confirmarlo. No requiere nuevas tablas.
 
+El menú de catálogo ahora limita los modelos por marca, distribuye una sola marca en dos columnas
+y ofrece destinos filtrados por marca y categoría. Los límites y nombres cortos se editan en el
+panel lateral y se guardan en el JSON existente; elegir productos conserva esos ajustes. Las
+pestañas de Productos usan los enlaces editables del administrador. La selección, las fotos y
+las marcas vienen del catálogo, sin listas de modelos fijas. Se corrigió la clasificación de
+«Mouse Gaming Pad» del importador y la ficha G640, conservando variantes, precios y existencias.
+
 El agente no aplicó migraciones alojadas ni hizo escrituras de prueba. El dueño informó que
 aplicó la `0027` el 26 de octubre. Seguimiento:
 

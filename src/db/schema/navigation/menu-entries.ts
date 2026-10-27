@@ -1,4 +1,4 @@
-import type { ProductSelection } from "@/lib/catalog/curated-products";
+import type { MenuProductSelection } from "@/lib/navigation/menu-display";
 import { boolean, integer, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
 
 /**
@@ -21,7 +21,7 @@ export const storefrontMenuEntries = pgTable("storefront_menu_entries", {
   label: varchar("label", { length: 100 }),
   href: varchar("href", { length: 500 }),
   linksConfigured: boolean("links_configured").notNull().default(false),
-  productSelection: jsonb("product_selection").$type<ProductSelection>(),
+  productSelection: jsonb("product_selection").$type<MenuProductSelection>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

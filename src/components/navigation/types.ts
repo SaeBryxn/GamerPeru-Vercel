@@ -30,6 +30,7 @@ export type MegaMenuShelves = Readonly<Record<string, MegaMenuShelf>>;
 export interface MegaMenuSection {
   title: string;
   items: NavLink[];
+  more?: NavLink;
 }
 
 export interface MegaMenuPreview {

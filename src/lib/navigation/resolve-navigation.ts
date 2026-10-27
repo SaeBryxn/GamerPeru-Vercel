@@ -122,14 +122,21 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
       // the block is dropped rather than shipping placeholder names and a stock photo.
       if (item.series) {
         const brandColumns = categorySlug
-          ? buildBrandColumns(selectedEntries, categorySlug, selection?.mode === "manual")
+          ? buildBrandColumns(
+              selectedEntries,
+              categorySlug,
+              selection?.mode === "manual",
+              selection?.menuDisplay
+            )
           : [];
         if (brandColumns.length > 0) resolved.series = brandColumns;
         else delete resolved.series;
       }
 
       if (item.promos) {
-        const promoCards = categorySlug ? buildPromoCards(selectedEntries, categorySlug) : [];
+        const promoCards = categorySlug
+          ? buildPromoCards(selectedEntries, categorySlug, 2, selection?.menuDisplay)
+          : [];
         if (promoCards.length > 0) resolved.promos = promoCards;
         else delete resolved.promos;
       }
@@ -173,7 +180,10 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
       return resolved;
     });
 
-  const productTypes = NAVIGATION_CONFIG.productTypes.filter((link) => !isHidden(link.href));
+  // The collection tabs use the same editable links as the Productos editor and mobile menu.
+  const productTypes = (primaryNav.find((item) => item.menuLayout === "products")?.sections ?? [])
+    .flatMap((section) => section.items)
+    .filter((link) => !isHidden(link.href));
 
   return {
     ...NAVIGATION_CONFIG,

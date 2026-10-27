@@ -38,6 +38,7 @@ export default async function MenuPage() {
       ...defaultMenuContent(entry.id),
       label: entry.label ?? defaultMenuContent(entry.id).label,
       href: entry.href ?? defaultMenuContent(entry.id).href,
+      display: entry.productSelection?.menuDisplay ?? defaultMenuContent(entry.id).display,
       links:
         entry.linksConfigured && editableLinks
           ? (editableLinks[entry.id] ?? [])
@@ -56,6 +57,7 @@ export default async function MenuPage() {
     id: product.productId,
     imageUrl: product.objectKey ? resolvePublicMediaUrl(product.objectKey) : null,
     brandName: product.brandName,
+    brandSlug: product.brandSlug,
     slug: product.slug,
     name: product.name,
     categorySlug: product.categorySlug,

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SafeString } from "@/lib/validation/safe-string";
 import { NAVIGATION_CONFIG } from "@/components/navigation/navigation-data";
+import { MenuDisplaySchema, defaultMenuDisplay } from "./menu-display";
 
 export const NavigationHrefSchema = z
   .string()
@@ -41,6 +42,7 @@ export const MenuContentSchema = z
         (links) => new Set(links.map((link) => link.id)).size === links.length,
         "No repitas enlaces."
       ),
+    display: MenuDisplaySchema.optional(),
   })
   .strict();
 export type EditableMenuContent = z.infer<typeof MenuContentSchema>;
@@ -55,6 +57,7 @@ export function defaultMenuContent(entryId: string): EditableMenuContent {
     entryId,
     label: entry?.label ?? entryId,
     href: entry?.href ?? "/",
+    ...(entry?.menuLayout === "series" ? { display: defaultMenuDisplay() } : {}),
     links: [
       ...(entry?.sections ?? []).flatMap((section) =>
         section.items.map((item) => ({

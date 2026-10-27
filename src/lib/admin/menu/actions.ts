@@ -3,7 +3,7 @@
 import { writeFeaturedProducts } from "@/lib/catalog/featured-product-storage";
 import { CatalogDomainError } from "@/lib/admin/catalog/types";
 import { MenuContentSchema } from "@/lib/navigation/menu-content-schema";
-import { ProductSelectionSchema } from "@/lib/catalog/curated-products";
+import { MenuProductSelectionSchema } from "@/lib/navigation/menu-display";
 
 import { revalidateStorefrontCatalog } from "@/lib/catalog/catalog-cache";
 import { eq, sql } from "drizzle-orm";
@@ -102,7 +102,7 @@ export async function setMenuProductSelectionAction(
   const denied = await requireCatalogManager();
   if (denied) return denied;
   const descriptor = getMenuEntryDescriptor(entryId);
-  const parsed = ProductSelectionSchema.safeParse(input);
+  const parsed = MenuProductSelectionSchema.safeParse(input);
   if (!descriptor?.categorySlug || !parsed.success)
     return { success: false, error: "Revisa los productos elegidos.", code: "INVALID_INPUT" };
   try {
@@ -122,9 +122,20 @@ export async function setMenuProductSelectionAction(
         parsed.data,
         descriptor.categorySlug
       );
+      const [current] = await tx
+        .select({ selection: storefrontMenuEntries.productSelection })
+        .from(storefrontMenuEntries)
+        .where(eq(storefrontMenuEntries.entryId, entryId));
+      const stored = MenuProductSelectionSchema.safeParse(current?.selection);
       await tx
         .update(storefrontMenuEntries)
-        .set({ productSelection: selection, updatedAt: sql`now()` })
+        .set({
+          productSelection: {
+            ...selection,
+            menuDisplay: stored.success ? stored.data.menuDisplay : undefined,
+          },
+          updatedAt: sql`now()`,
+        })
         .where(eq(storefrontMenuEntries.entryId, entryId));
     });
     revalidateStorefrontMenu();
@@ -160,7 +171,7 @@ export async function updateMenuContentAction(input: unknown): Promise<ActionRes
   try {
     await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('storefront_menu'))`);
-      const { entryId, label, href, links } = parsed.data;
+      const { entryId, label, href, links, display } = parsed.data;
       await tx
         .insert(storefrontMenuEntries)
         .values({
@@ -175,6 +186,22 @@ export async function updateMenuContentAction(input: unknown): Promise<ActionRes
           target: storefrontMenuEntries.entryId,
           set: { label, href, linksConfigured: true, updatedAt: sql`now()` },
         });
+      if (display && descriptor.categorySlug) {
+        const [current] = await tx
+          .select({ selection: storefrontMenuEntries.productSelection })
+          .from(storefrontMenuEntries)
+          .where(eq(storefrontMenuEntries.entryId, entryId));
+        const stored = MenuProductSelectionSchema.safeParse(current?.selection);
+        await tx
+          .update(storefrontMenuEntries)
+          .set({
+            productSelection: {
+              ...(stored.success ? stored.data : { mode: "automatic" as const, productSlugs: [] }),
+              menuDisplay: display,
+            },
+          })
+          .where(eq(storefrontMenuEntries.entryId, entryId));
+      }
       await tx.delete(storefrontMenuLinks).where(eq(storefrontMenuLinks.entryId, entryId));
       if (links.length)
         await tx

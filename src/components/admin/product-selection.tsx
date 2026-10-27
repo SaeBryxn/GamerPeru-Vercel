@@ -24,6 +24,7 @@ export interface ProductOption {
   categorySlug: string;
   imageUrl?: string | null;
   brandName?: string;
+  brandSlug?: string;
 }
 
 function ProductPhoto({ product, small = false }: { product?: ProductOption; small?: boolean }) {

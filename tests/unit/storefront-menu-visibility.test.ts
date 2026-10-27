@@ -130,6 +130,29 @@ describe("Resolved storefront navigation", () => {
       []
     );
   });
+  it("usa las colecciones editadas en Productos para las pestañas del catálogo", async () => {
+    settingsMock.value = settingsMock.value.map((entry) =>
+      entry.id === "productos" ? { ...entry, linksConfigured: true } : entry
+    );
+    contentMock.value = {
+      productos: [
+        {
+          id: "01a1c000-0000-7000-8000-000000000111",
+          label: "Mousepads elegidos",
+          href: "/categorias/mousepads",
+          sectionTitle: "Colecciones",
+          placement: "section",
+          icon: null,
+          isVisible: true,
+        },
+      ],
+    };
+    expect((await resolve()).productTypes).toEqual([
+      { label: "Mousepads elegidos", href: "/categorias/mousepads" },
+    ]);
+    contentMock.value = {};
+    expect((await resolve()).productTypes).toEqual([]);
+  });
 
   it("omits hidden entries from the top-level menu", async () => {
     const config = await resolve();

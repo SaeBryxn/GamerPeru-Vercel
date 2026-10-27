@@ -83,8 +83,14 @@ describe("Brand columns", () => {
     const columns = buildBrandColumns(
       [
         entry({ productId: "a", brandName: "Mchose", name: "K7" }),
-        entry({ productId: "b", brandName: "ATK", name: "A9", slug: "atk-a9" }),
-        entry({ productId: "c", brandName: "ATK", name: "A9 Pro", slug: "atk-a9-pro" }),
+        entry({ productId: "b", brandName: "ATK", brandSlug: "atk", name: "A9", slug: "atk-a9" }),
+        entry({
+          productId: "c",
+          brandName: "ATK",
+          brandSlug: "atk",
+          name: "A9 Pro",
+          slug: "atk-a9-pro",
+        }),
       ],
       "mouses"
     );
@@ -107,7 +113,7 @@ describe("Promo cards and tiles", () => {
       "mouses"
     );
     expect(cards).toHaveLength(1);
-    expect(cards[0]?.title).toBe("Mchose K7 v2 Ultra+ White Gold");
+    expect(cards[0]?.title).toBe("K7 v2 Ultra+ White Gold");
     expect(cards[0]?.image).toContain("products/mchose/k7/abc.webp");
   });
 

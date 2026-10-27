@@ -167,6 +167,16 @@ export function MobileDrawer({
                                     </li>
                                   ))}
                                 </ul>
+                                {group.more && (
+                                  <Link
+                                    href={group.more.href}
+                                    className={styles.viewAll}
+                                    onClick={requestClose}
+                                  >
+                                    {group.more.label}
+                                    <Icon icon={ArrowRight} size="sm" aria-hidden="true" />
+                                  </Link>
+                                )}
                               </div>
                             ))}
                           </div>

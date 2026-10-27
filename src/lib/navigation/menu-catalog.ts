@@ -18,6 +18,7 @@ import { buildProductCardSpecs } from "@/lib/catalog/card-specs";
 import { cardCompareAtSql, cardGallerySql, cardSingleVariantSql } from "@/lib/catalog/card-sql";
 import type { ProductCardImage, ProductDiscoveryItem } from "@/lib/catalog/types";
 import type { FooterColumn, MegaMenuShelves, NavLink } from "@/components/navigation/types";
+import { buildMenuBrandGroups, menuProductLabel, type MenuDisplay } from "./menu-display";
 
 /** Cards that fit one shelf row without the panel scrolling. */
 const SHELF_SIZE = 4;
@@ -217,30 +218,18 @@ export function buildMenuShelves(
 export function buildBrandColumns(
   entries: MenuCatalogEntry[],
   categorySlug: string,
-  preserveOrder = false
-): { title: string; items: NavLink[] }[] {
-  const scoped = entries.filter((entry) => entry.categorySlug === categorySlug);
-  const byBrand = new Map<string, MenuCatalogEntry[]>();
-
-  for (const entry of scoped) {
-    const list = byBrand.get(entry.brandName) ?? [];
-    list.push(entry);
-    byBrand.set(entry.brandName, list);
-  }
-
-  return [...byBrand.entries()]
-    .sort(([a], [b]) => (preserveOrder ? 0 : a.localeCompare(b)))
-    .map(([brandName, items]) => ({
-      title: brandName,
-      items: items.map((item) => ({ label: item.name, href: `/productos/${item.slug}` })),
-    }));
+  preserveOrder = false,
+  display?: MenuDisplay
+) {
+  return buildMenuBrandGroups(entries, categorySlug, preserveOrder, display);
 }
 
 /** Large promo cards: the most recently updated published products that actually have a photo. */
 export function buildPromoCards(
   entries: MenuCatalogEntry[],
   categorySlug: string,
-  limit = 2
+  limit = 2,
+  display?: MenuDisplay
 ): { title: string; href: string; image: string }[] {
   return entries
     .filter((entry) => entry.categorySlug === categorySlug && entry.objectKey)
@@ -248,7 +237,7 @@ export function buildPromoCards(
     .flatMap((entry) => {
       const image = resolvePublicMediaUrl(entry.objectKey);
       if (!image) return [];
-      return [{ title: entry.name, href: `/productos/${entry.slug}`, image }];
+      return [{ title: menuProductLabel(entry, display), href: `/productos/${entry.slug}`, image }];
     });
 }
 

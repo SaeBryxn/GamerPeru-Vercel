@@ -51,4 +51,40 @@ describe("Edición visual de los enlaces del menú", () => {
       }).success
     ).toBe(false);
   });
+  it("guarda límites y nombre corto desde la vista de catálogo", async () => {
+    save.mockClear();
+    save.mockResolvedValue({ success: true });
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    render(
+      <MenuContentEditor
+        value={defaultMenuContent("mouses")}
+        onSaved={onSaved}
+        catalogProducts={[
+          {
+            slug: "modelo-real",
+            name: "Marca Modelo real",
+            brandName: "Marca",
+            categorySlug: "mouses",
+          },
+        ]}
+      />
+    );
+    await user.click(screen.getByRole("button", { name: "Ajustar vista del menú" }));
+    const dialog = screen.getByRole("dialog", { name: "Mouses" });
+    const count = within(dialog).getByLabelText("Modelos por marca");
+    await user.clear(count);
+    await user.type(count, "4");
+    await user.type(within(dialog).getByLabelText("Nombre corto en el menú"), "Modelo compacto");
+    await user.click(within(dialog).getByRole("button", { name: "Guardar menú" }));
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        display: expect.objectContaining({
+          itemsPerBrand: 4,
+          productLabels: { "modelo-real": "Modelo compacto" },
+        }),
+      })
+    );
+    expect(onSaved).toHaveBeenCalledOnce();
+  });
 });

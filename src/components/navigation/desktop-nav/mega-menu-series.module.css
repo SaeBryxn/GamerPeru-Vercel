@@ -1,8 +1,8 @@
 .seriesLayout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-16);
-  align-items: stretch;
+  gap: var(--space-10);
+  align-items: start;
 }
 
 .seriesZone {
@@ -30,6 +30,23 @@
   align-content: start;
 }
 
+.seriesGrid[data-single-brand="true"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.seriesGrid[data-single-brand="true"] .seriesList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-6);
+}
+.seriesGroup {
+  min-width: 0;
+}
+.brandMore {
+  margin-top: var(--space-4);
+  font: 600 13px/1.5 var(--font-body);
+  color: var(--color-text-primary);
+}
+
 .seriesTitle {
   margin: 0 0 var(--space-3);
   font-family: var(--font-heading);
@@ -49,10 +66,15 @@
 }
 
 .seriesLink {
-  display: inline-block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   padding: 2px 0;
   font-family: var(--font-body);
   font-size: 15px;
+  line-height: 1.45;
   color: var(--color-text-secondary);
   text-decoration: none;
   background-image: linear-gradient(currentColor, currentColor);
@@ -70,10 +92,8 @@
   background-size: 100% 1px;
 }
 
-/* Pushed to the bottom so the divider lines up with the promo cards' lower edge. */
 .seriesFooter {
-  margin-top: auto;
-  padding-top: var(--space-10);
+  padding-top: var(--space-6);
 }
 
 .moreRow {
@@ -95,7 +115,6 @@
   gap: var(--space-6);
 }
 
-/* Cards stretch to the row, so they always fill the height the series column sets. */
 .promoItem {
   display: flex;
   min-width: 0;
@@ -106,7 +125,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  min-height: clamp(320px, 28vw, 460px);
+  height: clamp(280px, 22vw, 340px);
   padding: var(--space-4) var(--space-6) var(--space-6);
   border-radius: var(--radius-lg);
   background-color: var(--color-surface-secondary);
@@ -168,7 +187,7 @@
   background-size: 0% 2px;
   transition: background-size var(--motion-duration-moderate) var(--motion-easing-snappy);
   font-family: var(--font-heading);
-  font-size: clamp(22px, 1.9vw, 28px);
+  font-size: clamp(18px, 1.4vw, 22px);
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.1;
@@ -177,6 +196,25 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+}
+
+@media (max-width: 1200px) {
+  .seriesLayout {
+    gap: var(--space-6);
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+  .seriesGrid {
+    gap: var(--space-5);
+  }
+  .seriesLink {
+    font-size: 13px;
+  }
+  .promoGrid {
+    gap: var(--space-3);
+  }
+  .promoCard {
+    padding: var(--space-3);
+  }
 }
 
 .promoCard:hover .promoTitle,

@@ -23,6 +23,7 @@ import {
   setMenuProductSelectionAction,
 } from "@/lib/admin/menu/actions";
 import { MenuContentEditor } from "./menu-content-editor";
+import { buildMenuBrandGroups, menuProductLabel } from "@/lib/navigation/menu-display";
 import styles from "./menu.module.css";
 
 export interface MenuEntryView {
@@ -95,6 +96,17 @@ export function MenuWorkspace({ entries, products = [] }: MenuWorkspaceProps) {
         })
       : categoryProducts;
   const content = active ? contentOf(active) : null;
+  const groups = active?.categorySlug
+    ? buildMenuBrandGroups(
+        selectedProducts.map((product) => ({
+          ...product,
+          brandName: product.brandName ?? product.categorySlug,
+        })),
+        active.categorySlug,
+        selection?.mode === "manual",
+        content?.display
+      )
+    : [];
   return (
     <div className={styles.container}>
       <header className={styles.header}>
@@ -168,33 +180,47 @@ export function MenuWorkspace({ entries, products = [] }: MenuWorkspaceProps) {
               {active.categorySlug ? (
                 <>
                   <div className={styles.sceneLinks}>
-                    <small>PRODUCTOS DESTACADOS</small>
-                    {selectedProducts.slice(0, 6).map((product) => (
-                      <span key={product.slug}>{product.name}</span>
-                    ))}
-                    <span className={styles.seeMore}>Ver más →</span>
+                    <div className={styles.previewBrands} data-single-brand={groups.length === 1}>
+                      {groups.map((group) => (
+                        <div key={group.title}>
+                          <strong>{group.title}</strong>
+                          <ul>
+                            {group.items.map((item) => (
+                              <li key={item.href} title={item.description}>
+                                {item.label}
+                              </li>
+                            ))}
+                          </ul>
+                          <small>{group.more?.label ?? "Ver todos"} →</small>
+                        </div>
+                      ))}
+                    </div>
+                    <span className={styles.seeMore}>Ver todos los productos →</span>
                   </div>
                   <div className={styles.scenePromos}>
-                    {selectedProducts.slice(0, 2).map((product, i) => (
-                      <div key={product.slug}>
-                        <div>
-                          {product.imageUrl ? (
-                            <Image
-                              src={product.imageUrl}
-                              alt={product.name}
-                              width={260}
-                              height={200}
-                            />
-                          ) : (
-                            <ImageIcon size={32} />
-                          )}
+                    {selectedProducts
+                      .filter((product) => product.imageUrl)
+                      .slice(0, 2)
+                      .map((product, i) => (
+                        <div key={product.slug}>
+                          <div>
+                            {product.imageUrl ? (
+                              <Image
+                                src={product.imageUrl}
+                                alt={product.name}
+                                width={260}
+                                height={200}
+                              />
+                            ) : (
+                              <ImageIcon size={32} />
+                            )}
+                          </div>
+                          <span>
+                            <small>{i + 1}</small>
+                            {menuProductLabel(product, content.display)}
+                          </span>
                         </div>
-                        <span>
-                          <small>{i + 1}</small>
-                          {product.name}
-                        </span>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                   {!selectedProducts.length && (
                     <p className={styles.blank}>Aquí aparecerán los productos que elijas.</p>
@@ -260,6 +286,7 @@ export function MenuWorkspace({ entries, products = [] }: MenuWorkspaceProps) {
             <MenuContentEditor
               value={content}
               tileLayout={active.layout === "grid"}
+              catalogProducts={active.categorySlug ? selectedProducts : undefined}
               onSaved={(next) => {
                 setEdits((current) => ({ ...current, [active.id]: next }));
                 router.refresh();
