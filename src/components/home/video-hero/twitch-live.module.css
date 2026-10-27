@@ -8,19 +8,40 @@
   margin: 0;
   padding: 0;
   border: 0;
-  background: transparent;
   color: var(--color-text-dark-primary);
   width: clamp(400px, 30vw, 560px);
   max-width: 100%;
   pointer-events: none;
   max-height: calc(100dvh - var(--header-stack-height) - var(--space-8));
-  overflow: visible;
-}
-.dock[data-visible="false"] {
+  overflow: hidden;
+  opacity: 0;
+  translate: 12px 0;
   visibility: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-dark-canvas);
+  outline: 1px solid var(--color-border-dark-default);
+  box-shadow: var(--elevation-high);
+  transition:
+    opacity var(--motion-duration-normal) var(--motion-easing-snappy),
+    translate var(--motion-duration-normal) var(--motion-easing-snappy),
+    visibility 0s linear var(--motion-duration-normal);
+}
+.dock[data-supported="false"] {
+  display: none;
+}
+.dock[data-visible="true"] {
+  opacity: 1;
+  translate: 0 0;
+  visibility: visible;
+  transition-delay: 0s;
 }
 .dock::backdrop {
   background: color-mix(in srgb, var(--color-surface-dark-canvas) 75%, transparent);
+  opacity: 1;
+  transition: opacity var(--motion-duration-normal) var(--motion-easing-snappy);
+}
+.dock[data-visible="false"]::backdrop {
+  opacity: 0;
 }
 .dock[data-expanded="true"] {
   pointer-events: auto;
@@ -55,12 +76,18 @@
   outline: 2px solid var(--color-brand-red);
   outline-offset: -3px;
 }
-.reopen {
+.tabRail {
   position: fixed;
   top: 50%;
   right: 0;
   z-index: 90;
   transform: translateY(-50%);
+  overflow: clip;
+  padding: 4px 0 4px 4px;
+  pointer-events: none;
+}
+.reopen {
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -74,6 +101,19 @@
   box-shadow: var(--elevation-high);
   font-size: 13px;
   cursor: pointer;
+  opacity: 0;
+  translate: 100% 0;
+  visibility: hidden;
+  transition:
+    opacity var(--motion-duration-normal) var(--motion-easing-snappy),
+    translate var(--motion-duration-normal) var(--motion-easing-snappy),
+    visibility 0s linear var(--motion-duration-normal);
+}
+.reopen[data-visible="true"] {
+  opacity: 1;
+  translate: 0 0;
+  visibility: visible;
+  transition-delay: 0s;
 }
 .reopen svg:nth-of-type(2) {
   color: var(--color-brand-red);
@@ -85,27 +125,11 @@
   outline: 2px solid var(--color-brand-red);
   outline-offset: -3px;
 }
-.dock[data-online="true"] {
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-dark-canvas);
-  outline: 1px solid var(--color-border-dark-default);
-  box-shadow: var(--elevation-high);
-}
 .stage {
-  position: absolute;
-  top: 100%;
+  position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
   min-height: 300px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 180ms ease;
-}
-.stage[data-online="true"] {
-  position: relative;
-  top: auto;
-  opacity: 1;
   pointer-events: auto;
 }
 .player {
@@ -175,7 +199,15 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .stage {
-    transition: none;
+  .dock,
+  .reopen {
+    translate: none;
+    transition:
+      opacity var(--motion-duration-fast) var(--motion-easing-snappy),
+      visibility 0s;
+  }
+  .dock[data-visible="true"],
+  .reopen[data-visible="true"] {
+    transition-delay: 0s;
   }
 }

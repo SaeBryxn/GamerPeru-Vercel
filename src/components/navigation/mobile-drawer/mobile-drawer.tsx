@@ -164,6 +164,24 @@ export function MobileDrawer({
                                       >
                                         {item.label}
                                       </Link>
+                                      {!!item.children?.length && (
+                                        <ul
+                                          className={styles.nestedList}
+                                          aria-label={`Tipos de ${item.label}`}
+                                        >
+                                          {item.children.map((child) => (
+                                            <li key={child.href}>
+                                              <Link
+                                                href={child.href}
+                                                className={styles.subLink}
+                                                onClick={requestClose}
+                                              >
+                                                {child.label}
+                                              </Link>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
                                     </li>
                                   ))}
                                 </ul>

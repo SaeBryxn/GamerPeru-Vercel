@@ -657,3 +657,15 @@
     padding: 0 var(--space-3) var(--space-2);
   }
 }
+.collectionPreview strong {
+  font: 700 clamp(15px, 1.5vw, 22px)/1.4 var(--font-heading);
+  letter-spacing: -0.03em;
+}
+.collectionPreview ul {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.8;
+}

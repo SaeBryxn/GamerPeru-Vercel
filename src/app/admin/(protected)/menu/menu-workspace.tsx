@@ -24,6 +24,7 @@ import {
 } from "@/lib/admin/menu/actions";
 import { MenuContentEditor } from "./menu-content-editor";
 import { buildMenuBrandGroups, menuProductLabel } from "@/lib/navigation/menu-display";
+import { groupCatalogCollections, visibleCollectionLinks } from "@/lib/navigation/menu-collections";
 import styles from "./menu.module.css";
 
 export interface MenuEntryView {
@@ -228,11 +229,21 @@ export function MenuWorkspace({ entries, products = [] }: MenuWorkspaceProps) {
                 </>
               ) : (
                 <div className={styles.sceneLinkGrid}>
-                  {content.links
-                    .filter((link) => link.isVisible)
-                    .map((link) => (
-                      <span key={link.id}>{link.label}</span>
-                    ))}
+                  {(active.layout === "products"
+                    ? groupCatalogCollections(visibleCollectionLinks(content.links))
+                    : content.links.filter((link) => link.isVisible)
+                  ).map((link) => (
+                    <div key={link.href} className={styles.collectionPreview}>
+                      <strong>{link.label}</strong>
+                      {!!("children" in link && link.children?.length) && (
+                        <ul>
+                          {link.children.map((child) => (
+                            <li key={child.href}>{child.label}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
                   {!content.links.some((link) => link.isVisible) && (
                     <p className={styles.blank}>Sin enlaces visibles.</p>
                   )}
@@ -286,6 +297,7 @@ export function MenuWorkspace({ entries, products = [] }: MenuWorkspaceProps) {
             <MenuContentEditor
               value={content}
               tileLayout={active.layout === "grid"}
+              collectionLayout={active.layout === "products"}
               catalogProducts={active.categorySlug ? selectedProducts : undefined}
               onSaved={(next) => {
                 setEdits((current) => ({ ...current, [active.id]: next }));

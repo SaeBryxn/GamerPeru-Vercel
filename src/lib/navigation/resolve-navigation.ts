@@ -11,7 +11,11 @@ import type {
 } from "@/components/navigation/types";
 import { getCatalogNavigationFacts } from "./catalog-facts";
 import { getMenuEntrySettings, type MenuEntrySetting } from "./menu-settings";
-import { buildCatalogCollections } from "./menu-collections";
+import {
+  buildCatalogCollections,
+  groupCatalogCollections,
+  visibleCollectionLinks,
+} from "./menu-collections";
 import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
 import {
   buildBrandColumns,
@@ -176,9 +180,11 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
       }
 
       if (settingById.get(item.id)?.linksConfigured && editableLinks) {
-        const links = (editableLinks[item.id] ?? []).filter(
-          (link) => link.isVisible && !isHidden(link.href)
-        );
+        const links = (
+          item.menuLayout === "products"
+            ? visibleCollectionLinks(editableLinks[item.id] ?? [])
+            : (editableLinks[item.id] ?? [])
+        ).filter((link) => link.isVisible && !isHidden(link.href));
         const groups = new Map<string, NavLink[]>();
         for (const link of links.filter((link) => link.placement === "section")) {
           groups.set(link.sectionTitle, [
@@ -191,6 +197,14 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
           resolved.tiles = links
             .filter((link) => link.placement === "tile")
             .map((link) => ({ title: link.label, href: link.href, icon: link.icon ?? undefined }));
+      }
+      if (item.menuLayout === "products") {
+        const links = groupCatalogCollections(
+          resolved.sections.flatMap((section) => section.items)
+        );
+        resolved.sections = resolved.sections.length
+          ? [{ title: resolved.sections[0]!.title, items: links }]
+          : [];
       }
       return resolved;
     });

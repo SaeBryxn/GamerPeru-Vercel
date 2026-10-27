@@ -10,6 +10,35 @@ const save = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/admin/menu/actions", () => ({ updateMenuContentAction: save }));
 
 describe("Edición visual de los enlaces del menú", () => {
+  it("permite renombrar y ocultar tipos dentro de las colecciones sin cambiar sus destinos", async () => {
+    save.mockClear();
+    save.mockResolvedValue({ success: true });
+    const user = userEvent.setup();
+    const value = defaultMenuContent("productos", [
+      { label: "Accesorios gaming", href: "/categorias/accesorios" },
+      { label: "Keycaps", href: "/categorias/accesorios?tipo_accesorio=keycaps" },
+    ]);
+    render(<MenuContentEditor value={value} collectionLayout onSaved={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Editar colecciones y tipos" }));
+    const dialog = screen.getByRole("dialog", { name: "Productos" });
+    await user.click(within(dialog).getByRole("button", { name: "Editar enlace Keycaps" }));
+    const label = within(dialog).getByLabelText("Texto que verá el cliente");
+    await user.clear(label);
+    await user.type(label, "Teclas para tu teclado");
+    await user.click(within(dialog).getByLabelText("Visible en la tienda"));
+    await user.click(within(dialog).getByRole("button", { name: "Guardar menú" }));
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        links: expect.arrayContaining([
+          expect.objectContaining({
+            label: "Teclas para tu teclado",
+            href: "/categorias/accesorios?tipo_accesorio=keycaps",
+            isVisible: false,
+          }),
+        ]),
+      })
+    );
+  });
   it("edita y ordena enlaces en el panel, guardando una sola vez", async () => {
     save.mockResolvedValue({ success: true });
     const onSaved = vi.fn();

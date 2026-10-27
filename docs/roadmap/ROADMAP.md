@@ -331,6 +331,10 @@ aplicó la `0027` el 26 de octubre. Seguimiento:
   incluso después de hacer scroll. Conserva el mismo reproductor y la elección de ocultarlo si
   el canal se desconecta y vuelve. Ocultar desde la vista ampliada libera el scroll y devuelve
   el foco a la pestaña; al abrirlo se mantiene disponible la acción de ampliar.
+- El acceso a Twitch permanece oculto hasta que el canal emita en vivo. Entrada, salida y
+  pestaña lateral usan transiciones de opacidad y desplazamiento de 250 ms; con movimiento
+  reducido se elimina el desplazamiento y se respeta la duración mínima global. El diálogo ampliado espera a terminar su
+  salida antes de liberar la capa modal, sin reconstruir el reproductor.
 - Productos obtiene sus colecciones de categorías publicadas con variantes activas. Incluye
   Monitores, Audio y Accesorios, y genera los tipos de accesorios únicamente cuando existen
   productos clasificados. El menú y el editor usan la misma lista; una configuración manual del
@@ -339,3 +343,8 @@ aplicó la `0027` el 26 de octubre. Seguimiento:
 - Se configuró el campo editable `accessory_type` de Accesorios en las tablas existentes:
   3 skates, 4 juegos de keycaps, 1 funda, 1 mando, 1 placa y 1 reposamuñecas. No hay grip tapes
   publicados. Se conservaron nombres, precios, imágenes e inventario. No se requiere migración.
+- Los tipos filtrados se agrupan dentro de su categoría en Productos, tanto en escritorio como
+  en móvil: skates, keycaps, fundas, mandos, placas y reposamuñecas quedan dentro de Accesorios.
+  La relación se obtiene del destino del enlace, sin listas de nombres o productos en código.
+  El administrador muestra la misma agrupación y permite editar nombres, destinos, orden y
+  visibilidad; ocultar una categoría oculta sus tipos juntos. Utiliza las tablas existentes.

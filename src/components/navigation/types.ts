@@ -15,6 +15,8 @@ export interface NavLink {
   href: string;
   badge?: string;
   description?: string;
+  /** Filtered collections nested under their category, with editable names and destinations. */
+  children?: NavLink[];
 }
 
 export interface MegaMenuShelf {

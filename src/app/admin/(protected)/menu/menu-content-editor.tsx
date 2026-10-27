@@ -13,17 +13,20 @@ import { updateMenuContentAction } from "@/lib/admin/menu/actions";
 import type { ProductOption } from "@/components/admin/product-selection";
 import { defaultMenuDisplay } from "@/lib/navigation/menu-display";
 import { MenuDisplayFields } from "./menu-display-fields";
+import { groupCatalogCollections } from "@/lib/navigation/menu-collections";
 import styles from "./menu.module.css";
 
 export function MenuContentEditor({
   value,
   onSaved,
   tileLayout = false,
+  collectionLayout = false,
   catalogProducts,
 }: {
   value: EditableMenuContent;
   onSaved: (next: EditableMenuContent) => void;
   tileLayout?: boolean;
+  collectionLayout?: boolean;
   catalogProducts?: readonly ProductOption[];
 }) {
   const id = useId();
@@ -35,6 +38,9 @@ export function MenuContentEditor({
   const [error, setError] = useState("");
   const [showLinks, setShowLinks] = useState(false);
   const current = draft.links.find((link) => link.id === selected);
+  const collectionGroups = collectionLayout ? groupCatalogCollections(draft.links) : [];
+  const parentOf = (href: string) =>
+    collectionGroups.find((group) => group.children?.some((child) => child.href === href));
   const close = () => {
     if (!pending) {
       setOpen(false);
@@ -90,7 +96,12 @@ export function MenuContentEditor({
           setOpen(true);
         }}
       >
-        <Link2 size={15} /> {catalogProducts ? "Ajustar vista del menú" : "Editar nombre y enlaces"}
+        <Link2 size={15} />{" "}
+        {collectionLayout
+          ? "Editar colecciones y tipos"
+          : catalogProducts
+            ? "Ajustar vista del menú"
+            : "Editar nombre y enlaces"}
       </button>
       <AnimatePresence>
         {open && (
@@ -169,7 +180,9 @@ export function MenuContentEditor({
                     <span>{draft.links.filter((link) => link.isVisible).length} visibles</span>
                   </div>
                   <p className={styles.hint}>
-                    Selecciona un enlace para editarlo. Las flechas cambian dónde aparece.
+                    {collectionLayout
+                      ? "Edita nombres, destinos, orden y visibilidad. Los tipos filtrados se muestran dentro de su categoría, igual que en la tienda."
+                      : "Selecciona un enlace para editarlo. Las flechas cambian dónde aparece."}
                   </p>
                   <ol className={styles.linkRows}>
                     {draft.links.map((link, index) => (
@@ -181,12 +194,16 @@ export function MenuContentEditor({
                         <button
                           type="button"
                           className={styles.selectLink}
+                          aria-label={`Editar enlace ${link.label}`}
                           disabled={pending}
                           onClick={() => setSelected(link.id)}
                         >
                           <span className={styles.ordinal}>{index + 1}</span>
                           <span>
                             <strong>{link.label || "Sin título"}</strong>
+                            {parentOf(link.href) && (
+                              <small>Dentro de {parentOf(link.href)?.label}</small>
+                            )}
                             <small>{link.href || "Sin destino"}</small>
                           </span>
                           {!link.isVisible && <EyeOff size={15} />}
@@ -253,6 +270,11 @@ export function MenuContentEditor({
                   {current ? (
                     <fieldset disabled={pending}>
                       <legend>Editar este enlace</legend>
+                      {parentOf(current.href) && (
+                        <p className={styles.hint}>
+                          Se muestra dentro de {parentOf(current.href)?.label}.
+                        </p>
+                      )}
                       <label>
                         Texto que verá el cliente
                         <input
@@ -271,7 +293,7 @@ export function MenuContentEditor({
                         />
                       </label>
                       <p className={styles.hint}>Una dirección de la tienda o un enlace HTTPS.</p>
-                      {current.placement === "section" && (
+                      {current.placement === "section" && !collectionLayout && (
                         <label>
                           Grupo del enlace
                           <input

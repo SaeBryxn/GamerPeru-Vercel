@@ -49,8 +49,11 @@ export function MegaMenuProducts({
       0
     )
   );
+  const [filterHref, setFilterHref] = useState<string | null>(null);
 
-  const activeCollection = collections[activeIndex];
+  const parentCollection = collections[activeIndex];
+  const activeCollection =
+    parentCollection?.children?.find((link) => link.href === filterHref) ?? parentCollection;
   const shelf = activeCollection ? shelves?.[activeCollection.href] : undefined;
   const tabId = (index: number) => `${baseId}-tab-${index}`;
   const tabPanelId = `${baseId}-tabpanel`;
@@ -76,6 +79,7 @@ export function MegaMenuProducts({
     if (nextIndex === null) return;
     event.preventDefault();
     setActiveIndex(nextIndex);
+    setFilterHref(null);
     tabRefs.current[nextIndex]?.focus();
   }
 
@@ -117,7 +121,10 @@ export function MegaMenuProducts({
                 className={[styles.collectionsLink, isActive ? styles.collectionsLinkCurrent : ""]
                   .filter(Boolean)
                   .join(" ")}
-                onClick={() => setActiveIndex(index)}
+                onClick={() => {
+                  setActiveIndex(index);
+                  setFilterHref(null);
+                }}
                 onKeyDown={handleTabKeyDown}
               >
                 <SweepUnderline trigger="link">{collection.label}</SweepUnderline>
@@ -145,6 +152,24 @@ export function MegaMenuProducts({
         aria-labelledby={tabId(activeIndex)}
         className={styles.megaPreviews}
       >
+        {!!parentCollection?.children?.length && (
+          <div
+            className={styles.collectionFilters}
+            role="group"
+            aria-label={`Tipos de ${parentCollection.label}`}
+          >
+            {[parentCollection, ...parentCollection.children].map((link, index) => (
+              <button
+                key={link.href}
+                type="button"
+                aria-pressed={activeCollection?.href === link.href}
+                onClick={() => setFilterHref(index === 0 ? null : link.href)}
+              >
+                {index === 0 ? "Todos" : link.label}
+              </button>
+            ))}
+          </div>
+        )}
         {/*
           The wrapper remounts on every open so the entrance replays without the
           previous shelf fading out first; within an open panel, mode="wait"

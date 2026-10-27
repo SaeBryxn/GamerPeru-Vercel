@@ -19,7 +19,7 @@ import { cardCompareAtSql, cardGallerySql, cardSingleVariantSql } from "@/lib/ca
 import type { ProductCardImage, ProductDiscoveryItem } from "@/lib/catalog/types";
 import type { FooterColumn, MegaMenuShelves, NavLink } from "@/components/navigation/types";
 import { buildMenuBrandGroups, menuProductLabel, type MenuDisplay } from "./menu-display";
-import { matchCollectionEntries } from "./menu-collections";
+import { flattenCatalogCollections, matchCollectionEntries } from "./menu-collections";
 import { validateSpecificationSchema } from "@/lib/discovery-filters/schema-validation";
 import type { ValidatedSpecificationSchema } from "@/lib/discovery-filters/types";
 
@@ -215,7 +215,7 @@ export function buildMenuShelves(
 ): MegaMenuShelves {
   const shelves: Record<string, { totalCount: number; products: ProductDiscoveryItem[] }> = {};
 
-  for (const collection of collections) {
+  for (const collection of flattenCatalogCollections(collections)) {
     const items = matchCollectionEntries(entries, collection.href);
     if (items.length === 0) continue;
 

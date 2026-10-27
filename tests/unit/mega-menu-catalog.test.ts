@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildCatalogCollections, matchCollectionEntries } from "@/lib/navigation/menu-collections";
+import {
+  buildCatalogCollections,
+  groupCatalogCollections,
+  matchCollectionEntries,
+  visibleCollectionLinks,
+} from "@/lib/navigation/menu-collections";
 
 vi.mock("@/db", () => ({ db: {} }));
 
@@ -119,6 +124,48 @@ describe("Mega-menu shelves", () => {
 });
 
 describe("Real catalog collections", () => {
+  it("hiding a category hides its types without promoting them to separate categories", () => {
+    const links = [
+      { label: "Accesorios", href: "/categorias/accesorios", isVisible: false },
+      { label: "Keycaps", href: "/categorias/accesorios?tipo=keycaps", isVisible: true },
+      { label: "Mouse", href: "/categorias/mouses", isVisible: true },
+    ];
+    expect(visibleCollectionLinks(links)).toEqual([links[2]]);
+  });
+  it("nests editable filtered collections under their category, preserving editorial order and labels", () => {
+    const links = [
+      { label: "Teclas elegidas", href: "/categorias/complementos?tipo=teclas" },
+      { label: "Pantallas", href: "/categorias/pantallas" },
+      { label: "Complementos del setup", href: "/categorias/complementos" },
+      { label: "Fundas elegidas", href: "/categorias/complementos?tipo=funda" },
+    ];
+    expect(groupCatalogCollections(links)).toEqual([
+      links[1],
+      { ...links[2], children: [links[0], links[3]] },
+    ]);
+    expect(links[2]).not.toHaveProperty("children");
+    expect(groupCatalogCollections([])).toEqual([]);
+  });
+  it("builds independently filtered shelves for nested collections", () => {
+    const shelves = buildMenuShelves(
+      [
+        entry({
+          categorySlug: "accesorios",
+          specificationSchema: accessorySchema,
+          specValues: { accessory_type: "skates" },
+        }),
+        entry({
+          productId: "p2",
+          categorySlug: "accesorios",
+          specificationSchema: accessorySchema,
+          specValues: { accessory_type: "keycaps" },
+        }),
+      ],
+      [{ label: "Accesorios", href: "/categorias/accesorios", children: [COLLECTIONS[2]!] }]
+    );
+    expect(shelves["/categorias/accesorios"]?.totalCount).toBe(2);
+    expect(shelves[COLLECTIONS[2]!.href]?.totalCount).toBe(1);
+  });
   it("adds newly published categories and only represented accessory types", () => {
     const collections = buildCatalogCollections([
       entry({ categorySlug: "monitores", categoryName: "Pantallas", categoryDisplayOrder: 3 }),

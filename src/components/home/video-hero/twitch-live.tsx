@@ -55,13 +55,11 @@ export function TwitchLive({
   linkLabel,
   onLiveChange,
   autoplay = true,
-  heroVisible = true,
 }: {
   channel: string;
   linkLabel: string;
   onLiveChange: (live: boolean) => void;
   autoplay?: boolean;
-  heroVisible?: boolean;
 }) {
   const id = `twitch-${useId().replace(/[^a-z0-9_-]/gi, "")}`;
   const container = useRef<HTMLDivElement>(null);
@@ -81,11 +79,11 @@ export function TwitchLive({
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (expanded) {
+    if (expanded && !wasExpanded.current) {
       dialog.removeAttribute("open");
       if (dialog.showModal) dialog.showModal();
       else dialog.setAttribute("open", "");
-    } else {
+    } else if (!expanded) {
       if (wasExpanded.current) dialog.close?.();
       // A nonmodal open attribute avoids stealing focus when the home mounts.
       dialog.setAttribute("open", "");
@@ -99,15 +97,24 @@ export function TwitchLive({
       (hidden ? reopenButton.current : expandButton.current)?.focus();
     wasHidden.current = hidden;
     try {
-      if (hidden) readyPlayer.current?.pause();
+      if (hidden || !online) readyPlayer.current?.pause();
       else if (online && autoplay) readyPlayer.current?.play();
     } catch {
       /* The player can still be connecting; its READY event applies the current state. */
     }
   }, [hidden, online, autoplay]);
   useEffect(() => {
-    if (!online) setExpanded(false);
-  }, [online]);
+    if ((online && !hidden) || !expanded) return;
+    // Keep the modal in the top layer until its exit finishes. Interrupted exits are ignored.
+    const animations = dialogRef.current?.getAnimations?.() ?? [];
+    let cancelled = false;
+    void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+      if (!cancelled) setExpanded(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [online, hidden, expanded]);
   useEffect(() => {
     if (!expanded) return;
     const root = document.documentElement;
@@ -199,7 +206,7 @@ export function TwitchLive({
     };
   }, [channel, id, onLiveChange, autoplay, wide, portalTarget]);
   const tucked = online && hidden;
-  const visible = (online || heroVisible) && !tucked;
+  const visible = online && !hidden;
   if (!portalTarget) return null;
   return createPortal(
     <>
@@ -210,6 +217,7 @@ export function TwitchLive({
         data-online={online}
         data-expanded={expanded}
         data-visible={visible}
+        data-supported={wide}
         data-testid="twitch-live-dock"
         aria-label={`Directo de ${channel}`}
         aria-hidden={!visible}
@@ -264,7 +272,6 @@ export function TwitchLive({
                 title="Ocultar directo"
                 onClick={() => {
                   setHidden(true);
-                  setExpanded(false);
                 }}
               >
                 <ChevronRight size={20} aria-hidden="true" />
@@ -282,11 +289,14 @@ export function TwitchLive({
           <div ref={container} id={id} className={styles.player} />
         </div>
       </dialog>
-      {tucked && (
+      <div className={styles.tabRail}>
         <button
           ref={reopenButton}
           type="button"
           className={styles.reopen}
+          data-visible={tucked}
+          aria-hidden={!tucked}
+          inert={!tucked}
           aria-label="Mostrar directo"
           aria-controls={`${id}-window`}
           aria-expanded={false}
@@ -296,7 +306,7 @@ export function TwitchLive({
           <Radio size={16} aria-hidden="true" />
           <span>Ver directo</span>
         </button>
-      )}
+      </div>
     </>,
     portalTarget
   );

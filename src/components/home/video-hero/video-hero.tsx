@@ -179,7 +179,6 @@ export function VideoHero({
             linkLabel={twitch.linkLabel}
             onLiveChange={setTwitchOnline}
             autoplay={autoplayAllowed}
-            heroVisible={!isCovered}
           />
         )}
 

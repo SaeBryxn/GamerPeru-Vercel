@@ -2,6 +2,51 @@ import type { NavLink } from "@/components/navigation/types";
 import type { MenuCatalogEntry } from "./menu-catalog";
 import { parseDiscoveryUrl } from "@/lib/discovery-filters/url";
 
+/** Group filtered destinations under their category without depending on names or type values. */
+export function groupCatalogCollections(links: readonly NavLink[]): NavLink[] {
+  const categoryPath = (href: string) => {
+    if (!/^\/categorias\/[a-z0-9-]+\/?(?:\?|$)/.test(href)) return null;
+    const url = new URL(href, "https://store.invalid");
+    return { path: url.pathname.replace(/\/$/, ""), filtered: !!url.search };
+  };
+  const parents = new Map<string, NavLink>();
+  for (const link of links) {
+    const target = categoryPath(link.href);
+    if (target && !target.filtered)
+      parents.set(target.path, {
+        ...link,
+        ...(link.children ? { children: [...link.children] } : {}),
+      });
+  }
+  const result: NavLink[] = [];
+  for (const link of links) {
+    const target = categoryPath(link.href);
+    const parent = target ? parents.get(target.path) : undefined;
+    if (target?.filtered && parent) (parent.children ??= []).push({ ...link });
+    else result.push(parent ?? { ...link });
+  }
+  return result;
+}
+
+/** Hiding a category also hides its filtered types; hiding one type leaves the others alone. */
+export function visibleCollectionLinks<T extends NavLink & { isVisible?: boolean }>(
+  links: readonly T[]
+): T[] {
+  const hiddenCategories = new Set(
+    links
+      .filter((link) => link.isVisible === false && !link.href.includes("?"))
+      .map((link) => link.href.replace(/\/$/, ""))
+  );
+  return links.filter(
+    (link) =>
+      link.isVisible !== false && !hiddenCategories.has(link.href.split("?")[0]!.replace(/\/$/, ""))
+  );
+}
+
+export function flattenCatalogCollections(links: readonly NavLink[]): NavLink[] {
+  return links.flatMap((link) => [link, ...flattenCatalogCollections(link.children ?? [])]);
+}
+
 /** Categories and represented accessory types; names and destinations come from the catalog. */
 export function buildCatalogCollections(entries: MenuCatalogEntry[]): NavLink[] {
   const categories = new Map<string, MenuCatalogEntry[]>();
