@@ -11,6 +11,8 @@ import type {
 } from "@/components/navigation/types";
 import { getCatalogNavigationFacts } from "./catalog-facts";
 import { getMenuEntrySettings, type MenuEntrySetting } from "./menu-settings";
+import { buildCatalogCollections } from "./menu-collections";
+import { resolveCatalogReaderMode } from "@/lib/catalog/resolve-reader-mode";
 import {
   buildBrandColumns,
   buildFooterProductColumns,
@@ -158,6 +160,19 @@ export async function getStorefrontNavigation(): Promise<NavigationConfig> {
         const liveBrands = resolveBrands(categorySlug);
         if (liveBrands) resolved.brands = liveBrands;
         else delete resolved.brands;
+      }
+
+      if (
+        item.menuLayout === "products" &&
+        !settingById.get(item.id)?.linksConfigured &&
+        resolveCatalogReaderMode() !== "e2e-fixture"
+      ) {
+        resolved.sections = [
+          {
+            title: "Colecciones",
+            items: buildCatalogCollections(catalogEntries).filter((link) => !isHidden(link.href)),
+          },
+        ];
       }
 
       if (settingById.get(item.id)?.linksConfigured && editableLinks) {

@@ -97,6 +97,7 @@ export function MegaMenuProducts({
           aria-orientation="vertical"
           aria-labelledby={`${baseId}-heading`}
           className={styles.collectionsList}
+          data-compact={collections.length > 8}
         >
           {collections.map((collection, index) => {
             const isActive = index === activeIndex;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { TwitchLive } from "@/components/home/video-hero/twitch-live";
 import { VideoHero } from "@/components/home/video-hero/video-hero";
@@ -39,7 +39,11 @@ it("cambia entre directo y respaldo con eventos reales del reproductor, sin chat
   const events = new Map<string, () => void>();
   const play = vi.fn(),
     pause = vi.fn();
+  const created = vi.fn();
   class FakePlayer {
+    constructor() {
+      created();
+    }
     static ONLINE = "online";
     static OFFLINE = "offline";
     static READY = "ready";
@@ -63,8 +67,23 @@ it("cambia entre directo y respaldo con eventos reales del reproductor, sin chat
   });
   expect(screen.getByTestId("twitch-live-stage").getAttribute("data-online")).toBe("true");
   expect(changed).toHaveBeenLastCalledWith(true);
+  view.rerender(
+    <TwitchLive
+      channel="maxkillgg"
+      linkLabel="Ver Twitch"
+      onLiveChange={changed}
+      heroVisible={false}
+    />
+  );
+  expect(screen.getByTestId("twitch-live-dock").getAttribute("data-visible")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Ampliar directo" }));
+  expect(screen.getByTestId("twitch-live-dock").getAttribute("data-expanded")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Reducir directo" }));
+  expect(screen.getByTestId("twitch-live-dock").getAttribute("data-expanded")).toBe("false");
+  expect(created).toHaveBeenCalledOnce();
   act(() => events.get("offline")?.());
   expect(changed).toHaveBeenLastCalledWith(false);
+  expect(screen.getByTestId("twitch-live-dock").getAttribute("data-visible")).toBe("false");
   expect(screen.getByTestId("twitch-channel-link").getAttribute("href")).toBe(
     "https://www.twitch.tv/maxkillgg"
   );

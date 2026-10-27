@@ -19,6 +19,9 @@ import { cardCompareAtSql, cardGallerySql, cardSingleVariantSql } from "@/lib/ca
 import type { ProductCardImage, ProductDiscoveryItem } from "@/lib/catalog/types";
 import type { FooterColumn, MegaMenuShelves, NavLink } from "@/components/navigation/types";
 import { buildMenuBrandGroups, menuProductLabel, type MenuDisplay } from "./menu-display";
+import { matchCollectionEntries } from "./menu-collections";
+import { validateSpecificationSchema } from "@/lib/discovery-filters/schema-validation";
+import type { ValidatedSpecificationSchema } from "@/lib/discovery-filters/types";
 
 /** Cards that fit one shelf row without the panel scrolling. */
 const SHELF_SIZE = 4;
@@ -31,6 +34,10 @@ export interface MenuCatalogEntry {
   priceCents: number;
   categoryName: string;
   categorySlug: string;
+  categoryDisplayOrder?: number;
+  specificationSchema?: ValidatedSpecificationSchema | null;
+  specValues?: Record<string, unknown>;
+  variantPrices?: number[];
   brandName: string;
   brandSlug: string;
   objectKey: string | null;
@@ -82,6 +89,14 @@ async function queryMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
       singleVariantId: cardSingleVariantSql,
       categoryName: categories.name,
       categorySlug: categories.slug,
+      categoryId: categories.id,
+      categoryDisplayOrder: categories.displayOrder,
+      specSchemaId: categorySpecificationSchemas.id,
+      specSchemaVersion: categorySpecificationSchemas.schemaVersion,
+      productSpecSchemaId: productSpecifications.schemaId,
+      variantPrices: sql<
+        number[]
+      >`(select array_agg(pv.price_cents) from product_variants pv where pv.product_id=${products.id} and pv.status='ACTIVE')`,
       specValues: productSpecifications.specValues,
       specFieldDefinitions: categorySpecificationSchemas.fieldDefinitions,
       brandName: brands.name,
@@ -112,7 +127,7 @@ async function queryMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
     .leftJoin(
       categorySpecificationSchemas,
       and(
-        eq(categorySpecificationSchemas.categoryId, products.categoryId),
+        eq(categorySpecificationSchemas.id, categories.currentSpecSchemaId),
         eq(categorySpecificationSchemas.isActive, true)
       )
     )
@@ -129,6 +144,18 @@ async function queryMenuCatalogEntries(): Promise<MenuCatalogEntry[]> {
       priceCents: Number(row.priceCents),
       categoryName: row.categoryName,
       categorySlug: row.categorySlug,
+      categoryDisplayOrder: row.categoryDisplayOrder,
+      variantPrices: row.variantPrices,
+      specValues: row.productSpecSchemaId === row.specSchemaId ? (row.specValues ?? {}) : {},
+      specificationSchema:
+        row.specSchemaId && row.specSchemaVersion !== null
+          ? validateSpecificationSchema({
+              id: row.specSchemaId,
+              categoryId: row.categoryId,
+              schemaVersion: row.specSchemaVersion,
+              fieldDefinitions: row.specFieldDefinitions,
+            })
+          : null,
       brandName: row.brandName,
       brandSlug: row.brandSlug,
       objectKey: row.objectKey,
@@ -180,29 +207,16 @@ function toDiscoveryItem(entry: MenuCatalogEntry): ProductDiscoveryItem {
 /**
  * Builds one shelf per collection href the menu offers.
  *
- * Collections are matched by their category path, so a collection pointing at a filtered URL
- * (for example accessories narrowed to skates) still shows that category's products rather than
- * silently rendering nothing.
+ * Filtered collections use their technical schema, so Skates cannot show keycaps or keyboards.
  */
 export function buildMenuShelves(
   entries: MenuCatalogEntry[],
   collections: NavLink[]
 ): MegaMenuShelves {
-  const byCategory = new Map<string, MenuCatalogEntry[]>();
-  for (const entry of entries) {
-    const list = byCategory.get(entry.categorySlug) ?? [];
-    list.push(entry);
-    byCategory.set(entry.categorySlug, list);
-  }
-
   const shelves: Record<string, { totalCount: number; products: ProductDiscoveryItem[] }> = {};
 
   for (const collection of collections) {
-    const match = /^\/categorias\/([a-z0-9-]+)/.exec(collection.href);
-    const categorySlug = match?.[1];
-    if (!categorySlug) continue;
-
-    const items = byCategory.get(categorySlug) ?? [];
+    const items = matchCollectionEntries(entries, collection.href);
     if (items.length === 0) continue;
 
     shelves[collection.href] = {

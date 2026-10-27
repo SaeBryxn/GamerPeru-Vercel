@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SafeString } from "@/lib/validation/safe-string";
 import { NAVIGATION_CONFIG } from "@/components/navigation/navigation-data";
 import { MenuDisplaySchema, defaultMenuDisplay } from "./menu-display";
+import type { NavLink } from "@/components/navigation/types";
 
 export const NavigationHrefSchema = z
   .string()
@@ -48,7 +49,7 @@ export const MenuContentSchema = z
 export type EditableMenuContent = z.infer<typeof MenuContentSchema>;
 
 /** Stable default IDs allow opening an editor repeatedly before its first save. */
-export function defaultMenuContent(entryId: string): EditableMenuContent {
+export function defaultMenuContent(entryId: string, collections?: NavLink[]): EditableMenuContent {
   const entry = NAVIGATION_CONFIG.primaryNav.find((entry) => entry.id === entryId);
   let index = 0;
   const id = () =>
@@ -59,7 +60,10 @@ export function defaultMenuContent(entryId: string): EditableMenuContent {
     href: entry?.href ?? "/",
     ...(entry?.menuLayout === "series" ? { display: defaultMenuDisplay() } : {}),
     links: [
-      ...(entry?.sections ?? []).flatMap((section) =>
+      ...(entry?.menuLayout === "products" && collections
+        ? [{ title: "Colecciones", items: collections }]
+        : (entry?.sections ?? [])
+      ).flatMap((section) =>
         section.items.map((item) => ({
           id: id(),
           label: item.label,

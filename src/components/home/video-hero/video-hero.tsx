@@ -173,12 +173,13 @@ export function VideoHero({
           style={isLite ? undefined : { opacity: dim }}
           aria-hidden="true"
         />
-        {twitch?.enabled && twitch.channel && !isCovered && (
+        {twitch?.enabled && twitch.channel && (
           <TwitchLive
             channel={twitch.channel}
             linkLabel={twitch.linkLabel}
             onLiveChange={setTwitchOnline}
             autoplay={autoplayAllowed}
+            heroVisible={!isCovered}
           />
         )}
 

@@ -9,6 +9,7 @@ import { AdminForbidden } from "@/components/admin/admin-forbidden";
 import { getMenuEntrySettings } from "@/lib/navigation/menu-settings";
 import { getCategoryCatalogFacts } from "@/lib/navigation/catalog-facts";
 import { getMenuCatalogEntries } from "@/lib/navigation/menu-catalog";
+import { buildCatalogCollections } from "@/lib/navigation/menu-collections";
 import { MenuWorkspace, type MenuEntryView } from "./menu-workspace";
 
 export const metadata: Metadata = {
@@ -29,20 +30,22 @@ export default async function MenuPage() {
   const [settings, facts] = await Promise.all([getMenuEntrySettings(), getCategoryCatalogFacts()]);
 
   const editableLinks = await getEditableMenuLinks();
+  const catalogEntries = await getMenuCatalogEntries();
+  const collections = buildCatalogCollections(catalogEntries);
   const entries: MenuEntryView[] = settings.map((entry) => ({
     id: entry.id,
     productSelection: entry.productSelection,
     label: entry.label ?? entry.adminLabel,
     layout: NAVIGATION_CONFIG.primaryNav.find((item) => item.id === entry.id)?.menuLayout,
     content: {
-      ...defaultMenuContent(entry.id),
+      ...defaultMenuContent(entry.id, collections),
       label: entry.label ?? defaultMenuContent(entry.id).label,
       href: entry.href ?? defaultMenuContent(entry.id).href,
       display: entry.productSelection?.menuDisplay ?? defaultMenuContent(entry.id).display,
       links:
         entry.linksConfigured && editableLinks
           ? (editableLinks[entry.id] ?? [])
-          : defaultMenuContent(entry.id).links,
+          : defaultMenuContent(entry.id, collections).links,
     },
     description: entry.description,
     isVisible: entry.isVisible,
@@ -53,7 +56,7 @@ export default async function MenuPage() {
     missingDestinations: entry.missingDestinations ?? [],
   }));
 
-  const products = (await getMenuCatalogEntries()).map((product) => ({
+  const products = catalogEntries.map((product) => ({
     id: product.productId,
     imageUrl: product.objectKey ? resolvePublicMediaUrl(product.objectKey) : null,
     brandName: product.brandName,

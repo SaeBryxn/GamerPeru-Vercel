@@ -320,3 +320,18 @@ aplicó la `0027` el 26 de octubre. Seguimiento:
   canónicas del administrador y verifica después la publicación, el stock anterior y las
   asociaciones de todas las imágenes. Distingue galería, fotos por variante e historia; comprueba
   los objetos subidos y contabiliza únicamente medios nuevos en el presupuesto existente.
+
+### Directo persistente y colecciones reales (27 de octubre de 2026)
+
+- El directo se monta fuera de la portada, en una ventana fija que sigue visible al hacer scroll.
+  Ampliar abre el mismo reproductor en un diálogo modal nativo; reducir o pulsar Escape
+  devuelve la ventana a su estado normal sin crear otra instancia de Twitch. El enlace
+  sin directo se oculta al dejar atrás la portada. Se mantiene el límite mínimo de ancho de Twitch.
+- Productos obtiene sus colecciones de categorías publicadas con variantes activas. Incluye
+  Monitores, Audio y Accesorios, y genera los tipos de accesorios únicamente cuando existen
+  productos clasificados. El menú y el editor usan la misma lista; una configuración manual del
+  dueño conserva su orden y enlaces. Los filtros de las vitrinas usan el mismo esquema que las
+  páginas de categoría, en lugar de ignorar los parámetros y mezclar todos los accesorios.
+- Se configuró el campo editable `accessory_type` de Accesorios en las tablas existentes:
+  3 skates, 4 juegos de keycaps, 1 funda, 1 mando, 1 placa y 1 reposamuñecas. No hay grip tapes
+  publicados. Se conservaron nombres, precios, imágenes e inventario. No se requiere migración.

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ExternalLink, Radio } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ExternalLink, Maximize2, Minimize2, Radio } from "lucide-react";
 import styles from "./twitch-live.module.css";
 
 interface Player {
@@ -54,16 +55,51 @@ export function TwitchLive({
   linkLabel,
   onLiveChange,
   autoplay = true,
+  heroVisible = true,
 }: {
   channel: string;
   linkLabel: string;
   onLiveChange: (live: boolean) => void;
   autoplay?: boolean;
+  heroVisible?: boolean;
 }) {
   const id = `twitch-${useId().replace(/[^a-z0-9_-]/gi, "")}`;
   const container = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const expandButton = useRef<HTMLButtonElement>(null);
+  const wasExpanded = useRef(false);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [online, setOnline] = useState(false);
   const [wide, setWide] = useState(false);
+  useEffect(() => setPortalTarget(document.body), []);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (expanded) {
+      dialog.removeAttribute("open");
+      if (dialog.showModal) dialog.showModal();
+      else dialog.setAttribute("open", "");
+    } else {
+      if (wasExpanded.current) dialog.close?.();
+      // A nonmodal open attribute avoids stealing focus when the home mounts.
+      dialog.setAttribute("open", "");
+      if (wasExpanded.current) expandButton.current?.focus();
+    }
+    wasExpanded.current = expanded;
+  }, [expanded, portalTarget]);
+  useEffect(() => {
+    if (!online) setExpanded(false);
+  }, [online]);
+  useEffect(() => {
+    if (!expanded) return;
+    const root = document.documentElement;
+    const previous = root.style.overflow;
+    root.style.overflow = "hidden";
+    return () => {
+      root.style.overflow = previous;
+    };
+  }, [expanded]);
   useEffect(() => {
     // Leave room for a browser scrollbar while keeping Twitch's 400px player minimum.
     const query = window.matchMedia("(min-width: 416px)");
@@ -142,27 +178,64 @@ export function TwitchLive({
       target.replaceChildren();
       onLiveChange(false);
     };
-  }, [channel, id, onLiveChange, autoplay, wide]);
-  return (
-    <div className={styles.dock} data-online={online} data-testid="twitch-live-dock">
-      <a
-        href={`https://www.twitch.tv/${channel}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={styles.channel}
-        data-testid="twitch-channel-link"
-      >
-        {online && (
-          <span className={styles.live}>
-            <Radio size={14} aria-hidden="true" />
-            EN VIVO
+  }, [channel, id, onLiveChange, autoplay, wide, portalTarget]);
+  const visible = online || heroVisible;
+  if (!portalTarget) return null;
+  return createPortal(
+    <dialog
+      ref={dialogRef}
+      className={styles.dock}
+      data-online={online}
+      data-expanded={expanded}
+      data-visible={visible}
+      data-testid="twitch-live-dock"
+      aria-label={`Directo de ${channel}`}
+      aria-hidden={!visible}
+      inert={!visible}
+      onCancel={(event) => {
+        event.preventDefault();
+        setExpanded(false);
+      }}
+      onClick={(event) => {
+        if (expanded && event.target === event.currentTarget) setExpanded(false);
+      }}
+    >
+      <div className={styles.toolbar}>
+        <a
+          href={`https://www.twitch.tv/${channel}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.channel}
+          data-testid="twitch-channel-link"
+        >
+          {online && (
+            <span className={styles.live}>
+              <Radio size={14} aria-hidden="true" />
+              EN VIVO
+            </span>
+          )}
+          <span>
+            {linkLabel} · {channel}
           </span>
+          <ExternalLink size={15} aria-hidden="true" />
+        </a>
+        {online && (
+          <button
+            ref={expandButton}
+            type="button"
+            className={styles.expand}
+            aria-label={expanded ? "Reducir directo" : "Ampliar directo"}
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? (
+              <Minimize2 size={18} aria-hidden="true" />
+            ) : (
+              <Maximize2 size={18} aria-hidden="true" />
+            )}
+          </button>
         )}
-        <span>
-          {linkLabel} · {channel}
-        </span>
-        <ExternalLink size={15} aria-hidden="true" />
-      </a>
+      </div>
       <div
         className={styles.stage}
         data-online={online}
@@ -172,6 +245,7 @@ export function TwitchLive({
       >
         <div ref={container} id={id} className={styles.player} />
       </div>
-    </div>
+    </dialog>,
+    portalTarget
   );
 }

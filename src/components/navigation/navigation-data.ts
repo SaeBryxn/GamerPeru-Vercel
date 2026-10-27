@@ -15,8 +15,6 @@ const PRODUCT_TYPES: NavLink[] = [
   { label: "Mouses gaming", href: "/categorias/mouses" },
   { label: "Mousepads", href: "/categorias/mousepads" },
   { label: "Teclados", href: "/categorias/teclados" },
-  { label: "Skates", href: "/categorias/accesorios?tipo_accesorio=skates" },
-  { label: "Grip tapes", href: "/categorias/accesorios?tipo_accesorio=grip-tapes" },
 ];
 
 /**

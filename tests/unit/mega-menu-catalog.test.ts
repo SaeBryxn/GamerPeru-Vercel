@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { buildCatalogCollections, matchCollectionEntries } from "@/lib/navigation/menu-collections";
 
 vi.mock("@/db", () => ({ db: {} }));
 
@@ -32,6 +33,27 @@ const COLLECTIONS = [
   { label: "MousePad", href: "/categorias/mousepads" },
   { label: "Skates", href: "/categorias/accesorios?tipo_accesorio=skates" },
 ];
+const accessorySchema = {
+  id: "schema-accessories",
+  categoryId: "accessories",
+  schemaVersion: 1,
+  fieldDefinitions: [
+    {
+      key: "accessory_type",
+      label: "Tipo",
+      dataType: "enum" as const,
+      filterable: true,
+      filterKind: "ENUM_MULTI" as const,
+      publicParam: "tipo_accesorio",
+      displayOrder: 0,
+      options: [
+        { value: "skates", label: "Skates" },
+        { value: "keycaps", label: "Keycaps" },
+        { value: "grip-tapes", label: "Grip tapes" },
+      ],
+    },
+  ],
+};
 
 describe("Mega-menu shelves", () => {
   it("builds a shelf only for collections that have published products", () => {
@@ -40,12 +62,30 @@ describe("Mega-menu shelves", () => {
     expect(shelves["/categorias/mouses"]?.totalCount).toBe(1);
   });
 
-  it("matches a filtered collection URL to its category", () => {
+  it("matches a filtered collection to its real type instead of every accessory", () => {
     const shelves = buildMenuShelves(
-      [entry({ productId: "p2", categorySlug: "accesorios", slug: "skate-x" })],
+      [
+        entry({
+          productId: "p2",
+          categorySlug: "accesorios",
+          slug: "skate-x",
+          specificationSchema: accessorySchema,
+          specValues: { accessory_type: "skates" },
+        }),
+        entry({
+          productId: "p3",
+          categorySlug: "accesorios",
+          slug: "keycaps",
+          specificationSchema: accessorySchema,
+          specValues: { accessory_type: "keycaps" },
+        }),
+      ],
       COLLECTIONS
     );
     expect(shelves["/categorias/accesorios?tipo_accesorio=skates"]?.totalCount).toBe(1);
+    expect(shelves["/categorias/accesorios?tipo_accesorio=skates"]?.products[0]?.slug).toBe(
+      "skate-x"
+    );
   });
 
   it("reports the full count but shows at most four cards", () => {
@@ -75,6 +115,64 @@ describe("Mega-menu shelves", () => {
 
   it("returns nothing when the catalog is empty", () => {
     expect(buildMenuShelves([], COLLECTIONS)).toEqual({});
+  });
+});
+
+describe("Real catalog collections", () => {
+  it("adds newly published categories and only represented accessory types", () => {
+    const collections = buildCatalogCollections([
+      entry({ categorySlug: "monitores", categoryName: "Pantallas", categoryDisplayOrder: 3 }),
+      entry({ categoryDisplayOrder: 1 }),
+      entry({
+        categorySlug: "accesorios",
+        categoryName: "Accesorios",
+        categoryDisplayOrder: 4,
+        specificationSchema: accessorySchema,
+        specValues: { accessory_type: "skates" },
+      }),
+    ]);
+    expect(collections.map((c) => c.href)).toEqual([
+      "/categorias/mouses",
+      "/categorias/monitores",
+      "/categorias/accesorios",
+      "/categorias/accesorios?tipo_accesorio=skates",
+    ]);
+    expect(collections.find((c) => c.href === "/categorias/monitores")?.label).toBe("Pantallas");
+    expect(collections.some((c) => c.label === "Grip tapes")).toBe(false);
+  });
+  it("does not turn unsupported or invalid collection filters into unrelated products", () => {
+    const items = [
+      entry({
+        categorySlug: "accesorios",
+        specificationSchema: accessorySchema,
+        specValues: { accessory_type: "skates" },
+      }),
+    ];
+    expect(
+      matchCollectionEntries(items, "/categorias/accesorios?tipo_accesorio=no-existe")
+    ).toEqual([]);
+    expect(matchCollectionEntries(items, "/categorias/accesorios?otro=skates")).toEqual([]);
+    expect(matchCollectionEntries(items, "https://external.test/categorias/accesorios")).toEqual(
+      []
+    );
+    expect(
+      matchCollectionEntries(
+        [entry({ categorySlug: "accesorios" })],
+        "/categorias/accesorios?tipo_accesorio=skates"
+      )
+    ).toEqual([]);
+  });
+  it("respects brand and eligible variant prices from the category filters", () => {
+    const items = [
+      entry({ priceCents: 10000, variantPrices: [10000, 20000] }),
+      entry({ productId: "p2", brandSlug: "atk", priceCents: 21000 }),
+    ];
+    const filtered = matchCollectionEntries(
+      items,
+      "/categorias/mouses?marca=mchose&precio_min=150&precio_max=250"
+    );
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.priceCents).toBe(20000);
   });
 });
 

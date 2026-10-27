@@ -168,6 +168,10 @@
 .collectionsLinkCurrent {
   color: var(--color-text-primary);
 }
+.collectionsList[data-compact="true"] .collectionsLink {
+  font-size: 22px;
+  padding-block: 3px;
+}
 
 .collectionsLink:focus-visible {
   outline: 2px solid var(--focus-ring-color, var(--color-border-focus));
