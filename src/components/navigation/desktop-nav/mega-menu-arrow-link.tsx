@@ -3,32 +3,19 @@
 import React from "react";
 import Link from "@/components/app-link";
 import { ArrowRight } from "lucide-react";
-import { m, type Variants } from "framer-motion";
 import { Icon, type IconSize } from "@/components/ui";
 import styles from "./mega-menu-arrow-link.module.css";
-
-const MotionLink = m.create(Link);
-
-/**
- * Hover state shared by every arrow in the mega-menus: the arrow turns to
- * point straight down and dips slightly. Exported so whole-card links can drive
- * their own arrow with the same m.
- */
-export const ARROW_VARIANTS: Variants = {
-  rest: { rotate: 0, y: 0 },
-  hover: { rotate: 90, y: 2, transition: { type: "spring", stiffness: 380, damping: 22 } },
-};
 
 export interface ArrowProps {
   size?: IconSize;
 }
 
-/** Arrow that follows the nearest ancestor animating the "rest"/"hover" variants. */
+/** CSS follows the owning link's hover/focus and reverses from its current rotation. */
 export function MegaMenuArrow({ size = "sm" }: ArrowProps) {
   return (
-    <m.span className={styles.arrow} variants={ARROW_VARIANTS}>
+    <span className={styles.arrow} data-menu-arrow aria-hidden="true">
       <Icon icon={ArrowRight} size={size} aria-hidden="true" />
-    </m.span>
+    </span>
   );
 }
 
@@ -45,7 +32,7 @@ export interface MegaMenuArrowLinkProps {
 /**
  * Text link with a trailing arrow: at rest the label has no underline and the
  * arrow points right; on hover or keyboard focus the label underlines (CSS)
- * and the arrow rotates down (Framer Motion).
+ * and the arrow rotates down with a reversible CSS transition.
  */
 export function MegaMenuArrowLink({
   href,
@@ -56,19 +43,15 @@ export function MegaMenuArrowLink({
   onClick,
 }: MegaMenuArrowLinkProps) {
   return (
-    <MotionLink
+    <Link
       href={href}
       className={[styles.arrowLink, fullWidth ? styles.fullWidth : "", className]
         .filter(Boolean)
         .join(" ")}
       onClick={onClick}
-      initial="rest"
-      animate="rest"
-      whileHover="hover"
-      whileFocus="hover"
     >
       <span className={styles.label}>{children}</span>
       <MegaMenuArrow size={arrowSize} />
-    </MotionLink>
+    </Link>
   );
 }

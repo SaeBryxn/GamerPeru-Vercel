@@ -14,8 +14,6 @@ import {
 } from "./mega-menu-motion";
 import styles from "./mega-menu-series.module.css";
 
-const MotionLink = m.create(Link);
-
 const LAYOUT_VARIANTS = staggerVariants(0.12, 0.12);
 const SERIES_VARIANTS = staggerVariants(0.08);
 const PROMO_VARIANTS = staggerVariants(0.12, 0.1);
@@ -58,7 +56,7 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
                       className={styles.seriesLink}
                       onClick={onNavigate}
                     >
-                      {item.label}
+                      <span className={styles.linkLabel}>{item.label}</span>
                     </Link>
                   </li>
                 ))}
@@ -95,15 +93,7 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
       <m.div className={styles.promoGrid} variants={PROMO_VARIANTS}>
         {promos.map((promo) => (
           <m.div key={promo.href} className={styles.promoItem} variants={RISE_FROM_BELOW}>
-            <MotionLink
-              href={promo.href}
-              className={styles.promoCard}
-              onClick={onNavigate}
-              initial="rest"
-              animate="rest"
-              whileHover="hover"
-              whileFocus="hover"
-            >
+            <Link href={promo.href} className={styles.promoCard} onClick={onNavigate}>
               {promo.badge && <span className={styles.promoBadge}>{promo.badge}</span>}
               <span className={styles.promoMedia}>
                 <MegaMenuImage
@@ -113,10 +103,12 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
                 />
               </span>
               <span className={styles.promoFooter}>
-                <span className={styles.promoTitle}>{promo.title}</span>
+                <span className={styles.promoTitle}>
+                  <span className={styles.linkLabel}>{promo.title}</span>
+                </span>
                 <MegaMenuArrow size="md" />
               </span>
-            </MotionLink>
+            </Link>
           </m.div>
         ))}
       </m.div>

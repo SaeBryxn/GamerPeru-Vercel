@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-10);
-  align-items: start;
+  align-items: stretch;
 }
 
 .seriesZone {
@@ -77,22 +77,29 @@
   line-height: 1.45;
   color: var(--color-text-secondary);
   text-decoration: none;
-  background-image: linear-gradient(currentColor, currentColor);
-  background-repeat: no-repeat;
-  background-position: left bottom;
-  background-size: 0% 1px;
-  transition:
-    color var(--motion-duration-fast) var(--motion-easing-standard),
-    background-size var(--motion-duration-normal) var(--motion-easing-snappy);
+  transition: color var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
-.seriesLink:hover,
 .seriesLink:focus-visible {
   color: var(--color-text-primary);
-  background-size: 100% 1px;
+}
+
+.linkLabel {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  text-decoration-skip-ink: auto;
+  transition: text-decoration-color var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.seriesLink:focus-visible .linkLabel,
+.promoCard:focus-visible .linkLabel {
+  text-decoration-color: currentColor;
 }
 
 .seriesFooter {
+  margin-top: auto;
   padding-top: var(--space-6);
 }
 
@@ -125,7 +132,9 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  height: clamp(280px, 22vw, 340px);
+  height: clamp(400px, 32vw, 540px);
+  max-height: calc(100svh - 200px);
+  min-height: 300px;
   padding: var(--space-4) var(--space-6) var(--space-6);
   border-radius: var(--radius-lg);
   background-color: var(--color-surface-secondary);
@@ -165,11 +174,7 @@
   object-fit: contain;
   /* Product shots ship on white; multiply lets the card surface show through. */
   mix-blend-mode: multiply;
-  transition: transform var(--motion-duration-slow) var(--motion-easing-snappy);
-}
-
-.promoCard:hover .promoImage {
-  transform: scale(1.04);
+  transition: transform var(--motion-duration-normal) var(--motion-easing-snappy);
 }
 
 .promoFooter {
@@ -181,16 +186,12 @@
 }
 
 .promoTitle {
-  background-image: linear-gradient(currentColor, currentColor);
-  background-repeat: no-repeat;
-  background-position: left bottom;
-  background-size: 0% 2px;
-  transition: background-size var(--motion-duration-moderate) var(--motion-easing-snappy);
   font-family: var(--font-heading);
-  font-size: clamp(18px, 1.4vw, 22px);
+  font-size: clamp(20px, 1.7vw, 28px);
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.1;
+  line-height: 1.15;
+  padding-bottom: 4px;
   /* Long catalog names stay on two lines so the photo keeps most of the card. */
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -217,9 +218,26 @@
   }
 }
 
-.promoCard:hover .promoTitle,
-.promoCard:focus-visible .promoTitle {
-  background-size: 100% 2px;
+@media (hover: hover) and (pointer: fine) {
+  .seriesLink:hover {
+    color: var(--color-text-primary);
+  }
+  .seriesLink:hover .linkLabel,
+  .promoCard:hover .linkLabel {
+    text-decoration-color: currentColor;
+  }
+  .promoCard:hover .promoImage {
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .promoImage {
+    transition: none;
+  }
+  .promoCard:hover .promoImage {
+    transform: none;
+  }
 }
 
 .seriesLink:focus-visible,
