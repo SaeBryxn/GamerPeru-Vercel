@@ -57,9 +57,11 @@ export async function searchAdmin(
         canProducts
           ? sql`(SELECT COALESCE(json_agg(p), '[]'::json) FROM (
               SELECT pr.id, pr.name, pr.status, ma.object_key,
-                (SELECT pv.sku FROM product_variants pv
+                CASE WHEN pr.name ILIKE ${like} THEN NULL ELSE (
+                  SELECT pv.sku FROM product_variants pv
                   WHERE pv.product_id = pr.id AND pv.sku ILIKE ${like}
-                  ORDER BY pv.sku LIMIT 1) AS sku
+                  ORDER BY pv.sku LIMIT 1
+                ) END AS sku
               FROM products pr
               LEFT JOIN media_assets ma ON ma.id = pr.primary_media_id
               WHERE pr.status <> 'ARCHIVED' AND (

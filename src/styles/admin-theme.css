@@ -22,6 +22,24 @@
   --admin-header-height: 64px;
   --admin-radius: 10px;
   --admin-dot-size: 6px;
+
+  /*
+   * Operación (Inicio, Pedidos, Pagos, Inventario). Medidas y roles compartidos:
+   * cada pantalla de trabajo los consume en vez de declarar tamaños o colores sueltos.
+   * Los estados de pedido y pago usan los --color-status-* de cada tema, siempre con texto.
+   */
+  --admin-title-size: 24px;
+  --admin-kpi-size: 28px;
+  --admin-count-size: 22px;
+  --admin-text-size: 14px;
+  --admin-meta-size: 13px;
+  --admin-caption-size: 12px;
+  --admin-control-height: 36px;
+  --admin-tap-target: 44px;
+  --admin-control-radius: var(--radius-md);
+  --admin-badge-radius: 6px;
+  --admin-section-gap: var(--space-6);
+  --admin-focus-ring: var(--color-border-focus);
 }
 
 [data-admin-theme="light"] {
@@ -74,23 +92,6 @@
   --admin-header-surface: rgba(255, 255, 255, 0.9);
   --admin-scrim: rgba(17, 24, 39, 0.4);
 
-  /*
-   * Operación (Inicio, Pedidos, Pagos, Inventario). Medidas y roles compartidos:
-   * cada pantalla de trabajo los consume en vez de declarar tamaños o colores sueltos.
-   * Los estados de pedido y pago usan los --color-status-* de arriba, siempre con texto.
-   */
-  --admin-title-size: 24px;
-  --admin-kpi-size: 28px;
-  --admin-count-size: 22px;
-  --admin-text-size: 14px;
-  --admin-meta-size: 13px;
-  --admin-caption-size: 12px;
-  --admin-control-height: 36px;
-  --admin-tap-target: 44px;
-  --admin-control-radius: var(--radius-md);
-  --admin-badge-radius: 6px;
-  --admin-section-gap: var(--space-6);
-  --admin-focus-ring: var(--color-border-focus);
   /* La siguiente tarea: el único lugar donde Inicio usa el carmesí de la marca. */
   --admin-priority: var(--admin-brand);
   --admin-priority-soft: #fff1f2;

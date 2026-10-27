@@ -269,7 +269,7 @@ describe("summary cards", () => {
     expect(status.allClear).toBe(false);
     expect(status.rows.map((row) => [row.label, row.value, row.tone])).toEqual([
       ["Página de inicio", "9 de 10 visibles", "success"],
-      ["Menú y navegación", "6 secciones visibles", "success"],
+      ["Menú y navegación", "6 de 8 visibles", "success"],
       ["Productos publicados", "40", "success"],
       ["Publicados incompletos", "6", "danger"],
       ["Pagos en espera", "1 con más de 24 h", "warning"],
@@ -285,8 +285,11 @@ describe("order badges", () => {
       tone: "warning",
     });
     expect(describeOrderStatus("PROCESSING", "PAID", "SHIPPED").label).toBe("Enviado");
+    // Only what the «por preparar» queue counts carries that label.
+    expect(describeOrderStatus("CONFIRMED", "PAID", "READY_TO_PACK").label).toBe("En preparación");
     expect(describeOrderStatus("FULFILLED", "PAID", "DELIVERED").label).toBe("Entregado");
-    expect(describeOrderStatus("PENDING", "SUBMITTED", null).label).toBe("Por validar pago");
+    expect(describeOrderStatus("PENDING", "SUBMITTED", null).label).toBe("Por validar");
+    expect(describeOrderStatus("PENDING", "UNPAID", null).label).toBe("Sin pagar");
     expect(describeOrderStatus("CANCELLED", "UNPAID", null)).toEqual({
       label: "Cancelado",
       tone: "danger",

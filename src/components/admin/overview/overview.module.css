@@ -16,10 +16,9 @@
   min-width: 0;
 }
 
-@media (min-width: 640px) {
-  .kpi {
-    grid-column: span 6;
-  }
+/* Two KPIs per row from phones up; four from 1280 px. */
+.grid > .kpi {
+  grid-column: span 6;
 }
 
 @media (min-width: 1024px) {
@@ -32,7 +31,7 @@
 }
 
 @media (min-width: 1280px) {
-  .kpi {
+  .grid > .kpi {
     grid-column: span 3;
   }
   .chart {
@@ -56,8 +55,8 @@
 .card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-5);
+  gap: var(--space-3);
+  padding: 18px;
   border: 1px solid var(--admin-panel-border);
   border-radius: var(--admin-card-radius);
   background-color: var(--color-surface-card);
@@ -154,27 +153,33 @@
   height: 18px;
 }
 
-[data-hue="red"] {
+.chip[data-hue="red"],
+.tile[data-hue="red"] {
   --chip-bg: var(--color-status-danger-background);
   --chip-fg: var(--admin-brand);
 }
-[data-hue="blue"] {
+.chip[data-hue="blue"],
+.tile[data-hue="blue"] {
   --chip-bg: var(--color-status-info-background);
   --chip-fg: var(--color-status-info-text);
 }
-[data-hue="green"] {
+.chip[data-hue="green"],
+.tile[data-hue="green"] {
   --chip-bg: var(--color-status-success-background);
   --chip-fg: var(--color-status-success-text);
 }
-[data-hue="amber"] {
+.chip[data-hue="amber"],
+.tile[data-hue="amber"] {
   --chip-bg: var(--color-status-warning-background);
   --chip-fg: #d97706;
 }
-[data-hue="violet"] {
+.chip[data-hue="violet"],
+.tile[data-hue="violet"] {
   --chip-bg: rgba(139, 92, 246, 0.1);
   --chip-fg: #7c3aed;
 }
-[data-hue="neutral"] {
+.chip[data-hue="neutral"],
+.tile[data-hue="neutral"] {
   --chip-bg: var(--color-surface-secondary);
   --chip-fg: var(--color-text-secondary);
 }
@@ -274,6 +279,34 @@
   color: var(--color-text-muted);
 }
 
+@media (max-width: 639px) {
+  .metric {
+    min-height: 0;
+    gap: var(--space-2);
+    padding: 14px;
+  }
+  .metricHead .chip {
+    display: none;
+  }
+  .metricHead {
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+  .metricLabel {
+    font-size: 13px;
+  }
+  .metricValue {
+    font-size: 22px;
+  }
+  .metricCompare {
+    margin-top: 4px;
+    font-size: 12px;
+  }
+  .sparkline {
+    display: none;
+  }
+}
+
 .sparkline {
   flex-shrink: 0;
   width: 112px;
@@ -309,7 +342,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: 56px;
+  min-height: 52px;
   padding: var(--space-2) var(--space-1);
   border-radius: 8px;
   color: inherit;
@@ -398,8 +431,8 @@ a.rowLink:hover {
   flex-direction: column;
   justify-content: flex-end;
   gap: 2px;
-  min-height: 96px;
-  padding: var(--space-3);
+  min-height: 92px;
+  padding: 10px;
   border: 1px solid transparent;
   border-radius: 10px;
   background-color: var(--chip-bg);
@@ -431,7 +464,7 @@ a.tile:hover {
 }
 
 .tileLabel {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--chip-fg);
 }
@@ -439,6 +472,22 @@ a.tile:hover {
 .tileHint {
   font-size: var(--admin-caption-size);
   color: var(--color-text-muted);
+}
+
+/* Cards of ~300–350 px (laptops, tablets in landscape): number and label only. */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .tiles {
+    gap: 6px;
+  }
+  .tile {
+    padding: 8px;
+  }
+  .tileLabel {
+    font-size: 12px;
+  }
+  .tileHint {
+    display: none;
+  }
 }
 
 [data-hue="neutral"] .tileValue,
@@ -458,8 +507,8 @@ a.tile:hover {
 .ring {
   position: relative;
   flex-shrink: 0;
-  width: 84px;
-  height: 84px;
+  width: 64px;
+  height: 64px;
 }
 
 .ring svg {
@@ -475,7 +524,7 @@ a.tile:hover {
   align-items: center;
   justify-content: center;
   font-family: var(--font-heading);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -499,13 +548,46 @@ a.tile:hover {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 24px;
+  min-height: 20px;
   font-size: var(--admin-meta-size);
+  line-height: 1.3;
   color: var(--color-text-secondary);
 }
 
+.check {
+  position: relative;
+}
+
+/* The whole row is the link target, not just the label. */
 .check a {
   color: inherit;
+  text-decoration: none;
+}
+
+.check a::after {
+  content: "";
+  position: absolute;
+  inset: -3px -4px;
+  border-radius: 6px;
+}
+
+.check a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.check a:focus-visible {
+  outline: none;
+}
+
+.check a:focus-visible::after {
+  outline: 2px solid var(--admin-focus-ring);
+}
+
+@media (pointer: coarse) {
+  .check {
+    min-height: 36px;
+  }
 }
 
 .checkIcon {
@@ -609,8 +691,8 @@ a.tile:hover {
 }
 
 .thumbSmall {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
 }
 
@@ -629,7 +711,7 @@ a.tile:hover {
 }
 
 .tableWrap {
-  margin: 0 calc(var(--space-5) * -1);
+  margin: 0 -18px;
   overflow-x: auto;
 }
 
@@ -640,7 +722,7 @@ a.tile:hover {
 }
 
 .table th {
-  padding: 0 var(--space-3) var(--space-2);
+  padding: 0 8px var(--space-2);
   border-bottom: 1px solid var(--color-border-subtle);
   color: var(--color-text-muted);
   font-size: var(--admin-caption-size);
@@ -650,8 +732,8 @@ a.tile:hover {
 }
 
 .table td {
-  height: 48px;
-  padding: 0 var(--space-3);
+  height: 40px;
+  padding: 0 8px;
   border-bottom: 1px solid var(--color-border-subtle);
   color: var(--color-text-secondary);
   white-space: nowrap;
@@ -663,12 +745,12 @@ a.tile:hover {
 
 .table th:first-child,
 .table td:first-child {
-  padding-left: var(--space-5);
+  padding-left: 18px;
 }
 
 .table th:last-child,
 .table td:last-child {
-  padding-right: var(--space-5);
+  padding-right: 18px;
 }
 
 .table tbody tr:hover td {
@@ -689,7 +771,7 @@ a.tile:hover {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  max-width: 180px;
+  max-width: 140px;
 }
 
 .customer span {
@@ -704,6 +786,14 @@ a.tile:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* Narrow desktops: the order table drops «Productos» before it would scroll sideways. */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .table th:nth-child(3),
+  .table td:nth-child(3) {
+    display: none;
+  }
+}
+
 /* Phones: each order becomes a two-line card instead of a sideways-scrolling table. */
 @media (max-width: 639px) {
   .table thead {
@@ -714,6 +804,7 @@ a.tile:hover {
     clip: rect(0 0 0 0);
   }
   .table tr {
+    position: relative;
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 2px var(--space-3);
@@ -756,6 +847,11 @@ a.tile:hover {
     grid-row: 3;
     font-size: var(--admin-caption-size);
     color: var(--color-text-muted);
+  }
+  .orderLink::after {
+    content: "";
+    position: absolute;
+    inset: 0;
   }
   .tiles {
     gap: var(--space-2);

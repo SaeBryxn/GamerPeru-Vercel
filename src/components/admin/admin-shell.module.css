@@ -575,6 +575,16 @@
   }
 }
 
+/* Wide screens: the cards, not the gutters, get the extra width. */
+@media (min-width: 1280px) {
+  .mainContent {
+    padding-inline: var(--space-6);
+  }
+  .header {
+    padding: 0 var(--space-6);
+  }
+}
+
 /* --------------------------------------------------------------------------
  * Mobile drawer
  * -------------------------------------------------------------------------- */

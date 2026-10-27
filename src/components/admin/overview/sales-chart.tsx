@@ -52,7 +52,8 @@ export function SalesChart({ points, periodLabel, hasProfit, className }: SalesC
   const config = METRICS[metric];
 
   const values = points.map((point) => point[metric] ?? 0);
-  const top = niceMax(Math.max(...values, 0));
+  // An empty period still gets a readable scale: S/ 0–100 or 0–4 orders, not five «S/ 0».
+  const top = niceMax(Math.max(...values, config.money ? 10_000 : 4));
   const last = Math.max(points.length - 1, 1);
   const coords = values.map((value, index) => ({
     x: (index / last) * 100,
@@ -73,7 +74,7 @@ export function SalesChart({ points, periodLabel, hasProfit, className }: SalesC
 
   return (
     <section className={`${cardStyles.card} ${className ?? ""}`} aria-labelledby={`${id}-title`}>
-      <div className={cardStyles.cardHead}>
+      <div className={`${cardStyles.cardHead} ${styles.head}`}>
         <span className={cardStyles.chip} data-hue="neutral" aria-hidden="true">
           <ChartSpline />
         </span>

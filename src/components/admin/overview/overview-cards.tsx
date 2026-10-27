@@ -320,7 +320,6 @@ export function InventoryCard({
         hue="red"
         icon={Boxes}
         title="Inventario"
-        subtitle="Productos publicados"
         action={<CardLink href="/admin/inventario">Ver inventario</CardLink>}
       />
       <div className={styles.tiles}>
@@ -329,7 +328,7 @@ export function InventoryCard({
           icon={PackageX}
           count={summary.outOfStock.count}
           label="Sin stock"
-          hint="Productos agotados"
+          hint="Agotados"
           href={summary.outOfStock.href}
         />
         <Tile
@@ -337,7 +336,7 @@ export function InventoryCard({
           icon={TriangleAlert}
           count={summary.lowStock.count}
           label="Stock bajo"
-          hint="Algún color o talla por agotarse"
+          hint="Por agotarse"
           href={summary.lowStock.href}
         />
         <Tile
@@ -345,7 +344,7 @@ export function InventoryCard({
           icon={PackageCheck}
           count={summary.available.count}
           label="Disponibles"
-          hint="Listos para vender"
+          hint="Para vender"
           href={summary.available.href}
         />
       </div>
@@ -414,7 +413,7 @@ export function CatalogHealthCard({
         <div>
           <p className={styles.healthRating}>{health.rating}</p>
           <p className={styles.cardSubtitle}>
-            {health.score}% de {health.publishedProducts} productos publicados con la ficha completa
+            Fichas completas de {health.publishedProducts} publicados
           </p>
         </div>
       </div>
@@ -449,7 +448,7 @@ export function StoreStatusCard({
         title="Estado de la tienda"
         action={
           <span className={styles.pill} data-tone={status.allClear ? "success" : "warning"}>
-            {status.allClear ? "Al día" : "Requiere atención"}
+            {status.allClear ? "Al día" : "Revisar"}
           </span>
         }
       />
@@ -482,7 +481,7 @@ export function ProductThumbnail({
       {src ? (
         // Tiny admin thumbnails straight from the CDN: next/image would add a Worker transform each.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={alt} loading="lazy" width={small ? 30 : 44} height={small ? 30 : 44} />
+        <img src={src} alt={alt} loading="lazy" width={small ? 28 : 44} height={small ? 28 : 44} />
       ) : (
         <Package size={small ? 14 : 18} aria-hidden="true" />
       )}

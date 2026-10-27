@@ -1,3 +1,13 @@
+/* Phones: the metric picker gets its own row under the title. */
+@media (max-width: 639px) {
+  .head {
+    flex-wrap: wrap;
+  }
+  .head .select {
+    flex-basis: 100%;
+  }
+}
+
 .select {
   height: 36px;
   padding: 0 32px 0 12px;
@@ -22,7 +32,7 @@
 .chart {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: 190px auto;
+  grid-template-rows: 160px auto;
   column-gap: var(--space-3);
   flex: 1;
   min-height: 0;
@@ -30,7 +40,7 @@
 
 @media (min-width: 1280px) {
   .chart {
-    grid-template-rows: minmax(190px, 1fr) auto;
+    grid-template-rows: minmax(150px, 1fr) auto;
   }
 }
 

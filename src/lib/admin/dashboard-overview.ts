@@ -353,14 +353,15 @@ export function describeOrderStatus(
     return { label: "Entregado", tone: "success" };
   if (shipmentStatus === "SHIPPED") return { label: "Enviado", tone: "info" };
   if (paymentStatus === "SUBMITTED" || paymentStatus === "VERIFYING")
-    return { label: "Por validar pago", tone: "warning" };
+    return { label: "Por validar", tone: "warning" };
   if (paymentStatus === "PAID") {
-    return shipmentStatus === "PACKED"
-      ? { label: "Empacado", tone: "info" }
-      : { label: "Por preparar", tone: "warning" };
+    // «Por preparar» is exactly what the queue counts: paid, nothing done on the shipment yet.
+    if (shipmentStatus === "PACKED") return { label: "Empacado", tone: "info" };
+    if (shipmentStatus === "READY_TO_PACK") return { label: "En preparación", tone: "info" };
+    return { label: "Por preparar", tone: "warning" };
   }
   if (paymentStatus === "REJECTED") return { label: "Pago rechazado", tone: "danger" };
-  return { label: "Pendiente de pago", tone: "neutral" };
+  return { label: "Sin pagar", tone: "neutral" };
 }
 
 export async function fetchRecentOrders(
@@ -772,7 +773,7 @@ export function buildStoreStatus(
       label: "Menú y navegación",
       value:
         snapshot.menu.visible > 0
-          ? `${formatInteger(snapshot.menu.visible)} secciones visibles`
+          ? `${formatInteger(snapshot.menu.visible)} de ${formatInteger(snapshot.menu.total)} visibles`
           : "Sin secciones visibles",
       tone: snapshot.menu.visible > 0 ? "success" : "danger",
       href: OVERVIEW_LINKS.menu,
