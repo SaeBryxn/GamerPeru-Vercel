@@ -64,7 +64,7 @@ it("agrupa la identidad verificada y los destinos existentes sin inventar un nom
   // Without a profile name the email is the name, written once.
   expect(within(dialog).getByRole("heading", { name: "catalogo@example.test" })).toBeTruthy();
   expect(within(dialog).getAllByText("catalogo@example.test")).toHaveLength(1);
-  expect(screen.getByText("Catálogo")).toBeTruthy();
+  expect(within(dialog).getByText("Catálogo")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Datos de mi cuenta" }).getAttribute("href")).toBe(
     "/cuenta/perfil"
   );
@@ -144,7 +144,7 @@ it("usa la acción existente al confirmar y muestra su error sin cerrar el menú
   fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
   await waitFor(() => expect(mocks.signOut).toHaveBeenCalledOnce());
   expect(confirm).toHaveBeenCalledOnce();
-  expect(screen.getByRole("alert").textContent).toContain("No pudimos cerrar la sesión");
+  expect((await screen.findByRole("alert")).textContent).toContain("No pudimos cerrar la sesión");
   expect(screen.getByDisplayValue("Borrador pendiente")).toBeTruthy();
 });
 
