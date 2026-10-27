@@ -10,6 +10,9 @@ import { AdminSidebar } from "./admin-sidebar";
 import { buildAdminBreadcrumbs } from "./admin-breadcrumbs";
 import { AdminBreadcrumbs, AdminHeader } from "./admin-header";
 import { AdminMobileNav } from "./admin-mobile-nav";
+import { AdminNotifications } from "./admin-notifications";
+import { AdminSearch } from "./admin-search";
+import { useAdminAttention } from "./use-admin-attention";
 import { useAdminTheme } from "./use-admin-theme";
 import styles from "./admin-shell.module.css";
 
@@ -54,6 +57,7 @@ export function AdminShell({ authContext, identity, children }: AdminShellProps)
   const navItems = getAdminNavigation(authContext.permissions);
   // Inicio › section › sub-screen, so any level is one click away.
   const crumbs = buildAdminBreadcrumbs(navItems, currentPath);
+  const attention = useAdminAttention();
 
   return (
     <MotionConfig reducedMotion="user">
@@ -68,6 +72,7 @@ export function AdminShell({ authContext, identity, children }: AdminShellProps)
             currentPath={currentPath}
             collapsed={sidebarCollapsed}
             onToggleCollapsed={toggleSidebar}
+            badges={attention?.badges}
           />
 
           <div className={styles.mainWrapper}>
@@ -79,6 +84,8 @@ export function AdminShell({ authContext, identity, children }: AdminShellProps)
               onToggleTheme={toggle}
               identity={identity}
               roles={authContext.roles}
+              search={<AdminSearch navItems={navItems} />}
+              notifications={<AdminNotifications attention={attention} />}
             />
 
             {/*
@@ -99,6 +106,7 @@ export function AdminShell({ authContext, identity, children }: AdminShellProps)
           navItems={navItems}
           currentPath={currentPath}
           triggerRef={menuButtonRef}
+          badges={attention?.badges}
         />
       </div>
     </MotionConfig>
