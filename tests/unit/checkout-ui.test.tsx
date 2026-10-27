@@ -968,6 +968,104 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
   });
 
   describe("10. Order Confirmation View & GP-019 Privacy Boundary", () => {
+    it("keeps the payment step current until a receipt is approved", () => {
+      render(<CheckoutConfirmationView confirmation={sampleConfirmation} />);
+      const progress = screen.getByRole("list", { name: "Progreso de entrega" });
+      expect(progress.querySelector('[aria-current="step"]')?.textContent).toContain(
+        "Pago pendiente"
+      );
+    });
+
+    it("does not expose unsafe tracking destinations", () => {
+      render(
+        <CheckoutConfirmationView
+          confirmation={{
+            ...sampleConfirmation,
+            progress: {
+              ...sampleConfirmation.progress,
+              shipmentStatus: "SHIPPED",
+              trackingUrl: "javascript:alert(1)",
+              trackingNumber: "GUIA-001",
+              courierName: "Courier",
+            },
+          }}
+        />
+      );
+      expect(screen.queryByRole("link", { name: /Rastrear envío/ })).toBeNull();
+      expect(screen.getByText("Guía: GUIA-001")).toBeDefined();
+    });
+
+    it.each(["SHIPPED", "DELIVERED"] as const)(
+      "prioritizes %s tracking and never asks the customer to pay again",
+      (shipmentStatus) => {
+        render(
+          <CheckoutConfirmationView
+            confirmation={{
+              ...sampleConfirmation,
+              status: "CONFIRMED",
+              paymentStatus: "PAID",
+              progress: {
+                ...sampleConfirmation.progress,
+                shipmentStatus,
+                shippedAt: "2026-08-31T12:00:00.000Z",
+                deliveredAt: shipmentStatus === "DELIVERED" ? "2026-09-01T12:00:00.000Z" : null,
+              },
+            }}
+            paymentInstructions={{
+              orderNumber: sampleConfirmation.orderNumber,
+              paymentMethodCode: "YAPE",
+              paymentMethodName: "Yape",
+              paymentStatus: "PAID",
+              amountCents: sampleConfirmation.totalCents,
+              currency: "PEN",
+              recipientName: "Tienda",
+              accountIdentifier: "999888777",
+              instructionText: "Envía el monto exacto y sube tu comprobante.",
+              qrSignedUrl: null,
+              resubmissionGraceExpiresAt: null,
+              isEligibleForSubmission: false,
+            }}
+          />
+        );
+        expect(screen.queryByTestId("manual-payment-card")).toBeNull();
+        expect(screen.queryByText(/Envía el monto exacto/)).toBeNull();
+        expect(screen.getByTestId("confirmation-payment-status").textContent).toContain(
+          "Pago confirmado"
+        );
+        expect(screen.getByRole("heading", { level: 1 }).textContent).toContain(
+          shipmentStatus === "DELIVERED" ? "entregado" : "camino"
+        );
+      }
+    );
+
+    it("distinguishes receipt review from a confirmed payment without showing transfer instructions", () => {
+      render(
+        <CheckoutConfirmationView
+          confirmation={{ ...sampleConfirmation, paymentStatus: "PENDING_VERIFICATION" }}
+        />
+      );
+      expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("comprobante");
+      expect(screen.getByTestId("confirmation-payment-status").textContent).toContain(
+        "En revisión"
+      );
+      expect(screen.queryByText("Total pagado")).toBeNull();
+    });
+
+    it.each([
+      ["EXPIRED", "vencido"],
+      ["REFUNDED", "reembolsado"],
+    ] as const)(
+      "shows the actual terminal state %s instead of calling everything cancelled",
+      (status, label) => {
+        render(<CheckoutConfirmationView confirmation={{ ...sampleConfirmation, status }} />);
+        expect(screen.getByRole("heading", { level: 1 }).textContent?.toLowerCase()).toContain(
+          label
+        );
+        expect(screen.queryByTestId("manual-payment-card")).toBeNull();
+        expect(screen.queryByTestId("confirmation-cancel-order-button")).toBeNull();
+      }
+    );
+
     it("renders full confirmation details with pending payment state", () => {
       render(<CheckoutConfirmationView confirmation={sampleConfirmation} />);
 

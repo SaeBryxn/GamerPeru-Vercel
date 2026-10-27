@@ -9,24 +9,9 @@ export interface OrderItemPreview {
   imageObjectKey: string | null;
 }
 
-/**
- * The first order lines as JSON, each with the same card image rule as the catalog: the
- * designated primary, else the first public global photo. `orderId` is the SQL expression of
- * the order's id in the surrounding query (a column or an alias).
- */
-export function orderItemPreviewsSql(orderId: SQL, limit: number): SQL<OrderItemPreview[] | null> {
-  return sql<OrderItemPreview[] | null>`(
-    SELECT jsonb_agg(
-      jsonb_build_object(
-        'productName', x.product_name_snapshot,
-        'variantTitle', x.variant_title_snapshot,
-        'quantity', x.quantity,
-        'imageObjectKey', x.object_key
-      ) ORDER BY x.created_at, x.id
-    )
-    FROM (
-      SELECT oi.id, oi.created_at, oi.product_name_snapshot, oi.variant_title_snapshot, oi.quantity,
-        (
+/** Public product image for an order line; private payment media is never eligible. */
+export function orderItemImageSql(variantId: SQL): SQL<string | null> {
+  return sql<string | null>`(
           SELECT a.object_key
           FROM product_variants pv
           JOIN products p ON p.id = pv.product_id
@@ -44,11 +29,31 @@ export function orderItemPreviewsSql(orderId: SQL, limit: number): SQL<OrderItem
               LIMIT 1
             )
           )
-          WHERE pv.id = oi.variant_id
+          WHERE pv.id = ${variantId}
             AND a.security_class = 'PUBLIC_MEDIA'
             AND a.media_type = 'IMAGE'
           LIMIT 1
-        ) AS object_key
+        )`;
+}
+
+/**
+ * The first order lines as JSON, each with the same card image rule as the catalog: the
+ * designated primary, else the first public global photo. `orderId` is the SQL expression of
+ * the order's id in the surrounding query (a column or an alias).
+ */
+export function orderItemPreviewsSql(orderId: SQL, limit: number): SQL<OrderItemPreview[] | null> {
+  return sql<OrderItemPreview[] | null>`(
+    SELECT jsonb_agg(
+      jsonb_build_object(
+        'productName', x.product_name_snapshot,
+        'variantTitle', x.variant_title_snapshot,
+        'quantity', x.quantity,
+        'imageObjectKey', x.object_key
+      ) ORDER BY x.created_at, x.id
+    )
+    FROM (
+      SELECT oi.id, oi.created_at, oi.product_name_snapshot, oi.variant_title_snapshot, oi.quantity,
+        ${orderItemImageSql(sql`oi.variant_id`)} AS object_key
       FROM order_items oi
       WHERE oi.order_id = ${orderId}
       ORDER BY oi.created_at, oi.id

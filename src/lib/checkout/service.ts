@@ -1,6 +1,6 @@
 import "server-only";
 import { hasGuestRecoveryAccess } from "@/lib/orders/guest-recovery";
-import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   cartItems,
@@ -50,6 +50,7 @@ import {
 } from "@/lib/cart/persistence";
 import { clearAnonymousCartCookie } from "@/lib/cart/session";
 import { logger } from "@/lib/logger";
+import { orderItemImageSql } from "@/lib/orders/item-previews-sql";
 import { resolveCheckoutAuthority } from "./authority";
 import { getCheckoutConfig } from "./config";
 import {
@@ -1113,7 +1114,10 @@ export async function loadCheckoutConfirmation(
 
   // Load Order Details
   const items = await db
-    .select()
+    .select({
+      ...getTableColumns(orderItems),
+      imageObjectKey: orderItemImageSql(sql`${orderItems.variantId}`),
+    })
     .from(orderItems)
     .where(eq(orderItems.orderId, order.id))
     .orderBy(asc(orderItems.createdAt));
@@ -1193,7 +1197,7 @@ export async function loadCheckoutConfirmation(
         : null,
       serverNow: new Date().toISOString(),
       orderNumber: order.orderNumber,
-      status: order.status as "PENDING" | "CONFIRMED" | "CANCELLED",
+      status: order.status,
       paymentStatus: (payment?.status ?? "UNPAID") as
         "UNPAID" | "PENDING_VERIFICATION" | "PAID" | "REJECTED",
       currency: "PEN",
@@ -1236,6 +1240,7 @@ export async function loadCheckoutConfirmation(
         unitPriceCents: item.unitPriceCentsSnapshot,
         quantity: item.quantity,
         lineTotalCents: item.lineTotalCents,
+        imageObjectKey: item.imageObjectKey ?? null,
       })),
       createdAt: order.createdAt.toISOString(),
       progress: {

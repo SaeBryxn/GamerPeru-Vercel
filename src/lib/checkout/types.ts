@@ -123,6 +123,7 @@ export interface CheckoutConfirmationItemDTO {
   unitPriceCents: number;
   quantity: number;
   lineTotalCents: number;
+  imageObjectKey?: string | null;
 }
 
 export interface CheckoutConfirmationAddressDTO {
@@ -140,7 +141,8 @@ export interface CheckoutConfirmationAddressDTO {
 export interface CheckoutConfirmationDTO {
   isGuestOrder?: boolean;
   orderNumber: string;
-  status: "PENDING" | "CONFIRMED" | "CANCELLED";
+  status:
+    "PENDING" | "CONFIRMED" | "PROCESSING" | "FULFILLED" | "CANCELLED" | "EXPIRED" | "REFUNDED";
   paymentStatus: "UNPAID" | "PENDING_VERIFICATION" | "PAID" | "REJECTED";
   currency: "PEN";
   subtotalCents: number;

@@ -1,41 +1,53 @@
 "use client";
 
 import React, { useState, useId } from "react";
+import Image from "next/image";
 import { AnimatePresence, m, useReducedMotion, type Variants } from "framer-motion";
-import { AlertTriangle, Clock, ListChecks, MapPin, Package, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowUpRight,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  Headphones,
+  MapPin,
+  Package,
+  Truck,
+  XCircle,
+} from "lucide-react";
 import { DomeLink, Icon } from "@/components/ui";
 import { OrderTimeline } from "@/components/account/order-timeline";
-import { buildOrderTimeline, type CustomerOrderProgressDTO } from "@/lib/account/order-timeline";
+import { buildOrderTimeline } from "@/lib/account/order-timeline";
 import type { CheckoutConfirmationDTO } from "@/lib/checkout/types";
 import type { PaymentInstructionDTO } from "@/lib/payments/reader";
 import { formatCurrency } from "@/lib/utils/currency";
 import { ManualPaymentCard } from "./manual-payment-card";
 import { cancelUnpaidOrderAction } from "@/lib/orders/actions";
 import styles from "./checkout-confirmation-view.module.css";
-import { PurchaseProgress } from "./purchase-progress";
+import { CopyPaymentValue } from "./copy-payment-value";
+import { describeConfirmation } from "@/lib/checkout/confirmation-presentation";
+import { resolvePublicMediaUrl } from "@/lib/media/resolve-public-media-url";
+import { buildWhatsAppHref } from "@/lib/support/whatsapp";
 import { ReservationNotice } from "./reservation-notice";
 import { useVisiblePolling } from "@/lib/hooks/use-visible-polling";
 import { loadOrderProgressAction } from "@/lib/checkout/actions";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-/**
- * One entrance, ordered by `custom` step rather than DOM nesting, so the cascade reads mark,
- * heading, payment form and then the summary column even though they sit in different columns.
- */
+/** A short entrance shared by the status, tracking and purchase details. */
 const RISE_VARIANTS: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: (step: number = 0) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.5, ease: EASE, delay: 0.05 + step * 0.09 },
+    transition: { duration: 0.35, ease: EASE, delay: Math.min(step * 0.035, 0.18) },
   }),
 };
 
 const STEP = {
-  mark: 0,
   title: 1,
-  lead: 2,
   payment: 3,
   timeline: 4,
   actions: 5,
@@ -48,75 +60,19 @@ export interface CheckoutConfirmationViewProps {
   paymentInstructions?: PaymentInstructionDTO | null;
 }
 
-/** Circle then tick, drawn in sequence: the purchase lands with a single, quiet flourish. */
-function SuccessMark() {
-  const prefersReducedMotion = useReducedMotion();
-  const draw = (delay: number) =>
-    prefersReducedMotion
-      ? { initial: false as const }
-      : {
-          initial: { pathLength: 0, opacity: 0 },
-          animate: { pathLength: 1, opacity: 1 },
-          transition: { duration: 0.5, delay, ease: EASE },
-        };
+const ORDER_DATE = new Intl.DateTimeFormat("es-PE", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "America/Lima",
+});
 
-  return (
-    <svg className={styles.checkMark} viewBox="0 0 64 64" aria-hidden="true">
-      <m.circle
-        cx="32"
-        cy="32"
-        r="30"
-        strokeWidth="2"
-        className={styles.checkCircle}
-        {...draw(0.15)}
-      />
-      <m.path
-        d="M20 33 L28.5 41.5 L44.5 24.5"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={styles.checkPath}
-        {...draw(0.55)}
-      />
-    </svg>
-  );
-}
-
-/**
- * Heading for the order's state. A submitted receipt is not a confirmed payment: until the team
- * verifies it, the page says it was received, never that it was paid.
- */
-function heroCopy(
-  paymentStatus: string,
-  progress: CustomerOrderProgressDTO
-): { title: string; lead: string } {
-  if (progress.deliveredAt || progress.shipmentStatus === "DELIVERED") {
-    return { title: "¡Pedido entregado!", lead: "Gracias por comprar en Gamer Perú." };
-  }
-  if (progress.shippedAt || progress.shipmentStatus === "SHIPPED") {
-    return {
-      title: "Tu pedido va en camino",
-      lead: "Ya lo entregamos al courier. Abajo puedes ver el seguimiento.",
-    };
-  }
-  switch (paymentStatus) {
-    case "PAID":
-      return {
-        title: "¡Pago confirmado!",
-        lead: "Verificamos tu pago y tu pedido ya pasa a preparación.",
-      };
-    case "SUBMITTED":
-    case "VERIFYING":
-    case "PENDING_VERIFICATION":
-      return {
-        title: "Recibimos tu comprobante",
-        lead: "Nuestro equipo lo está verificando. Te avisaremos apenas quede confirmado.",
-      };
-    default:
-      return {
-        title: "¡Pedido registrado!",
-        lead: "Completa el pago para que empecemos a preparar tu pedido.",
-      };
+function safeTrackingHref(value: string | null) {
+  try {
+    const url = new URL(value ?? "");
+    return url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
   }
 }
 
@@ -157,7 +113,10 @@ export function CheckoutConfirmationView({
   const isCancelled = ["CANCELLED", "REFUNDED", "EXPIRED"].includes(orderStatus);
   useVisiblePolling(
     orderNumber,
-    !isCancelled && confirmation.progress.shipmentStatus !== "DELIVERED",
+    !isCancelled &&
+      orderStatus !== "FULFILLED" &&
+      !confirmation.progress.deliveredAt &&
+      confirmation.progress.shipmentStatus !== "DELIVERED",
     async () => {
       const result = await loadOrderProgressAction(orderNumber);
       if (!result?.success) {
@@ -185,13 +144,12 @@ export function CheckoutConfirmationView({
   );
   const isEligibleForCancellation =
     !isCancelled && orderStatus === "PENDING" && paymentStatus === "UNPAID";
-  const hero = heroCopy(paymentStatus, confirmation.progress);
+  const hero = describeConfirmation(orderStatus, paymentStatus, confirmation.progress);
+  const supportHref =
+    buildWhatsAppHref(`Hola, necesito ayuda con mi pedido ${orderNumber}.`) ?? "/contacto";
+  const trackingHref = safeTrackingHref(confirmation.progress.trackingUrl);
   const timeline = buildOrderTimeline(confirmation.progress, orderStatus, paymentStatus);
-  const totalLabel = isCancelled
-    ? "Total"
-    : paymentStatus === "PAID"
-      ? "Total pagado"
-      : "Total a pagar";
+  const totalLabel = isCancelled ? "Total" : hero.paid ? "Total pagado" : "Total a pagar";
 
   const handleOpenModal = () => {
     setCancelError(null);
@@ -246,76 +204,157 @@ export function CheckoutConfirmationView({
       initial={prefersReducedMotion ? false : "hidden"}
       animate="visible"
     >
-      <div className={styles.layout}>
-        <div className={styles.mainColumn}>
-          <section className={`${styles.card} ${styles.hero}`} aria-live="polite">
-            {isCancelled ? (
-              <>
-                <m.span className={styles.cancelMark} variants={RISE_VARIANTS} custom={STEP.mark}>
-                  <Icon icon={XCircle} size="xl" aria-hidden="true" />
-                </m.span>
-                <m.h1 className={styles.title} variants={RISE_VARIANTS} custom={STEP.title}>
-                  Pedido Cancelado
-                </m.h1>
-                <m.div
-                  className={`${styles.orderNumberBadge} ${styles.cancelledBadge}`}
-                  data-testid="confirmation-order-number"
-                  variants={RISE_VARIANTS}
-                  custom={STEP.lead}
-                >
-                  <span>Pedido #{orderNumber}</span>
-                </m.div>
-                <m.p
-                  className={styles.statusMessage}
-                  data-testid="confirmation-cancelled-message"
-                  variants={RISE_VARIANTS}
-                  custom={STEP.lead}
-                >
-                  Este pedido ha sido cancelado. Si deseas adquirir estos productos, puedes realizar
-                  una nueva orden desde el catálogo.
-                </m.p>
-              </>
+      <div className={styles.pageHeading}>
+        <a href="/cuenta/pedidos" className={styles.backLink}>
+          <ArrowLeft size={16} aria-hidden="true" /> Mis pedidos
+        </a>
+        <span>Tu compra, paso a paso</span>
+      </div>
+      <section className={styles.hero} aria-live="polite" data-tone={hero.tone}>
+        <div className={styles.heroContent}>
+          <span className={styles.heroEyebrow}>GAMER PERÚ · TU PEDIDO</span>
+          <m.h1 className={styles.title} variants={RISE_VARIANTS} custom={STEP.title}>
+            {hero.title}
+          </m.h1>
+          <p
+            className={styles.statusMessage}
+            data-testid={isCancelled ? "confirmation-cancelled-message" : undefined}
+          >
+            {hero.lead}
+          </p>
+          <div className={styles.heroMeta}>
+            <div className={styles.orderNumberBadge} data-testid="confirmation-order-number">
+              <span>Pedido #{orderNumber}</span>
+              <CopyPaymentValue value={orderNumber} label="número de pedido" />
+            </div>
+            <time dateTime={confirmation.createdAt}>
+              {ORDER_DATE.format(new Date(confirmation.createdAt))}
+            </time>
+          </div>
+        </div>
+        <div className={styles.heroStatus}>
+          <span className={styles.heroIcon} aria-hidden="true">
+            {hero.closed ? (
+              <XCircle size={36} />
+            ) : hero.delivered ? (
+              <CheckCircle2 size={36} />
+            ) : hero.shipped ? (
+              <Truck size={36} />
+            ) : hero.paid ? (
+              <Package size={36} />
             ) : (
-              <>
-                <m.span className={styles.markSlot} variants={RISE_VARIANTS} custom={STEP.mark}>
-                  <SuccessMark />
-                </m.span>
-                <m.h1 className={styles.title} variants={RISE_VARIANTS} custom={STEP.title}>
-                  {hero.title}
-                </m.h1>
-                <m.div
-                  className={styles.orderNumberBadge}
-                  data-testid="confirmation-order-number"
-                  variants={RISE_VARIANTS}
-                  custom={STEP.lead}
-                >
-                  <span>Pedido #{orderNumber}</span>
-                </m.div>
-                <m.p className={styles.statusMessage} variants={RISE_VARIANTS} custom={STEP.lead}>
-                  {hero.lead} Correo de contacto: <strong>{customerEmail}</strong>.
-                </m.p>
-              </>
+              <Clock size={36} />
             )}
-          </section>
-
-          {!isCancelled && (
-            <PurchaseProgress
-              current={paymentStatus === "UNPAID" ? 3 : 4}
-              completed={paymentStatus === "PAID"}
-            />
-          )}
+          </span>
+          <span className={styles.heroBadge}>{hero.label}</span>
+          <span className={styles.heroTotal}>{formatCurrency(totalCents)}</span>
+          <span className={styles.heroTotalLabel}>{totalLabel}</span>
+        </div>
+      </section>
+      <div className={styles.layout}>
+        <div className={styles.mainColumn} data-payment-needed={hero.needsPayment}>
+          <m.section
+            className={styles.card}
+            aria-labelledby="order-journey-title"
+            variants={RISE_VARIANTS}
+            custom={STEP.timeline}
+          >
+            <div className={styles.sectionHead}>
+              <div>
+                <p className={styles.eyebrow}>ESTADO DE TU COMPRA</p>
+                <h2 id="order-journey-title" className={styles.sectionTitle}>
+                  Seguimiento del pedido
+                </h2>
+              </div>
+              <span className={styles.liveNote}>
+                {hero.closed || hero.delivered ? "Estado final" : "Se actualiza automáticamente"}
+              </span>
+            </div>
+            {!hero.closed && (
+              <ol className={styles.journey} aria-label="Progreso de entrega">
+                {timeline
+                  .filter((step) =>
+                    ["payment", "preparing", "shipped", "delivered"].includes(step.key)
+                  )
+                  .map((step) => {
+                    const state =
+                      step.key === "payment" && !hero.paid && !hero.shipped
+                        ? "current"
+                        : step.state;
+                    const current =
+                      step.key === "payment" && !hero.paid && !hero.shipped
+                        ? hero.review
+                          ? "Pago en revisión"
+                          : "Pago pendiente"
+                        : step.label;
+                    return (
+                      <li
+                        key={step.key}
+                        data-state={state}
+                        aria-current={state === "current" ? "step" : undefined}
+                      >
+                        <span className={styles.journeyMarker} aria-hidden="true">
+                          {step.state === "done" ? (
+                            <Check size={16} />
+                          ) : step.key === "shipped" ? (
+                            <Truck size={16} />
+                          ) : step.key === "delivered" ? (
+                            <MapPin size={16} />
+                          ) : step.key === "payment" ? (
+                            <CheckCircle2 size={16} />
+                          ) : (
+                            <Package size={16} />
+                          )}
+                        </span>
+                        <strong>{current}</strong>
+                        {step.at && (
+                          <time dateTime={step.at}>{ORDER_DATE.format(new Date(step.at))}</time>
+                        )}
+                      </li>
+                    );
+                  })}
+              </ol>
+            )}
+            {(Boolean(confirmation.progress.courierName) ||
+              Boolean(confirmation.progress.trackingNumber)) && (
+              <div className={styles.shippingStrip}>
+                <Truck size={20} aria-hidden="true" />
+                <div>
+                  <strong>{confirmation.progress.courierName ?? "Información del envío"}</strong>
+                  {confirmation.progress.trackingNumber && (
+                    <span>Guía: {confirmation.progress.trackingNumber}</span>
+                  )}
+                </div>
+                {trackingHref && (
+                  <a href={trackingHref} target="_blank" rel="noopener noreferrer">
+                    Rastrear envío <ArrowUpRight size={16} aria-hidden="true" />
+                  </a>
+                )}
+              </div>
+            )}
+            <details className={styles.activity}>
+              <summary>
+                Ver historial del pedido <ChevronDown size={16} aria-hidden="true" />
+              </summary>
+              <div className={styles.activityBody}>
+                <OrderTimeline steps={timeline} trackingUrl={trackingHref} />
+              </div>
+            </details>
+          </m.section>
           {statusReadError && (
             <p role="status" className={styles.bodyText}>
               No se pudo actualizar el estado. Lo reintentaremos; también puedes recargar la página.
             </p>
           )}
-          {paymentStatus === "UNPAID" && !isCancelled && (
-            <ReservationNotice
-              expiresAt={confirmation.reservationExpiresAt}
-              serverNow={confirmation.serverNow}
-            />
+          {paymentStatus === "UNPAID" && hero.needsPayment && (
+            <div className={styles.reservation}>
+              <ReservationNotice
+                expiresAt={confirmation.reservationExpiresAt}
+                serverNow={confirmation.serverNow}
+              />
+            </div>
           )}
-          <m.div variants={RISE_VARIANTS} custom={STEP.payment}>
+          <m.div className={styles.paymentSlot} variants={RISE_VARIANTS} custom={STEP.payment}>
             {isCancelled ? (
               <div
                 className={`${styles.card} ${styles.statusRow}`}
@@ -326,11 +365,35 @@ export function CheckoutConfirmationView({
                   data-testid="confirmation-payment-status"
                 >
                   <Icon icon={XCircle} size="sm" aria-hidden="true" />
-                  Estado: Cancelado
+                  Estado: {hero.label}
                 </span>
-                <p className={styles.bodyText}>
-                  El pedido ha sido cancelado y los productos reservados han sido liberados.
-                </p>
+                <p className={styles.bodyText}>{hero.lead}</p>
+              </div>
+            ) : !hero.needsPayment ? (
+              <div
+                className={`${styles.card} ${styles.paymentReceipt}`}
+                data-testid="confirmation-payment-status-card"
+              >
+                <span className={styles.receiptIcon} aria-hidden="true">
+                  {hero.paid ? <CheckCircle2 size={24} /> : <Clock size={24} />}
+                </span>
+                <div>
+                  <strong data-testid="confirmation-payment-status">
+                    {hero.paid
+                      ? "Pago confirmado"
+                      : hero.review
+                        ? "En revisión"
+                        : "Información del pago"}
+                  </strong>
+                  <p className={styles.bodyText}>
+                    {paymentMethodName} · {formatCurrency(totalCents)}
+                    {hero.review
+                      ? ". Tu comprobante está en revisión; no vuelvas a pagar."
+                      : hero.paid
+                        ? ". No tienes que realizar otro pago por este pedido."
+                        : ". Si tienes alguna consulta sobre el pago, contacta al equipo con tu número de pedido."}
+                  </p>
+                </div>
               </div>
             ) : paymentInstructions ? (
               <ManualPaymentCard
@@ -348,30 +411,34 @@ export function CheckoutConfirmationView({
                   data-testid="confirmation-payment-status"
                 >
                   <Icon icon={Clock} size="sm" aria-hidden="true" />
-                  Estado de Pago: Pendiente de Pago
+                  Estado de Pago:{" "}
+                  {paymentStatus === "REJECTED" ? "Pago rechazado" : "Pendiente de Pago"}
                 </span>
                 <p className={styles.bodyText}>
                   Tu pedido se encuentra registrado correctamente. El método seleccionado es{" "}
-                  <strong>{paymentMethodName}</strong>. En breve recibirás la coordinación y
-                  validación de tu comprobante a través de nuestros canales oficiales de Gamer Perú.
+                  <strong>{paymentMethodName}</strong>. No pudimos cargar las instrucciones de pago.
+                  Recarga esta página o usa «Ayuda con mi pedido» para consultar al equipo.
                 </p>
               </div>
             )}
           </m.div>
 
-          <m.section
-            className={styles.card}
-            aria-labelledby="order-timeline-title"
-            variants={RISE_VARIANTS}
-            custom={STEP.timeline}
-          >
-            <h2 id="order-timeline-title" className={styles.summaryTitle}>
-              <Icon icon={ListChecks} size="sm" aria-hidden="true" />
-              Seguimiento del pedido
-            </h2>
-            <OrderTimeline steps={timeline} trackingUrl={confirmation.progress.trackingUrl} />
-          </m.section>
-
+          <section className={`${styles.card} ${styles.helpCard}`}>
+            <Headphones size={24} aria-hidden="true" />
+            <div>
+              <h2 className={styles.sectionTitle}>Estamos para ayudarte</h2>
+              <p className={styles.bodyText}>
+                ¿Una consulta sobre el envío o tus productos? Ten a mano tu número de pedido.
+              </p>
+            </div>
+            <a
+              href={supportHref}
+              target={supportHref.startsWith("https:") ? "_blank" : undefined}
+              rel="noopener noreferrer"
+            >
+              Ayuda con mi pedido <ArrowUpRight size={16} aria-hidden="true" />
+            </a>
+          </section>
           <m.div className={styles.actions} variants={RISE_VARIANTS} custom={STEP.actions}>
             {confirmation.isGuestOrder && (
               <DomeLink href="/checkout/recuperar" tone="light" className={styles.ghostButton}>
@@ -379,7 +446,7 @@ export function CheckoutConfirmationView({
               </DomeLink>
             )}
             <DomeLink
-              href="/categorias/mouses"
+              href="/productos"
               tone="light"
               className={styles.ghostButton}
               data-testid="confirmation-continue-shopping"
@@ -420,7 +487,7 @@ export function CheckoutConfirmationView({
           >
             <h2 className={styles.summaryTitle}>
               <Icon icon={Package} size="sm" aria-hidden="true" />
-              Resumen de Productos
+              Tu compra
             </h2>
 
             <ul className={styles.itemsList}>
@@ -431,12 +498,26 @@ export function CheckoutConfirmationView({
                   data-testid={`confirmation-item-${item.sku}`}
                 >
                   <div className={styles.itemMain}>
-                    <span className={styles.itemQty} aria-label={`Cantidad: ${item.quantity}`}>
-                      {item.quantity}×
+                    <span className={styles.itemPhoto}>
+                      {resolvePublicMediaUrl(item.imageObjectKey) ? (
+                        <Image
+                          src={resolvePublicMediaUrl(item.imageObjectKey)!}
+                          alt=""
+                          width={64}
+                          height={64}
+                        />
+                      ) : (
+                        <Package size={24} aria-hidden="true" />
+                      )}
                     </span>
                     <div>
                       <div className={styles.itemName}>{item.productName}</div>
-                      <div className={styles.itemSku}>SKU: {item.sku}</div>
+                      {item.variantTitle && (
+                        <div className={styles.itemVariant}>{item.variantTitle}</div>
+                      )}
+                      <div className={styles.itemMeta}>
+                        Cantidad {item.quantity} · {formatCurrency(item.unitPriceCents)} c/u
+                      </div>
                     </div>
                   </div>
                   <span className={styles.itemTotal}>{formatCurrency(item.lineTotalCents)}</span>
@@ -476,9 +557,13 @@ export function CheckoutConfirmationView({
           >
             <h2 className={styles.summaryTitle}>
               <Icon icon={MapPin} size="sm" aria-hidden="true" />
-              Datos de Entrega
+              Entrega y contacto
             </h2>
             <dl className={styles.infoList}>
+              <div className={styles.infoRow}>
+                <dt className={styles.infoLabel}>Correo</dt>
+                <dd className={styles.infoValue}>{customerEmail}</dd>
+              </div>
               <div className={styles.infoRow}>
                 <dt className={styles.infoLabel}>Destinatario</dt>
                 <dd className={styles.infoValue}>{deliveryAddress.recipientName}</dd>
