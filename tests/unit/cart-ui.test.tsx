@@ -640,13 +640,13 @@ describe("GP-017 / CART5 — Storefront Cart UI Unit Test Suite", () => {
   });
 
   describe("4. CartSummary & Empty State", () => {
-    it("renders formatted subtotal and Yape/Plin notice", () => {
+    it("renders formatted subtotal and explains the next step without assuming payment providers", () => {
       render(<CartSummary subtotalCents={25980} />);
 
       expect(screen.getByTestId("cart-subtotal-value").textContent).toBe("S/ 259.80");
       expect(screen.getByTestId("cart-trust-box")).toBeDefined();
-      expect(screen.getByTestId("cart-trust-box").textContent).toContain("Yape");
-      expect(screen.getByTestId("cart-trust-box").textContent).toContain("Plin");
+      expect(screen.getByTestId("cart-trust-box").textContent).toContain("Revisa antes de pagar");
+      expect(screen.getByTestId("cart-trust-box").textContent).toContain("costo de envío");
     });
 
     it("renders empty state with semantic Link and no nested button", () => {

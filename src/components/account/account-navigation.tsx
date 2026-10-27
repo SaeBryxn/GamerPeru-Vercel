@@ -20,7 +20,7 @@ const NAV_DESTINATIONS: NavDestination[] = [
   { label: "Mis pedidos", href: "/cuenta/pedidos", icon: Package },
   { label: "Favoritos", href: "/cuenta/favoritos", icon: Heart },
   { label: "Direcciones", href: "/cuenta/direcciones", icon: MapPin },
-  { label: "Datos personales", href: "/cuenta/perfil", icon: UserRound },
+  { label: "Mi perfil", href: "/cuenta/perfil", icon: UserRound },
 ];
 
 const PILL_TRANSITION = { type: "spring", stiffness: 420, damping: 36, mass: 0.8 } as const;

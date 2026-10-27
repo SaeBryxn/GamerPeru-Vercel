@@ -15,6 +15,9 @@ const MEMBER_SINCE_FORMAT = new Intl.DateTimeFormat("es-PE", {
 
 interface AccountShellProps {
   firstName: string | null;
+  displayName?: string;
+  avatarSeed?: string;
+  accent?: "red" | "neutral";
   displayEmail: string | null;
   memberSince: Date | null;
   orderCount: number;
@@ -26,6 +29,9 @@ interface AccountShellProps {
 
 export function AccountShell({
   firstName,
+  displayName,
+  avatarSeed,
+  accent = "red",
   displayEmail,
   memberSince,
   orderCount,
@@ -33,23 +39,20 @@ export function AccountShell({
   showAdminLink = false,
   children,
 }: AccountShellProps) {
+  const greeting = displayName?.trim() ? displayName : (firstName ?? "de nuevo");
+  const avatarName = avatarSeed?.trim() ? avatarSeed : (displayEmail ?? firstName ?? "cliente");
   return (
     <main id="main-content" className={styles.page}>
-      <header className={styles.hero}>
+      <header className={styles.hero} data-accent={accent}>
         <div className={styles.heroInner}>
           <div className={styles.heroIdentity}>
-            {/* Same seed as the admin avatar, so a person sees one face across the store. */}
+            {/* Personal choice first; the existing stable seed remains the default. */}
             <span className={styles.heroAvatar} aria-hidden="true">
-              <Blobatar
-                name={displayEmail ?? firstName ?? "cliente"}
-                size={64}
-                alt=""
-                className={styles.heroAvatarImage}
-              />
+              <Blobatar name={avatarName} size={64} alt="" className={styles.heroAvatarImage} />
             </span>
             <div>
               <p className={styles.eyebrow}>Mi cuenta</p>
-              <p className={styles.shellTitle}>Hola, {firstName ?? "de nuevo"}</p>
+              <p className={styles.shellTitle}>Hola, {greeting}</p>
               <p className={styles.shellEmail}>
                 {[
                   displayEmail,

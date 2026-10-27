@@ -62,15 +62,20 @@ export default async function CuentaPage() {
     },
     {
       href: "/cuenta/perfil",
-      title: "Datos personales",
-      text: "Nombre, teléfono, documento y contraseña",
+      title: "Mi perfil",
+      text: "Tu avatar, nombre visible y datos personales",
       icon: "profile",
     },
   ];
 
   return (
     <div className={styles.sectionStack}>
-      <h1 className={styles.visuallyHidden}>Resumen de tu cuenta</h1>
+      <div>
+        <h1 className={styles.title}>Todo a mano</h1>
+        <p className={styles.subtitle}>
+          Sigue tus compras, organiza tus entregas y personaliza tu perfil.
+        </p>
+      </div>
 
       <section aria-labelledby="latest-order-title" className={styles.sectionStack}>
         <div className={styles.sectionHeader}>
@@ -85,6 +90,9 @@ export default async function CuentaPage() {
             <p className={`${styles.cardText} ${styles.cardTextFlush}`}>
               Todavía no has hecho pedidos. Cuando compres, aquí verás su estado al instante.
             </p>
+            <DomeLink href="/productos" tone="dark" className={styles.domeSmall}>
+              Explorar productos
+            </DomeLink>
           </div>
         )}
       </section>

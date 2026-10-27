@@ -25,6 +25,8 @@ import type {
 } from "@/lib/checkout/types";
 import styles from "./checkout-page-client.module.css";
 import { PurchaseProgress } from "./purchase-progress";
+import { CheckoutReview } from "./checkout-review";
+import { CheckoutItems } from "./checkout-items";
 import {
   CHECKOUT_DRAFT_KEY,
   readCheckoutDraft,
@@ -114,6 +116,21 @@ export function CheckoutPageClient({
   const [reviewChanges, setReviewChanges] = useState<string[]>([]);
   const [draftRestored, setDraftRestored] = useState(false);
   const summaryRef = useRef<HTMLHeadingElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const editSection = (section: "contact" | "delivery" | "shipping" | "payment" = "contact") => {
+    setReviewReady(false);
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(`section-${section}-heading`);
+      target?.scrollIntoView?.({ block: "center", behavior: "instant" });
+      const control = target
+        ?.closest("section")
+        ?.querySelector<HTMLElement>("input:not([disabled]),select,button");
+      control?.focus({ preventScroll: true });
+    });
+  };
+  useEffect(() => {
+    if (reviewReady) document.getElementById("checkout-review-title")?.focus();
+  }, [reviewReady]);
   const [loadedDraftScope, setLoadedDraftScope] = useState("");
   const draftScope = JSON.stringify([
     initialContext.auth.status,
@@ -216,6 +233,7 @@ export function CheckoutPageClient({
   }
 
   const resetAttemptId = () => {
+    setReviewReady(false);
     const id = safelyGenerateAttemptId();
     if (id) {
       attemptIdRef.current = id;
@@ -354,6 +372,12 @@ export function CheckoutPageClient({
     }
 
     setFormErrors(errors);
+    if (Object.keys(errors).length) {
+      setReviewReady(false);
+      window.requestAnimationFrame(() => {
+        formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+      });
+    }
     return Object.keys(errors).length === 0;
   };
 
@@ -556,9 +580,16 @@ export function CheckoutPageClient({
   return (
     <div className={styles.pageWrapper} data-testid="checkout-page" data-hydrated={isHydrated}>
       <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>Finalizar Compra</h1>
+        <Link href="/carrito" className={styles.backLink}>
+          ← Volver al carrito
+        </Link>
+        <h1 className={styles.pageTitle}>
+          {reviewReady ? "Un último vistazo" : "Finalizar tu compra"}
+        </h1>
         <p className={styles.pageSubtitle}>
-          Completa tus datos de contacto, entrega y método de pago para registrar tu pedido.
+          {reviewReady
+            ? "Comprueba tu entrega y el total. El pago se realiza después de registrar el pedido."
+            : "Cuéntanos dónde recibirás tu pedido. Después podrás revisarlo antes de pagar."}
         </p>
       </div>
 
@@ -663,487 +694,536 @@ export function CheckoutPageClient({
           Recuperamos los datos que escribiste en esta pestaña. Revisa que sigan correctos.
         </p>
       )}
-      <form onSubmit={handleSubmit} className={styles.checkoutGrid} noValidate>
+      <form ref={formRef} onSubmit={handleSubmit} className={styles.checkoutGrid} noValidate>
         {/* Left Column: Checkout Sections */}
         <div className={styles.formColumn}>
-          {/* Section 1: Contact Information */}
-          <section className={styles.sectionCard} aria-labelledby="section-contact-heading">
-            <div className={styles.sectionHeader}>
-              <span className={styles.sectionNumber}>1</span>
-              <h2 id="section-contact-heading" className={styles.sectionTitle}>
-                Información de Contacto
-              </h2>
-            </div>
-
-            <div className={styles.formGroup}>
-              <label htmlFor="checkout-email" className={styles.label}>
-                Correo electrónico <span className={styles.requiredMark}>*</span>
-              </label>
-              <input
-                id="checkout-email"
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setReviewChangedWarning(null);
-                  resetAttemptId();
-                }}
-                disabled={isAuthenticated && Boolean(currentContext.auth.email)}
-                className={[styles.input, formErrors.email ? styles.inputError : ""]
-                  .filter(Boolean)
-                  .join(" ")}
-                placeholder="tu@correo.com"
-                data-testid="checkout-input-email"
-              />
-              {formErrors.email && <span className={styles.fieldError}>{formErrors.email}</span>}
-              <span className={styles.helpText}>
-                Enviaremos la confirmación del pedido y el comprobante a esta dirección.
-              </span>
-            </div>
-          </section>
-
-          {/* Section 2: Delivery Address */}
-          <section className={styles.sectionCard} aria-labelledby="section-delivery-heading">
-            <div className={styles.sectionHeader}>
-              <span className={styles.sectionNumber}>2</span>
-              <h2 id="section-delivery-heading" className={styles.sectionTitle}>
-                Dirección de Entrega
-              </h2>
-            </div>
-
-            {/* Authenticated Mode Switcher */}
-            {isAuthenticated && savedAddresses.length > 0 && (
-              <div className={styles.addressModeToggle}>
-                <label className={styles.modeRadio}>
-                  <input
-                    type="radio"
-                    name="deliveryMode"
-                    value="SAVED_ADDRESS"
-                    checked={deliveryMode === "SAVED_ADDRESS"}
-                    onChange={() => {
-                      setDeliveryMode("SAVED_ADDRESS");
-                      setReviewChangedWarning(null);
-                      resetAttemptId();
-                    }}
-                    className={styles.radioInput}
-                    data-testid="checkout-mode-saved-address"
-                  />
-                  <div className={styles.optionContent}>
-                    <span className={styles.optionTitle}>Usar dirección guardada</span>
-                  </div>
-                </label>
-
-                <label className={styles.modeRadio}>
-                  <input
-                    type="radio"
-                    name="deliveryMode"
-                    value="INLINE"
-                    checked={deliveryMode === "INLINE"}
-                    onChange={() => {
-                      setDeliveryMode("INLINE");
-                      setReviewChangedWarning(null);
-                      resetAttemptId();
-                    }}
-                    className={styles.radioInput}
-                    data-testid="checkout-mode-new-address"
-                  />
-                  <div className={styles.optionContent}>
-                    <span className={styles.optionTitle}>Ingresar nueva dirección</span>
-                  </div>
-                </label>
+          {reviewReady && (
+            <CheckoutReview
+              email={email}
+              address={
+                deliveryMode === "SAVED_ADDRESS"
+                  ? savedAddresses.find((address) => address.id === selectedAddressId)
+                  : inlineAddress
+              }
+              shipping={currentContext.shippingMethods.find(
+                (method) => method.code === selectedShippingCode
+              )}
+              payment={currentContext.paymentMethods.find(
+                (method) => method.code === selectedPaymentCode
+              )}
+              onEdit={editSection}
+              busy={isSubmitting || isRefreshingContext}
+            />
+          )}
+          <div className={styles.formSections} hidden={reviewReady}>
+            <p className={styles.requiredHint}>
+              Los campos con * son obligatorios.{" "}
+              {isAuthenticated
+                ? "Puedes usar una dirección de tu cuenta."
+                : "Puedes comprar como invitado, sin crear una cuenta."}
+            </p>
+            {Object.keys(formErrors).length > 0 && (
+              <div role="alert" className={styles.errorAlert}>
+                Revisa los campos señalados para continuar.
               </div>
             )}
+            {/* Section 1: Contact Information */}
+            <section className={styles.sectionCard} aria-labelledby="section-contact-heading">
+              <div className={styles.sectionHeader}>
+                <span className={styles.sectionNumber}>1</span>
+                <h2 id="section-contact-heading" className={styles.sectionTitle}>
+                  Información de Contacto
+                </h2>
+              </div>
 
-            {/* Saved Addresses Radio List */}
-            {isAuthenticated && deliveryMode === "SAVED_ADDRESS" && savedAddresses.length > 0 && (
-              <div className={styles.optionsList} data-testid="checkout-saved-addresses-list">
-                {savedAddresses.map((addr) => {
-                  const isSelected = selectedAddressId === addr.id;
-                  return (
-                    <label
-                      key={addr.id}
-                      className={[styles.optionCard, isSelected ? styles.optionCardSelected : ""]
-                        .filter(Boolean)
-                        .join(" ")}
-                      data-testid={`saved-address-${addr.id}`}
-                    >
+              <div className={styles.formGroup}>
+                <label htmlFor="checkout-email" className={styles.label}>
+                  Correo electrónico <span className={styles.requiredMark}>*</span>
+                </label>
+                <input
+                  id="checkout-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setReviewChangedWarning(null);
+                    resetAttemptId();
+                  }}
+                  disabled={isAuthenticated && Boolean(currentContext.auth.email)}
+                  className={[styles.input, formErrors.email ? styles.inputError : ""]
+                    .filter(Boolean)
+                    .join(" ")}
+                  placeholder="tu@correo.com"
+                  data-testid="checkout-input-email"
+                  autoComplete="email"
+                  aria-invalid={Boolean(formErrors.email)}
+                />
+                {formErrors.email && <span className={styles.fieldError}>{formErrors.email}</span>}
+                <span className={styles.helpText}>
+                  Enviaremos la confirmación del pedido y el comprobante a esta dirección.
+                </span>
+              </div>
+            </section>
+
+            {/* Section 2: Delivery Address */}
+            <section className={styles.sectionCard} aria-labelledby="section-delivery-heading">
+              <div className={styles.sectionHeader}>
+                <span className={styles.sectionNumber}>2</span>
+                <h2 id="section-delivery-heading" className={styles.sectionTitle}>
+                  Dirección de Entrega
+                </h2>
+              </div>
+
+              {/* Authenticated Mode Switcher */}
+              {isAuthenticated && savedAddresses.length > 0 && (
+                <div className={styles.addressModeToggle}>
+                  <label className={styles.modeRadio}>
+                    <input
+                      type="radio"
+                      name="deliveryMode"
+                      value="SAVED_ADDRESS"
+                      checked={deliveryMode === "SAVED_ADDRESS"}
+                      onChange={() => {
+                        setDeliveryMode("SAVED_ADDRESS");
+                        setReviewChangedWarning(null);
+                        resetAttemptId();
+                      }}
+                      className={styles.radioInput}
+                      data-testid="checkout-mode-saved-address"
+                    />
+                    <div className={styles.optionContent}>
+                      <span className={styles.optionTitle}>Usar dirección guardada</span>
+                    </div>
+                  </label>
+
+                  <label className={styles.modeRadio}>
+                    <input
+                      type="radio"
+                      name="deliveryMode"
+                      value="INLINE"
+                      checked={deliveryMode === "INLINE"}
+                      onChange={() => {
+                        setDeliveryMode("INLINE");
+                        setReviewChangedWarning(null);
+                        resetAttemptId();
+                      }}
+                      className={styles.radioInput}
+                      data-testid="checkout-mode-new-address"
+                    />
+                    <div className={styles.optionContent}>
+                      <span className={styles.optionTitle}>Ingresar nueva dirección</span>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              {/* Saved Addresses Radio List */}
+              {isAuthenticated && deliveryMode === "SAVED_ADDRESS" && savedAddresses.length > 0 && (
+                <div className={styles.optionsList} data-testid="checkout-saved-addresses-list">
+                  {savedAddresses.map((addr) => {
+                    const isSelected = selectedAddressId === addr.id;
+                    return (
+                      <label
+                        key={addr.id}
+                        className={[styles.optionCard, isSelected ? styles.optionCardSelected : ""]
+                          .filter(Boolean)
+                          .join(" ")}
+                        data-testid={`saved-address-${addr.id}`}
+                      >
+                        <input
+                          type="radio"
+                          name="savedAddress"
+                          value={addr.id}
+                          checked={isSelected}
+                          onChange={() => {
+                            setSelectedAddressId(addr.id);
+                            setReviewChangedWarning(null);
+                            resetAttemptId();
+                          }}
+                          className={styles.radioInput}
+                        />
+                        <div className={styles.optionContent}>
+                          <div className={styles.optionTitleRow}>
+                            <span className={styles.optionTitle}>{addr.recipientName}</span>
+                            {addr.isDefault && (
+                              <span className={styles.badgeDefault}>Predeterminada</span>
+                            )}
+                          </div>
+                          <p className={styles.optionDescription}>
+                            {addr.streetAddress}
+                            {addr.apartmentSuite ? `, ${addr.apartmentSuite}` : ""}, {addr.district}
+                            , {addr.province}, {addr.department}
+                          </p>
+                          <p className={styles.optionDescription}>Telf: {addr.phone}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Inline Address Form (Guests or New Address Mode) */}
+              {(deliveryMode === "INLINE" || !isAuthenticated || savedAddresses.length === 0) && (
+                <div className={styles.formGrid} data-testid="checkout-inline-address-form">
+                  <div className={styles.formGridTwoCol}>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="inline-recipientName" className={styles.label}>
+                        Nombre del destinatario <span className={styles.requiredMark}>*</span>
+                      </label>
                       <input
-                        type="radio"
-                        name="savedAddress"
-                        value={addr.id}
-                        checked={isSelected}
-                        onChange={() => {
-                          setSelectedAddressId(addr.id);
+                        id="inline-recipientName"
+                        type="text"
+                        value={inlineAddress.recipientName}
+                        onChange={(e) => {
+                          setInlineAddress((prev) => ({ ...prev, recipientName: e.target.value }));
                           setReviewChangedWarning(null);
                           resetAttemptId();
                         }}
-                        className={styles.radioInput}
+                        className={[styles.input, formErrors.recipientName ? styles.inputError : ""]
+                          .filter(Boolean)
+                          .join(" ")}
+                        placeholder="Nombre y Apellidos"
+                        data-testid="checkout-input-recipient-name"
+                        autoComplete="shipping name"
+                        maxLength={150}
+                        aria-invalid={Boolean(formErrors.recipientName)}
                       />
-                      <div className={styles.optionContent}>
-                        <div className={styles.optionTitleRow}>
-                          <span className={styles.optionTitle}>{addr.recipientName}</span>
-                          {addr.isDefault && (
-                            <span className={styles.badgeDefault}>Predeterminada</span>
+                      {formErrors.recipientName && (
+                        <span className={styles.fieldError}>{formErrors.recipientName}</span>
+                      )}
+                    </div>
+
+                    <div className={styles.formGroup}>
+                      <label htmlFor="inline-phone" className={styles.label}>
+                        Teléfono de contacto <span className={styles.requiredMark}>*</span>
+                      </label>
+                      <input
+                        id="inline-phone"
+                        type="tel"
+                        value={inlineAddress.phone}
+                        onChange={(e) => {
+                          setInlineAddress((prev) => ({ ...prev, phone: e.target.value }));
+                          setReviewChangedWarning(null);
+                          resetAttemptId();
+                        }}
+                        className={[styles.input, formErrors.phone ? styles.inputError : ""]
+                          .filter(Boolean)
+                          .join(" ")}
+                        placeholder="987654321"
+                        data-testid="checkout-input-phone"
+                        autoComplete="shipping tel"
+                        maxLength={20}
+                        aria-invalid={Boolean(formErrors.phone)}
+                      />
+                      {formErrors.phone && (
+                        <span className={styles.fieldError}>{formErrors.phone}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label htmlFor="inline-streetAddress" className={styles.label}>
+                      Dirección (Calle, Avenida, Jr.) <span className={styles.requiredMark}>*</span>
+                    </label>
+                    <input
+                      id="inline-streetAddress"
+                      type="text"
+                      value={inlineAddress.streetAddress}
+                      onChange={(e) => {
+                        setInlineAddress((prev) => ({ ...prev, streetAddress: e.target.value }));
+                        setReviewChangedWarning(null);
+                        resetAttemptId();
+                      }}
+                      className={[styles.input, formErrors.streetAddress ? styles.inputError : ""]
+                        .filter(Boolean)
+                        .join(" ")}
+                      placeholder="Av. Pardo y Aliaga 640"
+                      data-testid="checkout-input-street-address"
+                      autoComplete="shipping address-line1"
+                      maxLength={255}
+                      aria-invalid={Boolean(formErrors.streetAddress)}
+                    />
+                    {formErrors.streetAddress && (
+                      <span className={styles.fieldError}>{formErrors.streetAddress}</span>
+                    )}
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label htmlFor="inline-apartmentSuite" className={styles.label}>
+                      Dpto / Interior / Suite (Opcional)
+                    </label>
+                    <input
+                      id="inline-apartmentSuite"
+                      type="text"
+                      value={inlineAddress.apartmentSuite}
+                      onChange={(e) => {
+                        setInlineAddress((prev) => ({ ...prev, apartmentSuite: e.target.value }));
+                        setReviewChangedWarning(null);
+                        resetAttemptId();
+                      }}
+                      className={styles.input}
+                      placeholder="Ej: Dpto 402, Piso 3"
+                      data-testid="checkout-input-apartment"
+                      autoComplete="shipping address-line2"
+                      maxLength={100}
+                    />
+                  </div>
+
+                  <div className={styles.formGridThreeCol}>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="inline-department" className={styles.label}>
+                        Departamento <span className={styles.requiredMark}>*</span>
+                      </label>
+                      <select
+                        id="inline-department"
+                        value={inlineAddress.department}
+                        onChange={(e) => {
+                          const department = e.target.value;
+                          // A new department invalidates the province and district typed for the old one.
+                          const provinces = provinceSuggestions(department);
+                          setInlineAddress((prev) => ({
+                            ...prev,
+                            department,
+                            province: provinces.length === 1 ? (provinces[0] ?? "") : "",
+                            district: "",
+                          }));
+                          setReviewChangedWarning(null);
+                          resetAttemptId();
+                        }}
+                        className={[styles.input, formErrors.department ? styles.inputError : ""]
+                          .filter(Boolean)
+                          .join(" ")}
+                        data-testid="checkout-input-department"
+                        autoComplete="shipping address-level1"
+                        aria-invalid={Boolean(formErrors.department)}
+                      >
+                        <option value="">Elige un departamento</option>
+                        {PERU_DEPARTMENTS.map((department) => (
+                          <option key={department} value={department}>
+                            {department}
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.department && (
+                        <span className={styles.fieldError}>{formErrors.department}</span>
+                      )}
+                    </div>
+
+                    <div className={styles.formGroup}>
+                      <label htmlFor="inline-province" className={styles.label}>
+                        Provincia <span className={styles.requiredMark}>*</span>
+                      </label>
+                      <input
+                        id="inline-province"
+                        type="text"
+                        value={inlineAddress.province}
+                        onChange={(e) => {
+                          setInlineAddress((prev) => ({ ...prev, province: e.target.value }));
+                          setReviewChangedWarning(null);
+                          resetAttemptId();
+                        }}
+                        className={[styles.input, formErrors.province ? styles.inputError : ""]
+                          .filter(Boolean)
+                          .join(" ")}
+                        placeholder="Lima"
+                        list="inline-province-options"
+                        autoComplete="address-level2"
+                        data-testid="checkout-input-province"
+                        aria-invalid={Boolean(formErrors.province)}
+                      />
+                      <datalist id="inline-province-options">
+                        {provinceSuggestions(inlineAddress.department).map((province) => (
+                          <option key={province} value={province} />
+                        ))}
+                      </datalist>
+                      {formErrors.province && (
+                        <span className={styles.fieldError}>{formErrors.province}</span>
+                      )}
+                    </div>
+
+                    <div className={styles.formGroup}>
+                      <label htmlFor="inline-district" className={styles.label}>
+                        Distrito <span className={styles.requiredMark}>*</span>
+                      </label>
+                      <input
+                        id="inline-district"
+                        type="text"
+                        value={inlineAddress.district}
+                        onChange={(e) => {
+                          setInlineAddress((prev) => ({ ...prev, district: e.target.value }));
+                          setReviewChangedWarning(null);
+                          resetAttemptId();
+                        }}
+                        className={[styles.input, formErrors.district ? styles.inputError : ""]
+                          .filter(Boolean)
+                          .join(" ")}
+                        placeholder="Miraflores"
+                        list="inline-district-options"
+                        autoComplete="address-level3"
+                        data-testid="checkout-input-district"
+                        aria-invalid={Boolean(formErrors.district)}
+                      />
+                      <datalist id="inline-district-options">
+                        {districtSuggestions(inlineAddress.department, inlineAddress.province).map(
+                          (district) => (
+                            <option key={district} value={district} />
+                          )
+                        )}
+                      </datalist>
+                      {formErrors.district && (
+                        <span className={styles.fieldError}>{formErrors.district}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label htmlFor="inline-referenceNotes" className={styles.label}>
+                      Referencia de entrega (Opcional)
+                    </label>
+                    <input
+                      id="inline-referenceNotes"
+                      type="text"
+                      value={inlineAddress.referenceNotes}
+                      onChange={(e) => {
+                        setInlineAddress((prev) => ({ ...prev, referenceNotes: e.target.value }));
+                        setReviewChangedWarning(null);
+                        resetAttemptId();
+                      }}
+                      className={styles.input}
+                      placeholder="Ej: Frente al parque, rejas negras"
+                      data-testid="checkout-input-reference"
+                    />
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Section 3: Shipping Method */}
+            <section className={styles.sectionCard} aria-labelledby="section-shipping-heading">
+              <div className={styles.sectionHeader}>
+                <span className={styles.sectionNumber}>3</span>
+                <h2 id="section-shipping-heading" className={styles.sectionTitle}>
+                  Método de Envío
+                </h2>
+              </div>
+
+              {currentContext.shippingMethods.length === 0 ? (
+                <div
+                  className={styles.warningAlert}
+                  role="alert"
+                  data-testid="checkout-no-shipping-alert"
+                >
+                  <Icon icon={AlertTriangle} size="sm" aria-hidden="true" />
+                  <span>No hay métodos de envío disponibles temporalmente para tu ubicación.</span>
+                </div>
+              ) : (
+                <div className={styles.optionsList} data-testid="checkout-shipping-methods-list">
+                  {currentContext.shippingMethods.map((method) => {
+                    const isSelected = selectedShippingCode === method.code;
+                    return (
+                      <label
+                        key={method.code}
+                        className={[styles.optionCard, isSelected ? styles.optionCardSelected : ""]
+                          .filter(Boolean)
+                          .join(" ")}
+                        data-testid={`shipping-method-${method.code}`}
+                      >
+                        <input
+                          type="radio"
+                          name="shippingMethod"
+                          value={method.code}
+                          checked={isSelected}
+                          onChange={() => handleShippingChange(method.code)}
+                          className={styles.radioInput}
+                        />
+                        <div className={styles.optionContent}>
+                          <div className={styles.optionTitleRow}>
+                            <span className={styles.optionTitle}>{method.name}</span>
+                            <span className={styles.optionPrice}>
+                              {formatCurrency(method.basePriceCents)}
+                            </span>
+                          </div>
+                          {method.estimatedDaysMin !== null && method.estimatedDaysMax !== null && (
+                            <p className={styles.optionDescription}>
+                              Tiempo estimado: {method.estimatedDaysMin} a {method.estimatedDaysMax}{" "}
+                              días hábiles
+                            </p>
                           )}
                         </div>
-                        <p className={styles.optionDescription}>
-                          {addr.streetAddress}
-                          {addr.apartmentSuite ? `, ${addr.apartmentSuite}` : ""}, {addr.district},{" "}
-                          {addr.province}, {addr.department}
-                        </p>
-                        <p className={styles.optionDescription}>Telf: {addr.phone}</p>
-                      </div>
-                    </label>
-                  );
-                })}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            {/* Section 4: Payment Method (GP-018 Strict Safe Boundary) */}
+            <section className={styles.sectionCard} aria-labelledby="section-payment-heading">
+              <div className={styles.sectionHeader}>
+                <span className={styles.sectionNumber}>4</span>
+                <h2 id="section-payment-heading" className={styles.sectionTitle}>
+                  Método de Pago
+                </h2>
               </div>
-            )}
 
-            {/* Inline Address Form (Guests or New Address Mode) */}
-            {(deliveryMode === "INLINE" || !isAuthenticated || savedAddresses.length === 0) && (
-              <div className={styles.formGrid} data-testid="checkout-inline-address-form">
-                <div className={styles.formGridTwoCol}>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="inline-recipientName" className={styles.label}>
-                      Nombre del destinatario <span className={styles.requiredMark}>*</span>
-                    </label>
-                    <input
-                      id="inline-recipientName"
-                      type="text"
-                      value={inlineAddress.recipientName}
-                      onChange={(e) => {
-                        setInlineAddress((prev) => ({ ...prev, recipientName: e.target.value }));
-                        setReviewChangedWarning(null);
-                        resetAttemptId();
-                      }}
-                      className={[styles.input, formErrors.recipientName ? styles.inputError : ""]
-                        .filter(Boolean)
-                        .join(" ")}
-                      placeholder="Nombre y Apellidos"
-                      data-testid="checkout-input-recipient-name"
-                    />
-                    {formErrors.recipientName && (
-                      <span className={styles.fieldError}>{formErrors.recipientName}</span>
-                    )}
-                  </div>
-
-                  <div className={styles.formGroup}>
-                    <label htmlFor="inline-phone" className={styles.label}>
-                      Teléfono de contacto <span className={styles.requiredMark}>*</span>
-                    </label>
-                    <input
-                      id="inline-phone"
-                      type="tel"
-                      value={inlineAddress.phone}
-                      onChange={(e) => {
-                        setInlineAddress((prev) => ({ ...prev, phone: e.target.value }));
-                        setReviewChangedWarning(null);
-                        resetAttemptId();
-                      }}
-                      className={[styles.input, formErrors.phone ? styles.inputError : ""]
-                        .filter(Boolean)
-                        .join(" ")}
-                      placeholder="987654321"
-                      data-testid="checkout-input-phone"
-                    />
-                    {formErrors.phone && (
-                      <span className={styles.fieldError}>{formErrors.phone}</span>
-                    )}
-                  </div>
+              {currentContext.paymentMethods.length === 0 ? (
+                <div
+                  className={styles.warningAlert}
+                  role="alert"
+                  data-testid="checkout-no-payment-alert"
+                >
+                  <Icon icon={AlertTriangle} size="sm" aria-hidden="true" />
+                  <span>No hay métodos de pago disponibles en este momento.</span>
                 </div>
-
-                <div className={styles.formGroup}>
-                  <label htmlFor="inline-streetAddress" className={styles.label}>
-                    Dirección (Calle, Avenida, Jr.) <span className={styles.requiredMark}>*</span>
-                  </label>
-                  <input
-                    id="inline-streetAddress"
-                    type="text"
-                    value={inlineAddress.streetAddress}
-                    onChange={(e) => {
-                      setInlineAddress((prev) => ({ ...prev, streetAddress: e.target.value }));
-                      setReviewChangedWarning(null);
-                      resetAttemptId();
-                    }}
-                    className={[styles.input, formErrors.streetAddress ? styles.inputError : ""]
-                      .filter(Boolean)
-                      .join(" ")}
-                    placeholder="Av. Pardo y Aliaga 640"
-                    data-testid="checkout-input-street-address"
-                  />
-                  {formErrors.streetAddress && (
-                    <span className={styles.fieldError}>{formErrors.streetAddress}</span>
-                  )}
-                </div>
-
-                <div className={styles.formGroup}>
-                  <label htmlFor="inline-apartmentSuite" className={styles.label}>
-                    Dpto / Interior / Suite (Opcional)
-                  </label>
-                  <input
-                    id="inline-apartmentSuite"
-                    type="text"
-                    value={inlineAddress.apartmentSuite}
-                    onChange={(e) => {
-                      setInlineAddress((prev) => ({ ...prev, apartmentSuite: e.target.value }));
-                      setReviewChangedWarning(null);
-                      resetAttemptId();
-                    }}
-                    className={styles.input}
-                    placeholder="Ej: Dpto 402, Piso 3"
-                    data-testid="checkout-input-apartment"
-                  />
-                </div>
-
-                <div className={styles.formGridThreeCol}>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="inline-department" className={styles.label}>
-                      Departamento <span className={styles.requiredMark}>*</span>
-                    </label>
-                    <select
-                      id="inline-department"
-                      value={inlineAddress.department}
-                      onChange={(e) => {
-                        const department = e.target.value;
-                        // A new department invalidates the province and district typed for the old one.
-                        const provinces = provinceSuggestions(department);
-                        setInlineAddress((prev) => ({
-                          ...prev,
-                          department,
-                          province: provinces.length === 1 ? (provinces[0] ?? "") : "",
-                          district: "",
-                        }));
-                        setReviewChangedWarning(null);
-                        resetAttemptId();
-                      }}
-                      className={[styles.input, formErrors.department ? styles.inputError : ""]
-                        .filter(Boolean)
-                        .join(" ")}
-                      data-testid="checkout-input-department"
-                    >
-                      <option value="">Elige un departamento</option>
-                      {PERU_DEPARTMENTS.map((department) => (
-                        <option key={department} value={department}>
-                          {department}
-                        </option>
-                      ))}
-                    </select>
-                    {formErrors.department && (
-                      <span className={styles.fieldError}>{formErrors.department}</span>
-                    )}
-                  </div>
-
-                  <div className={styles.formGroup}>
-                    <label htmlFor="inline-province" className={styles.label}>
-                      Provincia <span className={styles.requiredMark}>*</span>
-                    </label>
-                    <input
-                      id="inline-province"
-                      type="text"
-                      value={inlineAddress.province}
-                      onChange={(e) => {
-                        setInlineAddress((prev) => ({ ...prev, province: e.target.value }));
-                        setReviewChangedWarning(null);
-                        resetAttemptId();
-                      }}
-                      className={[styles.input, formErrors.province ? styles.inputError : ""]
-                        .filter(Boolean)
-                        .join(" ")}
-                      placeholder="Lima"
-                      list="inline-province-options"
-                      autoComplete="address-level2"
-                      data-testid="checkout-input-province"
-                    />
-                    <datalist id="inline-province-options">
-                      {provinceSuggestions(inlineAddress.department).map((province) => (
-                        <option key={province} value={province} />
-                      ))}
-                    </datalist>
-                    {formErrors.province && (
-                      <span className={styles.fieldError}>{formErrors.province}</span>
-                    )}
-                  </div>
-
-                  <div className={styles.formGroup}>
-                    <label htmlFor="inline-district" className={styles.label}>
-                      Distrito <span className={styles.requiredMark}>*</span>
-                    </label>
-                    <input
-                      id="inline-district"
-                      type="text"
-                      value={inlineAddress.district}
-                      onChange={(e) => {
-                        setInlineAddress((prev) => ({ ...prev, district: e.target.value }));
-                        setReviewChangedWarning(null);
-                        resetAttemptId();
-                      }}
-                      className={[styles.input, formErrors.district ? styles.inputError : ""]
-                        .filter(Boolean)
-                        .join(" ")}
-                      placeholder="Miraflores"
-                      list="inline-district-options"
-                      autoComplete="address-level3"
-                      data-testid="checkout-input-district"
-                    />
-                    <datalist id="inline-district-options">
-                      {districtSuggestions(inlineAddress.department, inlineAddress.province).map(
-                        (district) => (
-                          <option key={district} value={district} />
-                        )
-                      )}
-                    </datalist>
-                    {formErrors.district && (
-                      <span className={styles.fieldError}>{formErrors.district}</span>
-                    )}
-                  </div>
-                </div>
-
-                <div className={styles.formGroup}>
-                  <label htmlFor="inline-referenceNotes" className={styles.label}>
-                    Referencia de entrega (Opcional)
-                  </label>
-                  <input
-                    id="inline-referenceNotes"
-                    type="text"
-                    value={inlineAddress.referenceNotes}
-                    onChange={(e) => {
-                      setInlineAddress((prev) => ({ ...prev, referenceNotes: e.target.value }));
-                      setReviewChangedWarning(null);
-                      resetAttemptId();
-                    }}
-                    className={styles.input}
-                    placeholder="Ej: Frente al parque, rejas negras"
-                    data-testid="checkout-input-reference"
-                  />
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* Section 3: Shipping Method */}
-          <section className={styles.sectionCard} aria-labelledby="section-shipping-heading">
-            <div className={styles.sectionHeader}>
-              <span className={styles.sectionNumber}>3</span>
-              <h2 id="section-shipping-heading" className={styles.sectionTitle}>
-                Método de Envío
-              </h2>
-            </div>
-
-            {currentContext.shippingMethods.length === 0 ? (
-              <div
-                className={styles.warningAlert}
-                role="alert"
-                data-testid="checkout-no-shipping-alert"
-              >
-                <Icon icon={AlertTriangle} size="sm" aria-hidden="true" />
-                <span>No hay métodos de envío disponibles temporalmente para tu ubicación.</span>
-              </div>
-            ) : (
-              <div className={styles.optionsList} data-testid="checkout-shipping-methods-list">
-                {currentContext.shippingMethods.map((method) => {
-                  const isSelected = selectedShippingCode === method.code;
-                  return (
-                    <label
-                      key={method.code}
-                      className={[styles.optionCard, isSelected ? styles.optionCardSelected : ""]
-                        .filter(Boolean)
-                        .join(" ")}
-                      data-testid={`shipping-method-${method.code}`}
-                    >
-                      <input
-                        type="radio"
-                        name="shippingMethod"
-                        value={method.code}
-                        checked={isSelected}
-                        onChange={() => handleShippingChange(method.code)}
-                        className={styles.radioInput}
-                      />
-                      <div className={styles.optionContent}>
-                        <div className={styles.optionTitleRow}>
+              ) : (
+                <div className={styles.optionsList} data-testid="checkout-payment-methods-list">
+                  {currentContext.paymentMethods.map((method) => {
+                    const isSelected = selectedPaymentCode === method.code;
+                    return (
+                      <label
+                        key={method.code}
+                        className={[styles.optionCard, isSelected ? styles.optionCardSelected : ""]
+                          .filter(Boolean)
+                          .join(" ")}
+                        data-testid={`payment-method-${method.code}`}
+                      >
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value={method.code}
+                          checked={isSelected}
+                          onChange={() => handlePaymentChange(method.code)}
+                          className={styles.radioInput}
+                        />
+                        <div className={styles.optionContent}>
                           <span className={styles.optionTitle}>{method.name}</span>
-                          <span className={styles.optionPrice}>
-                            {formatCurrency(method.basePriceCents)}
-                          </span>
-                        </div>
-                        {method.estimatedDaysMin !== null && method.estimatedDaysMax !== null && (
                           <p className={styles.optionDescription}>
-                            Tiempo estimado: {method.estimatedDaysMin} a {method.estimatedDaysMax}{" "}
-                            días hábiles
+                            Pago seguro mediante billetera digital o transferencia bancaria en Soles
+                            (PEN).
                           </p>
-                        )}
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
 
-          {/* Section 4: Payment Method (GP-018 Strict Safe Boundary) */}
-          <section className={styles.sectionCard} aria-labelledby="section-payment-heading">
-            <div className={styles.sectionHeader}>
-              <span className={styles.sectionNumber}>4</span>
-              <h2 id="section-payment-heading" className={styles.sectionTitle}>
-                Método de Pago
-              </h2>
-            </div>
-
-            {currentContext.paymentMethods.length === 0 ? (
-              <div
-                className={styles.warningAlert}
-                role="alert"
-                data-testid="checkout-no-payment-alert"
-              >
-                <Icon icon={AlertTriangle} size="sm" aria-hidden="true" />
-                <span>No hay métodos de pago disponibles en este momento.</span>
+              {/* Strict GP-019 Neutral Privacy Disclaimer */}
+              <div className={styles.paymentNoticeBox} data-testid="checkout-payment-notice">
+                <Icon
+                  icon={ShieldCheck}
+                  size="md"
+                  className={styles.paymentNoticeIcon}
+                  aria-hidden="true"
+                />
+                <p className={styles.paymentNoticeText}>
+                  Tu pedido se registrará con estado <strong>Pendiente de Pago</strong>. Al
+                  confirmar verás las instrucciones de pago y podrás enviar el comprobante. Elegir
+                  un medio de pago no te cobra todavía.
+                </p>
               </div>
-            ) : (
-              <div className={styles.optionsList} data-testid="checkout-payment-methods-list">
-                {currentContext.paymentMethods.map((method) => {
-                  const isSelected = selectedPaymentCode === method.code;
-                  return (
-                    <label
-                      key={method.code}
-                      className={[styles.optionCard, isSelected ? styles.optionCardSelected : ""]
-                        .filter(Boolean)
-                        .join(" ")}
-                      data-testid={`payment-method-${method.code}`}
-                    >
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value={method.code}
-                        checked={isSelected}
-                        onChange={() => handlePaymentChange(method.code)}
-                        className={styles.radioInput}
-                      />
-                      <div className={styles.optionContent}>
-                        <span className={styles.optionTitle}>{method.name}</span>
-                        <p className={styles.optionDescription}>
-                          Pago seguro mediante billetera digital o transferencia bancaria en Soles
-                          (PEN).
-                        </p>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Strict GP-019 Neutral Privacy Disclaimer */}
-            <div className={styles.paymentNoticeBox} data-testid="checkout-payment-notice">
-              <Icon
-                icon={ShieldCheck}
-                size="md"
-                className={styles.paymentNoticeIcon}
-                aria-hidden="true"
-              />
-              <p className={styles.paymentNoticeText}>
-                Tu pedido se registrará con estado <strong>Pendiente de Pago</strong>. Al confirmar
-                la compra, recibirás los detalles para coordinar tu pago de forma segura.
-              </p>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
 
         {/* Right Column: Order Summary & Review */}
@@ -1160,23 +1240,7 @@ export function CheckoutPageClient({
             )}
 
             {/* Items List */}
-            <div className={styles.itemsList}>
-              {cart.items.map((item) => (
-                <div
-                  key={item.variantId}
-                  className={styles.itemRow}
-                  data-testid={`checkout-item-${item.sku}`}
-                >
-                  <div className={styles.itemDetails}>
-                    <span className={styles.itemName}>
-                      {item.productName} × {item.quantity}
-                    </span>
-                    <span className={styles.itemMeta}>SKU: {item.sku}</span>
-                  </div>
-                  <span className={styles.itemPrice}>{formatCurrency(item.lineTotalCents)}</span>
-                </div>
-              ))}
-            </div>
+            <CheckoutItems items={cart.items} />
 
             {/* Pricing Totals */}
             <div className={styles.pricingRows}>
@@ -1236,6 +1300,16 @@ export function CheckoutPageClient({
                 />
               )}
             </Button>
+            {reviewReady && (
+              <button
+                type="button"
+                className={styles.editOrderButton}
+                onClick={() => editSection()}
+                disabled={isSubmitting}
+              >
+                Volver a mis datos
+              </button>
+            )}
 
             <div className={styles.securityFooter}>
               <Icon icon={Lock} size="sm" aria-hidden="true" />

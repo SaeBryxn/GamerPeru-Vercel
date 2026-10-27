@@ -158,6 +158,32 @@ describe("GP-018 / CHK6-BR3 — Explicit Selection & Fail-Closed Checkout Suite"
   });
 
   describe("1. Checkout Form Rendering & Basic Behavior", () => {
+    it("muestra una revisión real antes de crear el pedido y vuelve a revisarla si cambian los datos", async () => {
+      render(<CheckoutPageClient context={sampleContext} />);
+      const fill = (id: string, value: string) =>
+        fireEvent.change(screen.getByTestId(id), { target: { value } });
+      fill("checkout-input-email", "comprador@example.test");
+      fill("checkout-input-recipient-name", "Ana Pérez");
+      fill("checkout-input-phone", "999888777");
+      fill("checkout-input-street-address", "Av. Principal 123");
+      fill("checkout-input-district", "Miraflores");
+      fireEvent.click(screen.getByTestId("checkout-submit-button"));
+      expect(mockSubmitCheckoutAction).not.toHaveBeenCalled();
+      const review = screen.getByTestId("checkout-final-review");
+      expect(review.textContent).toContain("Ana Pérez");
+      expect(review.textContent).toContain("Av. Principal 123");
+      expect(review.textContent).toContain("Yape");
+      expect(screen.getByTestId("checkout-input-email").closest("[hidden]")).not.toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Editar contacto" }));
+      fill("checkout-input-email", "otro@example.test");
+      expect(screen.queryByTestId("checkout-final-review")).toBeNull();
+      expect(screen.getByTestId("checkout-submit-button").textContent).toContain("Revisar pedido");
+      fireEvent.click(screen.getByTestId("checkout-submit-button"));
+      expect(screen.getByTestId("checkout-final-review").textContent).toContain(
+        "otro@example.test"
+      );
+      expect(mockSubmitCheckoutAction).not.toHaveBeenCalled();
+    });
     it("renders empty cart state when cart is null or empty", () => {
       render(<CheckoutPageClient context={{ ...sampleContext, cart: null }} />);
       expect(screen.getByTestId("checkout-empty-state")).toBeDefined();

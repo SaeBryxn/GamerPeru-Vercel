@@ -348,3 +348,21 @@ aplicó la `0027` el 26 de octubre. Seguimiento:
   La relación se obtiene del destino del enlace, sin listas de nombres o productos en código.
   El administrador muestra la misma agrupación y permite editar nombres, destinos, orden y
   visibilidad; ocultar una categoría oculta sus tipos juntos. Utiliza las tablas existentes.
+
+### Perfil personalizable y revisión de compra (27 de octubre de 2026)
+
+- Los nombres de las seis categorías se simplificaron en los datos existentes para quitar la
+  repetición de «Gaming». Menú, editor y categorías siguen usando esos nombres editables;
+  no se cambian slugs, productos, precios ni inventario.
+- El perfil incluye vista previa de nombre visible, elección de avatar y portada roja o negra.
+  La personalización se guarda en el espacio `gamerperu_profile` de los metadatos del usuario
+  autenticado, con validación estricta. No modifica nombres de entrega, documentos ni permisos.
+  La lectura usa el usuario actual de Auth; no se aceptan identificadores de otro cliente.
+  Los datos de entrega, direcciones y seguridad se mantienen separados en el perfil.
+- El carrito explica que el siguiente paso permite elegir entrega y medio de pago. El checkout
+  muestra fotos, versión, cantidad y precio de cada producto. La revisión final presenta
+  contacto, dirección, envío y pago con acciones para editar cada apartado; modificar los datos
+  invalida la revisión y requiere revisarlos nuevamente antes de confirmar.
+- Se conservan la compra como invitado, las direcciones guardadas, el borrador de la pestaña,
+  la idempotencia y la comprobación de precios y stock en el servidor. Confirmar sigue creando
+  un pedido pendiente de pago; las instrucciones y el comprobante vienen después. Sin migración.

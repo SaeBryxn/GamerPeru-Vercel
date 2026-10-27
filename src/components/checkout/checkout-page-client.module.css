@@ -9,7 +9,7 @@
 .pageWrapper {
   padding: var(--space-8) 0 var(--space-16);
   min-height: calc(100vh - 200px);
-  background-color: #ffffff;
+  background-color: var(--color-surface-canvas);
 }
 
 .pageHeader {
@@ -19,7 +19,7 @@
 .pageTitle {
   margin: 0 0 var(--space-2) 0;
   font-family: var(--font-heading);
-  font-size: 30px;
+  font-size: clamp(28px, 3vw, 38px);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #111111;
@@ -62,9 +62,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding: 0;
-  border: none;
-  background-color: transparent;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-card);
 }
 
 .sectionHeader {
@@ -156,7 +157,7 @@
   background-color: #ffffff;
   color: #111111;
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 16px;
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease;
@@ -379,14 +380,13 @@
   padding: var(--space-6);
   border: 1px solid #ededed;
   border-radius: 12px;
-  background-color: #fafafa;
+  background-color: var(--color-surface-card);
 }
 
 @media (min-width: 1024px) {
   .stickySummary {
     position: sticky;
-    top: var(--space-6);
-    min-height: calc(100vh - 160px);
+    top: calc(var(--header-stack-height) + var(--space-4));
   }
 }
 
@@ -407,7 +407,7 @@
 
 .itemRow {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
 }
@@ -417,6 +417,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1;
 }
 
 .itemName {
@@ -425,6 +426,7 @@
   font-weight: 600;
   line-height: 1.4;
   color: #111111;
+  text-decoration: none;
 }
 
 .itemMeta {
@@ -648,4 +650,144 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  text-decoration: none;
+  margin-bottom: var(--space-3);
+}
+.formSections {
+  display: grid;
+  gap: var(--space-5);
+}
+.formSections[hidden] {
+  display: none;
+}
+.requiredHint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.itemPhoto {
+  display: grid;
+  place-items: center;
+  flex: 0 0 64px;
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-canvas);
+  overflow: hidden;
+  color: var(--color-text-muted);
+}
+.itemPhoto img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.reviewCard {
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+.reviewIntro {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.reviewIntro > svg {
+  flex-shrink: 0;
+  color: var(--color-text-primary);
+}
+.reviewIntro h2 {
+  margin: 0;
+  font: 800 24px/1.2 var(--font-heading);
+  letter-spacing: -0.03em;
+}
+.reviewIntro p,
+.reviewFootnote {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+.reviewDetails {
+  display: grid;
+  gap: var(--space-5);
+  margin: var(--space-6) 0;
+}
+.reviewDetails > div {
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.reviewDetails dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.reviewDetails dd {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.reviewDetails dd > span:not(:first-child),
+.reviewDetails small {
+  color: var(--color-text-secondary);
+}
+.reviewDetails button {
+  margin-left: auto;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.reviewFootnote {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-canvas);
+}
+.editOrderButton {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+.reviewCard button:focus-visible,
+.backLink:focus-visible,
+.editOrderButton:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 3px;
+}
+@media (max-width: 639px) {
+  .sectionCard,
+  .reviewCard {
+    padding: var(--space-5);
+  }
+  .itemRow {
+    gap: var(--space-3);
+  }
+  .itemPrice {
+    font-size: 13px;
+  }
 }

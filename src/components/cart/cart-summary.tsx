@@ -24,11 +24,11 @@ export function CartSummary({ subtotalCents, className }: CartSummaryProps): Rea
       <div className={styles.trustBox} data-testid="cart-trust-box">
         <div className={styles.trustHeader}>
           <Icon icon={ShieldCheck} size="md" className={styles.trustIcon} aria-hidden="true" />
-          <span className={styles.trustTitle}>Pago Seguro en Soles (PEN)</span>
+          <span className={styles.trustTitle}>Revisa antes de pagar</span>
         </div>
         <p className={styles.trustText}>
-          La verificación de pago mediante <strong>Yape</strong> o <strong>Plin</strong> se coordina
-          al confirmar tu pedido con Gamer Perú.
+          En el siguiente paso eliges la entrega y el medio de pago. Verás el costo de envío y el
+          total en soles antes de confirmar tu pedido.
         </p>
       </div>
     </div>

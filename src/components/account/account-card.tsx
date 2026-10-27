@@ -41,7 +41,7 @@ export function AccountCard({ title, editLabel, editor, action, children }: Acco
       };
 
   return (
-    <section className={styles.card} aria-labelledby={headingId}>
+    <section className={styles.card} aria-labelledby={headingId} data-editing={isEditing}>
       <div className={styles.cardHead}>
         <h2 id={headingId} className={styles.cardTitle}>
           {title}

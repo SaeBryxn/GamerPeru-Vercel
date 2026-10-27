@@ -32,6 +32,23 @@
   width: 100%;
   padding: var(--space-12) var(--account-gutter) var(--space-10);
 }
+.hero[data-accent="neutral"] {
+  background: var(--color-surface-dark-canvas);
+}
+.profileGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.profileGrid > [data-editing="true"] {
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  .profileGrid {
+    grid-template-columns: 1fr;
+  }
+}
 
 .heroIdentity {
   display: flex;

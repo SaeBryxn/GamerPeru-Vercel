@@ -5,6 +5,7 @@ import { getCurrentCustomerOrders } from "@/lib/account/orders";
 import { getVerifiedAuthContext, hasAdminShellAccess } from "@/lib/auth/rbac";
 import { AccountShell } from "@/components/account/account-shell";
 import styles from "@/components/account/account.module.css";
+import { getCurrentCustomerAppearance } from "@/lib/account/appearance-reader";
 
 export const metadata: Metadata = {
   title: "Mi cuenta | Gamer Perú",
@@ -47,10 +48,14 @@ export default async function CuentaLayout({ children }: { children: React.React
   // The counters are a courtesy: if orders fail to load, the account still opens without them.
   const orders = ordersState.status === "READY" ? ordersState.orders : [];
   const ordersInTransit = orders.filter((order) => order.status.isInTransit).length;
+  const { appearance } = await getCurrentCustomerAppearance();
 
   return (
     <AccountShell
       firstName={profileState.profile.firstName || null}
+      displayName={appearance.displayName}
+      avatarSeed={appearance.avatarSeed}
+      accent={appearance.accent}
       displayEmail={profileState.profile.email}
       memberSince={profileState.profile.createdAt}
       orderCount={orders.length}
