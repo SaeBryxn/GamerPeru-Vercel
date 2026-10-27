@@ -107,16 +107,6 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.15;
-  background-image: linear-gradient(currentColor, currentColor);
-  background-repeat: no-repeat;
-  background-position: left bottom;
-  background-size: 0% 2px;
-  transition: background-size var(--motion-duration-moderate) var(--motion-easing-snappy);
-}
-
-.tile:hover .tileTitle,
-.tile:focus-visible .tileTitle {
-  background-size: 100% 2px;
 }
 
 .tile:focus-visible {

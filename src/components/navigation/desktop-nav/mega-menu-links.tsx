@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "@/components/app-link";
 import { m } from "framer-motion";
+import { SweepUnderline } from "@/components/ui/sweep-underline";
 import type { MegaMenuCategory } from "../types";
 import { SLIDE_FROM_RIGHT, staggerVariants, useOpenCount } from "./mega-menu-motion";
 import styles from "./mega-menu-links.module.css";
@@ -31,7 +32,7 @@ export function MegaMenuLinks({ category, isOpen, onNavigate }: MegaMenuLinksPro
       {links.map((link) => (
         <m.li key={link.href} variants={SLIDE_FROM_RIGHT}>
           <Link href={link.href} className={styles.link} onClick={onNavigate}>
-            {link.label}
+            <SweepUnderline trigger="link">{link.label}</SweepUnderline>
           </Link>
         </m.li>
       ))}

@@ -4,6 +4,7 @@ import React from "react";
 import Link from "@/components/app-link";
 import { ArrowRight } from "lucide-react";
 import { Icon, type IconSize } from "@/components/ui";
+import { SweepUnderline } from "@/components/ui/sweep-underline";
 import styles from "./mega-menu-arrow-link.module.css";
 
 export interface ArrowProps {
@@ -50,7 +51,7 @@ export function MegaMenuArrowLink({
         .join(" ")}
       onClick={onClick}
     >
-      <span className={styles.label}>{children}</span>
+      <SweepUnderline trigger="link">{children}</SweepUnderline>
       <MegaMenuArrow size={arrowSize} />
     </Link>
   );

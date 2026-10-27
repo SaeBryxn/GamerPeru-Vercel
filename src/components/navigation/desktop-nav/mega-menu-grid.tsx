@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "@/components/app-link";
 import { m } from "framer-motion";
+import { SweepUnderline } from "@/components/ui/sweep-underline";
 import { Cpu, Keyboard, Mouse, Usb, type LucideIcon } from "lucide-react";
 import type { MegaMenuCategory, MegaMenuTileIcon } from "../types";
 import { MegaMenuArrow, MegaMenuArrowLink } from "./mega-menu-arrow-link";
@@ -72,7 +73,9 @@ export function MegaMenuGrid({ category, isOpen, onNavigate }: MegaMenuGridProps
                 ) : null}
               </span>
               <span className={styles.tileFooter}>
-                <span className={styles.tileTitle}>{tile.title}</span>
+                <span className={styles.tileTitle}>
+                  <SweepUnderline>{tile.title}</SweepUnderline>
+                </span>
                 <MegaMenuArrow size="md" />
               </span>
             </MotionLink>

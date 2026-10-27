@@ -145,9 +145,8 @@
 }
 
 /*
- * Inactive tabs stay gray and draw an underline on hover; the active tab turns
- * black with no underline. Tabs switch on click only; the button spans the
- * column for a generous target while the underline stays on the label.
+ * Tabs switch on click only; SweepUnderline shares the same directional treatment as the
+ * other menu labels while the button keeps a generous hit area.
  */
 .collectionsLink {
   display: block;
@@ -166,20 +165,8 @@
   transition: color var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
-.collectionsLabel {
-  background-image: linear-gradient(currentColor, currentColor);
-  background-repeat: no-repeat;
-  background-position: left bottom;
-  background-size: 0% 2px;
-  transition: background-size var(--motion-duration-normal) var(--motion-easing-snappy);
-}
-
 .collectionsLinkCurrent {
   color: var(--color-text-primary);
-}
-
-.collectionsLink:not(.collectionsLinkCurrent):hover .collectionsLabel {
-  background-size: 100% 2px;
 }
 
 .collectionsLink:focus-visible {

@@ -231,8 +231,10 @@ pestañas de Productos usan los enlaces editables del administrador. La selecci�
 las marcas vienen del catálogo, sin listas de modelos fijas. Se corrigió la clasificación de
 «Mouse Gaming Pad» del importador y la ficha G640, conservando variantes, precios y existencias.
 Las tarjetas del menú tienen un formato más vertical, con altura adaptada a la pantalla. Los
-subrayados siguen las letras de cada línea con una aparición gradual; las flechas giran con una
-transición CSS reversible y respetan la preferencia de movimiento reducido.
+subrayados usan `SweepUnderline`, compartido por enlaces, pestañas y títulos de tarjetas: se
+dibujan y se retiran de izquierda a derecha sobre las letras de cada línea. En las tarjetas se
+activan sobre el título. Las flechas conservan su giro CSS reversible y se respeta la preferencia
+de movimiento reducido.
 
 El agente no aplicó migraciones alojadas ni hizo escrituras de prueba. El dueño informó que
 aplicó la `0027` el 26 de octubre. Seguimiento:

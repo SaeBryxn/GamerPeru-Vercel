@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "@/components/app-link";
 import { m } from "framer-motion";
+import { SweepUnderline } from "@/components/ui/sweep-underline";
 import type { MegaMenuCategory } from "../types";
 import { MegaMenuArrow, MegaMenuArrowLink } from "./mega-menu-arrow-link";
 import { MegaMenuImage } from "./mega-menu-image";
@@ -56,7 +57,7 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
                       className={styles.seriesLink}
                       onClick={onNavigate}
                     >
-                      <span className={styles.linkLabel}>{item.label}</span>
+                      <SweepUnderline trigger="link">{item.label}</SweepUnderline>
                     </Link>
                   </li>
                 ))}
@@ -104,7 +105,7 @@ export function MegaMenuSeries({ category, isOpen, onNavigate }: MegaMenuSeriesP
               </span>
               <span className={styles.promoFooter}>
                 <span className={styles.promoTitle}>
-                  <span className={styles.linkLabel}>{promo.title}</span>
+                  <SweepUnderline>{promo.title}</SweepUnderline>
                 </span>
                 <MegaMenuArrow size="md" />
               </span>

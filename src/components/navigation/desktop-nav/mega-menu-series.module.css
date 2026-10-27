@@ -84,20 +84,6 @@
   color: var(--color-text-primary);
 }
 
-.linkLabel {
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 4px;
-  text-decoration-skip-ink: auto;
-  transition: text-decoration-color var(--motion-duration-fast) var(--motion-easing-standard);
-}
-
-.seriesLink:focus-visible .linkLabel,
-.promoCard:focus-visible .linkLabel {
-  text-decoration-color: currentColor;
-}
-
 .seriesFooter {
   margin-top: auto;
   padding-top: var(--space-6);
@@ -221,10 +207,6 @@
 @media (hover: hover) and (pointer: fine) {
   .seriesLink:hover {
     color: var(--color-text-primary);
-  }
-  .seriesLink:hover .linkLabel,
-  .promoCard:hover .linkLabel {
-    text-decoration-color: currentColor;
   }
   .promoCard:hover .promoImage {
     transform: scale(1.04);

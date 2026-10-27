@@ -14,6 +14,7 @@ import { QuickViewDialog } from "./quick-view-dialog";
 import { ScrubGallery } from "./scrub-gallery";
 import { SpecSwapBar } from "./spec-swap-bar";
 import { useCanHover } from "@/components/ui/use-can-hover";
+import { SweepUnderline } from "@/components/ui/sweep-underline";
 import styles from "./product-card.module.css";
 
 const OVERLAY_VARIANTS: Variants = {
@@ -182,7 +183,7 @@ export function ProductCard({
         <h2 className={styles.title}>
           {href ? (
             <Link href={href} className={styles.titleLink}>
-              {product.name}
+              <SweepUnderline>{product.name}</SweepUnderline>
             </Link>
           ) : (
             product.name

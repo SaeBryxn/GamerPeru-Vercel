@@ -11,6 +11,7 @@ import {
   useOpenCount,
 } from "./mega-menu-motion";
 import { ProductCard } from "@/components/catalog/product-card/product-card";
+import { SweepUnderline } from "@/components/ui/sweep-underline";
 import styles from "./desktop-nav.module.css";
 
 // Left column: heading, then each tab top to bottom, then the footer link.
@@ -118,7 +119,7 @@ export function MegaMenuProducts({
                 onClick={() => setActiveIndex(index)}
                 onKeyDown={handleTabKeyDown}
               >
-                <span className={styles.collectionsLabel}>{collection.label}</span>
+                <SweepUnderline trigger="link">{collection.label}</SweepUnderline>
               </m.button>
             );
           })}

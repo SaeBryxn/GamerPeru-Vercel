@@ -1,0 +1,33 @@
+.text {
+  padding-bottom: 0.08em;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  /* Exit: keep the right edge in place, so the line disappears from left to right. */
+  background-position: right bottom;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: background-size var(--motion-duration-moderate) var(--motion-easing-standard);
+}
+
+:global(a:focus-visible) .text,
+:global(button:focus-visible) .text {
+  background-position: left bottom;
+  background-size: 100% 1px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .text:hover,
+  :global(a:hover) .text[data-sweep-trigger="link"],
+  :global(button:hover) .text[data-sweep-trigger="link"] {
+    /* Entry: grow from the left; position changes at zero/full width are invisible. */
+    background-position: left bottom;
+    background-size: 100% 1px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text {
+    transition: none;
+  }
+}

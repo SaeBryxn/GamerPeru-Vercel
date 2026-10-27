@@ -19,19 +19,6 @@
   transition: transform var(--motion-duration-normal) var(--motion-easing-snappy);
 }
 
-/* Native text decoration follows each line's glyphs instead of filling the flex row. */
-.label {
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 4px;
-  transition: text-decoration-color var(--motion-duration-fast) var(--motion-easing-standard);
-}
-
-.arrowLink:focus-visible .label {
-  text-decoration-color: currentColor;
-}
-
 :global(a:focus-visible) .arrow {
   transform: rotate(90deg);
 }
@@ -39,9 +26,6 @@
 @media (hover: hover) and (pointer: fine) {
   :global(a:hover) .arrow {
     transform: rotate(90deg);
-  }
-  .arrowLink:hover .label {
-    text-decoration-color: currentColor;
   }
 }
 
