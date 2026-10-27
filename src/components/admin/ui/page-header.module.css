@@ -34,6 +34,13 @@
   gap: var(--space-3);
 }
 
+@media (max-width: 639px) {
+  .actions {
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+}
+
 @media (min-width: 1024px) {
   .title {
     font-size: 26px;

@@ -1,0 +1,102 @@
+.tabs {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background-color: var(--color-surface-card);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 7px;
+  color: var(--color-text-secondary);
+  font-size: var(--admin-meta-size);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-secondary);
+}
+
+.tabActive,
+.tabActive:hover {
+  background-color: var(--admin-brand);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.tab:focus-visible,
+.refresh:focus-visible {
+  outline: 2px solid var(--admin-focus-ring);
+  outline-offset: 2px;
+}
+
+.refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  background-color: var(--color-surface-card);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--admin-meta-size);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.refresh:hover:not(:disabled) {
+  background-color: var(--color-surface-secondary);
+}
+
+.refresh:disabled {
+  cursor: progress;
+}
+
+.spinning {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
+  }
+}
+
+/* Phones: the tabs take the full width so all four stay one tap each. */
+@media (max-width: 639px) {
+  .tabs {
+    display: grid;
+    flex: 1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .tab {
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 6px;
+  }
+  .refresh {
+    padding: 0 12px;
+  }
+  .refresh span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}

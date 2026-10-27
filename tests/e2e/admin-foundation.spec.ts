@@ -79,21 +79,30 @@ test.describe("GP-023 / CHK2 — Admin Dashboard Visual Integration & E2E Suite"
 
     // Admin layout shell loaded
     await expect(page.locator("aside").first()).toBeVisible();
-    await expect(page.getByRole("heading", { level: 1, name: "Inicio" })).toBeVisible();
-
-    // Work first, then the period, then where every order and unit stands.
-    await expect(page.getByRole("heading", { level: 2, name: "Requiere acción" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "Ventas" })).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 2, name: "Pedidos del período" })
+      page.getByRole("heading", { level: 1, name: "Resumen de la tienda" })
     ).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "Cola de pedidos" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "Inventario" })).toBeVisible();
-    await expect(page.getByText("Catálogo por completar")).toBeVisible();
+
+    // The reference layout: KPIs, the period beside the queue, store health, then lists.
+    for (const name of [
+      "Ventas netas",
+      "Pedidos",
+      "Ticket promedio",
+      "Utilidad estimada",
+      "Ventas del período",
+      "Por atender",
+      "Inventario",
+      "Salud del catálogo",
+      "Estado de la tienda",
+      "Top productos",
+      "Pedidos recientes",
+    ]) {
+      await expect(page.getByRole("heading", { level: 2, name, exact: true })).toBeVisible();
+    }
 
     // Inicio opens on today, compared with yesterday.
     await expect(page.getByRole("link", { name: "Hoy" })).toHaveAttribute("aria-current", "page");
-    await expect(page.getByText(/Comparado con ayer/)).toBeVisible();
+    await expect(page.getByText(/ayer$/).first()).toBeVisible();
 
     // The account menu in the header names the operator once (no duplicate in the sidebar)
     await expect(page.locator("header").first()).toContainText(ADMIN_E2E_USERS.superadmin.email);
@@ -118,19 +127,22 @@ test.describe("GP-023 / CHK2 — Admin Dashboard Visual Integration & E2E Suite"
   }) => {
     await loginAndNavigateToAdmin(page, ADMIN_E2E_USERS.catalog.email);
 
-    await expect(page.getByRole("heading", { level: 1, name: "Inicio" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Resumen de la tienda" })
+    ).toBeVisible();
     await expect(page.locator("header").first()).toContainText(ADMIN_E2E_USERS.catalog.email);
 
-    // Authorized, and open because it is the whole page for this role
+    // Authorized
+    await expect(page.getByRole("heading", { level: 2, name: "Salud del catálogo" })).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 2, name: "Productos por completar" })
+      page.getByRole("heading", { level: 2, name: "Estado de la tienda" })
     ).toBeVisible();
 
     // Unauthorized sections must be 0 in DOM
-    await expect(page.getByRole("heading", { level: 2, name: "Ventas" })).toHaveCount(0);
-    await expect(page.getByRole("heading", { level: 2, name: "Cola de pedidos" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 2, name: "Ventas netas" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 2, name: "Pedidos recientes" })).toHaveCount(0);
     await expect(page.getByRole("heading", { level: 2, name: "Inventario" })).toHaveCount(0);
-    await expect(page.locator("text=Pagos por verificar")).toHaveCount(0);
+    await expect(page.getByText(/pagos? por validar/)).toHaveCount(0);
   });
 
   test("E6: authenticated ADMIN_ORDERS sees financial/order/payment sections and zero catalog/inventory sections", async ({
@@ -138,18 +150,20 @@ test.describe("GP-023 / CHK2 — Admin Dashboard Visual Integration & E2E Suite"
   }) => {
     await loginAndNavigateToAdmin(page, ADMIN_E2E_USERS.orders.email);
 
-    await expect(page.getByRole("heading", { level: 1, name: "Inicio" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Resumen de la tienda" })
+    ).toBeVisible();
     await expect(page.locator("header").first()).toContainText(ADMIN_E2E_USERS.orders.email);
 
     // Authorized
-    await expect(page.getByRole("heading", { level: 2, name: "Ventas" })).toBeVisible();
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Pedidos del período" })
-    ).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "Cola de pedidos" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Ventas netas" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Por atender" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Pedidos recientes" })).toBeVisible();
 
     // Unauthorized
-    await expect(page.locator("text=Catálogo por completar")).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 2, name: "Salud del catálogo" })).toHaveCount(
+      0
+    );
     await expect(page.getByRole("heading", { level: 2, name: "Inventario" })).toHaveCount(0);
   });
 
@@ -158,7 +172,9 @@ test.describe("GP-023 / CHK2 — Admin Dashboard Visual Integration & E2E Suite"
   }) => {
     await loginAndNavigateToAdmin(page, ADMIN_E2E_USERS.support.email);
 
-    await expect(page.getByRole("heading", { level: 1, name: "Inicio" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Resumen de la tienda" })
+    ).toBeVisible();
     await expect(page.locator("header").first()).toContainText(ADMIN_E2E_USERS.support.email);
 
     // Truthful empty metrics explanation
@@ -166,9 +182,9 @@ test.describe("GP-023 / CHK2 — Admin Dashboard Visual Integration & E2E Suite"
     await expect(page.getByText("No hay métricas de resumen asignadas a tu rol.")).toBeVisible();
 
     // Zero privileged metric sections rendered
-    await expect(page.locator("text=Requiere acción")).toHaveCount(0);
-    await expect(page.getByRole("heading", { level: 2, name: "Ventas" })).toHaveCount(0);
-    await expect(page.getByRole("heading", { level: 2, name: "Cola de pedidos" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 2, name: "Por atender" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 2, name: "Ventas netas" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 2, name: "Pedidos recientes" })).toHaveCount(0);
     await expect(page.getByRole("heading", { level: 2, name: "Inventario" })).toHaveCount(0);
   });
 

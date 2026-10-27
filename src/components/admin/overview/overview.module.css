@@ -1,0 +1,779 @@
+/*
+ * Inicio: four KPI cards, the period chart beside «Por atender», three compact status cards,
+ * then best sellers beside recent orders. A 12-column grid keeps the reference proportions
+ * (3·3·3·3, 8·4, 4·4·4, 5·7) on desktop and folds to fewer columns below.
+ */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.grid > * {
+  grid-column: span 12;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .kpi {
+    grid-column: span 6;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    gap: var(--space-5);
+  }
+  .halfLg {
+    grid-column: span 6;
+  }
+}
+
+@media (min-width: 1280px) {
+  .kpi {
+    grid-column: span 3;
+  }
+  .chart {
+    grid-column: span 8;
+  }
+  .side,
+  .third {
+    grid-column: span 4;
+  }
+  .top {
+    grid-column: span 5;
+  }
+  .orders {
+    grid-column: span 7;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Card
+ * -------------------------------------------------------------------------- */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-card-radius);
+  background-color: var(--color-surface-card);
+  box-shadow: var(--admin-card-shadow);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.cardTitles {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--color-text-primary);
+}
+
+.cardSubtitle {
+  margin: 2px 0 0;
+  font-size: var(--admin-meta-size);
+  color: var(--color-text-muted);
+}
+
+.cardLink {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  border-radius: 6px;
+  color: var(--admin-brand);
+  font-size: var(--admin-meta-size);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cardLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cardLink:focus-visible,
+.rowLink:focus-visible,
+.tile:focus-visible {
+  outline: 2px solid var(--admin-focus-ring);
+  outline-offset: 2px;
+}
+
+.empty {
+  margin: auto 0;
+  padding: var(--space-4) 0;
+  font-size: var(--admin-meta-size);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* Tinted square behind a card or row icon; the hue says what kind of thing it is. */
+.chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background-color: var(--chip-bg, var(--color-surface-secondary));
+  color: var(--chip-fg, var(--color-text-secondary));
+}
+
+.chip svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.75;
+}
+
+.chipSmall {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+
+.chipSmall svg {
+  width: 18px;
+  height: 18px;
+}
+
+[data-hue="red"] {
+  --chip-bg: var(--color-status-danger-background);
+  --chip-fg: var(--admin-brand);
+}
+[data-hue="blue"] {
+  --chip-bg: var(--color-status-info-background);
+  --chip-fg: var(--color-status-info-text);
+}
+[data-hue="green"] {
+  --chip-bg: var(--color-status-success-background);
+  --chip-fg: var(--color-status-success-text);
+}
+[data-hue="amber"] {
+  --chip-bg: var(--color-status-warning-background);
+  --chip-fg: #d97706;
+}
+[data-hue="violet"] {
+  --chip-bg: rgba(139, 92, 246, 0.1);
+  --chip-fg: #7c3aed;
+}
+[data-hue="neutral"] {
+  --chip-bg: var(--color-surface-secondary);
+  --chip-fg: var(--color-text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+ * Trends
+ * -------------------------------------------------------------------------- */
+.trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.trend svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.25;
+}
+
+.trend[data-direction="up"] {
+  color: var(--color-status-success-text);
+}
+.trend[data-direction="down"] {
+  color: var(--color-status-danger-text);
+}
+.trend[data-direction="flat"],
+.trend[data-direction="new"] {
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+ * KPI cards
+ * -------------------------------------------------------------------------- */
+.metric {
+  position: relative;
+  gap: var(--space-3);
+  min-height: 140px;
+  overflow: hidden;
+}
+
+/* The first card carries the brand: a faint red wash, as in the reference. */
+.metricFeatured {
+  background-image: linear-gradient(
+    135deg,
+    var(--color-status-danger-background) 0%,
+    var(--color-surface-card) 70%
+  );
+}
+
+.metricHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.metricLabel {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.metricBody {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.metricValue {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.metricCompare {
+  margin: 6px 0 0;
+  font-size: var(--admin-meta-size);
+  color: var(--color-text-muted);
+}
+
+.metricNote {
+  margin: 0;
+  font-size: var(--admin-caption-size);
+  color: var(--color-text-muted);
+}
+
+.sparkline {
+  flex-shrink: 0;
+  width: 112px;
+  height: 44px;
+  overflow: visible;
+}
+
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .sparkline {
+    width: 84px;
+  }
+  .metricValue {
+    font-size: 26px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Rows (Por atender, estado de la tienda, top productos)
+ * -------------------------------------------------------------------------- */
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rows > li + li {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.rowLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-2) var(--space-1);
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.rowLink:hover {
+  background-color: var(--color-surface-secondary);
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.rowTitle strong {
+  margin-right: 4px;
+  color: var(--admin-brand);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowDetail {
+  margin: 1px 0 0;
+  overflow: hidden;
+  font-size: var(--admin-meta-size);
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowChevron {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-muted);
+}
+
+.urgentDot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: var(--admin-brand);
+}
+
+.allClear {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6) 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.allClear svg {
+  width: 28px;
+  height: 28px;
+  color: var(--color-status-success-text);
+}
+
+/* --------------------------------------------------------------------------
+ * Inventario
+ * -------------------------------------------------------------------------- */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  flex: 1;
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  min-height: 96px;
+  padding: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background-color: var(--chip-bg);
+  color: inherit;
+  text-decoration: none;
+}
+
+a.tile:hover {
+  border-color: var(--chip-fg);
+}
+
+.tileIcon {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 18px;
+  height: 18px;
+  color: var(--chip-fg);
+}
+
+.tileValue {
+  margin-bottom: auto;
+  font-family: var(--font-heading);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--chip-fg);
+}
+
+.tileLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--chip-fg);
+}
+
+.tileHint {
+  font-size: var(--admin-caption-size);
+  color: var(--color-text-muted);
+}
+
+[data-hue="neutral"] .tileValue,
+[data-hue="neutral"] .tileLabel {
+  color: var(--color-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+ * Salud del catálogo
+ * -------------------------------------------------------------------------- */
+.healthTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.ring {
+  position: relative;
+  flex-shrink: 0;
+  width: 84px;
+  height: 84px;
+}
+
+.ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ringValue {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.healthRating {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 24px;
+  font-size: var(--admin-meta-size);
+  color: var(--color-text-secondary);
+}
+
+.check a {
+  color: inherit;
+}
+
+.checkIcon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.checkIcon[data-tone="success"] {
+  color: var(--color-status-success-text);
+}
+.checkIcon[data-tone="warning"] {
+  color: #d97706;
+}
+.checkIcon[data-tone="danger"] {
+  color: var(--color-status-danger-text);
+}
+
+.checkLabel {
+  flex: 1;
+  min-width: 0;
+}
+
+.checkValue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.statusValue {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--admin-caption-size);
+  font-weight: 600;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.pill[data-tone="success"] {
+  background-color: var(--color-status-success-background);
+  color: var(--color-status-success-text);
+}
+.pill[data-tone="warning"] {
+  background-color: var(--color-status-warning-background);
+  color: var(--color-status-warning-text);
+}
+
+/* --------------------------------------------------------------------------
+ * Top productos y pedidos recientes
+ * -------------------------------------------------------------------------- */
+.rank {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: var(--color-surface-secondary);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.thumb {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background-color: #ffffff;
+  color: var(--color-text-muted);
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.thumbSmall {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+}
+
+.amount {
+  flex-shrink: 0;
+  min-width: 64px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.amount + .trend {
+  min-width: 52px;
+  justify-content: flex-end;
+}
+
+.tableWrap {
+  margin: 0 calc(var(--space-5) * -1);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--admin-meta-size);
+}
+
+.table th {
+  padding: 0 var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--admin-caption-size);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  height: 48px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.table th:first-child,
+.table td:first-child {
+  padding-left: var(--space-5);
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: var(--space-5);
+}
+
+.table tbody tr:hover td {
+  background-color: var(--color-surface-secondary);
+}
+
+.orderLink {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.orderLink:hover {
+  text-decoration: underline;
+}
+
+.customer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 180px;
+}
+
+.customer span {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  text-overflow: ellipsis;
+}
+
+.money {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Phones: each order becomes a two-line card instead of a sideways-scrolling table. */
+@media (max-width: 639px) {
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .table tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 2px var(--space-3);
+    padding: var(--space-3) var(--space-5);
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+  .table tr:last-child {
+    border-bottom: 0;
+  }
+  .table td,
+  .table td:first-child,
+  .table td:last-child {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+  .table td:nth-child(1) {
+    grid-column: 1 / 3;
+  }
+  .table td:nth-child(2) {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+  .table td:nth-child(3) {
+    display: none;
+  }
+  .table td:nth-child(4) {
+    grid-column: 3;
+    grid-row: 1;
+    text-align: right;
+  }
+  .table td:nth-child(5) {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+  }
+  .table td:nth-child(6) {
+    grid-column: 1 / 4;
+    grid-row: 3;
+    font-size: var(--admin-caption-size);
+    color: var(--color-text-muted);
+  }
+  .tiles {
+    gap: var(--space-2);
+  }
+  .tile {
+    min-height: 88px;
+    padding: var(--space-2) var(--space-3);
+  }
+  .tileHint {
+    display: none;
+  }
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

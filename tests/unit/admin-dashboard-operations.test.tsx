@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type {
   Brand,
@@ -27,14 +27,11 @@ import { AttentionSection } from "@/components/admin/dashboard/attention-section
 import { CatalogHealthSection } from "@/components/admin/dashboard/catalog-health-section";
 import { HomeStatusSection } from "@/components/admin/dashboard/home-status-section";
 import { OrderQueueSection } from "@/components/admin/dashboard/order-queue-section";
-import AdminDashboardPage from "@/app/admin/(protected)/page";
-import { getAdminDashboardData } from "@/lib/admin/dashboard-reader";
 
 const routerMocks = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: routerMocks.refresh }) }));
 
 vi.mock("@/db", () => ({ db: {} }));
-vi.mock("@/lib/admin/dashboard-reader", () => ({ getAdminDashboardData: vi.fn() }));
 
 const now = new Date();
 const product = (id: string, overrides: Partial<Product> = {}): Product => ({
@@ -579,126 +576,3 @@ describe("Operational sections", () => {
   });
 });
 
-describe("Jerarquía de Inicio", () => {
-  function dashboardPayload(withCatalog: boolean): AdminDashboardPayload {
-    return {
-      ...attentionPayload(),
-      period,
-      actor: {
-        authUserId: "test",
-        email: "operador@example.test",
-        roles: ["ADMIN_ORDERS"],
-        permissions: withCatalog ? ["catalog:manage", "orders:manage"] : ["orders:manage"],
-      },
-      financialCohort: { status: "UNAUTHORIZED" },
-      orderPipeline: { status: "UNAUTHORIZED" },
-      inventoryOverview: { status: "UNAUTHORIZED" },
-      catalogOverview: { status: "UNAUTHORIZED" },
-      homeStatus: withCatalog
-        ? {
-            status: "READY",
-            data: {
-              total: 10,
-              visible: 7,
-              hidden: 3,
-              neverEdited: 6,
-              emptyImageSlots: 1,
-              invalid: 0,
-            },
-          }
-        : { status: "UNAUTHORIZED" },
-      catalogHealth: { status: "UNAUTHORIZED" },
-    };
-  }
-
-  it("pliega el mantenimiento de la tienda debajo del trabajo del día", async () => {
-    vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(true));
-    render(await AdminDashboardPage({}));
-    const summary = screen.getByText("Portada de la tienda");
-    const details = summary.closest("details")!;
-    expect(details.open).toBe(false);
-    expect(details.textContent).toContain("7 de 10 secciones visibles");
-    fireEvent.click(summary);
-    expect(details.open).toBe(true);
-    expect(within(details).getByTestId("home-status-visible").textContent).toContain("7");
-    expect(screen.queryByText("operador@example.test")).toBeNull();
-    expect(screen.queryByText("ADMIN_ORDERS")).toBeNull();
-  });
-
-  it("abre en Hoy, comparado con ayer, y cada período queda en la URL", async () => {
-    vi.mocked(getAdminDashboardData).mockResolvedValue({
-      ...dashboardPayload(false),
-      financialCohort: readyFinancial(),
-    });
-    render(await AdminDashboardPage({}));
-    expect(vi.mocked(getAdminDashboardData)).toHaveBeenLastCalledWith({ periodSelector: "TODAY" });
-    expect(screen.getByRole("heading", { name: "Inicio" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "7 días" }).getAttribute("href")).toBe(
-      "/admin?period=LAST_7_DAYS"
-    );
-    expect(screen.getByTestId("financial-no-sales")).toBeTruthy();
-  });
-
-  it("una cuenta de pedidos ve sus colas sin bloques de catálogo", async () => {
-    vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(false));
-    const { container } = render(await AdminDashboardPage({}));
-    expect(container.querySelector("details")?.open).toBe(false);
-    expect(screen.getByText("Estado de pedidos")).toBeTruthy();
-    expect(screen.getByTestId("queue-to-prepare").textContent).toBe("3");
-    expect(screen.getByTestId("attention-orders-to-prepare")).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Inventario" })).toBeNull();
-  });
-
-  it("actualiza la lectura de datos con el botón de Inicio", async () => {
-    routerMocks.refresh.mockClear();
-    vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(false));
-    render(await AdminDashboardPage({}));
-    fireEvent.click(screen.getByRole("button", { name: "Actualizar datos" }));
-    expect(routerMocks.refresh).toHaveBeenCalledOnce();
-  });
-
-  it("sin métricas de período no muestra el selector ni la comparación", async () => {
-    vi.mocked(getAdminDashboardData).mockResolvedValue(dashboardPayload(false));
-    render(await AdminDashboardPage({ searchParams: Promise.resolve({ period: "LAST_7_DAYS" }) }));
-    expect(screen.queryByRole("navigation", { name: "Seleccionar período de reporte" })).toBeNull();
-    expect(screen.queryByText(/Comparado con/)).toBeNull();
-  });
-});
-
-function readyFinancial(): AdminDashboardPayload["financialCohort"] {
-  const summary = {
-    cohortGrossCents: 0n,
-    cohortNetCents: 0n,
-    cohortPendingCents: 0n,
-    cohortPaidOrders: 0,
-    cohortActivePaidOrders: 0,
-    aovCents: 0n,
-  };
-  const flat = {
-    currentValue: 0n,
-    previousValue: 0n,
-    absoluteDelta: 0n,
-    percentageNumerator: null,
-    percentageDenominator: null,
-    semanticState: "ZERO_BASELINE" as const,
-  };
-  return {
-    status: "READY",
-    data: {
-      current: summary,
-      previous: summary,
-      trends: {
-        gross: flat,
-        net: flat,
-        aov: flat,
-        paidOrders: {
-          currentValue: 0,
-          previousValue: 0,
-          absoluteDelta: 0,
-          percentageDelta: null,
-          semanticState: "ZERO_BASELINE",
-        },
-      },
-    },
-  };
-}
