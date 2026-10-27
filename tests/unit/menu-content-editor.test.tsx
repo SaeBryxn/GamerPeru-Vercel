@@ -76,6 +76,12 @@ describe("Edición visual de los enlaces del menú", () => {
     await user.clear(count);
     await user.type(count, "4");
     await user.type(within(dialog).getByLabelText("Nombre corto en el menú"), "Modelo compacto");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Enlaces adicionales del menú móvil" })
+    );
+    const linkLabel = within(dialog).getByLabelText("Texto que verá el cliente");
+    await user.clear(linkLabel);
+    await user.type(linkLabel, "Explorar por peso");
     await user.click(within(dialog).getByRole("button", { name: "Guardar menú" }));
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -86,5 +92,6 @@ describe("Edición visual de los enlaces del menú", () => {
       })
     );
     expect(onSaved).toHaveBeenCalledOnce();
+    expect(save.mock.calls.at(-1)?.[0].links[0].label).toBe("Explorar por peso");
   });
 });

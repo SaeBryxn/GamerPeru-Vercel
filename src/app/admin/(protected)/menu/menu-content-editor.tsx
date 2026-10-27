@@ -33,6 +33,7 @@ export function MenuContentEditor({
   const [selected, setSelected] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [showLinks, setShowLinks] = useState(false);
   const current = draft.links.find((link) => link.id === selected);
   const close = () => {
     if (!pending) {
@@ -85,6 +86,7 @@ export function MenuContentEditor({
           setDraft(structuredClone(value));
           setSelected(value.links[0]?.id ?? null);
           setError("");
+          setShowLinks(false);
           setOpen(true);
         }}
       >
@@ -130,7 +132,29 @@ export function MenuContentEditor({
                 />
               </label>
             </div>
-            {catalogProducts ? (
+            {catalogProducts && (
+              <div className={styles.entryFields} role="group" aria-label="Contenido a editar">
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  aria-pressed={!showLinks}
+                  disabled={pending}
+                  onClick={() => setShowLinks(false)}
+                >
+                  Vista y nombres cortos
+                </button>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  aria-pressed={showLinks}
+                  disabled={pending}
+                  onClick={() => setShowLinks(true)}
+                >
+                  Enlaces adicionales del menú móvil
+                </button>
+              </div>
+            )}
+            {catalogProducts && !showLinks ? (
               <MenuDisplayFields
                 products={catalogProducts}
                 value={draft.display ?? defaultMenuDisplay()}
