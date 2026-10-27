@@ -236,6 +236,15 @@ dibujan y se retiran de izquierda a derecha sobre las letras de cada línea. En 
 activan sobre el título. Las flechas conservan su giro CSS reversible y se respeta la preferencia
 de movimiento reducido.
 
+Los nombres principales del catálogo se redujeron al modelo: 95 títulos perdieron frases como
+«Wireless Gaming Mouse», «High-Performance» y «Mechanical Keyboard». Se conservan versiones,
+frecuencias y diferencias entre fichas; los nombres siguen siendo editables desde el catálogo.
+`scripts/catalog/compact-product-names.mjs` genera una vista previa y solo la aplica si no cambió
+el catálogo, con auditoría por producto y comprobación de que precios, inventario, enlaces,
+imágenes, especificaciones, historias y reseñas no cambian. El importador prepara los próximos
+nombres con el mismo criterio y conserva la identidad y el slug derivados del título original.
+No requiere migraciones nuevas.
+
 El agente no aplicó migraciones alojadas ni hizo escrituras de prueba. El dueño informó que
 aplicó la `0027` el 26 de octubre. Seguimiento:
 

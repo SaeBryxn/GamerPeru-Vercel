@@ -146,7 +146,18 @@ describe("Supplier catalog preparation", () => {
       existing: [{ name: "ATK Anime Mouse Pad - Reverie Pink" }],
     });
     expect(result.products).toHaveLength(1);
-    expect(result.products[0]).toMatchObject({ variants: [{ title: "Black-White" }] });
+    expect(result.products[0]).toMatchObject({
+      name: "ATK Reverie",
+      slug: slugify(product.title),
+      id: stableId(`product:${slugify(product.title)}`),
+      variants: [{ title: "Black-White" }],
+    });
+    const afterRename = buildSupplierPlan({
+      products: [product],
+      existing: [{ name: "ATK Reverie Pink" }],
+    });
+    expect(afterRename.products).toEqual(result.products);
+    expect(afterRename.excluded).toHaveLength(1);
     expect(result.excluded).toHaveLength(1);
   });
 });

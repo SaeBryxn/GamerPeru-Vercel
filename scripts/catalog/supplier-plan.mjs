@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { parseDocument } from "htmlparser2";
+import { compactProductName } from "./product-names.mjs";
 
 export const PRICING = {
   usdPen: 3.45,
@@ -351,7 +352,11 @@ export function buildSupplierPlan({ products, existing, webTexts = {}, market = 
       owner: /ATK 99G Air/i,
       titles: ["Air / Matcha Green"],
     },
-    { handle: "atk-anime-mouse-pad-reverie", owner: /ATK Anime.*Reverie.*Pink/i, titles: ["Pink"] },
+    {
+      handle: "atk-anime-mouse-pad-reverie",
+      owner: /ATK (?:Anime.*)?Reverie.*Pink/i,
+      titles: ["Pink"],
+    },
     {
       handle: "atk-dragonfly-a9-series-lightweight-wireless-mouse",
       owner: /ATK A9 PRO MAX White/i,
@@ -398,8 +403,10 @@ export function buildSupplierPlan({ products, existing, webTexts = {}, market = 
       if (v.usdCents <= 0) continue;
       const edition = v.options.find((o) => /^(model|version)$/i.test(o.name))?.label ?? "";
       const editionName = clip(editionTitle(p, edition, category), 190);
-      const name = clip(p.title, 190),
-        key = slugify(name);
+      // Supplier identity must keep using the original title, even when its display name is shorter.
+      const sourceName = clip(p.title, 190),
+        key = slugify(sourceName),
+        name = compactProductName(sourceName, category);
       if (
         managed.some((rule) => rule.titles.some((title) => slugify(title) === slugify(v.title))) ||
         (!managed.length &&
