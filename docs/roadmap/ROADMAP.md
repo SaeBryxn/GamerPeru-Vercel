@@ -278,3 +278,29 @@ aplicó la `0027` el 26 de octubre. Seguimiento:
 - [ ] **Más adelante (decidido así):** rangos de Discord en el perfil y sus logos; efecto del video
       que crece al hacer scroll. Descartados: cambiar los destacados del menú al pasar el cursor y el
       minijuego.
+
+### Editor de producto, Twitch y nuevas fuentes (27 de octubre de 2026)
+
+- El editor de producto parte de una vista de la ficha: fotos, nombre y descripción, versiones y
+  precios, ficha técnica y contenido. Cada zona abre su edición en un panel derecho con el mismo
+  patrón del home; conserva validación, permisos, control de concurrencia y aviso de cambios
+  pendientes. La publicación conserva su resumen al lado de la vista previa.
+- Opiniones e historia tienen controles independientes de visibilidad por producto en el JSON
+  existente. Ocultar opiniones conserva textos, fotos y moderación. La historia necesita estar
+  publicada además de activada. Sus títulos, incluido el de las especificaciones de familia, se
+  editan desde el constructor de historia; su acceso permanece en la misma pestaña.
+- Portada con Twitch opcional, editable en `/admin/home`: canal `maxkillgg`, reproductor de video
+  sin chat, indicación de directo y enlace al canal. El directo tiene prioridad al estar conectado;
+  sin conexión o ante un fallo de carga se conserva el video habitual. Pantallas menores que el
+  mínimo de 400 px del reproductor conservan el video y el enlace a Twitch. No usa claves de API
+  del canal ni agrega tablas.
+- Teclados y audio ya estaban habilitados en la configuración alojada al revisar este pedido;
+  se conserva esa decisión. WLMouse queda fuera de esta extracción por indicación del dueño.
+- Extracción de las cuatro colecciones indicadas de Attack Shark, las fichas oficiales de JINMS
+  y todas las páginas del listado de monitores gaming de Memory Kings: 207 fichas (95, 8 y 104),
+  con versiones, especificaciones, procedencia y galerías; incluye imágenes de las descripciones.
+  `scripts/catalog/extract-source-catalog.mjs` produce JSON, CSV y un manifiesto de imágenes
+  descargadas. Estos archivos preparan la importación; esta extracción no publica fichas nuevas.
+  Conserva precios de referencia con la moneda comprobada de la fuente (Attack Shark está
+  entregando PEN), sin confundirlos con costos. JINMS no publica precios: quedan nulos. No copia
+  stock ni reseñas del proveedor, y excluye cables y receptores vendidos por separado.

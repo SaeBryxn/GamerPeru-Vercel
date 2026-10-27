@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ProductSelectionSchema } from "@/lib/catalog/curated-products";
 import { SafeString } from "@/lib/validation/safe-string";
 import type { HomeSectionType } from "@/db/schema";
+import { normalizeTwitchChannel } from "./twitch-channel";
 
 export const HOME_CONTENT_SCHEMA_VERSION = 1;
 
@@ -24,6 +25,8 @@ export const HOME_EXTERNAL_LINK_HOSTS = [
   "x.com",
   "facebook.com",
   "www.facebook.com",
+  "twitch.tv",
+  "www.twitch.tv",
 ] as const;
 
 function isAllowedExternalUrl(value: string): boolean {
@@ -79,6 +82,32 @@ export const VideoHeroContentSchema = z
     heading: SafeString(1, 120),
     scrollHintLabel: SafeString(1, 60),
     video: HomeVideoSourceSchema,
+    twitch: z
+      .object({
+        enabled: z.boolean().default(false),
+        channel: z
+          .string()
+          .max(200)
+          .transform((value, context) => {
+            const channel = normalizeTwitchChannel(value);
+            if (channel === null) {
+              context.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Introduce un canal o enlace válido de Twitch.",
+              });
+              return z.NEVER;
+            }
+            return channel;
+          })
+          .default(""),
+        linkLabel: SafeString(1, 60).default("Ver en Twitch"),
+      })
+      .strict()
+      .refine(
+        (value) => !value.enabled || Boolean(value.channel),
+        "Indica el canal antes de activar los directos."
+      )
+      .optional(),
   })
   .strict();
 

@@ -10,6 +10,59 @@ vi.mock("@/lib/admin/catalog/actions", () => ({ updateProductAction: actions.upd
 vi.mock("@/lib/admin/catalog/pdp-actions", () => ({ searchPdpAccessoriesAction: actions.search }));
 afterEach(cleanup);
 
+it("oculta opiniones solo en la ficha elegida y permite volver a mostrarlas", async () => {
+  const product = {
+    id: "reviews-product",
+    name: "Modelo",
+    updatedAt: new Date("2026-10-22T08:00:00Z"),
+  };
+  actions.update.mockResolvedValue({
+    success: true,
+    data: {
+      product: {
+        ...product,
+        pdpConfig: { contentSections: ["story"] },
+        updatedAt: new Date("2026-10-22T08:01:00Z"),
+      },
+    },
+  });
+  render(
+    <ProductPageStep
+      product={product}
+      pdpConfig={{}}
+      variants={[]}
+      media={[]}
+      storySummary={{
+        lifecycle: "NO_STORY",
+        draftRevisionNumber: null,
+        publishedRevisionNumber: null,
+        publishedAt: null,
+      }}
+      onChanged={vi.fn()}
+    />
+  );
+  const toggle = screen.getByRole<HTMLInputElement>("switch", {
+    name: "Mostrar en la tienda: Opiniones",
+  });
+  expect(toggle.checked).toBe(true);
+  fireEvent.click(toggle);
+  expect(toggle.checked).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Guardar página del producto" }));
+  await waitFor(() =>
+    expect(actions.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: product.id,
+        pdpConfig: expect.objectContaining({ contentSections: ["story"] }),
+      })
+    )
+  );
+  fireEvent.click(screen.getByRole("switch", { name: "Mostrar en la tienda: Opiniones" }));
+  expect(
+    screen.getByRole<HTMLInputElement>("switch", { name: "Mostrar en la tienda: Opiniones" })
+      .checked
+  ).toBe(true);
+});
+
 it("avisa si un bloque activado está vacío y actualiza el resumen al apagarlo", () => {
   render(
     <ProductPageStep

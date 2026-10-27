@@ -5,6 +5,7 @@ export type FieldPath = readonly (string | number)[];
 
 /** One form control, addressed by its path inside the section content. */
 export type HomeField =
+  | { kind: "toggle"; path: FieldPath; label: string; hint?: string }
   | {
       kind: "text";
       path: FieldPath;
@@ -78,6 +79,20 @@ export const HOME_SECTION_FIELDS: Record<HomeSectionType, readonly HomeField[]> 
     },
   ],
   video_hero: [
+    {
+      kind: "toggle",
+      path: ["twitch", "enabled"],
+      label: "Priorizar mi directo de Twitch",
+      hint: "Si estás desconectado o Twitch no carga, se mantiene el video de portada.",
+    },
+    {
+      kind: "text",
+      path: ["twitch", "channel"],
+      label: "Canal de Twitch",
+      max: 200,
+      hint: "Nombre del canal o enlace https://www.twitch.tv/tu-canal. No incluye chat.",
+    },
+    { kind: "text", path: ["twitch", "linkLabel"], label: "Texto del enlace a Twitch", max: 60 },
     {
       kind: "text",
       path: ["heading"],

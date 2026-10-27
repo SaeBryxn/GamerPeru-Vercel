@@ -93,6 +93,24 @@ function renderField(field: HomeField, base: FieldPath, ctx: FieldContext): Reac
   const key = joinPath(path);
 
   switch (field.kind) {
+    case "toggle":
+      return (
+        <div key={key} className={styles.field}>
+          <label className={styles.fieldLabel}>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={getAt(ctx.content, path) === true}
+              onChange={(event) => ctx.update(path, event.target.checked)}
+            />
+            {field.label}
+          </label>
+          {field.hint && <p className={styles.fieldHint}>{field.hint}</p>}
+          {errorAt(ctx.errors, path) && (
+            <p className={styles.fieldError}>{errorAt(ctx.errors, path)}</p>
+          )}
+        </div>
+      );
     case "text":
     case "href":
       return <TextField key={key} field={field} path={path} ctx={ctx} />;

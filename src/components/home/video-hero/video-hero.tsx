@@ -13,6 +13,8 @@ import { ChevronDown } from "lucide-react";
 import { Icon, useCanHover, usePrefersReducedMotion } from "@/components/ui";
 import { useAutoplayAllowed, type HomeVideoSource } from "../home-video";
 import styles from "./video-hero.module.css";
+import { TwitchLive } from "./twitch-live";
+import type { HomeSectionContentMap } from "@/lib/home/section-schemas";
 
 /** Background playback: muted, looping, chromeless, and privacy-enhanced host. */
 export function buildHeroEmbedSrc(videoId: string): string {
@@ -50,18 +52,26 @@ export interface VideoHeroProps {
   video: HomeVideoSource;
   /** Element scrolled to when the hero is swiped or the chevron is used. */
   revealTargetId: string;
+  twitch?: HomeSectionContentMap["video_hero"]["twitch"];
 }
 
 /**
  * Full-viewport video stage. It behaves like a curtain: dragging it up (or
  * scrolling) lifts it away and reveals the store underneath.
  */
-export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: VideoHeroProps) {
+export function VideoHero({
+  heading,
+  scrollHintLabel,
+  video,
+  revealTargetId,
+  twitch,
+}: VideoHeroProps) {
   const sectionRef = useRef<HTMLElement>(null);
   // Unknown on the server and during hydration: the embed and the drag gesture start once the
   // preference is known, so both renders produce the same tree.
   const allowMotion = usePrefersReducedMotion() === false;
   const autoplayAllowed = useAutoplayAllowed();
+  const [twitchOnline, setTwitchOnline] = useState(false);
   // Touch screens scroll the curtain away natively: a drag gesture would fight the page scroll,
   // and a scroll-linked dim costs a paint per frame on the devices least able to afford it.
   const isTouch = !useCanHover();
@@ -114,7 +124,7 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
     >
       <m.div
         className={styles.curtain}
-        drag={isLite ? false : "y"}
+        drag={isLite || twitchOnline ? false : "y"}
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0.4, bottom: 0 }}
         dragMomentum={false}
@@ -129,7 +139,7 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
           Reduced-motion visitors get the still stage instead of the loop.
         */}
         <div className={styles.videoFrame} aria-hidden="true">
-          {video.kind === "youtube" && allowMotion && !isCovered && (
+          {video.kind === "youtube" && allowMotion && !isCovered && !twitchOnline && (
             <iframe
               className={styles.video}
               src={buildHeroEmbedSrc(video.videoId)}
@@ -140,7 +150,7 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
               data-testid="video-hero-frame"
             />
           )}
-          {video.kind === "upload" && (
+          {video.kind === "upload" && !twitchOnline && (
             // The poster is the first paint; the file only plays while the stage is uncovered.
             <video
               key={autoplayAllowed && !isCovered ? "playing" : "still"}
@@ -163,6 +173,14 @@ export function VideoHero({ heading, scrollHintLabel, video, revealTargetId }: V
           style={isLite ? undefined : { opacity: dim }}
           aria-hidden="true"
         />
+        {twitch?.enabled && twitch.channel && !isCovered && (
+          <TwitchLive
+            channel={twitch.channel}
+            linkLabel={twitch.linkLabel}
+            onLiveChange={setTwitchOnline}
+            autoplay={autoplayAllowed}
+          />
+        )}
 
         {/* The page still needs its H1; the stage itself stays wordless. */}
         <h1 className={styles.heading}>{heading}</h1>

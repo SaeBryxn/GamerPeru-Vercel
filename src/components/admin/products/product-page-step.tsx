@@ -2,7 +2,18 @@
 
 import Link from "@/components/app-link";
 import React, { useId, useRef, useState } from "react";
-import { Award, BookOpen, ChevronDown, ExternalLink, Gift, Truck, Zap } from "lucide-react";
+import {
+  Award,
+  BookOpen,
+  ChevronDown,
+  ExternalLink,
+  Gift,
+  Truck,
+  Zap,
+  MessageSquare,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
 import { StatusBadge } from "@/components/admin/ui";
 import { PdpAccessories } from "@/components/product-detail/pdp-accessories";
 import { PdpSizeGuide } from "@/components/product-detail/pdp-size-guide";
@@ -33,11 +44,13 @@ export interface ProductPageStepProps {
   media: AdminProductUiDetail["media"];
   storySummary: StoryLifecycleSummary;
   onChanged: () => void;
+  onPendingChange?: (pending: boolean) => void;
   technicalFieldNames?: string[];
 }
 
 const BLOCKS = [
   ["story", "Historia"],
+  ["reviews", "Opiniones"],
   ["variants", "Colores y miniaturas"],
   ["gift", "Regalo"],
   ["accessories", "Accesorios"],
@@ -48,7 +61,7 @@ const BLOCKS = [
   ["support", "Soporte"],
 ] as const;
 type Block = (typeof BLOCKS)[number][0];
-const ALWAYS_SHOWN: Block[] = ["story", "variants", "support"];
+const ALWAYS_SHOWN: Block[] = ["variants", "support"];
 const hasSupport = (config: ProductPdpConfig) =>
   Object.values(config.support).some((value) => value.trim());
 
@@ -78,10 +91,12 @@ function withAvailablePhotos(config: ProductPdpConfig, media: ProductPageStepPro
   return config;
 }
 
-function visible(block: Block, config: ProductPdpConfig, story: StoryLifecycleSummary) {
+function visible(block: Block, config: ProductPdpConfig, _story: StoryLifecycleSummary) {
   switch (block) {
     case "story":
-      return story.lifecycle === "PUBLISHED_ONLY" || story.lifecycle === "DRAFT_OVER_PUBLISHED";
+      return config.contentSections.includes("story");
+    case "reviews":
+      return config.contentSections.includes("reviews");
     case "variants":
       return true;
     case "gift":
@@ -131,6 +146,10 @@ function blockSummary(
   switch (block) {
     case "story":
       return getStoryLifecycleText(story);
+    case "reviews":
+      return config.contentSections.includes("reviews")
+        ? "Opiniones de compradores visibles en esta ficha"
+        : "Las opiniones están ocultas solo en este producto";
     case "variants": {
       const count = Object.keys(config.variants).length;
       return count
@@ -188,6 +207,17 @@ function BlockPreview({
 }) {
   const sizes = config.sizeGuide.sizes.filter((size) => size.name.trim());
   switch (block) {
+    case "reviews":
+      return (
+        <div className={styles.storyPreview}>
+          <MessageSquare size={28} aria-hidden="true" />
+          <strong>Opiniones de compradores</strong>
+          <p>
+            Se muestran únicamente las opiniones aprobadas de este producto. Ocultarlas conserva sus
+            textos y fotos.
+          </p>
+        </div>
+      );
     case "story":
       return (
         <div className={styles.storyPreview}>
@@ -397,6 +427,7 @@ export function ProductPageStep({
   media,
   storySummary,
   onChanged,
+  onPendingChange,
   technicalFieldNames = [],
 }: ProductPageStepProps) {
   const id = useId();
@@ -440,6 +471,14 @@ export function ProductPageStep({
   const toggle = (block: Block, checked: boolean) => {
     switch (block) {
       case "story":
+      case "reviews":
+        change({
+          ...config,
+          contentSections: checked
+            ? [...config.contentSections.filter((section) => section !== block), block]
+            : config.contentSections.filter((section) => section !== block),
+        });
+        break;
       case "variants":
         return;
       case "gift":
@@ -482,6 +521,7 @@ export function ProductPageStep({
     }
     saving.current = true;
     setPending(true);
+    onPendingChange?.(true);
     const payload = {
       productId: product.id,
       expectedUpdatedAt,
@@ -508,6 +548,7 @@ export function ProductPageStep({
     } finally {
       saving.current = false;
       setPending(false);
+      onPendingChange?.(false);
     }
   };
   const activeTitle = BLOCKS.find(([block]) => block === active)?.[1];
@@ -538,7 +579,7 @@ export function ProductPageStep({
                 change({ ...config, contentSections: [...config.contentSections].reverse() })
               }
             >
-              ↑
+              <ArrowUp size={15} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -548,7 +589,7 @@ export function ProductPageStep({
                 change({ ...config, contentSections: [...config.contentSections].reverse() })
               }
             >
-              ↓
+              <ArrowDown size={15} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -624,19 +665,25 @@ export function ProductPageStep({
                       <legend className={styles.srOnly}>{title}</legend>
                       {block === "story" ? (
                         <>
-                          <StatusBadge tone={isVisible ? "success" : "neutral"}>
+                          <StatusBadge
+                            tone={
+                              isVisible &&
+                              ["PUBLISHED_ONLY", "DRAFT_OVER_PUBLISHED"].includes(
+                                storySummary.lifecycle
+                              )
+                                ? "success"
+                                : "neutral"
+                            }
+                          >
                             {getStoryLifecycleText(storySummary)}
                           </StatusBadge>
                           <p className={styles.hint}>
-                            La historia se muestra cuando la publicas desde su editor. El enlace se
-                            abre en otra pestaña.
+                            La historia se muestra cuando está publicada y activada en esta ficha.
+                            Dentro de ella puedes editar los títulos de las tablas, incluido
+                            «Especificaciones de la familia · revisa la versión elegida».
                           </p>
                           <div className={styles.storyActions}>
-                            <Link
-                              href={`/admin/products/${product.id}/story`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
+                            <Link href={`/admin/products/${product.id}/story`}>
                               Editar historia
                               <ExternalLink size={14} aria-hidden="true" />
                             </Link>
@@ -645,6 +692,14 @@ export function ProductPageStep({
                             </button>
                           </div>
                         </>
+                      ) : block === "reviews" ? (
+                        <div>
+                          <p className={styles.hint}>
+                            Activa u oculta las opiniones para este producto. La moderación conserva
+                            los textos y las fotos de los compradores.
+                          </p>
+                          <Link href="/admin/resenas">Revisar opiniones recibidas</Link>
+                        </div>
                       ) : (
                         <>
                           <ProductPdpFields

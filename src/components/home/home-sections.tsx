@@ -101,6 +101,7 @@ export async function HomeSections({ home, storeLayerClassName }: HomeSectionsPr
           heading={hero.content.heading}
           scrollHintLabel={hero.content.scrollHintLabel}
           video={video(hero.content.video)}
+          twitch={hero.content.twitch}
           revealTargetId={storeLayerId}
         />
       )}

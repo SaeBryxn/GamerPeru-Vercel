@@ -1,5 +1,6 @@
-import { test, expect, type Locator, type Page } from "@playwright/test";
+import { test, expect, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import postgres from "postgres";
+import { createServerClient } from "@supabase/ssr";
 import {
   assertLocalDatabaseTarget,
   assertLocalSupabaseApiTarget,
@@ -17,14 +18,48 @@ const productPath = "/productos/mouse-pdp-e2e";
 
 test.describe.configure({ mode: "serial" });
 test.setTimeout(120000);
+let adminCookies: Awaited<ReturnType<BrowserContext["cookies"]>> | null = null;
 
 async function login(page: Page, target: string) {
-  await page.goto(`/auth/login?redirect=${encodeURIComponent(target)}`);
-  await page.getByLabel("Correo electrónico").fill(ADMIN_E2E_USERS.superadmin.email);
-  await page.getByLabel("Contraseña", { exact: true }).fill(ADMIN_E2E_PASSWORD);
-  await page.getByRole("button", { name: "Iniciar sesión", exact: true }).click();
-  await page.waitForURL((url) => !url.pathname.includes("/auth/login"));
+  if (adminCookies) {
+    await page.context().addCookies(adminCookies);
+    await page.goto(target);
+    return;
+  }
+  // Authenticate the real local fixture account; these tests exercise the catalog editor.
+  const cookies: Array<{ name: string; value: string }> = [];
+  const client = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll: () => [],
+        setAll: (values) => {
+          cookies.push(...values.map(({ name, value }) => ({ name, value })));
+        },
+      },
+    }
+  );
+  const { data, error } = await client.auth.signInWithPassword({
+    email: ADMIN_E2E_USERS.superadmin.email,
+    password: ADMIN_E2E_PASSWORD,
+  });
+  expect(error).toBeNull();
+  expect(data.user?.id).toBe(ADMIN_E2E_USERS.superadmin.id);
+  const base = new URL(process.env.PLAYWRIGHT_TEST_BASE_URL ?? "http://localhost:3000");
+  await page.context().addCookies(
+    cookies.map((cookie) => ({
+      ...cookie,
+      domain: base.hostname,
+      path: "/",
+      secure: false,
+      httpOnly: false,
+      sameSite: "Lax",
+    }))
+  );
   await page.goto(target);
+  if (!target.endsWith("/new")) await page.getByTestId("product-editor-preview").waitFor();
+  adminCookies = await page.context().cookies();
 }
 
 /** Opens step 5 "Página del producto"; clicking an open step would close it. */
@@ -84,6 +119,12 @@ test.beforeAll(async () => {
     await sql`INSERT INTO product_variants (id,product_id,sku,title,price_cents,compare_at_price_cents,status,attributes,display_order) VALUES (${id(variant)},${id(product)},${sku},${title},${price},23000,'ACTIVE',${sql.json(attributes)},${variant}) ON CONFLICT(id) DO UPDATE SET status='ACTIVE'`;
   await sql`INSERT INTO product_media (id,product_id,media_asset_id,variant_id,display_order) VALUES (${id(51)},${productId},${id(41)},NULL,0),(${id(52)},${productId},${id(42)},${whiteId},1) ON CONFLICT(id) DO NOTHING`;
   await sql`INSERT INTO product_specifications (product_id,schema_id,schema_version,spec_values) VALUES (${productId},${id(3)},1,${sql.json({ material: "Aleación de magnesio", sensor: "PAW3950", polling: "8000 Hz" })}) ON CONFLICT(product_id) DO NOTHING`;
+  const code = process.env.CHECKOUT_PRIMARY_INVENTORY_LOCATION_CODE ?? "LOC-LIM-01";
+  await sql`INSERT INTO inventory_locations(id,code,name,is_active) VALUES(${id(80)},${code},'Almacén local E2E PDP',true) ON CONFLICT(code) DO NOTHING`;
+  const [location] = await sql`SELECT id FROM inventory_locations WHERE code=${code}`;
+  for (const [index, variant] of [blackId, whiteId, accessoryId, id(31)].entries()) {
+    await sql`INSERT INTO inventory_items(id,variant_id,location_id,quantity_on_hand,quantity_reserved,quantity_allocated) VALUES(${id(81 + index)},${variant},${location!.id},10,0,0) ON CONFLICT(variant_id,location_id) DO UPDATE SET quantity_on_hand=10,quantity_reserved=0,quantity_allocated=0`;
+  }
 });
 
 test.beforeEach(async ({ context }) => {
@@ -95,11 +136,13 @@ test.beforeEach(async ({ context }) => {
 });
 
 test.afterAll(async () => {
+  await sql`DELETE FROM inventory_items WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE slug='pdp-created-e2e'))`;
   await sql`DELETE FROM product_specifications WHERE product_id IN (SELECT id FROM products WHERE slug='pdp-created-e2e')`;
   await sql`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE slug='pdp-created-e2e')`;
   await sql`DELETE FROM products WHERE slug='pdp-created-e2e'`;
 
   await sql`DELETE FROM cart_items WHERE variant_id IN (${blackId},${whiteId},${accessoryId},${id(31)})`;
+  await sql`DELETE FROM inventory_items WHERE variant_id IN (${blackId},${whiteId},${accessoryId},${id(31)})`;
   await sql`DELETE FROM product_specifications WHERE product_id IN (${productId},${id(20)},${id(30)})`;
   await sql`DELETE FROM product_media WHERE product_id=${productId}`;
   await sql`DELETE FROM product_variants WHERE product_id IN (${productId},${id(20)},${id(30)})`;
@@ -116,6 +159,8 @@ test("el admin guarda los bloques, miniaturas y accesorios con filas editables",
   page,
 }) => {
   await login(page, `/admin/products/${productId}`);
+  await expect(page.getByTestId("product-editor-preview")).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("editor-preview.png"), fullPage: true });
   const root = await openPageStep(page);
   await openBlock(root, "Especificaciones de la tienda");
   await root.getByText("Calificación y reseñas", { exact: true }).click();
@@ -217,6 +262,7 @@ test("el admin guarda los bloques, miniaturas y accesorios con filas editables",
 test("crear producto conserva la configuración y los importes exactos", async ({ page }) => {
   await login(page, "/admin/products/new");
   await page.getByTestId("input-name").fill("PDP created E2E");
+  await page.getByText(/^gamerperu\.com\/productos\//).click();
   await page.getByTestId("input-slug").fill("pdp-created-e2e");
   await page.getByTestId("select-brand").selectOption(id(1));
   await page.getByTestId("select-category").selectOption(id(2));
@@ -231,7 +277,7 @@ test("crear producto conserva la configuración y los importes exactos", async (
   await page.getByTestId("section-nav-variantes").click();
   const board = page.getByRole("region", { name: "Colores, tallas y precios" });
   await board.getByRole("button", { name: "Agregar color o talla" }).click();
-  const variantForm = board.getByRole("form", { name: "Agregar color o talla" });
+  const variantForm = page.getByRole("form", { name: "Agregar color o talla" });
   await variantForm.getByLabel("Color o talla").fill("Negro Mini");
   await variantForm.getByLabel("Precio", { exact: true }).fill("249.90");
   await variantForm.getByLabel("Precio antes (tachado)").fill("299.90");
