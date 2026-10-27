@@ -7,6 +7,7 @@ const directory = path.resolve(process.argv[2] ?? "scratch/catalogo-20261026");
 const plan = JSON.parse(fs.readFileSync(path.join(directory, "plan.json")));
 const before = JSON.parse(fs.readFileSync(path.join(directory, "estado-inicial.json")));
 const receipt = JSON.parse(fs.readFileSync(path.join(directory, "validacion.json")));
+const mediaManifest = JSON.parse(fs.readFileSync(path.join(directory, "media.json")));
 process.loadEnvFile(".env.local");
 const sql = postgres(process.env.DATABASE_URL, { max: 1, prepare: false, connect_timeout: 15 });
 try {
@@ -23,6 +24,45 @@ try {
         ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
         : v
     );
+  if (before.variants) {
+    const previousIds = [...new Set(before.variants.map((v) => v.id))];
+    const current =
+      await sql`select v.id,v.product_id,v.title,v.sku,v.attributes,v.price_cents,i.quantity_on_hand,i.quantity_reserved,i.quantity_allocated from product_variants v left join inventory_items i on i.variant_id=v.id where v.id in ${sql(previousIds)}`;
+    const sorted = (rows) => rows.map(normalize).sort();
+    assert.deepEqual(
+      sorted(current),
+      sorted(before.variants),
+      "Cambió una variante o existencia anterior"
+    );
+  }
+  const expectedAssets = [
+    ...new Map(
+      plan.products.flatMap((p) =>
+        p.images.map((i) => [mediaManifest[i.url].id, mediaManifest[i.url]])
+      )
+    ).values(),
+  ];
+  const assets =
+    await sql`select id,object_key,checksum_sha256,file_size_bytes from media_assets where id in ${sql(expectedAssets.map((a) => a.id))}`;
+  const assetMap = new Map(assets.map((a) => [a.id, a]));
+  const attachments =
+    await sql`select product_id,media_asset_id,variant_id,placement from product_media where product_id in ${sql(ids)}`;
+  const attached = new Set(
+    attachments.map((a) => `${a.product_id}:${a.media_asset_id}:${a.variant_id ?? "general"}`)
+  );
+  for (const expected of expectedAssets) {
+    const actual = assetMap.get(expected.id);
+    assert.ok(actual, expected.objectKey);
+    assert.equal(actual.object_key, expected.objectKey);
+    assert.equal(actual.checksum_sha256, expected.checksumSha256);
+    assert.equal(actual.file_size_bytes, expected.fileSizeBytes);
+  }
+  for (const p of plan.products)
+    for (const image of p.images)
+      assert.ok(
+        attached.has(`${p.id}:${mediaManifest[image.url].id}:${image.variantId ?? "general"}`),
+        `${p.name}: imagen no adjunta`
+      );
   for (const old of before.catalog) {
     const actual = products.find((p) => p.id === old.id);
     assert.ok(actual, old.name);
@@ -83,10 +123,12 @@ try {
     variants: variants.length,
     stories: stories.length,
     existingProductsPreserved: before.catalog.length,
+    mediaAssets: assets.length,
+    mediaAttachments: attachments.length,
     stockNew: 0,
     pricesProvisional: true,
     byBrand: Object.fromEntries(
-      ["atk", "mchose"].map((brand) => [
+      [...new Set(plan.products.map((p) => p.brand))].map((brand) => [
         brand,
         plan.products.filter((p) => p.brand === brand).length,
       ])

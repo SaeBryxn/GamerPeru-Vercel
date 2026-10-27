@@ -304,3 +304,17 @@ aplicó la `0027` el 26 de octubre. Seguimiento:
   Conserva precios de referencia con la moneda comprobada de la fuente (Attack Shark está
   entregando PEN), sin confundirlos con costos. JINMS no publica precios: quedan nulos. No copia
   stock ni reseñas del proveedor, y excluye cables y receptores vendidos por separado.
+
+### Publicación del catálogo extraído (27 de octubre de 2026)
+
+- Por indicación del dueño, las 207 fichas extraídas se importan completas y visibles, para que
+  después pueda ocultar las que no quiera. La carga incluye 95 Attack Shark, 8 JINMS y 104
+  monitores, 766 variantes, especificaciones e imágenes alojadas en R2. Se incorporan las marcas
+  nuevas y la categoría Monitores sin migraciones ni cambios a los productos anteriores.
+- Las variantes nuevas tienen stock cero; no se copian existencias del proveedor. Las referencias
+  minoristas se convierten en precios sugeridos con margen; los ocho JINMS sin importe público
+  usan estimaciones del catálogo actual, con su base registrada en el manifiesto de publicación.
+- El proceso de `scripts/catalog/README.md` conserva una copia inicial, valida con las reglas
+  canónicas del administrador y verifica después la publicación, el stock anterior y las
+  asociaciones de todas las imágenes. Distingue galería, fotos por variante e historia; comprueba
+  los objetos subidos y contabiliza únicamente medios nuevos en el presupuesto existente.

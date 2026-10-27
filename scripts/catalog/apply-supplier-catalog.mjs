@@ -133,9 +133,10 @@ try {
           media_asset_id: photo.asset.id,
           variant_id: photo.variantId,
           display_order: photo.order,
+          placement: photo.placement ?? "GALLERY",
         }));
         await tx`insert into product_media (id,product_id,media_asset_id,variant_id,display_order,placement)
-          select id,${p.id}::uuid,media_asset_id,variant_id,display_order,'GALLERY' from jsonb_to_recordset(${tx.json(attachments)}::jsonb) as a(id uuid,media_asset_id uuid,variant_id uuid,display_order int)
+          select id,${p.id}::uuid,media_asset_id,variant_id,display_order,placement::product_media_placement from jsonb_to_recordset(${tx.json(attachments)}::jsonb) as a(id uuid,media_asset_id uuid,variant_id uuid,display_order int,placement text)
           on conflict (id) do nothing`;
         if (existing.length) {
           await tx`insert into audit_events (id,actor_type,actor_id,action,target_type,target_id,metadata,request_id) values (${stableId(`append:${p.id}:${variantsToInsert.map((v) => v.id).join(",")}`)}::uuid,'SYSTEM','supplier-catalog-import','CATALOG_SUPPLIER_VARIANTS_APPEND','PRODUCT',${p.id},${tx.json({ batch: plan.batch, variants: variantsToInsert.map((v) => v.id), stock: 0 })},${plan.batch})`;
@@ -190,8 +191,15 @@ try {
   result.storageBytesAccounted = await sql.begin(async (tx) => {
     await tx`select pg_advisory_xact_lock(hashtextextended(${`supplier-storage:${plan.batch}`},0))`;
     const keys = [
-      ...new Set(plan.products.flatMap((p) => p.images.map((i) => media[i.url].objectKey))),
+      ...new Set(
+        plan.products.flatMap((p) =>
+          p.images
+            .filter((i) => !media[i.url].registeredBeforeImport)
+            .map((i) => media[i.url].objectKey)
+        )
+      ),
     ];
+    if (!keys.length) return 0;
     const total = Number(
       (
         await tx`select coalesce(sum(file_size_bytes),0) as bytes from media_assets where object_key in ${tx(keys)}`
