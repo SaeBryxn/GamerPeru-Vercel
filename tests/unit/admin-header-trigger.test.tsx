@@ -1,7 +1,7 @@
 import React, { createRef } from "react";
 import { describe, it, expect } from "vitest";
 import { renderToString } from "react-dom/server";
-import { AdminHeader } from "@/components/admin/admin-header";
+import { AdminBreadcrumbs, AdminHeader } from "@/components/admin/admin-header";
 
 describe("GP-022 / BR1 — AdminHeader Mobile Trigger & ARIA Contract Tests", () => {
   it("renders menu trigger button with aria-expanded='false' when closed", () => {
@@ -40,16 +40,12 @@ describe("GP-022 / BR1 — AdminHeader Mobile Trigger & ARIA Contract Tests", ()
 
   it("renders a navigable breadcrumb trail with a back link to the level above", () => {
     const html = renderToString(
-      <AdminHeader
-        onOpenMobileNav={() => {}}
-        isMobileNavOpen={false}
+      <AdminBreadcrumbs
         crumbs={[
           { label: "Inicio", href: "/admin" },
           { label: "Productos", href: "/admin/products" },
           { label: "Nuevo", href: null },
         ]}
-        theme="light"
-        onToggleTheme={() => {}}
       />
     );
 
@@ -59,5 +55,11 @@ describe("GP-022 / BR1 — AdminHeader Mobile Trigger & ARIA Contract Tests", ()
     expect(html).toContain('href="/admin/products"');
     expect(html).toMatch(/aria-current="page"[^>]*>Nuevo</);
     expect(html).toContain('aria-label="Volver a Productos"');
+  });
+
+  it("renders no trail on Inicio, where there is no level above", () => {
+    expect(renderToString(<AdminBreadcrumbs crumbs={[{ label: "Inicio", href: null }]} />)).toBe(
+      ""
+    );
   });
 });

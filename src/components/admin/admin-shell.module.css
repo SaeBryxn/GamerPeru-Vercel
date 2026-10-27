@@ -68,8 +68,7 @@
   height: 100vh;
   height: 100dvh;
   flex-shrink: 0;
-  padding: var(--space-6) var(--space-4);
-  border-right: 1px solid var(--color-border-subtle);
+  padding: var(--space-5) var(--space-3) var(--space-4);
   background-color: var(--admin-sidebar-surface);
   transition: width 0.2s ease;
 }
@@ -85,7 +84,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-6);
+  padding-left: var(--space-3);
 }
 
 .sidebarBrandRow .sidebarBrand {
@@ -95,6 +95,7 @@
 
 .sidebarCollapsed .sidebarBrandRow {
   flex-direction: column;
+  padding-left: 0;
   gap: var(--space-3);
 }
 
@@ -178,21 +179,14 @@
 .brandLogo {
   white-space: nowrap;
   font-family: var(--font-heading);
-  font-size: 18px;
+  font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.03em;
-  color: var(--color-text-primary);
+  color: #ffffff;
 }
 
-.brandBadge {
-  padding: 1px 6px;
-  border: 1px solid var(--color-border-default);
-  border-radius: 6px;
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+.brandAccent {
+  color: var(--admin-brand);
 }
 
 /* Scrolls on short screens so every destination stays reachable. */
@@ -210,15 +204,11 @@
   gap: var(--space-5);
 }
 
-.navGroupHead {
-  margin: 0 var(--space-2) var(--space-2);
-}
-
 .navSectionTitle {
-  margin: 0;
+  margin: 0 var(--space-3) var(--space-2);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-text-muted);
 }
@@ -226,7 +216,7 @@
 .navList {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -241,8 +231,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: 40px;
-  padding: 0 var(--space-2);
+  min-height: 38px;
+  padding: 0 var(--space-3);
   border-radius: 8px;
   color: var(--color-text-secondary);
   font-size: 14px;
@@ -266,7 +256,7 @@
 .navLinkActive,
 .navLinkActive:hover {
   background-color: transparent;
-  color: var(--color-text-primary);
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -274,57 +264,41 @@
 .navActiveMarker {
   position: absolute;
   inset: 0;
-  border-left: 2px solid var(--admin-brand);
   border-radius: 8px;
-  background-color: rgba(255, 255, 255, 0.07);
+  background-color: var(--admin-nav-active);
+  box-shadow: inset 0 0 0 1px rgba(225, 29, 72, 0.28);
 }
 
-/* Folder toggle: same row as a link, with a chevron that turns when open. */
-.navFolderButton {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.navChevron {
-  width: 16px;
-  height: 16px;
+/* Pending work next to a destination: red count, amber for stock. A dot on the icon rail. */
+.navBadge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
   margin-left: auto;
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  transition: transform 0.2s ease;
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: var(--admin-brand);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-.navChevronOpen {
-  transform: rotate(180deg);
+.navBadgeWarning {
+  background-color: #d97706;
 }
 
-.navSubList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 2px 0 0 22px;
-  padding: 0 0 0 10px;
-  border-left: 1px solid var(--color-border-subtle);
-  list-style: none;
-}
-
-/* Author display rules beat the hidden attribute, so a closed folder has to say it again. */
-.navSubList[hidden] {
-  display: none;
-}
-
-.navLinkNested {
-  min-height: 36px;
-  font-size: 13px;
-}
-
-.navLinkNested .navIconChip {
-  width: 18px;
-  height: 18px;
+.navBadge[data-collapsed] {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  min-width: 8px;
+  height: 8px;
+  padding: 0;
+  box-shadow: 0 0 0 2px var(--admin-sidebar-surface);
 }
 
 .navIconChip,
@@ -354,7 +328,7 @@
 }
 
 .navLinkActive .navIcon {
-  color: var(--color-text-primary);
+  color: #ffffff;
 }
 
 .navLabel {
@@ -387,6 +361,12 @@
   border-bottom: 1px solid var(--color-border-subtle);
   background-color: var(--admin-header-surface);
   backdrop-filter: blur(12px);
+}
+
+@media (min-width: 768px) {
+  .header {
+    padding: 0 var(--space-8);
+  }
 }
 
 .headerLeft,
@@ -432,6 +412,13 @@
 .closeButton:focus-visible {
   outline: 2px solid var(--color-border-focus);
   outline-offset: 2px;
+}
+
+.crumbBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .breadcrumbs {
@@ -579,7 +566,7 @@
 .mainContent {
   flex: 1;
   width: 100%;
-  padding: var(--space-6);
+  padding: var(--space-5) var(--space-4) var(--space-8);
 }
 
 @media (min-width: 768px) {
@@ -641,7 +628,6 @@
   .drawer,
   .drawerBackdrop,
   .navLink,
-  .navChevron,
   .sidebar {
     transition: none;
   }

@@ -186,8 +186,8 @@ test.describe("GP-025 / CHK4 — Admin AI Product Assistant", () => {
 
     await loginAndNavigate(page, ADMIN_E2E_USERS.catalog.email, "/admin/products/ai-import");
     await expect(page.getByRole("heading", { name: "Asistente IA de productos" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Asistente IA" }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: "Configuración IA" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Importar con IA" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "Inteligencia artificial" })).toHaveCount(0);
 
     await page.goto("/admin/settings/ai");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Acceso no autorizado");

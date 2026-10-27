@@ -8,7 +8,7 @@ import { getAdminNavigation } from "@/lib/admin/navigation";
 import type { AdminIdentity } from "@/lib/admin/staff/identity";
 import { AdminSidebar } from "./admin-sidebar";
 import { buildAdminBreadcrumbs } from "./admin-breadcrumbs";
-import { AdminHeader } from "./admin-header";
+import { AdminBreadcrumbs, AdminHeader } from "./admin-header";
 import { AdminMobileNav } from "./admin-mobile-nav";
 import { useAdminTheme } from "./use-admin-theme";
 import styles from "./admin-shell.module.css";
@@ -75,7 +75,6 @@ export function AdminShell({ authContext, identity, children }: AdminShellProps)
               onOpenMobileNav={() => setIsMobileNavOpen(true)}
               isMobileNavOpen={isMobileNavOpen}
               triggerRef={menuButtonRef}
-              crumbs={crumbs}
               theme={theme}
               onToggleTheme={toggle}
               identity={identity}
@@ -88,6 +87,7 @@ export function AdminShell({ authContext, identity, children }: AdminShellProps)
               which could leave the new screen blank until a full reload.
             */}
             <main id="admin-main-content" className={styles.mainContent} tabIndex={-1}>
+              <AdminBreadcrumbs crumbs={crumbs} />
               {children}
             </main>
           </div>

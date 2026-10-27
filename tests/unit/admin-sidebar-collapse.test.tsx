@@ -6,7 +6,7 @@ import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { CANONICAL_ADMIN_NAV_ITEMS } from "@/lib/admin/navigation";
 
 describe("Admin sidebar collapse", () => {
-  it("shows section titles and folders while expanded", () => {
+  it("shows the four section titles while expanded", () => {
     const onToggle = vi.fn();
     render(
       <AdminSidebar
@@ -17,8 +17,9 @@ describe("Admin sidebar collapse", () => {
       />
     );
 
-    expect(screen.getByRole("heading", { name: "Operaciones" })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Diseño de tienda/ })).toBeDefined();
+    expect(
+      screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)
+    ).toEqual(["Operaciones", "Catálogo", "Tienda online", "Administración"]);
     const toggle = screen.getByRole("button", { name: "Contraer menú lateral" });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(toggle);
@@ -43,34 +44,36 @@ describe("Admin sidebar collapse", () => {
       expect(screen.getByRole("link", { name: item.label })).toBeDefined();
     }
     expect(
-      screen.getByRole("link", { name: "Home de la tienda" }).getAttribute("aria-current")
+      screen.getByRole("link", { name: "Página de inicio" }).getAttribute("aria-current")
     ).toBe("page");
   });
 
-  it("opens and closes folders, including the one that holds the current screen", () => {
-    render(
+  it("shows pending counts next to their destination and a dot on the rail", () => {
+    const badges = { ordersToPrepare: 3, paymentsToReview: 0, pendingReviews: 120 };
+    const { rerender } = render(
       <AdminSidebar
         navItems={CANONICAL_ADMIN_NAV_ITEMS}
-        currentPath="/admin/home"
+        currentPath="/admin"
         collapsed={false}
         onToggleCollapsed={() => undefined}
+        badges={badges}
       />
     );
 
-    const design = screen.getByRole("button", { name: /Diseño de tienda/ });
-    const designList = document.getElementById(design.getAttribute("aria-controls")!)!;
-    expect(design.getAttribute("aria-expanded")).toBe("true");
-    expect(designList.hidden).toBe(false);
-    fireEvent.click(design);
-    expect(design.getAttribute("aria-expanded")).toBe("false");
-    expect(designList.hidden).toBe(true);
+    expect(screen.getByRole("link", { name: "Pedidos, 3 pendientes" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Reseñas, 120 pendientes" })).toBeDefined();
+    // A zero count says nothing.
+    expect(screen.getByRole("link", { name: "Pagos" })).toBeDefined();
 
-    const engine = screen.getByRole("button", { name: /Motor IA/ });
-    const engineList = document.getElementById(engine.getAttribute("aria-controls")!)!;
-    expect(engineList.hidden).toBe(true);
-    fireEvent.click(engine);
-    expect(engineList.hidden).toBe(false);
-    fireEvent.click(engine);
-    expect(engineList.hidden).toBe(true);
+    rerender(
+      <AdminSidebar
+        navItems={CANONICAL_ADMIN_NAV_ITEMS}
+        currentPath="/admin"
+        collapsed
+        onToggleCollapsed={() => undefined}
+        badges={badges}
+      />
+    );
+    expect(screen.getByRole("link", { name: "Pedidos, 3 pendientes" })).toBeDefined();
   });
 });

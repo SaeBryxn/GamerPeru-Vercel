@@ -3,7 +3,8 @@
 import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import type { AdminNavItem } from "@/lib/admin/types";
-import { AdminNavSections } from "./admin-nav-sections";
+import { AdminNavSections, type AdminNavBadges } from "./admin-nav-sections";
+import { AdminBrandMark } from "./admin-sidebar";
 import styles from "./admin-shell.module.css";
 
 interface AdminMobileNavProps {
@@ -12,6 +13,7 @@ interface AdminMobileNavProps {
   navItems: AdminNavItem[];
   currentPath?: string;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
+  badges?: AdminNavBadges;
 }
 
 export function AdminMobileNav({
@@ -20,6 +22,7 @@ export function AdminMobileNav({
   navItems,
   currentPath = "/admin",
   triggerRef,
+  badges,
 }: AdminMobileNavProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -90,8 +93,7 @@ export function AdminMobileNav({
         <div>
           <div className={styles.drawerHeader}>
             <div className={styles.sidebarBrand}>
-              <span className={styles.brandLogo}>Gamer Perú</span>
-              <span className={styles.brandBadge}>ADMIN</span>
+              <AdminBrandMark />
             </div>
             <button
               ref={closeButtonRef}
@@ -112,6 +114,7 @@ export function AdminMobileNav({
               navItems={navItems}
               currentPath={currentPath}
               markerId="admin-mobile-nav-active"
+              badges={badges}
               onNavigate={() => {
                 onClose();
                 triggerRef?.current?.focus();

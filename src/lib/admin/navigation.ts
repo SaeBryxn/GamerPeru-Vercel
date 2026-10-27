@@ -1,22 +1,17 @@
 import { AI_ASSISTANT_ENABLED } from "@/config/features";
 import type { PermissionName } from "@/lib/auth/rbac";
-import type { AdminNavFolder, AdminNavFolderId, AdminNavGroup, AdminNavItem } from "./types";
+import type { AdminNavGroup, AdminNavItem } from "./types";
 
 /** Sidebar sections, in display order. */
 export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   { id: "operations", label: "Operaciones" },
   { id: "catalog", label: "Catálogo" },
-  { id: "storefront", label: "Tienda y contenido" },
-  { id: "system", label: "IA y sistema" },
+  { id: "storefront", label: "Tienda online" },
+  { id: "administration", label: "Administración" },
 ];
 
-export const ADMIN_NAV_FOLDERS: Record<AdminNavFolderId, AdminNavFolder> = {
-  "storefront-design": { id: "storefront-design", label: "Diseño de tienda", iconName: "Palette" },
-  "ai-engine": { id: "ai-engine", label: "Motor IA", iconName: "Cpu" },
-};
-
 /**
- * Canonical Gamer Perú Admin Navigation Items
+ * Canonical Gamer Perú Admin Navigation Items, in display order.
  *
  * Scope Rule (GP-022):
  * Only implemented and verified destinations are exposed in active navigation.
@@ -28,16 +23,17 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: "Inicio",
     href: "/admin",
     group: "operations",
-    iconName: "Gauge",
-    description: "Panel principal de administración",
+    iconName: "House",
+    description: "Resumen de la tienda",
   },
   {
     id: "orders",
     label: "Pedidos",
     href: "/admin/orders",
     group: "operations",
-    iconName: "ShoppingBag",
+    iconName: "ClipboardList",
     requiredPermission: "orders:manage",
+    badge: "ordersToPrepare",
     description: "Gestión y seguimiento de pedidos",
   },
   {
@@ -45,18 +41,10 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: "Pagos",
     href: "/admin/pagos",
     group: "operations",
-    iconName: "ReceiptText",
+    iconName: "CreditCard",
     requiredPermission: "orders:verify",
+    badge: "paymentsToReview",
     description: "Cola de comprobantes Yape/Plin por verificar",
-  },
-  {
-    id: "products",
-    label: "Productos",
-    href: "/admin/products",
-    group: "catalog",
-    iconName: "Mouse",
-    requiredPermission: "catalog:manage",
-    description: "Gestión de catálogo y productos",
   },
   {
     id: "inventory",
@@ -65,7 +53,36 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     group: "operations",
     iconName: "Boxes",
     requiredPermission: "inventory:manage",
+    badge: "outOfStock",
     description: "Existencias, conteos y movimientos del almacén principal",
+  },
+  {
+    id: "products",
+    label: "Productos",
+    href: "/admin/products",
+    group: "catalog",
+    iconName: "Package",
+    requiredPermission: "catalog:manage",
+    description: "Gestión de catálogo y productos",
+  },
+  {
+    id: "ai-product-assistant",
+    label: "Importar con IA",
+    href: "/admin/products/ai-import",
+    group: "catalog",
+    iconName: "Sparkles",
+    requiredPermission: "catalog:ai_research",
+    description: "Investigación y revisión asistida de productos",
+  },
+  {
+    id: "reviews",
+    label: "Reseñas",
+    href: "/admin/resenas",
+    group: "catalog",
+    iconName: "MessageSquareText",
+    requiredPermission: "catalog:manage",
+    badge: "pendingReviews",
+    description: "Opiniones de compradores por aprobar antes de publicarlas",
   },
   {
     id: "taxonomy",
@@ -77,91 +94,51 @@ export const CANONICAL_ADMIN_NAV_ITEMS: AdminNavItem[] = [
     description: "Árbol del catálogo: categorías y marcas",
   },
   {
-    id: "reviews",
-    label: "Reseñas",
-    href: "/admin/resenas",
-    group: "catalog",
-    iconName: "MessageSquareText",
-    requiredPermission: "catalog:manage",
-    description: "Opiniones de compradores por aprobar antes de publicarlas",
-  },
-  {
     id: "storefront-home",
-    label: "Home de la tienda",
+    label: "Página de inicio",
     href: "/admin/home",
     group: "storefront",
-    folder: "storefront-design",
     iconName: "LayoutTemplate",
     requiredPermission: "catalog:manage",
     description: "Secciones, textos, imágenes y videos de la portada",
   },
   {
     id: "storefront-menu",
-    label: "Menú de la tienda",
+    label: "Menú y navegación",
     href: "/admin/menu",
     group: "storefront",
-    folder: "storefront-design",
     iconName: "PanelTop",
     requiredPermission: "catalog:manage",
     description: "Qué secciones ve el cliente en la barra superior",
   },
   {
-    id: "ai-product-assistant",
-    label: "Asistente IA",
-    href: "/admin/products/ai-import",
-    group: "system",
-    folder: "ai-engine",
-    iconName: "Sparkles",
-    requiredPermission: "catalog:ai_research",
-    description: "Investigación y revisión asistida de productos",
-  },
-  {
-    id: "ai-settings",
-    label: "Configuración IA",
-    href: "/admin/settings/ai",
-    group: "system",
-    folder: "ai-engine",
-    iconName: "KeyRound",
-    requiredPermission: "ai:manage_credentials",
-    description: "Proveedores, credenciales y perfiles de IA",
-  },
-  {
     id: "team",
     label: "Equipo",
     href: "/admin/equipo",
-    group: "system",
-    iconName: "UserCog",
+    group: "administration",
+    iconName: "Users",
     requiredPermission: "staff:manage",
     description: "Quién accede al panel y con qué nivel",
   },
+  {
+    id: "ai-settings",
+    label: "Inteligencia artificial",
+    href: "/admin/settings/ai",
+    group: "administration",
+    iconName: "Cpu",
+    requiredPermission: "ai:manage_credentials",
+    description: "Proveedores, credenciales y perfiles de IA",
+  },
 ];
 
-export type AdminNavEntry =
-  | { kind: "item"; item: AdminNavItem }
-  | { kind: "folder"; folder: AdminNavFolder; items: AdminNavItem[] };
-
-/**
- * The visible items split into their sections; inside a section, items that share a folder
- * collapse into one entry placed where the first of them sits. Empty sections are dropped.
- */
+/** The visible items split into their sections, in display order. Empty sections are dropped. */
 export function groupAdminNavigation(
   items: AdminNavItem[]
-): Array<AdminNavGroup & { entries: AdminNavEntry[] }> {
-  return ADMIN_NAV_GROUPS.map((group) => {
-    const entries: AdminNavEntry[] = [];
-    for (const item of items.filter((candidate) => candidate.group === group.id)) {
-      if (!item.folder) {
-        entries.push({ kind: "item", item });
-        continue;
-      }
-      const existing = entries.find(
-        (entry) => entry.kind === "folder" && entry.folder.id === item.folder
-      );
-      if (existing?.kind === "folder") existing.items.push(item);
-      else entries.push({ kind: "folder", folder: ADMIN_NAV_FOLDERS[item.folder], items: [item] });
-    }
-    return { ...group, entries };
-  }).filter((group) => group.entries.length > 0);
+): Array<AdminNavGroup & { items: AdminNavItem[] }> {
+  return ADMIN_NAV_GROUPS.map((group) => ({
+    ...group,
+    items: items.filter((item) => item.group === group.id),
+  })).filter((group) => group.items.length > 0);
 }
 
 /**

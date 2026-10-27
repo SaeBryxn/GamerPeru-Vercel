@@ -105,8 +105,11 @@ export function AdminAccountMenu({
           setOpen((value) => !value);
         }}
       >
-        <UserAvatar name={name} seed={email} src={avatarUrl} />
-        <span className={styles.triggerLabel}>{name}</span>
+        <UserAvatar name={name} seed={email} src={avatarUrl} size="md" />
+        <span className={styles.triggerLabel}>
+          <span className={styles.triggerName}>{name}</span>
+          <span className={styles.triggerRole}>{level}</span>
+        </span>
         <ChevronDown className={styles.chevron} size={14} aria-hidden="true" />
       </button>
       <div

@@ -20,3 +20,4 @@ export { DrawerHeader, SideDrawer } from "./side-drawer";
 export { ToastViewport, useToasts } from "./toasts";
 export type { NotifyFn, ToastTone } from "./toasts";
 export { AdminPageSkeleton } from "./admin-page-skeleton";
+export { PageHeader } from "./page-header";

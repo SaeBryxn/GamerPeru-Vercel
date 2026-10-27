@@ -1,41 +1,36 @@
 import type { PermissionName, RoleName } from "@/lib/auth/rbac";
 
-export type AdminNavGroupId = "operations" | "catalog" | "storefront" | "system";
-
-/** Collapsible entry inside a section that holds related destinations. */
-export type AdminNavFolderId = "storefront-design" | "ai-engine";
-
-export interface AdminNavFolder {
-  id: AdminNavFolderId;
-  label: string;
-  iconName: "Palette" | "Cpu";
-}
+export type AdminNavGroupId = "operations" | "catalog" | "storefront" | "administration";
 
 export interface AdminNavGroup {
   id: AdminNavGroupId;
   label: string;
 }
 
+/** Pending-work counters a destination can show next to its name (see /api/admin/attention). */
+export type AdminNavBadgeKey =
+  "ordersToPrepare" | "paymentsToReview" | "outOfStock" | "pendingReviews";
+
 export interface AdminNavItem {
   id: string;
   label: string;
   href: string;
   group: AdminNavGroupId;
-  folder?: AdminNavFolderId;
   iconName:
-    | "Gauge"
+    | "House"
+    | "ClipboardList"
+    | "CreditCard"
     | "Boxes"
-    | "ShoppingBag"
-    | "ReceiptText"
-    | "Mouse"
+    | "Package"
+    | "Sparkles"
+    | "MessageSquareText"
     | "FolderTree"
     | "LayoutTemplate"
     | "PanelTop"
-    | "Sparkles"
-    | "KeyRound"
-    | "UserCog"
-    | "MessageSquareText";
+    | "Users"
+    | "Cpu";
   requiredPermission?: PermissionName;
+  badge?: AdminNavBadgeKey;
   description?: string;
 }
 

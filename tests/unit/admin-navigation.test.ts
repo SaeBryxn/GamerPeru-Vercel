@@ -25,15 +25,15 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
       ["overview", "/admin", null],
       ["orders", "/admin/orders", "orders:manage"],
       ["payment-verification", "/admin/pagos", "orders:verify"],
-      ["products", "/admin/products", "catalog:manage"],
       ["inventory", "/admin/inventario", "inventory:manage"],
-      ["taxonomy", "/admin/taxonomia", "catalog:manage"],
+      ["products", "/admin/products", "catalog:manage"],
+      ["ai-product-assistant", "/admin/products/ai-import", "catalog:ai_research"],
       ["reviews", "/admin/resenas", "catalog:manage"],
+      ["taxonomy", "/admin/taxonomia", "catalog:manage"],
       ["storefront-home", "/admin/home", "catalog:manage"],
       ["storefront-menu", "/admin/menu", "catalog:manage"],
-      ["ai-product-assistant", "/admin/products/ai-import", "catalog:ai_research"],
-      ["ai-settings", "/admin/settings/ai", "ai:manage_credentials"],
       ["team", "/admin/equipo", "staff:manage"],
+      ["ai-settings", "/admin/settings/ai", "ai:manage_credentials"],
     ]);
   });
 
@@ -57,8 +57,8 @@ describe("GP-022 / GP-024 / GP-025 / GP-027 — Admin Navigation Filtering & Sco
     expect(navCatalog.length).toBe(6);
     expect(navCatalog[0]?.href).toBe("/admin");
     expect(navCatalog[1]?.href).toBe("/admin/products");
-    expect(navCatalog[2]?.href).toBe("/admin/taxonomia");
-    expect(navCatalog[3]?.href).toBe("/admin/resenas");
+    expect(navCatalog[2]?.href).toBe("/admin/resenas");
+    expect(navCatalog[3]?.href).toBe("/admin/taxonomia");
     expect(navCatalog[4]?.href).toBe("/admin/home");
     expect(navCatalog[5]?.href).toBe("/admin/menu");
 
@@ -110,28 +110,21 @@ describe("Admin navigation sections", () => {
   const shape = (permissions?: Set<PermissionName>) =>
     groupAdminNavigation(
       permissions ? getAdminNavigation(permissions) : CANONICAL_ADMIN_NAV_ITEMS
-    ).map((group) => [
-      group.label,
-      group.entries.map((entry) =>
-        entry.kind === "item"
-          ? entry.item.id
-          : [entry.folder.label, entry.items.map((item) => item.id)]
-      ),
-    ]);
+    ).map((group) => [group.label, group.items.map((item) => item.label)]);
 
-  it("groups destinations into sections with collapsible folders in display order", () => {
+  it("groups destinations into four sections in display order", () => {
     expect(shape()).toEqual([
-      ["Operaciones", ["overview", "orders", "payment-verification", "inventory"]],
-      ["Catálogo", ["products", "taxonomy", "reviews"]],
-      ["Tienda y contenido", [["Diseño de tienda", ["storefront-home", "storefront-menu"]]]],
-      ["IA y sistema", [["Motor IA", ["ai-product-assistant", "ai-settings"]], "team"]],
+      ["Operaciones", ["Inicio", "Pedidos", "Pagos", "Inventario"]],
+      ["Catálogo", ["Productos", "Importar con IA", "Reseñas", "Categorías y marcas"]],
+      ["Tienda online", ["Página de inicio", "Menú y navegación"]],
+      ["Administración", ["Equipo", "Inteligencia artificial"]],
     ]);
   });
 
-  it("drops sections and folders the staff member cannot open", () => {
+  it("drops sections the staff member cannot open", () => {
     expect(shape(new Set<PermissionName>(["ai:manage_credentials"]))).toEqual([
-      ["Operaciones", ["overview"]],
-      ["IA y sistema", [["Motor IA", ["ai-settings"]]]],
+      ["Operaciones", ["Inicio"]],
+      ["Administración", ["Inteligencia artificial"]],
     ]);
   });
 });

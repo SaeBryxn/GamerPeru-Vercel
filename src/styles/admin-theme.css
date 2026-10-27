@@ -14,18 +14,18 @@
  */
 
 [data-admin-theme] {
-  --admin-sidebar-width: 248px;
+  --admin-sidebar-width: 240px;
   --admin-card-radius: 12px;
   --admin-inset-radius: 10px;
   --admin-card-padding: 20px;
   --admin-inset-padding: 16px;
-  --admin-header-height: 60px;
+  --admin-header-height: 64px;
   --admin-radius: 10px;
   --admin-dot-size: 6px;
 }
 
 [data-admin-theme="light"] {
-  --color-surface-canvas: #f9fafb;
+  --color-surface-canvas: #f6f7f9;
   --color-surface-card: #ffffff;
   --color-surface-elevated: #ffffff;
   --color-surface-secondary: #f3f4f6;
@@ -36,8 +36,8 @@
   --color-text-muted: #6b7280;
   --color-text-disabled: #9ca3af;
 
-  --color-border-subtle: #e5e7eb;
-  --color-border-default: #d1d5db;
+  --color-border-subtle: #ebedf0;
+  --color-border-default: #d9dce1;
   --color-border-strong: #9ca3af;
   --color-border-focus: #111827;
 
@@ -65,12 +65,13 @@
 
   --admin-shadow: 0 1px 2px rgba(17, 24, 39, 0.04), 0 8px 24px -16px rgba(17, 24, 39, 0.12);
   --admin-panel: #ffffff;
-  --admin-panel-border: #e5e7eb;
-  --admin-card-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+  --admin-panel-border: #ebedf0;
+  --admin-card-shadow: 0 1px 2px rgba(17, 24, 39, 0.04), 0 1px 3px rgba(17, 24, 39, 0.02);
   --admin-inset: #f9fafb;
   --admin-inset-border: #e5e7eb;
-  --admin-sidebar-surface: #09090b;
-  --admin-header-surface: rgba(249, 250, 251, 0.85);
+  --admin-sidebar-surface: #0e0f11;
+  --admin-nav-active: rgba(225, 29, 72, 0.2);
+  --admin-header-surface: rgba(255, 255, 255, 0.9);
   --admin-scrim: rgba(17, 24, 39, 0.4);
 
   /*
@@ -148,6 +149,7 @@
   --admin-bar-fill: #a1a1aa;
   --admin-bar-track: #23252d;
   --admin-sidebar-surface: #0f1014;
+  --admin-nav-active: rgba(244, 63, 94, 0.2);
   --admin-header-surface: rgba(11, 12, 16, 0.85);
   --admin-scrim: rgba(0, 0, 0, 0.6);
 }
@@ -161,6 +163,6 @@ html[data-admin-theme="dark"] body {
 
 html[data-admin-theme="light"],
 html[data-admin-theme="light"] body {
-  background-color: #f9fafb;
+  background-color: #f6f7f9;
   color-scheme: light;
 }

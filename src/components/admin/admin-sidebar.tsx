@@ -4,7 +4,7 @@ import React from "react";
 import Link from "@/components/app-link";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { AdminNavItem } from "@/lib/admin/types";
-import { AdminNavSections } from "./admin-nav-sections";
+import { AdminNavSections, type AdminNavBadges } from "./admin-nav-sections";
 import styles from "./admin-shell.module.css";
 
 interface AdminSidebarProps {
@@ -12,6 +12,20 @@ interface AdminSidebarProps {
   currentPath?: string;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  badges?: AdminNavBadges;
+}
+
+/** The wordmark, with the brand red on «Perú» only. */
+export function AdminBrandMark({ collapsed = false }: { collapsed?: boolean }) {
+  return collapsed ? (
+    <span className={styles.brandLogo}>
+      G<span className={styles.brandAccent}>P</span>
+    </span>
+  ) : (
+    <span className={styles.brandLogo}>
+      Gamer <span className={styles.brandAccent}>Perú</span>
+    </span>
+  );
 }
 
 export function AdminSidebar({
@@ -19,6 +33,7 @@ export function AdminSidebar({
   currentPath = "/admin",
   collapsed,
   onToggleCollapsed,
+  badges,
 }: AdminSidebarProps) {
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
   return (
@@ -29,8 +44,7 @@ export function AdminSidebar({
       <div className={styles.sidebarTop}>
         <div className={styles.sidebarBrandRow}>
           <Link href="/admin" className={styles.sidebarBrand} aria-label="Gamer Perú admin">
-            <span className={styles.brandLogo}>{collapsed ? "GP" : "Gamer Perú"}</span>
-            {!collapsed && <span className={styles.brandBadge}>ADMIN</span>}
+            <AdminBrandMark collapsed={collapsed} />
           </Link>
           <button
             type="button"
@@ -50,6 +64,7 @@ export function AdminSidebar({
             currentPath={currentPath}
             markerId="admin-nav-active"
             collapsed={collapsed}
+            badges={badges}
           />
         </nav>
       </div>

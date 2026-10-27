@@ -12,27 +12,30 @@ import styles from "./admin-shell.module.css";
 
 interface AdminHeaderProps {
   onOpenMobileNav: () => void;
-  crumbs?: AdminCrumb[];
   isMobileNavOpen?: boolean;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
   theme: AdminTheme;
   onToggleTheme: () => void;
   identity?: AdminIdentity;
   roles?: readonly RoleName[];
+  /** The global search field, on the left. */
+  search?: React.ReactNode;
+  /** The notifications bell, before the account menu. */
+  notifications?: React.ReactNode;
 }
 
+/** Global top bar: the same on every admin screen. Screen titles live in each PageHeader. */
 export function AdminHeader({
   onOpenMobileNav,
-  crumbs = [{ label: "Inicio", href: null }],
   isMobileNavOpen = false,
   triggerRef,
   theme,
   onToggleTheme,
   identity,
   roles = [],
+  search,
+  notifications,
 }: AdminHeaderProps) {
-  // On a phone only the current screen fits; a back arrow keeps the level above one tap away.
-  const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2] : undefined;
   return (
     <header className={styles.header}>
       <div className={styles.headerLeft}>
@@ -47,40 +50,11 @@ export function AdminHeader({
         >
           <Menu className={styles.navIcon} aria-hidden="true" />
         </button>
-
-        {parent?.href && (
-          <Link
-            href={parent.href}
-            className={styles.crumbBack}
-            aria-label={`Volver a ${parent.label}`}
-          >
-            <ChevronLeft size={18} aria-hidden="true" />
-          </Link>
-        )}
-
-        <nav aria-label="Ruta de navegación" className={styles.breadcrumbs}>
-          <ol className={styles.crumbList}>
-            {crumbs.map((crumb, index) => (
-              <li key={`${crumb.label}-${index}`} className={styles.crumb}>
-                {index > 0 && (
-                  <ChevronRight className={styles.crumbSeparator} size={14} aria-hidden="true" />
-                )}
-                {crumb.href ? (
-                  <Link href={crumb.href} className={styles.crumbLink}>
-                    {crumb.label}
-                  </Link>
-                ) : (
-                  <span className={styles.breadcrumbCurrent} aria-current="page">
-                    {crumb.label}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ol>
-        </nav>
+        {search}
       </div>
 
       <div className={styles.headerRight}>
+        {notifications}
         <AdminAccountMenu
           email={identity?.email ?? null}
           displayName={identity?.displayName}
@@ -91,5 +65,47 @@ export function AdminHeader({
         />
       </div>
     </header>
+  );
+}
+
+/**
+ * Inicio › section › sub-screen above the content, every level but the current one a link back.
+ * Inicio alone needs no trail. On a phone only a back arrow and the current screen fit.
+ */
+export function AdminBreadcrumbs({ crumbs }: { crumbs: AdminCrumb[] }) {
+  if (crumbs.length < 2) return null;
+  const parent = crumbs[crumbs.length - 2];
+  return (
+    <div className={styles.crumbBar}>
+      {parent?.href && (
+        <Link
+          href={parent.href}
+          className={styles.crumbBack}
+          aria-label={`Volver a ${parent.label}`}
+        >
+          <ChevronLeft size={18} aria-hidden="true" />
+        </Link>
+      )}
+      <nav aria-label="Ruta de navegación" className={styles.breadcrumbs}>
+        <ol className={styles.crumbList}>
+          {crumbs.map((crumb, index) => (
+            <li key={`${crumb.label}-${index}`} className={styles.crumb}>
+              {index > 0 && (
+                <ChevronRight className={styles.crumbSeparator} size={14} aria-hidden="true" />
+              )}
+              {crumb.href ? (
+                <Link href={crumb.href} className={styles.crumbLink}>
+                  {crumb.label}
+                </Link>
+              ) : (
+                <span className={styles.breadcrumbCurrent} aria-current="page">
+                  {crumb.label}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </nav>
+    </div>
   );
 }
