@@ -139,7 +139,7 @@ export function VideoHero({
           Reduced-motion visitors get the still stage instead of the loop.
         */}
         <div className={styles.videoFrame} aria-hidden="true">
-          {video.kind === "youtube" && allowMotion && !isCovered && !twitchOnline && (
+          {video.kind === "youtube" && allowMotion && !isCovered && (
             <iframe
               className={styles.video}
               src={buildHeroEmbedSrc(video.videoId)}
@@ -150,7 +150,7 @@ export function VideoHero({
               data-testid="video-hero-frame"
             />
           )}
-          {video.kind === "upload" && !twitchOnline && (
+          {video.kind === "upload" && (
             // The poster is the first paint; the file only plays while the stage is uncovered.
             <video
               key={autoplayAllowed && !isCovered ? "playing" : "still"}

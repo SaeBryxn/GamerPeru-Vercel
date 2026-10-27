@@ -290,9 +290,11 @@ aplicó la `0027` el 26 de octubre. Seguimiento:
   publicada además de activada. Sus títulos, incluido el de las especificaciones de familia, se
   editan desde el constructor de historia; su acceso permanece en la misma pestaña.
 - Portada con Twitch opcional, editable en `/admin/home`: canal `maxkillgg`, reproductor de video
-  sin chat, indicación de directo y enlace al canal. El directo tiene prioridad al estar conectado;
-  sin conexión o ante un fallo de carga se conserva el video habitual. Pantallas menores que el
-  mínimo de 400 px del reproductor conservan el video y el enlace a Twitch. No usa claves de API
+  sin chat, indicación de directo y enlace al canal. El directo aparece en una ventana de
+  400–560 px en la esquina superior derecha, centrada en pantallas verticales. El video habitual
+  se conserva de fondo incluso durante el directo; al desconectarse queda solo el enlace.
+  Pantallas sin espacio para el mínimo de 400 px del reproductor conservan el video y el enlace
+  a Twitch. No usa claves de API
   del canal ni agrega tablas.
 - Teclados y audio ya estaban habilitados en la configuración alojada al revisar este pedido;
   se conserva esa decisión. WLMouse queda fuera de esta extracción por indicación del dueño.

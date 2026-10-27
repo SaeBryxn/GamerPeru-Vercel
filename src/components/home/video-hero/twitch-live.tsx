@@ -48,7 +48,7 @@ function loadPlayer(): Promise<TwitchApi> {
   return scriptPromise;
 }
 
-/** Offline and failed embeds stay behind the normal video. No chat iframe is created. */
+/** A live-only window over the normal hero video. No chat iframe is created. */
 export function TwitchLive({
   channel,
   linkLabel,
@@ -65,7 +65,8 @@ export function TwitchLive({
   const [online, setOnline] = useState(false);
   const [wide, setWide] = useState(false);
   useEffect(() => {
-    const query = window.matchMedia("(min-width: 400px)");
+    // Leave room for a browser scrollbar while keeping Twitch's 400px player minimum.
+    const query = window.matchMedia("(min-width: 416px)");
     const update = () => setWide(query.matches);
     update();
     query.addEventListener("change", update);
@@ -143,16 +144,7 @@ export function TwitchLive({
     };
   }, [channel, id, onLiveChange, autoplay, wide]);
   return (
-    <>
-      <div
-        className={styles.stage}
-        data-online={online}
-        aria-hidden={!online}
-        inert={!online}
-        data-testid="twitch-live-stage"
-      >
-        <div ref={container} id={id} className={styles.player} />
-      </div>
+    <div className={styles.dock} data-online={online} data-testid="twitch-live-dock">
       <a
         href={`https://www.twitch.tv/${channel}`}
         target="_blank"
@@ -171,6 +163,15 @@ export function TwitchLive({
         </span>
         <ExternalLink size={15} aria-hidden="true" />
       </a>
-    </>
+      <div
+        className={styles.stage}
+        data-online={online}
+        aria-hidden={!online}
+        inert={!online}
+        data-testid="twitch-live-stage"
+      >
+        <div ref={container} id={id} className={styles.player} />
+      </div>
+    </div>
   );
 }

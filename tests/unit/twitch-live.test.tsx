@@ -3,6 +3,7 @@ import React from "react";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { TwitchLive } from "@/components/home/video-hero/twitch-live";
+import { VideoHero } from "@/components/home/video-hero/video-hero";
 import { normalizeTwitchChannel } from "@/lib/home/twitch-channel";
 import { VideoHeroContentSchema } from "@/lib/home/section-schemas";
 
@@ -79,4 +80,36 @@ it("conserva el video habitual en pantallas menores al mínimo de Twitch", () =>
   render(<TwitchLive channel="maxkillgg" linkLabel="Ver Twitch" onLiveChange={vi.fn()} />);
   expect(constructor).not.toHaveBeenCalled();
   expect(screen.getByTestId("twitch-live-stage").getAttribute("aria-hidden")).toBe("true");
+});
+
+it("mantiene el video de portada detrás de la ventana durante el directo", async () => {
+  media(true);
+  const events = new Map<string, () => void>();
+  class FakePlayer {
+    static ONLINE = "online";
+    static OFFLINE = "offline";
+    static READY = "ready";
+    static ENDED = "ended";
+    play() {}
+    pause() {}
+    addEventListener(event: string, callback: () => void) {
+      events.set(event, callback);
+    }
+  }
+  window.Twitch = { Player: FakePlayer };
+  render(
+    <VideoHero
+      heading="Portada"
+      scrollHintLabel="Ver tienda"
+      revealTargetId="tienda"
+      video={{ kind: "upload", src: "https://example.test/hero.mp4", posterSrc: null }}
+      twitch={{ enabled: true, channel: "maxkillgg", linkLabel: "Ver Twitch" }}
+    />
+  );
+  await waitFor(() => expect(events.has("online")).toBe(true));
+  act(() => events.get("online")?.());
+  expect(screen.getByTestId("twitch-live-dock").getAttribute("data-online")).toBe("true");
+  expect(screen.getByTestId("video-hero-file")).toBeTruthy();
+  act(() => events.get("offline")?.());
+  expect(screen.getByTestId("video-hero-file")).toBeTruthy();
 });
